@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import { filterMessage } from "../../lib/word-filter";
 import { storage } from "../../storage";
+import { sanitizePlainText } from "../../lib/input-security";
 import type { AuthenticatedSocket } from "../shared";
 import { challengeGameRooms } from "../shared";
 
@@ -20,7 +21,7 @@ export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): P
   }
 
   // SECURITY: Sanitize and limit message length
-  const safeMessage = String(message || '').replace(/<[^>]*>/g, '').slice(0, 500);
+  const safeMessage = sanitizePlainText(message, { maxLength: 500 });
   if (!safeMessage.trim()) return;
 
   const room = challengeGameRooms.get(challengeId);
@@ -148,7 +149,7 @@ export async function handleGiftToPlayer(ws: AuthenticatedSocket, data: any): Pr
   const txResult = await db.transaction(async (tx) => {
     const [sender] = await tx.select().from(users)
       .where(eq(users.id, ws.userId!)).for('update');
-    
+
     if (!sender || parseFloat(sender.balance) < giftPrice) {
       return { success: false, error: 'Insufficient balance' };
     }

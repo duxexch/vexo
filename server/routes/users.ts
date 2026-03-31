@@ -3,6 +3,7 @@ import { storage } from "../storage";
 import { authMiddleware, adminMiddleware, type AuthRequest } from "./middleware";
 import { getErrorMessage } from "./helpers";
 import { toSafeUser, toSafeUsers } from "../lib/safe-user";
+import { sanitizePlainText } from "../lib/input-security";
 
 export function registerUsersRoutes(app: Express): void {
   app.get("/api/users", authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
@@ -53,8 +54,7 @@ export function registerUsersRoutes(app: Express): void {
           let value = req.body[field];
           // Sanitize string values — strip HTML tags
           if (typeof value === 'string') {
-            value = value.replace(/<[^>]*>/g, '').trim();
-            if (value.length > 255) value = value.slice(0, 255);
+            value = sanitizePlainText(value, { maxLength: 255 });
           }
           sanitizedUpdate[field] = value;
         }

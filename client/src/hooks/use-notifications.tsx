@@ -5,7 +5,7 @@ import { useAuth, useAuthHeaders } from "@/lib/auth";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
-import { type AppNotification } from "@/lib/notifications";
+import { type AppNotification, normalizeSafeNotificationLink } from "@/lib/notifications";
 
 export function useNotifications() {
   const { token, user } = useAuth();
@@ -156,7 +156,8 @@ export function useNotifications() {
         // Handle game start - redirect player1 (creator) to game screen
         if (data.type === "game_start") {
           const payload = data.payload;
-          if (payload?.redirectUrl && user?.id) {
+          const safeRedirectUrl = normalizeSafeNotificationLink(payload?.redirectUrl);
+          if (safeRedirectUrl && user?.id) {
             // Only redirect player1 (creator) - player2 is already redirected via mutation onSuccess
             if (payload.player1Id === user.id) {
               toast({
@@ -166,7 +167,7 @@ export function useNotifications() {
                   : 'Redirecting to game...',
               });
               // Direct navigation for challenge creator
-              window.location.href = payload.redirectUrl;
+              window.location.assign(safeRedirectUrl);
             }
           }
         }

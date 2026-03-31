@@ -3,6 +3,7 @@ import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import crypto from "crypto";
+import { sanitizePlainText } from "../../lib/input-security";
 
 export function registerComplaintRoutes(app: Express): void {
 
@@ -22,8 +23,8 @@ export function registerComplaintRoutes(app: Express): void {
       const agent = await storage.getAvailableAgentForAssignment();
       // SECURITY: Whitelist allowed fields — prevent mass assignment of userId, status, priority, etc.
       const { subject, description, category, transactionId } = req.body;
-      const safeSubject = subject ? String(subject).replace(/<[^>]*>/g, '').slice(0, 200) : '';
-      const safeDescription = description ? String(description).replace(/<[^>]*>/g, '').slice(0, 2000) : '';
+      const safeSubject = sanitizePlainText(subject, { maxLength: 200 });
+      const safeDescription = sanitizePlainText(description, { maxLength: 2000 });
       const complaint = await storage.createComplaint({
         userId: req.user!.id,
         ticketNumber: `CMP-${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
@@ -44,7 +45,7 @@ export function registerComplaintRoutes(app: Express): void {
         isNew: true,
         message: `New complaint from user ${req.user!.username}: ${req.body.subject || 'No subject'}`,
         messageAr: `شكوى جديدة من المستخدم ${req.user!.username}: ${req.body.subject || 'بدون عنوان'}`,
-      }).catch(() => {});
+      }).catch(() => { });
       res.status(201).json(complaint);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -76,8 +77,8 @@ export function registerComplaintRoutes(app: Express): void {
       const safeUpdate: Record<string, any> = {};
       if (status) safeUpdate.status = String(status).slice(0, 50);
       if (priority) safeUpdate.priority = String(priority).slice(0, 20);
-      if (adminNote) safeUpdate.adminNote = String(adminNote).replace(/<[^>]*>/g, '').slice(0, 1000);
-      if (resolution) safeUpdate.resolution = String(resolution).replace(/<[^>]*>/g, '').slice(0, 2000);
+      if (adminNote) safeUpdate.adminNote = sanitizePlainText(adminNote, { maxLength: 1000 });
+      if (resolution) safeUpdate.resolution = sanitizePlainText(resolution, { maxLength: 2000 });
       const complaint = await storage.updateComplaint(req.params.id, safeUpdate);
       if (!complaint) return res.status(404).json({ error: "Complaint not found" });
       res.json(complaint);

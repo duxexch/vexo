@@ -19,6 +19,7 @@ import {
   createSession,
   validatePasswordStrength,
 } from "../helpers";
+import { isSafeEmailAddress, isSafePhoneNumber } from "../../../lib/input-security";
 
 export function registerIdentifierRoutes(app: Express) {
   // Check if identifier (email/phone/accountId) exists
@@ -35,7 +36,7 @@ export function registerIdentifierRoutes(app: Express) {
         user = await storage.getUserByEmail(identifier);
       } else if (type === "phone") {
         // Validate phone format before lookup
-        if (!/^\+?[0-9]{7,15}$/.test(identifier.trim())) {
+        if (!isSafePhoneNumber(identifier.trim())) {
           return res.status(400).json({ error: "الرجاء إدخال رقم هاتف صحيح" });
         }
         user = await storage.getUserByPhone(identifier.trim());
@@ -132,10 +133,10 @@ export function registerIdentifierRoutes(app: Express) {
       }
 
       // Validate format based on type
-      if (type === "phone" && !/^\+?[0-9]{7,15}$/.test(identifier.trim())) {
+      if (type === "phone" && !isSafePhoneNumber(identifier.trim())) {
         return res.status(400).json({ error: "الرجاء إدخال رقم هاتف صحيح" });
       }
-      if (type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier.trim())) {
+      if (type === "email" && !isSafeEmailAddress(identifier.trim())) {
         return res.status(400).json({ error: "الرجاء إدخال بريد إلكتروني صحيح" });
       }
 

@@ -4,6 +4,7 @@ import { db } from "../db";
 import { eq, desc, and, sql, like, or, gte, count } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, getErrorMessage } from "./helpers";
 import { toSafeUsers } from "../lib/safe-user";
+import { escapeSqlLikePattern, parseStringQueryParam } from "../lib/input-security";
 
 export function registerAdminDashboardRoutes(app: Express) {
 
@@ -58,14 +59,14 @@ export function registerAdminDashboardRoutes(app: Express) {
   app.get("/api/admin/search", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
       const { q, type } = req.query;
-      const query = String(q || "").trim();
+      const query = parseStringQueryParam(q, 120);
 
       if (!query || query.length < 2) {
         return res.json({ users: [], transactions: [], complaints: [] });
       }
 
       // Escape SQL LIKE wildcards to prevent enumeration attacks
-      const escaped = String(query).replace(/%/g, '\\%').replace(/_/g, '\\_');
+      const escaped = escapeSqlLikePattern(query);
       const searchPattern = `%${escaped}%`;
 
       const [usersResult, transactionsResult, complaintsResult] = await Promise.all([

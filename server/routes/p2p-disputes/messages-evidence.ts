@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import { sendNotification } from "../../websocket";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage } from "./helpers";
+import { sanitizeNullablePlainText, sanitizePlainText } from "../../lib/input-security";
 
 /** POST /api/p2p/disputes/:id/messages + POST /api/p2p/disputes/:id/evidence */
 export function registerMessagesEvidenceRoutes(app: Express) {
@@ -54,7 +55,7 @@ export function registerMessagesEvidenceRoutes(app: Express) {
       }
 
       // 2. Insert the message (sanitize to prevent stored XSS)
-      const safeMessage = message.trim().replace(/<[^>]*>/g, '').slice(0, 2000);
+      const safeMessage = sanitizePlainText(message, { maxLength: 2000 });
       const [newMessage] = await db
         .insert(p2pDisputeMessages)
         .values({
@@ -86,11 +87,11 @@ export function registerMessagesEvidenceRoutes(app: Express) {
         priority: 'normal',
         title: 'New Dispute Message',
         titleAr: 'رسالة جديدة في النزاع',
-        message: `${req.user!.username} sent a message in dispute #${disputeId.slice(0,8)}.`,
-        messageAr: `أرسل ${req.user!.username} رسالة في النزاع #${disputeId.slice(0,8)}.`,
+        message: `${req.user!.username} sent a message in dispute #${disputeId.slice(0, 8)}.`,
+        messageAr: `أرسل ${req.user!.username} رسالة في النزاع #${disputeId.slice(0, 8)}.`,
         link: '/p2p/disputes',
         metadata: JSON.stringify({ disputeId, action: 'dispute_message' }),
-      }).catch(() => {});
+      }).catch(() => { });
 
       res.status(201).json({
         ...newMessage,
@@ -137,10 +138,10 @@ export function registerMessagesEvidenceRoutes(app: Express) {
         return res.status(400).json({ error: "Invalid file URL" });
       }
       // Sanitize text inputs
-      const safeFileName = String(fileName).replace(/<[^>]*>/g, '').slice(0, 255);
-      const safeDescription = description ? String(description).replace(/<[^>]*>/g, '').slice(0, 1000) : null;
-      const safeEvidenceType = String(evidenceType).replace(/<[^>]*>/g, '').slice(0, 50);
-      const safeFileType = String(fileType).replace(/<[^>]*>/g, '').slice(0, 100);
+      const safeFileName = sanitizePlainText(fileName, { maxLength: 255 });
+      const safeDescription = sanitizeNullablePlainText(description, 1000);
+      const safeEvidenceType = sanitizePlainText(evidenceType, { maxLength: 50 });
+      const safeFileType = sanitizePlainText(fileType, { maxLength: 100 });
 
       // 1. Validate dispute exists and user is party
       const [dispute] = await db

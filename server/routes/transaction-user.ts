@@ -7,6 +7,7 @@ import { db } from "../db";
 import { users } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { getErrorMessage } from "./helpers";
+import { sanitizePlainText } from "../lib/input-security";
 
 export function registerTransactionUserRoutes(app: Express): void {
   app.get("/api/transactions", authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -21,7 +22,7 @@ export function registerTransactionUserRoutes(app: Express): void {
       res.status(500).json({ error: getErrorMessage(error) });
     }
   });
-  
+
   app.post("/api/transactions/deposit", authMiddleware, sensitiveRateLimiter, async (req: AuthRequest, res: Response) => {
     try {
       const { amount, paymentMethod, paymentReference, walletNumber } = req.body;
@@ -29,24 +30,24 @@ export function registerTransactionUserRoutes(app: Express): void {
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
-      
+
       if (!amount || typeof amount !== 'string' && typeof amount !== 'number') {
         return res.status(400).json({ error: "Amount is required" });
       }
-      
+
       const totalAmount = parseFloat(String(amount));
       if (isNaN(totalAmount) || totalAmount <= 0 || totalAmount > 1000000) {
         return res.status(400).json({ error: "Amount must be between 0.01 and 1,000,000" });
       }
-      
+
       if (!paymentReference || typeof paymentReference !== 'string') {
         return res.status(400).json({ error: "Payment reference is required" });
       }
-      
+
       // Sanitize string inputs to prevent stored XSS
-      const safePaymentMethod = paymentMethod ? String(paymentMethod).replace(/<[^>]*>/g, '').slice(0, 100) : '';
-      const safeWalletNumber = walletNumber ? String(walletNumber).replace(/<[^>]*>/g, '').slice(0, 100) : '';
-      
+      const safePaymentMethod = sanitizePlainText(paymentMethod, { maxLength: 100 });
+      const safeWalletNumber = sanitizePlainText(walletNumber, { maxLength: 100 });
+
       const transaction = await storage.createTransaction({
         userId: user.id,
         type: "deposit",
@@ -57,7 +58,7 @@ export function registerTransactionUserRoutes(app: Express): void {
         referenceId: String(paymentReference).slice(0, 200),
         description: `${safePaymentMethod}${safeWalletNumber ? ` | Sender: ${safeWalletNumber}` : ''}`,
       });
-      
+
       await storage.createAuditLog({
         userId: user.id,
         action: "deposit",
@@ -76,7 +77,7 @@ export function registerTransactionUserRoutes(app: Express): void {
         deepLink: '/admin/users',
         entityType: 'transaction',
         entityId: transaction.id,
-      }).catch(() => {});
+      }).catch(() => { });
 
       // Notify user: deposit request received
       await sendNotification(user.id, {
@@ -88,52 +89,52 @@ export function registerTransactionUserRoutes(app: Express): void {
         messageAr: `تم إرسال طلب الإيداع بقيمة $${totalAmount.toFixed(2)} وهو قيد المراجعة.`,
         link: '/transactions',
         metadata: JSON.stringify({ transactionId: transaction.id, type: 'deposit', amount: totalAmount }),
-      }).catch(() => {});
-      
+      }).catch(() => { });
+
       res.status(201).json(transaction);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
   });
-  
+
   app.post("/api/transactions/withdraw", authMiddleware, sensitiveRateLimiter, async (req: AuthRequest, res: Response) => {
     try {
       const { amount } = req.body;
-      
+
       // CRITICAL: Validate amount is positive number
       if (!amount || (typeof amount !== 'string' && typeof amount !== 'number')) {
         return res.status(400).json({ error: "Amount is required" });
       }
-      
+
       const withdrawAmount = parseFloat(String(amount));
       if (isNaN(withdrawAmount) || withdrawAmount <= 0 || withdrawAmount > 1000000) {
         return res.status(400).json({ error: "Amount must be between 0.01 and 1,000,000" });
       }
-      
+
       // SECURITY: Atomic withdrawal with FOR UPDATE lock to prevent concurrent double-withdrawal
       const result = await db.transaction(async (tx) => {
         // Lock user row to prevent concurrent withdrawals
         const [user] = await tx.select().from(users)
           .where(eq(users.id, req.user!.id)).for('update');
-        
+
         if (!user) throw Object.assign(new Error("User not found"), { statusCode: 404 });
-        
+
         const currentBalance = parseFloat(user.balance);
         if (withdrawAmount > currentBalance) {
           throw Object.assign(new Error("Insufficient balance"), { statusCode: 400 });
         }
-        
+
         const newBalance = (currentBalance - withdrawAmount).toFixed(2);
-        
+
         // SECURITY: Atomically deduct balance (escrow) to prevent double-spend
         await tx.update(users).set({
           balance: newBalance,
           updatedAt: new Date(),
         }).where(eq(users.id, req.user!.id));
-        
+
         return { user, newBalance };
       });
-      
+
       const transaction = await storage.createTransaction({
         userId: result.user.id,
         type: "withdrawal",
@@ -143,7 +144,7 @@ export function registerTransactionUserRoutes(app: Express): void {
         balanceAfter: result.newBalance,
         description: "Withdrawal request",
       });
-      
+
       await storage.createAuditLog({
         userId: result.user.id,
         action: "withdrawal",
@@ -162,7 +163,7 @@ export function registerTransactionUserRoutes(app: Express): void {
         deepLink: '/admin/users',
         entityType: 'transaction',
         entityId: transaction.id,
-      }).catch(() => {});
+      }).catch(() => { });
 
       // Notify user: withdrawal request received
       await sendNotification(result.user.id, {
@@ -174,8 +175,8 @@ export function registerTransactionUserRoutes(app: Express): void {
         messageAr: `تم إرسال طلب السحب بقيمة $${withdrawAmount.toFixed(2)} وهو قيد المراجعة. تم حجز المبلغ من رصيدك.`,
         link: '/transactions',
         metadata: JSON.stringify({ transactionId: transaction.id, type: 'withdrawal', amount: withdrawAmount }),
-      }).catch(() => {});
-      
+      }).catch(() => { });
+
       res.status(201).json(transaction);
     } catch (error: unknown) {
       const statusCode = (error as any)?.statusCode;

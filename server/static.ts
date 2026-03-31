@@ -1,10 +1,41 @@
 import express, { type Express } from "express";
+import rateLimit from "express-rate-limit";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const publicStaticLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 240,
+  message: { error: "Too many requests" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const publicHtmlLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 180,
+  message: { error: "Too many requests" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+function escapeHtmlAttribute(value: string): string {
+  let out = "";
+  for (let i = 0; i < value.length; i += 1) {
+    const ch = value[i];
+    if (ch === "&") out += "&amp;";
+    else if (ch === "<") out += "&lt;";
+    else if (ch === ">") out += "&gt;";
+    else if (ch === '"') out += "&quot;";
+    else if (ch === "'") out += "&#39;";
+    else out += ch;
+  }
+  return out;
+}
 
 // SEO page titles & descriptions for crawler-friendly rendering
 const SEO_PAGES: Record<string, { title: string; description: string; keywords: string }> = {
@@ -79,7 +110,7 @@ export function serveStatic(app: Express) {
   }
 
   // ── Service Worker — MUST NOT be cached, with correct MIME & scope headers ──
-  app.get("/sw.js", (_req, res) => {
+  app.get("/sw.js", publicStaticLimiter, (_req, res) => {
     const swPath = path.join(distPath, "sw.js");
     if (fs.existsSync(swPath)) {
       const content = fs.readFileSync(swPath, "utf-8");
@@ -97,7 +128,7 @@ export function serveStatic(app: Express) {
   });
 
   // ── Manifest — short cache, correct type ──
-  app.get("/manifest.json", (_req, res) => {
+  app.get("/manifest.json", publicStaticLimiter, (_req, res) => {
     const manifestPath = path.join(distPath, "manifest.json");
     if (fs.existsSync(manifestPath)) {
       const content = fs.readFileSync(manifestPath, "utf-8");
@@ -141,7 +172,7 @@ export function serveStatic(app: Express) {
   }));
 
   // Digital Asset Links for TWA (Android app verification)
-  app.get("/.well-known/assetlinks.json", (_req, res) => {
+  app.get("/.well-known/assetlinks.json", publicStaticLimiter, (_req, res) => {
     const assetLinksPath = path.join(distPath, ".well-known", "assetlinks.json");
     if (fs.existsSync(assetLinksPath)) {
       res.setHeader("Content-Type", "application/json");
@@ -153,7 +184,7 @@ export function serveStatic(app: Express) {
   });
 
   // Apple App Site Association (iOS Universal Links / Trusted app)
-  app.get("/.well-known/apple-app-site-association", (_req, res) => {
+  app.get("/.well-known/apple-app-site-association", publicStaticLimiter, (_req, res) => {
     const aasaPath = path.join(distPath, ".well-known", "apple-app-site-association");
     if (fs.existsSync(aasaPath)) {
       res.setHeader("Content-Type", "application/json");
@@ -171,64 +202,69 @@ export function serveStatic(app: Express) {
 
   // fall through to index.html if the file doesn't exist (SPA)
   // Inject SEO meta tags for crawler-friendly rendering
-  app.use("*", (req, res) => {
+  app.use("*", publicHtmlLimiter, (req, res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    
+
     const indexPath = path.resolve(distPath, "index.html");
     let html = fs.readFileSync(indexPath, "utf-8");
-    
+
     // Get SEO data for the current path
     const pagePath = req.originalUrl.split("?")[0].replace(/\/$/, "") || "/";
     const seo = SEO_PAGES[pagePath];
-    
+
     if (seo) {
+      const escapedTitle = escapeHtmlAttribute(seo.title);
+      const escapedDescription = escapeHtmlAttribute(seo.description);
+      const escapedKeywords = escapeHtmlAttribute(seo.keywords);
+
       // Replace title
-      html = html.replace(/<title>[^<]*<\/title>/, `<title>${seo.title}</title>`);
-      
+      html = html.replace(/<title>[^<]*<\/title>/, `<title>${escapedTitle}</title>`);
+
       // Replace meta description
       html = html.replace(
         /<meta name="description" content="[^"]*"/,
-        `<meta name="description" content="${seo.description}"`
+        `<meta name="description" content="${escapedDescription}"`
       );
-      
+
       // Replace meta keywords
       html = html.replace(
         /<meta name="keywords" content="[^"]*"/,
-        `<meta name="keywords" content="${seo.keywords}"`
+        `<meta name="keywords" content="${escapedKeywords}"`
       );
-      
+
       // Replace OG tags
       html = html.replace(
         /<meta property="og:title" content="[^"]*"/,
-        `<meta property="og:title" content="${seo.title}"`
+        `<meta property="og:title" content="${escapedTitle}"`
       );
       html = html.replace(
         /<meta property="og:description" content="[^"]*"/,
-        `<meta property="og:description" content="${seo.description}"`
+        `<meta property="og:description" content="${escapedDescription}"`
       );
-      
+
       // Replace Twitter tags
       html = html.replace(
         /<meta name="twitter:title" content="[^"]*"/,
-        `<meta name="twitter:title" content="${seo.title}"`
+        `<meta name="twitter:title" content="${escapedTitle}"`
       );
       html = html.replace(
         /<meta name="twitter:description" content="[^"]*"/,
-        `<meta name="twitter:description" content="${seo.description}"`
+        `<meta name="twitter:description" content="${escapedDescription}"`
       );
-      
+
       // Update canonical URL
       const fullUrl = `https://vixo.click${pagePath === "/" ? "" : pagePath}`;
+      const escapedUrl = escapeHtmlAttribute(fullUrl);
       html = html.replace(
         /<link rel="canonical" href="[^"]*"/,
-        `<link rel="canonical" href="${fullUrl}/"`
+        `<link rel="canonical" href="${escapedUrl}/"`
       );
       html = html.replace(
         /<meta property="og:url" content="[^"]*"/,
-        `<meta property="og:url" content="${fullUrl}/"`
+        `<meta property="og:url" content="${escapedUrl}/"`
       );
     }
-    
+
     res.status(200).set({ "Content-Type": "text/html" }).end(html);
   });
 }

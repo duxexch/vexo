@@ -5,6 +5,7 @@ import { storage } from "../../storage";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { toSafeUser } from "../../lib/safe-user";
+import { sanitizePlainText } from "../../lib/input-security";
 
 export function registerAgentRoutes(app: Express): void {
 
@@ -79,10 +80,10 @@ export function registerAgentRoutes(app: Express): void {
       const method = await storage.createAgentPaymentMethod({
         agentId: req.params.id,
         type: String(type).slice(0, 50) as any,
-        name: String(name).replace(/<[^>]*>/g, '').slice(0, 100),
+        name: sanitizePlainText(name, { maxLength: 100 }),
         accountNumber: accountNumber ? String(accountNumber).slice(0, 50) : undefined,
-        holderName: holderName ? String(holderName).replace(/<[^>]*>/g, '').slice(0, 100) : undefined,
-        bankName: bankName ? String(bankName).replace(/<[^>]*>/g, '').slice(0, 100) : undefined,
+        holderName: holderName ? sanitizePlainText(holderName, { maxLength: 100 }) : undefined,
+        bankName: bankName ? sanitizePlainText(bankName, { maxLength: 100 }) : undefined,
         isActive: isActive !== undefined ? Boolean(isActive) : true,
       });
       res.status(201).json(method);

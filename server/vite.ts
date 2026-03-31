@@ -1,6 +1,7 @@
 import { type Express } from "express";
 import express from "express";
 import { createServer as createViteServer, createLogger } from "vite";
+import rateLimit from "express-rate-limit";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
 import fs from "fs";
@@ -8,6 +9,14 @@ import path from "path";
 import { nanoid } from "nanoid";
 
 const viteLogger = createLogger();
+
+const devStaticLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 180,
+  message: { error: "Too many requests" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 export async function setupVite(server: Server, app: Express) {
   const serverOptions = {
@@ -36,7 +45,7 @@ export async function setupVite(server: Server, app: Express) {
   // ── Service Worker — explicit route with no-cache headers (dev mode) ──
   // Must be BEFORE vite.middlewares to prevent Vite's static serving from caching it
   const publicDir = path.resolve(import.meta.dirname, "..", "client", "public");
-  app.get("/sw.js", (_req, res) => {
+  app.get("/sw.js", devStaticLimiter, (_req, res) => {
     const swPath = path.join(publicDir, "sw.js");
     if (fs.existsSync(swPath)) {
       const content = fs.readFileSync(swPath, "utf-8");

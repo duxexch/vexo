@@ -5,6 +5,7 @@ import { db } from "../../db";
 import { eq, desc, and, sql, count, gte } from "drizzle-orm";
 import { logger } from "../../lib/logger";
 import { type AdminRequest, adminAuthMiddleware, getErrorMessage } from "../helpers";
+import { sanitizeNullablePlainText, sanitizePlainText } from "../../lib/input-security";
 
 export function registerChatTicketsRoutes(app: Express) {
 
@@ -104,9 +105,10 @@ export function registerChatTicketsRoutes(app: Express) {
         .where(eq(supportTickets.id, ticketId)).limit(1);
       if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
-      // SECURITY: Sanitize admin content to prevent XSS
-      const safeContent = (content || "").trim().replace(/<[^>]*>/g, '').slice(0, 2000) || (mediaName ? String(mediaName).replace(/<[^>]*>/g, '').slice(0, 200) : "📎 مرفق");
-      const safeMediaName = mediaName ? String(mediaName).replace(/<[^>]*>/g, '').slice(0, 200) : null;
+      // SECURITY: Normalize user-supplied text into safe plain-text payloads
+      const safeContent = sanitizePlainText(content, { maxLength: 2000 })
+        || sanitizePlainText(mediaName, { maxLength: 200, fallback: "Attachment" });
+      const safeMediaName = sanitizeNullablePlainText(mediaName, 200);
 
       const [message] = await db.insert(supportMessages).values({
         ticketId,
@@ -121,11 +123,11 @@ export function registerChatTicketsRoutes(app: Express) {
       }).returning();
 
       await db.update(supportTickets)
-        .set({ 
-          lastMessageAt: new Date(), 
-          status: "active", 
+        .set({
+          lastMessageAt: new Date(),
+          status: "active",
           assignedAdminId: req.admin?.id,
-          updatedAt: new Date() 
+          updatedAt: new Date()
         })
         .where(eq(supportTickets.id, ticketId));
 
@@ -190,7 +192,7 @@ export function registerChatTicketsRoutes(app: Express) {
   app.get("/api/admin/support-chat/stats", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
     try {
       // Single query for all ticket stats (replaces 7 individual count queries)
-      const today = new Date(); today.setHours(0,0,0,0);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
       const statsResult = await db.execute(sql`
         SELECT
           COUNT(*) FILTER (WHERE status = 'open') AS open_count,
@@ -200,7 +202,7 @@ export function registerChatTicketsRoutes(app: Express) {
           COUNT(*) FILTER (WHERE created_at >= ${today}) AS today_count
         FROM support_tickets
       `);
-      
+
       // Parallel: total messages + unread from users
       const [totalMsgsResult, unreadResult] = await Promise.all([
         db.select({ count: count() }).from(supportMessages),

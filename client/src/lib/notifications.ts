@@ -16,17 +16,52 @@ export interface AppNotification {
 }
 
 /** Defense-in-depth: validate notification links on client side before navigation */
+export function normalizeSafeNotificationLink(link: string | null | undefined): string | null {
+  if (!link || typeof link !== 'string') return null;
+
+  const trimmed = link.trim();
+  if (!trimmed) return null;
+
+  const lowered = trimmed.toLowerCase();
+  const dangerousProtocols = ['javascript:', 'data:', 'vbscript:', 'blob:', 'file:', 'ftp:', 'ws:', 'wss:'];
+  if (dangerousProtocols.some((protocol) => lowered.startsWith(protocol))) {
+    return null;
+  }
+
+  // Block protocol-relative and backslash-prefixed links.
+  if (trimmed.startsWith('//') || trimmed.startsWith('\\\\')) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(trimmed, window.location.origin);
+    if (parsed.origin !== window.location.origin) {
+      return null;
+    }
+
+    const normalizedPath = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (!normalizedPath.startsWith('/')) {
+      return null;
+    }
+
+    return normalizedPath;
+  } catch {
+    return null;
+  }
+}
+
 export function isSafeNotificationLink(link: string | null | undefined): link is string {
-  if (!link || typeof link !== 'string') return false;
-  const trimmed = link.trim().toLowerCase();
-  // Block dangerous protocols
-  const dangerous = ['javascript:', 'data:', 'vbscript:', 'blob:', 'file:', 'ftp:', 'ws:', 'wss:'];
-  if (dangerous.some(p => trimmed.startsWith(p))) return false;
-  // Block protocol-relative URLs
-  if (trimmed.startsWith('//') || trimmed.startsWith('\\\\')) return false;
-  // Only allow relative paths (starting with /) or https URLs
-  if (trimmed.startsWith('/') || trimmed.startsWith('https://')) return true;
-  return false;
+  return normalizeSafeNotificationLink(link) !== null;
+}
+
+export function navigateToSafeNotificationLink(link: string | null | undefined): boolean {
+  const safeLink = normalizeSafeNotificationLink(link);
+  if (!safeLink) {
+    return false;
+  }
+
+  window.location.assign(safeLink);
+  return true;
 }
 
 const NOTIFICATION_SOUNDS = {
@@ -142,9 +177,7 @@ export function showLocalNotification(
 
     notification.onclick = () => {
       window.focus();
-      if (options?.url) {
-        window.location.href = options.url;
-      }
+      navigateToSafeNotificationLink(options?.url);
       notification.close();
     };
 
@@ -172,13 +205,13 @@ export function showInAppNotification(
 
 export async function initializeNotifications() {
   const hasPermission = await requestNotificationPermission();
-  
+
   if (hasPermission) {
     const registration = await registerServiceWorker();
     if (registration) {
       return registration;
     }
   }
-  
+
   return null;
 }

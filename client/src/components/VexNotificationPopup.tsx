@@ -13,6 +13,7 @@
  */
 import { useState, useEffect, useCallback, useRef, createContext, useContext } from "react";
 import { useI18n } from "@/lib/i18n";
+import { navigateToSafeNotificationLink, normalizeSafeNotificationLink } from "@/lib/notifications";
 import {
   Bell,
   DollarSign,
@@ -138,8 +139,8 @@ interface NotifPopupContextType {
 }
 
 const NotifPopupContext = createContext<NotifPopupContextType>({
-  showPopup: () => {},
-  dismissAll: () => {},
+  showPopup: () => { },
+  dismissAll: () => { },
 });
 
 export function useNotifPopup() {
@@ -334,9 +335,11 @@ export function VexNotificationPopupProvider({ children }: { children: React.Rea
 
   const showPopup = useCallback((data: Omit<NotifPopupData, "id">) => {
     const id = `vex-popup-${++idCounter}-${Date.now()}`;
+    const safeLink = normalizeSafeNotificationLink(data.link);
     const newNotif: InternalNotif = {
       ...data,
       id,
+      link: safeLink || undefined,
       createdAt: data.timestamp || Date.now(),
       dismissing: false,
       swipeX: 0,
@@ -355,9 +358,7 @@ export function VexNotificationPopupProvider({ children }: { children: React.Rea
 
   const handleClick = useCallback((notif: InternalNotif) => {
     dismiss(notif.id);
-    if (notif.link) {
-      window.location.href = notif.link;
-    }
+    navigateToSafeNotificationLink(notif.link);
   }, [dismiss]);
 
   // Listen for custom events from NotificationProvider

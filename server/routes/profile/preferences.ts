@@ -3,6 +3,7 @@ import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import { z } from "zod";
+import { sanitizePlainText } from "../../lib/input-security";
 
 const supportedLanguages = [
   "en", "ar", "fr", "es", "de", "tr", "zh", "hi", "pt", "ru",
@@ -62,12 +63,12 @@ export function registerPreferencesRoutes(app: Express): void {
     try {
       const validated = profileUpdateSchema.parse(req.body);
       const user = await storage.updateUser(req.user!.id, validated);
-      
+
       await storage.createAuditLog({
         userId: req.user!.id, action: "user_update", entityType: "user",
         entityId: req.user!.id, details: "Profile updated",
       });
-      
+
       const { password, ...safeUser } = user!;
       res.json(safeUser);
     } catch (error: unknown) {
@@ -101,16 +102,16 @@ export function registerPreferencesRoutes(app: Express): void {
       if (nickname.length > 30) {
         return res.status(400).json({ error: "Nickname must be at most 30 characters" });
       }
-      const safeNickname = String(nickname).replace(/<[^>]*>/g, '').trim();
+      const safeNickname = sanitizePlainText(nickname, { maxLength: 30 });
       if (safeNickname.length < 3) {
         return res.status(400).json({ error: "Nickname contains invalid characters" });
       }
-      
+
       const existingUser = await storage.getUserByNickname(safeNickname);
       if (existingUser && existingUser.id !== req.user!.id) {
         return res.status(400).json({ error: "Nickname already taken" });
       }
-      
+
       const user = await storage.updateUser(req.user!.id, { nickname: safeNickname });
       const { password, ...safeUser } = user!;
       res.json(safeUser);
@@ -125,12 +126,12 @@ export function registerPreferencesRoutes(app: Express): void {
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid request", details: parsed.error.errors });
       }
-      
+
       const { stealthMode, isOnline } = parsed.data;
-      const updateData: Partial<{stealthMode: boolean; isOnline: boolean; lastActiveAt: Date}> = { lastActiveAt: new Date() };
+      const updateData: Partial<{ stealthMode: boolean; isOnline: boolean; lastActiveAt: Date }> = { lastActiveAt: new Date() };
       if (stealthMode !== undefined) updateData.stealthMode = stealthMode;
       if (isOnline !== undefined) updateData.isOnline = isOnline;
-      
+
       const user = await storage.updateUser(req.user!.id, updateData);
       if (!user) return res.status(404).json({ error: "User not found" });
       const { password, ...safeUser } = user;

@@ -16,7 +16,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { playSound } from "@/hooks/use-sound-effects";
-import { type AppNotification, isSafeNotificationLink } from "@/lib/notifications";
+import { type AppNotification, navigateToSafeNotificationLink, normalizeSafeNotificationLink } from "@/lib/notifications";
 
 // Sound mapping by notification type — using new distinctive sounds
 const NOTIFICATION_SOUND_MAP: Record<string, Parameters<typeof playSound>[0]> = {
@@ -52,7 +52,7 @@ const NotificationContext = createContext<NotificationContextType>({
   isConnected: false,
   unreadCount: 0,
   sectionCounts: {},
-  markSectionRead: () => {},
+  markSectionRead: () => { },
 });
 
 export function useNotificationStatus() {
@@ -157,6 +157,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const lang = languageRef.current;
     const title = lang === "ar" && notification.titleAr ? notification.titleAr : notification.title;
     const message = lang === "ar" && notification.messageAr ? notification.messageAr : notification.message;
+    const safeLink = normalizeSafeNotificationLink(notification.link);
 
     // Play sound based on priority first, then type
     const soundKey = PRIORITY_SOUND_MAP[notification.priority] || NOTIFICATION_SOUND_MAP[notification.type] || 'notification';
@@ -169,7 +170,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         priority: notification.priority || "normal",
         title,
         message,
-        link: notification.link,
+        link: safeLink || undefined,
         duration: notification.priority === "urgent" ? 10000 : notification.priority === "high" ? 7000 : 5000,
       },
     }));
@@ -190,9 +191,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               renotify: true,
               requireInteraction: notification.priority === 'urgent',
               vibrate: notification.priority === 'urgent' ? [200, 80, 200, 80, 200] :
-                       notification.priority === 'high' ? [200, 100, 200] : [150, 80, 150],
+                notification.priority === 'high' ? [200, 100, 200] : [150, 80, 150],
               data: {
-                url: notification.link || '/',
+                url: safeLink || '/',
                 notificationType: notification.type,
                 soundType: notification.type,
               },
@@ -212,14 +213,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           });
           browserNotif.onclick = () => {
             window.focus();
-            if (isSafeNotificationLink(notification.link)) {
-              window.location.href = notification.link;
-            }
+            navigateToSafeNotificationLink(safeLink);
             browserNotif.close();
           };
           setTimeout(() => browserNotif.close(), 8000);
         }
-      } catch {}
+      } catch { }
     }
 
     // Vibrate on mobile (if supported)
@@ -371,7 +370,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         if (data.type === "game_start") {
           const payload = data.payload;
           const currentUser = userRef.current;
-          if (payload?.redirectUrl && currentUser?.id) {
+          const safeRedirectUrl = normalizeSafeNotificationLink(payload?.redirectUrl);
+          if (safeRedirectUrl && currentUser?.id) {
             // Check if current user is any player in the game (not just player1)
             const playerIds = [payload.player1Id, payload.player2Id, payload.player3Id, payload.player4Id].filter(Boolean);
             if (playerIds.includes(currentUser.id)) {
@@ -387,7 +387,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 },
               }));
               setTimeout(() => {
-                window.location.href = payload.redirectUrl;
+                window.location.assign(safeRedirectUrl);
               }, 800);
             }
           }
@@ -493,7 +493,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (token && typeof Notification !== 'undefined' && Notification.permission === 'default') {
       // Delay permission request slightly so it doesn't block initial render
       const timer = setTimeout(() => {
-        Notification.requestPermission().catch(() => {});
+        Notification.requestPermission().catch(() => { });
       }, 3000);
       return () => clearTimeout(timer);
     }

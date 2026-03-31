@@ -145,6 +145,38 @@ const createOfferSchema = z.object({
 
 type CreateOfferForm = z.infer<typeof createOfferSchema>;
 
+const SAFE_PREVIEW_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+  "image/gif",
+]);
+
+function isAllowedEvidenceMimeType(mimeType: string): boolean {
+  if (!mimeType) return false;
+  const normalized = mimeType.toLowerCase();
+  return normalized.startsWith("image/") || normalized.startsWith("video/") || normalized === "application/pdf";
+}
+
+function canPreviewImageFile(mimeType: string): boolean {
+  return SAFE_PREVIEW_IMAGE_TYPES.has((mimeType || "").toLowerCase());
+}
+
+function normalizeSafeEvidenceUrl(rawUrl: string): string | null {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+
+  try {
+    const parsed = new URL(rawUrl, window.location.origin);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return null;
+    }
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+
 function MarketplaceTab() {
   const { t } = useI18n();
   const { toast } = useToast();
@@ -728,31 +760,41 @@ function MyTradesTab() {
 }
 
 const DISPUTE_REASONS = [
-  { category: 'payment', reasons: [
-    { id: 'no_payment', icon: Ban },
-    { id: 'underpaid', icon: ArrowDownRight },
-    { id: 'overpaid', icon: ArrowUpRight },
-    { id: 'payment_pending', icon: Clock },
-    { id: 'wrong_payment_method', icon: AlertTriangle },
-  ]},
-  { category: 'release', reasons: [
-    { id: 'crypto_not_released', icon: Ban },
-    { id: 'wrong_amount_released', icon: AlertTriangle },
-  ]},
-  { category: 'conduct', reasons: [
-    { id: 'unresponsive', icon: Clock },
-    { id: 'abusive', icon: Ban },
-    { id: 'suspected_fraud', icon: Shield },
-  ]},
-  { category: 'compliance', reasons: [
-    { id: 'name_mismatch', icon: AlertTriangle },
-    { id: 'third_party_payment', icon: AlertTriangle },
-    { id: 'chargeback_threat', icon: Ban },
-  ]},
-  { category: 'other', reasons: [
-    { id: 'system_error', icon: AlertTriangle },
-    { id: 'other', icon: MessageSquare },
-  ]},
+  {
+    category: 'payment', reasons: [
+      { id: 'no_payment', icon: Ban },
+      { id: 'underpaid', icon: ArrowDownRight },
+      { id: 'overpaid', icon: ArrowUpRight },
+      { id: 'payment_pending', icon: Clock },
+      { id: 'wrong_payment_method', icon: AlertTriangle },
+    ]
+  },
+  {
+    category: 'release', reasons: [
+      { id: 'crypto_not_released', icon: Ban },
+      { id: 'wrong_amount_released', icon: AlertTriangle },
+    ]
+  },
+  {
+    category: 'conduct', reasons: [
+      { id: 'unresponsive', icon: Clock },
+      { id: 'abusive', icon: Ban },
+      { id: 'suspected_fraud', icon: Shield },
+    ]
+  },
+  {
+    category: 'compliance', reasons: [
+      { id: 'name_mismatch', icon: AlertTriangle },
+      { id: 'third_party_payment', icon: AlertTriangle },
+      { id: 'chargeback_threat', icon: Ban },
+    ]
+  },
+  {
+    category: 'other', reasons: [
+      { id: 'system_error', icon: AlertTriangle },
+      { id: 'other', icon: MessageSquare },
+    ]
+  },
 ];
 
 function DisputesTab() {
@@ -824,8 +866,8 @@ function DisputesTab() {
               fileSize: uploaded.fileSize || file.size,
               description: "",
               evidenceType: file.type.startsWith("image/") ? "screenshot" :
-                           file.type.startsWith("video/") ? "video" :
-                           file.type === "application/pdf" ? "document" : "other",
+                file.type.startsWith("video/") ? "video" :
+                  file.type === "application/pdf" ? "document" : "other",
             });
           } catch (err) {
             console.error(`Failed to upload evidence file: ${file.name}`, err);
@@ -868,7 +910,9 @@ function DisputesTab() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      const newFiles = Array.from(files).filter(f => f.size <= 10 * 1024 * 1024);
+      const newFiles = Array.from(files).filter((file) => {
+        return file.size <= 10 * 1024 * 1024 && isAllowedEvidenceMimeType(file.type);
+      });
       setUploadedFiles(prev => [...prev, ...newFiles].slice(0, 5));
     }
   };
@@ -887,7 +931,7 @@ function DisputesTab() {
     });
   };
 
-  const eligibleTrades = trades?.filter(t => 
+  const eligibleTrades = trades?.filter(t =>
     t.status === 'processing' || t.status === 'pending'
   ) || [];
 
@@ -1037,8 +1081,8 @@ function DisputesTab() {
               )}
 
               <div className="flex justify-end">
-                <Button 
-                  onClick={() => setDisputeStep(2)} 
+                <Button
+                  onClick={() => setDisputeStep(2)}
                   disabled={!selectedTrade || !selectedReason}
                   data-testid="button-next-step"
                 >
@@ -1057,7 +1101,7 @@ function DisputesTab() {
               <CardDescription>{t('p2p.dispute.uploadEvidenceDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div 
+              <div
                 className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
                 onClick={() => document.getElementById('evidence-upload')?.click()}
               >
@@ -1078,14 +1122,14 @@ function DisputesTab() {
               {uploadedFiles.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {uploadedFiles.map((file, index) => {
-                    const isImage = file.type.startsWith('image/');
-                    const previewUrl = isImage ? URL.createObjectURL(file) : null;
+                    const isPreviewImage = canPreviewImageFile(file.type);
+                    const previewUrl = isPreviewImage ? URL.createObjectURL(file) : null;
                     return (
                       <div key={index} className="relative group border rounded-lg overflow-hidden">
-                        {isImage && previewUrl ? (
+                        {isPreviewImage && previewUrl ? (
                           <div className="aspect-video bg-muted">
-                            <img 
-                              src={previewUrl} 
+                            <img
+                              src={previewUrl}
                               alt={file.name}
                               loading="lazy"
                               className="w-full h-full object-cover"
@@ -1105,9 +1149,9 @@ function DisputesTab() {
                           <p className="text-xs font-medium truncate">{file.name}</p>
                           <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                         </div>
-                        <Button 
-                          variant="destructive" 
-                          size="icon" 
+                        <Button
+                          variant="destructive"
+                          size="icon"
                           className="absolute top-1 end-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={() => removeFile(index)}
                         >
@@ -1237,8 +1281,8 @@ function DisputesTab() {
                   <ChevronRight className="h-4 w-4 rotate-180 me-1" />
                   {t('common.back')}
                 </Button>
-                <Button 
-                  onClick={handleSubmitDispute} 
+                <Button
+                  onClick={handleSubmitDispute}
                   disabled={!acknowledged || createDisputeMutation.isPending}
                   data-testid="button-submit-dispute"
                 >
@@ -1270,8 +1314,8 @@ function DisputesTab() {
           {disputes && disputes.length > 0 ? (
             <div className="space-y-3">
               {disputes.map((dispute) => (
-                <Card 
-                  key={dispute.id} 
+                <Card
+                  key={dispute.id}
                   className="cursor-pointer hover-elevate"
                   onClick={() => setSelectedDispute(dispute.id)}
                   data-testid={`card-dispute-${dispute.id}`}
@@ -1371,7 +1415,7 @@ function DisputesTab() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid gap-3">
-                      <div 
+                      <div
                         className="p-4 border rounded-lg cursor-pointer hover-elevate"
                         onClick={() => respondDisputeMutation.mutate({ action: 'accept' })}
                         data-testid="button-accept-dispute"
@@ -1386,8 +1430,8 @@ function DisputesTab() {
                           </div>
                         </div>
                       </div>
-                      
-                      <div 
+
+                      <div
                         className="p-4 border rounded-lg cursor-pointer hover-elevate"
                         onClick={() => respondDisputeMutation.mutate({ action: 'contest' })}
                         data-testid="button-contest-dispute"
@@ -1402,8 +1446,8 @@ function DisputesTab() {
                           </div>
                         </div>
                       </div>
-                      
-                      <div 
+
+                      <div
                         className="p-4 border rounded-lg cursor-pointer hover-elevate"
                         onClick={() => respondDisputeMutation.mutate({ action: 'escalate' })}
                         data-testid="button-escalate-dispute"
@@ -1419,7 +1463,7 @@ function DisputesTab() {
                         </div>
                       </div>
                     </div>
-                    
+
                     {respondDisputeMutation.isPending && (
                       <div className="flex items-center justify-center p-4">
                         <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -1444,36 +1488,47 @@ function DisputesTab() {
                       ) : (
                         <div className="space-y-2">
                           {disputeDetails.evidence.map((ev) => (
-                            <div key={ev.id} className="flex items-center justify-between p-2 border rounded-md">
-                              <div className="flex items-center gap-2">
-                                {ev.fileType.startsWith('image/') ? (
-                                  <Camera className="h-4 w-4 text-primary" />
-                                ) : ev.fileType.startsWith('video/') ? (
-                                  <Video className="h-4 w-4 text-primary" />
-                                ) : (
-                                  <FileCheck className="h-4 w-4 text-primary" />
-                                )}
-                                <div>
-                                  <p className="text-sm font-medium">{ev.fileName}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {ev.uploaderName} - {new Date(ev.createdAt).toLocaleString()}
-                                  </p>
+                            (() => {
+                              const safeFileUrl = normalizeSafeEvidenceUrl(ev.fileUrl);
+                              return (
+                                <div key={ev.id} className="flex items-center justify-between p-2 border rounded-md">
+                                  <div className="flex items-center gap-2">
+                                    {ev.fileType.startsWith('image/') ? (
+                                      <Camera className="h-4 w-4 text-primary" />
+                                    ) : ev.fileType.startsWith('video/') ? (
+                                      <Video className="h-4 w-4 text-primary" />
+                                    ) : (
+                                      <FileCheck className="h-4 w-4 text-primary" />
+                                    )}
+                                    <div>
+                                      <p className="text-sm font-medium">{ev.fileName}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {ev.uploaderName} - {new Date(ev.createdAt).toLocaleString()}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {ev.isVerified && (
+                                      <Badge variant="default" className="text-xs">
+                                        <Check className="h-3 w-3 me-1" />
+                                        {t('p2p.dispute.verified')}
+                                      </Badge>
+                                    )}
+                                    <Button variant="ghost" size="icon" asChild disabled={!safeFileUrl}>
+                                      {safeFileUrl ? (
+                                        <a href={safeFileUrl} target="_blank" rel="noopener noreferrer">
+                                          <Eye className="h-4 w-4" />
+                                        </a>
+                                      ) : (
+                                        <span>
+                                          <Eye className="h-4 w-4" />
+                                        </span>
+                                      )}
+                                    </Button>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {ev.isVerified && (
-                                  <Badge variant="default" className="text-xs">
-                                    <Check className="h-3 w-3 me-1" />
-                                    {t('p2p.dispute.verified')}
-                                  </Badge>
-                                )}
-                                <Button variant="ghost" size="icon" asChild>
-                                  <a href={ev.fileUrl} target="_blank" rel="noopener noreferrer">
-                                    <Eye className="h-4 w-4" />
-                                  </a>
-                                </Button>
-                              </div>
-                            </div>
+                              );
+                            })()
                           ))}
                         </div>
                       )}

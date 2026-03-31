@@ -17,7 +17,7 @@ const AGGRESSIVE_MOVE_TYPES = new Set(['move', 'play', 'playCard', 'double', 'bi
 
 const SENSITIVE_KEY_RE = /(password|passcode|secret|token|email|phone|mobile|address|national|ssn|iban|card|cvv|otp|cookie|authorization|auth)/i;
 const ID_KEY_RE = /(^|_)(user|admin|player|bot|session).*id(s)?$/i;
-const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+const BLOCKED_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 function nowIso() {
   return new Date().toISOString();
@@ -34,6 +34,132 @@ function toNumber(value, fallback = 0) {
     if (Number.isFinite(n)) return n;
   }
   return fallback;
+}
+
+function normalizeMapKey(value, fallback = 'unknown') {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return fallback;
+  if (BLOCKED_OBJECT_KEYS.has(raw)) return `${fallback}_key`;
+
+  let out = '';
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i];
+    const code = raw.charCodeAt(i);
+    const isAlphaNum = (code >= 48 && code <= 57) || (code >= 97 && code <= 122);
+    out += (isAlphaNum || ch === '_' || ch === '-' || ch === '.') ? ch : '_';
+  }
+
+  return out || fallback;
+}
+
+function isSafeEmailAddress(value) {
+  const text = String(value || '').trim();
+  if (!text || text.length > 254) return false;
+
+  const at = text.indexOf('@');
+  if (at <= 0 || at !== text.lastIndexOf('@') || at >= text.length - 3) return false;
+
+  const local = text.slice(0, at);
+  const domain = text.slice(at + 1);
+  if (!local || !domain || !domain.includes('.')) return false;
+  if (local.length > 64 || local[0] === '.' || local[local.length - 1] === '.') return false;
+
+  const localAllowed = "!#$%&'*+/=?^_`{|}~-";
+  for (let i = 0; i < local.length; i += 1) {
+    const ch = local[i];
+    const code = local.charCodeAt(i);
+    const isAlphaNum = (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+    if (isAlphaNum || ch === '.' || localAllowed.includes(ch)) continue;
+    return false;
+  }
+
+  const labels = domain.split('.');
+  if (labels.length < 2) return false;
+  for (const label of labels) {
+    if (!label || label.length > 63) return false;
+    const first = label.charCodeAt(0);
+    const last = label.charCodeAt(label.length - 1);
+    const firstOk = (first >= 48 && first <= 57) || (first >= 65 && first <= 90) || (first >= 97 && first <= 122);
+    const lastOk = (last >= 48 && last <= 57) || (last >= 65 && last <= 90) || (last >= 97 && last <= 122);
+    if (!firstOk || !lastOk) return false;
+
+    for (let i = 0; i < label.length; i += 1) {
+      const ch = label[i];
+      const code = label.charCodeAt(i);
+      const isAlphaNum = (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+      if (isAlphaNum || ch === '-') continue;
+      return false;
+    }
+  }
+
+  return labels[labels.length - 1].length >= 2;
+}
+
+function trimTokenPunctuation(token) {
+  const punctuation = new Set(['(', ')', '[', ']', '{', '}', '<', '>', '"', "'", ',', ';', ':', '!']);
+  let start = 0;
+  let end = token.length;
+  while (start < end && punctuation.has(token[start])) start += 1;
+  while (end > start && punctuation.has(token[end - 1])) end -= 1;
+  return {
+    prefix: token.slice(0, start),
+    core: token.slice(start, end),
+    suffix: token.slice(end),
+  };
+}
+
+function redactEmails(text) {
+  const tokens = String(text || '').split(' ');
+  for (let i = 0; i < tokens.length; i += 1) {
+    const parts = trimTokenPunctuation(tokens[i]);
+    if (isSafeEmailAddress(parts.core)) {
+      tokens[i] = `${parts.prefix}[redacted-email]${parts.suffix}`;
+    }
+  }
+  return tokens.join(' ');
+}
+
+function isPhoneLikeChar(ch) {
+  return (ch >= '0' && ch <= '9') || ch === '+' || ch === ' ' || ch === '-' || ch === '(' || ch === ')';
+}
+
+function looksLikePhoneSegment(text) {
+  if (!text) return false;
+  let digits = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch >= '0' && ch <= '9') {
+      digits += 1;
+      continue;
+    }
+    if (!isPhoneLikeChar(ch)) return false;
+  }
+  return digits >= 7;
+}
+
+function redactPhoneSequences(text) {
+  let out = '';
+  let segment = '';
+
+  const flush = () => {
+    if (!segment) return;
+    out += looksLikePhoneSegment(segment) ? '[redacted-phone]' : segment;
+    segment = '';
+  };
+
+  const value = String(text || '');
+  for (let i = 0; i < value.length; i += 1) {
+    const ch = value[i];
+    if (isPhoneLikeChar(ch)) {
+      segment += ch;
+      continue;
+    }
+    flush();
+    out += ch;
+  }
+
+  flush();
+  return out;
 }
 
 function randomInt(min, max) {
@@ -64,12 +190,8 @@ function redactString(text) {
   let value = String(text).trim();
 
   if (!value) return value;
-  if (EMAIL_RE.test(value)) {
-    value = value.replace(EMAIL_RE, '[redacted-email]');
-  }
-
-  // Generic phone-like sequence redaction.
-  value = value.replace(/\+?\d[\d\s\-()]{7,}\d/g, '[redacted-phone]');
+  value = redactEmails(value);
+  value = redactPhoneSequences(value);
 
   // Truncate any long payload to avoid leaking too much context.
   if (value.length > 240) {
@@ -139,7 +261,9 @@ function difficultyThinkRange(level) {
 }
 
 function strategyKey(gameType, difficultyLevel) {
-  return `${String(gameType || 'unknown').toLowerCase()}:${String(difficultyLevel || 'medium').toLowerCase()}`;
+  const safeGame = normalizeMapKey(gameType, 'unknown');
+  const safeDifficulty = normalizeMapKey(difficultyLevel, 'medium');
+  return `${safeGame}:${safeDifficulty}`;
 }
 
 function defaultModel() {
@@ -160,22 +284,22 @@ function defaultModel() {
     updatedAt: nowIso(),
     summary: {
       totalEvents: 0,
-      eventCounts: {},
+      eventCounts: Object.create(null),
       botDecisions: 0,
       adminChats: 0,
       selfTuneRuns: 0,
       lastSelfTuneAt: null,
     },
-    strategies: {},
-    users: {},
-    games: {},
-    sessions: {},
+    strategies: Object.create(null),
+    users: Object.create(null),
+    games: Object.create(null),
+    sessions: Object.create(null),
     projectSnapshots: [],
     rawEvents: [],
     analytics: {
-      eventsByDay: {},
-      resultsByDay: {},
-      moveTypeByGame: {},
+      eventsByDay: Object.create(null),
+      resultsByDay: Object.create(null),
+      moveTypeByGame: Object.create(null),
       decisionTotals: {
         count: 0,
         totalConfidence: 0,
@@ -222,10 +346,10 @@ function migrateModel(parsed) {
         ...(isPlainObject(parsed?.analytics?.decisionTotals) ? parsed.analytics.decisionTotals : {}),
       },
     },
-    strategies: isPlainObject(parsed?.strategies) ? parsed.strategies : {},
-    users: isPlainObject(parsed?.users) ? parsed.users : {},
-    games: isPlainObject(parsed?.games) ? parsed.games : {},
-    sessions: isPlainObject(parsed?.sessions) ? parsed.sessions : {},
+    strategies: isPlainObject(parsed?.strategies) ? parsed.strategies : Object.create(null),
+    users: isPlainObject(parsed?.users) ? parsed.users : Object.create(null),
+    games: isPlainObject(parsed?.games) ? parsed.games : Object.create(null),
+    sessions: isPlainObject(parsed?.sessions) ? parsed.sessions : Object.create(null),
     projectSnapshots: Array.isArray(parsed?.projectSnapshots) ? parsed.projectSnapshots : [],
     rawEvents: Array.isArray(parsed?.rawEvents) ? parsed.rawEvents : [],
   };
@@ -323,10 +447,15 @@ function setRuntimeEnabled(nextEnabled, requestedBy = 'admin-api', reason = '', 
 
 function getOrCreateStrategy(gameType, difficultyLevel) {
   const key = strategyKey(gameType, difficultyLevel);
+  if (!isPlainObject(model.strategies)) {
+    model.strategies = Object.create(null);
+  }
   if (!model.strategies[key]) {
+    const safeGameType = normalizeMapKey(gameType, 'unknown');
+    const safeDifficultyLevel = normalizeMapKey(difficultyLevel, 'medium');
     model.strategies[key] = {
-      gameType: String(gameType || 'unknown').toLowerCase(),
-      difficultyLevel: String(difficultyLevel || 'medium').toLowerCase(),
+      gameType: safeGameType,
+      difficultyLevel: safeDifficultyLevel,
       createdAt: nowIso(),
       updatedAt: nowIso(),
       explorationRate: 0.18,
@@ -358,7 +487,10 @@ function getOrCreateStrategy(gameType, difficultyLevel) {
 }
 
 function getOrCreateGameStats(gameType) {
-  const key = String(gameType || 'unknown').toLowerCase();
+  const key = normalizeMapKey(gameType, 'unknown');
+  if (!isPlainObject(model.games)) {
+    model.games = Object.create(null);
+  }
   if (!model.games[key]) {
     model.games[key] = {
       gameType: key,
@@ -375,6 +507,9 @@ function getOrCreateGameStats(gameType) {
 
 function getOrCreateUserStats(userId) {
   const key = hashStable(String(userId || 'unknown'));
+  if (!isPlainObject(model.users)) {
+    model.users = Object.create(null);
+  }
   if (!model.users[key]) {
     model.users[key] = {
       userId: key,
@@ -414,7 +549,7 @@ function incrementDayCounter(collection, day, key) {
   if (!collection[day]) {
     collection[day] = {
       total: 0,
-      byType: {},
+      byType: Object.create(null),
       matches: 0,
       aiWins: 0,
       humanWins: 0,
@@ -424,15 +559,20 @@ function incrementDayCounter(collection, day, key) {
   }
 
   collection[day].total += 1;
-  collection[day].byType[key] = (collection[day].byType[key] || 0) + 1;
+  const safeType = normalizeMapKey(key, 'event');
+  collection[day].byType[safeType] = (collection[day].byType[safeType] || 0) + 1;
 }
 
 function updateMoveTypeAnalytics(gameType, moveType, count = 1) {
-  const game = String(gameType || 'unknown').toLowerCase();
-  if (!model.analytics.moveTypeByGame[game]) {
-    model.analytics.moveTypeByGame[game] = {};
+  const game = normalizeMapKey(gameType, 'unknown');
+  const safeMoveType = normalizeMapKey(moveType, 'unknown');
+  if (!isPlainObject(model.analytics.moveTypeByGame)) {
+    model.analytics.moveTypeByGame = Object.create(null);
   }
-  model.analytics.moveTypeByGame[game][moveType] = (model.analytics.moveTypeByGame[game][moveType] || 0) + count;
+  if (!model.analytics.moveTypeByGame[game]) {
+    model.analytics.moveTypeByGame[game] = Object.create(null);
+  }
+  model.analytics.moveTypeByGame[game][safeMoveType] = (model.analytics.moveTypeByGame[game][safeMoveType] || 0) + count;
 }
 
 function indexDecision(confidence, thinkMs, consideredMoves = 0) {
@@ -685,14 +825,15 @@ function applyLearningEvent(body) {
 
   const day = nowIso().slice(0, 10);
   model.summary.totalEvents += 1;
-  model.summary.eventCounts[type] = (model.summary.eventCounts[type] || 0) + 1;
+  const safeEventType = normalizeMapKey(type, 'event');
+  model.summary.eventCounts[safeEventType] = (model.summary.eventCounts[safeEventType] || 0) + 1;
   incrementDayCounter(model.analytics.eventsByDay, day, type);
 
   trackRawEvent(type, payload);
 
   if (type === 'human_move') {
     const userId = String(payload.userId || 'unknown');
-    const moveType = String(payload.moveType || 'unknown');
+    const moveType = normalizeMapKey(payload.moveType, 'unknown');
     const gameType = String(payload.gameType || 'unknown').toLowerCase();
     const userStats = getOrCreateUserStats(userId);
 
@@ -705,7 +846,7 @@ function applyLearningEvent(body) {
   } else if (type === 'ai_move') {
     const gameType = String(payload.gameType || 'unknown').toLowerCase();
     const difficultyLevel = String(payload.difficultyLevel || 'medium').toLowerCase();
-    const moveType = String(payload.moveType || 'unknown');
+    const moveType = normalizeMapKey(payload.moveType, 'unknown');
     const confidence = clamp(toNumber(payload.confidence, 0.5), 0, 1);
     const consideredMoves = Math.max(0, Math.floor(toNumber(payload.consideredMoves, 0)));
 
@@ -743,7 +884,7 @@ function applyLearningEvent(body) {
     }
 
     const sessionInfo = sessionId ? model.sessions[getSessionKey(sessionId)] : null;
-    const learnedMoveType = String(sessionInfo?.lastMoveType || 'unknown');
+    const learnedMoveType = normalizeMapKey(sessionInfo?.lastMoveType, 'unknown');
     const reward = draw ? 0.01 : aiWon ? 0.07 : -0.07;
     strategy.moveTypeWeights[learnedMoveType] = Number((toNumber(strategy.moveTypeWeights[learnedMoveType], 0) + reward).toFixed(4));
 

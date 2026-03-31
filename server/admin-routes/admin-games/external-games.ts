@@ -16,11 +16,30 @@ const PROJECT_ROOT = path.resolve(__dirname, "../..");
 
 // Where external games are stored
 const EXT_GAMES_DIR = path.join(PROJECT_ROOT, "client", "public", "games", "ext");
+const EXT_GAMES_DIR_RESOLVED = path.resolve(EXT_GAMES_DIR);
+
+function resolveExtGamePath(...segments: string[]): string {
+  const resolved = path.resolve(EXT_GAMES_DIR_RESOLVED, ...segments);
+  if (resolved === EXT_GAMES_DIR_RESOLVED) return resolved;
+
+  const baseWithSep = `${EXT_GAMES_DIR_RESOLVED}${path.sep}`;
+  if (!resolved.startsWith(baseWithSep)) {
+    throw new Error("Invalid external game path");
+  }
+
+  return resolved;
+}
 
 // Ensure directory exists
 function ensureDir(dir: string) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  const resolvedDir = path.resolve(dir);
+  const baseWithSep = `${EXT_GAMES_DIR_RESOLVED}${path.sep}`;
+  if (resolvedDir !== EXT_GAMES_DIR_RESOLVED && !resolvedDir.startsWith(baseWithSep)) {
+    throw new Error("Refusing to create directory outside external games root");
+  }
+
+  if (!fs.existsSync(resolvedDir)) {
+    fs.mkdirSync(resolvedDir, { recursive: true });
   }
 }
 
@@ -154,9 +173,10 @@ export function registerAdminExternalGamesRoutes(app: Express) {
       // For html_embed: save HTML to file and set localPath
       let localPath = data.localPath;
       if (integrationType === "html_embed" && data.htmlContent) {
-        const gameDir = path.join(EXT_GAMES_DIR, slug);
+        const gameDir = resolveExtGamePath(slug);
         ensureDir(gameDir);
-        fs.writeFileSync(path.join(gameDir, "index.html"), data.htmlContent, "utf-8");
+        const htmlEntryPath = resolveExtGamePath(slug, "index.html");
+        fs.writeFileSync(htmlEntryPath, String(data.htmlContent), "utf-8");
         localPath = `/games/ext/${slug}/`;
       }
 
@@ -242,7 +262,7 @@ export function registerAdminExternalGamesRoutes(app: Express) {
         return res.status(400).json({ error: `ZIP file too large. Max ${MAX_ZIP_SIZE / 1024 / 1024}MB` });
       }
 
-      const gameDir = path.join(EXT_GAMES_DIR, game.slug);
+      const gameDir = resolveExtGamePath(game.slug);
 
       // Clear old files if re-uploading
       if (fs.existsSync(gameDir)) {
@@ -258,7 +278,7 @@ export function registerAdminExternalGamesRoutes(app: Express) {
       for (const entry of entries) {
         const entryName = entry.entryName;
         // Block path traversal
-        if (entryName.includes("..") || entryName.startsWith("/")) {
+        if (entryName.includes("..") || entryName.startsWith("/") || entryName.startsWith("\\") || path.isAbsolute(entryName)) {
           return res.status(400).json({ error: `Invalid ZIP entry: ${entryName}` });
         }
         // Block dangerous file types
@@ -273,7 +293,7 @@ export function registerAdminExternalGamesRoutes(app: Express) {
 
       // Check if entry file exists
       const entryFile = game.entryFile || "index.html";
-      
+
       // Maybe entry file is in a subdirectory (common with ZIP)
       let actualEntryPath = path.join(gameDir, entryFile);
       if (!fs.existsSync(actualEntryPath)) {

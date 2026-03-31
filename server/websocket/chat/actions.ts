@@ -4,6 +4,7 @@ import { chatMessages } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import type { AuthenticatedSocket } from "../shared";
 import { clients } from "../shared";
+import { sanitizePlainText } from "../../lib/input-security";
 
 /**
  * Handle deleting a message (for everyone or for self only).
@@ -57,7 +58,7 @@ export async function handleEditMessage(ws: AuthenticatedSocket, data: any): Pro
   const { messageId, newContent } = data;
   if (!messageId || !newContent || typeof newContent !== 'string') return;
 
-  const sanitized = String(newContent).replace(/<[^>]*>/g, '').slice(0, 2000).trim();
+  const sanitized = sanitizePlainText(newContent, { maxLength: 2000 });
   if (!sanitized) return;
 
   // Only sender can edit their own text messages

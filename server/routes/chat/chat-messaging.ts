@@ -5,6 +5,7 @@ import { db } from "../../db";
 import { eq, and, or, desc } from "drizzle-orm";
 import { users, chatMessages, chatSettings } from "@shared/schema";
 import { chatRateLimiter } from "../../lib/rate-limiter";
+import { sanitizePlainText } from "../../lib/input-security";
 
 export function registerChatMessagingRoutes(app: Express): void {
 
@@ -15,7 +16,7 @@ export function registerChatMessagingRoutes(app: Express): void {
       const otherUserId = req.params.userId;
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
-      
+
       const messages = await db.select()
         .from(chatMessages)
         .where(or(
@@ -25,7 +26,7 @@ export function registerChatMessagingRoutes(app: Express): void {
         .orderBy(desc(chatMessages.createdAt))
         .limit(limit)
         .offset(offset);
-      
+
       res.json(messages.reverse());
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -38,18 +39,18 @@ export function registerChatMessagingRoutes(app: Express): void {
       const senderId = req.user!.id;
       const receiverId = req.params.userId;
       const { content, messageType = "text", attachmentUrl } = req.body;
-      
+
       // SECURITY: Validate receiverId
       if (!receiverId || receiverId.length > 100) {
         return res.status(400).json({ error: "Invalid receiver" });
       }
-      
+
       // SECURITY: Rate limit
       const rateLimitResult = chatRateLimiter.check(senderId);
       if (!rateLimitResult.allowed) {
         return res.status(429).json({ error: "Too many messages, please wait" });
       }
-      
+
       // Check if chat is enabled (support both key names)
       const chatEnabledSetting = await db.select().from(chatSettings).where(
         or(eq(chatSettings.key, "chat_enabled"), eq(chatSettings.key, "isEnabled"))
@@ -57,35 +58,35 @@ export function registerChatMessagingRoutes(app: Express): void {
       if (chatEnabledSetting.length > 0 && chatEnabledSetting[0].value === "false") {
         return res.status(403).json({ error: "Chat is currently disabled" });
       }
-      
+
       if (!content || typeof content !== 'string' || content.trim() === "") {
         return res.status(400).json({ error: "Message content is required" });
       }
-      
-      // SECURITY: Sanitize HTML and enforce max length
-      const sanitizedContent = String(content).replace(/<[^>]*>/g, '').slice(0, 2000).trim();
+
+      // SECURITY: Normalize incoming user text into safe plain text
+      const sanitizedContent = sanitizePlainText(content, { maxLength: 2000 });
       if (!sanitizedContent) {
         return res.status(400).json({ error: "Message content is required" });
       }
-      
+
       // SECURITY: Check block/mute
       const [senderUser] = await db.select({ blockedUsers: users.blockedUsers })
         .from(users).where(eq(users.id, senderId));
       const [recipientUser] = await db.select({ blockedUsers: users.blockedUsers })
         .from(users).where(eq(users.id, receiverId));
-      
+
       if (senderUser?.blockedUsers?.includes(receiverId)) {
         return res.status(403).json({ error: "You have blocked this user" });
       }
       if (recipientUser?.blockedUsers?.includes(senderId)) {
         return res.status(403).json({ error: "Cannot send message to this user" });
       }
-      
+
       // PRIVACY: No word filtering on private messages - user privacy first
-      
+
       // SECURITY: Limit attachmentUrl
       const safeAttachmentUrl = attachmentUrl ? String(attachmentUrl).slice(0, 2048) : undefined;
-      
+
       const [message] = await db.insert(chatMessages).values({
         senderId,
         receiverId,
@@ -93,7 +94,7 @@ export function registerChatMessagingRoutes(app: Express): void {
         messageType: String(messageType).slice(0, 20),
         attachmentUrl: safeAttachmentUrl,
       }).returning();
-      
+
       res.status(201).json(message);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -105,7 +106,7 @@ export function registerChatMessagingRoutes(app: Express): void {
     try {
       const userId = req.user!.id;
       const messageId = req.params.messageId;
-      
+
       const [updated] = await db.update(chatMessages)
         .set({ isRead: true, readAt: new Date() })
         .where(and(
@@ -113,11 +114,11 @@ export function registerChatMessagingRoutes(app: Express): void {
           eq(chatMessages.receiverId, userId)
         ))
         .returning();
-      
+
       if (!updated) {
         return res.status(404).json({ error: "Message not found or not authorized" });
       }
-      
+
       res.json(updated);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -129,7 +130,7 @@ export function registerChatMessagingRoutes(app: Express): void {
     try {
       const userId = req.user!.id;
       const otherUserId = req.params.userId;
-      
+
       await db.update(chatMessages)
         .set({ isRead: true, readAt: new Date() })
         .where(and(
@@ -137,7 +138,7 @@ export function registerChatMessagingRoutes(app: Express): void {
           eq(chatMessages.receiverId, userId),
           eq(chatMessages.isRead, false)
         ));
-      
+
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

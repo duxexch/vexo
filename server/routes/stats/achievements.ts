@@ -3,6 +3,7 @@ import { AuthRequest, authMiddleware, adminTokenMiddleware } from "../middleware
 import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import { sendNotification } from "../../websocket";
+import { sanitizePlainText } from "../../lib/input-security";
 
 export function registerAchievementsRoutes(app: Express): void {
 
@@ -21,7 +22,7 @@ export function registerAchievementsRoutes(app: Express): void {
       const userId = req.user!.id;
       const userAchievements = await storage.getUserAchievements(userId);
       const allAchievements = await storage.getAchievements();
-      
+
       const achievementsWithProgress = allAchievements.map(achievement => {
         const userProgress = userAchievements.find(ua => ua.achievementId === achievement.id);
         return {
@@ -32,7 +33,7 @@ export function registerAchievementsRoutes(app: Express): void {
           rewardClaimed: userProgress?.rewardClaimed || false,
         };
       });
-      
+
       res.json(achievementsWithProgress);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -43,7 +44,7 @@ export function registerAchievementsRoutes(app: Express): void {
     try {
       const achievementId = req.params.id;
       const userId = req.user!.id;
-      
+
       const result = await storage.claimAchievementReward(userId, achievementId);
       if (!result.success) return res.status(400).json({ error: result.error });
 
@@ -54,9 +55,9 @@ export function registerAchievementsRoutes(app: Express): void {
           message: `You claimed $${result.amount} from your achievement reward!`,
           messageAr: `حصلت على $${result.amount} من مكافأة الإنجاز!`,
           link: '/wallet', metadata: JSON.stringify({ achievementId, amount: result.amount }),
-        }).catch(() => {});
+        }).catch(() => { });
       }
-      
+
       res.json({ success: true, amount: result.amount });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -68,10 +69,10 @@ export function registerAchievementsRoutes(app: Express): void {
       // SECURITY: Whitelist allowed fields for achievement creation
       const { name, nameAr, description, descriptionAr, category, icon, criteria, rewardType, rewardAmount, isActive } = req.body;
       const safeData: Record<string, any> = {};
-      if (name) safeData.name = String(name).replace(/<[^>]*>/g, '').slice(0, 100);
-      if (nameAr) safeData.nameAr = String(nameAr).replace(/<[^>]*>/g, '').slice(0, 100);
-      if (description) safeData.description = String(description).replace(/<[^>]*>/g, '').slice(0, 500);
-      if (descriptionAr) safeData.descriptionAr = String(descriptionAr).replace(/<[^>]*>/g, '').slice(0, 500);
+      if (name) safeData.name = sanitizePlainText(name, { maxLength: 100 });
+      if (nameAr) safeData.nameAr = sanitizePlainText(nameAr, { maxLength: 100 });
+      if (description) safeData.description = sanitizePlainText(description, { maxLength: 500 });
+      if (descriptionAr) safeData.descriptionAr = sanitizePlainText(descriptionAr, { maxLength: 500 });
       if (category) safeData.category = String(category).slice(0, 50);
       if (icon) safeData.icon = String(icon).slice(0, 50);
       if (criteria) safeData.criteria = criteria;

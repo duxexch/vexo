@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { MoveData } from '../game-engines/types';
 import { logger } from './logger';
+import { isSafeEmailAddress } from './input-security';
 
 const rawAiAgentBaseUrl = (process.env.AI_AGENT_BASE_URL || 'http://vex-ai-agent:3100').trim();
 const AI_AGENT_BASE_URL = rawAiAgentBaseUrl.replace(/\/+$/, '');
@@ -48,10 +49,87 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isPhoneLikeChar(ch: string): boolean {
+    return (ch >= '0' && ch <= '9') || ch === '+' || ch === ' ' || ch === '-' || ch === '(' || ch === ')';
+}
+
+function looksLikePhoneSegment(value: string): boolean {
+    if (!value) return false;
+
+    let digits = 0;
+    for (let i = 0; i < value.length; i += 1) {
+        const ch = value[i];
+        if (ch >= '0' && ch <= '9') {
+            digits += 1;
+            continue;
+        }
+        if (!isPhoneLikeChar(ch)) {
+            return false;
+        }
+    }
+
+    return digits >= 7;
+}
+
+function trimTokenPunctuation(token: string): { prefix: string; core: string; suffix: string } {
+    const punctuation = new Set(['(', ')', '[', ']', '{', '}', '<', '>', '"', "'", ',', ';', ':', '!']);
+    let start = 0;
+    let end = token.length;
+
+    while (start < end && punctuation.has(token[start])) {
+        start += 1;
+    }
+    while (end > start && punctuation.has(token[end - 1])) {
+        end -= 1;
+    }
+
+    return {
+        prefix: token.slice(0, start),
+        core: token.slice(start, end),
+        suffix: token.slice(end),
+    };
+}
+
+function redactEmailTokens(value: string): string {
+    const parts = value.split(' ');
+    for (let i = 0; i < parts.length; i += 1) {
+        const token = parts[i];
+        const cleaned = trimTokenPunctuation(token);
+        if (isSafeEmailAddress(cleaned.core)) {
+            parts[i] = `${cleaned.prefix}[redacted-email]${cleaned.suffix}`;
+        }
+    }
+    return parts.join(' ');
+}
+
+function redactPhoneSequences(value: string): string {
+    let out = '';
+    let segment = '';
+
+    const flush = () => {
+        if (!segment) return;
+        out += looksLikePhoneSegment(segment) ? '[redacted-phone]' : segment;
+        segment = '';
+    };
+
+    for (let i = 0; i < value.length; i += 1) {
+        const ch = value[i];
+        if (isPhoneLikeChar(ch)) {
+            segment += ch;
+            continue;
+        }
+        flush();
+        out += ch;
+    }
+
+    flush();
+    return out;
+}
+
 function sanitizeString(value: string): string {
     let sanitized = value.trim();
-    sanitized = sanitized.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]');
-    sanitized = sanitized.replace(/\+?\d[\d\s\-()]{7,}\d/g, '[redacted-phone]');
+    sanitized = redactEmailTokens(sanitized);
+    sanitized = redactPhoneSequences(sanitized);
     if (sanitized.length > 240) {
         sanitized = `${sanitized.slice(0, 240)}...`;
     }

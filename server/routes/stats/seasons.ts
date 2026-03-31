@@ -2,6 +2,7 @@ import type { Express, Response } from "express";
 import { AuthRequest, authMiddleware, adminTokenMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
+import { sanitizePlainText } from "../../lib/input-security";
 
 export function registerSeasonsRoutes(app: Express): void {
 
@@ -39,16 +40,16 @@ export function registerSeasonsRoutes(app: Express): void {
       const seasonId = req.params.id;
       const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
       const gameType = req.query.gameType as string | undefined;
-      
+
       const season = await storage.getSeason(seasonId);
       if (!season) return res.status(404).json({ error: "Season not found" });
-      
+
       const stats = await storage.getSeasonalStats(seasonId, limit, gameType);
       const rankedStats = stats.map((stat, index) => ({
         ...stat, rank: index + 1,
         winRate: stat.gamesPlayed > 0 ? Math.round((stat.gamesWon / stat.gamesPlayed) * 100) : 0,
       }));
-      
+
       res.json({ season, leaderboard: rankedStats });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -59,7 +60,7 @@ export function registerSeasonsRoutes(app: Express): void {
     try {
       const userId = req.user!.id;
       const seasonId = req.params.seasonId;
-      
+
       const stats = await storage.getUserSeasonalStats(userId, seasonId);
       if (!stats) {
         return res.json({
@@ -87,10 +88,10 @@ export function registerSeasonsRoutes(app: Express): void {
       // SECURITY: Whitelist allowed fields for season creation
       const { name, nameAr, description, descriptionAr, startDate, endDate, isActive, rewards } = req.body;
       const safeData: Record<string, any> = {};
-      if (name) safeData.name = String(name).replace(/<[^>]*>/g, '').slice(0, 100);
-      if (nameAr) safeData.nameAr = String(nameAr).replace(/<[^>]*>/g, '').slice(0, 100);
-      if (description) safeData.description = String(description).replace(/<[^>]*>/g, '').slice(0, 1000);
-      if (descriptionAr) safeData.descriptionAr = String(descriptionAr).replace(/<[^>]*>/g, '').slice(0, 1000);
+      if (name) safeData.name = sanitizePlainText(name, { maxLength: 100 });
+      if (nameAr) safeData.nameAr = sanitizePlainText(nameAr, { maxLength: 100 });
+      if (description) safeData.description = sanitizePlainText(description, { maxLength: 1000 });
+      if (descriptionAr) safeData.descriptionAr = sanitizePlainText(descriptionAr, { maxLength: 1000 });
       if (startDate) safeData.startDate = startDate;
       if (endDate) safeData.endDate = endDate;
       if (isActive !== undefined) safeData.isActive = Boolean(isActive);
@@ -107,10 +108,10 @@ export function registerSeasonsRoutes(app: Express): void {
       // SECURITY: Whitelist allowed fields for season update
       const { name, nameAr, description, descriptionAr, startDate, endDate, isActive, rewards } = req.body;
       const safeData: Record<string, any> = {};
-      if (name) safeData.name = String(name).replace(/<[^>]*>/g, '').slice(0, 100);
-      if (nameAr) safeData.nameAr = String(nameAr).replace(/<[^>]*>/g, '').slice(0, 100);
-      if (description) safeData.description = String(description).replace(/<[^>]*>/g, '').slice(0, 1000);
-      if (descriptionAr) safeData.descriptionAr = String(descriptionAr).replace(/<[^>]*>/g, '').slice(0, 1000);
+      if (name) safeData.name = sanitizePlainText(name, { maxLength: 100 });
+      if (nameAr) safeData.nameAr = sanitizePlainText(nameAr, { maxLength: 100 });
+      if (description) safeData.description = sanitizePlainText(description, { maxLength: 1000 });
+      if (descriptionAr) safeData.descriptionAr = sanitizePlainText(descriptionAr, { maxLength: 1000 });
       if (startDate) safeData.startDate = startDate;
       if (endDate) safeData.endDate = endDate;
       if (isActive !== undefined) safeData.isActive = Boolean(isActive);

@@ -11,6 +11,7 @@ import { emitDisputeAlert } from "../../lib/admin-alerts";
 import { sendNotification } from "../../websocket";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage, formatDispute } from "./helpers";
+import { sanitizePlainText } from "../../lib/input-security";
 
 /** POST /api/p2p/disputes — Create a new dispute on a trade */
 export function registerCreateRoutes(app: Express) {
@@ -25,8 +26,8 @@ export function registerCreateRoutes(app: Express) {
       }
 
       // SECURITY: Sanitize text inputs to prevent stored XSS
-      const safeReason = String(reason).replace(/<[^>]*>/g, '').slice(0, 500);
-      const safeDescription = description ? String(description).replace(/<[^>]*>/g, '').slice(0, 2000) : "";
+      const safeReason = sanitizePlainText(reason, { maxLength: 500 });
+      const safeDescription = sanitizePlainText(description, { maxLength: 2000 });
 
       // 1. Validate trade exists and user is a party
       const [trade] = await db
@@ -112,7 +113,7 @@ export function registerCreateRoutes(app: Express) {
         severity: 'warning',
         message: `New dispute opened by ${req.user!.username} on trade #${tradeId.slice(0, 8)}. Reason: ${reason}`,
         messageAr: `تم فتح نزاع جديد بواسطة ${req.user!.username} على الصفقة #${tradeId.slice(0, 8)}. السبب: ${reason}`,
-      }).catch(() => {});
+      }).catch(() => { });
 
       // Notify respondent about new dispute
       await sendNotification(respondentId, {
@@ -120,11 +121,11 @@ export function registerCreateRoutes(app: Express) {
         priority: 'urgent',
         title: 'Dispute Opened Against You ⚠️',
         titleAr: 'تم فتح نزاع ضدك ⚠️',
-        message: `${req.user!.username} opened a dispute on trade #${tradeId.slice(0,8)}. Reason: ${safeReason}`,
-        messageAr: `قام ${req.user!.username} بفتح نزاع على الصفقة #${tradeId.slice(0,8)}. السبب: ${safeReason}`,
+        message: `${req.user!.username} opened a dispute on trade #${tradeId.slice(0, 8)}. Reason: ${safeReason}`,
+        messageAr: `قام ${req.user!.username} بفتح نزاع على الصفقة #${tradeId.slice(0, 8)}. السبب: ${safeReason}`,
         link: '/p2p/disputes',
         metadata: JSON.stringify({ disputeId: dispute.id, tradeId, action: 'dispute_opened' }),
-      }).catch(() => {});
+      }).catch(() => { });
 
       // 9. Get respondent name for response
       const [respondentUser] = await db

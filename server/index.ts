@@ -1,6 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import cookieParser from "cookie-parser";
+import csurf from "csurf";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { registerAdminRoutes } from "./admin-routes";
 import { serveStatic } from "./static";
@@ -112,6 +114,14 @@ function startChallengeExpiryJob() {
 const app = express();
 const httpServer = createServer(app);
 
+const publicFileRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 240,
+  message: { error: "Too many requests" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const gameWss = setupGameWebSocket(httpServer);
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -160,7 +170,7 @@ const cspInlineScriptHashes = isProduction ? computeInlineScriptHashes() : [];
     ? path.resolve(__dirname, "..", "dist", "public")
     : path.resolve(__dirname, "..", "client", "public");
 
-  app.get("/sw.js", (_req: any, res: any) => {
+  app.get("/sw.js", publicFileRateLimiter, (_req: any, res: any) => {
     const swPath = path.join(swDir, "sw.js");
     if (fs.existsSync(swPath)) {
       const content = fs.readFileSync(swPath, "utf-8");
@@ -217,6 +227,51 @@ app.use(compression({
 
 // Parse cookies for httpOnly token support
 app.use(cookieParser());
+
+const csrfProtection = csurf({
+  cookie: {
+    key: "vex_csrf",
+    httpOnly: true,
+    sameSite: "strict",
+    secure: isProduction,
+    path: "/",
+  },
+  ignoreMethods: ["GET", "HEAD", "OPTIONS"],
+});
+
+function shouldEnforceCsrf(req: Request): boolean {
+  const method = req.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
+    return false;
+  }
+
+  const hasBearerAuth = typeof req.headers.authorization === "string" && req.headers.authorization.startsWith("Bearer ");
+  const hasAdminTokenHeader = typeof req.headers["x-admin-token"] === "string" && req.headers["x-admin-token"].length > 0;
+  if (hasBearerAuth || hasAdminTokenHeader) {
+    return false;
+  }
+
+  return typeof req.cookies?.vex_token === "string" && req.cookies.vex_token.length > 0;
+}
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (!shouldEnforceCsrf(req)) {
+    return next();
+  }
+  return csrfProtection(req, res, next);
+});
+
+app.get("/api/auth/csrf-token", csrfProtection, (req: Request, res: Response) => {
+  const csrfToken = (req as Request & { csrfToken?: () => string }).csrfToken?.();
+  return res.json({ csrfToken: csrfToken || null });
+});
+
+app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+  if (err?.code === "EBADCSRFTOKEN") {
+    return res.status(403).json({ error: "Invalid CSRF token" });
+  }
+  return next(err);
+});
 
 // CORS protection - restrict cross-origin requests in production
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -460,7 +515,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
     }
 
     // Serve files from MinIO via /storage/* proxy route
-    app.get("/storage/:filename", async (req: Request, res: Response) => {
+    app.get("/storage/:filename", publicFileRateLimiter, async (req: Request, res: Response) => {
       try {
         const { filename } = req.params;
         if (!filename || filename.includes("..") || filename.includes("/")) {

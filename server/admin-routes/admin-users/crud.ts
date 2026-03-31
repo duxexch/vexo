@@ -6,6 +6,7 @@ import { db } from "../../db";
 import { eq, desc, and } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 import { toSafeUser, toSafeUsers } from "../../lib/safe-user";
+import { sanitizePlainText } from "../../lib/input-security";
 
 export function registerUserCrudRoutes(app: Express) {
 
@@ -65,7 +66,7 @@ export function registerUserCrudRoutes(app: Express) {
 
       // Whitelist allowed fields — prevent balance/password/role manipulation
       const adminAllowedFields = ['status', 'firstName', 'lastName', 'email', 'phone', 'avatarUrl', 'country', 'language', 'nickname'];
-      const sanitize = (v: unknown) => typeof v === 'string' ? v.replace(/<[^>]*>/g, '').slice(0, 255) : v;
+      const sanitize = (v: unknown) => typeof v === 'string' ? sanitizePlainText(v, { maxLength: 255 }) : v;
 
       const updates: Record<string, any> = {};
       for (const key of adminAllowedFields) {

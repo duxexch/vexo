@@ -21,7 +21,7 @@
  *   - git_repo:      Game pulled from Git repository
  *   - pwa_app:       Standalone PWA loaded in iframe
  */
-(function(global) {
+(function (global) {
   'use strict';
 
   var VEX = {};
@@ -31,8 +31,25 @@
   var _ready = false;
   var _callbacks = {};
   var _callbackId = 0;
-  var _parentOrigin = '*';
+  var _parentOrigin = null;
   var _eventListeners = {};
+
+  function normalizeOrigin(value) {
+    if (!value || typeof value !== 'string') return null;
+    try {
+      var parsed = new URL(value, window.location.href);
+      if (!parsed.origin || parsed.origin === 'null') return null;
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+      return parsed.origin;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function resolveReferrerOrigin() {
+    if (!document.referrer) return null;
+    return normalizeOrigin(document.referrer);
+  }
 
   // ============ INTERNAL: PostMessage Communication ============
 
@@ -46,6 +63,12 @@
     if (callback) {
       _callbacks[msg.id] = callback;
     }
+
+    if (!_parentOrigin) {
+      console.error('[VEX SDK] Missing trusted parent origin. Set parentOrigin in VEX.init(config).');
+      return;
+    }
+
     try {
       window.parent.postMessage(JSON.stringify(msg), _parentOrigin);
     } catch (e) {
@@ -60,12 +83,11 @@
     } catch (e) {
       return; // Not our message
     }
-    if (!data || data.source !== 'vex-platform') return;
 
-    // Store parent origin for security
-    if (event.origin && event.origin !== 'null') {
-      _parentOrigin = event.origin;
-    }
+    var messageOrigin = normalizeOrigin(event.origin);
+    if (!messageOrigin || !_parentOrigin || messageOrigin !== _parentOrigin) return;
+
+    if (!data || data.source !== 'vex-platform') return;
 
     switch (data.type) {
       case 'init_response':
@@ -141,8 +163,15 @@
    * @param {Function} config.onReady - Called with player data when ready
    * @param {string} [config.language] - Preferred language (auto-detected if omitted)
    */
-  VEX.init = function(config) {
+  VEX.init = function (config) {
     _config = config || {};
+
+    _parentOrigin = normalizeOrigin(_config.parentOrigin) || resolveReferrerOrigin();
+    if (!_parentOrigin) {
+      console.error('[VEX SDK] Unable to resolve trusted parent origin. Pass parentOrigin in VEX.init(config).');
+      return;
+    }
+
     window.addEventListener('message', handleMessage);
 
     // Tell the platform we're ready
@@ -152,7 +181,7 @@
     });
 
     // Ping parent to establish connection
-    setTimeout(function() {
+    setTimeout(function () {
       if (!_ready) {
         sendMessage('game_ping', {});
       }
@@ -163,7 +192,7 @@
    * Get current player info.
    * @returns {{ id: string, username: string, balance: string, language: string, avatarUrl: string }} player
    */
-  VEX.getPlayer = function() {
+  VEX.getPlayer = function () {
     return _player;
   };
 
@@ -171,7 +200,7 @@
    * Get current session token.
    * @returns {string} sessionToken
    */
-  VEX.getSessionToken = function() {
+  VEX.getSessionToken = function () {
     return _sessionToken;
   };
 
@@ -179,7 +208,7 @@
    * Check if SDK is ready.
    * @returns {boolean}
    */
-  VEX.isReady = function() {
+  VEX.isReady = function () {
     return _ready;
   };
 
@@ -190,7 +219,7 @@
    * @param {string} [reason] - Optional reason for the debit
    * @param {Function} callback - Called with { success, newBalance, error }
    */
-  VEX.debit = function(amount, reason, callback) {
+  VEX.debit = function (amount, reason, callback) {
     if (typeof reason === 'function') { callback = reason; reason = ''; }
     sendMessage('debit', {
       amount: Number(amount),
@@ -206,7 +235,7 @@
    * @param {string} [reason] - Optional reason for the credit
    * @param {Function} callback - Called with { success, newBalance, error }
    */
-  VEX.credit = function(amount, reason, callback) {
+  VEX.credit = function (amount, reason, callback) {
     if (typeof reason === 'function') { callback = reason; reason = ''; }
     sendMessage('credit', {
       amount: Number(amount),
@@ -221,7 +250,7 @@
    * @param {Object} [extra] - Extra metadata
    * @param {Function} [callback]
    */
-  VEX.reportScore = function(score, extra, callback) {
+  VEX.reportScore = function (score, extra, callback) {
     if (typeof extra === 'function') { callback = extra; extra = {}; }
     sendMessage('report_score', {
       score: Number(score),
@@ -240,7 +269,7 @@
    * @param {Object} [result.metadata] - Any extra game data
    * @param {Function} [callback]
    */
-  VEX.endSession = function(result, callback) {
+  VEX.endSession = function (result, callback) {
     sendMessage('end_session', {
       result: (result && result.result) || 'none',
       score: (result && result.score) || 0,
@@ -253,7 +282,7 @@
   /**
    * Request to close the game and return to VEX.
    */
-  VEX.close = function() {
+  VEX.close = function () {
     sendMessage('close_request', {});
   };
 
@@ -262,7 +291,7 @@
    * @param {string} message
    * @param {string} [type] - 'success', 'error', 'info', 'warning'
    */
-  VEX.showToast = function(message, type) {
+  VEX.showToast = function (message, type) {
     sendMessage('show_toast', { message: message, type: type || 'info' });
   };
 
@@ -272,7 +301,7 @@
    * @param {string} event
    * @param {Function} handler
    */
-  VEX.on = function(event, handler) {
+  VEX.on = function (event, handler) {
     if (!_eventListeners[event]) _eventListeners[event] = [];
     _eventListeners[event].push(handler);
   };
@@ -282,10 +311,10 @@
    * @param {string} event
    * @param {Function} handler
    */
-  VEX.off = function(event, handler) {
+  VEX.off = function (event, handler) {
     var listeners = _eventListeners[event];
     if (listeners) {
-      _eventListeners[event] = listeners.filter(function(h) { return h !== handler; });
+      _eventListeners[event] = listeners.filter(function (h) { return h !== handler; });
     }
   };
 
@@ -293,7 +322,7 @@
    * Get platform info (language, theme, etc).
    * @param {Function} callback
    */
-  VEX.getPlatformInfo = function(callback) {
+  VEX.getPlatformInfo = function (callback) {
     sendMessage('get_platform_info', {}, callback);
   };
 
@@ -303,7 +332,7 @@
    * @param {*} value
    * @param {Function} [callback]
    */
-  VEX.setData = function(key, value, callback) {
+  VEX.setData = function (key, value, callback) {
     sendMessage('set_data', { key: key, value: value }, callback);
   };
 
@@ -312,7 +341,7 @@
    * @param {string} key
    * @param {Function} callback
    */
-  VEX.getData = function(key, callback) {
+  VEX.getData = function (key, callback) {
     sendMessage('get_data', { key: key }, callback);
   };
 

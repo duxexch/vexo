@@ -17,6 +17,7 @@ import {
   createSession,
   validatePasswordStrength,
 } from "./helpers";
+import { isSafeEmailAddress, sanitizePlainText } from "../../lib/input-security";
 
 export function registerUsernameRegistrationRoutes(app: Express) {
   app.post("/api/auth/register", registrationRateLimiter, async (req: Request, res: Response) => {
@@ -37,7 +38,7 @@ export function registerUsernameRegistrationRoutes(app: Express) {
       if (!pwCheck.valid) {
         return res.status(400).json({ error: pwCheck.error });
       }
-      if (email && (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+      if (email && (typeof email !== 'string' || email.length > 254 || !isSafeEmailAddress(email))) {
         return res.status(400).json({ error: "Invalid email format" });
       }
       if (firstName && (typeof firstName !== 'string' || firstName.length > 50)) {
@@ -47,8 +48,8 @@ export function registerUsernameRegistrationRoutes(app: Express) {
         return res.status(400).json({ error: "Last name must be under 50 characters" });
       }
 
-      // Strip HTML tags from string inputs
-      const sanitize = (s: string | undefined) => s ? s.replace(/<[^>]*>/g, '').trim() : s;
+      // Normalize text inputs to safe plain text
+      const sanitize = (s: string | undefined) => (s ? sanitizePlainText(s, { maxLength: 255 }) : s);
 
       const existing = await storage.getUserByUsername(username.trim());
       if (existing) {

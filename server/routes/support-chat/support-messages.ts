@@ -10,6 +10,7 @@ import { broadcastAdminAlert } from "../../websocket";
 import { logger } from "../../lib/logger";
 import crypto from "crypto";
 import { getAutoReply } from "./support-ticket";
+import { sanitizeNullablePlainText, sanitizePlainText } from "../../lib/input-security";
 
 export function registerSupportMessageRoutes(app: Express): void {
 
@@ -23,7 +24,7 @@ export function registerSupportMessageRoutes(app: Express): void {
       const [ticket] = await db.select().from(supportTickets)
         .where(and(eq(supportTickets.id, ticketId), eq(supportTickets.userId, userId)))
         .limit(1);
-      
+
       if (!ticket) return res.status(404).json({ error: "Ticket not found" });
 
       const messages = await db.select().from(supportMessages)
@@ -83,9 +84,10 @@ export function registerSupportMessageRoutes(app: Express): void {
       if (!ticket) return res.status(404).json({ error: "Ticket not found" });
       if (ticket.status === "closed") return res.status(400).json({ error: "Ticket is closed" });
 
-      // Insert message — SECURITY: Strip HTML to prevent stored XSS in admin panel
-      const safeContent = (content || "").trim().replace(/<[^>]*>/g, '') || (mediaName ? String(mediaName).replace(/<[^>]*>/g, '').slice(0, 200) : "📎 مرفق");
-      const safeMediaName = mediaName ? String(mediaName).replace(/<[^>]*>/g, '').slice(0, 200) : null;
+      // Insert message — SECURITY: normalize to safe plain text before persistence
+      const safeContent = sanitizePlainText(content, { maxLength: 2000 })
+        || sanitizePlainText(mediaName, { maxLength: 200, fallback: "Attachment" });
+      const safeMediaName = sanitizeNullablePlainText(mediaName, 200);
       const [message] = await db.insert(supportMessages).values({
         ticketId,
         senderId: userId,
@@ -118,12 +120,13 @@ export function registerSupportMessageRoutes(app: Express): void {
       }
 
       // Notify admin (persist to DB + broadcast via websocket)
+      const supportPreview = safeContent.substring(0, 100);
       emitAdminAlert({
         type: "support_message",
         title: "New Support Message",
         titleAr: "رسالة دعم جديدة",
-        message: content.trim().substring(0, 100),
-        messageAr: content.trim().substring(0, 100),
+        message: supportPreview,
+        messageAr: supportPreview,
         severity: "info",
         entityType: "support_ticket",
         entityId: ticketId,
@@ -136,8 +139,8 @@ export function registerSupportMessageRoutes(app: Express): void {
           type: "support_message",
           title: "New Support Message",
           titleAr: "رسالة دعم جديدة",
-          message: content.trim().substring(0, 100),
-          messageAr: content.trim().substring(0, 100),
+          message: supportPreview,
+          messageAr: supportPreview,
           severity: "info",
           entityType: "support_ticket",
           entityId: ticketId,

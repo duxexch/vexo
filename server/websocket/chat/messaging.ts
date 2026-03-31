@@ -6,6 +6,7 @@ import { chatRateLimiter } from "../../lib/rate-limiter";
 import type { AuthenticatedSocket } from "../shared";
 import { clients } from "../shared";
 import { getCachedUserBlockLists, isChatEnabled } from "../../lib/redis";
+import { sanitizePlainText } from "../../lib/input-security";
 
 /**
  * Handle sending a new chat message.
@@ -57,7 +58,7 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
 
   // SECURITY: Sanitize HTML tags and enforce max length
   const maxLen = 2000;
-  const sanitizedContent = content ? String(content).replace(/<[^>]*>/g, '').slice(0, maxLen).trim() : "";
+  const sanitizedContent = content ? sanitizePlainText(content, { maxLength: maxLen }) : "";
   if (!sanitizedContent && !isMediaMessage) {
     ws.send(JSON.stringify({ type: "chat_error", error: "Message content is required" }));
     return;
