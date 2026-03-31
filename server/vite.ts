@@ -62,7 +62,7 @@ export async function setupVite(server: Server, app: Express) {
     }
   });
 
-  app.use("/downloads", express.static(publicDownloads, {
+  app.use("/downloads", devStaticLimiter, express.static(publicDownloads, {
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.apk')) {
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
@@ -76,7 +76,7 @@ export async function setupVite(server: Server, app: Express) {
 
   app.use(vite.middlewares);
 
-  app.use("*", async (req, res, next) => {
+  app.use("*", devStaticLimiter, async (req, res, next) => {
     const url = req.originalUrl;
 
     // Skip SPA transform for direct file downloads (APK, AAB, binary files)

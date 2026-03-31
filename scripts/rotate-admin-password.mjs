@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { Pool } from "pg";
 
@@ -25,14 +24,16 @@ function parseArgs(argv) {
   return args;
 }
 
-function generateStrongPassword() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()_+-=";
-  const bytes = crypto.randomBytes(24);
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 1) {
-    out += alphabet[bytes[i] % alphabet.length];
+function validatePassword(password) {
+  if (typeof password !== "string" || password.length === 0) {
+    return "Password is required. Pass --password=...";
   }
-  return out;
+
+  if (password.length < 12) {
+    return "Password must be at least 12 characters.";
+  }
+
+  return null;
 }
 
 async function main() {
@@ -42,7 +43,13 @@ async function main() {
     process.exit(1);
   }
 
-  const newPassword = options.password || generateStrongPassword();
+  const passwordError = validatePassword(options.password);
+  if (passwordError) {
+    console.error(`[rotate-admin-password] ${passwordError}`);
+    process.exit(1);
+  }
+
+  const newPassword = options.password;
   const pool = new Pool({ connectionString: options.databaseUrl });
 
   try {
@@ -71,7 +78,7 @@ async function main() {
     console.log("[rotate-admin-password] Password rotated successfully.");
     console.log(JSON.stringify({
       username: options.username,
-      password: newPassword,
+      passwordUpdated: true,
       rounds: options.rounds,
       rotatedAt: new Date().toISOString(),
     }, null, 2));

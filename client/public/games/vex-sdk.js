@@ -29,10 +29,12 @@
   var _player = null;
   var _sessionToken = null;
   var _ready = false;
-  var _callbacks = {};
+  var _callbacks = Object.create(null);
   var _callbackId = 0;
   var _parentOrigin = null;
-  var _eventListeners = {};
+  var _eventListeners = Object.create(null);
+  var SAFE_EVENT_NAME_PATTERN = /^[A-Za-z0-9:_-]{1,64}$/;
+  var SAFE_CALLBACK_ID_PATTERN = /^[0-9]{1,12}$/;
 
   function normalizeOrigin(value) {
     if (!value || typeof value !== 'string') return null;
@@ -51,6 +53,32 @@
     return normalizeOrigin(document.referrer);
   }
 
+  function getCallbackKey(id) {
+    if (typeof id === 'number' && Number.isInteger(id) && id > 0) {
+      return String(id);
+    }
+    if (typeof id === 'string' && SAFE_CALLBACK_ID_PATTERN.test(id)) {
+      return id;
+    }
+    return null;
+  }
+
+  function consumeCallback(id) {
+    var key = getCallbackKey(id);
+    if (!key || !Object.prototype.hasOwnProperty.call(_callbacks, key)) {
+      return null;
+    }
+
+    var handler = _callbacks[key];
+    delete _callbacks[key];
+
+    return typeof handler === 'function' ? handler : null;
+  }
+
+  function isSafeEventName(event) {
+    return typeof event === 'string' && SAFE_EVENT_NAME_PATTERN.test(event);
+  }
+
   // ============ INTERNAL: PostMessage Communication ============
 
   function sendMessage(type, payload, callback) {
@@ -60,8 +88,8 @@
       payload: payload || {},
       id: ++_callbackId
     };
-    if (callback) {
-      _callbacks[msg.id] = callback;
+    if (typeof callback === 'function') {
+      _callbacks[String(msg.id)] = callback;
     }
 
     if (!_parentOrigin) {
@@ -107,9 +135,9 @@
       case 'credit_response':
       case 'session_end_response':
       case 'score_response':
-        if (data.id && _callbacks[data.id]) {
-          _callbacks[data.id](data.payload);
-          delete _callbacks[data.id];
+        var responseCallback = consumeCallback(data.id);
+        if (responseCallback) {
+          responseCallback(data.payload);
         }
         break;
 
@@ -132,24 +160,29 @@
       case 'error':
         console.error('[VEX SDK] Error from platform:', data.payload.message);
         _emit('error', data.payload);
-        if (data.id && _callbacks[data.id]) {
-          _callbacks[data.id]({ error: true, message: data.payload.message });
-          delete _callbacks[data.id];
+        var errorCallback = consumeCallback(data.id);
+        if (errorCallback) {
+          errorCallback({ error: true, message: data.payload.message });
         }
         break;
 
       default:
         // Custom event from platform
-        _emit(data.type, data.payload);
+        if (isSafeEventName(data.type)) {
+          _emit(data.type, data.payload);
+        }
     }
   }
 
   // ============ INTERNAL: Event System ============
 
   function _emit(event, data) {
+    if (!isSafeEventName(event)) return;
+
     var listeners = _eventListeners[event];
-    if (listeners) {
+    if (Array.isArray(listeners)) {
       for (var i = 0; i < listeners.length; i++) {
+        if (typeof listeners[i] !== 'function') continue;
         try { listeners[i](data); } catch (e) { console.error('[VEX SDK] Event handler error:', e); }
       }
     }
@@ -302,6 +335,8 @@
    * @param {Function} handler
    */
   VEX.on = function (event, handler) {
+    if (!isSafeEventName(event) || typeof handler !== 'function') return;
+
     if (!_eventListeners[event]) _eventListeners[event] = [];
     _eventListeners[event].push(handler);
   };
@@ -312,8 +347,10 @@
    * @param {Function} handler
    */
   VEX.off = function (event, handler) {
+    if (!isSafeEventName(event) || typeof handler !== 'function') return;
+
     var listeners = _eventListeners[event];
-    if (listeners) {
+    if (Array.isArray(listeners)) {
       _eventListeners[event] = listeners.filter(function (h) { return h !== handler; });
     }
   };
