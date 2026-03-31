@@ -1,0 +1,41 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAM_ID.click.vixo.app",
+        "paths": [
+          "/",
+          "/games",
+          "/games/*",
+          "/challenges",
+          "/challenge/*",
+          "/p2p",
+          "/p2p/*",
+          "/wallet",
+          "/tournaments",
+          "/tournaments/*",
+          "/leaderboard",
+          "/free",
+          "/multiplayer",
+          "/lobby",
+          "/daily-rewards",
+          "/referral",
+          "/auth/callback/*",
+          "/install-app",
+          "/terms",
+          "/privacy"
+        ],
+        "components": [
+          { "/": "/*", "comment": "Match all URLs" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["TEAM_ID.click.vixo.app"]
+  },
+  "activitycontinuation": {
+    "apps": ["TEAM_ID.click.vixo.app"]
+  }
+}

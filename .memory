@@ -1,0 +1,920 @@
+# 🧠 VEX PLATFORM — ذاكرة المشروع الكاملة (AI MEMORY)
+>
+> آخر تحديث: 27 فبراير 2026
+
+---
+
+## ⚠️ صلاحيات وتعليمات دائمة (PERMANENT INSTRUCTIONS)
+
+1. **الصلاحيات الكاملة**: المطور (AI) لديه صلاحيات كاملة على الجهاز المحلي وWorkspace
+2. **صلاحية استدعاء الخبراء**: يمكن استدعاء sub-agents متخصصين لأخذ رأيهم في أي موضوع
+3. **صلاحية التحكم في الـ Workspace**: إنشاء/تعديل/حذف أي ملف
+4. **بيئة التشغيل**: Docker (docker-compose) + سيتحول لتطبيق موبايل + نسخة لـ Google Play
+5. **التوافق الإلزامي**: كل تعديل أو تصميم لازم يكون:
+   - متوافق مع **كل مقاسات الشاشات** (Mobile 320px → Desktop 2K+)
+   - متوافق مع **زواحف محركات البحث** (SEO: meta tags, structured data, SSR-friendly)
+   - متوافق مع **RTL** (العربية) و **LTR** (الإنجليزية)
+6. **توثيق كل مرحلة**: كل تطوير أو طلب يتم إنجازه يُلخص ويُضاف في قسم "سجل التطوير" أسفل هذا الملف
+7. **Repository**: `promnes/vixotest` — Branch: `_vixo_temp` — Default: `main`
+8. **Mobile-First إجباري**: أي تعديل UI/UX لازم يكون متوافق مع الهاتف أولاً (Touch-friendly + شاشات صغيرة) لأن المشروع سيتحوّل إلى **AAB/APK**.
+9. **الترجمة الإلزامية**: أي نص جديد أو تعديل نصي لازم يمر عبر نظام i18n ويُضاف لكل ملفات اللغات/الموارد المحلية المستخدمة في المشروع.
+10. **جودة إنتاجية**: التعديلات يجب أن تكون Production-ready وليست ترقيعاً أو حلولاً مؤقتة.
+11. **تنظيف الكود أثناء التعديل**: حذف الكود الميت في نطاق الملفات المعدلة (imports غير مستخدمة، دوال/حالات غير مستخدمة، فروع منتهية).
+
+---
+
+## 📋 ملخص المشروع (PROJECT OVERVIEW)
+
+**VEX** (VIXO) هي منصة ألعاب متكاملة وتداول P2P مستوحاة من **1xBet** و **Binance P2P**.
+
+| الخاصية | القيمة |
+|---------|--------|
+| **الاسم** | VIX (VIXO) |
+| **App ID** | `click.vixo.app` |
+| **النوع** | Gaming & P2P Trading Platform |
+| **اللغات** | عربي + إنجليزي (RTL/LTR) |
+| **الثيم** | Dark Theme (Binance-inspired) — خلفية `#0f1419`, أخضر `#00c853`, ذهبي `#ff9800` |
+| **الألعاب** | شطرنج، طاولة زهر، دومينو، طرنيب، بلوط + 20 لعبة كازينو |
+| **العملات** | 68 عملة (USD, EGP, SAR, AED, USDT + عملة المشروع VXC) |
+| **الدفع** | 44 طريقة دفع (Visa, PayPal, Vodafone Cash, STC Pay, M-Pesa, Crypto...) |
+| **المستهدف** | 20,000+ مستخدم متزامن |
+
+---
+
+## 🏗️ البنية التقنية (TECH STACK)
+
+### Frontend
+
+| التقنية | الإصدار | الاستخدام |
+|---------|---------|-----------|
+| React | 18.3 | UI Framework |
+| TypeScript | 5.6 | Type Safety |
+| Vite | 7.3 | Build Tool + Dev Server |
+| Tailwind CSS | 3.4 | Styling (مع Tailwind Animate) |
+| shadcn/ui (Radix) | latest | 47 مكون UI جاهز |
+| TanStack React Query | 5.60 | State Management + API Cache |
+| Wouter | 3.3 | Client Routing (SPA) |
+| React Hook Form + Zod | latest | Form Validation |
+| Framer Motion | 11.13 | Animations |
+| Recharts | 2.15 | Charts & Analytics |
+| Lucide Icons | 0.453 | Icon Library |
+
+### Backend
+
+| التقنية | الإصدار | الاستخدام |
+|---------|---------|-----------|
+| Express.js | 4.21 | HTTP Server |
+| TypeScript | 5.6 | Type Safety |
+| PostgreSQL | 15 | Database |
+| Drizzle ORM | 0.39 | ORM + Migrations |
+| WebSocket (ws) | 8.19 | Real-time Communication |
+| JWT (jsonwebtoken) | 9.0 | Authentication (User + Admin tokens) |
+| bcryptjs | 3.0 | Password Hashing |
+| chess.js | 1.4 | Chess Game Engine |
+| express-rate-limit | 8.2 | Rate Limiting |
+| Node.js | 20.x | Runtime |
+
+### Infrastructure
+
+| التقنية | الاستخدام |
+|---------|-----------|
+| Docker + Docker Compose | Containerization |
+| Nginx | Reverse Proxy + SSL + Load Balancing |
+| PM2 | Process Manager (Cluster Mode) |
+| Capacitor | Mobile App (Android/iOS) |
+| Flutter WebView | Alternative Mobile Wrapper |
+| Service Worker | PWA + Push Notifications |
+| Let's Encrypt / Certbot | Free SSL |
+
+---
+
+## 📁 هيكل الملفات (FILE STRUCTURE)
+
+```
+vixo1/
+├── .memory                     ← هذا الملف (ذاكرة المشروع)
+├── client/                      ← Frontend (React SPA)
+│   ├── src/
+│   │   ├── App.tsx              ← Root Component (679 سطر) - Router + Layouts + Providers
+│   │   ├── main.tsx             ← Entry Point + SW Registration
+│   │   ├── index.css            ← Global Styles (354 سطر) - Tailwind + CSS Variables
+│   │   ├── components/          ← 9 مكونات + 3 مجلدات فرعية
+│   │   │   ├── ui/              ← 47 مكون shadcn/ui
+│   │   │   ├── games/           ← 14 مكون لعبة (Boards, Chat, Gifts, Voice)
+│   │   │   └── admin/           ← AdminAlertsDropdown
+│   │   ├── hooks/               ← 5 hooks مخصصة
+│   │   │   ├── use-chat.tsx     ← WebSocket Chat
+│   │   │   ├── use-mobile.tsx   ← Mobile Detection
+│   │   │   ├── use-notifications.tsx ← Notifications
+│   │   │   ├── use-toast.ts     ← Toast
+│   │   │   └── useGameWebSocket.ts ← Game Room WebSocket
+│   │   ├── lib/                 ← 7 مكتبات مساعدة
+│   │   │   ├── auth.tsx         ← Auth Context + Provider
+│   │   │   ├── i18n.tsx         ← Internationalization (EN/AR)
+│   │   │   ├── queryClient.ts   ← React Query + apiRequest
+│   │   │   ├── settings.tsx     ← Settings Context
+│   │   │   ├── theme.tsx        ← Theme Provider
+│   │   │   └── notifications.ts ← Push Notification Utils
+│   │   └── pages/               ← 30 صفحة + 28 صفحة أدمن + 5 صفحات ألعاب
+│   └── public/                  ← PWA Assets (manifest, sw.js, icons)
+│
+├── server/                      ← Backend (Express)
+│   ├── index.ts                 ← Entry Point (228 سطر) - Security, Logging
+│   ├── routes.ts                ← Main Routes (406 سطر) — infrastructure only (Phase 4)
+│   ├── admin-routes/             ← Admin Routes (13 modules — Phase 5)
+│   │   ├── index.ts             ← Barrel re-export (registerAdminRoutes)
+│   │   ├── helpers.ts           ← Shared middleware, auth, logging
+│   │   ├── admin-auth.ts        ← Login, 2FA, password recovery (5 endpoints)
+│   │   ├── admin-dashboard.ts   ← Stats, search, analytics, audit (4 endpoints)
+│   │   ├── admin-users.ts       ← User management, complaints (11 endpoints)
+│   │   ├── admin-settings.ts    ← Feature flags, themes, app settings (14 endpoints)
+│   │   ├── admin-support.ts     ← Support contacts, chat, auto-replies, media
+│   │   ├── admin-p2p.ts         ← P2P management, disputes, settings
+│   │   ├── admin-content.ts     ← Languages, badges, broadcasts, chat
+│   │   ├── admin-games.ts       ← Single/multiplayer games, social platforms
+│   │   ├── admin-alerts.ts      ← Alerts CRUD, pending counts
+│   │   ├── admin-currency.ts    ← Project currency, free play
+│   │   ├── admin-tournaments.ts ← Tournament admin (7 endpoints)
+│   │   ├── admin-challenges.ts  ← Challenge settings, list, cancel, stats
+│   │   └── admin-chat-features.ts ← Media/auto-delete permissions, PIN reset
+│   ├── storage/                 ← Data Access Layer (14 modules — Phase 6)
+│   │   ├── index.ts             ← Assembly + seed function
+│   │   ├── helpers.ts           ← UpdateUserData type + getErrorMessage
+│   │   ├── users.ts             ← 28 methods (accounts, auth, sessions, preferences)
+│   │   ├── financial.ts         ← 29 methods (transactions, agents, affiliates, promos)
+│   │   ├── games.ts             ← 17 methods (games, sessions, multiplayer)
+│   │   ├── live-games.ts        ← 27 methods (live sessions, moves, spectators, gifts, chat)
+│   │   ├── social.ts            ← 14 methods (relationships, social platforms)
+│   │   ├── p2p.ts               ← 18 methods (P2P trading + atomic ops)
+│   │   ├── project-currency.ts  ← 22 methods (wallets, conversions, ledger)
+│   │   ├── challenges.ts        ← 6 methods (challenges, settings, resignation)
+│   │   ├── achievements.ts      ← 20 methods (achievements, seasons)
+│   │   ├── admin.ts             ← 26 methods (audit, config, scheduled changes, alerts)
+│   │   ├── notifications.ts     ← 14 methods (notifications, announcements)
+│   │   └── support.ts           ← 25 methods (complaints, payments, support settings)
+│   ├── db.ts                    ← Database Connection (Pool + Drizzle)
+│   ├── websocket/               ← ✅ Main WebSocket (1,910→8 modules) [Phase 7]
+│   │   ├── shared.ts            ← Types, interfaces, shared state Maps
+│   │   ├── auth.ts              ← Auth + admin auth + notification marks (4 types)
+│   │   ├── chat.ts              ← Chat message handlers (9 types)
+│   │   ├── matchmaking.ts       ← Matchmaking handlers (5 types)
+│   │   ├── voice.ts             ← Voice/WebRTC signaling (5 types)
+│   │   ├── challenge-games.ts   ← Challenge game handlers (10 types)
+│   │   ├── notifications.ts     ← Broadcast/notification exports (8 functions)
+│   │   └── index.ts             ← setupWebSocket + re-exports
+│   ├── game-websocket.ts        ← Game WebSocket (1,069 سطر) - Paid Game Sessions
+│   ├── seed.ts                  ← Database Seeding (561 سطر)
+│   ├── vite.ts                  ← Vite Dev Server Integration
+│   ├── static.ts                ← Production Static File Serving
+│   ├── game-engines/            ← محركات الألعاب
+│   │   ├── index.ts             ← Engine Registry (Map-based)
+│   │   ├── types.ts             ← GameEngine Interface + Types
+│   │   ├── chess-engine.ts      ← Low-level Chess (676 سطر) - بدون dependencies
+│   │   ├── chess.ts             ← Chess Wrapper (chess.js)
+│   │   ├── backgammon.ts        ← Backgammon Engine (589 سطر)
+│   │   ├── domino-engine.ts     ← Domino Core (functional)
+│   │   ├── domino.ts            ← Domino Wrapper (class-based)
+│   │   ├── card-game-engine.ts  ← Card Engine (527 سطر) - Tarneeb + Baloot
+│   │   ├── tarneeb.ts           ← Tarneeb Wrapper
+│   │   └── baloot.ts            ← Baloot Wrapper
+│   ├── lib/                     ← مكتبات مساعدة
+│   │   ├── admin-alerts.ts      ← Real-time Admin Notifications
+│   │   ├── auth-config.ts       ← JWT Config (User + Admin secrets)
+│   │   ├── circuit-breaker.ts   ← Circuit Breaker Pattern
+│   │   ├── health.ts            ← Health Monitoring
+│   │   ├── logger.ts            ← Structured JSON Logging
+│   │   ├── odds-calculator.ts   ← Spectator Betting Odds (518 سطر)
+│   │   ├── rate-limiter.ts      ← WebSocket Rate Limiting
+│   │   ├── support-settler.ts   ← Spectator Bet Settlement
+│   │   └── word-filter.ts       ← Profanity Filter (EN + AR)
+│   ├── routes/                  ← Modular Routes (26 modules)
+│   │   ├── index.ts             ← Central Registration (26 modules)
+│   │   ├── middleware.ts        ← Auth + Rate Limiting Middleware
+│   │   ├── helpers.ts           ← Shared utilities (Phase 4)
+│   │   ├── auth.ts              ← Auth Routes (610 سطر)
+│   │   ├── health.ts            ← Health Check Endpoints
+│   │   ├── games.ts             ← Game CRUD
+│   │   ├── challenges.ts        ← Challenge System (914 سطر)
+│   │   ├── spectator.ts         ← Spectator Support/Betting
+│   │   ├── users.ts             ← User Management
+│   │   ├── transactions.ts      ← Financial Transactions
+│   │   ├── p2p-disputes.ts      ← P2P Dispute Resolution
+│   │   ├── p2p-trading.ts       ← P2P Trading (630 سطر)
+│   │   ├── payments.ts          ← Payment methods + agents + affiliates (Phase 4)
+│   │   ├── notifications.ts     ← Notifications + announcements (Phase 4)
+│   │   ├── stats.ts             ← Player stats + leaderboard + dashboard (Phase 4)
+│   │   ├── profile.ts           ← Profile + ID verification + pictures (Phase 4)
+│   │   ├── security.ts          ← Password + sessions + login history (Phase 4)
+│   │   ├── p2p-profile.ts       ← P2P profile stubs (Phase 4)
+│   │   ├── gifts.ts             ← Free rewards + gift shop (Phase 4)
+│   │   ├── social.ts            ← Friends + follow + block (Phase 4)
+│   │   ├── chat.ts              ← Chat conversations + messages (Phase 4)
+│   │   ├── matchmaking.ts       ← Random match + invitations (Phase 4)
+│   │   ├── game-config.ts       ← Emojis + sections + multiplayer config (Phase 4)
+│   │   └── support-chat.ts      ← Support tickets + auto-replies (Phase 4)
+│   └── tests/                   ← 14 ملف اختبار
+│
+├── shared/
+│   └── schema.ts                ← Database Schema (2,898 سطر!) — 66 جدول، 48 enum، 90 Zod schema
+│
+├── docker-compose.yml           ← Docker Config (DB + App + Nginx)
+├── Dockerfile                   ← Multi-stage Build (Node 20 Alpine)
+├── capacitor.config.ts          ← Capacitor Mobile Config
+├── package.json                 ← Dependencies (80+ packages)
+├── vite.config.ts               ← Vite Build Config (@ aliases)
+├── drizzle.config.ts            ← Drizzle ORM Config
+├── tailwind.config.ts           ← Tailwind Theme Config
+└── tsconfig.json                ← TypeScript Config
+```
+
+---
+
+## 🎮 نظام الألعاب (GAME SYSTEM)
+
+### ألعاب متعددة اللاعبين (Multiplayer — Real Money)
+
+| اللعبة | الحد الأدنى/الأقصى | اللاعبين | المحرك |
+|--------|-------------------|----------|--------|
+| ♟️ شطرنج (Chess) | قابل للتعديل | 2 | chess.js + custom engine |
+| 🎲 طاولة زهر (Backgammon) | قابل للتعديل | 2 | Custom (589 سطر) |
+| 🀄 دومينو (Domino) | قابل للتعديل | 2-4 | Custom (functional + class) |
+| 🃏 طرنيب (Tarneeb) | قابل للتعديل | 4 (فريقين) | Card engine |
+| 🃏 بلوط (Baloot) | قابل للتعديل | 4 (فريقين) | Card engine (Sun/Hokm) |
+
+### ألعاب فردية (Single-player / Casino)
+
+20 لعبة: Aviator, Rocket, Balloon, Dice, Hi-Lo, Lucky Wheel, Money Wheel, Dream Catcher, Slots (×4), Jackpot (×3), Penalty, Plinko, Mines, Tower, Keno, Roulette, Blackjack...
+
+### آلية التسوية المالية (Financial Settlement)
+
+- تتم في **معاملة DB واحدة** (Atomic Transaction)
+- `SELECT FOR UPDATE` لقفل الصفوف (Row-level locking)
+- منع Deadlocks عبر ترتيب User IDs قبل القفل
+- تحديث: رصيد الفائز + رصيد الخاسر + إحصائيات + سجل المعاملات + حالة الجلسة
+- دعم USD + VXC (عملة المشروع)
+
+---
+
+## 💰 النظام المالي (FINANCIAL SYSTEM)
+
+### المحفظة (Wallet)
+
+- رصيد USD رئيسي + محفظة VXC (عملة المشروع)
+- إيداع/سحب مع موافقة الوكيل/الأدمن
+- تحويل بين العملات (تلقائي/يدوي)
+- حدود يومية وشهرية حسب مستوى VIP (5 مستويات: Basic → Platinum)
+
+### P2P Trading
+
+- إنشاء عروض بيع/شراء (130+ عملة عالمية)
+- نظام Escrow (ضمان) مع قفل الأموال
+- رسوم: percentage / fixed / hybrid
+- نظام تقييم (1-5 نجوم) + شارات تاجر
+- نظام نزاعات مع أدلة ورسائل مسبقة
+- عمليات Atomic لكل مرحلة (إنشاء/إكمال/إلغاء)
+
+### نظام العمولات
+
+- وكلاء (Agents): عمولة على الإيداعات (2%) + السحوبات (1%)
+- مسوقين (Affiliates): عمولة على الإحالات (5%) + أكواد خصم
+
+### نظام المراهنة للمشاهدين (Spectator Support / "ادعم واربح")
+
+- حساب احتمالات ديناميكي (Win Rate 60% + Experience 25% + Streak 15%)
+- وضعين: فوري (Instant) أو انتظار مطابقة (Wait for Match)
+- رسوم المنصة (House Fee) + تسوية تلقائية
+
+---
+
+## 👥 نظام المستخدمين (USER SYSTEM)
+
+### الأدوار
+
+| الدور | الصلاحيات |
+|-------|-----------|
+| **admin** | تحكم كامل — لوحة إدارة منفصلة بـ JWT خاص |
+| **agent** | معالجة الإيداعات/السحوبات + إدارة الشكاوى |
+| **affiliate** | إحالات + أكواد خصم + عمولات |
+| **player** | لعب + تداول + تحدي + دردشة |
+
+### المصادقة (Authentication)
+
+- **JWT مزدوج**: `JWT_USER_SECRET` (7 أيام) + `JWT_ADMIN_SECRET` (24 ساعة)
+- **طرق تسجيل**: One-click, Username+Password, Phone, Email, Account ID
+- **OAuth**: Google, Facebook, Telegram, WhatsApp, X, Apple (قابل للتفعيل)
+- **OTP**: رمز 6 أرقام (10 دقائق صلاحية) — بريد/هاتف — مشفر بـ bcrypt
+- **كلمة مرور السحب**: طبقة أمان إضافية للعمليات المالية
+
+### الميزات الاجتماعية
+
+- متابعة/إلغاء متابعة + حظر/كتم
+- دردشة خاصة (مع رسائل تختفي بعد القراءة)
+- دردشة داخل اللعبة + رسائل سريعة
+- مكالمات صوتية (WebRTC Signaling)
+- إرسال هدايا (8 أنواع: وردة $0.50 → ألماسة $50)
+
+---
+
+## 🛡️ الأمان (SECURITY)
+
+| الميزة | التفاصيل |
+|--------|---------|
+| Rate Limiting | API: 300/min, Auth: 10/15min, Strict: 5/hour, Attack: 100/sec |
+| Headers | CSP, HSTS, X-Frame-Options, X-Content-Type-Options |
+| Prototype Pollution | حماية ضد `__proto__`, `constructor`, `prototype` |
+| Circuit Breaker | DB (3 failures/10s), API (5/30s), Payment (2/60s) |
+| Word Filter | فلتر ألفاظ (24 إنجليزي + 16 عربي) |
+| Audit Logs | تسجيل كل عمليات الأدمن + المستخدمين |
+| Session Management | جلسات متعددة + إمكانية الإلغاء |
+| Health Monitoring | Memory, CPU, DB Latency, Circuit States + تنبيهات |
+
+---
+
+## 🗄️ قاعدة البيانات (DATABASE SCHEMA)
+
+### إحصائيات
+
+- **66 جدول** (table)
+- **48 enum** (نوع بيانات مخصص)
+- **90+ Zod schema** (validation)
+- **130+ exported type** (TypeScript)
+- **35+ relation** (علاقات بين الجداول)
+
+### الجداول الرئيسية
+
+| الجدول | الوصف | الأعمدة الرئيسية |
+|--------|-------|-----------------|
+| `users` | المستخدمين | id, username, email, balance, role, status, gameStats... (~50 عمود) |
+| `agents` | الوكلاء | userId, agentCode, commissionRates, limits... |
+| `affiliates` | المسوقين | userId, affiliateCode, commissionRate, referrals... |
+| `transactions` | المعاملات | userId, type, status, amount, balanceBefore/After... |
+| `multiplayerGames` | إعدادات الألعاب | key, nameEn/Ar, minStake/maxStake, houseFee... |
+| `challenges` | التحديات | gameType, betAmount, players (1-4), status, winnerId... |
+| `liveGameSessions` | جلسات اللعب | challengeId, gameState, currentTurn, players, scores... |
+| `p2pOffers` | عروض P2P | type, currencies, price, limits, paymentMethods... |
+| `p2pTrades` | صفقات P2P | offerId, buyer/seller, escrow, status... |
+| `p2pDisputes` | نزاعات P2P | tradeId, initiator, evidence, resolution... |
+| `notifications` | الإشعارات | userId, type, title/Ar, message/Ar, priority... |
+| `achievements` | الإنجازات | key, category, rarity, requirement, reward... |
+| `seasons` | المواسم | number, dates, prizePool, status... |
+| `projectCurrencyWallets` | محفظة VXC | purchased/earned/locked balance... |
+| `spectatorSupports` | مراهنات المشاهدين | challengeId, amount, odds, status... |
+
+---
+
+## 🌐 WebSocket System
+
+### Main WebSocket (`/ws`) — 1,514 سطر
+
+| الرسالة | الوظيفة |
+|---------|---------|
+| `auth` | مصادقة المستخدم |
+| `admin_auth` | مصادقة الأدمن |
+| `chat_message` | دردشة خاصة (Rate limited: 5/3s) |
+| `typing` | مؤشر الكتابة |
+| `join_random_match` | مطابقة عشوائية |
+| `invite_friend` | دعوة صديق |
+| `voice_*` | WebRTC صوت (join/offer/answer/ice/leave) |
+| `join/leave_challenge_game` | دخول/خروج غرفة لعب |
+| `game_move` | حركة لعب (يتحقق من المحرك المناسب) |
+| `game_resign` | استسلام |
+| `gift_to_player` | إرسال هدية |
+| `challenge_chat` | دردشة التحدي |
+
+### Game WebSocket (`/ws/game`) — 1,069 سطر
+
+| الرسالة | الوظيفة |
+|---------|---------|
+| `authenticate` | مصادقة + تحميل بيانات المستخدم |
+| `join_game` | دخول جلسة لعب مدفوعة |
+| `spectate` | مشاهدة |
+| `make_move` | حركة (DB Transaction + FOR UPDATE) |
+| `send_gift` | هدية (Atomic Balance Transfer) |
+| `resign` | استسلام → تسوية مالية |
+| `offer_draw` / `respond_draw` | عرض/رد تعادل |
+
+---
+
+## 📱 صفحات التطبيق (CLIENT PAGES)
+
+### صفحات المستخدم (30 صفحة)
+
+| الصفحة | المسار | الحجم | الوصف |
+|--------|--------|-------|-------|
+| Dashboard | `/` | 253 سطر | لوحة تحكم شخصية + إحصائيات |
+| Login | (unauthenticated) | 971 سطر | تسجيل/دخول متعدد الطرق |
+| Play | `/play` | 1,889 سطر | مركز الألعاب الافتراضية (أكبر صفحة) |
+| Challenges | `/challenges` | 1,042 سطر | إنشاء/انضمام تحديات |
+| P2P | `/p2p` | 1,693 سطر | سوق التداول |
+| Settings | `/settings` | 1,369 سطر | إعدادات الحساب |
+| Wallet | `/wallet` | 629 سطر | المحفظة + الإيداع/السحب |
+| Game Lobby | `/lobby` | 955 سطر | صالة الألعاب |
+| Challenge Game | `/challenge/:id/play` | 520 سطر | شاشة اللعب |
+| Challenge Watch | `/challenge/:id/watch` | 779 سطر | مشاهدة + مراهنة |
+| Friends | `/friends` | 604 سطر | الأصدقاء + المتابعين |
+| Multiplayer | `/multiplayer` | 574 سطر | مطابقة اللاعبين |
+| Transactions | `/transactions` | 482 سطر | سجل المعاملات |
+| P2P Settings | `/p2p/settings` | 770 سطر | إعدادات التداول |
+| Player Profile | `/player/:userId` | 555 سطر | الملف الشخصي |
+| Games Catalog | `/games` | 433 سطر | كتالوج الألعاب |
+| Complaints | `/complaints` | 419 سطر | الشكاوى |
+| Free Rewards | `/free` | 359 سطر | مكافآت مجانية |
+| P2P Profile | `/p2p/profile/:userId` | 455 سطر | ملف التاجر |
+| Chat | `/chat` | 331 سطر | الدردشة |
+| Leaderboard | `/leaderboard` | 320 سطر | لوحة المتصدرين |
+| Seasonal | `/seasons` | 349 سطر | المواسم |
+| Support | `/support` | 195 سطر | الدعم |
+
+### صفحات الأدمن (28 صفحة في `/admin/`)
+
+Dashboard, Users, Sections, Anti-cheat, Analytics, Disputes, P2P, Currency, Support, App Settings, Languages, Badges, Notifications, Games, ID Verification, SEO, Payment Methods, Integrations, Social Platforms, Advertisements, Game Sections, Support Settings, Themes, Multiplayer Games, Unified Games, Announcements
+
+### صفحات الألعاب (5 صفحات)
+
+ChessGame, BackgammonGame, DominoGame, TarneebGame, BalootGame — كلها تستخدم `useGameWebSocket` hook
+
+---
+
+## 🐳 Docker & Deployment
+
+### Docker Compose Services
+
+```yaml
+db:        PostgreSQL 15 Alpine — Health check, persistent volume
+app:       Node 20 Alpine — Multi-stage build, depends on DB health
+nginx:     Nginx Alpine — Reverse proxy (optional profile)
+```
+
+### Dockerfile (Multi-stage)
+
+- **Stage 1 (Builder)**: Install all deps → Build client (Vite) + server (esbuild → dist/index.cjs)
+- **Stage 2 (Production)**: Production deps only + drizzle-kit for migrations
+
+### PM2 Production Config
+
+- Cluster mode (all CPU cores)
+- 1GB max memory restart
+- JSON logs in `/var/log/vex/`
+- Graceful shutdown (10s kill timeout)
+- Deploy hooks for auto `npm ci → build → reload`
+
+### Nginx Config (Production — 20k+ users)
+
+- Rate limiting zones (API 30r/s, Auth 10r/m, Strict 5r/m)
+- TLS 1.2/1.3, HSTS with preload
+- WebSocket `/ws` with 24h timeout
+- Static assets: 1-year cache immutable
+- Security: blocked .git/.env, wp-admin attack paths
+
+---
+
+## 📱 Mobile App
+
+### Capacitor (Primary)
+
+- App ID: `click.vixo.app`
+- Splash: Dark background #0f1419
+- Plugins: SplashScreen, StatusBar, Keyboard, PushNotifications
+- Build: `npm run build → npx cap sync → Android Studio/Xcode`
+
+### Flutter WebView (Alternative)
+
+- WebView + Connectivity monitoring
+- Arabic UI for error states
+- External URL detection → system browser
+- Back button = WebView history then exit dialog
+
+### PWA (Web)
+
+- Service Worker: Cache-first (static), Network-first (API)
+- Push Notifications with actions
+- Installable (manifest.json with icons 64→512px)
+- Offline support
+
+---
+
+## 🔧 الأوامر المهمة (KEY COMMANDS)
+
+```bash
+# Development
+npm run dev                    # Start dev server (port 3001)
+npm run check                  # TypeScript type check
+npm run db:push                # Push schema to DB
+
+# Production Build
+npm run build                  # Build client (Vite) + server (esbuild)
+npm start                      # Start production server
+
+# Docker
+docker-compose up -d           # Start all services
+docker-compose --profile with-nginx up -d   # With Nginx
+docker-compose exec app npx drizzle-kit push # Run migrations
+docker-compose exec app npx tsx scripts/seed-data.ts # Seed data
+
+# Database
+npx drizzle-kit push           # Push schema changes
+npx tsx scripts/seed-data.ts   # Seed currencies + payment methods + games
+```
+
+---
+
+## 🔑 Environment Variables
+
+### Required
+
+```
+DATABASE_URL          — PostgreSQL connection string
+SESSION_SECRET        — Min 32 chars
+JWT_SIGNING_KEY       — User JWT secret
+ADMIN_JWT_SECRET      — Admin JWT secret (مختلف عن User)
+```
+
+### Optional Integrations
+
+```
+SENDGRID_API_KEY      — Email notifications
+TWILIO_*              — SMS/OTP
+GOOGLE_CLIENT_*       — Google OAuth
+FACEBOOK_APP_*        — Facebook OAuth
+TELEGRAM_BOT_TOKEN    — Telegram auth
+STRIPE_*              — Payment gateway
+FIREBASE_*            — Push notifications
+```
+
+---
+
+## ⚡ أنماط الكود المهمة (CODE PATTERNS)
+
+### 1. Atomic Financial Operations
+
+```typescript
+// كل العمليات المالية تتم في transaction واحد مع FOR UPDATE
+await db.transaction(async (tx) => {
+  const [user] = await tx.select().from(users).where(eq(users.id, userId)).for('update');
+  // ... update balances atomically
+});
+```
+
+### 2. Deadlock Prevention
+
+```typescript
+// ترتيب User IDs قبل القفل لمنع Deadlocks
+const sortedIds = [userId1, userId2].sort();
+// Lock in sorted order
+```
+
+### 3. Dual JWT System
+
+```typescript
+// User Token: JWT_USER_SECRET (7 days)
+// Admin Token: JWT_ADMIN_SECRET (24 hours) via x-admin-token header
+```
+
+### 4. Game Engine Interface
+
+```typescript
+interface GameEngine {
+  gameType: string;
+  minPlayers: number;
+  maxPlayers: number;
+  createInitialState(): string;
+  validateMove(state: string, playerId: string, move: MoveData): ValidationResult;
+  applyMove(state: string, playerId: string, move: MoveData): ApplyMoveResult;
+  getGameStatus(state: string): GameStatus;
+  getValidMoves(state: string, playerId: string): MoveData[];
+  getPlayerView(state: string, playerId: string): PlayerView;
+}
+```
+
+### 5. Bilingual Notifications
+
+```typescript
+// كل الإشعارات ثنائية اللغة
+{ title: "English title", titleAr: "العنوان بالعربي", message: "...", messageAr: "..." }
+```
+
+---
+
+## 🚀 ملاحظات مهمة (IMPORTANT NOTES)
+
+1. ~~**`server/admin-routes.ts`** (5,349 سطر)~~ — ✅ تم تقسيمه (Phase 5) → 13 module
+2. ~~**`server/storage.ts`** (4,009 سطر)~~ — ✅ تم تقسيمه (Phase 6) → 14 module
+3. **`shared/schema.ts`** (3,370 سطر) — 66 جدول
+4. **`server/routes.ts`** تم تقسيمه ✅ (5,159 → 406 سطر، Phase 4)
+5. **P2P Disputes تستخدم in-memory storage** — تحتاج migration لقاعدة البيانات
+6. **بعض P2P Trading endpoints ترجع بيانات Demo/Mock** — تحتاج ربط حقيقي
+7. **Free Rewards (daily bonus, ads, referrals)** — Stub endpoints فقط
+8. **Matchmaking** يستخدم Fisher-Yates Shuffle + crypto.randomInt
+9. **Voice Chat** عبر WebRTC Signaling (الصوت P2P بين المستخدمين)
+10. **Challenge withdrawal** يفرض 30% penalty
+11. **أقصى حجم JSON body**: 10MB
+12. **DB Pool**: max 50 connections, min 5, 30s idle timeout
+
+---
+
+## 📊 سجل التطوير (DEVELOPMENT LOG)
+
+### [22 فبراير 2026] — تحليل المشروع الكامل وإنشاء الذاكرة
+
+- ✅ قراءة وتحليل جميع ملفات المشروع بالكامل
+- ✅ تحليل 66 جدول في قاعدة البيانات
+- ✅ تحليل 10+ محركات ألعاب
+- ✅ تحليل 30+ صفحة frontend
+- ✅ تحليل 28 صفحة أدمن
+- ✅ تحليل نظام WebSocket المزدوج
+- ✅ تحليل نظام P2P والتسوية المالية
+- ✅ تحليل Docker + Mobile + PWA configs
+- ✅ إنشاء ملف الذاكرة الشامل (.memory)
+- 📝 المشروع جاهز للتطوير والتحديثات
+
+### [22 فبراير 2026] — تشغيل Docker محلياً
+
+- ✅ Docker Desktop v29.2.0 + Compose v5.0.2 جاهز
+- ✅ إنشاء ملف `.env` بالمتغيرات المطلوبة (DB credentials + JWT secrets + session)
+- ✅ إصلاح Dockerfile: حذف COPY لمجلد `client/src/i18n` غير الموجود (الترجمة في `client/src/lib/i18n.tsx`)
+- ✅ إصلاح مشكلة SSL: PostgreSQL داخل Docker لا يدعم SSL — تعديل `server/db.ts` + إضافة `DB_SSL=false` في docker-compose
+- ✅ بناء وتشغيل الحاويات: `vex-db` (PostgreSQL 15 Alpine) + `vex-app` (Node 20 Alpine)
+- ✅ قاعدة البيانات: schema pushed + seeded (20 لعبة، 5 multiplayer، 8 هدايا، ثيمات، منصات اجتماعية)
+- ✅ Health check: `{"status":"healthy","database":{"status":"connected","latency":"1ms"}}`
+- ✅ التطبيق يعمل على `http://localhost:3001`
+- ⚠️ Feature flags seeding فشل (null name constraint) — غير حرج
+- 🔄 حساب أدمن يحتاج: `ADMIN_BOOTSTRAP_PASSWORD` (16+ حرف) + `ADMIN_BOOTSTRAP_EMAIL` في `.env`
+
+---
+
+### [22 فبراير 2026] — Phase 0: إصلاحات مالية طارئة + Phase 1: إزالة البيانات الوهمية + Phase 2: إصلاحات الواجهة
+
+#### Phase 0 — Emergency Financial Fixes ✅
+
+- ✅ `server/lib/support-settler.ts`: إصلاح double payout — الخاسر كان يسترد رصيده المقفل + الفائز كان يحصل على المبلغ الكامل مرتين
+  - إضافة `forfeitLockedProjectCurrencyBalance()` في storage.ts (يخصم من locked بدون إرجاع لـ total)
+  - الخاسر: forfeit (خصم locked) بدل unlock (إرجاع)
+  - الفائز: unlock stake + credit PROFIT فقط (بدل full netPool)
+- ✅ `server/lib/odds-calculator.ts`: إصلاح houseFee 500% — القيمة "5.00" من DB كانت تُستخدم كـ decimal (0.05 = 5%)
+  - إضافة normalize: إذا > 1 → قسمة على 100
+- ✅ `server/storage.ts` `settleProjectCurrencyGamePayout`: إصلاح totalBalance desync — الفائز كان يحصل على earnedBalance فقط بدون تحديث totalBalance
+- ✅ `server/routes/challenges.ts`: إصلاح withdraw refund — السحب كان يحسب penalty 30% لكن لا يرجع الـ 70% المتبقي
+  - إضافة refund logic لكلا العملتين (USD + project currency)
+- ✅ `server/routes/challenges.ts`: إصلاح totalBalance desync عند إنشاء/انضمام للتحديات (project currency)
+- ✅ `server/routes/spectator.ts`: إصلاح مطابقة المراهنات — كان يطابق أي مبلغ مع أي مبلغ آخر
+  - تغيير لمطابقة المبالغ المتساوية فقط
+
+#### Phase 1 — Remove Fake Data & Move In-Memory to DB ✅
+
+- ✅ إزالة `Math.random()` fake spectatorCount/totalBets (6 مواقع في challenges.ts) → استبدال بـ 0
+- ✅ إزالة mock gifts endpoint → إرجاع مصفوفة فارغة
+- ✅ حذف المصفوفات in-memory: `challenges[]`, `spectatorBets[]`, `challengeRatings[]`, `challengerFollows[]`
+- ✅ `challengerFollows`: نقل من in-memory array إلى DB table `challenger_follows` (موجود في schema)
+- ✅ `spectatorBets` (stake/stakes): تحويل endpoint القديم لاستخدام spectator supports من DB
+- ✅ حذف `challenges.push()` اللي كان يضيف لمصفوفة غير مستخدمة
+- ✅ تنظيف imports غير مستخدمة (crypto)
+
+#### Phase 2 — Frontend Crash Fixes ✅
+
+- ✅ `ChessGame.tsx`: إصلاح crash `moveHistory.map()` — إضافة `|| []` fallback
+- ✅ `ChessGame.tsx`: توسيع `isValidChessState` ليشمل `whiteTime` و `blackTime`
+- ✅ `TarneebGame.tsx` + `BalootGame.tsx`: إصلاح team numbering mismatch (0-indexed vs 1-indexed)
+- ✅ `TarneebGame.tsx` + `BalootGame.tsx`: إصلاح `undefined % 2 = NaN` عند غياب playerOrder
+- ✅ `DominoGame.tsx`: إصلاح spectator false-positive عند غياب playerOrder
+- ✅ `DominoGame.tsx`: إصلاح draw action — كان يرسل play بدل draw (tile -1,-1 مع isPassed:false)
+- ✅ `BackgammonGame.tsx`: إصلاح عرض التعادل — كان يعرض "خسرت" بدل "تعادل"
+- ✅ `ChessTimer.tsx`: إصلاح timer jitter — فصل server sync عن local countdown
+- ✅ `ChessChat.tsx`: إصلاح React key collision عند غياب msg.id
+
+#### Build & Deploy ✅
+
+- ✅ Docker build نجح بدون أخطاء
+- ✅ الحاويات تعمل (healthy): `http://localhost:3001/api/health`
+
+---
+
+### [22 فبراير 2026] — تنظيف الكود الميت والملفات الاختبارية
+
+#### الملفات المحذوفة
+
+- ✅ `server/tests/` — 15 ملف اختبار مستقل (~7,458 سطر)
+- ✅ `tests/` — 1 ملف اختبار (websocket-stress-test.ts, ~519 سطر)
+- ✅ `flutter_wrapper/` — مجلد Flutter WebView مهجور (تم استبداله بـ Capacitor)
+- ✅ `vex_database_backup_20260120_032148.sql` — ملف نسخة احتياطية في الجذر (~10,169 سطر)
+- ✅ `.copilot-memory.md` — ملف ذاكرة مكرر (373 سطر، .memory هو الملف الرسمي)
+- ✅ `تحويله لتطبيق` — توثيق عربي مكرر (موجود في MOBILE_APP_BUILD.md)
+- ✅ `ecosystem.config.cjs` — ملف PM2 غير مستخدم (صفر مراجع)
+- ✅ `AI_CONTEXT.md` + `AI_PROJECT_GUIDE.md` + `PROJECT_MAP.md` — وثائق عامة غير دقيقة (تصف نظام Python غير موجود)
+- ✅ `replit.md` — يشير لملفات اختبار محذوفة
+- ✅ `scripts/export.sh` — سكربت غير مرجعي (72 سطر)
+
+#### صفحات ومكونات يتيمة محذوفة (لا routes ولا imports)
+
+- ✅ `client/src/pages/privacy-policy.tsx` (~207 سطر)
+- ✅ `client/src/pages/terms-of-service.tsx` (~261 سطر)
+- ✅ `client/src/pages/admin/admin-games.tsx` (~888 سطر، استُبدل بـ admin-unified-games.tsx)
+- ✅ `client/src/pages/admin/admin-multiplayer-games.tsx` (~1,051 سطر)
+- ✅ `client/src/pages/admin/admin-themes.tsx` (~237 سطر)
+- ✅ `client/src/components/games/BackgammonBoard.tsx` (~388 سطر، النسخة المستخدمة في backgammon/ subfolder)
+- ✅ `client/src/components/games/VirtualGamesGrid.tsx` (~147 سطر، لم يتم استيراده أبداً)
+
+#### كود ميت في الخادم
+
+- ✅ `server/websocket.ts`: حذف 8 دوال exportedميتة (~200 سطر):
+  - `getConnectedClients()`, `registerAdminClient()`, `getAdminClientCount()`
+  - `broadcastBotGameState()`, `broadcastBotGameMove()`, `broadcastBotGameEnded()`
+  - `initBotGameRoom()`, `getBotGameSpectatorCount()`
+
+#### تنظيف console.log
+
+- ✅ `client/src/hooks/useGameWebSocket.ts`: استبدال 21 console.log بـ wsLog() (يعمل فقط في DEV)
+- ✅ `server/game-websocket.ts`: استبدال console.log بـ logger.info (structured logging)
+- ✅ `server/routes.ts`: استبدال 5 console.log("Default ...") بـ logger.info
+- ✅ `client/src/pages/challenge-game.tsx`: حذف debug logs
+- ✅ `client/src/pages/admin/admin-p2p.tsx`: حذف debug log
+
+#### تحديثات التوثيق
+
+- ✅ `README.md`: استبدال قسم Flutter بإشارة لـ Capacitor (MOBILE_APP_BUILD.md)
+- ✅ `secret` → `ENV_VARS_GUIDE.md`: إعادة تسمية
+
+#### ملاحظات مهمة
+
+- ⚠️ محركات الألعاب "المكررة" (`chess-engine.ts`, `domino-engine.ts`, `card-game-engine.ts`) لم تُحذف — مستخدمة فعلياً في `websocket/challenge-games.ts` لنظام التحديات
+- ⚠️ routes P2P في `routes.ts` (L1750-1920) ترجع بيانات mock/hardcoded — لم تُحذف لأن الواجهة تعتمد عليها
+- ⚠️ مجلد `deploy/` محفوظ — مطلوب لنشر bare-metal/VPS
+
+#### الإجمالي: ~22,000+ سطر كود ميت/اختباري محذوف
+
+#### Build & Verify ✅
+
+- ✅ Docker rebuild نجح بدون أخطاء
+- ✅ الحاويات تعمل (healthy): `http://localhost:3001/api/health`
+
+---
+
+### [22 فبراير 2026] — Phase 3: TypeScript Type Safety + Dead Code Cleanup
+
+- ✅ إصلاح جميع أخطاء TypeScript (0 errors)
+- ✅ حذف ~22,000+ سطر كود ميت/اختباري
+- ✅ حذف 15 ملف اختبار + flutter_wrapper + ملفات توثيق مكررة
+- ✅ حذف 7 صفحات/مكونات يتيمة (لا routes ولا imports)
+- ✅ حذف 8 دوال ميتة من websocket.ts
+- ✅ استبدال console.log بـ structured logging
+- ✅ Commit: `ac02082`
+
+---
+
+### [29 مارس 2026] — Phase 0 Auth Hardening (2FA + Sessions + OAuth + Unified Verification)
+
+- ✅ توحيد التحقق من التوكنات في ملف مركزي: `server/lib/auth-verification.ts`
+  - نفس منطق التحقق أصبح يُستخدم في HTTP middleware + WebSocket + upload auth
+  - تفعيل فحص الجلسة النشطة عبر `tokenFingerprint` مع تحديث النشاط
+- ✅ تشديد 2FA للمستخدم:
+  - `POST /api/auth/2fa/verify` لم يعد يقبل `userId` من الـ body
+  - أصبح `challengeToken` إلزامي كمصدر الهوية الوحيد
+- ✅ تشديد 2FA للأدمن:
+  - إضافة one-time challenge flow في `server/admin-routes/helpers.ts`
+  - `POST /api/admin/verify-2fa` أصبح يعتمد `challengeToken` بدل `userId`
+- ✅ ضبط دورة حياة الجلسات:
+  - logout/refresh/logout-all أصبحوا متوافقين مع نموذج fingerprint hash
+  - refresh يوقف الجلسة القديمة ويُصدر جلسة جديدة بشكل صريح
+- ✅ تأمين OAuth callback:
+  - إزالة JWT من query string
+  - اعتماد one-time exchange code عبر `/api/auth/social/exchange`
+- ✅ توحيد SafeUser DTO:
+  - إضافة `server/lib/safe-user.ts`
+  - استبدال أنماط `{ ...user, password: undefined }` المتفرقة
+- ✅ تحديث واجهة الأدمن والـ callback في الواجهة الأمامية:
+  - `client/src/pages/admin/admin-login.tsx` (مرحلتين: credentials ثم 2FA challenge)
+  - `client/src/pages/auth-callback.tsx` (code exchange + تخزين `pwm_token`)
+
+#### Verify ✅
+
+- ✅ `npx tsc --noEmit` => `EXIT:0`
+- ✅ تشغيل الخادم تحققياً على المنفذ `3021` (لأن 3001/3011 كانا مشغولين)
+- ✅ فحوصات سريعة:
+  - `GET /` => `200`
+  - `POST /api/auth/social/exchange` بدون code => `{"error":"Exchange code is required"}`
+  - `POST /api/auth/2fa/verify` مع payload legacy => `{"error":"Challenge token is required"}`
+  - `POST /api/admin/verify-2fa` بدون بيانات => `{"error":"Code and challenge token are required"}`
+
+### [27 فبراير 2026] — Phase 4: Routes Modularization
+
+- ✅ تقسيم `server/routes.ts` من 5,159 سطر إلى 406 سطر (92% تخفيض)
+- ✅ إنشاء 12 ملف route جديد + helpers.ts
+- ✅ 26 route module مسجل في routes/index.ts
+- ✅ routes.ts يحتوي فقط: rate limiters, seeds, schedulers, admin bootstrap, error handler
+- ✅ 0 أخطاء TypeScript
+- ✅ Commit: `d04fd10`
+
+### [27 فبراير 2026] — Phase 6: Storage Modularization
+
+- ✅ تقسيم `server/storage.ts` من 4,009 سطر إلى 14 module تحت `server/storage/`
+- ✅ helpers.ts + 12 domain module + index.ts (assembly + seed)
+- ✅ تحويل class methods إلى standalone exported functions
+- ✅ Cross-module dependency: admin.ts ← games.ts (applyScheduledConfigChange)
+- ✅ 0 TypeScript errors — Commit: `066ed61`
+
+### [27 فبراير 2026] — Phase 5: Admin Routes Modularization
+
+- ✅ تقسيم `server/admin-routes.ts` من 5,349 سطر إلى 13 module + helpers + index
+- ✅ حذف الملف الأصلي واستبداله بمجلد `server/admin-routes/`
+- ✅ 15 ملف جديد: helpers.ts, admin-auth, dashboard, users, settings, support, p2p, content, games, alerts, currency, tournaments, challenges, chat-features, index.ts
+- ✅ إصلاح أخطاء schema في admin-auth.ts (lockedUntil, passwordResetTokens, codeHash, sendEmail signature)
+- ✅ 0 أخطاء TypeScript
+- ✅ Commit: `31fc981`
+
+### [27 فبراير 2026] — Phase 7: WebSocket Modularization
+
+- ✅ تقسيم `server/websocket.ts` من 1,910 سطر إلى 8 modules تحت `server/websocket/`
+- ✅ shared.ts (types + state Maps) + 5 handler modules + notifications.ts + index.ts
+- ✅ 33 message handler محفوظ: auth(4), chat(9), matchmaking(5), voice(5), challenge-games(10)
+- ✅ 8 exported functions محفوظة: sendNotification, broadcastNotification, broadcastSystemEvent, broadcastAdminAlert, broadcastChallengeUpdate, broadcastToUser, getOnlineUsersCount, getActiveGameRoomsCount
+- ✅ جميع الـ 26 external import مازالت تعمل بدون تغيير (re-exports من index.ts)
+- ✅ 0 أخطاء TypeScript — Commit: `3f95f42`
+
+### [28 مارس 2026] — تقوية WebSocket + خط جودة أولي
+
+- ✅ إضافة طبقة تحقق payload صارمة لرسائل challenge websocket قبل dispatch (`server/websocket/challenge-games/validation.ts`)
+- ✅ إضافة طبقة تحقق صارمة لرسائل `/ws/game` قبل التنفيذ (`server/game-websocket/validation.ts`)
+- ✅ إضافة توافق خلفي لنوع الرسالة `send_gift` في challenge dispatcher لتفادي كسر العملاء الحاليين
+- ✅ إضافة سكربتات جودة: `check:types`, `i18n:audit`, `i18n:audit:strict`, `quality:gate`
+- ✅ التحقق: TypeScript pass + server startup على 3011 + health 200
+
+### [28 مارس 2026] — تقليل ضجيج أخطاء WS في صفحة المشاهدة
+
+- ✅ إضافة dedupe/throttle لرسائل أخطاء WebSocket في `client/src/pages/challenge-watch.tsx`
+- ✅ منع تكرار نفس Toast الخطأ خلال نافذة زمنية قصيرة (signature: `code:message`)
+- ✅ إدخال أخطاء parse malformed ضمن نفس مسار العرض المنظّم
+- ✅ التحقق: TypeScript pass + server startup على 3011 + health 200
+- ⚠️ تدقيق i18n أظهر drift واسع في 107 locale (حالياً non-strict mode)
+
+### [28 مارس 2026] — تقوية مسار `/ws` العام
+
+- ✅ إضافة `server/websocket/validation.ts` للتحقق من envelope (payload object + type string غير فارغ + حد طول)
+- ✅ منع message types غير المعروفة مبكرًا في `server/websocket/index.ts`
+- ✅ إضافة `ws_error` واضحة للرسائل malformed أو unknown بدل التجاهل الصامت
+- ✅ التحقق: TypeScript pass + server startup على 3011 + health 200
+
+<!-- 
+كل تطوير جديد يُضاف هنا بالتنسيق:
+### [التاريخ] — وصف مختصر
+- ✅ ما تم إنجازه
+- ⚠️ ملاحظات
+- 🔄 ما يحتاج متابعة
+-->
+
+### [28 مارس 2026] — توحيد Envelope أخطاء `/ws` (مع توافق خلفي)
+
+- ✅ تحويل أخطاء التحقق في `/ws` إلى شكل منظّم يتضمن `message` و`code`
+- ✅ إضافة أكواد صريحة: `invalid_envelope`, `invalid_type`, `unknown_type`, `invalid_format`
+- ✅ الحفاظ على التوافق الخلفي عبر إبقاء الحقول العلوية `error` و`code`
+- ✅ التحقق: TypeScript pass + server startup على 3011 + health 200
+
+### [28 مارس 2026] — توحيد Envelope أخطاء `/ws/game` (مع توافق خلفي)
+
+- ✅ إضافة نموذج خطأ منظّم لـ validation في `/ws/game` مع codes صريحة
+- ✅ codes مضافة: `invalid_payload`, `invalid_format`, `unknown_type`
+- ✅ توحيد إرسال الأخطاء ليشمل `payload.message` و`payload.code`
+- ✅ الحفاظ على الحقول العلوية `error` و`code` لتوافق العملاء القدامى
+- ✅ التحقق: TypeScript pass + server startup على 3011 + health 200
+
+### [28 مارس 2026] — تقوية صفحة المشاهدة ضد أخطاء WebSocket
+
+- ✅ تحديث `client/src/pages/challenge-watch.tsx` لمعالجة `ws_error`, `error`, `challenge_error`, `move_error`
+- ✅ دعم استخراج الرسالة من الشكل الجديد (`payload.message`) والشكل القديم (`error`)
+- ✅ إضافة حماية parse للرسائل WebSocket malformed لمنع crash في الواجهة
+- ✅ التحقق: TypeScript pass + server startup على 3011 + health 200
+
+### [28 مارس 2026] — توحيد معالجة أخطاء WebSocket في الواجهة
+
+- ✅ إضافة helper مشترك `client/src/lib/ws-errors.ts` لاستخراج `message` و`code` من envelopes الحديثة/القديمة
+- ✅ استبدال منطق الاستخراج المكرر في `challenge-watch` بالـ helper المشترك
+- ✅ توحيد استقبال أخطاء `useGameWebSocket` لكل الأنواع: `ws_error`, `error`, `challenge_error`, `move_error`, `move_rejected`
+- ✅ الحفاظ على الإغلاق القاتل فقط لأخطاء الجلسة/التخويل (`SESSION_NOT_FOUND`, `NOT_AUTHORIZED`)
+- ✅ التحقق: TypeScript pass + server startup على 3011 + health 200
+
+### [28 مارس 2026] — توسيع توحيد أخطاء WS إلى chat/notifications
+
+- ✅ تحديث `client/src/hooks/use-chat.tsx` لاعتماد helper موحّد لأخطاء websocket بدل `chat_error` المخصص فقط
+- ✅ تحديث `client/src/hooks/use-notifications.tsx` لاعتراض أخطاء websocket الموحّدة وعرضها بشكل مرئي
+- ✅ إبقاء سلوك parse الآمن وعدم كسر تدفق الرسائل غير المتعلقة بالأخطاء
+- ✅ التحقق: TypeScript pass + server startup على 3011 + health 200
+
+### [28 مارس 2026] — تقليل تكرار Toast أخطاء WS في notifications
+
+- ✅ إضافة dedupe/throttle في `client/src/hooks/use-notifications.tsx` لمنع تكرار نفس Toast الخطأ خلال 5 ثوانٍ
+- ✅ استخدام توقيع موحّد للمنع يعتمد على: `type + code + message` حتى لا نخفي أخطاء مختلفة
+- ✅ الحفاظ على العرض المحلي للعناوين (AR/EN) ونمط `destructive`
+- ✅ التحقق: TypeScript pass + server startup على 3011 + health 200
+
+### [28 مارس 2026] — تقوية صفحة challenge-game ضد أخطاء WebSocket
+
+- ✅ تحديث `client/src/pages/challenge-game.tsx` لدعم `isWsErrorType` و `extractWsErrorInfo` بدل المعالجة غير الموحّدة
+- ✅ إضافة dedupe/toast لأخطاء websocket المتكررة لتقليل الإزعاج أثناء عدم استقرار الاتصال
+- ✅ إضافة حماية parse في `ws.onmessage` لمنع تعطل الواجهة عند الرسائل malformed
+- ✅ التحقق: TypeScript pass + server startup على 3011 + health 200
+
+### [31 مارس 2026] — متابعة تدقيق صلاحيات التحديات + Regression baseline
+
+- ✅ إغلاق فجوة `available challenges` باستبعاد كل المقاعد المشغولة (`player1..player4`) في `server/storage/challenge-queries.ts`
+- ✅ إضافة سكربت Regression Smoke جديد: `scripts/smoke-challenge-permissions.mjs`
+- ✅ تغطية baseline داخل السكربت لـ: حظر قراءة التحدي الخاص لغير المشاركين، حظر join لتحديات friend المحجوزة، والتحقق من استبعاد المشاركين من قائمة المتاح
+- ✅ إضافة أمر تشغيل: `npm run security:smoke:challenges`
+- ⚠️ التحقق التكاملّي الكامل في البيئة الحالية اصطدم باختلاف كود الحاوية المشغلة (`dist`) عن ملفات workspace؛ تم الاكتفاء بـ TypeScript + تحديث التوثيق وخط smoke baseline

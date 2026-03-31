@@ -1,0 +1,84 @@
+# VEX Platform - Docker Ignore File
+# ملف تجاهل Docker — Optimized March 2026
+
+# Dependencies
+node_modules
+.npm
+
+# Build outputs (we build fresh in Docker)
+dist
+
+# Development files
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Cache
+.cache
+.replit
+replit.nix
+
+# Backups
+backups
+*.sql
+*.sql.gz
+
+# Documentation (not needed in production image)
+docs
+*.md
+!README.md
+
+# Test files
+*.test.ts
+*.spec.ts
+__tests__
+coverage
+
+# Flutter / Mobile (separate builds, not needed in Docker)
+flutter_wrapper
+twa
+capacitor.config.ts
+
+# Large game source files (not needed — games are in client/public/games/)
+Brackeys.zip
+Brackeys.zip/
+
+# Export files
+vex_export_*
+*.tar.gz
+
+# Temporary files
+tmp
+temp
+.DS_Store
+Thumbs.db
+
+# Uploads (mounted as volume in production)
+uploads
+
+# Docker files themselves
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# Secrets
+secret
+
+# Audit / design docs
+*_AUDIT_REPORT.md
+*_IMPROVEMENT_PLAN.md
+design_guidelines.md
+ts_errors.txt

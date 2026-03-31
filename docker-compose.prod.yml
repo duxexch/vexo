@@ -1,0 +1,296 @@
+# VEX Platform - Production Docker Compose
+# Uses existing Traefik from classitest via external network
+# Domain: vixo.click
+# Usage: docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+
+services:
+  # ==================== PostgreSQL Database ====================
+  db:
+    image: postgres:15-alpine
+    container_name: vex-db
+    hostname: vex-db
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.50'
+        reservations:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-vex_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command: >
+      postgres
+        -c shared_buffers=128MB
+        -c effective_cache_size=256MB
+        -c work_mem=8MB
+        -c maintenance_work_mem=64MB
+        -c max_connections=100
+        -c log_min_duration_statement=1000
+        -c log_statement=none
+        -c log_lock_waits=on
+        -c checkpoint_completion_target=0.9
+        -c wal_buffers=4MB
+        -c random_page_cost=1.1
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - vex-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-vex_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ==================== Redis Cache ====================
+  redis:
+    image: redis:7-alpine
+    container_name: vex-redis
+    hostname: vex-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+        --requirepass ${REDIS_PASSWORD}
+        --maxmemory 128mb
+        --maxmemory-policy allkeys-lru
+        --appendonly yes
+        --tcp-backlog 511
+        --timeout 300
+        --tcp-keepalive 60
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+          cpus: '0.15'
+        reservations:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    volumes:
+      - redis_data:/data
+    networks:
+      - vex-internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ==================== MinIO Object Storage ====================
+  minio:
+    image: minio/minio:latest
+    container_name: vex-minio
+    hostname: vex-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.20'
+        reservations:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "127.0.0.1:9011:9001"
+      - "127.0.0.1:9010:9000"
+    networks:
+      - vex-internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ==================== AI Agent Service ====================
+  ai-agent:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: vex-ai-agent
+    hostname: vex-ai-agent
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      NODE_ENV: production
+      PORT: 3100
+      AI_AGENT_SHARED_TOKEN: ${AI_AGENT_SHARED_TOKEN:-}
+      AI_AGENT_DATA_DIR: /app/data
+    volumes:
+      - ai_agent_data:/app/data
+    networks:
+      - vex-internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3100/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ==================== VEX Application ====================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vex-app
+    hostname: vex-app
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      ai-agent:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@vex-db:5432/${POSTGRES_DB:-vex_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@vex-redis:6379
+      AI_AGENT_ENABLED: ${AI_AGENT_ENABLED:-true}
+      AI_AGENT_BASE_URL: http://vex-ai-agent:3100
+      AI_AGENT_SHARED_TOKEN: ${AI_AGENT_SHARED_TOKEN:-}
+      AI_AGENT_TIMEOUT_MS: ${AI_AGENT_TIMEOUT_MS:-900}
+      MINIO_ENDPOINT: vex-minio
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-vex-uploads}
+      MINIO_USE_SSL: "false"
+      SESSION_SECRET: ${SESSION_SECRET}
+      JWT_USER_SECRET: ${JWT_SIGNING_KEY}
+      JWT_ADMIN_SECRET: ${ADMIN_JWT_SECRET}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-admin123}
+      ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-admin}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-admin@vixo.click}
+      ADMIN_RESET_PASSWORD: ${ADMIN_RESET_PASSWORD:-}
+      ADMIN_RESET_USERNAME: ${ADMIN_RESET_USERNAME:-}
+      ADMIN_RESET_EMAIL: ${ADMIN_RESET_EMAIL:-}
+      ADMIN_RECOVERY_EMAIL: ${ADMIN_RECOVERY_EMAIL:-admin@vixo.click}
+      SKIP_MIGRATIONS: ${SKIP_MIGRATIONS:-false}
+      ALLOW_FORCE_MIGRATIONS: ${ALLOW_FORCE_MIGRATIONS:-false}
+      SEED_DATABASE: ${SEED_DATABASE:-true}
+      DB_SSL: "false"
+      DB_POOL_MAX: "30"
+      DB_POOL_MIN: "5"
+      TZ: UTC
+    # No direct ports — Traefik handles all traffic
+    expose:
+      - "3001"
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - app_logs:/app/logs
+      - app_uploads:/app/uploads
+    networks:
+      - vex-internal
+      - classitest_classify-network
+    labels:
+      # Enable Traefik
+      - "traefik.enable=true"
+      - "traefik.docker.network=classitest_classify-network"
+      # HTTPS Router
+      - "traefik.http.routers.vex.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
+      - "traefik.http.routers.vex.entrypoints=websecure"
+      - "traefik.http.routers.vex.tls=true"
+      - "traefik.http.routers.vex.tls.certresolver=letsencrypt"
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.vex-http.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
+      - "traefik.http.routers.vex-http.entrypoints=web"
+      - "traefik.http.routers.vex-http.middlewares=vex-https-redirect"
+      - "traefik.http.middlewares.vex-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.vex-https-redirect.redirectscheme.permanent=true"
+      # Service port
+      - "traefik.http.services.vex.loadbalancer.server.port=3001"
+      - "traefik.http.services.vex.loadbalancer.server.scheme=http"
+      # Security Headers
+      - "traefik.http.middlewares.vex-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.vex-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.vex-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.vex-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.vex-headers.headers.frameDeny=true"
+      - "traefik.http.middlewares.vex-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.vex-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.vex-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.vex-headers.headers.customResponseHeaders.X-Robots-Tag=index, follow"
+      - "traefik.http.middlewares.vex-headers.headers.customResponseHeaders.Cross-Origin-Opener-Policy=same-origin-allow-popups"
+      # Gzip compression at Traefik level
+      - "traefik.http.middlewares.vex-compress.compress=true"
+      - "traefik.http.middlewares.vex-compress.compress.minResponseBodyBytes=1024"
+      # Chain middlewares
+      - "traefik.http.routers.vex.middlewares=vex-compress,vex-headers"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+
+networks:
+  vex-internal:
+    driver: bridge
+  classitest_classify-network:
+    external: true
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  app_logs:
+    driver: local
+  app_uploads:
+    driver: local
+  ai_agent_data:
+    driver: local

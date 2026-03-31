@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  
+  <!-- ══════════ الصفحة الرئيسية / Homepage ══════════ -->
+  <url>
+    <loc>https://vixo.click/</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://vixo.click/" />
+    <image:image>
+      <image:loc>https://vixo.click/icons/vex-gaming-logo-512x512.png</image:loc>
+      <image:title>VEX - منصة الألعاب والتداول</image:title>
+      <image:caption>VEX Gaming &amp; P2P Trading Platform</image:caption>
+    </image:image>
+  </url>
+
+  <!-- ══════════ الألعاب / Games ══════════ -->
+  <url>
+    <loc>https://vixo.click/games</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/games" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/games" />
+    <image:image>
+      <image:loc>https://vixo.click/icons/vex-online-games-shortcut.png</image:loc>
+      <image:title>ألعاب VEX أونلاين - شطرنج، طاولة، دومينو، طرنيب، بلوت</image:title>
+    </image:image>
+  </url>
+
+  <!-- ══════════ التحديات / Challenges ══════════ -->
+  <url>
+    <loc>https://vixo.click/challenges</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/challenges" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/challenges" />
+  </url>
+
+  <!-- ══════════ تداول P2P / P2P Trading ══════════ -->
+  <url>
+    <loc>https://vixo.click/p2p</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/p2p" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/p2p" />
+    <image:image>
+      <image:loc>https://vixo.click/icons/vex-p2p-trading-shortcut.png</image:loc>
+      <image:title>تداول P2P آمن - VEX Secure P2P Trading</image:title>
+    </image:image>
+  </url>
+
+  <!-- ══════════ البطولات / Tournaments ══════════ -->
+  <url>
+    <loc>https://vixo.click/tournaments</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/tournaments" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/tournaments" />
+  </url>
+
+  <!-- ══════════ لوحة المتصدرين / Leaderboard ══════════ -->
+  <url>
+    <loc>https://vixo.click/leaderboard</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.80</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/leaderboard" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/leaderboard" />
+  </url>
+
+  <!-- ══════════ المواسم / Seasons ══════════ -->
+  <url>
+    <loc>https://vixo.click/seasons</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/seasons" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/seasons" />
+  </url>
+
+  <!-- ══════════ القسم المجاني / Free Section ══════════ -->
+  <url>
+    <loc>https://vixo.click/free</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/free" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/free" />
+  </url>
+
+  <!-- ══════════ اللعب الجماعي / Multiplayer ══════════ -->
+  <url>
+    <loc>https://vixo.click/multiplayer</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.70</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/multiplayer" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/multiplayer" />
+  </url>
+
+  <!-- ══════════ صالة الألعاب / Lobby ══════════ -->
+  <url>
+    <loc>https://vixo.click/lobby</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.70</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/lobby" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/lobby" />
+  </url>
+
+  <!-- ══════════ المكافآت اليومية / Daily Rewards ══════════ -->
+  <url>
+    <loc>https://vixo.click/daily-rewards</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.65</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/daily-rewards" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/daily-rewards" />
+  </url>
+
+  <!-- ══════════ نظام الإحالة / Referral ══════════ -->
+  <url>
+    <loc>https://vixo.click/referral</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.60</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/referral" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/referral" />
+  </url>
+
+  <!-- ══════════ الأركيد / Arcade ══════════ -->
+  <url>
+    <loc>https://vixo.click/arcade</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.60</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/arcade" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/arcade" />
+  </url>
+
+  <!-- ══════════ تثبيت التطبيق / Install App ══════════ -->
+  <url>
+    <loc>https://vixo.click/install-app</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.55</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/install-app" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/install-app" />
+  </url>
+
+  <!-- ══════════ تحميل التطبيق / Downloads ══════════ -->
+  <url>
+    <loc>https://vixo.click/downloads</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.55</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/downloads" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/downloads" />
+  </url>
+
+  <!-- ══════════ شروط الاستخدام / Terms ══════════ -->
+  <url>
+    <loc>https://vixo.click/terms</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.40</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/terms" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/terms" />
+  </url>
+
+  <!-- ══════════ سياسة الخصوصية / Privacy ══════════ -->
+  <url>
+    <loc>https://vixo.click/privacy</loc>
+    <lastmod>2026-03-03</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.40</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/privacy" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/privacy" />
+  </url>
+
+</urlset>

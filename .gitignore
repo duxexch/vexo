@@ -1,0 +1,38 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+.config/replit/.semgrep/
+
+# Environment files (sensitive data)
+.env
+.env.local
+.env.production
+.env.production.local
+
+# Logs
+logs/
+*.log
+
+# Uploads
+uploads/
+
+# Backups
+backups/
+
+# Android/iOS signing keys (NEVER commit these)
+*.jks
+*.keystore
+android/app/signing.properties
+ios/App/Pods/
+
+# Android/iOS build outputs & platform
+android/
+ios/
+
+# Build outputs
+android/app/build/
+ios/App/build/ts_errors.txt
+Brackeys.zip/

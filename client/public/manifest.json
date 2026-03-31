@@ -1,0 +1,211 @@
+{
+  "name": "VEX - منصة الألعاب والتداول | Gaming & Trading",
+  "short_name": "VEX",
+  "description": "العب شطرنج، طاولة، دومينو، طرنيب وبلوت أونلاين مع لاعبين حقيقيين. تداول P2P آمن مع 85+ عملة. محفظة رقمية ومكافآت يومية. Play Chess, Backgammon, Domino, Tarneeb & Baloot online. Secure P2P trading.",
+  "start_url": "/?source=pwa",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#0f1419",
+  "theme_color": "#0f1419",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": ["games", "entertainment", "finance", "social", "board", "card"],
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "display_override": ["window-controls-overlay", "tabbed", "standalone", "minimal-ui"],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "handle_links": "preferred",
+  "icons": [
+    {
+      "src": "/vex-gaming-favicon.png",
+      "sizes": "64x64",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vex-gaming-logo-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vex-gaming-logo-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vex-gaming-logo-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vex-gaming-logo-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vex-gaming-logo-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vex-gaming-logo-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vex-gaming-logo-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/vex-gaming-logo-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vex-gaming-logo-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vex-gaming-logo-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/vex-gaming-mobile-screenshot.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "الشاشة الرئيسية - VEX Home"
+    },
+    {
+      "src": "/screenshots/vex-gaming-desktop-screenshot.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "عرض سطح المكتب - VEX Desktop"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "الألعاب",
+      "short_name": "Games",
+      "description": "العب الآن - جميع الألعاب التفاعلية",
+      "url": "/play?source=shortcut",
+      "icons": [{ "src": "/icons/vex-online-games-shortcut.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "المحفظة",
+      "short_name": "Wallet",
+      "description": "إدارة رصيدك والإيداع والسحب",
+      "url": "/wallet?source=shortcut",
+      "icons": [{ "src": "/icons/vex-wallet-shortcut.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "تداول P2P",
+      "short_name": "P2P",
+      "description": "تداول آمن مع مستخدمين آخرين",
+      "url": "/p2p?source=shortcut",
+      "icons": [{ "src": "/icons/vex-p2p-trading-shortcut.png", "sizes": "96x96", "type": "image/png" }]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=click.vixo.app",
+      "id": "click.vixo.app"
+    },
+    {
+      "platform": "webapp",
+      "url": "https://vixo.click/manifest.json",
+      "id": "vixo.click"
+    }
+  ],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+vex",
+      "url": "/?handler=%s"
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "/games",
+      "accept": {
+        "application/json": [".json", ".vex"],
+        "text/plain": [".txt"]
+      }
+    }
+  ],
+  "widgets": [
+    {
+      "name": "نتائج VEX",
+      "description": "أحدث نتائج الألعاب والتحديات - VEX Latest Results",
+      "tag": "vex-results-widget",
+      "ms_ac_template": "widgets/results.json",
+      "data": "https://vixo.click/api/widgets/results",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "/screenshots/vex-gaming-mobile-screenshot.png",
+          "sizes": "390x844",
+          "label": "VEX Results Widget"
+        }
+      ],
+      "icons": [
+        { "src": "/icons/vex-gaming-logo-96x96.png", "sizes": "96x96" }
+      ],
+      "backgrounds": [
+        { "src": "/icons/vex-gaming-logo-512x512.png", "sizes": "512x512" }
+      ]
+    }
+  ],
+  "note_taking": {
+    "new_note_url": "/notes?source=note-taking"
+  },
+  "tab_strip": {
+    "home_tab": {
+      "url": "/",
+      "icons": [
+        { "src": "/icons/vex-gaming-logo-96x96.png", "sizes": "96x96" }
+      ]
+    },
+    "new_tab_button": {
+      "url": "/games"
+    }
+  },
+  "serviceworker": {
+    "src": "/sw.js",
+    "scope": "/",
+    "type": "classic",
+    "update_via_cache": "none"
+  }
+}

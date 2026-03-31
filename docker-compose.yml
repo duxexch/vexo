@@ -1,0 +1,159 @@
+# VEX Platform - Docker Compose Configuration
+# منصة VEX للألعاب والتداول - تكوين Docker Compose
+# آخر تحديث: فبراير 2026
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: vex-db
+    hostname: vex-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-vex_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vex_password}
+      POSTGRES_DB: ${POSTGRES_DB:-vex_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    # Port NOT exposed to host — only accessible via vex-network (security best practice)
+    # Uncomment below ONLY for local debugging:
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+    networks:
+      - vex-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vex_user} -d ${POSTGRES_DB:-vex_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: vex-redis
+    hostname: vex-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD:-changeme_redis_password}
+    volumes:
+      - redis_data:/data
+    networks:
+      - vex-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme_redis_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # AI Agent Service
+  ai-agent:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: vex-ai-agent
+    hostname: vex-ai-agent
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3100
+      AI_AGENT_SHARED_TOKEN: ${AI_AGENT_SHARED_TOKEN:-vex-local-ai-token}
+      AI_AGENT_DATA_DIR: /app/data
+    volumes:
+      - ai_agent_data:/app/data
+    networks:
+      - vex-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3100/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # VEX Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vex-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-agent:
+        condition: service_healthy
+    labels:
+      # Traefik configuration for vixo.click
+      - "traefik.enable=true"
+      - "traefik.docker.network=classitest_classify-network"
+      
+      # HTTPS router
+      - "traefik.http.routers.vex-secure.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
+      - "traefik.http.routers.vex-secure.entrypoints=websecure"
+      - "traefik.http.routers.vex-secure.tls.certresolver=letsencrypt"
+      - "traefik.http.services.vex.loadbalancer.server.port=3001"
+      
+      # HTTP → HTTPS redirect
+      - "traefik.http.routers.vex.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
+      - "traefik.http.routers.vex.entrypoints=web"
+      - "traefik.http.routers.vex.middlewares=vex-https-redirect"
+      - "traefik.http.middlewares.vex-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.vex-https-redirect.redirectscheme.permanent=true"
+      
+      # Security headers
+      - "traefik.http.middlewares.vex-security.headers.stsSeconds=63072000"
+      - "traefik.http.middlewares.vex-security.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.vex-security.headers.contentTypeNosniff=true"
+      - "traefik.http.routers.vex-secure.middlewares=vex-security"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vex_user}:${POSTGRES_PASSWORD:-vex_password}@vex-db:5432/${POSTGRES_DB:-vex_db}
+      SESSION_SECRET: ${SESSION_SECRET}
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-admin@vex.local}
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY}
+      ALLOW_FORCE_MIGRATIONS: ${ALLOW_FORCE_MIGRATIONS:-false}
+      SKIP_MIGRATIONS: ${SKIP_MIGRATIONS:-false}
+      MIGRATION_TIMEOUT: ${MIGRATION_TIMEOUT:-120}
+      SEED_DATABASE: ${SEED_DATABASE:-false}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_redis_password}@vex-redis:6379
+      AI_AGENT_ENABLED: ${AI_AGENT_ENABLED:-true}
+      AI_AGENT_BASE_URL: http://vex-ai-agent:3100
+      AI_AGENT_SHARED_TOKEN: ${AI_AGENT_SHARED_TOKEN:-vex-local-ai-token}
+      AI_AGENT_TIMEOUT_MS: ${AI_AGENT_TIMEOUT_MS:-900}
+      DB_SSL: "false"
+      TZ: UTC
+    ports:
+      - "${APP_PORT:-3001}:3001"
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    networks:
+      - vex-network
+      - classitest_classify-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  vex-network:
+    driver: bridge
+  classitest_classify-network:
+    external: true
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  ai_agent_data:
+    driver: local

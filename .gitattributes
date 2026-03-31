@@ -1,0 +1,9 @@
+# Force LF line endings for shell scripts (critical for Linux servers)
+*.sh text eol=lf
+entrypoint.sh text eol=lf
+Dockerfile text eol=lf
+
+# Keep Windows line endings for Windows-only files
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf

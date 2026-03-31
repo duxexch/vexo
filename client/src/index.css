@@ -1,0 +1,648 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== RTL/LTR Comprehensive Support ===== */
+
+/* Auto-swap directional margins/paddings for RTL */
+[dir="rtl"] .ml-auto { margin-left: unset; margin-right: auto; }
+[dir="rtl"] .mr-auto { margin-right: unset; margin-left: auto; }
+
+/* Fix directional spacing for RTL */
+[dir="rtl"] .ml-1 { margin-left: unset; margin-right: 0.25rem; }
+[dir="rtl"] .ml-2 { margin-left: unset; margin-right: 0.5rem; }
+[dir="rtl"] .ml-3 { margin-left: unset; margin-right: 0.75rem; }
+[dir="rtl"] .ml-4 { margin-left: unset; margin-right: 1rem; }
+[dir="rtl"] .mr-1 { margin-right: unset; margin-left: 0.25rem; }
+[dir="rtl"] .mr-2 { margin-right: unset; margin-left: 0.5rem; }
+[dir="rtl"] .mr-3 { margin-right: unset; margin-left: 0.75rem; }
+[dir="rtl"] .mr-4 { margin-right: unset; margin-left: 1rem; }
+
+[dir="rtl"] .pl-1 { padding-left: unset; padding-right: 0.25rem; }
+[dir="rtl"] .pl-2 { padding-left: unset; padding-right: 0.5rem; }
+[dir="rtl"] .pl-3 { padding-left: unset; padding-right: 0.75rem; }
+[dir="rtl"] .pl-4 { padding-left: unset; padding-right: 1rem; }
+[dir="rtl"] .pl-6 { padding-left: unset; padding-right: 1.5rem; }
+[dir="rtl"] .pl-8 { padding-left: unset; padding-right: 2rem; }
+[dir="rtl"] .pl-9 { padding-left: unset; padding-right: 2.25rem; }
+[dir="rtl"] .pr-1 { padding-right: unset; padding-left: 0.25rem; }
+[dir="rtl"] .pr-2 { padding-right: unset; padding-left: 0.5rem; }
+[dir="rtl"] .pr-3 { padding-right: unset; padding-left: 0.75rem; }
+[dir="rtl"] .pr-4 { padding-right: unset; padding-left: 1rem; }
+
+/* Fix text alignment for RTL */
+[dir="rtl"] .text-left { text-align: right; }
+[dir="rtl"] .text-right { text-align: left; }
+
+/* Fix absolute positioning for RTL */
+[dir="rtl"] .left-0 { left: unset; right: 0; }
+[dir="rtl"] .right-0 { right: unset; left: 0; }
+[dir="rtl"] .left-1 { left: unset; right: 0.25rem; }
+[dir="rtl"] .right-1 { right: unset; left: 0.25rem; }
+[dir="rtl"] .left-2 { left: unset; right: 0.5rem; }
+[dir="rtl"] .right-2 { right: unset; left: 0.5rem; }
+[dir="rtl"] .left-3 { left: unset; right: 0.75rem; }
+[dir="rtl"] .right-3 { right: unset; left: 0.75rem; }
+[dir="rtl"] .left-4 { left: unset; right: 1rem; }
+[dir="rtl"] .right-4 { right: unset; left: 1rem; }
+[dir="rtl"] .-left-1 { left: unset; right: -0.25rem; }
+[dir="rtl"] .-right-1 { right: unset; left: -0.25rem; }
+
+/* Fix translate for RTL */
+[dir="rtl"] .translate-x-full { --tw-translate-x: -100%; }
+[dir="rtl"] .-translate-x-full { --tw-translate-x: 100%; }
+[dir="rtl"] .translate-x-1\/2 { --tw-translate-x: -50%; }
+[dir="rtl"] .-translate-x-1\/2 { --tw-translate-x: 50%; }
+
+/* Fix rounded corners for RTL */
+[dir="rtl"] .rounded-l-lg { border-radius: 0 0.5rem 0.5rem 0; }
+[dir="rtl"] .rounded-r-lg { border-radius: 0.5rem 0 0 0.5rem; }
+[dir="rtl"] .rounded-l-md { border-radius: 0 0.375rem 0.375rem 0; }
+[dir="rtl"] .rounded-r-md { border-radius: 0.375rem 0 0 0.375rem; }
+
+/* Fix border sides for RTL */
+[dir="rtl"] .border-l { border-left: unset; border-right: 1px solid; }
+[dir="rtl"] .border-r { border-right: unset; border-left: 1px solid; }
+[dir="rtl"] .border-l-2 { border-left: unset; border-right: 2px solid; }
+[dir="rtl"] .border-r-2 { border-right: unset; border-left: 2px solid; }
+[dir="rtl"] .border-l-4 { border-left: unset; border-right: 4px solid; }
+[dir="rtl"] .border-r-4 { border-right: unset; border-left: 4px solid; }
+
+/* Fix flex/space between direction for RTL */
+[dir="rtl"] .space-x-1 > :not(:last-child) { margin-right: unset; margin-left: 0.25rem; }
+[dir="rtl"] .space-x-2 > :not(:last-child) { margin-right: unset; margin-left: 0.5rem; }
+[dir="rtl"] .space-x-3 > :not(:last-child) { margin-right: unset; margin-left: 0.75rem; }
+[dir="rtl"] .space-x-4 > :not(:last-child) { margin-right: unset; margin-left: 1rem; }
+
+/* RTL-specific icon rotation (e.g., arrows that should flip) */
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+
+/* RTL font family — Use Cairo for Arabic scripts */
+[dir="rtl"] body {
+  font-family: 'Cairo', 'Noto Sans Arabic', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* LTR font family */
+[dir="ltr"] body {
+  font-family: 'Poppins', 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Font fallback to reduce CLS — size-adjust prevents layout shift */
+@font-face {
+  font-family: 'Poppins';
+  font-display: swap;
+  src: local('Poppins');
+  size-adjust: 105%;
+  ascent-override: 90%;
+  descent-override: 22%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Cairo';
+  font-display: swap;
+  src: local('Cairo');
+  size-adjust: 102%;
+  ascent-override: 95%;
+  descent-override: 30%;
+  line-gap-override: 0%;
+}
+
+/* Prevent layout shifts globally */
+*, *::before, *::after {
+  /* Ensure images and replaced elements have explicit size hints */
+  max-width: 100%;
+}
+img, video, svg {
+  display: block;
+  height: auto;
+}
+
+/* Binance-Inspired Theme */
+/* LIGHT MODE */
+:root {
+  --button-outline: rgba(0,0,0, .10);
+  --badge-outline: rgba(0,0,0, .05);
+  --opaque-button-border-intensity: -8;
+  --elevate-1: rgba(0,0,0, .03);
+  --elevate-2: rgba(0,0,0, .08);
+  --background: 0 0% 98%;
+  --foreground: 220 13% 18%;
+  --border: 220 13% 91%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 13% 18%;
+  --card-border: 220 13% 88%;
+  --sidebar: 220 13% 97%;
+  --sidebar-foreground: 220 13% 18%;
+  --sidebar-border: 220 13% 88%;
+  --sidebar-primary: 45 93% 58%;
+  --sidebar-primary-foreground: 220 13% 10%;
+  --sidebar-accent: 45 70% 90%;
+  --sidebar-accent-foreground: 220 13% 18%;
+  --sidebar-ring: 45 93% 58%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 13% 18%;
+  --popover-border: 220 13% 88%;
+  --primary: 45 93% 58%;
+  --primary-foreground: 220 13% 10%;
+  --secondary: 220 13% 95%;
+  --secondary-foreground: 220 13% 18%;
+  --muted: 220 13% 95%;
+  --muted-foreground: 220 10% 46%;
+  --accent: 45 80% 92%;
+  --accent-foreground: 220 13% 18%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 220 13% 91%;
+  --ring: 45 93% 58%;
+  --chart-1: 45 93% 58%;
+  --chart-2: 142 76% 36%;
+  --chart-3: 0 84% 60%;
+  --chart-4: 199 89% 48%;
+  --chart-5: 280 68% 60%;
+  --font-sans: 'Poppins', sans-serif;
+  --font-serif: 'Poppins', sans-serif;
+  --font-mono: Menlo, monospace;
+  --radius: 0.5rem;
+  --shadow-2xs: 0px 1px 2px 0px hsl(220 13% 18% / 0.03);
+  --shadow-xs: 0px 1px 2px 0px hsl(220 13% 18% / 0.05);
+  --shadow-sm: 0px 1px 3px 0px hsl(220 13% 18% / 0.05), 0px 1px 2px -1px hsl(220 13% 18% / 0.05);
+  --shadow: 0px 2px 4px 0px hsl(220 13% 18% / 0.05), 0px 1px 2px -1px hsl(220 13% 18% / 0.05);
+  --shadow-md: 0px 4px 6px 0px hsl(220 13% 18% / 0.05), 0px 2px 4px -1px hsl(220 13% 18% / 0.05);
+  --shadow-lg: 0px 10px 15px 0px hsl(220 13% 18% / 0.05), 0px 4px 6px -1px hsl(220 13% 18% / 0.05);
+  --shadow-xl: 0px 20px 25px 0px hsl(220 13% 18% / 0.05), 0px 8px 10px -1px hsl(220 13% 18% / 0.05);
+  --shadow-2xl: 0px 25px 50px 0px hsl(220 13% 18% / 0.08);
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+
+  /* Custom colors */
+  --success: 142 76% 36%;
+  --success-foreground: 0 0% 100%;
+  --warning: 45 93% 58%;
+  --warning-foreground: 220 13% 10%;
+  --info: 199 89% 48%;
+  --info-foreground: 0 0% 100%;
+  --win: 142 76% 36%;
+  --loss: 0 84% 60%;
+
+  /* Game Board Colors */
+  --game-board-bg: 30 40% 25%;
+  --game-felt: 142 40% 25%;
+  --game-card-bg: 0 0% 100%;
+  --game-card-text: 0 0% 10%;
+  --game-highlight: 45 93% 58%;
+  --game-valid-move: 142 60% 50%;
+  --game-last-move: 45 93% 58%;
+  --game-danger: 0 84% 60%;
+  --game-selected: 199 89% 48%;
+
+  /* Game Layout */
+  --touch-target-min: 44px;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --game-board-max-h: min(600px, calc(100vh - var(--safe-area-bottom) - 120px));
+
+  /* Fallback for older browsers */
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --sidebar-accent-border: hsl(var(--sidebar-accent));
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+}
+
+.dark {
+  --button-outline: rgba(255,255,255, .10);
+  --badge-outline: rgba(255,255,255, .05);
+  --opaque-button-border-intensity: 9;
+  --elevate-1: rgba(255,255,255, .04);
+  --elevate-2: rgba(255,255,255, .09);
+  --background: 220 13% 8%;
+  --foreground: 45 20% 95%;
+  --border: 220 13% 18%;
+  --card: 220 13% 11%;
+  --card-foreground: 45 20% 92%;
+  --card-border: 220 13% 18%;
+  --sidebar: 220 13% 11%;
+  --sidebar-foreground: 45 20% 92%;
+  --sidebar-border: 220 13% 18%;
+  --sidebar-primary: 45 93% 58%;
+  --sidebar-primary-foreground: 220 13% 10%;
+  --sidebar-accent: 45 40% 20%;
+  --sidebar-accent-foreground: 45 20% 92%;
+  --sidebar-ring: 45 93% 58%;
+  --popover: 220 13% 11%;
+  --popover-foreground: 45 20% 92%;
+  --popover-border: 220 13% 20%;
+  --primary: 45 93% 58%;
+  --primary-foreground: 220 13% 10%;
+  --secondary: 220 13% 20%;
+  --secondary-foreground: 45 20% 92%;
+  --muted: 220 13% 18%;
+  --muted-foreground: 45 10% 60%;
+  --accent: 45 40% 20%;
+  --accent-foreground: 45 20% 92%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 220 13% 18%;
+  --ring: 45 93% 58%;
+  --chart-1: 45 93% 58%;
+  --chart-2: 142 76% 46%;
+  --chart-3: 0 84% 60%;
+  --chart-4: 199 89% 58%;
+  --chart-5: 280 68% 70%;
+  --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.10);
+  --shadow-xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.15);
+  --shadow-sm: 0px 1px 3px 0px hsl(0 0% 0% / 0.15), 0px 1px 2px -1px hsl(0 0% 0% / 0.15);
+  --shadow: 0px 2px 4px 0px hsl(0 0% 0% / 0.15), 0px 1px 2px -1px hsl(0 0% 0% / 0.15);
+  --shadow-md: 0px 4px 6px 0px hsl(0 0% 0% / 0.15), 0px 2px 4px -1px hsl(0 0% 0% / 0.15);
+  --shadow-lg: 0px 10px 15px 0px hsl(0 0% 0% / 0.15), 0px 4px 6px -1px hsl(0 0% 0% / 0.15);
+  --shadow-xl: 0px 20px 25px 0px hsl(0 0% 0% / 0.15), 0px 8px 10px -1px hsl(0 0% 0% / 0.15);
+  --shadow-2xl: 0px 25px 50px 0px hsl(0 0% 0% / 0.20);
+
+  /* Custom colors */
+  --success: 142 76% 46%;
+  --success-foreground: 0 0% 100%;
+  --warning: 45 93% 58%;
+  --warning-foreground: 220 13% 10%;
+  --info: 199 89% 58%;
+  --info-foreground: 0 0% 100%;
+  --win: 142 76% 46%;
+  --loss: 0 84% 60%;
+
+  /* Game Board Colors */
+  --game-board-bg: 30 30% 15%;
+  --game-felt: 142 30% 15%;
+  --game-card-bg: 220 13% 18%;
+  --game-card-text: 45 20% 90%;
+  --game-highlight: 45 93% 58%;
+  --game-valid-move: 142 60% 50%;
+  --game-last-move: 45 93% 58%;
+  --game-danger: 0 84% 60%;
+  --game-selected: 199 89% 58%;
+
+  /* Fallback for older browsers */
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --sidebar-accent-border: hsl(var(--sidebar-accent));
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Utility classes for elevation effects */
+.hover-elevate {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.hover-elevate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--elevate-1);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.hover-elevate:hover::before {
+  opacity: 1;
+}
+
+.active-elevate-2 {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.active-elevate-2::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--elevate-2);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.active-elevate-2:active::after {
+  opacity: 1;
+}
+
+.no-default-hover-elevate::before {
+  display: none !important;
+}
+
+.no-default-active-elevate::after {
+  display: none !important;
+}
+
+.toggle-elevate {
+  position: relative;
+}
+
+.toggle-elevate.toggle-elevated::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--elevate-2);
+  opacity: 1;
+  pointer-events: none;
+}
+
+/* RTL Support */
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+
+/* TikTok-style Gift Animations */
+@keyframes float-up {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100vh) scale(0.5);
+    opacity: 0;
+  }
+}
+
+@keyframes gift-burst {
+  0% {
+    transform: scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.3) rotate(180deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(360deg);
+    opacity: 1;
+  }
+}
+
+@keyframes shake-gift {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px) rotate(-5deg); }
+  75% { transform: translateX(5px) rotate(5deg); }
+}
+
+@keyframes combo-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.animate-shake {
+  animation: shake-gift 0.5s ease-in-out infinite;
+}
+
+.animate-gift-burst {
+  animation: gift-burst 0.6s ease-out forwards;
+}
+
+.animate-combo-pulse {
+  animation: combo-pulse 0.3s ease-in-out;
+}
+
+/* Scrollbar Hide */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Game Card Glow Effects */
+.game-card-glow {
+  position: relative;
+}
+
+.game-card-glow::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: linear-gradient(45deg, hsl(var(--primary)) 0%, transparent 50%, hsl(var(--primary)) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+}
+
+.game-card-glow:hover::before {
+  opacity: 0.3;
+}
+
+/* Reduced Motion — respect user preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Safe Area — iPhone notch/Dynamic Island */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.mb-safe {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ===== Game Animations ===== */
+
+/* Chess: piece move */
+@keyframes chess-move {
+  0% { transform: translate(var(--move-from-x, 0), var(--move-from-y, 0)); }
+  100% { transform: translate(0, 0); }
+}
+
+/* Chess: piece captured */
+@keyframes chess-capture {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+/* Chess: check shake */
+@keyframes chess-check {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+/* Chess: last move flash */
+@keyframes chess-last-move {
+  0% { background-color: hsl(45 93% 58% / 0.5); }
+  100% { background-color: hsl(45 93% 58% / 0.15); }
+}
+
+/* Card: deal stagger (enhanced — from dealer center) */
+@keyframes card-deal {
+  0% { transform: translateY(-60px) scale(0.7) rotate(-5deg); opacity: 0; }
+  50% { transform: translateY(-10px) scale(0.95) rotate(1deg); opacity: 0.8; }
+  100% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* Card: play to center (enhanced) */
+@keyframes card-play {
+  0% { transform: translateY(40px) scale(0.7); opacity: 0; }
+  60% { transform: translateY(-5px) scale(1.05); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* Card: collect trick — sweep to winner */
+@keyframes card-collect {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--collect-x, 0), var(--collect-y, -80px)) scale(0.6); opacity: 0; }
+}
+
+/* Card: trick sweep — 4 cards shrink toward winner direction then vanish */
+@keyframes trick-sweep {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  40% { transform: translate(var(--sweep-x, 0px), var(--sweep-y, 0px)) scale(0.8); opacity: 0.9; }
+  100% { transform: translate(calc(var(--sweep-x, 0px) * 2), calc(var(--sweep-y, 0px) * 2)) scale(0.2) rotate(20deg); opacity: 0; }
+}
+
+/* Confetti celebration — particles fall from top */
+@keyframes confetti-fall {
+  0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  25% { transform: translateY(150px) rotate(90deg) translateX(30px); opacity: 1; }
+  50% { transform: translateY(300px) rotate(180deg) translateX(-20px); opacity: 0.9; }
+  75% { transform: translateY(450px) rotate(270deg) translateX(15px); opacity: 0.6; }
+  100% { transform: translateY(650px) rotate(360deg) translateX(-10px); opacity: 0; }
+}
+.animate-confetti-fall { animation: confetti-fall 3s ease-out forwards; }
+
+/* Backgammon: dice roll */
+@keyframes dice-roll {
+  0% { transform: rotate(0deg) scale(0.5); opacity: 0; }
+  50% { transform: rotate(180deg) scale(1.2); }
+  75% { transform: rotate(300deg) scale(1.05); }
+  100% { transform: rotate(360deg) scale(1); opacity: 1; }
+}
+
+/* Backgammon: piece move */
+@keyframes backgammon-move {
+  0% { transform: translate(var(--bg-from-x, 0), var(--bg-from-y, 0)); }
+  100% { transform: translate(0, 0); }
+}
+
+/* Domino: place tile */
+@keyframes domino-place {
+  0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+  60% { transform: scale(1.1) rotate(2deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* Domino: draw from deck */
+@keyframes domino-draw {
+  0% { transform: translateX(-30px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+/* Domino: button fade-in */
+@keyframes domino-fade-in {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Page transitions */
+@keyframes page-enter {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* List item stagger */
+@keyframes list-enter {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Utility classes for game animations */
+.animate-chess-move { animation: chess-move 200ms ease-out forwards; }
+.animate-chess-capture { animation: chess-capture 200ms ease-out forwards; }
+.animate-chess-check { animation: chess-check 500ms ease-in-out; }
+.animate-chess-last-move { animation: chess-last-move 1s ease-out forwards; }
+.animate-card-deal { animation: card-deal 350ms ease-out forwards; }
+.animate-card-play { animation: card-play 250ms ease-out forwards; }
+.animate-card-collect { animation: card-collect 400ms ease-in forwards; }
+.animate-trick-sweep { animation: trick-sweep 500ms ease-in forwards; }
+.animate-dice-roll { animation: dice-roll 600ms ease-out forwards; }
+.animate-backgammon-move { animation: backgammon-move 300ms ease-out forwards; }
+.animate-domino-place { animation: domino-place 200ms ease-out forwards; }
+.animate-domino-draw { animation: domino-draw 300ms ease-out forwards; }
+.animate-domino-fade-in { animation: domino-fade-in 200ms ease-out forwards; }
+.animate-page-enter { animation: page-enter 150ms ease-out forwards; }
+.animate-list-enter { animation: list-enter 200ms ease-out forwards; }

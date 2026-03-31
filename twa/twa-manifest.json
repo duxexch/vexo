@@ -1,0 +1,84 @@
+{
+  "host": "vixo.click",
+  "name": "VEX - Gaming & Trading Platform",
+  "launcherName": "VEX",
+  "display": "standalone",
+  "themeColor": "#0f1419",
+  "navigationColor": "#0f1419",
+  "navigationColorDark": "#0a0e12",
+  "navigationDividerColor": "#1a1f26",
+  "navigationDividerColorDark": "#0a0e12",
+  "backgroundColor": "#0f1419",
+  "enableNotifications": true,
+  "startUrl": "/?source=twa",
+  "iconUrl": "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+  "maskableIconUrl": "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+  "monochromeIconUrl": "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+  "splashScreenFadeOutDuration": 400,
+  "isChromeOSOnly": false,
+  "shortcuts": [
+    {
+      "name": "الألعاب",
+      "short_name": "Games",
+      "url": "/play",
+      "icons": [
+        {
+          "src": "https://vixo.click/icons/vex-online-games-shortcut.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "المحفظة",
+      "short_name": "Wallet",
+      "url": "/wallet",
+      "icons": [
+        {
+          "src": "https://vixo.click/icons/vex-wallet-shortcut.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "تداول P2P",
+      "short_name": "P2P",
+      "url": "/p2p",
+      "icons": [
+        {
+          "src": "https://vixo.click/icons/vex-p2p-trading-shortcut.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://vixo.click/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": false
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isSplashScreenFadeOutEnabled": true,
+  "signingKey": {
+    "path": "android.keystore",
+    "alias": "vex-key"
+  },
+  "appVersionName": "1.1.0",
+  "appVersionCode": 2,
+  "packageId": "click.vixo.app",
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}

@@ -1,0 +1,234 @@
+import express, { type Express } from "express";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// SEO page titles & descriptions for crawler-friendly rendering
+const SEO_PAGES: Record<string, { title: string; description: string; keywords: string }> = {
+  "/": {
+    title: "VEX - منصة الألعاب والتداول | Play Chess, Backgammon, Domino Online",
+    description: "العب شطرنج، طاولة، دومينو، طرنيب وبلوت أونلاين مع لاعبين حقيقيين. تداول P2P آمن مع 85+ عملة. Play Chess, Backgammon, Domino, Tarneeb & Baloot online.",
+    keywords: "VEX, العاب اونلاين, شطرنج, طاولة, دومينو, طرنيب, بلوت, تداول P2P, online games, chess, backgammon"
+  },
+  "/games": {
+    title: "ألعاب أونلاين - شطرنج، طاولة، دومينو، طرنيب، بلوت | VEX Games",
+    description: "العب أفضل الألعاب أونلاين: شطرنج، طاولة زهر، دومينو، طرنيب وبلوت مع لاعبين حقيقيين في الوقت الفعلي. Play Chess, Backgammon, Domino, Tarneeb & Baloot online.",
+    keywords: "العاب اونلاين, شطرنج اونلاين, طاولة زهر, دومينو, طرنيب, بلوت, chess online, backgammon, domino"
+  },
+  "/challenges": {
+    title: "تحديات مباشرة - العب وأربح | VEX Challenges",
+    description: "شارك في تحديات مباشرة ضد لاعبين حقيقيين. تحدى أصدقائك في الشطرنج والطاولة والدومينو. Challenge real players in Chess, Backgammon & more.",
+    keywords: "تحديات, مسابقات, العب واربح, challenges, compete, win prizes"
+  },
+  "/p2p": {
+    title: "تداول P2P آمن - 85+ عملة | VEX P2P Trading",
+    description: "تداول P2P آمن ومضمون مع أكثر من 85 عملة. بيع واشتري بأفضل الأسعار. Secure P2P trading with 85+ currencies.",
+    keywords: "تداول P2P, بيع وشراء, عملات, P2P trading, buy sell, currencies, secure trading"
+  },
+  "/tournaments": {
+    title: "بطولات أونلاين - فز بجوائز حقيقية | VEX Tournaments",
+    description: "شارك في بطولات الشطرنج والطاولة والبلوت. جوائز حقيقية كل يوم. Join Chess, Backgammon & Baloot tournaments.",
+    keywords: "بطولات, tournaments, جوائز, prizes, مسابقات, competitions"
+  },
+  "/leaderboard": {
+    title: "لوحة المتصدرين - أفضل اللاعبين | VEX Leaderboard",
+    description: "شاهد ترتيب أفضل اللاعبين. تنافس للوصول إلى القمة. See top players ranking and compete for the top.",
+    keywords: "متصدرين, ترتيب, leaderboard, ranking, top players, أفضل لاعب"
+  },
+  "/free": {
+    title: "ألعاب مجانية - العب بدون رصيد | VEX Free Games",
+    description: "العب ألعاب مجانية بدون أي رصيد. تدرب وطور مهاراتك. Play free games without any balance. Practice and improve.",
+    keywords: "العاب مجانية, free games, بدون رصيد, practice, تدريب"
+  },
+  "/daily-rewards": {
+    title: "مكافآت يومية - اجمع هدايا كل يوم | VEX Daily Rewards",
+    description: "احصل على مكافآت يومية مجانية. سجل دخولك كل يوم واجمع جوائز. Get free daily rewards and bonuses.",
+    keywords: "مكافآت يومية, daily rewards, هدايا, bonuses, جوائز مجانية"
+  },
+  "/referral": {
+    title: "ادعُ أصدقاءك واربح - نظام الإحالة | VEX Referral",
+    description: "ادعُ أصدقاءك لمنصة VEX واحصل على مكافآت. Invite friends and earn rewards with VEX referral program.",
+    keywords: "إحالة, دعوة أصدقاء, referral, invite friends, مكافآت إحالة"
+  },
+  "/install-app": {
+    title: "حمّل تطبيق VEX - Android & PWA | Download VEX App",
+    description: "حمّل تطبيق VEX على جهازك. متوفر كتطبيق PWA وأندرويد. Download VEX app for Android or install as PWA.",
+    keywords: "تحميل VEX, download VEX, تطبيق اندرويد, Android app, PWA, تثبيت"
+  },
+  "/terms": {
+    title: "شروط الاستخدام | VEX Terms of Service",
+    description: "شروط استخدام منصة VEX للألعاب والتداول. VEX Platform Terms of Service.",
+    keywords: "شروط الاستخدام, terms of service, قوانين, rules"
+  },
+  "/privacy": {
+    title: "سياسة الخصوصية | VEX Privacy Policy",
+    description: "سياسة الخصوصية لمنصة VEX. نحمي بياناتك. VEX Privacy Policy - Your data is protected.",
+    keywords: "سياسة الخصوصية, privacy policy, حماية البيانات, data protection"
+  },
+};
+
+export function serveStatic(app: Express) {
+  const distPath = path.resolve(__dirname, "..", "dist", "public");
+  if (!fs.existsSync(distPath)) {
+    throw new Error(
+      `Could not find the build directory: ${distPath}, make sure to build the client first`,
+    );
+  }
+
+  // ── Service Worker — MUST NOT be cached, with correct MIME & scope headers ──
+  app.get("/sw.js", (_req, res) => {
+    const swPath = path.join(distPath, "sw.js");
+    if (fs.existsSync(swPath)) {
+      const content = fs.readFileSync(swPath, "utf-8");
+      res.set({
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+        "Service-Worker-Allowed": "/",
+      });
+      res.status(200).send(content);
+    } else {
+      res.status(404).end("// Service worker not found");
+    }
+  });
+
+  // ── Manifest — short cache, correct type ──
+  app.get("/manifest.json", (_req, res) => {
+    const manifestPath = path.join(distPath, "manifest.json");
+    if (fs.existsSync(manifestPath)) {
+      const content = fs.readFileSync(manifestPath, "utf-8");
+      res.set({
+        "Content-Type": "application/manifest+json; charset=utf-8",
+        "Cache-Control": "public, max-age=3600",
+      });
+      res.status(200).send(content);
+    } else {
+      res.status(404).json({});
+    }
+  });
+
+  // Downloads folder — APK, AAB with proper MIME types and Content-Disposition
+  app.use("/downloads", express.static(path.join(distPath, "downloads"), {
+    maxAge: "1h",
+    etag: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.apk')) {
+        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+        res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
+      } else if (filePath.endsWith('.aab')) {
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
+      }
+    }
+  }));
+
+  // Hashed assets (JS/CSS with content hash) — immutable, cache forever
+  app.use("/assets", express.static(path.join(distPath, "assets"), {
+    maxAge: "1y",
+    immutable: true,
+    etag: false,
+    lastModified: false,
+  }));
+
+  // Other static files — cache briefly, revalidate
+  app.use(express.static(distPath, {
+    maxAge: "1h",
+    etag: true,
+  }));
+
+  // Digital Asset Links for TWA (Android app verification)
+  app.get("/.well-known/assetlinks.json", (_req, res) => {
+    const assetLinksPath = path.join(distPath, ".well-known", "assetlinks.json");
+    if (fs.existsSync(assetLinksPath)) {
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      res.sendFile(assetLinksPath);
+    } else {
+      res.status(404).json([]);
+    }
+  });
+
+  // Apple App Site Association (iOS Universal Links / Trusted app)
+  app.get("/.well-known/apple-app-site-association", (_req, res) => {
+    const aasaPath = path.join(distPath, ".well-known", "apple-app-site-association");
+    if (fs.existsSync(aasaPath)) {
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      res.sendFile(aasaPath);
+    } else {
+      res.status(404).json({});
+    }
+  });
+
+  // Catch-all for unmatched /api/* routes — return 404 JSON, not SPA HTML
+  app.all("/api/*", (_req, res) => {
+    res.status(404).json({ error: "Endpoint not found" });
+  });
+
+  // fall through to index.html if the file doesn't exist (SPA)
+  // Inject SEO meta tags for crawler-friendly rendering
+  app.use("*", (req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    
+    const indexPath = path.resolve(distPath, "index.html");
+    let html = fs.readFileSync(indexPath, "utf-8");
+    
+    // Get SEO data for the current path
+    const pagePath = req.originalUrl.split("?")[0].replace(/\/$/, "") || "/";
+    const seo = SEO_PAGES[pagePath];
+    
+    if (seo) {
+      // Replace title
+      html = html.replace(/<title>[^<]*<\/title>/, `<title>${seo.title}</title>`);
+      
+      // Replace meta description
+      html = html.replace(
+        /<meta name="description" content="[^"]*"/,
+        `<meta name="description" content="${seo.description}"`
+      );
+      
+      // Replace meta keywords
+      html = html.replace(
+        /<meta name="keywords" content="[^"]*"/,
+        `<meta name="keywords" content="${seo.keywords}"`
+      );
+      
+      // Replace OG tags
+      html = html.replace(
+        /<meta property="og:title" content="[^"]*"/,
+        `<meta property="og:title" content="${seo.title}"`
+      );
+      html = html.replace(
+        /<meta property="og:description" content="[^"]*"/,
+        `<meta property="og:description" content="${seo.description}"`
+      );
+      
+      // Replace Twitter tags
+      html = html.replace(
+        /<meta name="twitter:title" content="[^"]*"/,
+        `<meta name="twitter:title" content="${seo.title}"`
+      );
+      html = html.replace(
+        /<meta name="twitter:description" content="[^"]*"/,
+        `<meta name="twitter:description" content="${seo.description}"`
+      );
+      
+      // Update canonical URL
+      const fullUrl = `https://vixo.click${pagePath === "/" ? "" : pagePath}`;
+      html = html.replace(
+        /<link rel="canonical" href="[^"]*"/,
+        `<link rel="canonical" href="${fullUrl}/"`
+      );
+      html = html.replace(
+        /<meta property="og:url" content="[^"]*"/,
+        `<meta property="og:url" content="${fullUrl}/"`
+      );
+    }
+    
+    res.status(200).set({ "Content-Type": "text/html" }).end(html);
+  });
+}

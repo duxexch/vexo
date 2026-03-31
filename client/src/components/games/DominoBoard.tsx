@@ -1,0 +1,655 @@
+import { useState, useEffect, useMemo, useRef, memo } from "react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n";
+
+interface DominoBoardProps {
+  gameState?: string | Record<string, unknown>;
+  currentTurn?: string;
+  isMyTurn: boolean;
+  isSpectator: boolean;
+  onMove: (move: DominoMove) => void;
+  status?: string;
+  turnTimeLimit?: number; // seconds per turn (0 = no limit)
+}
+
+interface DominoMove {
+  tileLeft: number;
+  tileRight: number;
+  placedEnd: "left" | "right";
+  isPassed: boolean;
+}
+
+interface DominoTile {
+  left: number;
+  right: number;
+  id?: string; // C7-F12: unique tile ID from server
+}
+
+interface GameState {
+  myHand: DominoTile[];
+  opponentTileCount: number;
+  opponentTileCounts: Record<string, number>;
+  boardTiles: { tile: DominoTile; rotation: number }[];
+  leftEnd: number;
+  rightEnd: number;
+  boneyard: number;
+  lastAction?: { type: string; playerId: string; tile?: DominoTile; end?: string }; // C7-F11: includes played tile info
+  scores?: Record<string, number>;
+  canDraw?: boolean; // F5: server-computed draw eligibility
+  playerOrder?: string[]; // F6/F7/F8: for readable player labels
+  validMoves?: Array<{ type: string; tile?: { left: number; right: number; id?: string }; end?: string }>; // C7-F3: server-provided valid moves
+  passCount?: number; // C7-F9: consecutive pass counter
+  playerCount?: number; // C7-F9: total player count for blocked warning
+  drawsThisTurn?: number; // C9-F8: draws taken this turn
+  maxDraws?: number; // C9-F8: max draws per turn
+}
+
+const INITIAL_STATE: GameState = {
+  myHand: [],
+  opponentTileCount: 7,
+  opponentTileCounts: {},
+  boardTiles: [],
+  leftEnd: -1,
+  rightEnd: -1,
+  boneyard: 0, // C13-F8: Safe default — actual value always comes from server
+};
+
+// C13-F7: Hoisted to module scope — avoids re-creating on every render
+const TILE_SIZES: Record<string, string> = {
+  sm: "w-8 h-16",
+  md: "w-12 h-24",
+  lg: "w-16 h-32",
+};
+
+const DOT_SIZES: Record<string, string> = {
+  sm: "w-2 h-2",
+  md: "w-2 h-2 sm:w-2.5 sm:h-2.5",
+  lg: "w-3 h-3",
+};
+
+// C8-F8: Hoisted to module scope — avoids re-creating on every render
+const DOT_POSITIONS: Record<number, number[][]> = {
+  1: [[1, 1]],
+  2: [[0, 0], [2, 2]],
+  3: [[0, 0], [1, 1], [2, 2]],
+  4: [[0, 0], [0, 2], [2, 0], [2, 2]],
+  5: [[0, 0], [0, 2], [1, 1], [2, 0], [2, 2]],
+  6: [[0, 0], [0, 2], [1, 0], [1, 2], [2, 0], [2, 2]],
+};
+
+// C18-F9: Wrapped in memo to prevent re-renders when parent updates unrelated state
+const DominoTileComponent = memo(function DominoTileComponent({ 
+  tile, 
+  isSelected, 
+  onClick, 
+  isPlayable,
+  size = "md",
+  rotation = 0,
+}: { 
+  tile: DominoTile; 
+  isSelected?: boolean; 
+  onClick?: () => void;
+  isPlayable?: boolean;
+  size?: "sm" | "md" | "lg";
+  rotation?: number;
+}) {
+  const { t } = useI18n();
+
+  const renderDots = (value: number) => {
+    if (value === 0) {
+      return <div className="w-full h-full" />;
+    }
+
+    const positions = DOT_POSITIONS[value] || [];
+
+    return (
+      <div className="grid grid-cols-3 grid-rows-3 gap-0.5 p-1 w-full h-full">
+        {[0, 1, 2].map(row =>
+          [0, 1, 2].map(col => {
+            const hasDot = positions.some(([r, c]) => r === row && c === col);
+            return (
+              <div
+                key={`${row}-${col}`}
+                className={cn(
+                  "rounded-full",
+                  hasDot ? `${DOT_SIZES[size]} bg-gray-800` : ""
+                )}
+              />
+            );
+          })
+        )}
+      </div>
+    );
+  };
+
+  const rotationClass = rotation === 90 ? "rotate-90" : rotation === -90 ? "-rotate-90" : "";
+
+  return (
+    <div
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={`${t('domino.tile')} ${tile.left}-${tile.right}${isSelected ? `, ${t('domino.selected')}` : ''}${isPlayable ? `, ${t('domino.playable')}` : ''}`}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      className={cn(
+        TILE_SIZES[size],
+        "bg-white rounded-lg border-2 flex flex-col transition-all",
+        isSelected ? "border-primary ring-2 ring-primary scale-110 z-10" : "border-gray-400",
+        isPlayable ? "hover:scale-105 hover:shadow-lg" : "opacity-60",
+        onClick && isPlayable ? "cursor-pointer" : "cursor-default",
+        rotationClass
+      )}
+      data-testid={`domino-tile-${tile.left}-${tile.right}`}
+    >
+      <div className="flex-1 flex items-center justify-center border-b border-gray-300">
+        {renderDots(tile.left)}
+      </div>
+      <div className="flex-1 flex items-center justify-center">
+        {renderDots(tile.right)}
+      </div>
+    </div>
+  );
+});
+
+// C8-F7: Compact placeholder — shows count badge + mini tile stack (max 3 icons)
+function PlaceholderTile({ count }: { count: number }) {
+  const visibleCount = Math.min(count, 3);
+  return (
+    <div className="flex gap-1 items-center">
+      {Array.from({ length: visibleCount }).map((_, i) => (
+        <div
+          key={i}
+          className="w-6 h-12 bg-gradient-to-br from-blue-600 to-blue-800 rounded-md border border-blue-900 flex items-center justify-center"
+        >
+          <div className="w-4 h-4 rounded-full bg-blue-400/30" />
+        </div>
+      ))}
+      {count > 3 && (
+        <span className="text-xs font-semibold text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">×{count}</span>
+      )}
+    </div>
+  );
+}
+
+export function DominoBoard({
+  gameState,
+  currentTurn,
+  isMyTurn,
+  isSpectator,
+  onMove,
+  status,
+  turnTimeLimit = 30,
+}: DominoBoardProps) {
+  const { t } = useI18n();
+  const [selectedTile, setSelectedTile] = useState<number | null>(null);
+  const selectedTileRef = useRef(selectedTile); // C11-F4: ref for stable Escape handler
+  selectedTileRef.current = selectedTile;
+  const [drawPending, setDrawPending] = useState(false); // F9: prevent duplicate draw clicks
+  const [movePending, setMovePending] = useState(false); // C10-F11: prevent duplicate place clicks
+  const [passPending, setPassPending] = useState(false); // C11-F11: prevent duplicate pass
+  const [timeLeft, setTimeLeft] = useState(turnTimeLimit);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoPlayedRef = useRef(false);
+  const prevHandLenRef = useRef<number>(0); // F8: Track previous hand length for animation
+  const lastTileRef = useRef<HTMLDivElement>(null); // C7-F8: auto-scroll to latest board tile
+
+  const state = useMemo<GameState>(() => {
+    try {
+      if (gameState) {
+        // FIX: Accept both string (from server) and object (from DominoGame)
+        if (typeof gameState === 'string') {
+          return JSON.parse(gameState);
+        }
+        return gameState as unknown as GameState;
+      }
+    } catch {
+      // C12-F7: Log parse failures for debugging
+      console.warn('[DominoBoard] Failed to parse gameState');
+      return INITIAL_STATE;
+    }
+    return INITIAL_STATE;
+  }, [gameState]);
+
+  // C12-F12: Single useMemo — eliminates redundant useCallback+useMemo pair
+  const playableTiles = useMemo(() => {
+    // C7-F3: Prefer server-provided validMoves when available
+    if (state.validMoves && state.validMoves.length > 0) {
+      const playMoves = state.validMoves.filter(m => m.type === 'play' && m.tile);
+      if (playMoves.length > 0) {
+        const grouped = new Map<number, ("left" | "right")[]>();
+        for (const move of playMoves) {
+          const mt = move.tile!;
+          const idx = state.myHand.findIndex(h =>
+            (h.left === mt.left && h.right === mt.right) ||
+            (h.left === mt.right && h.right === mt.left)
+          );
+          if (idx !== -1) {
+            if (!grouped.has(idx)) grouped.set(idx, []);
+            if (move.end) grouped.get(idx)!.push(move.end as "left" | "right");
+          }
+        }
+        return Array.from(grouped.entries()).map(([index, ends]) => ({ index, ends }));
+      }
+    }
+
+    // Fallback: local computation
+    if (state.boardTiles.length === 0) {
+      return state.myHand.map((_, i) => ({ index: i, ends: ["left"] as ("left" | "right")[] }));
+    }
+
+    const playable: { index: number; ends: ("left" | "right")[] }[] = [];
+    state.myHand.forEach((tile, index) => {
+      const ends: ("left" | "right")[] = [];
+      if (tile.left === state.leftEnd || tile.right === state.leftEnd) ends.push("left");
+      if (tile.left === state.rightEnd || tile.right === state.rightEnd) ends.push("right");
+      if (ends.length > 0) playable.push({ index, ends });
+    });
+    return playable;
+  }, [state]);
+
+  // C12-F2: Derive canPass from server validMoves — avoids one-frame lag from useEffect
+  const canPass = useMemo(() => {
+    if (state.validMoves && state.validMoves.length > 0) {
+      return state.validMoves.some(m => m.type === 'pass');
+    }
+    // C14-F11: Default false — consistent with draw button's ?? false
+    return playableTiles.length === 0 && (state.boneyard === 0 || !(state.canDraw ?? false));
+  }, [state.validMoves, playableTiles, state.boneyard, state.canDraw]);
+
+  // F12: Clear selected tile when turn changes to avoid stale selection
+  // C18-F4: Also reset when hand length changes (after draw, indices shift)
+  useEffect(() => {
+    setSelectedTile(null);
+  }, [isMyTurn, currentTurn, state.myHand.length]);
+
+  // C9-F9: Escape key deselects currently selected tile
+  // C11-F4: Stable listener via ref — avoids re-registering on every selection change
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedTileRef.current !== null) {
+        setSelectedTile(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // F9: Reset draw/move pending when state changes (draw completed or turn advanced)
+  useEffect(() => {
+    setDrawPending(false);
+    setMovePending(false); // C10-F11
+    setPassPending(false); // C11-F11
+  }, [state.myHand.length, state.boneyard, isMyTurn]);
+
+  // F8: Update previous hand length AFTER render
+  useEffect(() => {
+    prevHandLenRef.current = state.myHand.length;
+  }, [state.myHand.length]);
+
+  // C7-F8: Auto-scroll board to latest tile when board grows
+  useEffect(() => {
+    lastTileRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
+  }, [state.boardTiles.length]);
+
+  // F1: Timer — reset on turn change only
+  // C18-F6: Removed myHand.length and boneyard from deps — draw shouldn't reset timer
+  useEffect(() => {
+    setTimeLeft(turnTimeLimit);
+    autoPlayedRef.current = false;
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (!isMyTurn || isSpectator || status === 'finished' || turnTimeLimit <= 0) return;
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isMyTurn, currentTurn, turnTimeLimit, isSpectator, status]);
+
+  // Auto-play when timer hits 0
+  useEffect(() => {
+    if (timeLeft !== 0 || !isMyTurn || isSpectator || status === 'finished' || autoPlayedRef.current) return;
+    autoPlayedRef.current = true;
+    // C15-F12: Timeout heuristic — prefer stronger hand-reduction plays
+    if (playableTiles.length > 0) {
+      const bestPlayable = playableTiles.reduce((best, current) => {
+        const tile = state.myHand[current.index];
+        if (!tile) return best;
+        const score = (tile.left + tile.right)
+          + (tile.left === tile.right ? 5 : 0)
+          + (current.ends.length === 2 ? 2 : 0);
+        if (!best || score > best.score) {
+          return { play: current, score };
+        }
+        return best;
+      }, null as null | { play: { index: number; ends: ('left' | 'right')[] }; score: number });
+
+      if (bestPlayable) {
+        const pick = bestPlayable.play;
+        const tile = state.myHand[pick.index];
+        if (tile) {
+          let chosenEnd = pick.ends[0];
+          if (pick.ends.length === 2) {
+            const remainingHand = state.myHand.filter((_, idx) => idx !== pick.index);
+            const leftNew = tile.left === state.leftEnd ? tile.right : tile.left;
+            const rightNew = tile.left === state.rightEnd ? tile.right : tile.left;
+            const leftConnectivity = remainingHand.filter(t => t.left === leftNew || t.right === leftNew).length;
+            const rightConnectivity = remainingHand.filter(t => t.left === rightNew || t.right === rightNew).length;
+            chosenEnd = leftConnectivity >= rightConnectivity ? 'left' : 'right';
+          }
+          onMove({ tileLeft: tile.left, tileRight: tile.right, placedEnd: chosenEnd, isPassed: false });
+          return;
+        }
+      }
+
+      // C17-F6: Defensive fallback — ensure timeout always results in a move decision
+      const fallback = playableTiles[0];
+      const fallbackTile = fallback ? state.myHand[fallback.index] : undefined;
+      if (fallback && fallbackTile) {
+        onMove({ tileLeft: fallbackTile.left, tileRight: fallbackTile.right, placedEnd: fallback.ends[0], isPassed: false });
+      } else if (state.boneyard > 0 && (state.canDraw ?? false)) {
+        onMove({ tileLeft: -1, tileRight: -1, placedEnd: 'left', isPassed: false });
+      } else {
+        onMove({ tileLeft: 0, tileRight: 0, placedEnd: 'left', isPassed: true });
+      }
+      return;
+    } else if (state.boneyard > 0 && (state.canDraw ?? false)) {
+      // C10-F8: Default false — don't auto-draw without server confirmation
+      onMove({ tileLeft: -1, tileRight: -1, placedEnd: 'left', isPassed: false });
+    } else {
+      // No tiles to play, or maxDraws reached — pass
+      onMove({ tileLeft: 0, tileRight: 0, placedEnd: 'left', isPassed: true });
+    }
+  }, [timeLeft, isMyTurn, isSpectator, status, state.boneyard, state.canDraw, state.myHand, playableTiles, onMove]);
+
+  // C13-F4: Shared player label helper — eliminates 3x inline duplication
+  const getPlayerLabel = (pid: string): string => {
+    const playerIdx = state.playerOrder?.indexOf(pid) ?? -1;
+    const playerNo = Math.max(1, playerIdx + 1);
+    // C14-F6: Clamp to minimum 1 — prevents "Player 0" when player not in order
+    return pid.startsWith('bot-') ? `${t('domino.bot')} ${playerNo}` : `${t('domino.player')} ${playerNo}`;
+  };
+
+  const handleTileClick = (index: number) => {
+    if (isSpectator || !isMyTurn || status === "finished") return;
+    
+    const playable = playableTiles.find(p => p.index === index);
+    if (!playable) return;
+
+    // C13-F6: Auto-place when only one end is valid — saves a click
+    if (playable.ends.length === 1) {
+      if (movePending) return;
+      setMovePending(true);
+      const tile = state.myHand[index];
+      onMove({ tileLeft: tile.left, tileRight: tile.right, placedEnd: playable.ends[0], isPassed: false });
+      setSelectedTile(null);
+      return;
+    }
+
+    if (selectedTile === index) {
+      setSelectedTile(null);
+    } else {
+      setSelectedTile(index);
+    }
+  };
+
+  const handlePlaceTile = (end: "left" | "right") => {
+    if (selectedTile === null || movePending || !isMyTurn || isSpectator) return; // C14-F5: + turn/spectator guard
+    setMovePending(true);
+    
+    const tile = state.myHand[selectedTile];
+    const move: DominoMove = {
+      tileLeft: tile.left,
+      tileRight: tile.right,
+      placedEnd: end,
+      isPassed: false,
+    };
+    
+    onMove(move);
+    setSelectedTile(null);
+  };
+
+  const handlePass = () => {
+    if (!isMyTurn || isSpectator || status === 'finished' || !canPass) return;
+    if (passPending) return; // C11-F11: prevent duplicate
+    setPassPending(true);
+    const move: DominoMove = {
+      tileLeft: 0,
+      tileRight: 0,
+      placedEnd: "left",
+      isPassed: true,
+    };
+    onMove(move);
+  };
+
+  const handleDraw = () => {
+    if (!isMyTurn || isSpectator || status === 'finished' || !(state.canDraw ?? false)) return;
+    if (drawPending) return; // F9: prevent duplicate
+    setDrawPending(true);
+    onMove({
+      tileLeft: -1,
+      tileRight: -1,
+      placedEnd: "left",
+      isPassed: false,
+    });
+  };
+
+  const selectedPlayable = selectedTile !== null ? playableTiles.find(p => p.index === selectedTile) : null;
+
+  return (
+    <div className="relative flex flex-col gap-6 p-4 max-w-[min(800px,100vw)] mx-auto overflow-x-auto" style={{ touchAction: 'manipulation' }}>
+      {/* F8: Per-opponent tile counts with player labels */}
+      <div className="text-center">
+        <p className="text-xs sm:text-sm text-muted-foreground mb-2">
+          {t('domino.opponentTiles')}
+        </p>
+        {Object.keys(state.opponentTileCounts).length > 0 ? (
+          <div className="flex gap-4 justify-center flex-wrap">
+            {Object.entries(state.opponentTileCounts).map(([pid, count]) => {
+              const label = getPlayerLabel(pid);
+              return (
+                <div key={pid} className="flex flex-col items-center gap-1">
+                  <PlaceholderTile count={count} />
+                  <span className="text-xs text-muted-foreground">{label} ({count})</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex justify-center">
+            <PlaceholderTile count={state.opponentTileCount} />
+          </div>
+        )}
+      </div>
+
+      {/* C7-F11: Last action notification — includes play moves */}
+      {state.lastAction && (
+        <div className="text-center py-1">
+          <span className="inline-block px-3 py-1 rounded-full bg-muted text-xs sm:text-sm text-muted-foreground animate-pulse">
+            {(() => {
+              const pid = state.lastAction!.playerId;
+              const label = getPlayerLabel(pid);
+              if (state.lastAction!.type === 'draw') return `${label} ${t('domino.drewTile')}`;
+              if (state.lastAction!.type === 'pass') return `${label} ${t('domino.passedTurn')}`;
+              const tile = state.lastAction!.tile;
+              // C10-F12: Use localized "played" verb
+              return tile
+                ? `${label} ${t('domino.played')} [${tile.left}|${tile.right}]`
+                : `${label} ${t('domino.played')}`;
+            })()}
+          </span>
+        </div>
+      )}
+
+      {/* F7: Scores display with player identity */}
+      {state.scores && Object.values(state.scores).some(s => s > 0) && (
+        <div className="flex justify-center gap-4">
+          {Object.entries(state.scores).map(([pid, score]) => {
+            const label = getPlayerLabel(pid);
+            return (
+              <div key={pid} className="text-center px-3 py-1 rounded bg-muted/50">
+                <span className="text-xs text-muted-foreground">{label}</span>
+                <span className="ms-1 text-sm font-semibold">{score}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* C7-F9: Blocked-game proximity warning */}
+      {state.passCount != null && state.passCount > 0 && status !== 'finished' && (
+        <div className="flex justify-center">
+          <span className={cn(
+            "inline-block px-2 py-0.5 rounded text-xs",
+            state.passCount >= (state.playerCount ?? 2) - 1
+              ? "bg-amber-500/20 text-amber-500 animate-pulse font-medium"
+              : "bg-muted text-muted-foreground"
+          )}>
+            ⚠ {t('domino.pass')}: {state.passCount}/{state.playerCount ?? 2}
+          </span>
+        </div>
+      )}
+
+      {/* Turn indicator + timer */}
+      {status !== 'finished' && (
+        <div className="flex items-center justify-center gap-3">
+          <span className={cn(
+            "inline-block px-3 py-1 rounded-full text-xs sm:text-sm font-medium",
+            isMyTurn
+              ? "bg-primary text-primary-foreground animate-pulse"
+              : "bg-muted text-muted-foreground"
+          )}>
+            {isMyTurn ? t('domino.yourTurn') : t('domino.opponentTurn')}
+          </span>
+          {turnTimeLimit > 0 && isMyTurn && !isSpectator && (
+            <span className={cn(
+              "inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold",
+              timeLeft <= 5 ? "bg-destructive text-destructive-foreground animate-pulse" : "bg-muted text-foreground"
+            )}>
+              {timeLeft}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div
+        className="bg-game-felt rounded-xl p-4 sm:p-6 min-h-[30vh] flex items-center justify-center"
+        role="region"
+        aria-label={state.boardTiles.length === 0
+          ? (isSpectator ? t('domino.board') : t('domino.placeFirst'))
+          : `${t('domino.board')}: ${state.boardTiles.length} ${t('domino.tiles')}, ${t('domino.leftEnd')}: ${state.leftEnd}, ${t('domino.rightEnd')}: ${state.rightEnd}`}
+      >
+        {state.boardTiles.length === 0 ? (
+          <p className="text-white/70 text-base sm:text-lg">
+            {isSpectator ? t('domino.board') : t('domino.placeFirst')}
+          </p>
+        ) : (
+          <div className="flex items-center gap-1 overflow-x-auto max-w-full pb-2 scrollbar-thin">
+            {state.boardTiles.map((item, index) => {
+              const isLastTile = index === state.boardTiles.length - 1;
+              return (
+                <div
+                  key={item.tile.id ?? `${item.tile.left}-${item.tile.right}-${index}`}
+                  className={isLastTile ? "animate-domino-place" : ""}
+                  ref={isLastTile ? lastTileRef : null}
+                >
+                  <DominoTileComponent
+                    tile={item.tile}
+                    size="sm"
+                    rotation={item.rotation}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {selectedTile !== null && selectedPlayable && (
+        <div className="flex justify-center gap-4">
+          {selectedPlayable.ends.includes("left") && (
+            <Button
+              onClick={() => handlePlaceTile("left")}
+              aria-label={t('domino.placeLeft')}
+              data-testid="button-place-left"
+            >
+              {t('domino.placeLeft')}
+            </Button>
+          )}
+          {selectedPlayable.ends.includes("right") && (
+            <Button
+              onClick={() => handlePlaceTile("right")}
+              aria-label={t('domino.placeRight')}
+              data-testid="button-place-right"
+            >
+              {t('domino.placeRight')}
+            </Button>
+          )}
+        </div>
+      )}
+
+      <div className="bg-card rounded-xl p-4 border">
+        <p className="text-xs sm:text-sm text-muted-foreground mb-3 text-center">
+          {t('domino.yourTiles')} ({state.myHand.length})
+        </p>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {state.myHand.map((tile, index) => {
+            const isPlayable = playableTiles.some(p => p.index === index);
+            const canInteract = isMyTurn && isPlayable && !isSpectator;
+            // F8: Only animate tiles that are newly added (index >= previous hand length)
+            const isNewTile = index >= prevHandLenRef.current;
+            return (
+              <div key={tile.id ?? `${tile.left}-${tile.right}-${index}`} className={isNewTile ? "animate-domino-draw" : ""} style={isNewTile ? { animationDelay: `${(index - prevHandLenRef.current) * 60}ms` } : undefined}>
+                <DominoTileComponent
+                  tile={tile}
+                  isSelected={selectedTile === index}
+                  onClick={canInteract ? () => handleTileClick(index) : undefined}
+                  isPlayable={canInteract}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* F5: Button container — use server canDraw for draw eligibility */}
+      <div className="flex justify-center gap-4 animate-domino-fade-in">
+        {(state.canDraw ?? false) && isMyTurn && !isSpectator && (
+          <Button
+            variant="secondary"
+            onClick={handleDraw}
+            disabled={drawPending}
+            aria-label={`${t('domino.draw')} — ${state.boneyard} ${t('domino.tilesRemaining')}`}
+            data-testid="button-draw"
+          >
+            {drawPending ? '…' : `${t('domino.draw')} (${state.boneyard})${state.maxDraws ? ` [${state.drawsThisTurn ?? 0}/${state.maxDraws}]` : ''}`}
+          </Button>
+        )}
+        {canPass && isMyTurn && !isSpectator && (
+          <Button
+            variant="outline"
+            onClick={handlePass}
+            disabled={passPending}
+            aria-label={t('domino.pass')}
+            data-testid="button-pass"
+          >
+            {passPending ? '…' : t('domino.pass')}
+          </Button>
+        )}
+      </div>
+
+      {status === "finished" && (
+        <div className="absolute inset-0 bg-black/30 flex items-center justify-center rounded-xl">
+          <span className="text-2xl font-bold text-white drop-shadow-lg">
+            {t('domino.gameOver')}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}

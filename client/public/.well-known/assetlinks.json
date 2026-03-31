@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "click.vixo.app",
+      "sha256_cert_fingerprints": [
+        "2B:94:C7:21:A3:81:27:05:C2:3C:33:7A:01:D2:C9:26:06:84:2B:AF:00:FE:FF:81:1B:C5:8B:5E:AC:7F:19:0B"
+      ]
+    }
+  }
+]

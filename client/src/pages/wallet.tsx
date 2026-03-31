@@ -1,0 +1,684 @@
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth";
+import { apiRequest, queryClient, financialQueryOptions } from "@/lib/queryClient";
+import { 
+  Wallet, 
+  ArrowDownToLine, 
+  ArrowUpFromLine, 
+  History, 
+  CreditCard,
+  Building2,
+  Smartphone,
+  Bitcoin,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  Coins,
+  ArrowRightLeft,
+  Loader2
+} from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { TableSkeleton } from "@/components/skeletons";
+import { QueryErrorState } from "@/components/QueryErrorState";
+import { BalanceDisplay } from "@/components/BalanceDisplay";
+import { useBalance } from "@/hooks/useBalance";
+import { playSound } from "@/hooks/use-sound-effects";
+import type { Transaction, ProjectCurrencyConversion } from "@shared/schema";
+
+interface WalletStats {
+  totalDeposited: string;
+  totalWithdrawn: string;
+  totalWagered: string;
+  totalWon: string;
+}
+
+interface ProjectCurrencySettings {
+  currencyName: string;
+  currencySymbol: string;
+  exchangeRate: string;
+  minConversionAmount: string;
+  maxConversionAmount: string;
+  conversionCommissionRate: string;
+  useInGames: boolean;
+  useInP2P: boolean;
+  isActive: boolean;
+}
+
+interface ProjectCurrencyWallet {
+  id: string;
+  purchasedBalance: string;
+  earnedBalance: string;
+  totalBalance: string;
+  currencyName: string;
+  currencySymbol: string;
+}
+
+export default function WalletPage() {
+  const { t, language } = useI18n();
+  const { user, refreshUser } = useAuth();
+  const { toast } = useToast();
+  
+  const [showDeposit, setShowDeposit] = useState(false);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [showConvert, setShowConvert] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [convertAmount, setConvertAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [walletNumber, setWalletNumber] = useState("");
+  const { isHidden: isBalanceHidden } = useBalance();
+
+  const { data: txResponse, isLoading: loadingTransactions, isError: isErrorTransactions, error: errorTransactions, refetch: refetchTransactions } = useQuery<{ data: Transaction[]; total: number }>({
+    queryKey: ['/api/transactions', { pageSize: 10 }],
+    queryFn: async () => {
+      const res = await fetch('/api/transactions?pageSize=10', {
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to fetch transactions');
+      return res.json();
+    },
+    ...financialQueryOptions,
+  });
+  const transactions = txResponse?.data ?? [];
+
+  const { data: walletStats } = useQuery<WalletStats>({
+    queryKey: ['/api/wallet/stats'],
+    ...financialQueryOptions,
+  });
+
+  const { data: currencySettings } = useQuery<ProjectCurrencySettings>({
+    queryKey: ['/api/project-currency/settings'],
+    retry: false,
+  });
+
+  const { data: projectWallet, isLoading: walletLoading } = useQuery<ProjectCurrencyWallet>({
+    queryKey: ['/api/project-currency/wallet'],
+    enabled: !!currencySettings?.isActive,
+    ...financialQueryOptions,
+  });
+
+  const { data: currencyConversions } = useQuery<ProjectCurrencyConversion[]>({
+    queryKey: ['/api/project-currency/conversions'],
+    enabled: !!currencySettings?.isActive,
+  });
+
+  const convertMutation = useMutation({
+    mutationFn: (data: { amount: string }) =>
+      apiRequest('POST', '/api/project-currency/convert', data),
+    onSuccess: async (res: Response) => {
+      const result = await res.json().catch(() => ({}));
+      const message = result.status === 'pending' 
+        ? 'Conversion submitted for approval' 
+        : `Converted to ${currencySettings?.currencySymbol || 'VXC'} successfully!`;
+      toast({ title: t('common.success'), description: message });
+      queryClient.invalidateQueries({ queryKey: ['/api/project-currency/wallet'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/project-currency/conversions'] });
+      refreshUser?.();
+      setShowConvert(false);
+      setConvertAmount("");
+    },
+    onError: (err: Error) => {
+      toast({ title: t('common.error'), description: err.message, variant: "destructive" });
+    }
+  });
+
+  const depositMutation = useMutation({
+    mutationFn: (data: { amount: number; paymentMethod: string; paymentReference: string; walletNumber?: string }) =>
+      apiRequest('POST', '/api/transactions/deposit', data),
+    onSuccess: () => {
+      playSound('coin');
+      toast({ title: t('common.success'), description: t('wallet.depositSuccess') });
+      queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
+      refreshUser?.();
+      setShowDeposit(false);
+      setDepositAmount("");
+      setPaymentReference("");
+      setWalletNumber("");
+    },
+    onError: (err: Error) => {
+      toast({ title: t('common.error'), description: err.message, variant: "destructive" });
+    }
+  });
+
+  const withdrawMutation = useMutation({
+    mutationFn: (data: { amount: number; paymentMethod: string }) =>
+      apiRequest('POST', '/api/transactions/withdraw', data),
+    onSuccess: () => {
+      playSound('success');
+      toast({ title: t('common.success'), description: t('wallet.withdrawSuccess') });
+      queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
+      refreshUser?.();
+      setShowWithdraw(false);
+      setWithdrawAmount("");
+    },
+    onError: (err: Error) => {
+      toast({ title: t('common.error'), description: err.message, variant: "destructive" });
+    }
+  });
+
+  const recentTransactions = Array.isArray(transactions) ? transactions : [];
+
+  const getTransactionIcon = (type: string) => {
+    switch (type) {
+      case 'deposit': return <ArrowDownToLine className="h-4 w-4 text-green-500" />;
+      case 'withdrawal': return <ArrowUpFromLine className="h-4 w-4 text-red-500" />;
+      case 'stake': return <TrendingDown className="h-4 w-4 text-orange-500" />;
+      case 'win': return <TrendingUp className="h-4 w-4 text-green-500" />;
+      case 'bonus': return <TrendingUp className="h-4 w-4 text-green-500" />;
+      case 'reward': return <TrendingUp className="h-4 w-4 text-green-500" />;
+      case 'refund': return <ArrowDownToLine className="h-4 w-4 text-green-500" />;
+      default: return <History className="h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'completed': return <Badge variant="default" className="bg-green-500"><CheckCircle className="h-3 w-3 me-1" />{t('wallet.completed')}</Badge>;
+      case 'pending': return <Badge variant="secondary"><Clock className="h-3 w-3 me-1" />{t('wallet.pending')}</Badge>;
+      case 'rejected': return <Badge variant="destructive"><XCircle className="h-3 w-3 me-1" />{t('wallet.rejected')}</Badge>;
+      default: return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const paymentMethods = [
+    { id: 'bank', name: t('wallet.bankTransfer'), icon: Building2 },
+    { id: 'card', name: t('wallet.creditCard'), icon: CreditCard },
+    { id: 'ewallet', name: t('wallet.eWallet'), icon: Smartphone },
+    { id: 'crypto', name: t('wallet.crypto'), icon: Bitcoin },
+  ];
+
+  return (
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+            <Wallet className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
+            {t('wallet.title')}
+          </h1>
+          <p className="text-sm sm:text-base text-muted-foreground">{t('wallet.description')}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:gap-4 md:grid-cols-3">
+        <Card className="md:col-span-2">
+          <CardHeader className="pb-2 px-3 sm:px-6">
+            <CardTitle>{t('wallet.currentBalance')}</CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 sm:px-6">
+            <div className="mb-4">
+              <BalanceDisplay balance={user?.balance || "0"} variant="header" />
+            </div>
+            <div className="flex gap-2 sm:gap-3 flex-wrap">
+              <Button onClick={() => setShowDeposit(true)} className="flex-1 sm:flex-none min-h-[44px]" data-testid="button-deposit">
+                <ArrowDownToLine className="h-4 w-4 me-2" />
+                {t('wallet.deposit')}
+              </Button>
+              <Button variant="outline" onClick={() => setShowWithdraw(true)} className="flex-1 sm:flex-none min-h-[44px]" data-testid="button-withdraw">
+                <ArrowUpFromLine className="h-4 w-4 me-2" />
+                {t('wallet.withdraw')}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t('wallet.quickStats')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">{t('wallet.totalDeposited')}</span>
+              <span className="font-medium text-green-500">${parseFloat(user?.totalDeposited || "0").toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">{t('wallet.totalWithdrawn')}</span>
+              <span className="font-medium text-red-500">${parseFloat(user?.totalWithdrawn || "0").toFixed(2)}</span>
+            </div>
+            <Separator />
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">{t('wallet.totalWagered')}</span>
+              <span className="font-medium">${parseFloat(user?.totalWagered || "0").toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">{t('wallet.totalWon')}</span>
+              <span className="font-medium text-primary">${parseFloat(user?.totalWon || "0").toFixed(2)}</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {currencySettings?.isActive && (
+        <Card className="border-2 border-primary/50 bg-gradient-to-br from-primary/5 to-transparent">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-full bg-primary/10">
+                  <Coins className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl">
+                    {currencySettings.currencyName || 'VEX Coin'}
+                  </CardTitle>
+                  <CardDescription>
+                    {currencySettings.useInGames && currencySettings.useInP2P 
+                      ? t('wallet.vexUsageGamesAndP2P') || 'Use for games and P2P trading'
+                      : currencySettings.useInGames 
+                        ? t('wallet.vexUsageGames') || 'Use for games'
+                        : currencySettings.useInP2P 
+                          ? t('wallet.vexUsageP2P') || 'Use for P2P trading' 
+                          : t('wallet.vexUsagePlatform') || 'Platform currency'
+                    }
+                  </CardDescription>
+                </div>
+              </div>
+
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-6 md:grid-cols-3">
+              <div className="md:col-span-2">
+                <div className="text-4xl font-bold text-primary balance-glow mb-4" data-testid="text-vxc-balance">
+                  {isBalanceHidden 
+                    ? '******' 
+                    : `${currencySettings.currencySymbol} ${parseFloat(projectWallet?.totalBalance || "0").toFixed(2)}`
+                  }
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <div className="text-xs text-muted-foreground mb-1">{t('wallet.purchased') || 'Purchased'}</div>
+                    <div className="text-lg font-semibold">
+                      {isBalanceHidden ? '***' : `${currencySettings.currencySymbol} ${parseFloat(projectWallet?.purchasedBalance || "0").toFixed(2)}`}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <div className="text-xs text-muted-foreground mb-1">{t('wallet.earned') || 'Earned'}</div>
+                    <div className="text-lg font-semibold text-green-500">
+                      {isBalanceHidden ? '***' : `${currencySettings.currencySymbol} ${parseFloat(projectWallet?.earnedBalance || "0").toFixed(2)}`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col justify-center gap-4 p-4 bg-muted/30 rounded-lg">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">{t('wallet.exchangeRate') || 'Exchange Rate'}</div>
+                  <div className="text-lg font-bold">
+                    1 USD = {currencySettings.exchangeRate} {currencySettings.currencySymbol}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">{t('wallet.commission') || 'Commission'}</div>
+                  <div className="text-sm font-medium">
+                    {parseFloat(currencySettings.conversionCommissionRate || "0")}%
+                  </div>
+                </div>
+                <Button 
+                  className="w-full" 
+                  size="lg"
+                  onClick={() => setShowConvert(true)} 
+                  data-testid="button-convert-to-vxc"
+                >
+                  <ArrowRightLeft className="h-5 w-5 me-2" />
+                  {t('wallet.convertNow') || 'Convert Now'}
+                </Button>
+              </div>
+            </div>
+            
+            {currencyConversions && currencyConversions.length > 0 && (
+              <div className="mt-6 pt-4 border-t">
+                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                  <History className="h-4 w-4" />
+                  {t('wallet.recentConversions') || 'Recent Conversions'}
+                </h4>
+                <div className="space-y-2">
+                  {currencyConversions.slice(0, 5).map((conv) => (
+                    <div key={conv.id} className="flex items-center justify-between text-sm p-3 bg-muted/50 rounded-lg" data-testid={`row-conversion-${conv.id}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-full bg-background">
+                          <ArrowRightLeft className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <div className="font-medium">
+                            ${parseFloat(conv.baseCurrencyAmount).toFixed(2)} → {currencySettings.currencySymbol} {parseFloat(conv.netAmount).toFixed(2)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(conv.createdAt).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { 
+                              month: 'short', 
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <Badge 
+                        variant={conv.status === 'completed' ? 'default' : conv.status === 'pending' ? 'secondary' : 'destructive'}
+                      >
+                        {conv.status === 'completed' && <CheckCircle className="h-3 w-3 me-1" />}
+                        {conv.status === 'pending' && <Clock className="h-3 w-3 me-1" />}
+                        {conv.status}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2">
+            <History className="h-5 w-5" />
+            {t('wallet.recentTransactions')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingTransactions ? (
+            <TableSkeleton rows={3} columns={4} />
+          ) : isErrorTransactions ? (
+            <QueryErrorState error={errorTransactions} onRetry={() => refetchTransactions()} compact />
+          ) : recentTransactions.length > 0 ? (
+            <div className="space-y-3">
+              {recentTransactions.map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg" data-testid={`row-transaction-${tx.id}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-background">
+                      {getTransactionIcon(tx.type)}
+                    </div>
+                    <div>
+                      <p className="font-medium capitalize">{t(`wallet.type.${tx.type}`)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(tx.createdAt).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`font-bold ${['deposit', 'win', 'bonus', 'reward', 'refund'].includes(tx.type) ? 'text-green-500' : 'text-red-500'}`}>
+                      {['deposit', 'win', 'bonus', 'reward', 'refund'].includes(tx.type) ? '+' : '-'}${parseFloat(tx.amount).toFixed(2)}
+                    </span>
+                    {getStatusBadge(tx.status)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon={History} title={t('wallet.noTransactions')} />
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={showDeposit} onOpenChange={setShowDeposit}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowDownToLine className="h-5 w-5 text-green-500" />
+              {t('wallet.deposit')}
+            </DialogTitle>
+            <DialogDescription>{t('wallet.depositDesc')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>{t('wallet.amount')}</Label>
+              <Input
+                type="number"
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                placeholder="0.00"
+                className="mt-2"
+                data-testid="input-deposit-amount"
+              />
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {[10, 25, 50, 100, 250, 500].map(amount => (
+                  <Button
+                    key={amount}
+                    variant={depositAmount === String(amount) ? "default" : "outline"}
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => setDepositAmount(String(amount))}
+                  >
+                    ${amount}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label>{t('wallet.paymentMethod')}</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {paymentMethods.map(method => {
+                  const Icon = method.icon;
+                  return (
+                    <Button
+                      key={method.id}
+                      variant={paymentMethod === method.id ? "default" : "outline"}
+                      className="h-auto py-3 flex-col"
+                      onClick={() => setPaymentMethod(method.id)}
+                      data-testid={`button-method-${method.id}`}
+                    >
+                      <Icon className="h-5 w-5 mb-1" />
+                      <span className="text-xs">{method.name}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <Label>{language === 'ar' ? 'رقم المرجع / إيصال الدفع' : 'Payment Reference / Receipt'}</Label>
+              <Input
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
+                placeholder={language === 'ar' ? 'أدخل رقم المرجع أو رقم الإيصال' : 'Enter receipt or reference number'}
+                className="mt-2"
+              />
+            </div>
+            <div>
+              <Label>{language === 'ar' ? 'رقم المحفظة / الحساب المرسل' : 'Sender Wallet / Account Number'}</Label>
+              <Input
+                value={walletNumber}
+                onChange={(e) => setWalletNumber(e.target.value)}
+                placeholder={language === 'ar' ? 'رقم المحفظة أو الحساب المرسل منه' : 'Your wallet or account number'}
+                className="mt-2"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeposit(false)}>{t('common.cancel')}</Button>
+            <Button 
+              onClick={() => depositMutation.mutate({ amount: parseFloat(depositAmount), paymentMethod, paymentReference, walletNumber: walletNumber || undefined })}
+              disabled={!depositAmount || !paymentMethod || !paymentReference || depositMutation.isPending}
+              data-testid="button-confirm-deposit"
+            >
+              {depositMutation.isPending && <RefreshCw className="h-4 w-4 me-2 animate-spin" />}
+              {t('wallet.confirmDeposit')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showWithdraw} onOpenChange={setShowWithdraw}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowUpFromLine className="h-5 w-5 text-red-500" />
+              {t('wallet.withdraw')}
+            </DialogTitle>
+            <DialogDescription>{t('wallet.withdrawDesc')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-3 bg-muted rounded-lg text-sm">
+              <span className="text-muted-foreground">{t('wallet.availableBalance')}: </span>
+              <span className="font-bold text-primary">${parseFloat(user?.balance || "0").toFixed(2)}</span>
+            </div>
+            <div>
+              <Label>{t('wallet.amount')}</Label>
+              <Input
+                type="number"
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(e.target.value)}
+                placeholder="0.00"
+                className="mt-2"
+                data-testid="input-withdraw-amount"
+              />
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {[10, 25, 50, 100].map(amount => (
+                  <Button
+                    key={amount}
+                    variant={withdrawAmount === String(amount) ? "default" : "outline"}
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => setWithdrawAmount(String(amount))}
+                  >
+                    ${amount}
+                  </Button>
+                ))}
+                <Button
+                  variant={withdrawAmount === String(parseFloat(user?.balance || "0").toFixed(2)) ? "default" : "outline"}
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => setWithdrawAmount(String(parseFloat(user?.balance || "0").toFixed(2)))}
+                >
+                  {language === 'ar' ? 'الكل' : 'All'}
+                </Button>
+              </div>
+            </div>
+            <div>
+              <Label>{t('wallet.paymentMethod')}</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {paymentMethods.map(method => {
+                  const Icon = method.icon;
+                  return (
+                    <Button
+                      key={method.id}
+                      variant={paymentMethod === method.id ? "default" : "outline"}
+                      className="h-auto py-3 flex-col"
+                      onClick={() => setPaymentMethod(method.id)}
+                    >
+                      <Icon className="h-5 w-5 mb-1" />
+                      <span className="text-xs">{method.name}</span>
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowWithdraw(false)}>{t('common.cancel')}</Button>
+            <Button 
+              onClick={() => withdrawMutation.mutate({ amount: parseFloat(withdrawAmount), paymentMethod })}
+              disabled={!withdrawAmount || !paymentMethod || withdrawMutation.isPending || parseFloat(withdrawAmount) > parseFloat(user?.balance || "0")}
+              data-testid="button-confirm-withdraw"
+            >
+              {withdrawMutation.isPending && <RefreshCw className="h-4 w-4 me-2 animate-spin" />}
+              {t('wallet.confirmWithdraw')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {currencySettings?.isActive && (
+        <Dialog open={showConvert} onOpenChange={setShowConvert}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Coins className="h-5 w-5 text-primary" />
+                Convert to {currencySettings.currencyName || 'VEX Coin'}
+              </DialogTitle>
+              <DialogDescription>
+                Convert your USD balance to {currencySettings.currencySymbol}. 
+                Rate: 1 USD = {currencySettings.exchangeRate} {currencySettings.currencySymbol}
+                {parseFloat(currencySettings.conversionCommissionRate) > 0 && (
+                  <> (Fee: {(parseFloat(currencySettings.conversionCommissionRate) * 100).toFixed(1)}%)</>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="p-3 bg-muted rounded-lg text-sm">
+                <span className="text-muted-foreground">Available Balance: </span>
+                <span className="font-bold text-primary">${parseFloat(user?.balance || "0").toFixed(2)}</span>
+              </div>
+              <div>
+                <Label>Amount (USD)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={currencySettings.minConversionAmount}
+                  max={currencySettings.maxConversionAmount}
+                  value={convertAmount}
+                  onChange={(e) => setConvertAmount(e.target.value)}
+                  placeholder={`Min: $${currencySettings.minConversionAmount}`}
+                  className="mt-2"
+                  data-testid="input-convert-amount"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Min: ${currencySettings.minConversionAmount} | Max: ${currencySettings.maxConversionAmount}
+                </p>
+              </div>
+              {convertAmount && parseFloat(convertAmount) > 0 && (
+                <div className="p-3 bg-primary/10 rounded-lg border border-primary/30">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span>You pay:</span>
+                    <span className="font-medium">${parseFloat(convertAmount).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Gross amount:</span>
+                    <span>{currencySettings.currencySymbol} {(parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate)).toFixed(2)}</span>
+                  </div>
+                  {parseFloat(currencySettings.conversionCommissionRate) > 0 && (
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Fee ({(parseFloat(currencySettings.conversionCommissionRate) * 100).toFixed(1)}%):</span>
+                      <span>-{currencySettings.currencySymbol} {(parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate) * parseFloat(currencySettings.conversionCommissionRate)).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <Separator className="my-2" />
+                  <div className="flex justify-between text-base font-bold text-primary">
+                    <span>You receive:</span>
+                    <span>
+                      {currencySettings.currencySymbol} {(
+                        parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate) * (1 - parseFloat(currencySettings.conversionCommissionRate))
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowConvert(false)}>{t('common.cancel')}</Button>
+              <Button 
+                onClick={() => convertMutation.mutate({ amount: convertAmount })}
+                disabled={
+                  !convertAmount || 
+                  parseFloat(convertAmount) <= 0 ||
+                  parseFloat(convertAmount) < parseFloat(currencySettings.minConversionAmount) ||
+                  parseFloat(convertAmount) > parseFloat(currencySettings.maxConversionAmount) ||
+                  parseFloat(convertAmount) > parseFloat(user?.balance || "0") ||
+                  convertMutation.isPending
+                }
+                data-testid="button-confirm-convert"
+              >
+                {convertMutation.isPending && <Loader2 className="h-4 w-4 me-2 animate-spin" />}
+                Convert to {currencySettings.currencySymbol}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}

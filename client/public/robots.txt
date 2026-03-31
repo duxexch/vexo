@@ -1,0 +1,94 @@
+# VEX Platform - Robots.txt
+# https://vixo.click
+
+# Google
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /settings
+Disallow: /wallet
+Disallow: /transactions
+Disallow: /complaints
+Disallow: /notifications
+Disallow: /chat
+Disallow: /support
+Disallow: /challenge/*/play
+Disallow: /challenge/*/watch
+Disallow: /game/*/
+Disallow: /player/
+Disallow: /p2p/profile/
+Disallow: /p2p/settings
+Disallow: /profile
+
+# Google Image Bot
+User-agent: Googlebot-Image
+Allow: /icons/
+Allow: /screenshots/
+Allow: /games/
+Disallow: /api/
+
+# Bing
+User-agent: Bingbot
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /settings
+Disallow: /wallet
+Disallow: /transactions
+Disallow: /chat
+Disallow: /support
+Disallow: /challenge/*/play
+Disallow: /game/*/
+
+# Yandex
+User-agent: Yandex
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /wallet
+Disallow: /transactions
+Disallow: /chat
+Crawl-delay: 2
+
+# Baidu
+User-agent: Baiduspider
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /wallet
+Disallow: /transactions
+Disallow: /chat
+Crawl-delay: 3
+
+# All other bots
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /settings
+Disallow: /wallet
+Disallow: /transactions
+Disallow: /complaints
+Disallow: /notifications
+Disallow: /chat
+Disallow: /support
+Disallow: /challenge/*/play
+Disallow: /challenge/*/watch
+Disallow: /game/*/
+Disallow: /player/
+Disallow: /p2p/profile/
+Disallow: /p2p/settings
+Disallow: /profile
+Crawl-delay: 1
+
+# Sitemaps
+Sitemap: https://vixo.click/sitemap.xml
+
+# Host
+Host: https://vixo.click

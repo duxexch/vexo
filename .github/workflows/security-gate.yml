@@ -1,0 +1,91 @@
+name: Security Gate
+
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+jobs:
+    security-gate:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        services:
+            postgres:
+                image: postgres:16
+                env:
+                    POSTGRES_USER: vex_user
+                    POSTGRES_PASSWORD: VexLocal2026SecurePass!
+                    POSTGRES_DB: vex_db
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U vex_user -d vex_db"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 10
+
+        env:
+            DATABASE_URL: postgresql://vex_user:VexLocal2026SecurePass!@localhost:5432/vex_db
+            DB_SSL: "false"
+            SESSION_SECRET: vex-ci-session-secret-key
+            JWT_SIGNING_KEY: vex-ci-jwt-signing-key
+            JWT_ADMIN_SECRET: vex-ci-admin-jwt-secret
+            PORT: "3011"
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+                  cache: npm
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: TypeScript gate
+              run: npm run check:types
+
+            - name: Dependency security gate
+              run: npm run security:audit
+
+            - name: Build for production runtime checks
+              run: npm run build
+
+            - name: Start production server
+              run: |
+                  NODE_ENV=production npm run start > server.log 2>&1 &
+                  echo $! > server.pid
+
+                  for i in {1..90}; do
+                    if curl -fsS http://127.0.0.1:3011/ > /dev/null; then
+                      echo "Server is ready on 3011"
+                      exit 0
+                    fi
+                    sleep 1
+                  done
+
+                  echo "Server failed to start in time"
+                  tail -n 300 server.log || true
+                  exit 1
+
+            - name: Security smoke endpoints
+              run: SECURITY_BASE_URL=http://127.0.0.1:3011 npm run security:smoke
+
+            - name: Production CSP runtime validation
+              run: CSP_BASE_URL=http://127.0.0.1:3011 npm run security:csp
+
+            - name: Stop server and print logs
+              if: always()
+              run: |
+                  if [ -f server.pid ]; then
+                    kill $(cat server.pid) || true
+                  fi
+
+                  if [ -f server.log ]; then
+                    echo "---- server.log (tail) ----"
+                    tail -n 300 server.log || true
+                  fi

@@ -1,0 +1,61 @@
+import type { Express } from "express";
+import { registerHealthRoutes } from "./health";
+import { registerUsersRoutes } from "./users";
+import { registerGamesRoutes } from "./games";
+import { registerTransactionUserRoutes } from "./transaction-user";
+import { registerTransactionAgentRoutes } from "./transaction-agent";
+import { registerAuthRoutes } from "./auth";
+import { registerP2PTradingRoutes } from "./p2p-trading";
+import { registerP2PDisputesRoutes } from "./p2p-disputes";
+import { registerChallengesRoutes } from "./challenges";
+import { registerSpectatorRoutes } from "./spectator";
+import { registerTournamentRoutes } from "./tournaments";
+import { registerDailyRewardRoutes } from "./daily-rewards";
+import { registerOAuthRoutes } from "./social-auth";
+import { registerChatFeatureRoutes } from "./chat-features";
+import { registerPaymentRoutes } from "./payments";
+import { registerNotificationRoutes } from "./notifications";
+import { registerStatsRoutes } from "./stats";
+import { registerProfileRoutes } from "./profile";
+import { registerSecurityRoutes } from "./security";
+import { registerP2PProfileRoutes } from "./p2p-profile";
+import { registerGiftsRoutes } from "./gifts";
+import { registerSocialRoutes } from "./social";
+import { registerChatRoutes } from "./chat";
+import { registerMatchmakingRoutes } from "./matchmaking";
+import { registerGameConfigRoutes } from "./game-config";
+import { registerSupportChatRoutes } from "./support-chat";
+import { registerExternalGamesRoutes } from "./external-games";
+import { authMiddleware } from "./middleware";
+
+export function registerModularRoutes(app: Express): void {
+  registerHealthRoutes(app);
+  registerUsersRoutes(app);
+  registerGamesRoutes(app);
+  registerTransactionUserRoutes(app);
+  registerTransactionAgentRoutes(app);
+  registerAuthRoutes(app);
+  registerOAuthRoutes(app);
+  registerP2PTradingRoutes(app);
+  registerP2PDisputesRoutes(app);
+  registerChallengesRoutes(app);
+  registerSpectatorRoutes(app);
+  registerTournamentRoutes(app);
+  registerDailyRewardRoutes(app);
+  registerChatFeatureRoutes(app, authMiddleware);
+
+  // Phase 4: Modularized route modules
+  registerPaymentRoutes(app);
+  registerNotificationRoutes(app);
+  registerStatsRoutes(app);
+  registerProfileRoutes(app);
+  registerSecurityRoutes(app);
+  registerP2PProfileRoutes(app);
+  registerGiftsRoutes(app);
+  registerSocialRoutes(app);
+  registerChatRoutes(app);
+  registerMatchmakingRoutes(app);
+  registerGameConfigRoutes(app);
+  registerSupportChatRoutes(app);
+  registerExternalGamesRoutes(app);
+}
