@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import DOMPurify from "dompurify";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -161,6 +162,16 @@ function isAllowedEvidenceMimeType(mimeType: string): boolean {
 
 function canPreviewImageFile(mimeType: string): boolean {
   return SAFE_PREVIEW_IMAGE_TYPES.has((mimeType || "").toLowerCase());
+}
+
+function sanitizeDisplayText(rawText: string): string {
+  if (!rawText) return "";
+
+  return DOMPurify.sanitize(rawText, {
+    ALLOWED_TAGS: [],
+    ALLOWED_ATTR: [],
+    KEEP_CONTENT: true,
+  });
 }
 
 function normalizeSafeEvidenceUrl(rawUrl: string): string | null {
@@ -1124,13 +1135,14 @@ function DisputesTab() {
                   {uploadedFiles.map((file, index) => {
                     const isPreviewImage = canPreviewImageFile(file.type);
                     const previewUrl = isPreviewImage ? URL.createObjectURL(file) : null;
+                    const safeFileName = sanitizeDisplayText(file.name);
                     return (
                       <div key={index} className="relative group border rounded-lg overflow-hidden">
                         {isPreviewImage && previewUrl ? (
                           <div className="aspect-video bg-muted">
                             <img
                               src={previewUrl}
-                              alt={file.name}
+                              alt={safeFileName}
                               loading="lazy"
                               className="w-full h-full object-cover"
                               onLoad={() => URL.revokeObjectURL(previewUrl)}
@@ -1146,7 +1158,7 @@ function DisputesTab() {
                           </div>
                         )}
                         <div className="p-2 bg-background">
-                          <p className="text-xs font-medium truncate">{file.name}</p>
+                          <p className="text-xs font-medium truncate">{safeFileName}</p>
                           <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                         </div>
                         <Button

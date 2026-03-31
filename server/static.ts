@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import rateLimit from "express-rate-limit";
+import escapeHtml from "escape-html";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -24,80 +25,82 @@ const publicHtmlLimiter = rateLimit({
 });
 
 function escapeHtmlAttribute(value: string): string {
-  let out = "";
-  for (let i = 0; i < value.length; i += 1) {
-    const ch = value[i];
-    if (ch === "&") out += "&amp;";
-    else if (ch === "<") out += "&lt;";
-    else if (ch === ">") out += "&gt;";
-    else if (ch === '"') out += "&quot;";
-    else if (ch === "'") out += "&#39;";
-    else out += ch;
-  }
-  return out;
+  return escapeHtml(value);
 }
 
 // SEO page titles & descriptions for crawler-friendly rendering
-const SEO_PAGES: Record<string, { title: string; description: string; keywords: string }> = {
+const SEO_PAGES: Record<string, { title: string; description: string; keywords: string; canonicalUrl: string }> = {
   "/": {
     title: "VEX - منصة الألعاب والتداول | Play Chess, Backgammon, Domino Online",
     description: "العب شطرنج، طاولة، دومينو، طرنيب وبلوت أونلاين مع لاعبين حقيقيين. تداول P2P آمن مع 85+ عملة. Play Chess, Backgammon, Domino, Tarneeb & Baloot online.",
-    keywords: "VEX, العاب اونلاين, شطرنج, طاولة, دومينو, طرنيب, بلوت, تداول P2P, online games, chess, backgammon"
+    keywords: "VEX, العاب اونلاين, شطرنج, طاولة, دومينو, طرنيب, بلوت, تداول P2P, online games, chess, backgammon",
+    canonicalUrl: "https://vixo.click"
   },
   "/games": {
     title: "ألعاب أونلاين - شطرنج، طاولة، دومينو، طرنيب، بلوت | VEX Games",
     description: "العب أفضل الألعاب أونلاين: شطرنج، طاولة زهر، دومينو، طرنيب وبلوت مع لاعبين حقيقيين في الوقت الفعلي. Play Chess, Backgammon, Domino, Tarneeb & Baloot online.",
-    keywords: "العاب اونلاين, شطرنج اونلاين, طاولة زهر, دومينو, طرنيب, بلوت, chess online, backgammon, domino"
+    keywords: "العاب اونلاين, شطرنج اونلاين, طاولة زهر, دومينو, طرنيب, بلوت, chess online, backgammon, domino",
+    canonicalUrl: "https://vixo.click/games"
   },
   "/challenges": {
     title: "تحديات مباشرة - العب وأربح | VEX Challenges",
     description: "شارك في تحديات مباشرة ضد لاعبين حقيقيين. تحدى أصدقائك في الشطرنج والطاولة والدومينو. Challenge real players in Chess, Backgammon & more.",
-    keywords: "تحديات, مسابقات, العب واربح, challenges, compete, win prizes"
+    keywords: "تحديات, مسابقات, العب واربح, challenges, compete, win prizes",
+    canonicalUrl: "https://vixo.click/challenges"
   },
   "/p2p": {
     title: "تداول P2P آمن - 85+ عملة | VEX P2P Trading",
     description: "تداول P2P آمن ومضمون مع أكثر من 85 عملة. بيع واشتري بأفضل الأسعار. Secure P2P trading with 85+ currencies.",
-    keywords: "تداول P2P, بيع وشراء, عملات, P2P trading, buy sell, currencies, secure trading"
+    keywords: "تداول P2P, بيع وشراء, عملات, P2P trading, buy sell, currencies, secure trading",
+    canonicalUrl: "https://vixo.click/p2p"
   },
   "/tournaments": {
     title: "بطولات أونلاين - فز بجوائز حقيقية | VEX Tournaments",
     description: "شارك في بطولات الشطرنج والطاولة والبلوت. جوائز حقيقية كل يوم. Join Chess, Backgammon & Baloot tournaments.",
-    keywords: "بطولات, tournaments, جوائز, prizes, مسابقات, competitions"
+    keywords: "بطولات, tournaments, جوائز, prizes, مسابقات, competitions",
+    canonicalUrl: "https://vixo.click/tournaments"
   },
   "/leaderboard": {
     title: "لوحة المتصدرين - أفضل اللاعبين | VEX Leaderboard",
     description: "شاهد ترتيب أفضل اللاعبين. تنافس للوصول إلى القمة. See top players ranking and compete for the top.",
-    keywords: "متصدرين, ترتيب, leaderboard, ranking, top players, أفضل لاعب"
+    keywords: "متصدرين, ترتيب, leaderboard, ranking, top players, أفضل لاعب",
+    canonicalUrl: "https://vixo.click/leaderboard"
   },
   "/free": {
     title: "ألعاب مجانية - العب بدون رصيد | VEX Free Games",
     description: "العب ألعاب مجانية بدون أي رصيد. تدرب وطور مهاراتك. Play free games without any balance. Practice and improve.",
-    keywords: "العاب مجانية, free games, بدون رصيد, practice, تدريب"
+    keywords: "العاب مجانية, free games, بدون رصيد, practice, تدريب",
+    canonicalUrl: "https://vixo.click/free"
   },
   "/daily-rewards": {
     title: "مكافآت يومية - اجمع هدايا كل يوم | VEX Daily Rewards",
     description: "احصل على مكافآت يومية مجانية. سجل دخولك كل يوم واجمع جوائز. Get free daily rewards and bonuses.",
-    keywords: "مكافآت يومية, daily rewards, هدايا, bonuses, جوائز مجانية"
+    keywords: "مكافآت يومية, daily rewards, هدايا, bonuses, جوائز مجانية",
+    canonicalUrl: "https://vixo.click/daily-rewards"
   },
   "/referral": {
     title: "ادعُ أصدقاءك واربح - نظام الإحالة | VEX Referral",
     description: "ادعُ أصدقاءك لمنصة VEX واحصل على مكافآت. Invite friends and earn rewards with VEX referral program.",
-    keywords: "إحالة, دعوة أصدقاء, referral, invite friends, مكافآت إحالة"
+    keywords: "إحالة, دعوة أصدقاء, referral, invite friends, مكافآت إحالة",
+    canonicalUrl: "https://vixo.click/referral"
   },
   "/install-app": {
     title: "حمّل تطبيق VEX - Android & PWA | Download VEX App",
     description: "حمّل تطبيق VEX على جهازك. متوفر كتطبيق PWA وأندرويد. Download VEX app for Android or install as PWA.",
-    keywords: "تحميل VEX, download VEX, تطبيق اندرويد, Android app, PWA, تثبيت"
+    keywords: "تحميل VEX, download VEX, تطبيق اندرويد, Android app, PWA, تثبيت",
+    canonicalUrl: "https://vixo.click/install-app"
   },
   "/terms": {
     title: "شروط الاستخدام | VEX Terms of Service",
     description: "شروط استخدام منصة VEX للألعاب والتداول. VEX Platform Terms of Service.",
-    keywords: "شروط الاستخدام, terms of service, قوانين, rules"
+    keywords: "شروط الاستخدام, terms of service, قوانين, rules",
+    canonicalUrl: "https://vixo.click/terms"
   },
   "/privacy": {
     title: "سياسة الخصوصية | VEX Privacy Policy",
     description: "سياسة الخصوصية لمنصة VEX. نحمي بياناتك. VEX Privacy Policy - Your data is protected.",
-    keywords: "سياسة الخصوصية, privacy policy, حماية البيانات, data protection"
+    keywords: "سياسة الخصوصية, privacy policy, حماية البيانات, data protection",
+    canonicalUrl: "https://vixo.click/privacy"
   },
 };
 
@@ -252,16 +255,15 @@ export function serveStatic(app: Express) {
         `<meta name="twitter:description" content="${escapedDescription}"`
       );
 
-      // Update canonical URL
-      const fullUrl = `https://vixo.click${pagePath === "/" ? "" : pagePath}`;
-      const escapedUrl = escapeHtmlAttribute(fullUrl);
+      // Update canonical URL from static SEO config to avoid reflecting request-derived paths
+      const escapedUrl = escapeHtmlAttribute(seo.canonicalUrl);
       html = html.replace(
         /<link rel="canonical" href="[^"]*"/,
-        `<link rel="canonical" href="${escapedUrl}/"`
+        `<link rel="canonical" href="${escapedUrl}"`
       );
       html = html.replace(
         /<meta property="og:url" content="[^"]*"/,
-        `<meta property="og:url" content="${escapedUrl}/"`
+        `<meta property="og:url" content="${escapedUrl}"`
       );
     }
 

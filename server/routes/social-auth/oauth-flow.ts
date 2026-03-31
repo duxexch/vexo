@@ -149,7 +149,7 @@ export function registerOAuthFlowRoutes(app: Express) {
         extraParams.response_mode = "form_post";
       }
 
-      const authUrl = buildAuthorizationUrl(
+      const authUrl = await buildAuthorizationUrl(
         platform,
         platformRecord.clientId,
         callbackUrl,

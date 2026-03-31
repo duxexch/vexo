@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import cookieParser from "cookie-parser";
+import csurf from "csurf";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { registerAdminRoutes } from "./admin-routes";
@@ -30,7 +31,6 @@ import {
   verifyAdminAccessToken,
   verifyUserAccessToken,
 } from "./lib/auth-verification";
-import { issueCsrfToken, validateCsrfToken } from "./lib/csrf-protection";
 
 /** Safely extract error message from unknown catch value */
 function getErrorMessage(error: unknown): string {
@@ -228,6 +228,17 @@ app.use(compression({
 // Parse cookies for httpOnly token support
 app.use(cookieParser());
 
+const csrfProtection = csurf({
+  cookie: {
+    key: "vex_csrf",
+    httpOnly: true,
+    sameSite: "strict",
+    secure: isProduction,
+    path: "/",
+  },
+  ignoreMethods: ["GET", "HEAD", "OPTIONS"],
+});
+
 function shouldEnforceCsrf(req: Request): boolean {
   const method = req.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
@@ -243,10 +254,10 @@ function shouldEnforceCsrf(req: Request): boolean {
   return typeof req.cookies?.vex_token === "string" && req.cookies.vex_token.length > 0;
 }
 
-app.get("/api/auth/csrf-token", (_req: Request, res: Response) => {
-  const csrfToken = issueCsrfToken(res, isProduction);
+app.get("/api/auth/csrf-token", csrfProtection, (req: Request, res: Response) => {
+  const csrfToken = (req as Request & { csrfToken?: () => string }).csrfToken?.();
   res.setHeader("Cache-Control", "no-store");
-  return res.json({ csrfToken });
+  return res.json({ csrfToken: csrfToken || null });
 });
 
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -254,11 +265,15 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     return next();
   }
 
-  if (!validateCsrfToken(req)) {
+  return csrfProtection(req, res, next);
+});
+
+app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+  if (err?.code === "EBADCSRFTOKEN") {
     return res.status(403).json({ error: "Invalid CSRF token" });
   }
 
-  return next();
+  return next(err);
 });
 
 // CORS protection - restrict cross-origin requests in production

@@ -2,6 +2,7 @@
  * OAuth Provider Registry — Register and manage OAuth providers with PKCE support
  */
 import crypto from "crypto";
+import { generateChallenge } from "pkce-challenge";
 import type { OAuthProviderConfig, ProfileNormalizer } from "./types";
 
 const PKCE_MIN_VERIFIER_LENGTH = 43;
@@ -54,10 +55,10 @@ export function generateCodeVerifier(): string {
   return crypto.randomBytes(64).toString("base64url");
 }
 
-export function generateCodeChallenge(verifier: string): string {
+export async function generateCodeChallenge(verifier: string): Promise<string> {
   if (!isValidPkceVerifier(verifier)) {
     throw new Error("Invalid PKCE verifier");
   }
 
-  return crypto.createHash("sha256").update(verifier).digest("base64url");
+  return generateChallenge(verifier, "S256");
 }

@@ -70,14 +70,14 @@ export async function cleanupExpiredStates() {
 }
 
 // ==================== Authorization URL ====================
-export function buildAuthorizationUrl(
+export async function buildAuthorizationUrl(
   platformName: string,
   clientId: string,
   callbackUrl: string,
   state: string,
   codeVerifier?: string,
   extraParams?: Record<string, string>,
-): string {
+): Promise<string> {
   const provider = getProvider(platformName);
   if (!provider) throw new Error(`Unknown OAuth provider: ${platformName}`);
 
@@ -92,7 +92,7 @@ export function buildAuthorizationUrl(
   });
 
   if (config.supportsPKCE && codeVerifier) {
-    params.set("code_challenge", generateCodeChallenge(codeVerifier));
+    params.set("code_challenge", await generateCodeChallenge(codeVerifier));
     params.set("code_challenge_method", "S256");
   }
 
