@@ -169,6 +169,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
     });
 
     // Broadcast to players with personalized views (hide opponent cards)
+    const seq = typeof result.updatedSession.totalMoves === "number" ? result.updatedSession.totalMoves : 0;
     for (const [playerId, socket] of room.players) {
       if (socket.readyState === WebSocket.OPEN) {
         const playerView = result.engine.getPlayerView(result.newState, playerId);
@@ -179,6 +180,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
           events: result.events,
           move,
           playerId: ws.userId,
+          seq,
         }));
       }
     }
@@ -194,6 +196,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
           events: result.events,
           move,
           playerId: ws.userId,
+          seq,
         }));
       }
     }

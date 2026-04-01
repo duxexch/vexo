@@ -101,12 +101,16 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
     }
 
     // Broadcast game ended
+    const gameEndedSeq = room.currentState && typeof room.currentState.totalMoves === "number"
+      ? room.currentState.totalMoves
+      : 0;
     [...room.players.values(), ...room.spectators.values()].forEach((socket) => {
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
           type: "game_ended",
           winnerId: result.winnerId,
           reason: "resignation",
+          seq: gameEndedSeq,
         }));
       }
     });
@@ -170,6 +174,7 @@ export async function handleOfferDraw(ws: AuthenticatedSocket, data: any): Promi
       socket.send(JSON.stringify({
         type: "draw_offered",
         offeredBy: ws.userId,
+        seq: room.currentState && typeof room.currentState.totalMoves === "number" ? room.currentState.totalMoves : 0,
       }));
     }
   });
@@ -240,12 +245,16 @@ export async function handleRespondDraw(ws: AuthenticatedSocket, data: any): Pro
       }
 
       // Broadcast game ended as draw
+      const gameEndedSeq = room.currentState && typeof room.currentState.totalMoves === "number"
+        ? room.currentState.totalMoves
+        : 0;
       [...room.players.values(), ...room.spectators.values()].forEach((socket) => {
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({
             type: "game_ended",
             winnerId: null,
             reason: "draw_agreement",
+            seq: gameEndedSeq,
           }));
         }
       });
@@ -287,6 +296,7 @@ export async function handleRespondDraw(ws: AuthenticatedSocket, data: any): Pro
         socket.send(JSON.stringify({
           type: "draw_declined",
           declinedBy: ws.userId,
+          seq: room.currentState && typeof room.currentState.totalMoves === "number" ? room.currentState.totalMoves : 0,
         }));
       }
     });

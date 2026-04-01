@@ -8,10 +8,15 @@ import { storage } from "../../storage";
 import { sanitizePlainText } from "../../lib/input-security";
 import type { AuthenticatedSocket } from "../shared";
 import { challengeGameRooms } from "../shared";
+import { requireChallengeParticipant, requireChallengePlayer } from "./guards";
 
 /** Handle challenge_chat message — only game participants (players), NOT spectators */
 export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId, message, isQuickMessage, quickMessageKey } = data;
+  const guard = requireChallengePlayer(ws, challengeId);
+  if (!guard.ok) {
+    return;
+  }
 
   // SECURITY: Rate limit challenge chat
   const rateLimitResult = chatRateLimiter.check(ws.userId!);
@@ -24,18 +29,7 @@ export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): P
   const safeMessage = sanitizePlainText(message, { maxLength: 500 });
   if (!safeMessage.trim()) return;
 
-  const room = challengeGameRooms.get(challengeId);
-
-  if (!room) {
-    ws.send(JSON.stringify({ type: "challenge_error", error: "Room not found" }));
-    return;
-  }
-
-  // SECURITY: Only players can chat, spectators cannot
-  if (!room.players.has(ws.userId!)) {
-    ws.send(JSON.stringify({ type: "challenge_error", error: "Only players can chat" }));
-    return;
-  }
+  const { room } = guard;
 
   // Get session
   const [session] = await db.select().from(challengeGameSessions)
@@ -84,17 +78,11 @@ export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): P
 /** Handle gift_to_player message — gift sent notification to players */
 export async function handleGiftToPlayer(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId, recipientId, giftId } = data;
-  const room = challengeGameRooms.get(challengeId);
-
-  if (!room) {
-    ws.send(JSON.stringify({ type: "challenge_error", error: "Room not found" }));
+  const guard = requireChallengeParticipant(ws, challengeId, { allowSpectator: true });
+  if (!guard.ok) {
     return;
   }
-
-  if (!room.players.has(ws.userId!) && !room.spectators.has(ws.userId!)) {
-    ws.send(JSON.stringify({ type: "challenge_error", error: "You are not part of this game room" }));
-    return;
-  }
+  const { room } = guard;
 
   // SECURITY: Validate inputs
   if (!giftId || !recipientId || typeof giftId !== 'string' || typeof recipientId !== 'string') {

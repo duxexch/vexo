@@ -109,6 +109,7 @@ interface GiftInfo {
 
 interface ChallengeWSMessage {
   type: string;
+  seq?: number;
   role?: "player" | "spectator";
   error?: string;
   code?: string;
@@ -186,6 +187,11 @@ export default function ChallengeGamePage() {
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
   const intentionalCloseRef = useRef(false);
   const wsErrorToastRef = useRef<{ signature: string; at: number }>({ signature: "", at: 0 });
+  const latestWsSeqRef = useRef(0);
+  const latestTotalMovesRef = useRef(0);
+  const latestViewMovesRef = useRef(0);
+  const chessMovePendingRef = useRef(false);
+  const chessMoveAckTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: challenge, isLoading, isError: isChallengeError, error: challengeError } = useQuery<Challenge, Error>({
     queryKey: [`/api/challenges/${challengeId}`],
@@ -252,6 +258,14 @@ export default function ChallengeGamePage() {
     if (roleAssignmentTimerRef.current) {
       clearTimeout(roleAssignmentTimerRef.current);
       roleAssignmentTimerRef.current = null;
+    }
+  }, []);
+
+  const clearChessMovePending = useCallback(() => {
+    chessMovePendingRef.current = false;
+    if (chessMoveAckTimerRef.current) {
+      clearTimeout(chessMoveAckTimerRef.current);
+      chessMoveAckTimerRef.current = null;
     }
   }, []);
 
@@ -394,6 +408,7 @@ export default function ChallengeGamePage() {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
       }
+      clearChessMovePending();
       const activeSocket = wsRef.current;
       if (activeSocket?.readyState === WebSocket.OPEN) {
         activeSocket.send(JSON.stringify({ type: "leave_challenge_game", challengeId }));
@@ -401,7 +416,7 @@ export default function ChallengeGamePage() {
       activeSocket?.close();
       wsRef.current = null;
     };
-  }, [authToken, challengeId, user, clearRoleAssignmentTimer, language, requestRoleAssignment, setLocation, showWsErrorToast, t]);
+  }, [authToken, challengeId, user, clearRoleAssignmentTimer, language, requestRoleAssignment, setLocation, showWsErrorToast, t, clearChessMovePending]);
 
   // Live countdown timer — ticks every second when game is playing
   useEffect(() => { setSoundMuted(isMuted); }, [isMuted, setSoundMuted]);
@@ -420,6 +435,47 @@ export default function ChallengeGamePage() {
   }, [gameSession?.status, gameSession?.currentTurn]);
 
   const handleWebSocketMessage = useCallback((data: ChallengeWSMessage) => {
+    const shouldAcceptSeqOnly = (seq?: number): boolean => {
+      if (typeof seq !== "number") return true;
+      if (seq < latestWsSeqRef.current) return false;
+      latestWsSeqRef.current = seq;
+      return true;
+    };
+
+    const getViewMoveCount = (view?: Record<string, unknown>): number | null => {
+      if (!view) return null;
+      const moveHistory = view.moveHistory;
+      if (Array.isArray(moveHistory)) return moveHistory.length;
+      const history = view.history;
+      if (Array.isArray(history)) return history.length;
+      return null;
+    };
+
+    const shouldApplySessionUpdate = (session?: GameSession, view?: Record<string, unknown>, seq?: number): boolean => {
+      if (typeof seq === "number") {
+        if (seq < latestWsSeqRef.current) return false;
+        latestWsSeqRef.current = seq;
+      }
+
+      const sessionMoves = (session && typeof session.totalMoves === "number") ? session.totalMoves : null;
+      const viewMoves = getViewMoveCount(view);
+
+      if (sessionMoves !== null) {
+        if (sessionMoves < latestTotalMovesRef.current) return false;
+        if (sessionMoves === latestTotalMovesRef.current && viewMoves !== null && viewMoves < latestViewMovesRef.current) {
+          return false;
+        }
+        latestTotalMovesRef.current = sessionMoves;
+      } else if (viewMoves !== null && viewMoves < latestViewMovesRef.current) {
+        return false;
+      }
+
+      if (viewMoves !== null) {
+        latestViewMovesRef.current = Math.max(latestViewMovesRef.current, viewMoves);
+      }
+      return true;
+    };
+
     if (isWsErrorType(data.type)) {
       const { message, code } = extractWsErrorInfo(data);
       if (message) {
@@ -436,13 +492,20 @@ export default function ChallengeGamePage() {
         break;
       case "game_state_sync":
         lastSyncRef.current = Date.now();
-        if (data.session) setGameSession(data.session);
-        if (data.view) setPlayerView(data.view);
+        if (shouldApplySessionUpdate(data.session, data.view, data.seq)) {
+          if (data.session) setGameSession(data.session);
+          if (data.view) setPlayerView(data.view);
+        }
         break;
       case "game_move":
         lastSyncRef.current = Date.now();
-        if (data.session) setGameSession(prev => prev ? { ...prev, ...data.session } : null);
-        if (data.view) setPlayerView(data.view);
+        if (shouldApplySessionUpdate(data.session, data.view, data.seq)) {
+          if (data.session) {
+            setGameSession(prev => prev ? { ...prev, ...data.session } : null);
+            clearChessMovePending();
+          }
+          if (data.view) setPlayerView(data.view);
+        }
         // Sound: determine move type from game context
         if (gameSession?.gameType === "chess") {
           const view = data.view as Record<string, unknown> | undefined;
@@ -478,6 +541,10 @@ export default function ChallengeGamePage() {
         }
         break;
       case "game_ended":
+        if (!shouldAcceptSeqOnly(data.seq)) {
+          break;
+        }
+        clearChessMovePending();
         setGameSession(prev => prev ? { ...prev, status: "finished", winnerId: data.winnerId ?? undefined, winReason: data.reason ?? undefined } : null);
         setDrawOffered(null);
         if (data.winnerId === user?.id) playSound("gameWin");
@@ -485,6 +552,9 @@ export default function ChallengeGamePage() {
         else playSound("gameLose");
         break;
       case "draw_offered":
+        if (!shouldAcceptSeqOnly(data.seq)) {
+          break;
+        }
         setDrawOffered(data.offeredBy ?? null);
         playSound("draw");
         toast({
@@ -493,11 +563,22 @@ export default function ChallengeGamePage() {
         });
         break;
       case "draw_declined":
+        if (!shouldAcceptSeqOnly(data.seq)) {
+          break;
+        }
         setDrawOffered(null);
         toast({
           title: t('challenge.drawDeclined'),
           description: t('challenge.drawDeclinedDesc'),
         });
+        break;
+      case "dice_rolled":
+      case "turn_ended":
+        if (!shouldAcceptSeqOnly(data.seq)) {
+          break;
+        }
+        lastSyncRef.current = Date.now();
+        if (data.view) setPlayerView(data.view);
         break;
       case "session_replaced":
         toast({
@@ -511,7 +592,7 @@ export default function ChallengeGamePage() {
         setGameSession(prev => prev ? { ...prev, spectatorCount: (data.count as number) ?? 0 } : null);
         break;
     }
-  }, [toast, playSound, user, gameSession?.gameType, showWsErrorToast]);
+  }, [toast, playSound, user, gameSession?.gameType, showWsErrorToast, clearChessMovePending]);
 
   const sendMove = useCallback((move: object) => {
     if (!canPlayActions) {
@@ -519,14 +600,33 @@ export default function ChallengeGamePage() {
       return;
     }
 
+    const isChessMove = gameSession?.gameType === "chess"
+      && typeof (move as { from?: unknown }).from === "string"
+      && typeof (move as { to?: unknown }).to === "string";
+
+    if (isChessMove && chessMovePendingRef.current) {
+      return;
+    }
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
+      if (isChessMove) {
+        chessMovePendingRef.current = true;
+        if (chessMoveAckTimerRef.current) {
+          clearTimeout(chessMoveAckTimerRef.current);
+        }
+        chessMoveAckTimerRef.current = setTimeout(() => {
+          chessMovePendingRef.current = false;
+          chessMoveAckTimerRef.current = null;
+        }, 3000);
+      }
+
       wsRef.current.send(JSON.stringify({
         type: "game_move",
         challengeId,
         move,
       }));
     }
-  }, [challengeId, canPlayActions, showSpectatorActionBlocked]);
+  }, [challengeId, canPlayActions, showSpectatorActionBlocked, gameSession?.gameType]);
 
   // Backgammon-specific: roll dice
   const sendRoll = useCallback(() => {
@@ -872,6 +972,7 @@ export default function ChallengeGamePage() {
                     myColor={myColor}
                     isMyTurn={canPlayActions && ((playerView?.isMyTurn as boolean) ?? (gameSession?.currentTurn === user?.id))}
                     isSpectator={isSpectator}
+                    authoritativeValidMoves={playerView?.validMoves}
                     onMove={canPlayActions ? sendMove : () => { }}
                     status={gameSession?.status}
                   />

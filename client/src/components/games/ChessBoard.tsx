@@ -8,6 +8,7 @@ interface ChessBoardProps {
   myColor: "white" | "black";
   isMyTurn: boolean;
   isSpectator: boolean;
+  authoritativeValidMoves?: unknown;
   onMove: (move: ChessMove) => void;
   status?: string;
 }
@@ -25,6 +26,12 @@ interface Square {
   col: number;
   piece: string | null;
   color: "white" | "black";
+}
+
+interface AuthoritativeMove {
+  from: string;
+  to: string;
+  promotion?: string;
 }
 
 type PieceType = "K" | "Q" | "R" | "B" | "N" | "P" | "k" | "q" | "r" | "b" | "n" | "p";
@@ -89,9 +96,9 @@ function getPieceColor(piece: string): "white" | "black" | null {
 // Check if a specific square is attacked by the given color
 function isSquareAttacked(board: string[][], row: number, col: number, byColor: "white" | "black"): boolean {
   const isAttacker = byColor === "white" ? isWhitePiece : (p: string) => p !== "" && !isWhitePiece(p);
-  
+
   // Check knight attacks
-  const knightMoves = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+  const knightMoves = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
   for (const [dr, dc] of knightMoves) {
     const r = row + dr, c = col + dc;
     if (r >= 0 && r <= 7 && c >= 0 && c <= 7) {
@@ -99,7 +106,7 @@ function isSquareAttacked(board: string[][], row: number, col: number, byColor: 
       if (p && isAttacker(p) && p.toUpperCase() === "N") return true;
     }
   }
-  
+
   // Check pawn attacks
   const pawnDir = byColor === "white" ? 1 : -1; // white pawns attack upward (decreasing row)
   for (const dc of [-1, 1]) {
@@ -109,7 +116,7 @@ function isSquareAttacked(board: string[][], row: number, col: number, byColor: 
       if (p && isAttacker(p) && p.toUpperCase() === "P") return true;
     }
   }
-  
+
   // Check king attacks
   for (const dr of [-1, 0, 1]) {
     for (const dc of [-1, 0, 1]) {
@@ -121,9 +128,9 @@ function isSquareAttacked(board: string[][], row: number, col: number, byColor: 
       }
     }
   }
-  
+
   // Check sliding pieces (bishop/queen diagonals, rook/queen straights)
-  const diags = [[-1,-1],[-1,1],[1,-1],[1,1]];
+  const diags = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
   for (const [dr, dc] of diags) {
     for (let i = 1; i < 8; i++) {
       const r = row + dr * i, c = col + dc * i;
@@ -135,8 +142,8 @@ function isSquareAttacked(board: string[][], row: number, col: number, byColor: 
       }
     }
   }
-  
-  const straights = [[-1,0],[1,0],[0,-1],[0,1]];
+
+  const straights = [[-1, 0], [1, 0], [0, -1], [0, 1]];
   for (const [dr, dc] of straights) {
     for (let i = 1; i < 8; i++) {
       const r = row + dr * i, c = col + dc * i;
@@ -148,7 +155,7 @@ function isSquareAttacked(board: string[][], row: number, col: number, byColor: 
       }
     }
   }
-  
+
   return false;
 }
 
@@ -169,11 +176,11 @@ function wouldLeaveInCheck(board: string[][], fromRow: number, fromCol: number, 
   const newBoard = board.map(row => [...row]);
   newBoard[toRow][toCol] = newBoard[fromRow][fromCol];
   newBoard[fromRow][fromCol] = "";
-  
+
   const enemyColor = color === "white" ? "black" : "white";
   const kingPos = findKing(newBoard, color);
   if (!kingPos) return true;
-  
+
   return isSquareAttacked(newBoard, kingPos[0], kingPos[1], enemyColor);
 }
 
@@ -206,7 +213,7 @@ function getRawMoves(board: string[][], row: number, col: number, piece: string,
     case "P": {
       const dir = isWhite ? -1 : 1;
       const startRow = isWhite ? 6 : 1;
-      
+
       // Forward moves
       if (!board[row + dir]?.[col]) {
         moves.push(coordsToSquare(row + dir, col));
@@ -214,7 +221,7 @@ function getRawMoves(board: string[][], row: number, col: number, piece: string,
           moves.push(coordsToSquare(row + dir * 2, col));
         }
       }
-      
+
       // Normal captures
       [-1, 1].forEach(dc => {
         const target = board[row + dir]?.[col + dc];
@@ -222,7 +229,7 @@ function getRawMoves(board: string[][], row: number, col: number, piece: string,
           moves.push(coordsToSquare(row + dir, col + dc));
         }
       });
-      
+
       // En passant
       if (enPassant !== "-") {
         const [epRow, epCol] = squareToCoords(enPassant);
@@ -251,7 +258,7 @@ function getRawMoves(board: string[][], row: number, col: number, piece: string,
       [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]].forEach(([dr, dc]) => {
         addMoveIfValid(row + dr, col + dc);
       });
-      
+
       // Castling
       const baseRow = isWhite ? 7 : 0;
       const enemyColor = isWhite ? "black" : "white";
@@ -259,18 +266,18 @@ function getRawMoves(board: string[][], row: number, col: number, piece: string,
         // Kingside castling
         const kingSideRight = isWhite ? castling.includes("K") : castling.includes("k");
         if (kingSideRight && !board[baseRow][5] && !board[baseRow][6] &&
-            !isSquareAttacked(board, baseRow, 4, enemyColor) &&
-            !isSquareAttacked(board, baseRow, 5, enemyColor) &&
-            !isSquareAttacked(board, baseRow, 6, enemyColor)) {
+          !isSquareAttacked(board, baseRow, 4, enemyColor) &&
+          !isSquareAttacked(board, baseRow, 5, enemyColor) &&
+          !isSquareAttacked(board, baseRow, 6, enemyColor)) {
           moves.push(coordsToSquare(baseRow, 6));
         }
-        
+
         // Queenside castling
         const queenSideRight = isWhite ? castling.includes("Q") : castling.includes("q");
         if (queenSideRight && !board[baseRow][3] && !board[baseRow][2] && !board[baseRow][1] &&
-            !isSquareAttacked(board, baseRow, 4, enemyColor) &&
-            !isSquareAttacked(board, baseRow, 3, enemyColor) &&
-            !isSquareAttacked(board, baseRow, 2, enemyColor)) {
+          !isSquareAttacked(board, baseRow, 4, enemyColor) &&
+          !isSquareAttacked(board, baseRow, 3, enemyColor) &&
+          !isSquareAttacked(board, baseRow, 2, enemyColor)) {
           moves.push(coordsToSquare(baseRow, 2));
         }
       }
@@ -285,11 +292,35 @@ function getRawMoves(board: string[][], row: number, col: number, piece: string,
 function getValidMoves(board: string[][], row: number, col: number, piece: string, castling: string, enPassant: string): string[] {
   const raw = getRawMoves(board, row, col, piece, castling, enPassant);
   const color = getPieceColor(piece)!;
-  
+
   // Filter out moves that leave own king in check
   return raw.filter(moveSquare => {
     const [toRow, toCol] = squareToCoords(moveSquare);
     return !wouldLeaveInCheck(board, row, col, toRow, toCol, color);
+  });
+}
+
+function parseAuthoritativeMoves(input: unknown): AuthoritativeMove[] {
+  if (!Array.isArray(input)) return [];
+
+  return input.flatMap((entry) => {
+    if (typeof entry === "string") {
+      const text = entry.trim().toLowerCase();
+      if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(text)) return [];
+      return [{ from: text.slice(0, 2), to: text.slice(2, 4), promotion: text.slice(4) || undefined }];
+    }
+
+    if (entry && typeof entry === "object") {
+      const maybeMove = entry as { from?: unknown; to?: unknown; promotion?: unknown };
+      if (typeof maybeMove.from !== "string" || typeof maybeMove.to !== "string") return [];
+      const from = maybeMove.from.toLowerCase();
+      const to = maybeMove.to.toLowerCase();
+      if (!/^[a-h][1-8]$/.test(from) || !/^[a-h][1-8]$/.test(to)) return [];
+      const promotion = typeof maybeMove.promotion === "string" ? maybeMove.promotion.toLowerCase() : undefined;
+      return [{ from, to, promotion }];
+    }
+
+    return [];
   });
 }
 
@@ -299,6 +330,7 @@ export function ChessBoard({
   myColor,
   isMyTurn,
   isSpectator,
+  authoritativeValidMoves,
   onMove,
   status,
 }: ChessBoardProps) {
@@ -327,6 +359,10 @@ export function ChessBoard({
   const board = fenData.board;
   const castling = fenData.castling;
   const enPassant = fenData.enPassant;
+  const authoritativeMoves = useMemo(
+    () => parseAuthoritativeMoves(authoritativeValidMoves),
+    [authoritativeValidMoves]
+  );
 
   // Trigger slide animation when lastMove changes (local move)
   useEffect(() => {
@@ -421,12 +457,19 @@ export function ChessBoard({
     const piece = board[actualRow][actualCol];
 
     if (selectedSquare) {
-      if (validMoves.includes(square)) {
+      const selectedAuthMoves = authoritativeMoves.filter(m => m.from === selectedSquare);
+      const hasAuthoritativeMoves = selectedAuthMoves.length > 0;
+      const destinationAllowedByAuthority = selectedAuthMoves.some(m => m.to === square);
+
+      if (validMoves.includes(square) && (!hasAuthoritativeMoves || destinationAllowedByAuthority)) {
         const fromPiece = board[squareToCoords(selectedSquare)[0]][squareToCoords(selectedSquare)[1]];
         const isPawn = fromPiece.toUpperCase() === "P";
-        const isPromotion = isPawn && (actualRow === 0 || actualRow === 7);
+        const isPromotionRank = isPawn && (actualRow === 0 || actualRow === 7);
+        const requiresPromotion = hasAuthoritativeMoves
+          ? selectedAuthMoves.some(m => m.to === square && !!m.promotion)
+          : isPromotionRank;
 
-        if (isPromotion) {
+        if (requiresPromotion) {
           setShowPromotion({ from: selectedSquare, to: square });
         } else {
           const move: ChessMove = {
@@ -442,7 +485,10 @@ export function ChessBoard({
         setValidMoves([]);
       } else if (piece && getPieceColor(piece) === myColor) {
         setSelectedSquare(square);
-        setValidMoves(getValidMoves(board, actualRow, actualCol, piece, castling, enPassant));
+        const squareAuthoritativeMoves = authoritativeMoves.filter(m => m.from === square).map(m => m.to);
+        setValidMoves(squareAuthoritativeMoves.length > 0
+          ? Array.from(new Set(squareAuthoritativeMoves))
+          : getValidMoves(board, actualRow, actualCol, piece, castling, enPassant));
       } else {
         setSelectedSquare(null);
         setValidMoves([]);
@@ -450,10 +496,13 @@ export function ChessBoard({
     } else {
       if (piece && getPieceColor(piece) === myColor) {
         setSelectedSquare(square);
-        setValidMoves(getValidMoves(board, actualRow, actualCol, piece, castling, enPassant));
+        const squareAuthoritativeMoves = authoritativeMoves.filter(m => m.from === square).map(m => m.to);
+        setValidMoves(squareAuthoritativeMoves.length > 0
+          ? Array.from(new Set(squareAuthoritativeMoves))
+          : getValidMoves(board, actualRow, actualCol, piece, castling, enPassant));
       }
     }
-  }, [selectedSquare, validMoves, board, myColor, isMyTurn, isSpectator, onMove, status, castling, enPassant]);
+  }, [selectedSquare, validMoves, board, myColor, isMyTurn, isSpectator, onMove, status, castling, enPassant, authoritativeMoves]);
 
   const handlePromotion = (promotionPiece: string) => {
     if (!showPromotion) return;
@@ -467,7 +516,7 @@ export function ChessBoard({
       to: showPromotion.to,
       piece: "P",
       captured: capturedPiece || undefined,
-      promotion: promotionPiece,
+      promotion: promotionPiece.toLowerCase(),
     };
     onMove(move);
     setLastMove({ from: showPromotion.from, to: showPromotion.to });
@@ -478,18 +527,18 @@ export function ChessBoard({
     const actualRow = myColor === "black" ? 7 - row : row;
     const actualCol = myColor === "black" ? 7 - col : col;
     const square = coordsToSquare(actualRow, actualCol);
-    
+
     const isLight = (row + col) % 2 === 0;
-    let className = isLight ? "bg-amber-100 dark:bg-amber-200" : "bg-amber-700 dark:bg-amber-800";
+    let className = isLight ? "chess-square chess-square-light" : "chess-square chess-square-dark";
 
     if (selectedSquare === square) {
-      className = "bg-yellow-400 dark:bg-yellow-500";
+      className = "chess-square chess-square-selected";
     } else if (kingInCheck === square) {
-      className = "bg-red-500 dark:bg-red-600";
+      className = "chess-square chess-square-check";
     } else if (validMoves.includes(square)) {
-      className = isLight ? "bg-green-200 dark:bg-green-300" : "bg-green-600 dark:bg-green-700";
+      className = isLight ? "chess-square chess-square-valid-light" : "chess-square chess-square-valid-dark";
     } else if (lastMove && (lastMove.from === square || lastMove.to === square)) {
-      className = isLight ? "bg-yellow-200 dark:bg-yellow-300" : "bg-yellow-600 dark:bg-yellow-700";
+      className = isLight ? "chess-square chess-square-last-light" : "chess-square chess-square-last-dark";
     }
 
     return className;
@@ -505,18 +554,18 @@ export function ChessBoard({
       {bottomCaptures.length > 0 && (
         <div className="flex items-center gap-0.5 mb-1 min-h-[1.25rem]">
           {bottomCaptures.map((p, i) => (
-            <span key={i} className="text-sm sm:text-base opacity-70">{PIECE_SYMBOLS[p]}</span>
+            <span key={i} className="chess-piece-captured">{PIECE_SYMBOLS[p]}</span>
           ))}
         </div>
       )}
-      <div className="grid grid-cols-8 border-2 border-amber-900 rounded-lg overflow-hidden shadow-lg">
+      <div className="grid grid-cols-8 border-2 rounded-lg overflow-hidden shadow-lg chess-board-frame">
         {flippedBoard.map((rowPieces, row) => (
           rowPieces.map((piece, col) => {
             const actualRow = myColor === "black" ? 7 - row : row;
             const actualCol = myColor === "black" ? 7 - col : col;
             const square = coordsToSquare(actualRow, actualCol);
             const isValidMove = validMoves.includes(square);
-            
+
             return (
               <div
                 key={`${row}-${col}`}
@@ -530,10 +579,10 @@ export function ChessBoard({
                 data-testid={`chess-square-${square}`}
               >
                 {piece && (
-                  <span 
+                  <span
                     className={cn(
-                      "text-2xl sm:text-3xl md:text-4xl select-none",
-                      isWhitePiece(piece) ? "text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" : "text-gray-900",
+                      "text-2xl sm:text-3xl md:text-4xl select-none chess-piece",
+                      isWhitePiece(piece) ? "chess-piece-white" : "chess-piece-black",
                       animSquare === square && "animate-chess-move"
                     )}
                     style={animSquare === square ? {
@@ -570,7 +619,7 @@ export function ChessBoard({
       {topCaptures.length > 0 && (
         <div className="flex items-center gap-0.5 mt-1 min-h-[1.25rem]">
           {topCaptures.map((p, i) => (
-            <span key={i} className="text-sm sm:text-base opacity-70">{PIECE_SYMBOLS[p]}</span>
+            <span key={i} className="chess-piece-captured">{PIECE_SYMBOLS[p]}</span>
           ))}
         </div>
       )}
@@ -584,7 +633,7 @@ export function ChessBoard({
                 <button
                   key={p}
                   onClick={() => handlePromotion(p)}
-                  className="w-14 h-14 bg-amber-100 hover:bg-amber-200 rounded-lg flex items-center justify-center text-3xl"
+                  className="w-14 h-14 rounded-lg flex items-center justify-center text-3xl chess-promotion-btn"
                   data-testid={`promotion-${p}`}
                 >
                   {PIECE_SYMBOLS[myColor === "white" ? p : p.toLowerCase()]}

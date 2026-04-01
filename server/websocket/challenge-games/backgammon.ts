@@ -44,17 +44,20 @@ export async function handleRollDice(ws: AuthenticatedSocket, data: any): Promis
         throw new Error(rollResult.error || "Cannot roll now");
       }
 
-      await tx.update(challengeGameSessions)
+      const [updatedSession] = await tx.update(challengeGameSessions)
         .set({
           gameState: rollResult.newState,
+          totalMoves: (session.totalMoves || 0) + 1,
           updatedAt: new Date(),
         })
-        .where(eq(challengeGameSessions.id, session.id));
+        .where(eq(challengeGameSessions.id, session.id))
+        .returning();
 
-      return { newState: rollResult.newState, engine: bgEngine };
+      return { newState: rollResult.newState, engine: bgEngine, updatedSession };
     });
 
     const gameState = JSON.parse(result.newState);
+    const seq = typeof result.updatedSession?.totalMoves === "number" ? result.updatedSession.totalMoves : 0;
 
     // Player views
     for (const [playerId, socket] of room.players) {
@@ -64,6 +67,7 @@ export async function handleRollDice(ws: AuthenticatedSocket, data: any): Promis
           dice: gameState.dice,
           playerId: ws.userId,
           view: result.engine.getPlayerView(result.newState, playerId),
+          seq,
         }));
       }
     }
@@ -74,6 +78,7 @@ export async function handleRollDice(ws: AuthenticatedSocket, data: any): Promis
           dice: gameState.dice,
           playerId: ws.userId,
           view: result.engine.getPlayerView(result.newState, 'spectator'),
+          seq,
         }));
       }
     }
@@ -118,16 +123,20 @@ export async function handleEndTurn(ws: AuthenticatedSocket, data: any): Promise
       const newState = JSON.parse(endTurnResult.newState);
       const nextTurn = newState.currentTurn === 'white' ? challenge.player1Id : challenge.player2Id;
 
-      await tx.update(challengeGameSessions)
+      const [updatedSession] = await tx.update(challengeGameSessions)
         .set({
           gameState: endTurnResult.newState,
           currentTurn: nextTurn,
+          totalMoves: (session.totalMoves || 0) + 1,
           updatedAt: new Date(),
         })
-        .where(eq(challengeGameSessions.id, session.id));
+        .where(eq(challengeGameSessions.id, session.id))
+        .returning();
 
-      return { newState: endTurnResult.newState, nextTurn, engine: bgEngine };
+      return { newState: endTurnResult.newState, nextTurn, engine: bgEngine, updatedSession };
     });
+
+    const seq = typeof result.updatedSession?.totalMoves === "number" ? result.updatedSession.totalMoves : 0;
 
     for (const [playerId, socket] of room.players) {
       if (socket.readyState === WebSocket.OPEN) {
@@ -135,6 +144,7 @@ export async function handleEndTurn(ws: AuthenticatedSocket, data: any): Promise
           type: "turn_ended",
           view: result.engine.getPlayerView(result.newState, playerId),
           nextPlayer: result.nextTurn,
+          seq,
         }));
       }
     }
@@ -144,6 +154,7 @@ export async function handleEndTurn(ws: AuthenticatedSocket, data: any): Promise
           type: "turn_ended",
           view: result.engine.getPlayerView(result.newState, 'spectator'),
           nextPlayer: result.nextTurn,
+          seq,
         }));
       }
     }

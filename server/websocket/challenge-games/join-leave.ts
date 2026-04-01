@@ -129,9 +129,10 @@ export async function handleJoinChallengeGame(ws: AuthenticatedSocket, data: any
   // Send current game state — SECURITY: Use getPlayerView() to prevent leaking cards/hidden state
   const sendFilteredState = (stateSource: any) => {
     if (!stateSource) return;
+    const seq = typeof stateSource.totalMoves === "number" ? stateSource.totalMoves : 0;
     const rawState = stateSource.gameState;
     if (!rawState) {
-      ws.send(JSON.stringify({ type: "game_state_sync", session: stateSource }));
+      ws.send(JSON.stringify({ type: "game_state_sync", session: stateSource, seq }));
       return;
     }
 
@@ -154,6 +155,7 @@ export async function handleJoinChallengeGame(ws: AuthenticatedSocket, data: any
         type: "game_state_sync",
         session: { ...stateSource, gameState: undefined },
         view,
+        seq,
       }));
     } catch {
       ws.send(JSON.stringify({
