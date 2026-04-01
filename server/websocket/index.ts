@@ -107,6 +107,9 @@ export function setupWebSocket(server: Server) {
     });
 
     ws.on("close", () => {
+      ws.activeChallengeId = undefined;
+      ws.activeChallengeRole = undefined;
+
       if (ws.userId && clients.has(ws.userId)) {
         clients.get(ws.userId)!.delete(ws);
         if (clients.get(ws.userId)!.size === 0) {

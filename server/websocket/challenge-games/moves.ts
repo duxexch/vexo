@@ -8,17 +8,16 @@ import { isChallengeSessionPlayableStatus, normalizeChallengeGameState } from ".
 import { sendNotification } from "../notifications";
 import { logger } from "../../lib/logger";
 import { getErrorMessage, type AuthenticatedSocket } from "../shared";
-import { challengeGameRooms } from "../shared";
+import { requireChallengePlayer } from "./guards";
 
 /** Handle game_move message — process a move with DB transaction and payout settlement */
 export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId, move } = data;
-  const room = challengeGameRooms.get(challengeId);
-
-  if (!room || !room.players.has(ws.userId!)) {
-    ws.send(JSON.stringify({ type: "challenge_error", error: "Not a player in this game" }));
+  const guard = requireChallengePlayer(ws, challengeId);
+  if (!guard.ok) {
     return;
   }
+  const { room } = guard;
 
   try {
     // Use DB transaction with row lock for atomic move processing

@@ -43,25 +43,27 @@ export async function handleJoinChallengeGame(ws: AuthenticatedSocket, data: any
   if (!isActualPlayer) {
     // SECURITY: Block spectators from private challenges unless they're the invited friend
     if (challenge.visibility === 'private' && ws.userId !== challenge.friendAccountId) {
-      ws.send(JSON.stringify({ type: "challenge_error", error: "This is a private challenge" }));
+      ws.send(JSON.stringify({ type: "challenge_error", error: "This is a private challenge", code: "private_challenge_forbidden" }));
       return;
     }
 
     // SECURITY: Check if spectators are allowed for this game type
     const challengeConfig = await storage.getChallengeSettings(normalizedGameType);
     if (!challengeConfig.allowSpectators) {
-      ws.send(JSON.stringify({ type: "challenge_error", error: "Spectators are not allowed for this game" }));
+      ws.send(JSON.stringify({ type: "challenge_error", error: "Spectators are not allowed for this game", code: "spectators_disabled" }));
       return;
     }
 
     // SECURITY: Check max spectator limit
     if (room.spectators.size >= challengeConfig.maxSpectators) {
-      ws.send(JSON.stringify({ type: "challenge_error", error: "Spectator limit reached" }));
+      ws.send(JSON.stringify({ type: "challenge_error", error: "Spectator limit reached", code: "spectator_limit_reached" }));
       return;
     }
 
     // User is NOT a player - they are a spectator
     room.spectators.set(ws.userId!, ws);
+    ws.activeChallengeId = challengeId;
+    ws.activeChallengeRole = "spectator";
 
     try {
       await db.insert(challengeSpectators)
@@ -109,6 +111,8 @@ export async function handleJoinChallengeGame(ws: AuthenticatedSocket, data: any
       existingSocket.close(4001, 'Replaced by new connection');
     }
     room.players.set(ws.userId!, ws);
+    ws.activeChallengeId = challengeId;
+    ws.activeChallengeRole = "player";
 
     // Tell the client they joined as player
     ws.send(JSON.stringify({ type: "role_assigned", role: "player", playerId: ws.userId }));
@@ -221,5 +225,10 @@ export async function handleLeaveChallengeGame(ws: AuthenticatedSocket, data: an
     if (room.players.size === 0 && room.spectators.size === 0) {
       challengeGameRooms.delete(challengeId);
     }
+  }
+
+  if (ws.activeChallengeId === challengeId) {
+    ws.activeChallengeId = undefined;
+    ws.activeChallengeRole = undefined;
   }
 }

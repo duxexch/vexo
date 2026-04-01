@@ -41,6 +41,8 @@ interface RegisterData {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const USER_CACHE_KEY = "pwm_user_cache";
+const TOKEN_STORAGE_KEY = "pwm_token";
+const TOKEN_BACKUP_KEY = "pwm_token_backup";
 const CACHE_TTL = 60 * 1000;
 
 interface CachedUser {
@@ -82,8 +84,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem("pwm_token");
+    const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY) || sessionStorage.getItem(TOKEN_BACKUP_KEY);
     if (savedToken) {
+      if (!localStorage.getItem(TOKEN_STORAGE_KEY)) {
+        localStorage.setItem(TOKEN_STORAGE_KEY, savedToken);
+      }
+      sessionStorage.setItem(TOKEN_BACKUP_KEY, savedToken);
       setToken(savedToken);
 
       const cached = getCachedUser();
@@ -116,18 +122,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const userData = await res.json();
         const etag = res.headers.get("ETag");
         setUser(userData);
+        setToken(authToken);
+        localStorage.setItem(TOKEN_STORAGE_KEY, authToken);
+        sessionStorage.setItem(TOKEN_BACKUP_KEY, authToken);
         if (etag && etag.length > 0) {
           setCachedUser(userData, etag);
         }
       } else {
-        localStorage.removeItem("pwm_token");
-        clearUserCache();
-        setToken(null);
+        // Only revoke local session on definitive auth failures.
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem(TOKEN_STORAGE_KEY);
+          sessionStorage.removeItem(TOKEN_BACKUP_KEY);
+          clearUserCache();
+          setToken(null);
+          setUser(null);
+        }
       }
     } catch {
-      localStorage.removeItem("pwm_token");
-      clearUserCache();
-      setToken(null);
+      // Keep user/token on transient network/backend errors to avoid forced logout.
     } finally {
       setIsLoading(false);
     }
@@ -151,7 +163,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     setUser(data.user);
     setToken(data.token);
-    localStorage.setItem("pwm_token", data.token);
+    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+    sessionStorage.setItem(TOKEN_BACKUP_KEY, data.token);
     clearUserCache();
   };
 
@@ -174,7 +187,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     setUser(data.user);
     setToken(data.token);
-    localStorage.setItem("pwm_token", data.token);
+    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+    sessionStorage.setItem(TOKEN_BACKUP_KEY, data.token);
     clearUserCache();
   };
 
@@ -197,7 +211,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     setUser(data.user);
     setToken(data.token);
-    localStorage.setItem("pwm_token", data.token);
+    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+    sessionStorage.setItem(TOKEN_BACKUP_KEY, data.token);
     clearUserCache();
   };
 
@@ -220,7 +235,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     setUser(data.user);
     setToken(data.token);
-    localStorage.setItem("pwm_token", data.token);
+    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+    sessionStorage.setItem(TOKEN_BACKUP_KEY, data.token);
     clearUserCache();
   };
 
@@ -243,7 +259,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const confirmOneClickLogin = (userData: User, authToken: string) => {
     setUser(userData);
     setToken(authToken);
-    localStorage.setItem("pwm_token", authToken);
+    localStorage.setItem(TOKEN_STORAGE_KEY, authToken);
+    sessionStorage.setItem(TOKEN_BACKUP_KEY, authToken);
   };
 
   const register = async (data: RegisterData) => {
@@ -261,7 +278,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const result = await res.json();
     setUser(result.user);
     setToken(result.token);
-    localStorage.setItem("pwm_token", result.token);
+    localStorage.setItem(TOKEN_STORAGE_KEY, result.token);
+    sessionStorage.setItem(TOKEN_BACKUP_KEY, result.token);
   };
 
   const logout = () => {
@@ -276,7 +294,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setUser(null);
     setToken(null);
-    localStorage.removeItem("pwm_token");
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    sessionStorage.removeItem(TOKEN_BACKUP_KEY);
     clearUserCache();
   };
 
@@ -286,8 +305,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshUser = async () => {
-    const savedToken = localStorage.getItem("pwm_token");
+    const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY) || sessionStorage.getItem(TOKEN_BACKUP_KEY);
     if (savedToken) {
+      if (!localStorage.getItem(TOKEN_STORAGE_KEY)) {
+        localStorage.setItem(TOKEN_STORAGE_KEY, savedToken);
+      }
+      sessionStorage.setItem(TOKEN_BACKUP_KEY, savedToken);
       await fetchUser(savedToken);
     }
   };

@@ -110,6 +110,8 @@ interface GiftInfo {
 interface ChallengeWSMessage {
   type: string;
   role?: "player" | "spectator";
+  error?: string;
+  code?: string;
   session?: GameSession;
   view?: Record<string, unknown>;
   message?: Record<string, unknown>;
@@ -154,7 +156,7 @@ export default function ChallengeGamePage() {
   const [, params] = useRoute("/challenge/:id/play");
   const [, setLocation] = useLocation();
   const { t, language } = useI18n();
-  const { user } = useAuth();
+  const { user, token: authToken } = useAuth();
   const { toast } = useToast();
   const challengeId = params?.id;
 
@@ -211,14 +213,10 @@ export default function ChallengeGamePage() {
 
   const challengeErrorStatus = parseHttpStatus(challengeError ?? null);
 
-  const isPlayer = serverRole === "player" || (serverRole === null && user && (
-    challenge?.player1Id === user.id ||
-    challenge?.player2Id === user.id ||
-    challenge?.player3Id === user.id ||
-    challenge?.player4Id === user.id
-  ));
-  const isSpectator = serverRole === "spectator" || (serverRole === null && !isPlayer);
-  const canPlayActions = Boolean(isPlayer && !isSpectator);
+  const isPlayer = serverRole === "player";
+  const isSpectator = serverRole === "spectator";
+  // Do not allow gameplay actions until the server explicitly assigns role.
+  const canPlayActions = serverRole === "player";
   const myColor = challenge?.player1Id === user?.id ? "white" : "black";
 
   const showSpectatorActionBlocked = useCallback(() => {
@@ -288,12 +286,21 @@ export default function ChallengeGamePage() {
     if (!challengeId || !user) return;
 
     const connect = () => {
-      const token = localStorage.getItem("pwm_token");
+      const existingSocket = wsRef.current;
+      if (existingSocket && (
+        existingSocket.readyState === WebSocket.OPEN
+        || existingSocket.readyState === WebSocket.CONNECTING
+      )) {
+        return;
+      }
+
+      const token = authToken || localStorage.getItem("pwm_token") || sessionStorage.getItem("pwm_token_backup");
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (wsRef.current !== ws) return;
         setWsConnState("connected");
         reconnectAttemptRef.current = 0;
         authReadyRef.current = false;
@@ -304,6 +311,7 @@ export default function ChallengeGamePage() {
       };
 
       ws.onmessage = (event) => {
+        if (wsRef.current !== ws) return;
         try {
           const data = JSON.parse(event.data) as ChallengeWSMessage;
 
@@ -320,14 +328,30 @@ export default function ChallengeGamePage() {
               ? data.error
               : (language === "ar" ? "فشل توثيق الجلسة" : "Session authentication failed");
             showWsErrorToast(description, "auth_error");
+            authReadyRef.current = false;
+            pendingJoinRef.current = true;
+            setServerRole(null);
+
+            if (token) {
+              setWsConnState("reconnecting");
+              if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                ws.close();
+              }
+              return;
+            }
+
             setWsConnState("disconnected");
-            setLocation("/login");
+            setTimeout(() => setLocation("/login"), 500);
             return;
           }
 
-          if (data.type === "challenge_error" && data.code === "auth_required" && authReadyRef.current) {
-            requestRoleAssignment(ws);
-            return;
+          if (data.type === "challenge_error" && authReadyRef.current) {
+            const code = typeof data.code === "string" ? data.code : "";
+            if (code === "auth_required" || code === "rejoin_required" || code === "room_not_ready") {
+              pendingJoinRef.current = true;
+              requestRoleAssignment(ws);
+              return;
+            }
           }
 
           handleWebSocketMessage(data);
@@ -337,6 +361,8 @@ export default function ChallengeGamePage() {
       };
 
       ws.onclose = (event) => {
+        if (wsRef.current !== ws) return;
+        wsRef.current = null;
         setServerRole(null);
         authReadyRef.current = false;
         pendingJoinRef.current = false;
@@ -346,6 +372,9 @@ export default function ChallengeGamePage() {
         const attempt = reconnectAttemptRef.current++;
         const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
         setWsConnState("reconnecting");
+        if (reconnectTimerRef.current) {
+          clearTimeout(reconnectTimerRef.current);
+        }
         reconnectTimerRef.current = setTimeout(connect, delay);
       };
 
@@ -361,13 +390,18 @@ export default function ChallengeGamePage() {
       authReadyRef.current = false;
       pendingJoinRef.current = false;
       clearRoleAssignmentTimer();
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "leave_challenge_game", challengeId }));
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
       }
-      wsRef.current?.close();
+      const activeSocket = wsRef.current;
+      if (activeSocket?.readyState === WebSocket.OPEN) {
+        activeSocket.send(JSON.stringify({ type: "leave_challenge_game", challengeId }));
+      }
+      activeSocket?.close();
+      wsRef.current = null;
     };
-  }, [challengeId, user, clearRoleAssignmentTimer, language, requestRoleAssignment, setLocation, showWsErrorToast, t]);
+  }, [authToken, challengeId, user, clearRoleAssignmentTimer, language, requestRoleAssignment, setLocation, showWsErrorToast, t]);
 
   // Live countdown timer — ticks every second when game is playing
   useEffect(() => { setSoundMuted(isMuted); }, [isMuted, setSoundMuted]);
@@ -680,7 +714,7 @@ export default function ChallengeGamePage() {
     );
   }
 
-  if (serverRole === null && wsRef.current?.readyState === WebSocket.OPEN) {
+  if (serverRole === null && wsConnState === "connecting") {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

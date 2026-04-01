@@ -20,6 +20,8 @@ export interface AuthenticatedSocket extends WebSocket {
   userAgent?: string;
   tokenFingerprint?: string;
   isAlive?: boolean;
+  activeChallengeId?: string;
+  activeChallengeRole?: "player" | "spectator";
 }
 
 export interface GameRoomState {

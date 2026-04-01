@@ -5,17 +5,16 @@ import { eq, desc } from "drizzle-orm";
 import { getGameEngine } from "../../game-engines";
 import { isChallengeSessionPlayableStatus, normalizeChallengeGameState } from "../../lib/challenge-game-state";
 import { getErrorMessage, type AuthenticatedSocket } from "../shared";
-import { challengeGameRooms } from "../shared";
+import { requireChallengePlayer } from "./guards";
 
 /** Handle roll_dice message — backgammon dice roll */
 export async function handleRollDice(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId } = data;
-  const room = challengeGameRooms.get(challengeId);
-
-  if (!room || !room.players.has(ws.userId!)) {
-    ws.send(JSON.stringify({ type: "challenge_error", error: "Not a player in this game" }));
+  const guard = requireChallengePlayer(ws, challengeId);
+  if (!guard.ok) {
     return;
   }
+  const { room } = guard;
 
   try {
     const result = await db.transaction(async (tx) => {
@@ -86,9 +85,9 @@ export async function handleRollDice(ws: AuthenticatedSocket, data: any): Promis
 /** Handle end_turn message — backgammon end turn */
 export async function handleEndTurn(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId } = data;
-  const room = challengeGameRooms.get(challengeId);
-
-  if (!room || !room.players.has(ws.userId!)) return;
+  const guard = requireChallengePlayer(ws, challengeId);
+  if (!guard.ok) return;
+  const { room } = guard;
 
   try {
     const result = await db.transaction(async (tx) => {

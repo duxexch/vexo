@@ -8,16 +8,16 @@ import { sendNotification } from "../notifications";
 import { logger } from "../../lib/logger";
 import type { AuthenticatedSocket } from "../shared";
 import { challengeGameRooms } from "../shared";
+import { requireChallengePlayer } from "./guards";
 
 /** Handle game_resign message — resign with payout settlement */
 export async function handleGameResign(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId } = data;
-  const room = challengeGameRooms.get(challengeId);
-
-  if (!room || !room.players.has(ws.userId!)) {
-    ws.send(JSON.stringify({ type: "challenge_error", error: "Not a player" }));
+  const guard = requireChallengePlayer(ws, challengeId);
+  if (!guard.ok) {
     return;
   }
+  const { room } = guard;
 
   try {
     const result = await db.transaction(async (tx) => {
@@ -158,11 +158,11 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
 /** Handle offer_draw message */
 export async function handleOfferDraw(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId } = data;
-  const room = challengeGameRooms.get(challengeId);
-  if (!room || !room.players.has(ws.userId!)) {
-    ws.send(JSON.stringify({ type: "challenge_error", error: "Spectators cannot offer draw" }));
+  const guard = requireChallengePlayer(ws, challengeId);
+  if (!guard.ok) {
     return;
   }
+  const { room } = guard;
 
   // Send to all other players
   room.players.forEach((socket, playerId) => {
@@ -178,11 +178,11 @@ export async function handleOfferDraw(ws: AuthenticatedSocket, data: any): Promi
 /** Handle respond_draw message */
 export async function handleRespondDraw(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId, accept } = data;
-  const room = challengeGameRooms.get(challengeId);
-  if (!room || !room.players.has(ws.userId!)) {
-    ws.send(JSON.stringify({ type: "challenge_error", error: "Spectators cannot respond to draw" }));
+  const guard = requireChallengePlayer(ws, challengeId);
+  if (!guard.ok) {
     return;
   }
+  const { room } = guard;
 
   if (accept) {
     try {
