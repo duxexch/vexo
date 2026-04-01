@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -693,7 +693,7 @@ export default function ChallengeGamePage() {
 
   const opponent = challenge.player1Id === user?.id ? challenge.player2 : challenge.player1;
 
-  const chessStatePayload = useMemo(() => {
+  const chessStatePayload = (() => {
     const sessionState = typeof gameSession?.gameState === "string" ? gameSession.gameState.trim() : "";
     if (sessionState.length > 0) {
       return sessionState;
@@ -705,7 +705,7 @@ export default function ChallengeGamePage() {
     }
 
     return JSON.stringify({ fen });
-  }, [gameSession?.gameState, playerView]);
+  })();
 
   // Compute live timer: server time minus elapsed seconds since last sync
   const elapsedSinceSyncSec = Math.floor((Date.now() - lastSyncRef.current) / 1000);
