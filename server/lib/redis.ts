@@ -50,6 +50,34 @@ export function getRedisSub(): Redis {
   return redisSub;
 }
 
+/**
+ * Gracefully close any Redis connections that were initialized in this process.
+ * Useful for standalone scripts/tests to avoid hanging Node handles.
+ */
+export async function closeRedisConnections(): Promise<void> {
+  const clients = [redisSub, redisPub, redis].filter(Boolean) as Redis[];
+
+  for (const client of clients) {
+    try {
+      if (client.status !== "end") {
+        await client.quit();
+      }
+    } catch {
+      try {
+        client.disconnect();
+      } catch {
+        // no-op: best-effort shutdown for script termination
+      }
+    }
+  }
+
+  redis = null;
+  redisPub = null;
+  redisSub = null;
+  subInitialized = false;
+  subscriptionHandlers.clear();
+}
+
 // ==================== PUB/SUB SYSTEM ====================
 
 type MessageHandler = (channel: string, message: string) => void;
@@ -91,7 +119,7 @@ export function unsubscribe(channel: string, handler: MessageHandler): void {
     handlers.delete(handler);
     if (handlers.size === 0) {
       subscriptionHandlers.delete(channel);
-      getRedisSub().unsubscribe(channel).catch(() => {});
+      getRedisSub().unsubscribe(channel).catch(() => { });
     }
   }
 }
@@ -276,14 +304,14 @@ export async function trackUserOnline(userId: string): Promise<void> {
   const client = getRedisClient();
   try {
     await client.zadd("online_users", Date.now(), userId);
-  } catch {}
+  } catch { }
 }
 
 export async function trackUserOffline(userId: string): Promise<void> {
   const client = getRedisClient();
   try {
     await client.zrem("online_users", userId);
-  } catch {}
+  } catch { }
 }
 
 export async function getOnlineUserCount(): Promise<number> {

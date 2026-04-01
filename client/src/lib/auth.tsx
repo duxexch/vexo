@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import type { User } from "@shared/schema";
+import { fetchWithCsrf } from "@/lib/csrf";
 
 interface OneClickResult {
   user: User;
@@ -57,7 +58,7 @@ function getCachedUser(): CachedUser | null {
         return parsed;
       }
     }
-  } catch {}
+  } catch { }
   return null;
 }
 
@@ -68,7 +69,7 @@ function setCachedUser(data: User, etag: string) {
       etag,
       cachedAt: Date.now()
     }));
-  } catch {}
+  } catch { }
 }
 
 function clearUserCache() {
@@ -84,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const savedToken = localStorage.getItem("pwm_token");
     if (savedToken) {
       setToken(savedToken);
-      
+
       const cached = getCachedUser();
       if (cached) {
         setUser(cached.data);
@@ -104,13 +105,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cachedEtag && cachedEtag.length > 0) {
         headers["If-None-Match"] = cachedEtag;
       }
-      
+
       const res = await fetch("/api/auth/me", { headers });
-      
+
       if (res.status === 304 && cachedEtag) {
         return;
       }
-      
+
       if (res.ok) {
         const userData = await res.json();
         const etag = res.headers.get("ETag");
@@ -133,12 +134,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (username: string, password: string) => {
-    const res = await fetch("/api/auth/login", {
+    const res = await fetchWithCsrf("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
-    
+
     if (!res.ok) {
       const errorData = await res.json();
       const err = new Error(errorData.error || "Login failed") as Error & { errorCode?: string; correctMethod?: string };
@@ -146,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       err.correctMethod = errorData.correctMethod;
       throw err;
     }
-    
+
     const data = await res.json();
     setUser(data.user);
     setToken(data.token);
@@ -155,12 +156,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginByAccount = async (accountId: string, password: string) => {
-    const res = await fetch("/api/auth/login-by-account", {
+    const res = await fetchWithCsrf("/api/auth/login-by-account", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ accountId, password }),
     });
-    
+
     if (!res.ok) {
       const errorData = await res.json();
       const err = Object.assign(new Error(errorData.error || "Login failed"), {
@@ -169,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       throw err;
     }
-    
+
     const data = await res.json();
     setUser(data.user);
     setToken(data.token);
@@ -178,12 +179,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginByPhone = async (phone: string, password: string) => {
-    const res = await fetch("/api/auth/login-by-phone", {
+    const res = await fetchWithCsrf("/api/auth/login-by-phone", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone, password }),
     });
-    
+
     if (!res.ok) {
       const errorData = await res.json();
       const err = Object.assign(new Error(errorData.error || "Login failed"), {
@@ -192,7 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       throw err;
     }
-    
+
     const data = await res.json();
     setUser(data.user);
     setToken(data.token);
@@ -201,12 +202,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const loginByEmail = async (email: string, password: string) => {
-    const res = await fetch("/api/auth/login-by-email", {
+    const res = await fetchWithCsrf("/api/auth/login-by-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-    
+
     if (!res.ok) {
       const errorData = await res.json();
       const err = Object.assign(new Error(errorData.error || "Login failed"), {
@@ -215,7 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       throw err;
     }
-    
+
     const data = await res.json();
     setUser(data.user);
     setToken(data.token);
@@ -224,17 +225,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const oneClickRegister = async (referralCode?: string): Promise<OneClickResult> => {
-    const res = await fetch("/api/auth/one-click-register", {
+    const res = await fetchWithCsrf("/api/auth/one-click-register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ referralCode: referralCode || undefined }),
     });
-    
+
     if (!res.ok) {
       const error = await res.json();
       throw new Error(error.error || "Registration failed");
     }
-    
+
     const data = await res.json();
     return data;
   };
@@ -246,17 +247,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (data: RegisterData) => {
-    const res = await fetch("/api/auth/register", {
+    const res = await fetchWithCsrf("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-    
+
     if (!res.ok) {
       const error = await res.json();
       throw new Error(error.error || "Registration failed");
     }
-    
+
     const result = await res.json();
     setUser(result.user);
     setToken(result.token);
@@ -264,6 +265,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    if (token) {
+      void fetchWithCsrf("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }).catch(() => { });
+    }
+
     setUser(null);
     setToken(null);
     localStorage.removeItem("pwm_token");
@@ -284,11 +294,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!token) return;
-    
+
     const interval = setInterval(() => {
       fetchUser(token);
     }, 30000);
-    
+
     return () => clearInterval(interval);
   }, [token]);
 

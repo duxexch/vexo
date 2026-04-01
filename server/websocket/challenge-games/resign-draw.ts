@@ -3,6 +3,7 @@ import { db } from "../../db";
 import { challengeGameSessions, challengeChatMessages, challenges } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 import { settleChallengePayout, settleDrawPayout } from "../../lib/payout";
+import { isChallengeSessionFinalStatus } from "../../lib/challenge-game-state";
 import { sendNotification } from "../notifications";
 import { logger } from "../../lib/logger";
 import type { AuthenticatedSocket } from "../shared";
@@ -55,10 +56,11 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
 
       const [session] = await tx.select().from(challengeGameSessions)
         .where(eq(challengeGameSessions.challengeId, challengeId))
+        .orderBy(desc(challengeGameSessions.createdAt))
         .limit(1)
         .for('update');
 
-      if (session?.status === "finished") {
+      if (session && isChallengeSessionFinalStatus(session.status)) {
         throw new Error("Game already finished");
       }
 
@@ -86,12 +88,16 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
 
     // CRITICAL: Settle payout on resignation
     if (result.winnerId) {
-      await settleChallengePayout(
+      const payoutResult = await settleChallengePayout(
         challengeId,
         result.winnerId,
         ws.userId!,
         result.gameType
       );
+
+      if (!payoutResult.success) {
+        throw new Error(payoutResult.error || "Payout settlement failed");
+      }
     }
 
     // Broadcast game ended
@@ -111,14 +117,14 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
     if (result.winnerId) {
       const winnerIds = result.winningTeam !== undefined
         ? (result.winningTeam === 0
-            ? [result.challenge.player1Id, result.challenge.player3Id]
-            : [result.challenge.player2Id, result.challenge.player4Id]).filter(Boolean) as string[]
+          ? [result.challenge.player1Id, result.challenge.player3Id]
+          : [result.challenge.player2Id, result.challenge.player4Id]).filter(Boolean) as string[]
         : [result.winnerId];
 
       const loserIds = result.winningTeam !== undefined
         ? (result.winningTeam === 0
-            ? [result.challenge.player2Id, result.challenge.player4Id]
-            : [result.challenge.player1Id, result.challenge.player3Id]).filter(Boolean) as string[]
+          ? [result.challenge.player2Id, result.challenge.player4Id]
+          : [result.challenge.player1Id, result.challenge.player3Id]).filter(Boolean) as string[]
         : [ws.userId!];
 
       winnerIds.forEach((winnerId) => {
@@ -191,10 +197,11 @@ export async function handleRespondDraw(ws: AuthenticatedSocket, data: any): Pro
 
         const [session] = await tx.select().from(challengeGameSessions)
           .where(eq(challengeGameSessions.challengeId, challengeId))
+          .orderBy(desc(challengeGameSessions.createdAt))
           .limit(1)
           .for('update');
 
-        if (session?.status === "finished") {
+        if (session && isChallengeSessionFinalStatus(session.status)) {
           throw new Error("Game already finished");
         }
 
@@ -219,7 +226,7 @@ export async function handleRespondDraw(ws: AuthenticatedSocket, data: any): Pro
       });
 
       // Settle draw payout (refund both players)
-      await settleDrawPayout(
+      const drawResult = await settleDrawPayout(
         challengeId,
         result.challenge.player1Id,
         result.challenge.player2Id || '',
@@ -227,6 +234,10 @@ export async function handleRespondDraw(ws: AuthenticatedSocket, data: any): Pro
         undefined,
         [result.challenge.player3Id, result.challenge.player4Id].filter(Boolean) as string[]
       );
+
+      if (!drawResult.success) {
+        throw new Error(drawResult.error || "Draw settlement failed");
+      }
 
       // Broadcast game ended as draw
       [...room.players.values(), ...room.spectators.values()].forEach((socket) => {
@@ -267,6 +278,7 @@ export async function handleRespondDraw(ws: AuthenticatedSocket, data: any): Pro
       }
     } catch (error: unknown) {
       logger.error('Draw accept error:', error);
+      ws.send(JSON.stringify({ type: "challenge_error", error: "Failed to process draw settlement" }));
     }
   } else {
     // Declined — notify other players

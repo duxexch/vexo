@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -174,6 +174,10 @@ export default function ChallengeGamePage() {
   const [wsConnState, setWsConnState] = useState<"connecting" | "connected" | "reconnecting" | "disconnected">("connecting");
 
   const wsRef = useRef<WebSocket | null>(null);
+  const authReadyRef = useRef(false);
+  const pendingJoinRef = useRef(false);
+  const roleAssignmentTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const serverRoleRef = useRef<"player" | "spectator" | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const lastSyncRef = useRef<number>(Date.now());
   const reconnectAttemptRef = useRef(0);
@@ -181,8 +185,8 @@ export default function ChallengeGamePage() {
   const intentionalCloseRef = useRef(false);
   const wsErrorToastRef = useRef<{ signature: string; at: number }>({ signature: "", at: 0 });
 
-  const { data: challenge, isLoading } = useQuery<Challenge>({
-    queryKey: ["/api/challenges", challengeId],
+  const { data: challenge, isLoading, isError: isChallengeError, error: challengeError } = useQuery<Challenge, Error>({
+    queryKey: [`/api/challenges/${challengeId}`],
     enabled: !!challengeId,
   });
 
@@ -193,9 +197,19 @@ export default function ChallengeGamePage() {
     surrenderLoserRefundPercent: string;
     withdrawPenaltyPercent: string;
   }>({
-    queryKey: ["/api/challenge-config", challenge?.gameType],
+    queryKey: [`/api/challenge-config/${challenge?.gameType || ""}`],
     enabled: !!challenge?.gameType,
   });
+
+  const parseHttpStatus = (error: Error | null): number | null => {
+    if (!error?.message) return null;
+    const match = error.message.match(/^(\d{3})\s*:/);
+    if (!match) return null;
+    const status = Number(match[1]);
+    return Number.isNaN(status) ? null : status;
+  };
+
+  const challengeErrorStatus = parseHttpStatus(challengeError ?? null);
 
   const isPlayer = serverRole === "player" || (serverRole === null && user && (
     challenge?.player1Id === user.id ||
@@ -236,6 +250,40 @@ export default function ChallengeGamePage() {
     });
   }, [t, toast]);
 
+  const clearRoleAssignmentTimer = useCallback(() => {
+    if (roleAssignmentTimerRef.current) {
+      clearTimeout(roleAssignmentTimerRef.current);
+      roleAssignmentTimerRef.current = null;
+    }
+  }, []);
+
+  const requestRoleAssignment = useCallback((socket: WebSocket) => {
+    if (!challengeId || socket.readyState !== WebSocket.OPEN) return;
+
+    socket.send(JSON.stringify({
+      type: "join_challenge_game",
+      challengeId,
+    }));
+    pendingJoinRef.current = false;
+
+    clearRoleAssignmentTimer();
+    roleAssignmentTimerRef.current = setTimeout(() => {
+      if (serverRoleRef.current === null && authReadyRef.current && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          type: "join_challenge_game",
+          challengeId,
+        }));
+      }
+    }, 2500);
+  }, [challengeId, clearRoleAssignmentTimer]);
+
+  useEffect(() => {
+    serverRoleRef.current = serverRole;
+    if (serverRole) {
+      clearRoleAssignmentTimer();
+    }
+  }, [serverRole, clearRoleAssignmentTimer]);
+
   useEffect(() => {
     if (!challengeId || !user) return;
 
@@ -248,16 +296,40 @@ export default function ChallengeGamePage() {
       ws.onopen = () => {
         setWsConnState("connected");
         reconnectAttemptRef.current = 0;
+        authReadyRef.current = false;
+        pendingJoinRef.current = true;
+        setServerRole(null);
+        clearRoleAssignmentTimer();
         ws.send(JSON.stringify({ type: "auth", token }));
-        ws.send(JSON.stringify({
-          type: "join_challenge_game",
-          challengeId
-        }));
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data) as ChallengeWSMessage;
+
+          if (data.type === "auth_success") {
+            authReadyRef.current = true;
+            if (pendingJoinRef.current) {
+              requestRoleAssignment(ws);
+            }
+            return;
+          }
+
+          if (data.type === "auth_error") {
+            const description = typeof data.error === "string"
+              ? data.error
+              : (language === "ar" ? "فشل توثيق الجلسة" : "Session authentication failed");
+            showWsErrorToast(description, "auth_error");
+            setWsConnState("disconnected");
+            setLocation("/login");
+            return;
+          }
+
+          if (data.type === "challenge_error" && data.code === "auth_required" && authReadyRef.current) {
+            requestRoleAssignment(ws);
+            return;
+          }
+
           handleWebSocketMessage(data);
         } catch {
           showWsErrorToast(t("common.retry"), "invalid_server_message");
@@ -266,6 +338,9 @@ export default function ChallengeGamePage() {
 
       ws.onclose = (event) => {
         setServerRole(null);
+        authReadyRef.current = false;
+        pendingJoinRef.current = false;
+        clearRoleAssignmentTimer();
         if (intentionalCloseRef.current || event.code === 4001) return;
         // Auto-reconnect with exponential backoff (max 10s)
         const attempt = reconnectAttemptRef.current++;
@@ -283,13 +358,16 @@ export default function ChallengeGamePage() {
 
     return () => {
       intentionalCloseRef.current = true;
+      authReadyRef.current = false;
+      pendingJoinRef.current = false;
+      clearRoleAssignmentTimer();
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "leave_challenge_game", challengeId }));
       }
       wsRef.current?.close();
     };
-  }, [challengeId, user]);
+  }, [challengeId, user, clearRoleAssignmentTimer, language, requestRoleAssignment, setLocation, showWsErrorToast, t]);
 
   // Live countdown timer — ticks every second when game is playing
   useEffect(() => { setSoundMuted(isMuted); }, [isMuted, setSoundMuted]);
@@ -319,6 +397,8 @@ export default function ChallengeGamePage() {
     switch (data.type) {
       case "role_assigned":
         setServerRole(data.role ?? null);
+        break;
+      case "joined_challenge_game":
         break;
       case "game_state_sync":
         lastSyncRef.current = Date.now();
@@ -537,6 +617,54 @@ export default function ChallengeGamePage() {
     );
   }
 
+  if (isChallengeError) {
+    const isUnauthorized = challengeErrorStatus === 401;
+    const isForbidden = challengeErrorStatus === 403;
+    const isNotFound = challengeErrorStatus === 404;
+    const isRateLimited = challengeErrorStatus === 429;
+
+    const title = isUnauthorized
+      ? (language === "ar" ? "تسجيل الدخول مطلوب" : "Login required")
+      : isForbidden
+        ? (language === "ar" ? "غير مصرح لك بالدخول لهذه المباراة" : "You are not authorized to access this match")
+        : isNotFound
+          ? (language === "ar" ? "التحدي غير موجود" : "Challenge not found")
+          : isRateLimited
+            ? (language === "ar" ? "تم تجاوز الحد المسموح من الطلبات" : "Too many requests")
+            : (language === "ar" ? "تعذر تحميل التحدي" : "Failed to load challenge");
+
+    const description = isUnauthorized
+      ? (language === "ar" ? "الجلسة مفقودة أو منتهية." : "Your session is missing or expired.")
+      : isForbidden
+        ? (language === "ar" ? "هذا التحدي غير متاح لهذا الحساب." : "This challenge is not available for this account.")
+        : isNotFound
+          ? (language === "ar" ? "قد يكون التحدي أُلغي أو انتهى." : "The challenge may have been cancelled or completed.")
+          : isRateLimited
+            ? (language === "ar" ? "يرجى الانتظار قليلًا ثم إعادة المحاولة." : "Please wait a moment and try again.")
+            : (challengeError?.message || (language === "ar" ? "حدث خطأ غير متوقع." : "An unexpected error occurred."));
+
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="pt-6 text-center space-y-4">
+            <p className="font-semibold">{title}</p>
+            <p className="text-sm text-muted-foreground">{description}</p>
+            <div className="flex items-center justify-center gap-2">
+              <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: [`/api/challenges/${challengeId}`] })}>
+                {language === "ar" ? "إعادة المحاولة" : "Retry"}
+              </Button>
+              <Button onClick={() => setLocation(isUnauthorized ? "/login" : "/challenges")}>
+                {isUnauthorized
+                  ? (language === "ar" ? "تسجيل الدخول" : "Go to Login")
+                  : (language === "ar" ? "العودة للتحديات" : "Back to Challenges")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!challenge) {
     return (
       <div className="p-6">
@@ -564,6 +692,20 @@ export default function ChallengeGamePage() {
   }
 
   const opponent = challenge.player1Id === user?.id ? challenge.player2 : challenge.player1;
+
+  const chessStatePayload = useMemo(() => {
+    const sessionState = typeof gameSession?.gameState === "string" ? gameSession.gameState.trim() : "";
+    if (sessionState.length > 0) {
+      return sessionState;
+    }
+
+    const fen = typeof playerView?.fen === "string" ? playerView.fen : "";
+    if (!fen) {
+      return undefined;
+    }
+
+    return JSON.stringify({ fen });
+  }, [gameSession?.gameState, playerView]);
 
   // Compute live timer: server time minus elapsed seconds since last sync
   const elapsedSinceSyncSec = Math.floor((Date.now() - lastSyncRef.current) / 1000);
@@ -691,10 +833,10 @@ export default function ChallengeGamePage() {
 
                 {challenge.gameType === "chess" && (
                   <ChessBoard
-                    gameState={(gameSession?.gameState as string) || (playerView?.board as string)}
+                    gameState={chessStatePayload}
                     currentTurn={gameSession?.currentTurn}
                     myColor={myColor}
-                    isMyTurn={gameSession?.currentTurn === user?.id}
+                    isMyTurn={canPlayActions && ((playerView?.isMyTurn as boolean) ?? (gameSession?.currentTurn === user?.id))}
                     isSpectator={isSpectator}
                     onMove={canPlayActions ? sendMove : () => { }}
                     status={gameSession?.status}

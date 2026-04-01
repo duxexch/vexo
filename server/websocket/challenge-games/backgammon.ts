@@ -3,6 +3,7 @@ import { db } from "../../db";
 import { challengeGameSessions, challenges } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 import { getGameEngine } from "../../game-engines";
+import { isChallengeSessionPlayableStatus, normalizeChallengeGameState } from "../../lib/challenge-game-state";
 import { getErrorMessage, type AuthenticatedSocket } from "../shared";
 import { challengeGameRooms } from "../shared";
 
@@ -24,7 +25,7 @@ export async function handleRollDice(ws: AuthenticatedSocket, data: any): Promis
         .limit(1)
         .for('update');
 
-      if (!session || session.status !== "playing" || session.gameType !== "backgammon") {
+      if (!session || !isChallengeSessionPlayableStatus(session.status) || String(session.gameType || "").toLowerCase() !== "backgammon") {
         throw new Error("Cannot roll dice now");
       }
 
@@ -32,7 +33,12 @@ export async function handleRollDice(ws: AuthenticatedSocket, data: any): Promis
       if (!bgEngine) throw new Error("Backgammon engine not available");
 
       const [challenge] = await tx.select().from(challenges).where(eq(challenges.id, challengeId));
-      let stateJson = session.gameState || bgEngine.initializeWithPlayers(challenge.player1Id, challenge.player2Id!);
+      if (!challenge) {
+        throw new Error("Challenge not found");
+      }
+
+      const normalizedState = normalizeChallengeGameState(session.gameState);
+      const stateJson = normalizedState || bgEngine.initializeWithPlayers(challenge.player1Id, challenge.player2Id!);
 
       const rollResult = bgEngine.applyMove(stateJson, ws.userId!, { type: 'roll' });
       if (!rollResult.success) {
@@ -88,17 +94,23 @@ export async function handleEndTurn(ws: AuthenticatedSocket, data: any): Promise
     const result = await db.transaction(async (tx) => {
       const [session] = await tx.select().from(challengeGameSessions)
         .where(eq(challengeGameSessions.challengeId, challengeId))
+        .orderBy(desc(challengeGameSessions.createdAt))
         .limit(1)
         .for('update');
 
-      if (!session || session.gameType !== "backgammon" || !session.gameState) {
+      if (!session || !isChallengeSessionPlayableStatus(session.status) || String(session.gameType || "").toLowerCase() !== "backgammon") {
         throw new Error("Cannot end turn");
       }
 
       const bgEngine = getGameEngine('backgammon');
       if (!bgEngine) throw new Error("Backgammon engine not available");
 
-      const endTurnResult = bgEngine.applyMove(session.gameState, ws.userId!, { type: 'end_turn' });
+      const normalizedState = normalizeChallengeGameState(session.gameState);
+      if (!normalizedState) {
+        throw new Error("Corrupted game state");
+      }
+
+      const endTurnResult = bgEngine.applyMove(normalizedState, ws.userId!, { type: 'end_turn' });
       if (!endTurnResult.success) {
         throw new Error(endTurnResult.error || "Cannot end turn");
       }

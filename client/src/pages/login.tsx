@@ -17,6 +17,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SupportChatIcon } from "@/components/support-chat-widget";
 import { LanguageSwitcher } from "@/lib/i18n";
+import { fetchWithCsrf } from "@/lib/csrf";
 
 interface AuthSettings {
   oneClickEnabled: boolean;
@@ -61,7 +62,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [authSettings, setAuthSettings] = useState<AuthSettings | null>(null);
   const [socialPlatforms, setSocialPlatforms] = useState<SocialPlatform[]>([]);
-  
+
   // Read referral code from URL (?ref=xxx)
   const referralCodeFromUrl = new URLSearchParams(window.location.search).get("ref") || "";
   const getEnabledTabs = () => {
@@ -73,7 +74,7 @@ export default function LoginPage() {
     if (authSettings.emailLoginEnabled !== false) tabs.push("email");
     return tabs;
   };
-  
+
   const enabledTabs = getEnabledTabs();
   const currentTab = activeTab && enabledTabs.includes(activeTab) ? activeTab : enabledTabs[0];
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
@@ -89,21 +90,21 @@ export default function LoginPage() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordStep, setForgotPasswordStep] = useState<"request" | "reset">("request");
   const [resetToken, setResetToken] = useState("");
-  
+
   const [accountLoginForm, setAccountLoginForm] = useState({ accountId: "", password: "" });
   const [phoneLoginForm, setPhoneLoginForm] = useState({ phone: "", password: "" });
   const [emailLoginForm, setEmailLoginForm] = useState({ username: "", password: "" });
   const [forgotPasswordForm, setForgotPasswordForm] = useState({ identifier: "", newPassword: "", confirmPassword: "" });
-  
+
   // Auto-registration state
   const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
   const [pendingRegistration, setPendingRegistration] = useState<{ identifier: string; type: "email" | "phone"; password: string } | null>(null);
   const [showAccountNotFoundModal, setShowAccountNotFoundModal] = useState(false);
-  
+
   // Smart redirect state - when user is on wrong tab
   const [showRedirectModal, setShowRedirectModal] = useState(false);
   const [redirectInfo, setRedirectInfo] = useState<{ correctMethod: string; maskedHint: string; password: string } | null>(null);
-  
+
   // Terms & privacy agreement state
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
@@ -111,20 +112,20 @@ export default function LoginPage() {
     fetch("/api/auth/settings")
       .then(res => res.json())
       .then(setAuthSettings)
-      .catch(() => {});
-    
+      .catch(() => { });
+
     fetch("/api/social-platforms")
       .then(res => res.json())
       .then(setSocialPlatforms)
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const checkTermsAgreed = () => {
     if (!agreedToTerms) {
       toast({
         title: dir === "rtl" ? "مطلوب" : "Required",
-        description: dir === "rtl" 
-          ? "يجب الموافقة على الشروط والأحكام وسياسة الخصوصية أولاً" 
+        description: dir === "rtl"
+          ? "يجب الموافقة على الشروط والأحكام وسياسة الخصوصية أولاً"
           : "You must agree to the Terms & Conditions and Privacy Policy first",
         variant: "destructive"
       });
@@ -161,20 +162,20 @@ export default function LoginPage() {
       const err = error as Error & { errorCode?: string; correctMethod?: string };
       // Handle WRONG_LOGIN_METHOD - auto redirect to correct tab
       if (err.errorCode === "WRONG_LOGIN_METHOD" && err.correctMethod) {
-        setRedirectInfo({ 
-          correctMethod: err.correctMethod, 
+        setRedirectInfo({
+          correctMethod: err.correctMethod,
           maskedHint: "",
-          password: accountLoginForm.password 
+          password: accountLoginForm.password
         });
         setShowRedirectModal(true);
         setIsLoading(false);
         return;
       }
-      
+
       // Handle ACCOUNT_NOT_FOUND - use find-credential to search everywhere
       if (err.errorCode === "ACCOUNT_NOT_FOUND" && accountLoginForm.accountId) {
         try {
-          const findRes = await fetch("/api/auth/find-credential", {
+          const findRes = await fetchWithCsrf("/api/auth/find-credential", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ identifier: accountLoginForm.accountId }),
@@ -182,22 +183,22 @@ export default function LoginPage() {
           const findData = await findRes.json();
           if (findRes.ok && findData.found) {
             // User exists but registered via different method
-            setRedirectInfo({ 
-              correctMethod: findData.correctMethod, 
+            setRedirectInfo({
+              correctMethod: findData.correctMethod,
               maskedHint: findData.maskedHint || "",
-              password: accountLoginForm.password 
+              password: accountLoginForm.password
             });
             setShowRedirectModal(true);
             setIsLoading(false);
             return;
           }
-        } catch {}
+        } catch { }
         // Account truly doesn't exist
         setShowAccountNotFoundModal(true);
         setIsLoading(false);
         return;
       }
-      
+
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -222,20 +223,20 @@ export default function LoginPage() {
       const err = error as Error & { errorCode?: string; correctMethod?: string };
       // Handle WRONG_LOGIN_METHOD - auto redirect to correct tab
       if (err.errorCode === "WRONG_LOGIN_METHOD" && err.correctMethod) {
-        setRedirectInfo({ 
-          correctMethod: err.correctMethod, 
+        setRedirectInfo({
+          correctMethod: err.correctMethod,
           maskedHint: "",
-          password: phoneLoginForm.password 
+          password: phoneLoginForm.password
         });
         setShowRedirectModal(true);
         setIsLoading(false);
         return;
       }
-      
+
       // Handle ACCOUNT_NOT_FOUND - use find-credential to search everywhere
       if (err.errorCode === "ACCOUNT_NOT_FOUND" && phoneLoginForm.phone) {
         try {
-          const findRes = await fetch("/api/auth/find-credential", {
+          const findRes = await fetchWithCsrf("/api/auth/find-credential", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ identifier: phoneLoginForm.phone.trim() }),
@@ -243,27 +244,27 @@ export default function LoginPage() {
           const findData = await findRes.json();
           if (findRes.ok && findData.found) {
             // User exists but registered via different method
-            setRedirectInfo({ 
-              correctMethod: findData.correctMethod, 
+            setRedirectInfo({
+              correctMethod: findData.correctMethod,
               maskedHint: findData.maskedHint || "",
-              password: phoneLoginForm.password 
+              password: phoneLoginForm.password
             });
             setShowRedirectModal(true);
             setIsLoading(false);
             return;
           }
-        } catch {}
+        } catch { }
         // Phone not found anywhere - offer to create account
-        setPendingRegistration({ 
-          identifier: phoneLoginForm.phone.trim(), 
-          type: "phone", 
-          password: phoneLoginForm.password 
+        setPendingRegistration({
+          identifier: phoneLoginForm.phone.trim(),
+          type: "phone",
+          password: phoneLoginForm.password
         });
         setShowCreateAccountModal(true);
         setIsLoading(false);
         return;
       }
-      
+
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -287,20 +288,20 @@ export default function LoginPage() {
       const err = error as Error & { errorCode?: string; correctMethod?: string };
       // Handle WRONG_LOGIN_METHOD - auto redirect to correct tab
       if (err.errorCode === "WRONG_LOGIN_METHOD" && err.correctMethod) {
-        setRedirectInfo({ 
-          correctMethod: err.correctMethod, 
+        setRedirectInfo({
+          correctMethod: err.correctMethod,
           maskedHint: "",
-          password: emailLoginForm.password 
+          password: emailLoginForm.password
         });
         setShowRedirectModal(true);
         setIsLoading(false);
         return;
       }
-      
+
       // Handle ACCOUNT_NOT_FOUND - use find-credential to search everywhere
       if (err.errorCode === "ACCOUNT_NOT_FOUND" && emailLoginForm.username.includes("@")) {
         try {
-          const findRes = await fetch("/api/auth/find-credential", {
+          const findRes = await fetchWithCsrf("/api/auth/find-credential", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ identifier: emailLoginForm.username }),
@@ -308,45 +309,45 @@ export default function LoginPage() {
           const findData = await findRes.json();
           if (findRes.ok && findData.found) {
             // User exists but registered via different method
-            setRedirectInfo({ 
-              correctMethod: findData.correctMethod, 
+            setRedirectInfo({
+              correctMethod: findData.correctMethod,
               maskedHint: findData.maskedHint || "",
-              password: emailLoginForm.password 
+              password: emailLoginForm.password
             });
             setShowRedirectModal(true);
             setIsLoading(false);
             return;
           }
-        } catch {}
+        } catch { }
         // Email not found anywhere - offer to create account
-        setPendingRegistration({ 
-          identifier: emailLoginForm.username, 
-          type: "email", 
-          password: emailLoginForm.password 
+        setPendingRegistration({
+          identifier: emailLoginForm.username,
+          type: "email",
+          password: emailLoginForm.password
         });
         setShowCreateAccountModal(true);
         setIsLoading(false);
         return;
       }
-      
+
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   const handleCreateAccount = async () => {
     if (!pendingRegistration) return;
     setIsLoading(true);
     try {
-      const res = await fetch("/api/auth/create-from-identifier", {
+      const res = await fetchWithCsrf("/api/auth/create-from-identifier", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(pendingRegistration),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      
+
       // Store token with correct key and cache user data
       localStorage.setItem("pwm_token", data.token);
       localStorage.setItem("pwm_user_cache", JSON.stringify({
@@ -356,9 +357,9 @@ export default function LoginPage() {
       }));
       setShowCreateAccountModal(false);
       setPendingRegistration(null);
-      toast({ 
-        title: t('auth.createAccount'), 
-        description: t('auth.accountCreatedVerify') 
+      toast({
+        title: t('auth.createAccount'),
+        description: t('auth.accountCreatedVerify')
       });
       // Navigate and reload to pick up the new auth state
       setLocation("/");
@@ -375,10 +376,10 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const res = await fetch("/api/auth/forgot-password", {
+      const res = await fetchWithCsrf("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           accountId: forgotPasswordForm.identifier,
           email: forgotPasswordForm.identifier.includes("@") ? forgotPasswordForm.identifier : undefined,
           phone: forgotPasswordForm.identifier.match(/^[0-9+]+$/) ? forgotPasswordForm.identifier : undefined,
@@ -405,7 +406,7 @@ export default function LoginPage() {
     }
     setIsLoading(true);
     try {
-      const res = await fetch("/api/auth/reset-password", {
+      const res = await fetchWithCsrf("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: resetToken, newPassword: forgotPasswordForm.newPassword }),
@@ -441,7 +442,7 @@ export default function LoginPage() {
 
   const shareCredentials = async () => {
     const text = `VEX Account Credentials\n\nAccount ID: ${generatedCredentials?.accountId}\nPassword: ${generatedCredentials?.password}\n\nKeep these safe!`;
-    
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -495,7 +496,7 @@ export default function LoginPage() {
     try {
       setIsLoading(true);
       const token = pendingToken;
-      const res = await fetch("/api/user/nickname", {
+      const res = await fetchWithCsrf("/api/user/nickname", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -543,13 +544,13 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-foreground">VEX</h1>
           <p className="text-muted-foreground text-sm mt-1">{t('auth.gamingTrading')}</p>
         </div>
-        
+
         <CardContent className="p-0">
           <Tabs value={currentTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className={`w-full grid rounded-none border-b border-border h-auto p-0 bg-transparent`} style={{ gridTemplateColumns: `repeat(${enabledTabs.length}, 1fr)` }}>
               {enabledTabs.includes("one-click") && (
-                <TabsTrigger 
-                  value="one-click" 
+                <TabsTrigger
+                  value="one-click"
                   className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs"
                   data-testid="tab-one-click"
                 >
@@ -558,8 +559,8 @@ export default function LoginPage() {
                 </TabsTrigger>
               )}
               {enabledTabs.includes("account") && (
-                <TabsTrigger 
-                  value="account" 
+                <TabsTrigger
+                  value="account"
                   className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs"
                   data-testid="tab-account"
                 >
@@ -568,8 +569,8 @@ export default function LoginPage() {
                 </TabsTrigger>
               )}
               {enabledTabs.includes("phone") && (
-                <TabsTrigger 
-                  value="phone" 
+                <TabsTrigger
+                  value="phone"
                   className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs"
                   data-testid="tab-phone"
                 >
@@ -578,8 +579,8 @@ export default function LoginPage() {
                 </TabsTrigger>
               )}
               {enabledTabs.includes("email") && (
-                <TabsTrigger 
-                  value="email" 
+                <TabsTrigger
+                  value="email"
                   className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs"
                   data-testid="tab-email"
                 >
@@ -588,7 +589,7 @@ export default function LoginPage() {
                 </TabsTrigger>
               )}
             </TabsList>
-            
+
             <div className="p-6 space-y-4">
               {enabledTabs.includes("one-click") && (
                 <TabsContent value="one-click" className="m-0 space-y-4">
@@ -600,8 +601,8 @@ export default function LoginPage() {
                         {t('auth.oneClickDesc')}
                       </p>
                     </div>
-                    <Button 
-                      onClick={handleOneClickRegister} 
+                    <Button
+                      onClick={handleOneClickRegister}
                       className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                       disabled={isLoading || !agreedToTerms}
                       data-testid="button-one-click-register"
@@ -615,7 +616,7 @@ export default function LoginPage() {
                   </div>
                 </TabsContent>
               )}
-              
+
               {enabledTabs.includes("account") && (
                 <TabsContent value="account" className="m-0">
                   <form onSubmit={handleAccountLogin} className="space-y-4">
@@ -649,7 +650,7 @@ export default function LoginPage() {
                   </form>
                 </TabsContent>
               )}
-              
+
               {enabledTabs.includes("phone") && (
                 <TabsContent value="phone" className="m-0">
                   <form onSubmit={handlePhoneLogin} className="space-y-4">
@@ -689,7 +690,7 @@ export default function LoginPage() {
                   </form>
                 </TabsContent>
               )}
-              
+
               {enabledTabs.includes("email") && (
                 <TabsContent value="email" className="m-0">
                   <form onSubmit={handleEmailLogin} className="space-y-4">
@@ -723,7 +724,7 @@ export default function LoginPage() {
                   </form>
                 </TabsContent>
               )}
-              
+
               <div className="pt-4 border-t border-border">
                 <button
                   type="button"
@@ -735,7 +736,7 @@ export default function LoginPage() {
                   {t('auth.forgotPassword')}
                 </button>
               </div>
-              
+
               {socialPlatforms.length > 0 && (
                 <div className="pt-4 border-t border-border">
                   <p className="text-xs text-muted-foreground text-center mb-3">{t('auth.orContinueWith')}</p>
@@ -847,9 +848,9 @@ export default function LoginPage() {
                     {generatedCredentials?.accountId}
                   </p>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => copyToClipboard(generatedCredentials?.accountId || "", "accountId")}
                   data-testid="button-copy-account-id"
                 >
@@ -863,9 +864,9 @@ export default function LoginPage() {
                     {generatedCredentials?.password}
                   </p>
                 </div>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   onClick={() => copyToClipboard(generatedCredentials?.password || "", "password")}
                   data-testid="button-copy-password"
                 >
@@ -874,32 +875,32 @@ export default function LoginPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                onClick={copyAllCredentials} 
-                className="flex-1" 
+              <Button
+                variant="outline"
+                onClick={copyAllCredentials}
+                className="flex-1"
                 data-testid="button-copy-all"
               >
                 <Copy className="w-4 h-4 me-2" />
                 {copiedField === "all" ? t('auth.copied') : t('auth.copyAll')}
               </Button>
-              <Button 
-                variant="outline" 
-                onClick={shareCredentials} 
-                className="flex-1" 
+              <Button
+                variant="outline"
+                onClick={shareCredentials}
+                className="flex-1"
                 data-testid="button-share-credentials"
               >
                 <Share2 className="w-4 h-4 me-2" />
                 {t('auth.share')}
               </Button>
             </div>
-            
+
             <div className="pt-4 border-t border-border">
               <p className="text-xs text-muted-foreground text-center mb-3">{t('auth.shareVia')}</p>
               <div className="flex justify-center gap-3 flex-wrap">
-                <Button 
-                  variant="outline" 
-                  size="icon" 
+                <Button
+                  variant="outline"
+                  size="icon"
                   onClick={() => {
                     const text = encodeURIComponent(`VEX Account\nAccount ID: ${generatedCredentials?.accountId}\nPassword: ${generatedCredentials?.password}`);
                     window.open(`https://wa.me/?text=${text}`, '_blank');
@@ -909,9 +910,9 @@ export default function LoginPage() {
                 >
                   <SiWhatsapp className="w-4 h-4 text-[#25D366]" />
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
+                <Button
+                  variant="outline"
+                  size="icon"
                   onClick={() => {
                     const text = encodeURIComponent(`VEX Account\nAccount ID: ${generatedCredentials?.accountId}\nPassword: ${generatedCredentials?.password}`);
                     window.open(`https://t.me/share/url?text=${text}`, '_blank');
@@ -921,9 +922,9 @@ export default function LoginPage() {
                 >
                   <SiTelegram className="w-4 h-4 text-[#0088cc]" />
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
+                <Button
+                  variant="outline"
+                  size="icon"
                   onClick={() => {
                     const text = encodeURIComponent(`VEX Account\nAccount ID: ${generatedCredentials?.accountId}\nPassword: ${generatedCredentials?.password}`);
                     window.open(`mailto:?subject=VEX Account Credentials&body=${text}`, '_blank');
@@ -933,9 +934,9 @@ export default function LoginPage() {
                 >
                   <Mail className="w-4 h-4" />
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
+                <Button
+                  variant="outline"
+                  size="icon"
                   onClick={() => {
                     const text = encodeURIComponent(`VEX Account\nAccount ID: ${generatedCredentials?.accountId}\nPassword: ${generatedCredentials?.password}`);
                     window.open(`sms:?body=${text}`, '_blank');
@@ -962,7 +963,7 @@ export default function LoginPage() {
               {forgotPasswordStep === "request" ? t('auth.resetPassword') : t('auth.setNewPassword')}
             </DialogTitle>
             <DialogDescription>
-              {forgotPasswordStep === "request" 
+              {forgotPasswordStep === "request"
                 ? t('auth.resetDesc')
                 : t('auth.newPasswordDesc')}
             </DialogDescription>
@@ -1042,8 +1043,8 @@ export default function LoginPage() {
               {t('auth.createAccountPrompt')}
             </p>
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   setShowCreateAccountModal(false);
                   setPendingRegistration(null);
@@ -1054,7 +1055,7 @@ export default function LoginPage() {
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={handleCreateAccount}
                 className="flex-1"
                 disabled={isLoading}
@@ -1092,15 +1093,15 @@ export default function LoginPage() {
               {t('auth.usePhoneEmail')}
             </p>
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => setShowAccountNotFoundModal(false)}
                 className="flex-1"
                 data-testid="button-close-account-not-found"
               >
                 {t('auth.tryAgain')}
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
                   setShowAccountNotFoundModal(false);
                   setActiveTab("one-click");
@@ -1160,8 +1161,8 @@ export default function LoginPage() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => {
                   setShowRedirectModal(false);
                   setRedirectInfo(null);
@@ -1170,7 +1171,7 @@ export default function LoginPage() {
               >
                 إلغاء
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
                   const method = redirectInfo?.correctMethod;
                   setShowRedirectModal(false);

@@ -3,6 +3,7 @@ import { storage } from "../../storage";
 import { db } from "../../db";
 import { eq, and, desc, or, isNull, sql } from "drizzle-orm";
 import { challenges as challengesTable } from "@shared/schema";
+import { isChallengeSessionPlayableStatus, normalizeChallengeGameState } from "../../lib/challenge-game-state";
 import { authMiddleware, AuthRequest, sensitiveRateLimiter } from "../middleware";
 import {
   getChallengeParticipantIds,
@@ -45,43 +46,51 @@ export function registerSessionsPointsRoutes(app: Express) {
   app.post("/api/challenges/:id/session", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const { challengeGameSessions: sessions } = await import("@shared/schema");
-      
+
       const [challenge] = await db.select().from(challengesTable).where(eq(challengesTable.id, req.params.id));
       if (!challenge) {
         return res.status(404).json({ error: "Challenge not found" });
       }
-      
+
       if (!isChallengeParticipant(challenge, req.user!.id)) {
         return res.status(403).json({ error: "Not a participant in this challenge" });
       }
 
-      // SECURITY: Idempotency guard — check if active session already exists
-      const [existingSession] = await db.select()
+      // SECURITY: Idempotency guard — return current playable session instead of creating duplicates
+      const [latestSession] = await db.select()
         .from(sessions)
-        .where(and(eq(sessions.challengeId, req.params.id), eq(sessions.status, "playing")))
+        .where(eq(sessions.challengeId, req.params.id))
+        .orderBy(desc(sessions.createdAt))
         .limit(1);
-      
-      if (existingSession) {
-        return res.json(existingSession); // Return existing session instead of creating duplicate
+
+      if (latestSession && isChallengeSessionPlayableStatus(latestSession.status)) {
+        return res.json(latestSession);
       }
 
       // Use proper game engine initialization instead of hardcoded stub
       const { getGameEngine } = await import("../../game-engines");
-      const engine = getGameEngine(challenge.gameType);
+      const normalizedGameType = String(challenge.gameType || "").toLowerCase();
+      const engine = getGameEngine(normalizedGameType);
       const playerIds = getChallengeParticipantIds(challenge);
-      let initialState: any;
-      
+      let initialStateJson = "";
+
       if (engine && typeof engine.initializeWithPlayers === 'function' && playerIds.length >= 2) {
-        if (challenge.gameType === 'tarneeb' || challenge.gameType === 'baloot') {
+        if (normalizedGameType === 'tarneeb' || normalizedGameType === 'baloot') {
           // Card team games: pass array of player IDs (engine generates bots if needed)
-          initialState = JSON.parse(engine.initializeWithPlayers(playerIds, 31));
+          initialStateJson = engine.initializeWithPlayers(playerIds, 31);
         } else {
-          initialState = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
+          initialStateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
         }
-      } else if (challenge.gameType === "chess") {
-        initialState = { fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", moveCount: 0 };
+      } else if (normalizedGameType === "chess") {
+        initialStateJson = JSON.stringify({ fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", moveCount: 0 });
       } else {
-        initialState = engine?.createInitialState?.() || {};
+        const fallbackState = engine?.createInitialState?.() || "{}";
+        initialStateJson = typeof fallbackState === "string" ? fallbackState : JSON.stringify(fallbackState);
+      }
+
+      const normalizedInitialState = normalizeChallengeGameState(initialStateJson);
+      if (!normalizedInitialState) {
+        return res.status(500).json({ error: "Failed to initialize valid game state" });
       }
 
       const [session] = await db.insert(sessions).values({
@@ -90,7 +99,7 @@ export function registerSessionsPointsRoutes(app: Express) {
         currentTurn: challenge.player1Id,
         player1TimeRemaining: challenge.timeLimit || 300,
         player2TimeRemaining: challenge.timeLimit || 300,
-        gameState: JSON.stringify(initialState),
+        gameState: normalizedInitialState,
         status: "playing",
       }).returning();
 
@@ -131,7 +140,7 @@ export function registerSessionsPointsRoutes(app: Express) {
           ),
         ))
         .limit(1);
-      
+
       if (!challenge) {
         return res.status(404).json({ error: "Active challenge not found" });
       }

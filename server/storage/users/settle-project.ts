@@ -3,7 +3,7 @@ import {
   projectCurrencyWallets, projectCurrencyLedger,
 } from "@shared/schema";
 import { db } from "../../db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 // ==================== PROJECT CURRENCY GAME PAYOUTS ====================
 
@@ -26,8 +26,21 @@ export async function settleProjectCurrencyGamePayout(
   const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot'];
 
   return await db.transaction(async (tx) => {
+    const [existingSettlement] = await tx.select({ id: projectCurrencyLedger.id })
+      .from(projectCurrencyLedger)
+      .where(and(
+        eq(projectCurrencyLedger.referenceId, sessionId),
+        eq(projectCurrencyLedger.userId, winnerId),
+        eq(projectCurrencyLedger.type, 'game_win'),
+      ))
+      .limit(1);
+
+    if (existingSettlement) {
+      return { success: true };
+    }
+
     const [id1, id2] = [winnerId, loserId].sort();
-    
+
     const [wallet1] = await tx.select().from(projectCurrencyWallets)
       .where(eq(projectCurrencyWallets.userId, id1)).for('update');
     const [wallet2] = await tx.select().from(projectCurrencyWallets)

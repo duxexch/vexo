@@ -4,6 +4,7 @@ import { challengeGameSessions, challengeChatMessages, challenges } from "@share
 import { eq, desc } from "drizzle-orm";
 import { getGameEngine } from "../../game-engines";
 import { settleChallengePayout, settleDrawPayout } from "../../lib/payout";
+import { isChallengeSessionPlayableStatus, normalizeChallengeGameState } from "../../lib/challenge-game-state";
 import { sendNotification } from "../notifications";
 import { logger } from "../../lib/logger";
 import { getErrorMessage, type AuthenticatedSocket } from "../shared";
@@ -29,7 +30,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
         .limit(1)
         .for('update');
 
-      if (!session || session.status !== "playing") {
+      if (!session || !isChallengeSessionPlayableStatus(session.status)) {
         throw new Error("Game not in progress");
       }
 
@@ -40,14 +41,15 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
       const [challenge] = await tx.select().from(challenges).where(eq(challenges.id, challengeId));
       if (!challenge) throw new Error("Challenge not found");
 
-      const gameType = session.gameType;
+      const gameType = String(session.gameType || "").toLowerCase();
       const engine = getGameEngine(gameType);
       if (!engine) throw new Error(`Unknown game type: ${gameType}`);
 
       // Get or initialize game state
       let stateJson: string;
-      if (session.gameState) {
-        stateJson = session.gameState;
+      const normalizedState = normalizeChallengeGameState(session.gameState);
+      if (normalizedState) {
+        stateJson = normalizedState;
       } else {
         const playerIds = [
           challenge.player1Id,
@@ -55,13 +57,17 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
           challenge.player3Id,
           challenge.player4Id,
         ].filter(Boolean) as string[];
-        if (gameType === 'tarneeb') {
+        if ((session.totalMoves || 0) > 0) {
+          throw new Error("Corrupted game state");
+        }
+
+        if (gameType === "tarneeb") {
           stateJson = engine.initializeWithPlayers(playerIds, 31);
-        } else if (gameType === 'baloot') {
+        } else if (gameType === "baloot") {
           stateJson = engine.initializeWithPlayers(playerIds, 152);
-        } else if (gameType === 'backgammon') {
+        } else if (gameType === "backgammon") {
           stateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
-        } else if (gameType === 'domino') {
+        } else if (gameType === "domino") {
           stateJson = engine.initializeWithPlayers(playerIds);
         } else {
           stateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
@@ -143,7 +149,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
           totalMoves: (session.totalMoves || 0) + 1,
           lastMoveAt: new Date(),
           updatedAt: new Date(),
-          status: isGameOver ? 'completed' : 'playing',
+          status: isGameOver ? 'finished' : 'playing',
           winnerId: winnerId,
         })
         .where(eq(challengeGameSessions.id, session.id))
@@ -195,17 +201,8 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
 
     // CRITICAL: Settle payout if game is over
     if (result.isGameOver && result.challenge) {
-      // Update challenge status
-      await db.update(challenges)
-        .set({
-          status: "completed",
-          winnerId: result.winnerId,
-          endedAt: new Date(),
-        })
-        .where(eq(challenges.id, challengeId));
-
       if (result.isDraw) {
-        await settleDrawPayout(
+        const drawSettlement = await settleDrawPayout(
           challengeId,
           result.challenge.player1Id,
           result.challenge.player2Id!,
@@ -213,6 +210,10 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
           undefined,
           [result.challenge.player3Id, result.challenge.player4Id].filter(Boolean) as string[]
         );
+
+        if (!drawSettlement.success) {
+          throw new Error(drawSettlement.error || "Draw payout settlement failed");
+        }
       } else if (result.winnerId) {
         const allPlayerIds = [
           result.challenge.player1Id,
@@ -223,21 +224,34 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
 
         const loserId = result.winningTeam !== undefined
           ? (result.winningTeam === 0
-              ? ([result.challenge.player2Id, result.challenge.player4Id].filter(Boolean) as string[])[0]
-              : ([result.challenge.player1Id, result.challenge.player3Id].filter(Boolean) as string[])[0])
+            ? ([result.challenge.player2Id, result.challenge.player4Id].filter(Boolean) as string[])[0]
+            : ([result.challenge.player1Id, result.challenge.player3Id].filter(Boolean) as string[])[0])
           : allPlayerIds.find((id) => id !== result.winnerId);
 
         if (!loserId) {
           throw new Error('Unable to resolve loser for payout settlement');
         }
 
-        await settleChallengePayout(
+        const payoutSettlement = await settleChallengePayout(
           challengeId,
           result.winnerId,
           loserId,
           result.gameType
         );
+
+        if (!payoutSettlement.success) {
+          throw new Error(payoutSettlement.error || "Winner payout settlement failed");
+        }
       }
+
+      // Update challenge status after successful settlement to keep money/state consistency
+      await db.update(challenges)
+        .set({
+          status: "completed",
+          winnerId: result.winnerId,
+          endedAt: new Date(),
+        })
+        .where(eq(challenges.id, challengeId));
 
       // Broadcast game over
       const gameStatus2 = result.engine.getGameStatus(result.newState);
@@ -271,16 +285,16 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
       } else if (result.winnerId) {
         const winnerIds = result.winningTeam !== undefined
           ? (result.winningTeam === 0
-              ? [result.challenge.player1Id, result.challenge.player3Id]
-              : [result.challenge.player2Id, result.challenge.player4Id]).filter(Boolean) as string[]
+            ? [result.challenge.player1Id, result.challenge.player3Id]
+            : [result.challenge.player2Id, result.challenge.player4Id]).filter(Boolean) as string[]
           : [result.winnerId];
 
         const loserIds = result.winningTeam !== undefined
           ? (result.winningTeam === 0
-              ? [result.challenge.player2Id, result.challenge.player4Id]
-              : [result.challenge.player1Id, result.challenge.player3Id]).filter(Boolean) as string[]
+            ? [result.challenge.player2Id, result.challenge.player4Id]
+            : [result.challenge.player1Id, result.challenge.player3Id]).filter(Boolean) as string[]
           : ([result.challenge.player1Id, result.challenge.player2Id, result.challenge.player3Id, result.challenge.player4Id]
-              .filter((id): id is string => Boolean(id && id !== result.winnerId)));
+            .filter((id): id is string => Boolean(id && id !== result.winnerId)));
 
         winnerIds.forEach((winnerId) => {
           sendNotification(winnerId, { type: 'success', priority: 'normal', title: `You Won! — ${gameLabel}`, titleAr: `فزت! — ${gameLabel}`, message: `Congratulations! You won the challenge.${betAmount > 0 ? ` You earned $${(betAmount * 2 * 0.95).toFixed(2)}.` : ''}`, messageAr: `تهانينا! فزت بالتحدي.${betAmount > 0 ? ` ربحت $${(betAmount * 2 * 0.95).toFixed(2)}.` : ''}`, link: '/challenges' }).catch(() => { });

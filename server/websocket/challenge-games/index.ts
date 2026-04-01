@@ -12,7 +12,14 @@ import { validateChallengeGameMessage } from "./validation";
  * challenge_chat, game_resign, offer_draw, respond_draw, gift_to_player
  */
 export async function handleChallengeGames(ws: AuthenticatedSocket, data: unknown): Promise<void> {
-  if (!ws.userId) return;
+  if (!ws.userId) {
+    ws.send(JSON.stringify({
+      type: "challenge_error",
+      error: "Authentication required before joining challenge game",
+      code: "auth_required",
+    }));
+    return;
+  }
 
   const validation = validateChallengeGameMessage(data);
   if (!validation.ok) {

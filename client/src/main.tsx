@@ -2,8 +2,27 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
+function enforceCanonicalHost(): boolean {
+  const canonicalHostMap: Record<string, string> = {
+    "127.0.0.1": "localhost",
+    "www.vixo.click": "vixo.click",
+  };
+
+  const currentHost = window.location.hostname.toLowerCase();
+  const canonicalHost = canonicalHostMap[currentHost];
+  if (!canonicalHost || canonicalHost === currentHost) {
+    return false;
+  }
+
+  const nextUrl = `${window.location.protocol}//${canonicalHost}${window.location.port ? `:${window.location.port}` : ""}${window.location.pathname}${window.location.search}${window.location.hash}`;
+  window.location.replace(nextUrl);
+  return true;
+}
+
+const isRedirectingToCanonicalHost = enforceCanonicalHost();
+
 // ── Service Worker registration with auto-update detection ──
-if ('serviceWorker' in navigator) {
+if (!isRedirectingToCanonicalHost && 'serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
@@ -114,4 +133,6 @@ function showUpdateBanner(registration: ServiceWorkerRegistration) {
   document.body.appendChild(banner);
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+if (!isRedirectingToCanonicalHost) {
+  createRoot(document.getElementById("root")!).render(<App />);
+}

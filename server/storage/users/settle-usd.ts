@@ -2,7 +2,7 @@ import {
   users, transactions, liveGameSessions,
 } from "@shared/schema";
 import { db } from "../../db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 // ==================== USD GAME PAYOUTS ====================
 
@@ -29,6 +29,20 @@ export async function settleGamePayout(
   const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot'];
 
   return await db.transaction(async (tx) => {
+    const [existingSettlement] = await tx.select({ id: transactions.id })
+      .from(transactions)
+      .where(and(
+        eq(transactions.referenceId, sessionId),
+        eq(transactions.userId, winnerId),
+        eq(transactions.type, 'win'),
+        eq(transactions.status, 'completed'),
+      ))
+      .limit(1);
+
+    if (existingSettlement) {
+      return { success: true };
+    }
+
     const [id1, id2] = [winnerId, loserId].sort();
     const [user1] = await tx.select().from(users).where(eq(users.id, id1)).for('update');
     const [user2] = await tx.select().from(users).where(eq(users.id, id2)).for('update');

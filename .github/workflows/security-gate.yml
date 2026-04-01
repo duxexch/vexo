@@ -10,6 +10,7 @@ jobs:
     security-gate:
         runs-on: ubuntu-latest
         timeout-minutes: 30
+
         services:
             postgres:
                 image: postgres:16
@@ -24,23 +25,24 @@ jobs:
                     --health-interval 10s
                     --health-timeout 5s
                     --health-retries 10
-              redis:
+
+            redis:
                 image: redis:7-alpine
                 ports:
-                  - 6379:6379
+                    - 6379:6379
                 options: >-
-                  --health-cmd "redis-cli ping"
-                  --health-interval 10s
-                  --health-timeout 5s
-                  --health-retries 10
+                    --health-cmd "redis-cli ping"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 10
 
         env:
             DATABASE_URL: postgresql://vex_user:VexLocal2026SecurePass!@localhost:5432/vex_db
-              REDIS_URL: redis://localhost:6379
+            REDIS_URL: redis://localhost:6379
             DB_SSL: "false"
-          SESSION_SECRET: vex-ci-session-secret-key-2026-min-32-chars
-          JWT_SIGNING_KEY: vex-ci-jwt-signing-key-2026-min-32-chars
-          JWT_ADMIN_SECRET: vex-ci-admin-jwt-secret-2026-min-32-chars
+            SESSION_SECRET: vex-ci-session-secret-key-2026-min-32-chars
+            JWT_SIGNING_KEY: vex-ci-jwt-signing-key-2026-min-32-chars
+            JWT_ADMIN_SECRET: vex-ci-admin-jwt-secret-2026-min-32-chars
             PORT: "3011"
 
         steps:
@@ -64,6 +66,9 @@ jobs:
 
             - name: Build for production runtime checks
               run: npm run build
+
+            - name: Settlement idempotency smoke
+              run: npm run security:smoke:settlement-idempotency
 
             - name: Start production server
               run: |

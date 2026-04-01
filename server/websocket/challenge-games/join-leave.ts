@@ -4,6 +4,7 @@ import { storage } from "../../storage";
 import { users, challengeGameSessions, challenges, challengeSpectators } from "@shared/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { getGameEngine } from "../../game-engines";
+import { normalizeChallengeGameState } from "../../lib/challenge-game-state";
 import type { AuthenticatedSocket } from "../shared";
 import { challengeGameRooms } from "../shared";
 
@@ -17,6 +18,8 @@ export async function handleJoinChallengeGame(ws: AuthenticatedSocket, data: any
     ws.send(JSON.stringify({ type: "challenge_error", error: "Challenge not found" }));
     return;
   }
+
+  const normalizedGameType = String(challenge.gameType || "").toLowerCase();
 
   // SERVER-SIDE ROLE DETERMINATION: Check if user is actually a seated player in this challenge
   const socketUserId = ws.userId ?? null;
@@ -45,7 +48,7 @@ export async function handleJoinChallengeGame(ws: AuthenticatedSocket, data: any
     }
 
     // SECURITY: Check if spectators are allowed for this game type
-    const challengeConfig = await storage.getChallengeSettings(challenge.gameType);
+    const challengeConfig = await storage.getChallengeSettings(normalizedGameType);
     if (!challengeConfig.allowSpectators) {
       ws.send(JSON.stringify({ type: "challenge_error", error: "Spectators are not allowed for this game" }));
       return;
@@ -123,18 +126,37 @@ export async function handleJoinChallengeGame(ws: AuthenticatedSocket, data: any
   const sendFilteredState = (stateSource: any) => {
     if (!stateSource) return;
     const rawState = stateSource.gameState;
-    if (rawState) {
-      const engine = getGameEngine(challenge.gameType);
-      const parsedState = typeof rawState === 'string' ? JSON.parse(rawState) : rawState;
-      const viewerId = isActualPlayer ? ws.userId! : 'spectator';
-      const view = engine?.getPlayerView(parsedState, viewerId) || parsedState;
+    if (!rawState) {
+      ws.send(JSON.stringify({ type: "game_state_sync", session: stateSource }));
+      return;
+    }
+
+    const normalizedState = normalizeChallengeGameState(rawState);
+    if (!normalizedState) {
+      ws.send(JSON.stringify({
+        type: "challenge_error",
+        error: "Corrupted game state",
+        code: "invalid_game_state",
+      }));
+      return;
+    }
+
+    try {
+      const engine = getGameEngine(normalizedGameType);
+      const viewerId = isActualPlayer ? ws.userId! : "spectator";
+      const fallbackView = JSON.parse(normalizedState);
+      const view = engine?.getPlayerView(normalizedState, viewerId) || fallbackView;
       ws.send(JSON.stringify({
         type: "game_state_sync",
         session: { ...stateSource, gameState: undefined },
-        view
+        view,
       }));
-    } else {
-      ws.send(JSON.stringify({ type: "game_state_sync", session: stateSource }));
+    } catch {
+      ws.send(JSON.stringify({
+        type: "challenge_error",
+        error: "Failed to prepare game state",
+        code: "state_sync_failed",
+      }));
     }
   };
 

@@ -22,12 +22,12 @@ import { GameCardSkeletonGrid } from "@/components/skeletons";
 import { QueryErrorState } from "@/components/QueryErrorState";
 import { playSound } from "@/hooks/use-sound-effects";
 import { GAME_ICON_STYLES } from "@/lib/game-config";
-import { 
-  Swords, 
-  Users, 
-  Shuffle, 
-  Clock, 
-  Trophy, 
+import {
+  Swords,
+  Users,
+  Shuffle,
+  Clock,
+  Trophy,
   Coins,
   Play,
   X,
@@ -156,7 +156,7 @@ export default function ChallengesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  
+
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
   const [showGiftShop, setShowGiftShop] = useState(false);
@@ -166,7 +166,7 @@ export default function ChallengesPage() {
   const [friendAccountId, setFriendAccountId] = useState("");
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [requiredPlayers, setRequiredPlayers] = useState<2 | 4>(2);
-  
+
   const multiPlayerGames = ['domino', 'tarneeb', 'baloot'];
   const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
   const [gameFilter, setGameFilter] = useState<string[]>([]);
@@ -213,8 +213,15 @@ export default function ChallengesPage() {
     },
   });
 
+  const refreshChallengeQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['/api/challenges'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/challenges/my'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/challenges/available'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/challenges/public'] });
+  };
+
   const followedIds = new Set(followedChallengers?.map(f => f.userId) || []);
-  
+
   const getGameIconByName = (name: string) => {
     const lowerName = name.toLowerCase();
     return GAME_ICON_STYLES[lowerName]?.icon || Target;
@@ -258,7 +265,7 @@ export default function ChallengesPage() {
     onSuccess: () => {
       playSound('success');
       toast({ title: t('common.success'), description: t('challenges.created') });
-      queryClient.invalidateQueries({ queryKey: ['/api/challenges'] });
+      refreshChallengeQueries();
       setShowCreateDialog(false);
       resetForm();
     },
@@ -274,7 +281,7 @@ export default function ChallengesPage() {
     onSuccess: async (res: Response) => {
       playSound('challenge');
       toast({ title: t('common.success'), description: t('challenges.joined') });
-      queryClient.invalidateQueries({ queryKey: ['/api/challenges'] });
+      refreshChallengeQueries();
       // Navigate directly to game screen after successful join
       const data = typeof res?.json === 'function' ? await res.json() : res;
       if (data && data.id) {
@@ -291,7 +298,7 @@ export default function ChallengesPage() {
       apiRequest('POST', `/api/challenges/${challengeId}/withdraw`),
     onSuccess: () => {
       toast({ title: t('common.success'), description: t('challenges.withdrawn') });
-      queryClient.invalidateQueries({ queryKey: ['/api/challenges'] });
+      refreshChallengeQueries();
       setShowWithdrawDialog(false);
       setActiveChallenge(null);
     },
@@ -350,12 +357,12 @@ export default function ChallengesPage() {
       const max = parseFloat(selectedGameData.maxBet);
       const bet = parseFloat(betAmount);
       if (bet < min || bet > max) {
-        toast({ 
-          title: t('common.error'), 
-          description: language === 'ar' 
-            ? `مبلغ التحدي يجب أن يكون بين $${min} و $${max}` 
+        toast({
+          title: t('common.error'),
+          description: language === 'ar'
+            ? `مبلغ التحدي يجب أن يكون بين $${min} و $${max}`
             : `Challenge amount must be between $${min} and $${max}`,
-          variant: "destructive" 
+          variant: "destructive"
         });
         return;
       }
@@ -379,6 +386,20 @@ export default function ChallengesPage() {
     const game = challengeGames.find(g => g.name.toLowerCase() === gameType.toLowerCase() || g.id === gameType);
     if (game) return getGameIconByName(game.name);
     return GAME_ICON_STYLES[gameType.toLowerCase()]?.icon || Target;
+  };
+
+  const formatUsd = (amount: number | string | undefined) => Number(amount || 0).toFixed(2);
+
+  const getChallengeParticipantIds = (challenge: Challenge): string[] =>
+    [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id].filter(Boolean) as string[];
+
+  const isChallengeParticipant = (challenge: Challenge): boolean => {
+    if (!user?.id) return false;
+    return getChallengeParticipantIds(challenge).includes(user.id);
+  };
+
+  const handlePlayChallenge = (challenge: Challenge) => {
+    setLocation(`/challenge/${challenge.id}/play`);
   };
 
   const filterChallenges = (challenges: Challenge[] | undefined) => {
@@ -431,7 +452,7 @@ export default function ChallengesPage() {
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
       <BackButton className="mb-2" />
-      
+
       {/* Header Section */}
       <section className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="min-w-0">
@@ -645,276 +666,293 @@ export default function ChallengesPage() {
             </TabsTrigger>
           </TabsList>
 
-        <TabsContent value="arena">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold flex items-center gap-2">
-                <Eye className="h-5 w-5" />
-                {t('challenges.liveMatches')}
-              </h3>
-            </div>
+          <TabsContent value="arena">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Eye className="h-5 w-5" />
+                  {t('challenges.liveMatches')}
+                </h3>
+              </div>
 
-            {loadingPublic ? (
-              <GameCardSkeletonGrid count={4} />
-            ) : isErrorPublic ? (
-              <QueryErrorState error={errorPublic} onRetry={() => refetchPublic()} compact />
-            ) : filterChallenges(publicChallenges).length > 0 ? (
-              <div className="grid md:grid-cols-2 gap-4">
-                {filterChallenges(publicChallenges).map(challenge => {
+              {loadingPublic ? (
+                <GameCardSkeletonGrid count={4} />
+              ) : isErrorPublic ? (
+                <QueryErrorState error={errorPublic} onRetry={() => refetchPublic()} compact />
+              ) : filterChallenges(publicChallenges).length > 0 ? (
+                <div className="grid md:grid-cols-2 gap-4">
+                  {filterChallenges(publicChallenges).map(challenge => {
+                    const GameIcon = getGameIcon(challenge.gameType);
+                    return (
+                      <Card key={challenge.id} className="overflow-hidden" data-testid={`card-live-challenge-${challenge.id}`}>
+                        <CardHeader className="pb-2 bg-primary/5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <GameIcon className="h-5 w-5 text-primary" />
+                              <span className="font-semibold capitalize">{challenge.gameType}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="destructive" className="animate-pulse">
+                                {t('challenges.live')}
+                              </Badge>
+                              <Badge variant="outline">
+                                <Eye className="h-3 w-3 me-1" />
+                                {challenge.spectatorCount}
+                              </Badge>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="text-center flex-1 min-w-0">
+                              <div className="flex items-center justify-center gap-1">
+                                <p className="font-bold truncate max-w-[100px]" title={challenge.player1Name}>{challenge.player1Name}</p>
+                                {challenge.player1Id !== user?.id && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleFollow(challenge.player1Id);
+                                    }}
+                                    data-testid={`button-follow-p1-${challenge.id}`}
+                                  >
+                                    {followedIds.has(challenge.player1Id) ? (
+                                      <UserCheck className="h-3 w-3 text-primary" />
+                                    ) : (
+                                      <UserPlus className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                              <RatingBadge rating={challenge.player1Rating} />
+                              <p className="text-3xl font-bold mt-2">{challenge.player1Score || 0}</p>
+                            </div>
+                            <div className="px-4">
+                              <span className="text-2xl font-bold text-muted-foreground">VS</span>
+                            </div>
+                            <div className="text-center flex-1 min-w-0">
+                              <div className="flex items-center justify-center gap-1">
+                                <p className="font-bold truncate max-w-[100px]" title={challenge.player2Name}>{challenge.player2Name}</p>
+                                {challenge.player2Id && challenge.player2Id !== user?.id && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleFollow(challenge.player2Id!);
+                                    }}
+                                    data-testid={`button-follow-p2-${challenge.id}`}
+                                  >
+                                    {followedIds.has(challenge.player2Id) ? (
+                                      <UserCheck className="h-3 w-3 text-primary" />
+                                    ) : (
+                                      <UserPlus className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                              <RatingBadge rating={challenge.player2Rating} />
+                              <p className="text-3xl font-bold mt-2">{challenge.player2Score || 0}</p>
+                            </div>
+                          </div>
+                          <Separator />
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <div className="flex items-center gap-1">
+                              <Coins className="h-4 w-4 text-yellow-500" />
+                              <span>{t('challenges.totalBets')}: ${formatUsd(challenge.totalBets)}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Trophy className="h-4 w-4 text-primary" />
+                              <span>{t('challenges.prize')}: ${formatUsd(challenge.betAmount * 2)}</span>
+                            </div>
+                          </div>
+                          <Button className="w-full" onClick={() => handleSpectate(challenge)} data-testid={`button-spectate-${challenge.id}`}>
+                            <Eye className="h-4 w-4 me-2" />
+                            {t('challenges.watchAndBet')}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent>
+                    <EmptyState icon={Eye} title={t('challenges.noLiveMatches')} />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="available">
+            <div className="space-y-4">
+              {loadingAvailable ? (
+                <GameCardSkeletonGrid count={3} />
+              ) : isErrorAvailable ? (
+                <QueryErrorState error={errorAvailable} onRetry={() => refetchAvailable()} compact />
+              ) : filterChallenges(availableChallenges).length > 0 ? (
+                filterChallenges(availableChallenges).map(challenge => {
                   const GameIcon = getGameIcon(challenge.gameType);
                   return (
-                    <Card key={challenge.id} className="overflow-hidden" data-testid={`card-live-challenge-${challenge.id}`}>
-                      <CardHeader className="pb-2 bg-primary/5">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <GameIcon className="h-5 w-5 text-primary" />
-                            <span className="font-semibold capitalize">{challenge.gameType}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="destructive" className="animate-pulse">
-                              {t('challenges.live')}
-                            </Badge>
-                            <Badge variant="outline">
-                              <Eye className="h-3 w-3 me-1" />
-                              {challenge.spectatorCount}
-                            </Badge>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="text-center flex-1 min-w-0">
-                            <div className="flex items-center justify-center gap-1">
-                              <p className="font-bold truncate max-w-[100px]" title={challenge.player1Name}>{challenge.player1Name}</p>
-                              {challenge.player1Id !== user?.id && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleFollow(challenge.player1Id);
-                                  }}
-                                  data-testid={`button-follow-p1-${challenge.id}`}
-                                >
-                                  {followedIds.has(challenge.player1Id) ? (
-                                    <UserCheck className="h-3 w-3 text-primary" />
-                                  ) : (
-                                    <UserPlus className="h-3 w-3" />
-                                  )}
-                                </Button>
-                              )}
+                    <Card key={challenge.id} data-testid={`card-challenge-${challenge.id}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-4 flex-wrap">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-primary/20">
+                              <GameIcon className="h-5 w-5 text-primary" />
                             </div>
-                            <RatingBadge rating={challenge.player1Rating} />
-                            <p className="text-3xl font-bold mt-2">{challenge.player1Score || 0}</p>
-                          </div>
-                          <div className="px-4">
-                            <span className="text-2xl font-bold text-muted-foreground">VS</span>
-                          </div>
-                          <div className="text-center flex-1 min-w-0">
-                            <div className="flex items-center justify-center gap-1">
-                              <p className="font-bold truncate max-w-[100px]" title={challenge.player2Name}>{challenge.player2Name}</p>
-                              {challenge.player2Id && challenge.player2Id !== user?.id && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleFollow(challenge.player2Id!);
-                                  }}
-                                  data-testid={`button-follow-p2-${challenge.id}`}
-                                >
-                                  {followedIds.has(challenge.player2Id) ? (
-                                    <UserCheck className="h-3 w-3 text-primary" />
-                                  ) : (
-                                    <UserPlus className="h-3 w-3" />
-                                  )}
-                                </Button>
-                              )}
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold capitalize">{challenge.gameType}</p>
+                                {challenge.visibility === 'public' ? (
+                                  <Globe className="h-4 w-4 text-green-500" />
+                                ) : (
+                                  <Lock className="h-4 w-4 text-yellow-500" />
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm text-muted-foreground truncate max-w-[150px]">
+                                  {t('challenges.by')} {challenge.player1Name}
+                                </p>
+                                {challenge.player1Id !== user?.id && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleFollow(challenge.player1Id);
+                                    }}
+                                    data-testid={`button-follow-${challenge.player1Id}`}
+                                  >
+                                    {followedIds.has(challenge.player1Id) ? (
+                                      <UserCheck className="h-4 w-4 text-primary" />
+                                    ) : (
+                                      <UserPlus className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                              <RatingBadge rating={challenge.player1Rating} />
                             </div>
-                            <RatingBadge rating={challenge.player2Rating} />
-                            <p className="text-3xl font-bold mt-2">{challenge.player2Score || 0}</p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="text-end">
+                              <p className="font-bold text-lg">${formatUsd(challenge.betAmount)}</p>
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {challenge.timeLimit}s
+                              </p>
+                            </div>
+                            <Button onClick={() => joinChallengeMutation.mutate(challenge.id)} data-testid={`button-join-${challenge.id}`}>
+                              <Play className="h-4 w-4 me-1" />
+                              {t('challenges.join')}
+                            </Button>
                           </div>
                         </div>
-                        <Separator />
-                        <div className="flex items-center justify-between gap-2 text-sm">
-                          <div className="flex items-center gap-1">
-                            <Coins className="h-4 w-4 text-yellow-500" />
-                            <span>{t('challenges.totalBets')}: ${challenge.totalBets}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Trophy className="h-4 w-4 text-primary" />
-                            <span>{t('challenges.prize')}: ${challenge.betAmount * 2}</span>
-                          </div>
-                        </div>
-                        <Button className="w-full" onClick={() => handleSpectate(challenge)} data-testid={`button-spectate-${challenge.id}`}>
-                          <Eye className="h-4 w-4 me-2" />
-                          {t('challenges.watchAndBet')}
-                        </Button>
                       </CardContent>
                     </Card>
                   );
-                })}
-              </div>
-            ) : (
-              <Card>
-                <CardContent>
-                  <EmptyState icon={Eye} title={t('challenges.noLiveMatches')} />
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
+                })
+              ) : (
+                <Card>
+                  <CardContent>
+                    <EmptyState icon={Users} title={t('challenges.noAvailable')} />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
 
-        <TabsContent value="available">
-          <div className="space-y-4">
-            {loadingAvailable ? (
-              <GameCardSkeletonGrid count={3} />
-            ) : isErrorAvailable ? (
-              <QueryErrorState error={errorAvailable} onRetry={() => refetchAvailable()} compact />
-            ) : filterChallenges(availableChallenges).length > 0 ? (
-              filterChallenges(availableChallenges).map(challenge => {
-                const GameIcon = getGameIcon(challenge.gameType);
-                return (
-                  <Card key={challenge.id} data-testid={`card-challenge-${challenge.id}`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between gap-4 flex-wrap">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-full bg-primary/20">
-                            <GameIcon className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
+          <TabsContent value="my">
+            <div className="space-y-4">
+              {loadingMy ? (
+                <GameCardSkeletonGrid count={2} />
+              ) : isErrorMy ? (
+                <QueryErrorState error={errorMy} onRetry={() => refetchMy()} compact />
+              ) : filterChallenges(myChallenges).length > 0 ? (
+                filterChallenges(myChallenges).map(challenge => {
+                  const GameIcon = getGameIcon(challenge.gameType);
+                  const canPlay = challenge.status === 'active' && isChallengeParticipant(challenge);
+                  const canWithdraw = (challenge.status === 'waiting' || challenge.status === 'active') && isChallengeParticipant(challenge);
+                  const opponentName = [
+                    { id: challenge.player1Id, name: challenge.player1Name },
+                    { id: challenge.player2Id, name: challenge.player2Name },
+                    { id: challenge.player3Id, name: challenge.player3Name },
+                    { id: challenge.player4Id, name: challenge.player4Name },
+                  ].find((player) => player.id && player.id !== user?.id)?.name || (language === 'ar' ? 'خصم' : 'Opponent');
+                  return (
+                    <Card key={challenge.id} data-testid={`card-my-challenge-${challenge.id}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-4 flex-wrap">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-full bg-primary/20">
+                              <GameIcon className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
                               <p className="font-semibold capitalize">{challenge.gameType}</p>
-                              {challenge.visibility === 'public' ? (
-                                <Globe className="h-4 w-4 text-green-500" />
-                              ) : (
-                                <Lock className="h-4 w-4 text-yellow-500" />
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
                               <p className="text-sm text-muted-foreground truncate max-w-[150px]">
-                                {t('challenges.by')} {challenge.player1Name}
-                              </p>
-                              {challenge.player1Id !== user?.id && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleFollow(challenge.player1Id);
-                                  }}
-                                  data-testid={`button-follow-${challenge.player1Id}`}
-                                >
-                                  {followedIds.has(challenge.player1Id) ? (
-                                    <UserCheck className="h-4 w-4 text-primary" />
-                                  ) : (
-                                    <UserPlus className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              )}
-                            </div>
-                            <RatingBadge rating={challenge.player1Rating} />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="text-end">
-                            <p className="font-bold text-lg">${challenge.betAmount}</p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {challenge.timeLimit}s
-                            </p>
-                          </div>
-                          <Button onClick={() => joinChallengeMutation.mutate(challenge.id)} data-testid={`button-join-${challenge.id}`}>
-                            <Play className="h-4 w-4 me-1" />
-                            {t('challenges.join')}
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            ) : (
-              <Card>
-                <CardContent>
-                  <EmptyState icon={Users} title={t('challenges.noAvailable')} />
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="my">
-          <div className="space-y-4">
-            {loadingMy ? (
-              <GameCardSkeletonGrid count={2} />
-            ) : isErrorMy ? (
-              <QueryErrorState error={errorMy} onRetry={() => refetchMy()} compact />
-            ) : filterChallenges(myChallenges).length > 0 ? (
-              filterChallenges(myChallenges).map(challenge => {
-                const GameIcon = getGameIcon(challenge.gameType);
-                const isCreator = challenge.player1Id === user?.id;
-                return (
-                  <Card key={challenge.id} data-testid={`card-my-challenge-${challenge.id}`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between gap-4 flex-wrap">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-full bg-primary/20">
-                            <GameIcon className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-semibold capitalize">{challenge.gameType}</p>
-                            <p className="text-sm text-muted-foreground truncate max-w-[150px]">
-                              {challenge.status === 'waiting' 
-                                ? (challenge.requiredPlayers && challenge.requiredPlayers > 2
+                                {challenge.status === 'waiting'
+                                  ? (challenge.requiredPlayers && challenge.requiredPlayers > 2
                                     ? `${challenge.currentPlayers || 1}/${challenge.requiredPlayers} ${t('challenges.players') || 'players'}`
                                     : t('challenges.waitingForOpponent'))
-                                : `vs ${isCreator ? challenge.player2Name : challenge.player1Name}`
-                              }
-                            </p>
+                                  : `vs ${opponentName}`
+                                }
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
+                            <Badge variant={
+                              challenge.status === 'active' ? 'default' :
+                                challenge.status === 'completed' ? 'secondary' :
+                                  challenge.status === 'cancelled' ? 'destructive' : 'outline'
+                            }>
+                              {challenge.status}
+                            </Badge>
+                            <p className="font-bold">${formatUsd(challenge.betAmount)}</p>
+                            {canPlay && (
+                              <Button
+                                size="sm"
+                                onClick={() => handlePlayChallenge(challenge)}
+                                data-testid={`button-play-${challenge.id}`}
+                              >
+                                <Play className="h-4 w-4 me-1" />
+                                {t('nav.play') || (language === 'ar' ? 'لعب' : 'Play')}
+                              </Button>
+                            )}
+                            {canWithdraw && (
+                              <Button
+                                variant={challenge.status === 'active' ? 'outline' : 'destructive'}
+                                size="sm"
+                                onClick={() => {
+                                  setActiveChallenge(challenge);
+                                  setShowWithdrawDialog(true);
+                                }}
+                                data-testid={`button-withdraw-${challenge.id}`}
+                              >
+                                <X className="h-4 w-4 me-1" />
+                                {challenge.status === 'waiting' ? (language === 'ar' ? 'إلغاء' : 'Cancel') : (language === 'ar' ? 'انسحاب' : 'Withdraw')}
+                              </Button>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <Badge variant={
-                            challenge.status === 'active' ? 'default' :
-                            challenge.status === 'completed' ? 'secondary' :
-                            challenge.status === 'cancelled' ? 'destructive' : 'outline'
-                          }>
-                            {challenge.status}
-                          </Badge>
-                          <p className="font-bold">${challenge.betAmount}</p>
-                          {(challenge.status === 'waiting' || challenge.status === 'active') && (isCreator || challenge.player2Id === user?.id) && (
-                            <Button 
-                              variant="destructive" 
-                              size="sm"
-                              onClick={() => {
-                                setActiveChallenge(challenge);
-                                setShowWithdrawDialog(true);
-                              }}
-                              data-testid={`button-withdraw-${challenge.id}`}
-                            >
-                              <X className="h-4 w-4 me-1" />
-                              {challenge.status === 'waiting' ? (language === 'ar' ? 'إلغاء' : 'Cancel') : (language === 'ar' ? 'انسحاب' : 'Withdraw')}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            ) : (
-              <Card>
-                <CardContent>
-                  <EmptyState icon={Swords} title={t('challenges.noChallenges')} action={{ label: t('challenges.createFirst'), onClick: () => setShowCreateDialog(true) }} />
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              ) : (
+                <Card>
+                  <CardContent>
+                    <EmptyState icon={Swords} title={t('challenges.noChallenges')} action={{ label: t('challenges.createFirst'), onClick: () => setShowCreateDialog(true) }} />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
         </Tabs>
       </section>
 
@@ -1062,7 +1100,7 @@ export default function ChallengesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
-              {activeChallenge?.status === 'active' 
+              {activeChallenge?.status === 'active'
                 ? (language === 'ar' ? 'تأكيد الانسحاب — عقوبة 70%' : 'Confirm Withdrawal — 70% Penalty')
                 : (language === 'ar' ? 'تأكيد إلغاء التحدي' : 'Confirm Challenge Cancellation')
               }
@@ -1079,7 +1117,7 @@ export default function ChallengesPage() {
               {activeChallenge.status === 'active' ? (
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-destructive">
-                    {language === 'ar' 
+                    {language === 'ar'
                       ? `💸 العقوبة: $${(Number(activeChallenge.betAmount) * 0.7).toFixed(2)} (70%)`
                       : `💸 Penalty: $${(Number(activeChallenge.betAmount) * 0.7).toFixed(2)} (70%)`
                     }
@@ -1093,7 +1131,7 @@ export default function ChallengesPage() {
                 </div>
               ) : (
                 <p className="text-sm">
-                  {language === 'ar' 
+                  {language === 'ar'
                     ? `✅ سيتم استرداد مبلغ الرهان بالكامل: $${Number(activeChallenge.betAmount).toFixed(2)}`
                     : `✅ Your bet amount will be fully refunded: $${Number(activeChallenge.betAmount).toFixed(2)}`
                   }
@@ -1105,12 +1143,12 @@ export default function ChallengesPage() {
             <Button variant="outline" onClick={() => setShowWithdrawDialog(false)}>
               {t('common.cancel')}
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               onClick={() => activeChallenge && withdrawChallengeMutation.mutate(activeChallenge.id)}
               disabled={withdrawChallengeMutation.isPending}
             >
-              {activeChallenge?.status === 'active' 
+              {activeChallenge?.status === 'active'
                 ? (language === 'ar' ? 'تأكيد الانسحاب' : 'Confirm Withdrawal')
                 : (language === 'ar' ? 'تأكيد الإلغاء' : 'Confirm Cancellation')
               }
@@ -1146,8 +1184,8 @@ export default function ChallengesPage() {
                           <Icon className="h-8 w-8 mx-auto text-primary mb-2" />
                           <p className="font-medium">{language === 'ar' && gift.nameAr ? gift.nameAr : gift.name}</p>
                           <p className="text-sm text-muted-foreground">{gift.coinValue} coins</p>
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             className="mt-2 w-full"
                             onClick={() => purchaseGiftMutation.mutate({ giftId: gift.id, quantity: 1 })}
                             data-testid={`button-buy-${gift.id}`}

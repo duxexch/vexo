@@ -190,10 +190,20 @@ export default function ChallengeWatchPage() {
     });
   }, [language, toast]);
 
-  const { data: challenge, isLoading } = useQuery<Challenge>({
+  const { data: challenge, isLoading, isError: isChallengeError, error: challengeError } = useQuery<Challenge, Error>({
     queryKey: [`/api/challenges/${challengeId}`],
     enabled: !!challengeId,
   });
+
+  const parseHttpStatus = (error: Error | null): number | null => {
+    if (!error?.message) return null;
+    const match = error.message.match(/^(\d{3})\s*:/);
+    if (!match) return null;
+    const status = Number(match[1]);
+    return Number.isNaN(status) ? null : status;
+  };
+
+  const challengeErrorStatus = parseHttpStatus(challengeError ?? null);
 
   const { data: oddsData, isLoading: isLoadingOdds } = useQuery<OddsData>({
     queryKey: [`/api/challenges/${challengeId}/odds`],
@@ -388,6 +398,54 @@ export default function ChallengeWatchPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (isChallengeError) {
+    const isUnauthorized = challengeErrorStatus === 401;
+    const isForbidden = challengeErrorStatus === 403;
+    const isNotFound = challengeErrorStatus === 404;
+    const isRateLimited = challengeErrorStatus === 429;
+
+    const title = isUnauthorized
+      ? (language === "ar" ? "تسجيل الدخول مطلوب" : "Login required")
+      : isForbidden
+        ? (language === "ar" ? "غير مصرح لك بمشاهدة هذا التحدي" : "You are not authorized to view this challenge")
+        : isNotFound
+          ? (language === "ar" ? "التحدي غير موجود" : "Challenge not found")
+          : isRateLimited
+            ? (language === "ar" ? "تم تجاوز الحد المسموح من الطلبات" : "Too many requests")
+            : (language === "ar" ? "تعذر تحميل التحدي" : "Failed to load challenge");
+
+    const description = isUnauthorized
+      ? (language === "ar" ? "انتهت الجلسة أو لم يتم تسجيل الدخول." : "Your session is missing or expired.")
+      : isForbidden
+        ? (language === "ar" ? "هذا التحدي خاص ولا يمكن الوصول إليه بهذا الحساب." : "This challenge is private for your account.")
+        : isNotFound
+          ? (language === "ar" ? "قد يكون التحدي أُلغي أو لم يعد متاحًا." : "The challenge may have been cancelled or no longer available.")
+          : isRateLimited
+            ? (language === "ar" ? "يرجى الانتظار قليلًا ثم إعادة المحاولة." : "Please wait a moment and try again.")
+            : (challengeError?.message || (language === "ar" ? "حدث خطأ غير متوقع." : "An unexpected error occurred."));
+
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="pt-6 text-center space-y-4">
+            <p className="font-semibold">{title}</p>
+            <p className="text-sm text-muted-foreground">{description}</p>
+            <div className="flex items-center justify-center gap-2">
+              <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: [`/api/challenges/${challengeId}`] })}>
+                {language === "ar" ? "إعادة المحاولة" : "Retry"}
+              </Button>
+              <Button onClick={() => setLocation(isUnauthorized ? "/login" : "/challenges")}>
+                {isUnauthorized
+                  ? (language === "ar" ? "تسجيل الدخول" : "Go to Login")
+                  : (language === "ar" ? "العودة للتحديات" : "Back to Challenges")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

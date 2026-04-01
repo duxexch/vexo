@@ -4,8 +4,8 @@
  */
 import { db } from '../db';
 import { storage } from '../storage';
-import { challenges, users } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { challenges, users, transactions, projectCurrencyLedger, projectCurrencyWallets } from '@shared/schema';
+import { and, eq } from 'drizzle-orm';
 import { settleSpectatorSupports } from './support-settler';
 import { refundPendingSupports } from './support-settler';
 import { logger } from './logger';
@@ -58,6 +58,59 @@ function resolveWinnerLoserTeams(challenge: ChallengeRecord, winnerId: string): 
     winners: [winnerId],
     losers: fallbackLoser ? [fallbackLoser] : [],
   };
+}
+
+async function hasWinnerPayoutRecord(referenceId: string, winnerId: string, currencyType: string): Promise<boolean> {
+  if (currencyType === 'project') {
+    const [existingLedger] = await db.select({ id: projectCurrencyLedger.id })
+      .from(projectCurrencyLedger)
+      .where(and(
+        eq(projectCurrencyLedger.referenceId, referenceId),
+        eq(projectCurrencyLedger.userId, winnerId),
+        eq(projectCurrencyLedger.type, 'game_win'),
+      ))
+      .limit(1);
+
+    return Boolean(existingLedger);
+  }
+
+  const [existingTx] = await db.select({ id: transactions.id })
+    .from(transactions)
+    .where(and(
+      eq(transactions.referenceId, referenceId),
+      eq(transactions.userId, winnerId),
+      eq(transactions.type, 'win'),
+      eq(transactions.status, 'completed'),
+    ))
+    .limit(1);
+
+  return Boolean(existingTx);
+}
+
+async function hasDrawRefundRecord(referenceId: string, currencyType: string): Promise<boolean> {
+  if (currencyType === 'project') {
+    const [existingLedger] = await db.select({ id: projectCurrencyLedger.id })
+      .from(projectCurrencyLedger)
+      .where(and(
+        eq(projectCurrencyLedger.referenceId, referenceId),
+        eq(projectCurrencyLedger.type, 'refund'),
+        eq(projectCurrencyLedger.referenceType, 'challenge_draw_refund'),
+      ))
+      .limit(1);
+
+    return Boolean(existingLedger);
+  }
+
+  const [existingTx] = await db.select({ id: transactions.id })
+    .from(transactions)
+    .where(and(
+      eq(transactions.referenceId, referenceId),
+      eq(transactions.type, 'game_refund'),
+      eq(transactions.status, 'completed'),
+    ))
+    .limit(1);
+
+  return Boolean(existingTx);
 }
 
 async function settleHeadToHeadPayout(
@@ -160,6 +213,7 @@ export async function settleChallengePayout(
       return { success: false, error: 'Challenge not found' };
     }
 
+    const settlementReferenceId = sessionId || challenge.id;
     const { winners, losers } = resolveWinnerLoserTeams(challenge, winnerId);
     if (winners.length === 0 || losers.length === 0) {
       return { success: false, error: 'Unable to resolve winners/losers for payout' };
@@ -167,12 +221,23 @@ export async function settleChallengePayout(
 
     const pairCount = Math.min(winners.length, losers.length);
     for (let i = 0; i < pairCount; i += 1) {
+      const alreadySettled = await hasWinnerPayoutRecord(
+        settlementReferenceId,
+        winners[i],
+        challenge.currencyType || 'usd',
+      );
+
+      if (alreadySettled) {
+        logger.warn(`[Payout] Duplicate settlement prevented for challenge ${challengeId}, winner=${winners[i]}`);
+        continue;
+      }
+
       const settleResult = await settleHeadToHeadPayout(
         challenge,
         winners[i],
         losers[i],
         gameType,
-        sessionId,
+        settlementReferenceId,
       );
 
       if (!settleResult.success) {
@@ -219,6 +284,17 @@ export async function settleDrawPayout(
       return { success: false, error: 'Challenge not found' };
     }
 
+    const settlementReferenceId = sessionId || challengeId;
+    const alreadyRefunded = await hasDrawRefundRecord(
+      settlementReferenceId,
+      challenge.currencyType || 'usd',
+    );
+
+    if (alreadyRefunded) {
+      logger.warn(`[Payout] Duplicate draw refund prevented for challenge ${challengeId}`);
+      return { success: true, stakeAmount: challenge.betAmount };
+    }
+
     const allPlayerIds = Array.from(new Set([
       player1Id,
       player2Id,
@@ -227,10 +303,97 @@ export async function settleDrawPayout(
 
     const betAmount = parseFloat(challenge.betAmount);
     if (betAmount > 0) {
-      // Refund all seated players their entries
-      for (const playerId of allPlayerIds) {
-        await storage.updateUserBalanceWithCheck(playerId, challenge.betAmount, 'add');
+      if ((challenge.currencyType || 'usd') === 'project') {
+        await db.transaction(async (tx) => {
+          const sortedPlayerIds = [...allPlayerIds].sort();
+          const walletsByUserId = new Map<string, typeof projectCurrencyWallets.$inferSelect>();
+
+          for (const playerId of sortedPlayerIds) {
+            const [wallet] = await tx.select().from(projectCurrencyWallets)
+              .where(eq(projectCurrencyWallets.userId, playerId))
+              .for('update');
+
+            if (!wallet) {
+              throw new Error(`Project currency wallet not found for user ${playerId}`);
+            }
+
+            walletsByUserId.set(playerId, wallet);
+          }
+
+          for (const playerId of allPlayerIds) {
+            const wallet = walletsByUserId.get(playerId);
+            if (!wallet) continue;
+
+            const earnedBefore = parseFloat(wallet.earnedBalance || '0');
+            const totalBefore = parseFloat(wallet.totalBalance || '0');
+            const earnedAfter = (earnedBefore + betAmount).toFixed(8);
+            const totalAfter = (totalBefore + betAmount).toFixed(8);
+
+            await tx.update(projectCurrencyWallets)
+              .set({
+                earnedBalance: earnedAfter,
+                totalBalance: totalAfter,
+                updatedAt: new Date(),
+              })
+              .where(eq(projectCurrencyWallets.userId, playerId));
+
+            await tx.insert(projectCurrencyLedger).values({
+              walletId: wallet.id,
+              userId: playerId,
+              type: 'refund',
+              amount: challenge.betAmount,
+              balanceBefore: earnedBefore.toFixed(8),
+              balanceAfter: earnedAfter,
+              referenceId: settlementReferenceId,
+              referenceType: 'challenge_draw_refund',
+              description: `Draw refund for challenge ${challengeId}`,
+              metadata: JSON.stringify({ challengeId, reason: 'draw' }),
+            });
+          }
+        });
+      } else {
+        await db.transaction(async (tx) => {
+          const sortedPlayerIds = [...allPlayerIds].sort();
+          const usersById = new Map<string, typeof users.$inferSelect>();
+
+          for (const playerId of sortedPlayerIds) {
+            const [user] = await tx.select().from(users)
+              .where(eq(users.id, playerId))
+              .for('update');
+
+            if (!user) {
+              throw new Error(`User not found for draw refund: ${playerId}`);
+            }
+
+            usersById.set(playerId, user);
+          }
+
+          for (const playerId of allPlayerIds) {
+            const user = usersById.get(playerId);
+            if (!user) continue;
+
+            const balanceBefore = parseFloat(user.balance || '0');
+            const balanceAfter = (balanceBefore + betAmount).toFixed(2);
+
+            await tx.update(users)
+              .set({ balance: balanceAfter, updatedAt: new Date() })
+              .where(eq(users.id, playerId));
+
+            await tx.insert(transactions).values({
+              userId: playerId,
+              type: 'game_refund',
+              status: 'completed',
+              amount: challenge.betAmount,
+              balanceBefore: balanceBefore.toFixed(2),
+              balanceAfter,
+              description: `Draw refund for challenge ${challengeId}`,
+              referenceId: settlementReferenceId,
+              processedAt: new Date(),
+            });
+          }
+        });
       }
+
       logger.info(`[Payout] Draw refund: challenge=${challengeId}, refunded ${challenge.betAmount} to ${allPlayerIds.length} players`);
     }
 
