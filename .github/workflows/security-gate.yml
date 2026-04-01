@@ -67,6 +67,9 @@ jobs:
             - name: Build for production runtime checks
               run: npm run build
 
+            - name: Provision database schema
+              run: npm run db:push
+
             - name: Settlement idempotency smoke
               run: npm run security:smoke:settlement-idempotency
 
