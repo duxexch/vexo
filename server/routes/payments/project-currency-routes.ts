@@ -3,8 +3,28 @@ import { AuthRequest, authMiddleware, sensitiveRateLimiter } from "../middleware
 import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import { sendNotification } from "../../websocket";
+import { db } from "../../db";
+import { gameplaySettings } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 export function registerProjectCurrencyRoutes(app: Express): void {
+
+  app.get("/api/project-currency/play-gift-policy", async (_req: Request, res: Response) => {
+    try {
+      const [setting] = await db.select({ value: gameplaySettings.value })
+        .from(gameplaySettings)
+        .where(eq(gameplaySettings.key, "play_gift_currency_mode"))
+        .limit(1);
+
+      const mode = setting?.value === "mixed" ? "mixed" : "project_only";
+      res.json({
+        mode,
+        projectOnly: mode === "project_only",
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
 
   app.get("/api/project-currency/settings", async (req: Request, res: Response) => {
     try {
@@ -103,7 +123,7 @@ export function registerProjectCurrencyRoutes(app: Express): void {
         messageAr: `تحويل $${parsedAmount.toFixed(2)} ${conversion.status === 'pending' ? 'مقدم للمراجعة' : 'مكتمل'}. الصافي: ${conversion.netAmount} عملة.`,
         link: '/wallet',
         metadata: JSON.stringify({ conversionId: conversion.id, amount: parsedAmount, status: conversion.status }),
-      }).catch(() => {});
+      }).catch(() => { });
 
       res.json({
         message: conversion.status === "pending"

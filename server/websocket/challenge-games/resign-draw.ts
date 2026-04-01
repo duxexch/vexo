@@ -13,6 +13,7 @@ import { requireChallengePlayer } from "./guards";
 /** Handle game_resign message — resign with payout settlement */
 export async function handleGameResign(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId } = data;
+  const reason = data?.reason === "timeout" ? "timeout" : "resignation";
   const guard = requireChallengePlayer(ws, challengeId);
   if (!guard.ok) {
     return;
@@ -69,7 +70,7 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
           .set({
             status: "finished",
             winnerId,
-            winReason: "resignation",
+            winReason: reason,
             updatedAt: new Date(),
           })
           .where(eq(challengeGameSessions.id, session.id));
@@ -109,7 +110,7 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
         socket.send(JSON.stringify({
           type: "game_ended",
           winnerId: result.winnerId,
-          reason: "resignation",
+          reason,
           seq: gameEndedSeq,
         }));
       }

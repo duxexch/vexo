@@ -1165,7 +1165,7 @@ export const p2pDisputes = pgTable("p2p_disputes", {
 // ==================== P2P TRANSACTION LOGS ====================
 
 export const p2pTransactionLogActionEnum = pgEnum("p2p_transaction_log_action", [
-  "trade_created", "payment_marked", "payment_confirmed", "trade_completed", 
+  "trade_created", "payment_marked", "payment_confirmed", "trade_completed",
   "trade_cancelled", "dispute_opened", "dispute_message", "evidence_uploaded",
   "dispute_resolved", "escrow_held", "escrow_released", "escrow_returned"
 ]);
@@ -1310,7 +1310,7 @@ export const p2pSettings = pgTable("p2p_settings", {
 
 export const p2pVerificationLevelEnum = pgEnum("p2p_verification_level", ["none", "email", "phone", "kyc_basic", "kyc_full"]);
 export const p2pBadgeTypeEnum = pgEnum("p2p_badge_type", [
-  "verified", "trusted_seller", "trusted_buyer", "fast_responder", "high_volume", 
+  "verified", "trusted_seller", "trusted_buyer", "fast_responder", "high_volume",
   "new_star", "dispute_free", "premium_trader", "top_rated"
 ]);
 
@@ -2049,6 +2049,7 @@ export const userRelationships = pgTable("user_relationships", {
   index("idx_user_relationships_target_user_id").on(table.targetUserId),
   index("idx_user_relationships_type").on(table.type),
   index("idx_user_relationships_status").on(table.status),
+  uniqueIndex("idx_user_relationships_unique").on(table.userId, table.targetUserId, table.type),
 ]);
 
 export const userRelationshipsRelations = relations(userRelationships, ({ one }) => ({

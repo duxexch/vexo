@@ -3,6 +3,7 @@ import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import { parseStringQueryParam } from "../../lib/input-security";
+import { getBlockedUserIds } from "../../lib/user-blocking";
 
 export function registerSocialSearchRoutes(app: Express): void {
 
@@ -15,14 +16,19 @@ export function registerSocialSearchRoutes(app: Express): void {
       }
 
       const searchResults = await storage.searchUsers(query, req.user!.id);
-      const following = await storage.getUserFollowing(req.user!.id);
+      const [following, blockedIds] = await Promise.all([
+        storage.getUserFollowing(req.user!.id),
+        getBlockedUserIds(req.user!.id),
+      ]);
       const followingIds = new Set(following.map(r => r.targetUserId));
+      const blockedSet = new Set(blockedIds);
 
       const results = searchResults.map(user => {
         const { password, ...safeUser } = user;
         return {
           ...safeUser,
           isFollowing: followingIds.has(user.id),
+          isBlocked: blockedSet.has(user.id),
         };
       });
 
@@ -43,13 +49,15 @@ export function registerSocialSearchRoutes(app: Express): void {
 
       const { password, ...safeUser } = user;
 
-      const following = await storage.getUserFollowing(req.user!.id);
-      const followers = await storage.getUserFollowers(req.user!.id);
-      const blocked = await storage.getUserBlocked(req.user!.id);
+      const [following, followers, blockedIds] = await Promise.all([
+        storage.getUserFollowing(req.user!.id),
+        storage.getUserFollowers(req.user!.id),
+        getBlockedUserIds(req.user!.id),
+      ]);
 
       const isFollowing = following.some(r => r.targetUserId === user.id);
       const isFollower = followers.some(r => r.userId === user.id);
-      const isBlocked = blocked.some(r => r.targetUserId === user.id);
+      const isBlocked = blockedIds.includes(user.id);
       const isFriend = isFollowing && isFollower;
 
       res.json({

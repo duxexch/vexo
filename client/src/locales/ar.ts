@@ -1429,8 +1429,6 @@ const ar: Record<string, string> = {
   'baloot.tapToDismiss': 'اضغط للإغلاق',
   'baloot.passed': 'مرّر',
   'baloot.rounds': 'جولات لُعبت',
-
-  // Referral page
   'referral.title': 'ادعُ أصدقاءك',
   'referral.description': 'ادعُ أصدقاءك واحصل على مكافآت عن كل صديق يسجل!',
   'referral.copied': 'تم النسخ!',
@@ -1454,8 +1452,6 @@ const ar: Record<string, string> = {
   'referral.step2': 'صديقك يسجل باستخدام الرابط',
   'referral.step3': 'تحصل على مكافأة عن كل تسجيل',
   'referral.step4': 'كلما دعوت أكثر، كانت المكافآت أكبر!',
-
-  // Daily Rewards page
   'dailyRewards.title': 'المكافآت اليومية',
   'dailyRewards.description': 'سجّل دخولك يومياً واحصل على مكافآت متزايدة!',
   'dailyRewards.claimed': 'تم استلام المكافأة!',
@@ -1477,8 +1473,6 @@ const ar: Record<string, string> = {
   'dailyRewards.tip3': 'اليوم 7 يعطي مكافأة كبيرة!',
   'dailyRewards.tip4': 'فقدان يوم يعيد تعيين السلسلة',
   'dailyRewards.tip5': 'المكافآت تضاف مباشرة إلى رصيدك',
-
-  // Game History page
   'gameHistory.title': 'سجل الألعاب',
   'gameHistory.games': 'الألعاب',
   'gameHistory.wins': 'الانتصارات',
@@ -1499,8 +1493,6 @@ const ar: Record<string, string> = {
   'gameHistory.loss': 'خسارة',
   'gameHistory.noGames': 'لا توجد ألعاب مكتملة بعد',
   'gameHistory.inProgress': 'جارية',
-
-  // Install App page
   'install.title': 'تثبيت تطبيق VEX',
   'install.description': 'احصل على تجربة أسرع وأفضل مع التطبيق. العب وتداول واكسب مباشرة من جهازك!',
   'install.followSteps': '📱 اتبع الخطوات',
@@ -1644,8 +1636,6 @@ const ar: Record<string, string> = {
   'install.faq5q': 'ما هو ملف AAB؟',
   'install.faq5a': 'AAB (حزمة تطبيق أندرويد) هو التنسيق الرسمي من Google لنشر التطبيقات على المتجر. ينتج تحميلات أصغر محسّنة لكل جهاز. للتثبيت المباشر، ستحتاج أداة bundletool من Google لاستخراج ملفات APK منه.',
   'install.readyToPlay': 'جاهز للعب؟ حمّل التطبيق الآن!',
-
-  // Games Catalog page
   'catalog.title': 'كتالوج الألعاب',
   'catalog.playNow': 'العب الآن',
   'catalog.players': 'لاعبين',
@@ -1672,8 +1662,6 @@ const ar: Record<string, string> = {
   'catalog.readyDesc': 'انضم إلى الآلاف من اللاعبين وابدأ رحلتك نحو القمة',
   'catalog.startPlaying': 'ابدأ اللعب',
   'catalog.watchMatches': 'شاهد المباريات',
-
-  // Challenge Game page
   'challenge.newGift': 'هدية جديدة!',
   'challenge.drawOffered': 'عرض تعادل',
   'challenge.opponentOffersDraw': 'الخصم يعرض التعادل',

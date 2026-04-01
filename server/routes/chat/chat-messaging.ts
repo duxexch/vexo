@@ -3,9 +3,10 @@ import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
 import { eq, and, or, desc } from "drizzle-orm";
-import { users, chatMessages, chatSettings } from "@shared/schema";
+import { chatMessages, chatSettings } from "@shared/schema";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import { sanitizePlainText } from "../../lib/input-security";
+import { isUserBlocked } from "../../lib/user-blocking";
 
 export function registerChatMessagingRoutes(app: Express): void {
 
@@ -70,15 +71,15 @@ export function registerChatMessagingRoutes(app: Express): void {
       }
 
       // SECURITY: Check block/mute
-      const [senderUser] = await db.select({ blockedUsers: users.blockedUsers })
-        .from(users).where(eq(users.id, senderId));
-      const [recipientUser] = await db.select({ blockedUsers: users.blockedUsers })
-        .from(users).where(eq(users.id, receiverId));
+      const [senderBlockedRecipient, recipientBlockedSender] = await Promise.all([
+        isUserBlocked(senderId, receiverId),
+        isUserBlocked(receiverId, senderId),
+      ]);
 
-      if (senderUser?.blockedUsers?.includes(receiverId)) {
+      if (senderBlockedRecipient) {
         return res.status(403).json({ error: "You have blocked this user" });
       }
-      if (recipientUser?.blockedUsers?.includes(senderId)) {
+      if (recipientBlockedSender) {
         return res.status(403).json({ error: "Cannot send message to this user" });
       }
 

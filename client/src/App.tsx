@@ -151,7 +151,7 @@ function PageLoader() {
   );
 }
 
-function SidebarBalanceDisplay({ user, logout, t }: { user: { balance?: string | number | null; username?: string | null; [key: string]: unknown } | null; logout: () => void; t: (key: string) => string }) {
+function SidebarBalanceDisplay({ user, logout, t }: { user: { balance?: string | number | null; username?: string | null;[key: string]: unknown } | null; logout: () => void; t: (key: string) => string }) {
   return (
     <div className="space-y-3">
       <BalanceDisplay balance={String(user?.balance || "0")} variant="sidebar" />
@@ -260,25 +260,25 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
                 const badgeCount = item.key === 'notifications' ? unreadCount : (sectionCounts[item.key] || 0);
                 const isActive = location === item.url;
                 return (
-                <SidebarMenuItem key={item.key}>
-                  <SidebarMenuButton 
-                    isActive={isActive}
-                    onClick={() => handleNavClick(item.url)}
-                    onMouseEnter={() => prefetchPage(item.url)}
-                    aria-current={isActive ? "page" : undefined}
-                    data-testid={`link-${item.key}`}
-                  >
-                    <div className="relative">
-                      <item.icon />
-                      {badgeCount > 0 && !isActive && (
-                        <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none px-1">
-                          {badgeCount > 99 ? "99+" : badgeCount}
-                        </span>
-                      )}
-                    </div>
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                  <SidebarMenuItem key={item.key}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      onClick={() => handleNavClick(item.url)}
+                      onMouseEnter={() => prefetchPage(item.url)}
+                      aria-current={isActive ? "page" : undefined}
+                      data-testid={`link-${item.key}`}
+                    >
+                      <div className="relative">
+                        <item.icon />
+                        {badgeCount > 0 && !isActive && (
+                          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none px-1">
+                            {badgeCount > 99 ? "99+" : badgeCount}
+                          </span>
+                        )}
+                      </div>
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 );
               })}
             </SidebarMenu>
@@ -300,7 +300,7 @@ function BalanceBar() {
 function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => void; isChatOpen: boolean }) {
   const { t, language } = useI18n();
   const [location, setLocation] = useLocation();
-  const { unreadCount, sectionCounts } = useNotificationStatus();
+  const { sectionCounts } = useNotificationStatus();
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
 
@@ -308,23 +308,22 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
     { title: t('nav.p2p') || 'P2P', url: "/p2p", icon: ArrowLeftRight, key: "p2p" },
     { title: t('nav.main') || 'Main', url: "/", icon: Home, key: "main" },
     { title: t('nav.play') || 'Games', url: "/games", icon: Gamepad2, key: "play" },
-    { title: language === 'ar' ? 'الإشعارات' : 'Alerts', url: "/notifications", icon: Bell, key: "notifications", hasBadge: true },
     { title: t('nav.challenges') || 'Challenges', url: "/challenges", icon: Swords, key: "challenges" },
   ];
 
   const navigateToIndex = (direction: 'left' | 'right') => {
     const currentIndex = navItems.findIndex(item => item.url === location);
     if (currentIndex === -1) return;
-    
+
     let newIndex: number;
     const isRTL = language === 'ar';
-    
+
     if ((direction === 'right' && !isRTL) || (direction === 'left' && isRTL)) {
       newIndex = currentIndex < navItems.length - 1 ? currentIndex + 1 : 0;
     } else {
       newIndex = currentIndex > 0 ? currentIndex - 1 : navItems.length - 1;
     }
-    
+
     setLocation(navItems[newIndex].url);
   };
 
@@ -353,10 +352,10 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
 
     const handleTouchEnd = () => {
       if (!touchStartX.current || !touchEndX.current) return;
-      
+
       const distance = touchStartX.current - touchEndX.current;
       const isSwipe = Math.abs(distance) > minSwipeDistance;
-      
+
       if (isSwipe) {
         if (distance > 0) {
           navigateToIndex('right');
@@ -364,7 +363,7 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
           navigateToIndex('left');
         }
       }
-      
+
       touchStartX.current = null;
       touchEndX.current = null;
     };
@@ -384,32 +383,30 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
     <nav className="fixed bottom-0 start-0 end-0 flex items-center justify-around gap-1 px-2 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t bg-background md:hidden z-50" aria-label="Main navigation">
       {navItems.map((item) => {
         const isActive = location === item.url;
-        const badgeCount = item.key === 'notifications' ? (isActive ? 0 : unreadCount) : (isActive ? 0 : (sectionCounts[item.key] || 0));
+        const badgeCount = isActive ? 0 : (sectionCounts[item.key] || 0);
         return (
           <Link key={item.key} href={item.url}
-            className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md min-w-[3rem] transition-colors no-underline ${
-              isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md min-w-[3rem] transition-colors no-underline ${isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              }`}
             aria-current={isActive ? "page" : undefined}
             data-testid={`nav-${item.key}`}
           >
             <div className="relative">
               <item.icon className="w-5 h-5" />
-                {badgeCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold leading-none px-0.5">
-                    {badgeCount > 99 ? "99+" : badgeCount}
-                  </span>
-                )}
-              </div>
-              <span className="text-[10px] font-medium leading-none">{item.title}</span>
-              {isActive && <div className="w-4 h-0.5 bg-primary rounded-full mt-0.5" />}
+              {badgeCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold leading-none px-0.5">
+                  {badgeCount > 99 ? "99+" : badgeCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-medium leading-none">{item.title}</span>
+            {isActive && <div className="w-4 h-0.5 bg-primary rounded-full mt-0.5" />}
           </Link>
         );
       })}
       <button
-        className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md min-w-[3rem] transition-colors ${
-          isChatOpen ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-        }`}
+        className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md min-w-[3rem] transition-colors ${isChatOpen ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+          }`}
         onClick={onChatToggle}
         data-testid="nav-chat"
       >
@@ -425,7 +422,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const { t, language, dir } = useI18n();
   const sidebarSide = language === 'ar' ? 'right' : 'left';
   const [isChatOpen, setIsChatOpen] = useState(false);
-  
+
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "4rem",
@@ -437,48 +434,48 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <NotificationProvider>
-    <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full" dir={dir}>
-        <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[200] focus:p-3 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:m-2">
-          {t('nav.skipToContent') || 'Skip to content'}
-        </a>
-        <AppSidebar side={sidebarSide} />
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-3 border-b bg-background sticky top-0 z-50">
-            <SidebarTrigger className="h-10 w-10" aria-label={t('nav.navigation') || 'Navigation'} data-testid="button-sidebar-toggle" />
-            <div className="flex items-center gap-3 flex-wrap">
-              <Link href="/wallet">
-                <Button variant="outline" size="sm" className="gap-2" aria-label={t('nav.wallet') || 'Wallet'} data-testid="button-header-wallet">
-                  <Wallet className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t('nav.wallet')}</span>
-                </Button>
-              </Link>
-              <ThemeToggle />
-              <NotificationBell />
-              <LanguageSwitcher />
-            </div>
-          </header>
-          <main id="main-content" className="flex-1 overflow-auto pb-16 md:pb-0 animate-page-enter">
-            {children}
-          </main>
-          <BottomNavigation onChatToggle={toggleChat} isChatOpen={isChatOpen} />
-        </div>
-        {isChatOpen && (
-          <div className="fixed inset-0 z-[100] md:hidden" onClick={toggleChat}>
-            <div className="absolute inset-0 bg-black/50" />
-            <div 
-              className="absolute bottom-16 start-0 end-0 h-[70vh] bg-background rounded-t-xl overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Suspense fallback={<PageLoader />}>
-                <ChatPage />
-              </Suspense>
-            </div>
+      <SidebarProvider style={style as React.CSSProperties}>
+        <div className="flex h-screen w-full" dir={dir}>
+          <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[200] focus:p-3 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:m-2">
+            {t('nav.skipToContent') || 'Skip to content'}
+          </a>
+          <AppSidebar side={sidebarSide} />
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <header className="flex items-center justify-between gap-4 p-3 border-b bg-background sticky top-0 z-50">
+              <SidebarTrigger className="h-10 w-10" aria-label={t('nav.navigation') || 'Navigation'} data-testid="button-sidebar-toggle" />
+              <div className="flex items-center gap-3 flex-wrap">
+                <Link href="/wallet">
+                  <Button variant="outline" size="sm" className="gap-2" aria-label={t('nav.wallet') || 'Wallet'} data-testid="button-header-wallet">
+                    <Wallet className="h-4 w-4" />
+                    <span className="hidden sm:inline">{t('nav.wallet')}</span>
+                  </Button>
+                </Link>
+                <ThemeToggle />
+                <NotificationBell />
+                <LanguageSwitcher />
+              </div>
+            </header>
+            <main id="main-content" className="flex-1 overflow-auto pb-16 md:pb-0 animate-page-enter">
+              {children}
+            </main>
+            <BottomNavigation onChatToggle={toggleChat} isChatOpen={isChatOpen} />
           </div>
-        )}
-      </div>
-      <SupportChatWidget isLoggedIn={true} />
-    </SidebarProvider>
+          {isChatOpen && (
+            <div className="fixed inset-0 z-[100] md:hidden" onClick={toggleChat}>
+              <div className="absolute inset-0 bg-black/50" />
+              <div
+                className="absolute bottom-16 start-0 end-0 h-[70vh] bg-background rounded-t-xl overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Suspense fallback={<PageLoader />}>
+                  <ChatPage />
+                </Suspense>
+              </div>
+            </div>
+          )}
+        </div>
+        <SupportChatWidget isLoggedIn={true} />
+      </SidebarProvider>
     </NotificationProvider>
   );
 }
@@ -488,97 +485,97 @@ function AdminRouter() {
     <ErrorBoundary>
       <Suspense fallback={<PageLoader />}>
         <Switch>
-        <Route path="/admin" component={AdminLoginPage} />
-        <Route path="/admin/dashboard">
-          <AdminLayout><AdminDashboardPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/users">
-          <AdminLayout><AdminUsersPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/sections">
-          <AdminLayout><AdminSectionsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/anti-cheat">
-          <AdminLayout><AdminAntiCheatPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/analytics">
-          <AdminLayout><AdminAnalyticsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/disputes">
-          <AdminLayout><AdminDisputesPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/tournaments">
-          <AdminLayout><AdminTournamentsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/free-play">
-          <AdminLayout><AdminFreePlayPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/p2p">
-          <AdminLayout><AdminP2PPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/currency">
-          <AdminLayout><AdminCurrencyPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/support">
-          <AdminLayout><AdminSupportPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/app-settings">
-          <AdminLayout><AdminAppSettingsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/languages">
-          <AdminLayout><AdminLanguagesPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/badges">
-          <AdminLayout><AdminBadgesPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/notifications">
-          <AdminLayout><AdminNotificationsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/games">
-          <AdminLayout><AdminGamesPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/external-games">
-          <AdminLayout><AdminExternalGamesPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/game-sections">
-          <AdminLayout><AdminGameSectionsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/id-verification">
-          <AdminLayout><AdminIdVerificationPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/seo">
-          <AdminLayout><AdminSeoPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/payment-methods">
-          <AdminLayout><AdminPaymentMethodsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/integrations">
-          <AdminLayout><AdminIntegrationsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/social-platforms">
-          <AdminLayout><AdminSocialPlatformsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/advertisements">
-          <AdminLayout><AdminAdvertisementsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/support-settings">
-          <AdminLayout><AdminSupportSettingsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/challenge-settings">
-          <AdminLayout><AdminChallengeSettingsPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/challenges">
-          <AdminLayout><AdminChallengesPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/chat-management">
-          <AdminLayout><AdminChatPage /></AdminLayout>
-        </Route>
-        <Route path="/admin/sam9">
-          <AdminLayout><AdminSam9Page /></AdminLayout>
-        </Route>
-        <Route path="/admin/audit-logs">
-          <AdminLayout><AdminAuditLogsPage /></AdminLayout>
-        </Route>
+          <Route path="/admin" component={AdminLoginPage} />
+          <Route path="/admin/dashboard">
+            <AdminLayout><AdminDashboardPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/users">
+            <AdminLayout><AdminUsersPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/sections">
+            <AdminLayout><AdminSectionsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/anti-cheat">
+            <AdminLayout><AdminAntiCheatPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/analytics">
+            <AdminLayout><AdminAnalyticsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/disputes">
+            <AdminLayout><AdminDisputesPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/tournaments">
+            <AdminLayout><AdminTournamentsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/free-play">
+            <AdminLayout><AdminFreePlayPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/p2p">
+            <AdminLayout><AdminP2PPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/currency">
+            <AdminLayout><AdminCurrencyPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/support">
+            <AdminLayout><AdminSupportPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/app-settings">
+            <AdminLayout><AdminAppSettingsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/languages">
+            <AdminLayout><AdminLanguagesPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/badges">
+            <AdminLayout><AdminBadgesPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/notifications">
+            <AdminLayout><AdminNotificationsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/games">
+            <AdminLayout><AdminGamesPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/external-games">
+            <AdminLayout><AdminExternalGamesPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/game-sections">
+            <AdminLayout><AdminGameSectionsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/id-verification">
+            <AdminLayout><AdminIdVerificationPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/seo">
+            <AdminLayout><AdminSeoPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/payment-methods">
+            <AdminLayout><AdminPaymentMethodsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/integrations">
+            <AdminLayout><AdminIntegrationsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/social-platforms">
+            <AdminLayout><AdminSocialPlatformsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/advertisements">
+            <AdminLayout><AdminAdvertisementsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/support-settings">
+            <AdminLayout><AdminSupportSettingsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/challenge-settings">
+            <AdminLayout><AdminChallengeSettingsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/challenges">
+            <AdminLayout><AdminChallengesPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/chat-management">
+            <AdminLayout><AdminChatPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/sam9">
+            <AdminLayout><AdminSam9Page /></AdminLayout>
+          </Route>
+          <Route path="/admin/audit-logs">
+            <AdminLayout><AdminAuditLogsPage /></AdminLayout>
+          </Route>
         </Switch>
       </Suspense>
     </ErrorBoundary>

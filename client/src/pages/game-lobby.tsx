@@ -117,13 +117,13 @@ interface ChallengeRowProps {
   gameConfig: Record<string, GameConfigItem>;
 }
 
-const ChallengeRow = memo(function ChallengeRow({ 
-  challenge, 
-  type, 
-  isNew, 
-  language, 
-  onJoin, 
-  onWatch, 
+const ChallengeRow = memo(function ChallengeRow({
+  challenge,
+  type,
+  isNew,
+  language,
+  onJoin,
+  onWatch,
   onResume,
   isJoining,
   t,
@@ -134,18 +134,18 @@ const ChallengeRow = memo(function ChallengeRow({
   const Icon = config.icon;
 
   return (
-    <div 
+    <div
       className={`relative flex items-center gap-4 p-4 rounded-lg bg-card/50 hover-elevate transition-all ${isNew ? 'ring-2 ring-primary' : ''}`}
       data-testid={`row-challenge-${challenge.id}`}
     >
       {isNew && (
         <Badge className="absolute -top-2 -end-2 bg-primary text-xs px-1.5 z-10">{t('lobby.new')}</Badge>
       )}
-      
+
       <div className={`p-2 rounded-lg ${config.color} border shrink-0`}>
         <Icon className="w-5 h-5" />
       </div>
-      
+
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium truncate">{challenge.player1Name}</span>
@@ -186,7 +186,7 @@ const ChallengeRow = memo(function ChallengeRow({
 
       <div className="flex items-center gap-2 shrink-0">
         {type === 'yours' && (
-          <Button 
+          <Button
             variant="outline"
             size="sm"
             onClick={() => onResume(challenge.id)}
@@ -197,7 +197,7 @@ const ChallengeRow = memo(function ChallengeRow({
           </Button>
         )}
         {type === 'open' && (
-          <Button 
+          <Button
             size="sm"
             onClick={() => onJoin(challenge.id)}
             disabled={isJoining}
@@ -214,8 +214,8 @@ const ChallengeRow = memo(function ChallengeRow({
           </Button>
         )}
         {type === 'live' && (
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => onWatch(challenge.id)}
             data-testid={`button-watch-${challenge.id}`}
@@ -242,12 +242,12 @@ interface GameCardProps {
   t: (key: string) => string;
 }
 
-const GameCard = memo(function GameCard({ 
-  gameType, 
-  config, 
-  isSelected, 
-  waitingCount, 
-  liveCount, 
+const GameCard = memo(function GameCard({
+  gameType,
+  config,
+  isSelected,
+  waitingCount,
+  liveCount,
   isTrending,
   language,
   onSelect,
@@ -257,43 +257,47 @@ const GameCard = memo(function GameCard({
   const Icon = config.icon;
 
   return (
-    <Card 
+    <Card
       className={`hover-elevate cursor-pointer transition-all overflow-hidden ${isSelected ? 'ring-2 ring-primary' : ''}`}
       onClick={() => onSelect(gameType)}
       data-testid={`card-game-${gameType}`}
     >
       <div className={`absolute inset-0 bg-gradient-to-br ${config.gradient} opacity-50`} />
-      <CardContent className="p-4 relative">
-        <div className="flex items-center gap-3">
-          <div className={`p-3 rounded-lg ${config.color} border shrink-0`}>
-            <Icon className="w-6 h-6" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold truncate">{language === 'ar' ? config.nameAr : config.name}</h3>
+      <CardContent className="p-3 sm:p-4 relative">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className={`p-2.5 sm:p-3 rounded-lg ${config.color} border shrink-0`}>
+              <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+            <div className="flex items-center gap-1 flex-wrap justify-end">
               {isTrending && (
-                <Badge variant="secondary" className="text-xs shrink-0" data-testid={`badge-trending-${gameType}`}>
+                <Badge variant="secondary" className="text-[10px] sm:text-xs shrink-0" data-testid={`badge-trending-${gameType}`}>
                   <Flame className="w-3 h-3 me-1" />
-                  {t('lobby.trending')}
+                  <span className="hidden sm:inline">{t('lobby.trending')}</span>
                 </Badge>
               )}
-            </div>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <Badge variant="outline" className="text-xs">
-                <Users className="w-3 h-3 me-1" />
-                {waitingCount}
-              </Badge>
               {liveCount > 0 && (
-                <Badge variant="destructive" className="text-xs">
+                <Badge variant="destructive" className="text-[10px] sm:text-xs shrink-0">
                   <div className="w-2 h-2 rounded-full bg-destructive-foreground me-1 animate-pulse" />
                   {liveCount} {t('lobby.live')}
                 </Badge>
               )}
             </div>
           </div>
-          <Button 
-            size="sm" 
-            className="shrink-0"
+
+          <div className="min-w-0">
+            <h3 className="font-semibold text-sm sm:text-base truncate">{language === 'ar' ? config.nameAr : config.name}</h3>
+            <div className="mt-2">
+              <Badge variant="outline" className="text-[10px] sm:text-xs">
+                <Users className="w-3 h-3 me-1" />
+                {waitingCount}
+              </Badge>
+            </div>
+          </div>
+
+          <Button
+            size="sm"
+            className="w-full"
             onClick={(e) => { e.stopPropagation(); onQuickMatch(gameType); }}
             data-testid={`button-quickmatch-${gameType}`}
           >
@@ -311,9 +315,9 @@ export default function GameLobbyPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  
+
   const savedPrefs = useMemo(() => loadPreferences(), []);
-  
+
   const [selectedGame, setSelectedGame] = useState<string | null>(savedPrefs.selectedGame);
   const [searchQuery, setSearchQuery] = useState("");
   const [stakePreset, setStakePreset] = useState(savedPrefs.stakePreset);
@@ -351,7 +355,7 @@ export default function GameLobbyPage() {
     const currentIds = availableChallenges.map(c => c.id);
     const prevIds = prevAvailableRef.current;
     const newIds = currentIds.filter(id => !prevIds.includes(id));
-    
+
     if (newIds.length > 0 && prevIds.length > 0) {
       setNewMatchIds(new Set(newIds));
       const timer = setTimeout(() => setNewMatchIds(new Set()), 3000);
@@ -404,14 +408,14 @@ export default function GameLobbyPage() {
     },
   });
 
-  const yourChallenges = useMemo(() => 
-    availableChallenges.filter((c: Challenge) => 
+  const yourChallenges = useMemo(() =>
+    availableChallenges.filter((c: Challenge) =>
       c.player1Id === user?.id && c.status === 'waiting'
     ),
     [availableChallenges, user?.id]
   );
 
-  const openMatches = useMemo(() => 
+  const openMatches = useMemo(() =>
     availableChallenges.filter((c: Challenge) => {
       if (c.player1Id === user?.id) return false;
       if (selectedGame && c.gameType !== selectedGame) return false;
@@ -422,7 +426,7 @@ export default function GameLobbyPage() {
     [availableChallenges, user?.id, selectedGame, betRange, searchQuery]
   );
 
-  const liveGames = useMemo(() => 
+  const liveGames = useMemo(() =>
     liveChallenges.filter((c: Challenge) => {
       if (selectedGame && c.gameType !== selectedGame) return false;
       return c.status === 'active';
@@ -474,10 +478,10 @@ export default function GameLobbyPage() {
 
   const startQuickMatch = useCallback(() => {
     if (!quickMatchGame) return;
-    
+
     const matchingChallenge = availableChallenges.find(
-      (c: Challenge) => c.gameType === quickMatchGame && 
-        c.status === 'waiting' && 
+      (c: Challenge) => c.gameType === quickMatchGame &&
+        c.status === 'waiting' &&
         c.player1Id !== user?.id &&
         Math.abs(c.betAmount - quickMatchBet) <= quickMatchBet * 0.3
     );
@@ -519,8 +523,8 @@ export default function GameLobbyPage() {
               {user?.freePlayCount} {t('lobby.freePlays')}
             </Badge>
           )}
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="icon"
             onClick={handleRefresh}
             data-testid="button-refresh"
@@ -534,15 +538,15 @@ export default function GameLobbyPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {Object.entries(GAME_CONFIG).map(([gameType, config]) => {
           const waitingCount = gameStats[gameType]?.waiting || 0;
           const liveCount = gameStats[gameType]?.live || 0;
           const isTrending = liveCount >= 2 || waitingCount >= 3 || (waitingCount + liveCount) >= 4;
           return (
-            <GameCard 
-              key={gameType} 
-              gameType={gameType} 
+            <GameCard
+              key={gameType}
+              gameType={gameType}
               config={config}
               isSelected={selectedGame === gameType}
               waitingCount={waitingCount}
@@ -573,7 +577,7 @@ export default function GameLobbyPage() {
               const Icon = config.icon;
               const isSelected = selectedGame === gameType;
               const matchCount = gameStats[gameType]?.waiting || 0;
-              
+
               return (
                 <Button
                   key={gameType}
@@ -612,7 +616,7 @@ export default function GameLobbyPage() {
 
           <div className="relative w-full lg:w-64">
             <Search className="absolute start-2 top-2.5 w-4 h-4 text-muted-foreground" />
-            <Input 
+            <Input
               placeholder={t('lobby.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -679,9 +683,9 @@ export default function GameLobbyPage() {
                 ) : (
                   <div className="space-y-2">
                     {yourChallenges.map((challenge: Challenge) => (
-                      <ChallengeRow 
-                        key={challenge.id} 
-                        challenge={challenge} 
+                      <ChallengeRow
+                        key={challenge.id}
+                        challenge={challenge}
                         type="yours"
                         isNew={newMatchIds.has(challenge.id)}
                         language={language}
@@ -722,9 +726,9 @@ export default function GameLobbyPage() {
                 ) : (
                   <div className="space-y-2">
                     {openMatches.map((challenge: Challenge) => (
-                      <ChallengeRow 
-                        key={challenge.id} 
-                        challenge={challenge} 
+                      <ChallengeRow
+                        key={challenge.id}
+                        challenge={challenge}
                         type="open"
                         isNew={newMatchIds.has(challenge.id)}
                         language={language}
@@ -768,9 +772,9 @@ export default function GameLobbyPage() {
                 ) : (
                   <div className="space-y-2">
                     {liveGames.map((challenge: Challenge) => (
-                      <ChallengeRow 
-                        key={challenge.id} 
-                        challenge={challenge} 
+                      <ChallengeRow
+                        key={challenge.id}
+                        challenge={challenge}
                         type="live"
                         isNew={false}
                         language={language}
@@ -798,7 +802,7 @@ export default function GameLobbyPage() {
               {t('lobby.quickMatchTitle')}
             </DialogTitle>
           </DialogHeader>
-          
+
           {quickMatchGame && (
             <div className="space-y-4">
               <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
@@ -845,7 +849,7 @@ export default function GameLobbyPage() {
             <Button variant="outline" onClick={() => setShowQuickMatch(false)} data-testid="button-cancel-quickmatch">
               {t('common.cancel')}
             </Button>
-            <Button 
+            <Button
               onClick={startQuickMatch}
               disabled={createChallengeMutation.isPending || joinChallengeMutation.isPending}
               data-testid="button-start-quickmatch"

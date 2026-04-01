@@ -287,6 +287,7 @@ function defaultModel() {
       eventCounts: Object.create(null),
       botDecisions: 0,
       adminChats: 0,
+      supportChats: 0,
       selfTuneRuns: 0,
       lastSelfTuneAt: null,
     },
@@ -294,6 +295,7 @@ function defaultModel() {
     users: Object.create(null),
     games: Object.create(null),
     sessions: Object.create(null),
+    supportDesk: Object.create(null),
     projectSnapshots: [],
     rawEvents: [],
     analytics: {
@@ -350,6 +352,7 @@ function migrateModel(parsed) {
     users: isPlainObject(parsed?.users) ? parsed.users : Object.create(null),
     games: isPlainObject(parsed?.games) ? parsed.games : Object.create(null),
     sessions: isPlainObject(parsed?.sessions) ? parsed.sessions : Object.create(null),
+    supportDesk: isPlainObject(parsed?.supportDesk) ? parsed.supportDesk : Object.create(null),
     projectSnapshots: Array.isArray(parsed?.projectSnapshots) ? parsed.projectSnapshots : [],
     rawEvents: Array.isArray(parsed?.rawEvents) ? parsed.rawEvents : [],
   };
@@ -364,8 +367,223 @@ function migrateModel(parsed) {
   merged.runtime.reason = String(merged.runtime.reason || '');
   merged.rawEvents = merged.rawEvents.slice(-MAX_RAW_EVENTS);
   merged.projectSnapshots = merged.projectSnapshots.slice(-MAX_PROJECT_SNAPSHOTS);
+  if (!isPlainObject(merged.supportDesk)) {
+    merged.supportDesk = Object.create(null);
+  }
 
   return merged;
+}
+
+function hasArabicChars(text) {
+  return /[\u0600-\u06FF]/.test(String(text || ''));
+}
+
+function getSupportDeskStore() {
+  if (!isPlainObject(model.supportDesk)) {
+    model.supportDesk = Object.create(null);
+  }
+  return model.supportDesk;
+}
+
+function getOrCreateSupportConversation(ticketId, userId) {
+  const store = getSupportDeskStore();
+  const safeTicketId = normalizeMapKey(ticketId, 'support_ticket');
+  const safeUserId = hashStable(userId || 'unknown_user');
+  const key = `${safeTicketId}:${safeUserId}`;
+
+  if (!isPlainObject(store[key])) {
+    store[key] = {
+      key,
+      ticketId: safeTicketId,
+      userId: safeUserId,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      turnCount: 0,
+      severity: 'normal',
+      status: 'collecting',
+      collected: {
+        issue: false,
+        steps: false,
+        expected: false,
+        actual: false,
+        error: false,
+        time: false,
+        impact: false,
+        platform: false,
+      },
+      details: {
+        issue: '',
+        steps: '',
+        expected: '',
+        actual: '',
+        error: '',
+        time: '',
+        impact: '',
+        platform: '',
+      },
+    };
+  }
+
+  return store[key];
+}
+
+function updateSupportConversationFromMessage(conversation, message) {
+  const text = String(message || '').trim();
+  const lower = text.toLowerCase();
+
+  conversation.turnCount = toNumber(conversation.turnCount, 0) + 1;
+  conversation.updatedAt = nowIso();
+
+  if (!conversation.collected.issue && text.length >= 18) {
+    conversation.collected.issue = true;
+    conversation.details.issue = text.slice(0, 280);
+  }
+
+  if (!conversation.collected.platform) {
+    if (/\b(android|ios|iphone|ipad|web|browser|chrome|safari|app|desktop)\b/i.test(lower) || /اندرويد|ايفون|المتصفح|تطبيق|ويب|سطح المكتب/.test(lower)) {
+      conversation.collected.platform = true;
+      conversation.details.platform = text.slice(0, 120);
+    }
+  }
+
+  if (!conversation.collected.steps && (/\b(tried|steps|after|when i|repro)\b/i.test(lower) || /جربت|الخطوات|بعد ما|لما/.test(lower))) {
+    conversation.collected.steps = true;
+    conversation.details.steps = text.slice(0, 220);
+  }
+
+  if (!conversation.collected.expected && (/\b(should|expected|supposed to)\b/i.test(lower) || /المفروض|كان لازم|متوقع/.test(lower))) {
+    conversation.collected.expected = true;
+    conversation.details.expected = text.slice(0, 220);
+  }
+
+  if (!conversation.collected.actual && (/\b(not working|doesn't|can't|failed|stuck|freeze|error)\b/i.test(lower) || /مش شغال|ما بيشتغل|تعطل|هنج|معلق|خطأ|فشل/.test(lower))) {
+    conversation.collected.actual = true;
+    conversation.details.actual = text.slice(0, 220);
+  }
+
+  if (!conversation.collected.error && (/\b(error|code|exception|timeout|403|404|500)\b/i.test(lower) || /رمز|كود|خطأ|مهلة|استثناء/.test(lower))) {
+    conversation.collected.error = true;
+    conversation.details.error = text.slice(0, 220);
+  }
+
+  if (!conversation.collected.time && (/\b(today|yesterday|since|after update|now|minutes|hours)\b/i.test(lower) || /اليوم|امبارح|منذ|بعد التحديث|الآن|دقائق|ساعات/.test(lower))) {
+    conversation.collected.time = true;
+    conversation.details.time = text.slice(0, 180);
+  }
+
+  if (!conversation.collected.impact && (/\b(urgent|blocked|cannot use|payment|money|withdraw|deposit|security|hack|account locked)\b/i.test(lower) || /عاجل|موقوف|مش قادر استخدم|فلوس|سحب|ايداع|أمان|اختراق|الحساب مقفول/.test(lower))) {
+    conversation.collected.impact = true;
+    conversation.details.impact = text.slice(0, 220);
+  }
+
+  if (/\b(payment|money|withdraw|deposit|security|hack|locked)\b/i.test(lower) || /فلوس|سحب|ايداع|امان|اختراق|مقفول/.test(lower)) {
+    conversation.severity = 'high';
+  }
+}
+
+function isExplicitLiveChatRequest(message) {
+  const lower = String(message || '').toLowerCase();
+  return /\b(live chat|human|agent|escalate|transfer)\b/i.test(lower) || /محادثة حية|موظف|تحويل|تصعيد|بشري/.test(lower);
+}
+
+function buildSupportHandoffSummary(conversation) {
+  const detail = conversation.details || {};
+  const lines = [];
+  if (detail.issue) lines.push(`issue=${detail.issue}`);
+  if (detail.platform) lines.push(`platform=${detail.platform}`);
+  if (detail.actual) lines.push(`actual=${detail.actual}`);
+  if (detail.error) lines.push(`error=${detail.error}`);
+  if (detail.steps) lines.push(`steps=${detail.steps}`);
+  if (detail.time) lines.push(`time=${detail.time}`);
+  if (detail.impact) lines.push(`impact=${detail.impact}`);
+  return lines.slice(0, 5).join(' | ');
+}
+
+function buildSupportTriageReply(conversation, message) {
+  updateSupportConversationFromMessage(conversation, message);
+  const arabic = hasArabicChars(message);
+
+  if (isExplicitLiveChatRequest(message)) {
+    conversation.status = 'ready_for_handoff';
+    const summary = buildSupportHandoffSummary(conversation);
+    return {
+      reply: arabic
+        ? `أكيد، هحوّلك لفريق الدعم البشري الآن. قبل التحويل، ده ملخص سريع: ${summary || 'تم استلام المشكلة.'}`
+        : `Sure, I can transfer you to a human support specialist now. Quick summary before handoff: ${summary || 'Issue captured.'}`,
+      confidence: 0.9,
+      resolved: false,
+      escalateToLiveChat: true,
+      reason: 'user_requested_live_chat',
+      triage: {
+        turnCount: conversation.turnCount,
+        severity: conversation.severity,
+        collected: conversation.collected,
+        summary,
+      },
+    };
+  }
+
+  const collected = conversation.collected || {};
+  const hasCore = Boolean(collected.issue && collected.actual && (collected.time || collected.steps));
+  const highSeverity = conversation.severity === 'high';
+
+  if (highSeverity && hasCore && conversation.turnCount >= 2) {
+    conversation.status = 'ready_for_handoff';
+    const summary = buildSupportHandoffSummary(conversation);
+    return {
+      reply: arabic
+        ? `فهمت المشكلة، وعلشان أسرّع الحل هحولها لفريق بشري مع كل التفاصيل: ${summary || 'تم جمع البيانات الأساسية.'}`
+        : `I understand the issue. To speed things up, I will hand this to a human specialist with full context: ${summary || 'Core details captured.'}`,
+      confidence: 0.86,
+      resolved: false,
+      escalateToLiveChat: true,
+      reason: 'high_severity_case',
+      triage: {
+        turnCount: conversation.turnCount,
+        severity: conversation.severity,
+        collected: conversation.collected,
+        summary,
+      },
+    };
+  }
+
+  const questionsAr = [];
+  const questionsEn = [];
+
+  if (!collected.platform) {
+    questionsAr.push('بتستخدم التطبيق ولا المتصفح؟ وعلى أي جهاز؟');
+    questionsEn.push('Are you using the app or browser, and on which device?');
+  }
+  if (!collected.steps) {
+    questionsAr.push('ايه آخر خطوات عملتها قبل المشكلة؟');
+    questionsEn.push('What were the last steps right before the issue happened?');
+  }
+  if (!collected.time) {
+    questionsAr.push('المشكلة بدأت من إمتى تقريبًا؟');
+    questionsEn.push('When did this start approximately?');
+  }
+  if (!collected.error) {
+    questionsAr.push('لو في رسالة خطأ أو كود، ابعته زي ما ظهر.');
+    questionsEn.push('If there is an error message/code, please paste it exactly as shown.');
+  }
+
+  const ask = (arabic ? questionsAr : questionsEn).slice(0, 2);
+
+  return {
+    reply: arabic
+      ? `تمام، فهمت. خليني أجمع التفاصيل بسرعة عشان أوصلك لحل أدق. ${ask.join(' ')}`
+      : `Got it. Let me collect a few details so I can help better. ${ask.join(' ')}`,
+    confidence: 0.72,
+    resolved: false,
+    escalateToLiveChat: false,
+    reason: 'triage_in_progress',
+    triage: {
+      turnCount: conversation.turnCount,
+      severity: conversation.severity,
+      collected: conversation.collected,
+      summary: buildSupportHandoffSummary(conversation),
+    },
+  };
 }
 
 async function loadModel() {
@@ -1025,6 +1243,13 @@ function getCapabilities() {
       },
       notes: 'All analytics are privacy-safe and use pseudonymized identifiers.',
     },
+    supportDesk: {
+      enabled: true,
+      endpoints: {
+        chat: '/v1/support/chat',
+      },
+      features: ['human-style triage', 'structured incident collection', 'controlled escalation'],
+    },
   };
 }
 
@@ -1436,6 +1661,52 @@ export async function startSam9Service() {
     } catch (error) {
       console.error(`[${AGENT_NAME}] admin chat failed:`, error);
       res.status(500).json({ error: 'Failed to process admin chat message' });
+    }
+  });
+
+  app.post('/v1/support/chat', authorize, (req, res) => {
+    try {
+      if (!isRuntimeEnabled()) {
+        return res.status(503).json({
+          error: `${AGENT_NAME} runtime is stopped`,
+          code: 'AGENT_STOPPED',
+          runtime: getRuntimeState(),
+        });
+      }
+
+      model.summary.supportChats += 1;
+
+      const ticketId = redactString(String(req.body?.ticketId || 'ticket'));
+      const userId = redactString(String(req.body?.userId || 'user'));
+      const message = redactString(String(req.body?.message || ''));
+
+      if (!message.trim()) {
+        return res.status(400).json({ error: 'Message is required' });
+      }
+
+      const conversation = getOrCreateSupportConversation(ticketId, userId);
+      const answer = buildSupportTriageReply(conversation, message);
+
+      trackRawEvent('support_chat', {
+        ticketId: hashStable(ticketId),
+        userId: hashStable(userId),
+        messageLength: message.length,
+        turnCount: toNumber(conversation.turnCount, 1),
+        severity: conversation.severity,
+        escalateToLiveChat: Boolean(answer.escalateToLiveChat),
+        reason: answer.reason || 'unknown',
+      });
+
+      scheduleFlush();
+
+      res.json({
+        generatedAt: nowIso(),
+        agentName: AGENT_NAME,
+        ...answer,
+      });
+    } catch (error) {
+      console.error(`[${AGENT_NAME}] support chat failed:`, error);
+      res.status(500).json({ error: 'Failed to process support chat message' });
     }
   });
 

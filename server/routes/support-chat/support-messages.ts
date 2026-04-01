@@ -3,7 +3,7 @@ import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { eq, and, or, desc } from "drizzle-orm";
+import { eq, and, or, desc, count } from "drizzle-orm";
 import { supportTickets, supportMessages } from "@shared/schema";
 import { emitAdminAlert } from "../../lib/admin-alerts";
 import { broadcastAdminAlert } from "../../websocket";
@@ -13,7 +13,17 @@ import { getAutoReply } from "./support-ticket";
 import { sanitizeNullablePlainText, sanitizePlainText } from "../../lib/input-security";
 import { chatWithAiAgentSupport } from "../../lib/ai-agent-client";
 
-function shouldEscalateToLiveChat(aiReply: string, aiMeta?: { resolved?: boolean; escalateToLiveChat?: boolean; confidence?: number }): boolean {
+function shouldEscalateToLiveChat(
+  aiReply: string,
+  userInput: string,
+  userTurns: number,
+  aiMeta?: { resolved?: boolean; escalateToLiveChat?: boolean; confidence?: number },
+): boolean {
+  const normalizedInput = userInput.trim().toLowerCase();
+  const explicitTransfer = /\b(live chat|human|agent|transfer|escalate)\b/i.test(normalizedInput)
+    || /محادثة حية|موظف|بشري|تحويل|تصعيد/.test(normalizedInput);
+
+  if (explicitTransfer) return true;
   if (aiMeta?.escalateToLiveChat) return true;
   if (aiMeta?.resolved === false) return true;
   if (typeof aiMeta?.confidence === "number" && aiMeta.confidence < 0.4) return true;
@@ -25,6 +35,10 @@ function shouldEscalateToLiveChat(aiReply: string, aiMeta?: { resolved?: boolean
     "i can't", "i cannot", "not sure", "unable to", "contact support", "human agent",
     "لا أستطيع", "غير متأكد", "تعذر", "يرجى التواصل", "موظف دعم", "تحويل",
   ];
+  if (userTurns < 3) {
+    return false;
+  }
+
   return escalationPhrases.some((phrase) => normalized.includes(phrase.toLowerCase()));
 }
 
@@ -34,6 +48,14 @@ function buildLiveChatOfferMessage(input: string): string {
     return "حاول sam9 مساعدتك لكن يحتاج تدخل بشري الآن. إذا أردت التحويل لمحادثة حية مع فريق الدعم، اكتب: (محادثة حية).";
   }
   return "sam9 tried to help, but this case needs a human specialist. If you want to transfer to live chat with support, reply with: (live chat).";
+}
+
+function buildDataCollectionMessage(input: string): string {
+  const looksArabic = /[\u0600-\u06FF]/.test(input);
+  if (looksArabic) {
+    return "تمام، هساعدك خطوة بخطوة. عشان أحلها أسرع: اكتب الجهاز/النظام، آخر خطوة قبل المشكلة، ورسالة الخطأ إن وجدت.";
+  }
+  return "Got it, I can help step by step. To diagnose faster, share your device/platform, last action before the issue, and any error message/code.";
 }
 
 function buildSam9Reply(aiReply: string, sourceMessage: string): string {
@@ -135,6 +157,14 @@ export function registerSupportMessageRoutes(app: Express): void {
         .set({ lastMessageAt: new Date(), status: "waiting", updatedAt: new Date() })
         .where(eq(supportTickets.id, ticketId));
 
+      const [userTurnRow] = await db.select({ count: count() })
+        .from(supportMessages)
+        .where(and(
+          eq(supportMessages.ticketId, ticketId),
+          eq(supportMessages.senderType, "user"),
+        ));
+      const userTurns = Number(userTurnRow?.count || 1);
+
       // sam9 tries first. If unresolved, offer live chat handoff.
       const autoReplyInput = (content || "").trim().toLowerCase();
       const aiSupport = autoReplyInput
@@ -143,7 +173,7 @@ export function registerSupportMessageRoutes(app: Express): void {
 
       const aiReply = sanitizePlainText(aiSupport?.reply, { maxLength: 1600, fallback: "" });
       const hasAiReply = aiReply.trim().length > 0;
-      const escalateToLiveChat = shouldEscalateToLiveChat(aiReply, {
+      const escalateToLiveChat = shouldEscalateToLiveChat(aiReply, safeContent, userTurns, {
         resolved: aiSupport?.resolved,
         escalateToLiveChat: aiSupport?.escalateToLiveChat,
         confidence: aiSupport?.confidence,
@@ -172,14 +202,25 @@ export function registerSupportMessageRoutes(app: Express): void {
           });
         }
 
-        await db.insert(supportMessages).values({
-          ticketId,
-          senderId: "sam9",
-          senderType: "system",
-          content: buildLiveChatOfferMessage(safeContent),
-          isAutoReply: true,
-          isRead: false,
-        });
+        if (escalateToLiveChat) {
+          await db.insert(supportMessages).values({
+            ticketId,
+            senderId: "sam9",
+            senderType: "system",
+            content: buildLiveChatOfferMessage(safeContent),
+            isAutoReply: true,
+            isRead: false,
+          });
+        } else {
+          await db.insert(supportMessages).values({
+            ticketId,
+            senderId: "sam9",
+            senderType: "system",
+            content: buildDataCollectionMessage(safeContent),
+            isAutoReply: true,
+            isRead: false,
+          });
+        }
       }
 
       // Notify admin (persist to DB + broadcast via websocket)

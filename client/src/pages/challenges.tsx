@@ -123,6 +123,8 @@ interface ChallengeGame {
   status: string;
 }
 
+type CurrencyType = 'project' | 'usd';
+
 type ChessSystemKey =
   | 'bullet_1_0'
   | 'blitz_3_2'
@@ -184,6 +186,8 @@ export default function ChallengesPage() {
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [requiredPlayers, setRequiredPlayers] = useState<2 | 4>(2);
   const [chessSystem, setChessSystem] = useState<ChessSystemKey>('rapid_10_0');
+  const [currencyType, setCurrencyType] = useState<CurrencyType>('project');
+  const [quickConvertAmount, setQuickConvertAmount] = useState('5');
 
   const multiPlayerGames = ['domino', 'tarneeb', 'baloot'];
   const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
@@ -216,6 +220,25 @@ export default function ChallengesPage() {
 
   const { data: giftInventory } = useQuery<InventoryItem[]>({
     queryKey: ['/api/gifts/inventory'],
+  });
+
+  const { data: currencyPolicy } = useQuery<{ mode: 'project_only' | 'mixed'; projectOnly: boolean }>({
+    queryKey: ['/api/project-currency/play-gift-policy'],
+    queryFn: async () => {
+      const res = await fetch('/api/project-currency/play-gift-policy');
+      if (!res.ok) throw new Error('Failed to fetch play/gift policy');
+      return res.json();
+    },
+  });
+
+  const { data: projectWallet, refetch: refetchProjectWallet } = useQuery<{ totalBalance: string; currencySymbol: string }>({
+    queryKey: ['/api/project-currency/wallet'],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await fetch('/api/project-currency/wallet', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load wallet');
+      return res.json();
+    },
   });
 
   const { data: followedChallengers } = useQuery<{ userId: string }[]>({
@@ -278,7 +301,7 @@ export default function ChallengesPage() {
   };
 
   const createChallengeMutation = useMutation({
-    mutationFn: (data: { gameType: string; betAmount: number; opponentType: string; friendAccountId?: string; visibility: string; requiredPlayers?: number; chessSystem?: ChessSystemKey }) =>
+    mutationFn: (data: { gameType: string; betAmount: number; opponentType: string; friendAccountId?: string; visibility: string; requiredPlayers?: number; chessSystem?: ChessSystemKey; currencyType?: CurrencyType }) =>
       apiRequest('POST', '/api/challenges', data),
     onSuccess: () => {
       playSound('success');
@@ -350,6 +373,20 @@ export default function ChallengesPage() {
     }
   });
 
+  const quickConvertMutation = useMutation({
+    mutationFn: (amount: string) => apiRequest('POST', '/api/project-currency/convert', { amount }),
+    onSuccess: async () => {
+      await refetchProjectWallet();
+      toast({
+        title: t('common.success'),
+        description: language === 'ar' ? 'تم التحويل بنجاح' : 'Converted successfully',
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: t('common.error'), description: err.message, variant: 'destructive' });
+    },
+  });
+
   const resetForm = () => {
     setSelectedGame(null);
     setBetAmount("");
@@ -358,6 +395,7 @@ export default function ChallengesPage() {
     setVisibility('public');
     setRequiredPlayers(2);
     setChessSystem('rapid_10_0');
+    setCurrencyType(currencyPolicy?.projectOnly ? 'project' : 'usd');
   };
 
   const handleCreateChallenge = () => {
@@ -394,8 +432,14 @@ export default function ChallengesPage() {
       visibility,
       requiredPlayers: multiPlayerGames.includes(selectedGame) ? requiredPlayers : 2,
       chessSystem: selectedGame === 'chess' ? chessSystem : undefined,
+      currencyType: currencyPolicy?.projectOnly ? 'project' : currencyType,
     });
   };
+
+  const numericBetAmount = Number(betAmount || 0);
+  const projectBalance = Number(projectWallet?.totalBalance || 0);
+  const needProjectCurrency = (currencyPolicy?.projectOnly ?? true) || currencyType === 'project';
+  const projectShortage = Math.max(0, numericBetAmount - projectBalance);
 
   const handleSpectate = (challenge: Challenge) => {
     setLocation(`/challenge/${challenge.id}/watch`);
@@ -1072,6 +1116,63 @@ export default function ChallengesPage() {
                 />
               </div>
             </div>
+
+            <div>
+              <Label>{language === 'ar' ? 'عملة الرهان' : 'Stake Currency'}</Label>
+              {currencyPolicy?.projectOnly ? (
+                <div className="mt-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+                  {language === 'ar'
+                    ? 'وضع المنصة الحالي يفرض عملة المشروع للعب وشراء الهدايا.'
+                    : 'Current platform policy requires project currency for gameplay and gift purchases.'}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <Button
+                    type="button"
+                    variant={currencyType === 'usd' ? 'default' : 'outline'}
+                    onClick={() => setCurrencyType('usd')}
+                  >
+                    USD
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={currencyType === 'project' ? 'default' : 'outline'}
+                    onClick={() => setCurrencyType('project')}
+                  >
+                    {projectWallet?.currencySymbol || 'VXC'}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {needProjectCurrency && numericBetAmount > 0 && projectShortage > 0 && (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
+                <p className="text-sm font-medium">
+                  {language === 'ar' ? 'الرصيد غير كافٍ بعملة المشروع' : 'Insufficient project currency balance'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {language === 'ar'
+                    ? `المطلوب: ${projectShortage.toFixed(2)} ${projectWallet?.currencySymbol || 'VXC'} إضافية.`
+                    : `You need ${projectShortage.toFixed(2)} more ${projectWallet?.currencySymbol || 'VXC'}.`}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={quickConvertAmount}
+                    onChange={(e) => setQuickConvertAmount(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => quickConvertMutation.mutate(quickConvertAmount)}
+                    disabled={quickConvertMutation.isPending}
+                  >
+                    {quickConvertMutation.isPending ? t('common.loading') : (language === 'ar' ? 'تحويل سريع' : 'Quick Convert')}
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center justify-between">
               <div>

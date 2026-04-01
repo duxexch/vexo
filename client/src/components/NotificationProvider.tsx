@@ -157,6 +157,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const lang = languageRef.current;
     const title = lang === "ar" && notification.titleAr ? notification.titleAr : notification.title;
     const message = lang === "ar" && notification.messageAr ? notification.messageAr : notification.message;
+    const titleAr = notification.titleAr || notification.title;
+    const messageAr = notification.messageAr || notification.message;
     const safeLink = normalizeSafeNotificationLink(notification.link);
 
     // Play sound based on priority first, then type
@@ -168,8 +170,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       detail: {
         type: notification.type || "system",
         priority: notification.priority || "normal",
-        title,
-        message,
+        title: notification.title,
+        titleAr,
+        message: notification.message,
+        messageAr,
         link: safeLink || undefined,
         duration: notification.priority === "urgent" ? 10000 : notification.priority === "high" ? 7000 : 5000,
       },
@@ -318,8 +322,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               detail: {
                 type: "system",
                 priority: "normal",
-                title: lang === 'ar' ? 'تم تحديث إعدادات اللعبة' : 'Game settings updated',
-                message: lang === 'ar' ? 'تم تطبيق أحدث إعدادات اللعبة' : 'Latest game configuration has been applied',
+                title: 'Game settings updated',
+                titleAr: 'تم تحديث إعدادات اللعبة',
+                message: 'Latest game configuration has been applied',
+                messageAr: 'تم تطبيق أحدث إعدادات اللعبة',
               },
             }));
           }
@@ -331,8 +337,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               detail: {
                 type: "p2p",
                 priority: "normal",
-                title: lang === 'ar' ? 'تحديث إعدادات P2P' : 'P2P Settings Updated',
-                message: lang === 'ar' ? 'تم تحديث إعدادات التداول' : 'Trading settings have been updated',
+                title: 'P2P Settings Updated',
+                titleAr: 'تحديث إعدادات P2P',
+                message: 'Trading settings have been updated',
+                messageAr: 'تم تحديث إعدادات التداول',
               },
             }));
           }
@@ -356,10 +364,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               detail: {
                 type: "challenge",
                 priority: "high",
-                title: lang === 'ar' ? 'تم تحديك!' : 'You\'ve Been Challenged!',
-                message: lang === 'ar'
-                  ? `${data.data.player1Name} تحداك في ${data.data.gameType}`
-                  : `${data.data.player1Name} challenged you to ${data.data.gameType}`,
+                title: 'You\'ve Been Challenged!',
+                titleAr: 'تم تحديك!',
+                message: `${data.data.player1Name} challenged you to ${data.data.gameType}`,
+                messageAr: `${data.data.player1Name} تحداك في ${data.data.gameType}`,
                 link: '/challenges',
               },
             }));
@@ -381,8 +389,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 detail: {
                   type: "game",
                   priority: "high",
-                  title: lang === 'ar' ? 'بدأت المباراة!' : 'Game Started!',
-                  message: lang === 'ar' ? 'جاري الانتقال إلى اللعبة...' : 'Redirecting to game...',
+                  title: 'Game Started!',
+                  titleAr: 'بدأت المباراة!',
+                  message: 'Redirecting to game...',
+                  messageAr: 'جاري الانتقال إلى اللعبة...',
                   duration: 3000,
                 },
               }));
@@ -407,8 +417,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             detail: {
               type: "support",
               priority: "high",
-              title: lang === 'ar' ? 'رد من الدعم الفني 💬' : 'Support Reply 💬',
-              message: msgContent.substring(0, 100) || (lang === 'ar' ? 'لديك رسالة جديدة من الدعم' : 'You have a new support message'),
+              title: 'Support Reply 💬',
+              titleAr: 'رد من الدعم الفني 💬',
+              message: msgContent.substring(0, 100) || 'You have a new support message',
+              messageAr: msgContent.substring(0, 100) || 'لديك رسالة جديدة من الدعم',
               duration: 8000,
             },
           }));

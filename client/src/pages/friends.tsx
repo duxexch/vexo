@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
@@ -12,12 +12,10 @@ import {
   Users,
   UserPlus,
   UserMinus,
-  UserX,
   Search,
   MessageCircle,
   Swords,
   Ban,
-  CheckCircle,
   Loader2,
   X,
   UserCheck,
@@ -28,6 +26,7 @@ import type { User } from "@shared/schema";
 
 type UserWithFollowStatus = Omit<User, "password"> & {
   isFollowing?: boolean;
+  isBlocked?: boolean;
   isOnline?: boolean;
   level?: number;
   avatarUrl?: string;
@@ -61,7 +60,7 @@ function UserCard({
       {/* Avatar with online indicator */}
       <div className="relative flex-shrink-0">
         <Avatar className="h-12 w-12 ring-2 ring-border/30 group-hover:ring-primary/20 transition-all" data-testid={`avatar-user-${user.id}`}>
-          <AvatarImage src={user.avatarUrl || undefined} alt={user.username} />
+          <AvatarImage src={user.avatarUrl || user.profilePicture || undefined} alt={user.username} />
           <AvatarFallback className="text-sm font-semibold bg-primary/10 text-primary">{initials}</AvatarFallback>
         </Avatar>
         <span className={`absolute -bottom-0.5 -end-0.5 h-3.5 w-3.5 rounded-full border-2 border-card
@@ -179,13 +178,13 @@ function UserCard({
           </Button>
         )}
 
-        {actionType === "search" && (
+        {actionType === "search" && !user.isBlocked && (
           <Button
             variant={user.isFollowing ? "ghost" : "default"}
             size="sm"
             className={`h-8 rounded-full text-xs ${user.isFollowing
-                ? "hover:bg-red-500/10 hover:text-red-500"
-                : "bg-primary hover:bg-primary/90"
+              ? "hover:bg-red-500/10 hover:text-red-500"
+              : "bg-primary hover:bg-primary/90"
               }`}
             onClick={() => onAction(user.id, user.isFollowing ? "unfollow" : "follow")}
             disabled={isLoading}
@@ -204,6 +203,20 @@ function UserCard({
                 {t("friends.follow")}
               </>
             )}
+          </Button>
+        )}
+
+        {actionType !== "blocked" && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 rounded-full hover:bg-red-500/10 hover:text-red-500"
+            onClick={() => onAction(user.id, user.isBlocked ? "unblock" : "block")}
+            disabled={isLoading}
+            data-testid={`button-block-toggle-${user.id}`}
+            title={user.isBlocked ? t("chat.unblockUser") : t("chat.blockUser")}
+          >
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : user.isBlocked ? <ShieldOff className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
           </Button>
         )}
       </div>
@@ -346,24 +359,25 @@ export default function FriendsPage() {
   const { data: searchResults = [], isLoading: searchLoading } = useQuery<UserWithFollowStatus[]>({
     queryKey: ["/api/users/search", searchQuery],
     queryFn: async () => {
-      const authToken = localStorage.getItem("pwm_token") || localStorage.getItem("token") || "";
-      const res = await fetch(`/api/users/search?q=${encodeURIComponent(searchQuery)}`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      if (!res.ok) throw new Error("Search failed");
+      const res = await apiRequest("GET", `/api/users/search?q=${encodeURIComponent(searchQuery)}`);
       return res.json();
     },
     enabled: searchQuery.length >= 2,
   });
 
+  const invalidateSocialQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/users/friends"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/users/following"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/users/followers"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/users/blocked"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/users/search"] });
+  };
+
   const followMutation = useMutation({
     mutationFn: async (userId: string) => apiRequest("POST", `/api/users/follow/${userId}`),
     onSuccess: () => {
       toast({ title: t("friends.followSuccess") });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/friends"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/following"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/followers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/search"] });
+      invalidateSocialQueries();
     },
     onError: () => toast({ title: t("common.error"), variant: "destructive" }),
     onSettled: () => setActionLoadingId(null),
@@ -373,20 +387,18 @@ export default function FriendsPage() {
     mutationFn: async (userId: string) => apiRequest("DELETE", `/api/users/unfollow/${userId}`),
     onSuccess: () => {
       toast({ title: t("friends.unfollowSuccess") });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/friends"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/following"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/followers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/search"] });
+      invalidateSocialQueries();
     },
     onError: () => toast({ title: t("common.error"), variant: "destructive" }),
     onSettled: () => setActionLoadingId(null),
   });
 
-  const unblockMutation = useMutation({
-    mutationFn: async (userId: string) => apiRequest("DELETE", `/api/users/unblock/${userId}`),
-    onSuccess: () => {
-      toast({ title: t("friends.unblockSuccess") });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/blocked"] });
+  const blockMutation = useMutation({
+    mutationFn: async ({ userId, action }: { userId: string; action: "block" | "unblock" }) =>
+      apiRequest(action === "block" ? "POST" : "DELETE", `/api/users/${userId}/block`),
+    onSuccess: (_data, variables) => {
+      toast({ title: t(variables.action === "block" ? "chat.blockSuccess" : "friends.unblockSuccess") });
+      invalidateSocialQueries();
     },
     onError: () => toast({ title: t("common.error"), variant: "destructive" }),
     onSettled: () => setActionLoadingId(null),
@@ -397,7 +409,8 @@ export default function FriendsPage() {
     switch (action) {
       case "follow": followMutation.mutate(userId); break;
       case "unfollow": unfollowMutation.mutate(userId); break;
-      case "unblock": unblockMutation.mutate(userId); break;
+      case "block": blockMutation.mutate({ userId, action: "block" }); break;
+      case "unblock": blockMutation.mutate({ userId, action: "unblock" }); break;
       case "chat":
         window.location.href = `/chat?user=${userId}`;
         setActionLoadingId(null);
@@ -411,6 +424,7 @@ export default function FriendsPage() {
   };
 
   const followingIds = new Set(following.map((u) => u.id));
+  const followBackCandidates = followers.filter((user) => !followingIds.has(user.id));
 
   // Determine active content
   const renderContent = () => {
@@ -463,14 +477,12 @@ export default function FriendsPage() {
 
       case "followers":
         if (followersLoading) return <CardSkeleton />;
-        if (followers.length === 0) return <EmptySection icon={Users} message={t("friends.noFollowers")} sub={t("friends.noFollowersDesc")} />;
+        if (followBackCandidates.length === 0) return <EmptySection icon={Users} message={t("friends.noFollowers")} sub={t("friends.noFollowersDesc")} />;
         return (
           <div className="space-y-2">
-            {followers
-              .filter((user) => !followingIds.has(user.id))
-              .map((user) => (
-                <UserCard key={user.id} user={user} actionType="follower" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
-              ))}
+            {followBackCandidates.map((user) => (
+              <UserCard key={user.id} user={user} actionType="follower" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
+            ))}
           </div>
         );
 

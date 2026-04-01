@@ -1,11 +1,11 @@
 import type { Express, Response } from "express";
 import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
-import { storage } from "../../storage";
 import { db } from "../../db";
 import { eq, and, or, sql, desc } from "drizzle-orm";
 import { users, games, gameMatches, matchmakingQueue, gameplaySettings } from "@shared/schema";
 import crypto from "crypto";
+import { isEitherUserBlocked } from "../../lib/user-blocking";
 
 export function registerQueueRoutes(app: Express): void {
 
@@ -66,7 +66,7 @@ export function registerQueueRoutes(app: Express): void {
           [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
         }
         const opponent = shuffled[0];
-        
+
         // Update opponent's queue status
         await db.update(matchmakingQueue)
           .set({ status: "matched" })
@@ -119,9 +119,8 @@ export function registerQueueRoutes(app: Express): void {
       }
 
       // Check if either user has blocked the other
-      const blockedByFriend = await storage.getUserRelationship(friend[0].id, userId, "block");
-      const blockedByUser = await storage.getUserRelationship(userId, friend[0].id, "block");
-      if (blockedByFriend || blockedByUser) {
+      const isBlocked = await isEitherUserBlocked(userId, friend[0].id);
+      if (isBlocked) {
         return res.status(403).json({ error: "Cannot invite this user" });
       }
 

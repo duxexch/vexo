@@ -196,6 +196,8 @@ export default function ChallengeGamePage() {
   const [localTimerTick, setLocalTimerTick] = useState(0);
   const [drawOffered, setDrawOffered] = useState<string | null>(null); // offeredBy userId
   const [wsConnState, setWsConnState] = useState<"connecting" | "connected" | "reconnecting" | "disconnected">("connecting");
+  const [showQuickConvertCard, setShowQuickConvertCard] = useState(false);
+  const [quickConvertAmount, setQuickConvertAmount] = useState("5");
 
   const wsRef = useRef<WebSocket | null>(null);
   const authReadyRef = useRef(false);
@@ -213,10 +215,51 @@ export default function ChallengeGamePage() {
   const latestViewMovesRef = useRef(0);
   const chessMovePendingRef = useRef(false);
   const chessMoveAckTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutSignalSentRef = useRef(false);
 
   const { data: challenge, isLoading, isError: isChallengeError, error: challengeError } = useQuery<Challenge, Error>({
     queryKey: [`/api/challenges/${challengeId}`],
     enabled: !!challengeId,
+  });
+
+  const { data: currencyPolicy } = useQuery<{ mode: "project_only" | "mixed"; projectOnly: boolean }>({
+    queryKey: ["/api/project-currency/play-gift-policy"],
+    queryFn: async () => {
+      const res = await fetch("/api/project-currency/play-gift-policy");
+      if (!res.ok) throw new Error("Failed to fetch currency policy");
+      return res.json();
+    },
+  });
+
+  const { data: projectWallet, refetch: refetchProjectWallet } = useQuery<{ totalBalance: string; currencySymbol: string }>({
+    queryKey: ["/api/project-currency/wallet"],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await fetch("/api/project-currency/wallet", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load project wallet");
+      return res.json();
+    },
+  });
+
+  const quickConvertMutation = useMutation({
+    mutationFn: (amount: string) => apiRequest("POST", "/api/project-currency/convert", { amount }),
+    onSuccess: async () => {
+      await refetchProjectWallet();
+      toast({
+        title: language === "ar" ? "تم التحويل" : "Converted",
+        description: language === "ar"
+          ? "تمت إضافة رصيد عملة المشروع بنجاح."
+          : "Project currency balance was updated successfully.",
+      });
+      setShowQuickConvertCard(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t("common.error"),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   // Fetch dynamic commission/surrender settings for this game type
@@ -501,6 +544,9 @@ export default function ChallengeGamePage() {
       const { message, code } = extractWsErrorInfo(data);
       if (message) {
         showWsErrorToast(message, code);
+        if (currencyPolicy?.projectOnly && /project currency|convert|insufficient/i.test(message)) {
+          setShowQuickConvertCard(true);
+        }
       }
       return;
     }
@@ -522,7 +568,7 @@ export default function ChallengeGamePage() {
         lastSyncRef.current = Date.now();
         if (shouldApplySessionUpdate(data.session, data.view, data.seq)) {
           if (data.session) {
-            setGameSession(prev => prev ? { ...prev, ...data.session } : null);
+            setGameSession(prev => prev ? { ...prev, ...data.session } : (data.session ?? null));
             clearChessMovePending();
           }
           if (data.view) setPlayerView(data.view);
@@ -580,7 +626,21 @@ export default function ChallengeGamePage() {
           break;
         }
         clearChessMovePending();
-        setGameSession(prev => prev ? { ...prev, status: "finished", winnerId: data.winnerId ?? undefined, winReason: data.reason ?? undefined } : null);
+        setGameSession(prev => prev ? { ...prev, status: "finished", winnerId: data.winnerId ?? undefined, winReason: data.reason ?? undefined } : {
+          id: "",
+          challengeId: challengeId || "",
+          gameType: (challenge?.gameType as GameSession["gameType"]) || "chess",
+          currentTurn: "",
+          player1TimeRemaining: 0,
+          player2TimeRemaining: 0,
+          gameState: "",
+          status: "finished",
+          winnerId: data.winnerId ?? undefined,
+          winReason: data.reason ?? undefined,
+          totalMoves: latestTotalMovesRef.current,
+          spectatorCount: 0,
+          totalGiftsValue: "0",
+        });
         setDrawOffered(null);
         if (data.winnerId === user?.id) playSound("gameWin");
         else if (data.reason === "draw_agreement") playSound("draw");
@@ -624,10 +684,10 @@ export default function ChallengeGamePage() {
         setTimeout(() => setLocation("/challenges"), 2000);
         break;
       case "spectator_count":
-        setGameSession(prev => prev ? { ...prev, spectatorCount: (data.count as number) ?? 0 } : null);
+        setGameSession(prev => prev ? { ...prev, spectatorCount: (data.count as number) ?? 0 } : prev);
         break;
     }
-  }, [toast, playSound, user, gameSession?.gameType, showWsErrorToast, clearChessMovePending]);
+  }, [toast, playSound, user, gameSession?.gameType, showWsErrorToast, clearChessMovePending, currencyPolicy?.projectOnly, challengeId, challenge?.gameType]);
 
   const sendMove = useCallback((move: object) => {
     if (!canPlayActions) {
@@ -912,6 +972,27 @@ export default function ChallengeGamePage() {
   void localTimerTick; // referenced to trigger re-render
   const myTimeRemaining = Math.max(0, isMyTurnForTimer ? serverMyTime - elapsedSinceSyncSec : serverMyTime);
   const opponentTimeRemaining = Math.max(0, !isMyTurnForTimer ? serverOppTime - elapsedSinceSyncSec : serverOppTime);
+
+  useEffect(() => {
+    if (gameSession?.status !== "playing" || !canPlayActions || challenge?.gameType !== "chess") {
+      timeoutSignalSentRef.current = false;
+      return;
+    }
+
+    const iAmCurrentTurn = gameSession.currentTurn === user?.id;
+    if (!iAmCurrentTurn || myTimeRemaining > 0 || timeoutSignalSentRef.current) {
+      return;
+    }
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      timeoutSignalSentRef.current = true;
+      wsRef.current.send(JSON.stringify({
+        type: "game_resign",
+        challengeId,
+        reason: "timeout",
+      }));
+    }
+  }, [gameSession?.status, gameSession?.currentTurn, canPlayActions, challenge?.gameType, myTimeRemaining, user?.id, challengeId]);
 
   const GAME_INFO: Record<string, { icon: React.ComponentType<{ className?: string }>; nameAr: string; nameEn: string }> = {
     chess: { icon: Crown, nameAr: "الشطرنج", nameEn: "Chess" },
@@ -1283,6 +1364,46 @@ export default function ChallengeGamePage() {
         gift={activeGiftAnimation}
         onComplete={() => setActiveGiftAnimation(null)}
       />
+
+      {showQuickConvertCard && currencyPolicy?.projectOnly && (
+        <div className="fixed bottom-4 end-4 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-4 shadow-xl">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold">
+                {language === "ar" ? "مطلوب عملة المشروع" : "Project currency required"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {language === "ar"
+                  ? "حوّل رصيداً سريعاً للمتابعة داخل المباراة والهدايا."
+                  : "Convert quickly to continue gameplay and gifting."}
+              </p>
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => setShowQuickConvertCard(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            <Input
+              type="number"
+              min="1"
+              step="1"
+              value={quickConvertAmount}
+              onChange={(e) => setQuickConvertAmount(e.target.value)}
+            />
+            <Button
+              onClick={() => quickConvertMutation.mutate(quickConvertAmount)}
+              disabled={quickConvertMutation.isPending}
+            >
+              {quickConvertMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : (language === "ar" ? "تحويل" : "Convert")}
+            </Button>
+          </div>
+
+          <p className="text-xs text-muted-foreground mt-2">
+            {language === "ar" ? "رصيدك الحالي:" : "Current balance:"} {projectWallet?.currencySymbol || "VXC"} {Number(projectWallet?.totalBalance || 0).toFixed(2)}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

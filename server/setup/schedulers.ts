@@ -1,11 +1,13 @@
 import { storage } from "../storage";
-import { notifications, p2pSettings, p2pTrades } from "@shared/schema";
+import { challengeGameSessions, challenges, notifications, p2pSettings, p2pTrades } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, or, sql, lt } from "drizzle-orm";
-import { broadcastSystemEvent } from "../websocket";
+import { broadcastSystemEvent, challengeGameRooms } from "../websocket";
 import { logger } from "../lib/logger";
 import { runAdaptiveAiHealthCheck } from "../lib/adaptive-ai";
 import { sendAiAgentLearningEvent } from "../lib/ai-agent-client";
+import { settleChallengePayout } from "../lib/payout";
+import { WebSocket } from "ws";
 
 export function startSchedulers(): void {
   // ==================== SCHEDULED CONFIG CHANGES SCHEDULER ====================
@@ -184,4 +186,155 @@ export function startSchedulers(): void {
   setTimeout(cleanupOldNotifications, 30000);
   setInterval(cleanupOldNotifications, CLEANUP_INTERVAL);
   logger.info(`[Notification Cleanup] Started (interval: ${CLEANUP_INTERVAL / 3600000}h)`);
+
+  // ==================== CHESS TIMEOUT WATCHDOG ====================
+  // Server-authoritative timeout settlement for active challenge chess games.
+  const CHESS_TIMEOUT_WATCHDOG_INTERVAL = 3000;
+
+  async function processChallengeChessTimeouts() {
+    try {
+      const activeRows = await db.select({
+        challengeId: challengeGameSessions.challengeId,
+      })
+        .from(challengeGameSessions)
+        .innerJoin(challenges, eq(challengeGameSessions.challengeId, challenges.id))
+        .where(and(
+          eq(challengeGameSessions.status, "playing"),
+          eq(challenges.status, "active"),
+          eq(challengeGameSessions.gameType, "chess"),
+          sql`${challengeGameSessions.currentTurn} IS NOT NULL`
+        ))
+        .limit(50);
+
+      for (const row of activeRows) {
+        try {
+          const outcome = await db.transaction(async (tx) => {
+            const [session] = await tx.select()
+              .from(challengeGameSessions)
+              .where(eq(challengeGameSessions.challengeId, row.challengeId))
+              .orderBy(sql`${challengeGameSessions.createdAt} DESC`)
+              .limit(1)
+              .for("update");
+
+            if (!session || session.status !== "playing" || !session.currentTurn) {
+              return null;
+            }
+
+            const [challenge] = await tx.select()
+              .from(challenges)
+              .where(eq(challenges.id, row.challengeId))
+              .limit(1)
+              .for("update");
+
+            if (!challenge || challenge.status !== "active" || !challenge.player2Id) {
+              return null;
+            }
+
+            const currentTurnPlayerId = session.currentTurn;
+            if (currentTurnPlayerId !== challenge.player1Id && currentTurnPlayerId !== challenge.player2Id) {
+              return null;
+            }
+
+            const nowMs = Date.now();
+            const lastMoveAt = session.lastMoveAt ?? session.updatedAt ?? session.createdAt ?? new Date(nowMs);
+            const elapsedSec = Math.max(0, Math.floor((nowMs - new Date(lastMoveAt).getTime()) / 1000));
+            if (elapsedSec <= 0) {
+              return null;
+            }
+
+            const player1Remaining = Math.max(0, Number(session.player1TimeRemaining ?? challenge.timeLimit ?? 300));
+            const player2Remaining = Math.max(0, Number(session.player2TimeRemaining ?? challenge.timeLimit ?? 300));
+
+            const isPlayer1Turn = currentTurnPlayerId === challenge.player1Id;
+            const nextPlayer1Remaining = Math.max(0, isPlayer1Turn ? player1Remaining - elapsedSec : player1Remaining);
+            const nextPlayer2Remaining = Math.max(0, !isPlayer1Turn ? player2Remaining - elapsedSec : player2Remaining);
+            const timedOut = isPlayer1Turn ? nextPlayer1Remaining <= 0 : nextPlayer2Remaining <= 0;
+
+            if (!timedOut) {
+              return null;
+            }
+
+            const winnerId = isPlayer1Turn ? challenge.player2Id : challenge.player1Id;
+            const loserId = currentTurnPlayerId;
+
+            if (!winnerId || !loserId) {
+              return null;
+            }
+
+            const [updatedSession] = await tx.update(challengeGameSessions)
+              .set({
+                status: "finished",
+                winnerId,
+                winReason: "timeout",
+                currentTurn: null,
+                player1TimeRemaining: nextPlayer1Remaining,
+                player2TimeRemaining: nextPlayer2Remaining,
+                updatedAt: new Date(),
+              })
+              .where(eq(challengeGameSessions.id, session.id))
+              .returning();
+
+            await tx.update(challenges)
+              .set({
+                status: "completed",
+                winnerId,
+                endedAt: new Date(),
+              })
+              .where(eq(challenges.id, challenge.id));
+
+            return {
+              challengeId: challenge.id,
+              winnerId,
+              loserId,
+              seq: typeof updatedSession?.totalMoves === "number" ? updatedSession.totalMoves : 0,
+            };
+          });
+
+          if (!outcome) {
+            continue;
+          }
+
+          const payoutResult = await settleChallengePayout(
+            outcome.challengeId,
+            outcome.winnerId,
+            outcome.loserId,
+            "chess",
+          );
+
+          if (!payoutResult.success) {
+            logger.error(`[Chess Timeout Watchdog] Payout failed for challenge ${outcome.challengeId}: ${payoutResult.error}`);
+          }
+
+          const room = challengeGameRooms.get(outcome.challengeId);
+          if (room) {
+            const message = JSON.stringify({
+              type: "game_ended",
+              winnerId: outcome.winnerId,
+              reason: "timeout",
+              seq: outcome.seq,
+            });
+
+            [...room.players.values(), ...room.spectators.values()].forEach((socket) => {
+              if (socket.readyState === WebSocket.OPEN) {
+                socket.send(message);
+              }
+            });
+          }
+
+          logger.info(`[Chess Timeout Watchdog] Settled timeout challenge ${outcome.challengeId}`);
+        } catch (perChallengeError) {
+          logger.error(
+            `[Chess Timeout Watchdog] Failed processing challenge ${row.challengeId}`,
+            perChallengeError instanceof Error ? perChallengeError : new Error(String(perChallengeError)),
+          );
+        }
+      }
+    } catch (error) {
+      logger.error("[Chess Timeout Watchdog] Error", error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  setTimeout(processChallengeChessTimeouts, 10000);
+  setInterval(processChallengeChessTimeouts, CHESS_TIMEOUT_WATCHDOG_INTERVAL);
+  logger.info(`[Chess Timeout Watchdog] Started (interval: ${CHESS_TIMEOUT_WATCHDOG_INTERVAL}ms)`);
 }

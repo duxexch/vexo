@@ -10,7 +10,16 @@ import { encryptPlatformSecrets, decryptPlatformSecrets } from "../lib/crypto-ut
 // ==================== USER RELATIONSHIPS ====================
 
 export async function createUserRelationship(relationship: InsertUserRelationship): Promise<UserRelationship> {
-  const [created] = await db.insert(userRelationships).values(relationship).returning();
+  const [created] = await db.insert(userRelationships)
+    .values(relationship)
+    .onConflictDoUpdate({
+      target: [userRelationships.userId, userRelationships.targetUserId, userRelationships.type],
+      set: {
+        status: relationship.status ?? "active",
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
   return created;
 }
 
@@ -38,7 +47,8 @@ export async function getUserFollowing(userId: string): Promise<UserRelationship
   return db.select().from(userRelationships)
     .where(and(
       eq(userRelationships.userId, userId),
-      eq(userRelationships.type, "follow")
+      eq(userRelationships.type, "follow"),
+      eq(userRelationships.status, "active")
     ))
     .orderBy(desc(userRelationships.createdAt));
 }
@@ -47,16 +57,8 @@ export async function getUserFollowers(userId: string): Promise<UserRelationship
   return db.select().from(userRelationships)
     .where(and(
       eq(userRelationships.targetUserId, userId),
-      eq(userRelationships.type, "follow")
-    ))
-    .orderBy(desc(userRelationships.createdAt));
-}
-
-export async function getUserBlocked(userId: string): Promise<UserRelationship[]> {
-  return db.select().from(userRelationships)
-    .where(and(
-      eq(userRelationships.userId, userId),
-      eq(userRelationships.type, "block")
+      eq(userRelationships.type, "follow"),
+      eq(userRelationships.status, "active")
     ))
     .orderBy(desc(userRelationships.createdAt));
 }

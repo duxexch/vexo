@@ -56,7 +56,9 @@ export interface NotifPopupData {
   type: NotifPopupType;
   priority: NotifPriority;
   title: string;
+  titleAr?: string;
   message: string;
+  messageAr?: string;
   icon?: React.ReactNode;
   link?: string;
   duration?: number; // ms, default 5000
@@ -166,6 +168,10 @@ function NotifCard({
   const [swiping, setSwiping] = useState(false);
   const duration = notif.duration || (notif.priority === "urgent" ? URGENT_DURATION : DEFAULT_DURATION);
   const Icon = TYPE_ICON[notif.type] || Bell;
+  const { language } = useI18n();
+  const isAr = language === "ar";
+  const localizedTitle = isAr && notif.titleAr ? notif.titleAr : notif.title;
+  const localizedMessage = isAr && notif.messageAr ? notif.messageAr : notif.message;
 
   // Auto-dismiss timer with progress bar
   useEffect(() => {
@@ -265,14 +271,14 @@ function NotifCard({
           <div className="flex-1 min-w-0 pt-0.5">
             <div className="flex items-center justify-between gap-2">
               <h4 className="text-sm font-semibold text-foreground truncate leading-tight">
-                {notif.title}
+                {localizedTitle}
               </h4>
               <span className="text-[10px] text-muted-foreground/60 flex-shrink-0 tabular-nums">
-                {formatTimeAgo(notif.createdAt)}
+                {formatTimeAgo(notif.createdAt, isAr)}
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">
-              {notif.message}
+              {localizedMessage}
             </p>
           </div>
 
@@ -304,12 +310,18 @@ function NotifCard({
 }
 
 /* ═══════════════ Time Formatter ═══════════════ */
-function formatTimeAgo(ts: number): string {
+function formatTimeAgo(ts: number, isAr: boolean): string {
   const diff = Math.floor((Date.now() - ts) / 1000);
-  if (diff < 5) return "الآن";
-  if (diff < 60) return `${diff}ث`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}د`;
-  return `${Math.floor(diff / 3600)}س`;
+  if (isAr) {
+    if (diff < 5) return "الآن";
+    if (diff < 60) return `${diff}ث`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}د`;
+    return `${Math.floor(diff / 3600)}س`;
+  }
+  if (diff < 5) return "now";
+  if (diff < 60) return `${diff}s`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  return `${Math.floor(diff / 3600)}h`;
 }
 
 /* ═══════════════ Provider + Container ═══════════════ */

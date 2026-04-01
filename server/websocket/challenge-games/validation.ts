@@ -119,6 +119,7 @@ const challengeGameMessageSchema = z.discriminatedUnion("type", [
     z.object({
         type: z.literal("game_resign"),
         challengeId: challengeIdSchema,
+        reason: z.enum(["resignation", "timeout"]).optional(),
     }),
     z.object({
         type: z.literal("offer_draw"),
