@@ -78,6 +78,12 @@ export function registerSessionsPointsRoutes(app: Express) {
         if (normalizedGameType === 'tarneeb' || normalizedGameType === 'baloot') {
           // Card team games: pass array of player IDs (engine generates bots if needed)
           initialStateJson = engine.initializeWithPlayers(playerIds, 31);
+        } else if (normalizedGameType === 'chess') {
+          const incrementMs = challenge.timeLimit === 180 ? 2000 : challenge.timeLimit === 900 ? 10000 : 0;
+          initialStateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1], {
+            timeMs: Math.max(60, challenge.timeLimit || 300) * 1000,
+            incrementMs,
+          });
         } else {
           initialStateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
         }

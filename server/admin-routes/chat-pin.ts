@@ -6,32 +6,52 @@ import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage
 
 export function registerAdminChatPinRoutes(app: Express) {
 
+  const resetChatPinForUser = async (userId: string, req: AdminRequest, res: Response) => {
+    const targetUserId = String(userId || "").trim();
+    if (!targetUserId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
+
+    const [existingUser] = await db.select({ id: users.id }).from(users).where(eq(users.id, targetUserId)).limit(1);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    await db.update(users).set({
+      chatPinHash: null,
+      chatPinEnabled: false,
+      chatPinFailedAttempts: 0,
+      chatPinLockedUntil: null,
+      chatPinSetAt: null,
+    }).where(eq(users.id, targetUserId));
+
+    try {
+      const { sendNotification } = await import("../websocket");
+      sendNotification(targetUserId, {
+        type: "system",
+        title: "تم إعادة تعيين رقم PIN",
+        message: "تم إعادة تعيين رقم PIN الخاص بالدردشة بواسطة المسؤول.",
+      });
+    } catch { }
+
+    await logAdminAction(req.admin!.id, "update", "chat_pin_reset", targetUserId, { metadata: "reset_pin" }, req);
+
+    return res.json({ success: true, message: "PIN reset successfully" });
+  };
+
   // Admin reset user's chat PIN
   app.post("/api/admin/chat-pin/reset/:userId", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
-      const { userId } = req.params;
+      return await resetChatPinForUser(req.params.userId, req, res);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
 
-      await db.update(users).set({
-        chatPinHash: null,
-        chatPinEnabled: false,
-        chatPinFailedAttempts: 0,
-        chatPinLockedUntil: null,
-        chatPinSetAt: null,
-      }).where(eq(users.id, userId));
-
-      // Notify user
-      try {
-        const { sendNotification } = await import("../websocket");
-        sendNotification(userId, {
-          type: "system",
-          title: "تم إعادة تعيين رقم PIN",
-          message: "تم إعادة تعيين رقم PIN الخاص بالدردشة بواسطة المسؤول.",
-        });
-      } catch {}
-
-      await logAdminAction(req.admin!.id, "update", "chat_pin_reset", userId, { metadata: "reset_pin" }, req);
-
-      res.json({ success: true, message: "PIN reset successfully" });
+  // Compatibility alias used by current admin chat page (body: { userId })
+  app.post("/api/admin/chat/pin/reset", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      return await resetChatPinForUser(req.body?.userId, req, res);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -66,7 +86,7 @@ export function registerAdminChatPinRoutes(app: Express) {
           .from(chatAutoDeletePermissions).where(eq(chatAutoDeletePermissions.userId, u.id));
         const [pinStatus] = await db.select({ chatPinEnabled: users.chatPinEnabled })
           .from(users).where(eq(users.id, u.id));
-        
+
         return {
           ...u,
           mediaEnabled: media?.mediaEnabled || false,

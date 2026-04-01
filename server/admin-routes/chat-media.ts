@@ -6,25 +6,63 @@ import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage
 
 export function registerAdminChatMediaRoutes(app: Express) {
 
+  const resolveTargetUserId = (req: AdminRequest): string => {
+    return String(req.params.userId || req.body?.userId || "").trim();
+  };
+
+  const assertUserExists = async (userId: string): Promise<boolean> => {
+    if (!userId) return false;
+    const [existingUser] = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
+    return Boolean(existingUser);
+  };
+
+  const getMediaStatsPayload = async () => {
+    const [totalEnabled] = await db.select({ count: count() }).from(chatMediaPermissions)
+      .where(eq(chatMediaPermissions.mediaEnabled, true));
+
+    const totalRevenue = await db.execute(sql`
+      SELECT COALESCE(SUM(CAST(price_paid AS DECIMAL)), 0) as total
+      FROM chat_media_permissions WHERE media_enabled = true
+    `);
+
+    const enabledUsersRes = await db.execute(sql`
+      SELECT cmp.user_id, cmp.granted_by, u.username
+      FROM chat_media_permissions cmp
+      INNER JOIN users u ON cmp.user_id = u.id
+      WHERE cmp.media_enabled = true
+      ORDER BY cmp.granted_at DESC
+      LIMIT 100
+    `);
+
+    const [config] = await db.select().from(systemConfig).where(eq(systemConfig.key, "chat_media_price"));
+
+    return {
+      totalEnabledUsers: totalEnabled.count,
+      totalEnabled: totalEnabled.count,
+      totalRevenue: parseFloat((totalRevenue.rows[0] as Record<string, unknown>)?.total as string || "0"),
+      currentPrice: parseFloat(config?.value || "100"),
+      systemEnabled: true,
+      users: (enabledUsersRes.rows as Array<{ user_id: string; granted_by: string | null; username: string | null }>).map((row) => ({
+        userId: row.user_id,
+        username: row.username || undefined,
+        grantedBy: row.granted_by || undefined,
+      })),
+    };
+  };
+
   // Get media permission pricing and stats  
   app.get("/api/admin/chat-media/stats", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
     try {
-      const [totalEnabled] = await db.select({ count: count() }).from(chatMediaPermissions)
-        .where(eq(chatMediaPermissions.mediaEnabled, true));
-      
-      const totalRevenue = await db.execute(sql`
-        SELECT COALESCE(SUM(CAST(price_paid AS DECIMAL)), 0) as total
-        FROM chat_media_permissions WHERE media_enabled = true
-      `);
+      res.json(await getMediaStatsPayload());
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
 
-      const [config] = await db.select().from(systemConfig).where(eq(systemConfig.key, "chat_media_price"));
-      
-      res.json({
-        totalEnabledUsers: totalEnabled.count,
-        totalRevenue: parseFloat((totalRevenue.rows[0] as Record<string, unknown>)?.total as string || "0"),
-        currentPrice: parseFloat(config?.value || "100"),
-        systemEnabled: true,
-      });
+  // Compatibility alias used by current admin chat page
+  app.get("/api/admin/chat/media/stats", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
+    try {
+      res.json(await getMediaStatsPayload());
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -32,6 +70,29 @@ export function registerAdminChatMediaRoutes(app: Express) {
 
   // Update media pricing
   app.put("/api/admin/chat-media/pricing", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const { price } = req.body;
+      if (typeof price !== 'number' || price < 0) {
+        return res.status(400).json({ error: "Invalid price" });
+      }
+
+      await db.insert(systemConfig).values({
+        key: "chat_media_price",
+        value: String(price),
+        updatedBy: req.admin!.id,
+      }).onConflictDoUpdate({
+        target: systemConfig.key,
+        set: { value: String(price), updatedAt: new Date(), updatedBy: req.admin!.id },
+      });
+
+      res.json({ success: true, price });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  // Compatibility alias used by current admin chat page
+  app.put("/api/admin/chat/media/pricing", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
       const { price } = req.body;
       if (typeof price !== 'number' || price < 0) {
@@ -78,7 +139,10 @@ export function registerAdminChatMediaRoutes(app: Express) {
   // Grant media permission to user (free)
   app.post("/api/admin/chat-media/grant/:userId", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
-      const { userId } = req.params;
+      const userId = resolveTargetUserId(req);
+      if (!await assertUserExists(userId)) {
+        return res.status(404).json({ error: "User not found" });
+      }
 
       const [existing] = await db.select().from(chatMediaPermissions)
         .where(eq(chatMediaPermissions.userId, userId));
@@ -108,10 +172,48 @@ export function registerAdminChatMediaRoutes(app: Express) {
     }
   });
 
+  // Compatibility alias used by current admin chat page (body: { userId })
+  app.post("/api/admin/chat/media/grant", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const userId = resolveTargetUserId(req);
+      if (!await assertUserExists(userId)) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const [existing] = await db.select().from(chatMediaPermissions)
+        .where(eq(chatMediaPermissions.userId, userId));
+
+      if (existing) {
+        await db.update(chatMediaPermissions).set({
+          mediaEnabled: true,
+          grantedBy: "admin",
+          grantedAt: new Date(),
+          revokedAt: null,
+          revokedBy: null,
+        }).where(eq(chatMediaPermissions.userId, userId));
+      } else {
+        await db.insert(chatMediaPermissions).values({
+          userId,
+          mediaEnabled: true,
+          grantedBy: "admin",
+          pricePaid: "0",
+        });
+      }
+
+      await logAdminAction(req.admin!.id, "update", "chat_media_permission", userId, { metadata: "grant_media" }, req);
+      res.json({ success: true });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
   // Revoke media permission from user
   app.post("/api/admin/chat-media/revoke/:userId", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
-      const { userId } = req.params;
+      const userId = resolveTargetUserId(req);
+      if (!await assertUserExists(userId)) {
+        return res.status(404).json({ error: "User not found" });
+      }
 
       await db.update(chatMediaPermissions).set({
         mediaEnabled: false,
@@ -121,6 +223,27 @@ export function registerAdminChatMediaRoutes(app: Express) {
 
       await logAdminAction(req.admin!.id, "update", "chat_media_permission", userId, { metadata: "revoke_media" }, req);
 
+      res.json({ success: true });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  // Compatibility alias used by current admin chat page (body: { userId })
+  app.post("/api/admin/chat/media/revoke", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const userId = resolveTargetUserId(req);
+      if (!await assertUserExists(userId)) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      await db.update(chatMediaPermissions).set({
+        mediaEnabled: false,
+        revokedAt: new Date(),
+        revokedBy: req.admin!.id,
+      }).where(eq(chatMediaPermissions.userId, userId));
+
+      await logAdminAction(req.admin!.id, "update", "chat_media_permission", userId, { metadata: "revoke_media" }, req);
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

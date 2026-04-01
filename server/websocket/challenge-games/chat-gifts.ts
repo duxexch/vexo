@@ -1,7 +1,7 @@
 import { WebSocket } from "ws";
 import { db } from "../../db";
-import { users, challengeGameSessions, challengeChatMessages, challenges } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { users, challengeGameSessions, challengeChatMessages, challenges, transactions, gameplaySettings } from "@shared/schema";
+import { eq, and } from "drizzle-orm";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import { filterMessage } from "../../lib/word-filter";
 import { storage } from "../../storage";
@@ -77,7 +77,7 @@ export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): P
 
 /** Handle gift_to_player message — gift sent notification to players */
 export async function handleGiftToPlayer(ws: AuthenticatedSocket, data: any): Promise<void> {
-  const { challengeId, recipientId, giftId } = data;
+  const { challengeId, recipientId, giftId, idempotencyKey } = data;
   const guard = requireChallengeParticipant(ws, challengeId, { allowSpectator: true });
   if (!guard.ok) {
     return;
@@ -120,9 +120,19 @@ export async function handleGiftToPlayer(ws: AuthenticatedSocket, data: any): Pr
     return;
   }
 
+  const [currencyModeSetting] = await db.select({ value: gameplaySettings.value })
+    .from(gameplaySettings)
+    .where(eq(gameplaySettings.key, 'play_gift_currency_mode'))
+    .limit(1);
+  const enforceProjectOnly = !currencyModeSetting || currencyModeSetting.value !== 'mixed';
+  if (enforceProjectOnly) {
+    ws.send(JSON.stringify({ type: "challenge_error", error: "Direct real-money gifts are disabled. Purchase gifts with project currency first." }));
+    return;
+  }
+
   // SECURITY: Validate gift exists in database and get server-side price/name
-  const giftItem = await storage.getGiftItem(giftId);
-  if (!giftItem) {
+  const giftItem = await storage.getGiftFromCatalog(giftId);
+  if (!giftItem || !giftItem.isActive) {
     ws.send(JSON.stringify({ type: "challenge_error", error: "Gift not found" }));
     return;
   }
@@ -133,21 +143,110 @@ export async function handleGiftToPlayer(ws: AuthenticatedSocket, data: any): Pr
     return;
   }
 
-  // SECURITY: Atomic balance deduction — prevent double-spend
+  const recipientEarnings = Math.min(giftPrice, Math.max(0, (giftItem.coinValue || 1) * 0.01));
+  const platformFee = Math.max(0, giftPrice - recipientEarnings);
+  const normalizedIdempotencyKey = typeof idempotencyKey === "string"
+    ? idempotencyKey.trim().slice(0, 128)
+    : "";
+  const idempotencyReferenceId = normalizedIdempotencyKey
+    ? `challenge_live_gift_idem:${challengeId}:${ws.userId}:${normalizedIdempotencyKey}`
+    : undefined;
+
+  // SECURITY: Atomic balance deduction + credit + fee records — prevent double-spend
   const txResult = await db.transaction(async (tx) => {
+    if (idempotencyReferenceId) {
+      const [existing] = await tx.select({ id: transactions.id })
+        .from(transactions)
+        .where(and(
+          eq(transactions.referenceId, idempotencyReferenceId),
+          eq(transactions.userId, ws.userId!),
+          eq(transactions.type, "gift_sent"),
+          eq(transactions.status, "completed"),
+        ))
+        .for('update')
+        .limit(1);
+
+      if (existing) {
+        return { success: false, error: 'Gift already processed' };
+      }
+    }
+
     const [sender] = await tx.select().from(users)
       .where(eq(users.id, ws.userId!)).for('update');
 
-    if (!sender || parseFloat(sender.balance) < giftPrice) {
+    const [recipient] = await tx.select().from(users)
+      .where(eq(users.id, recipientId)).for('update');
+
+    if (!sender || !recipient || parseFloat(sender.balance) < giftPrice) {
       return { success: false, error: 'Insufficient balance' };
     }
 
+    const senderBalanceBefore = parseFloat(sender.balance);
+    const senderBalanceAfter = (senderBalanceBefore - giftPrice).toFixed(2);
+    const recipientBalanceBefore = parseFloat(recipient.balance);
+    const recipientBalanceAfter = (recipientBalanceBefore + recipientEarnings).toFixed(2);
+
     await tx.update(users).set({
-      balance: sql`(CAST(${users.balance} AS DECIMAL) - ${giftPrice})::TEXT`,
+      balance: senderBalanceAfter,
       updatedAt: new Date(),
     }).where(eq(users.id, ws.userId!));
 
-    return { success: true, senderUsername: sender.username };
+    await tx.update(users).set({
+      balance: recipientBalanceAfter,
+      updatedAt: new Date(),
+    }).where(eq(users.id, recipientId));
+
+    const { challengeGifts } = await import("@shared/schema");
+    const [giftRecord] = await tx.insert(challengeGifts).values({
+      challengeId,
+      senderId: ws.userId!,
+      recipientId,
+      giftId,
+      quantity: 1,
+      message: null,
+    }).returning();
+
+    const giftReferenceId = `challenge_live_gift:${giftRecord.id}`;
+
+    await tx.insert(transactions).values({
+      userId: ws.userId!,
+      type: "gift_sent",
+      amount: giftPrice.toFixed(2),
+      status: "completed",
+      balanceBefore: senderBalanceBefore.toFixed(2),
+      balanceAfter: senderBalanceAfter,
+      description: `Direct gift ${giftItem.name} to ${recipientId} in challenge ${challengeId}`,
+      referenceId: idempotencyReferenceId || giftReferenceId,
+      processedAt: new Date(),
+    });
+
+    await tx.insert(transactions).values({
+      userId: recipientId,
+      type: "gift_received",
+      amount: recipientEarnings.toFixed(2),
+      status: "completed",
+      balanceBefore: recipientBalanceBefore.toFixed(2),
+      balanceAfter: recipientBalanceAfter,
+      description: `Received direct gift ${giftItem.name} from ${ws.userId} in challenge ${challengeId}`,
+      referenceId: giftReferenceId,
+      processedAt: new Date(),
+    });
+
+    if (platformFee > 0) {
+      await tx.insert(transactions).values({
+        userId: ws.userId!,
+        type: "platform_fee",
+        amount: platformFee.toFixed(2),
+        status: "completed",
+        balanceBefore: senderBalanceBefore.toFixed(2),
+        balanceAfter: senderBalanceAfter,
+        description: `Platform fee for direct gift ${giftItem.name}`,
+        referenceId: giftReferenceId,
+        processedAt: new Date(),
+      });
+    }
+
+    return { success: true, senderUsername: sender.username, giftReferenceId };
   });
 
   if (!txResult.success) {

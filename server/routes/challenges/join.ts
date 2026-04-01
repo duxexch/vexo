@@ -27,6 +27,12 @@ function buildInitialChallengeState(challenge: ChallengeRow): { gameState: strin
         gameState = engine.initializeWithPlayers(playerIds, 152);
       } else if (gameType === "domino") {
         gameState = engine.initializeWithPlayers(playerIds);
+      } else if (gameType === "chess") {
+        const incrementMs = challenge.timeLimit === 180 ? 2000 : challenge.timeLimit === 900 ? 10000 : 0;
+        gameState = engine.initializeWithPlayers(playerIds[0], playerIds[1], {
+          timeMs: Math.max(60, challenge.timeLimit || 300) * 1000,
+          incrementMs,
+        });
       } else {
         gameState = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
       }
@@ -107,6 +113,18 @@ export function registerJoinRoute(app: Express) {
 
       // Use DB challenge for financial logic
       const challenge = dbChallenge;
+
+      const [currencyModeSetting] = await db.select({ value: gameplaySettings.value })
+        .from(gameplaySettings)
+        .where(eq(gameplaySettings.key, 'play_gift_currency_mode'))
+        .limit(1);
+      const enforceProjectOnly = !currencyModeSetting || currencyModeSetting.value !== 'mixed';
+      if (enforceProjectOnly && (challenge.currencyType || 'usd') === 'usd') {
+        challengeJoinLocks.delete(challengeId);
+        return res.status(400).json({
+          error: 'Real-money gameplay is disabled. Convert to project currency to join games.',
+        });
+      }
 
       // Financial safety: Check and deduct balance using transaction with row-level locking
       const betAmount = parseFloat(String(challenge.betAmount));

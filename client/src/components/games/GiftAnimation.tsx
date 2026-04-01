@@ -66,23 +66,25 @@ const GIFT_COLORS: Record<string, string> = {
 export function GiftAnimation({ gift, onComplete }: GiftAnimationProps) {
   const { language } = useI18n();
   const [isVisible, setIsVisible] = useState(false);
-  const [particles, setParticles] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; size: number; delay: number }>>([]);
 
   useEffect(() => {
     if (gift) {
       setIsVisible(true);
-      
-      const newParticles = Array.from({ length: 12 }, (_, i) => ({
+
+      const newParticles = Array.from({ length: 24 }, (_, i) => ({
         id: i,
-        x: Math.random() * 100 - 50,
-        y: Math.random() * 100 - 50,
+        x: Math.random() * 220 - 110,
+        y: Math.random() * 220 - 110,
+        size: 4 + Math.random() * 8,
+        delay: Math.random() * 280,
       }));
       setParticles(newParticles);
 
       const timer = setTimeout(() => {
         setIsVisible(false);
         onComplete?.();
-      }, 3000);
+      }, 3400);
 
       return () => clearTimeout(timer);
     }
@@ -96,62 +98,73 @@ export function GiftAnimation({ gift, onComplete }: GiftAnimationProps) {
   const giftName = language === "ar" ? gift.giftItem.nameAr || gift.giftItem.name : gift.giftItem.name;
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center"
       data-testid="gift-animation-overlay"
     >
-      <div 
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,205,90,0.22),transparent_52%)] gift-aurora" />
+
+      <div
         className={cn(
-          "relative bg-background/95 backdrop-blur-sm rounded-xl p-6 shadow-2xl border-2 border-primary/30",
-          "animate-in zoom-in-50 fade-in duration-300"
+          "relative rounded-2xl p-6 shadow-2xl border border-white/20",
+          "bg-[linear-gradient(150deg,rgba(26,16,55,0.92),rgba(6,9,28,0.9))]",
+          "animate-in zoom-in-50 fade-in duration-300 gift-pop-card"
         )}
       >
+        <div className="absolute inset-0 rounded-2xl border border-white/20 opacity-70 gift-glare" />
+        <div className="absolute inset-0 rounded-2xl gift-shockwave" />
+
         {particles.map((particle) => (
           <div
             key={particle.id}
             className={cn(
-              "absolute w-2 h-2 rounded-full",
+              "absolute rounded-full shadow-xl",
               iconColor.replace("text-", "bg-")
             )}
             style={{
               left: "50%",
               top: "50%",
-              animation: `particle-fly 1s ease-out forwards`,
+              width: `${particle.size}px`,
+              height: `${particle.size}px`,
+              animation: `gift-particle-fly 1300ms cubic-bezier(0.19, 1, 0.22, 1) forwards`,
+              animationDelay: `${particle.delay}ms`,
               transform: `translate(${particle.x}px, ${particle.y}px)`,
             }}
           />
         ))}
 
         <div className="text-center space-y-3">
-          <div 
+          <div
             className={cn(
-              "mx-auto w-20 h-20 rounded-full flex items-center justify-center",
-              "bg-gradient-to-br from-primary/20 to-primary/5",
-              "animate-bounce"
+              "mx-auto w-24 h-24 rounded-full flex items-center justify-center",
+              "bg-[radial-gradient(circle_at_35%_35%,rgba(255,255,255,0.45),rgba(255,255,255,0.12)_35%,rgba(20,20,40,0.25)_70%)]",
+              "border border-white/35 shadow-[0_20px_50px_rgba(6,10,24,0.55)]",
+              "gift-orb-3d"
             )}
           >
-            <IconComponent className={cn("w-12 h-12", iconColor)} />
+            <IconComponent className={cn("w-14 h-14 drop-shadow-2xl", iconColor)} />
           </div>
 
           <div className="space-y-1">
-            <p className="text-lg font-bold">
+            <p className="text-xl font-extrabold text-white tracking-wide">
               {gift.quantity > 1 ? `${gift.quantity}x ` : ""}{giftName}
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-white/80">
               {language === "ar" ? "من" : "from"}{" "}
-              <span className="font-medium text-foreground">{gift.senderUsername}</span>
+              <span className="font-semibold text-yellow-300">{gift.senderUsername}</span>
             </p>
           </div>
 
           {gift.message && (
-            <p className="text-sm italic text-muted-foreground max-w-xs">
+            <p className="text-sm italic text-white/75 max-w-xs">
               "{gift.message}"
             </p>
           )}
 
-          <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
-            <Sparkles className="w-3 h-3" />
+          <div className="flex items-center justify-center gap-1 text-xs text-white/75">
+            <Sparkles className="w-3 h-3 text-yellow-300" />
             <span>${parseFloat(gift.giftItem.price).toFixed(2)}</span>
+            <Sparkles className="w-3 h-3 text-yellow-300" />
           </div>
         </div>
       </div>

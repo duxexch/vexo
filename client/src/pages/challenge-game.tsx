@@ -28,6 +28,7 @@ import { GameChat } from "@/components/games/GameChat";
 import { VoiceChat } from "@/components/games/VoiceChat";
 import { SpectatorPanel } from "@/components/games/SpectatorPanel";
 import { ShareMatchButton } from "@/components/games/ShareMatchButton";
+import { GiftAnimation } from "@/components/games/GiftAnimation";
 import {
   Crown,
   Target,
@@ -104,7 +105,26 @@ interface GiftInfo {
   id: string;
   senderName: string;
   giftName: string;
+  amount?: number;
+  senderId?: string;
+  recipientId?: string;
   [key: string]: unknown;
+}
+
+interface GiftAnimationState {
+  id: string;
+  senderId: string;
+  senderUsername: string;
+  recipientId: string;
+  giftItem: {
+    id: string;
+    name: string;
+    nameAr?: string;
+    icon: string;
+    price: string;
+  };
+  quantity: number;
+  message?: string;
 }
 
 interface ChallengeWSMessage {
@@ -170,6 +190,7 @@ export default function ChallengeGamePage() {
   const [showResignDialog, setShowResignDialog] = useState(false);
   const [spectators, setSpectators] = useState<SpectatorInfo[]>([]);
   const [receivedGifts, setReceivedGifts] = useState<GiftInfo[]>([]);
+  const [activeGiftAnimation, setActiveGiftAnimation] = useState<GiftAnimationState | null>(null);
   const [serverRole, setServerRole] = useState<"player" | "spectator" | null>(null);
   const [playerView, setPlayerView] = useState<Record<string, unknown> | null>(null);
   const [localTimerTick, setLocalTimerTick] = useState(0);
@@ -529,8 +550,22 @@ export default function ChallengeGamePage() {
         break;
       case "gift_received":
         if (data.gift) {
-          const gift = data.gift;
+          const gift = data.gift as GiftInfo;
           setReceivedGifts(prev => [...prev, gift]);
+          setActiveGiftAnimation({
+            id: String(gift.id || `${Date.now()}`),
+            senderId: String(gift.senderId || "unknown"),
+            senderUsername: String(gift.senderName || "Supporter"),
+            recipientId: String(gift.recipientId || "unknown"),
+            giftItem: {
+              id: String(gift.id || "gift"),
+              name: String(gift.giftName || "Gift"),
+              nameAr: String(gift.giftName || "هدية"),
+              icon: "sparkles",
+              price: String(gift.amount || 0),
+            },
+            quantity: 1,
+          });
           toast({
             title: t('challenge.newGift'),
             description: `${gift.senderName} sent ${gift.giftName}`,
@@ -721,6 +756,29 @@ export default function ChallengeGamePage() {
     setMessageInput("");
   }, [challengeId]);
 
+  const sendGiftToPlayer = useCallback((giftId: string, recipientId: string) => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      toast({
+        title: language === "ar" ? "الاتصال غير جاهز" : "Connection not ready",
+        description: language === "ar" ? "أعد المحاولة خلال لحظة." : "Please try again in a moment.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const idempotencyKey = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    wsRef.current.send(JSON.stringify({
+      type: "gift_to_player",
+      challengeId,
+      giftId,
+      recipientId,
+      idempotencyKey,
+    }));
+  }, [challengeId, toast, language]);
+
   const handleResign = useCallback(() => {
     if (!canPlayActions) {
       showSpectatorActionBlocked();
@@ -828,17 +886,17 @@ export default function ChallengeGamePage() {
   const opponent = challenge.player1Id === user?.id ? challenge.player2 : challenge.player1;
 
   const chessStatePayload = (() => {
+    const fen = typeof playerView?.fen === "string" ? playerView.fen : "";
+    if (fen) {
+      return JSON.stringify({ fen });
+    }
+
     const sessionState = typeof gameSession?.gameState === "string" ? gameSession.gameState.trim() : "";
     if (sessionState.length > 0) {
       return sessionState;
     }
 
-    const fen = typeof playerView?.fen === "string" ? playerView.fen : "";
-    if (!fen) {
-      return undefined;
-    }
-
-    return JSON.stringify({ fen });
+    return undefined;
   })();
 
   // Compute live timer: server time minus elapsed seconds since last sync
@@ -846,11 +904,11 @@ export default function ChallengeGamePage() {
   // Determine whose turn it is to subtract elapsed time from the correct player
   const isMyTurnForTimer = gameSession?.currentTurn === user?.id;
   const serverMyTime = challenge.player1Id === user?.id
-    ? gameSession?.player1TimeRemaining || challenge.timeLimit
-    : gameSession?.player2TimeRemaining || challenge.timeLimit;
+    ? (gameSession?.player1TimeRemaining ?? challenge.timeLimit)
+    : (gameSession?.player2TimeRemaining ?? challenge.timeLimit);
   const serverOppTime = challenge.player1Id === user?.id
-    ? gameSession?.player2TimeRemaining || challenge.timeLimit
-    : gameSession?.player1TimeRemaining || challenge.timeLimit;
+    ? (gameSession?.player2TimeRemaining ?? challenge.timeLimit)
+    : (gameSession?.player1TimeRemaining ?? challenge.timeLimit);
   void localTimerTick; // referenced to trigger re-render
   const myTimeRemaining = Math.max(0, isMyTurnForTimer ? serverMyTime - elapsedSinceSyncSec : serverMyTime);
   const opponentTimeRemaining = Math.max(0, !isMyTurnForTimer ? serverOppTime - elapsedSinceSyncSec : serverOppTime);
@@ -1135,6 +1193,7 @@ export default function ChallengeGamePage() {
                   totalMoves={gameSession?.totalMoves}
                   currentTurn={gameSession?.currentTurn}
                   gameStatus={gameSession?.status}
+                  onSendGift={sendGiftToPlayer}
                 />
               </div>
             )}
@@ -1219,6 +1278,11 @@ export default function ChallengeGamePage() {
           </DialogContent>
         </Dialog>
       )}
+
+      <GiftAnimation
+        gift={activeGiftAnimation}
+        onComplete={() => setActiveGiftAnimation(null)}
+      />
     </div>
   );
 }

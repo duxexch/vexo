@@ -56,32 +56,56 @@ export default function AdminDisputesPage() {
   const [selectedDispute, setSelectedDispute] = useState<any>(null);
   const [resolution, setResolution] = useState("");
   const [resolutionType, setResolutionType] = useState<string>("");
+  const [winnerId, setWinnerId] = useState<string>("");
 
   // Alert-based highlighting: track which disputes have unread alerts
   const { data: unreadData } = useUnreadAlertEntities("/admin/disputes");
   const unreadEntityIds = new Set(unreadData?.entityIds || []);
   const markAlertRead = useMarkAlertReadByEntity();
 
-  const { data: complaints, isLoading } = useQuery({
-    queryKey: ["/api/admin/complaints"],
-    queryFn: () => adminFetch("/api/admin/complaints"),
+  const { data: disputes, isLoading } = useQuery({
+    queryKey: ["/api/admin/p2p/disputes"],
+    queryFn: () => adminFetch("/api/admin/p2p/disputes"),
   });
 
   const resolveMutation = useMutation({
-    mutationFn: async ({ id, status, resolution }: { id: string; status: string; resolution: string }) => {
-      return adminFetch(`/api/admin/complaints/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status, adminNote: resolution }),
-      });
+    mutationFn: async ({ id, status, resolution, winnerId }: { id: string; status: string; resolution: string; winnerId?: string }) => {
+      if (status === "resolved") {
+        if (!winnerId) {
+          throw new Error("Winner is required for dispute resolution");
+        }
+        return adminFetch(`/api/admin/p2p/disputes/${id}/resolve`, {
+          method: "POST",
+          body: JSON.stringify({ resolution, winnerId }),
+        });
+      }
+
+      if (status === "investigating") {
+        return adminFetch(`/api/admin/p2p/disputes/${id}/escalate`, {
+          method: "POST",
+          body: JSON.stringify({ reason: resolution }),
+        });
+      }
+
+      if (status === "closed") {
+        return adminFetch(`/api/admin/p2p/disputes/${id}/close`, {
+          method: "POST",
+          body: JSON.stringify({ reason: resolution }),
+        });
+      }
+
+      throw new Error("Unsupported resolution action");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/complaints"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/disputes"] });
       toast({ title: "Dispute Resolved", description: "The dispute has been resolved" });
       setSelectedDispute(null);
       setResolution("");
+      setResolutionType("");
+      setWinnerId("");
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to resolve dispute", variant: "destructive" });
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to resolve dispute", variant: "destructive" });
     },
   });
 
@@ -90,7 +114,8 @@ export default function AdminDisputesPage() {
       case "resolved": return "default";
       case "pending": return "secondary";
       case "open": return "destructive";
-      case "in_review": return "outline";
+      case "investigating": return "outline";
+      case "closed": return "secondary";
       default: return "secondary";
     }
   };
@@ -107,18 +132,21 @@ export default function AdminDisputesPage() {
 
   const handleResolve = () => {
     if (!selectedDispute || !resolution || !resolutionType) return;
+    if (resolutionType === "resolved" && !winnerId) return;
+
     resolveMutation.mutate({
       id: selectedDispute.id,
       status: resolutionType,
       resolution,
+      winnerId: resolutionType === "resolved" ? winnerId : undefined,
     });
   };
 
   const stats = {
-    total: complaints?.length || 0,
-    pending: complaints?.filter((c: { status: string }) => c.status === "pending" || c.status === "open").length || 0,
-    inReview: complaints?.filter((c: { status: string }) => c.status === "in_review").length || 0,
-    resolved: complaints?.filter((c: { status: string }) => c.status === "resolved").length || 0,
+    total: disputes?.length || 0,
+    pending: disputes?.filter((c: { status: string }) => c.status === "pending" || c.status === "open").length || 0,
+    inReview: disputes?.filter((c: { status: string }) => c.status === "investigating").length || 0,
+    resolved: disputes?.filter((c: { status: string }) => c.status === "resolved" || c.status === "closed").length || 0,
   };
 
   if (isLoading) {
@@ -136,8 +164,8 @@ export default function AdminDisputesPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Disputes & Complaints</h1>
-        <p className="text-muted-foreground">Manage P2P disputes and user complaints</p>
+        <h1 className="text-3xl font-bold">P2P Disputes</h1>
+        <p className="text-muted-foreground">Manage and resolve P2P trading disputes</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -188,61 +216,72 @@ export default function AdminDisputesPage() {
       </div>
 
       <div className="space-y-4">
-        {complaints?.map((dispute: { id: string; subject?: string; status: string; priority?: string; description?: string; userId?: string; relatedAmount?: string; createdAt: string }) => {
+        {disputes?.map((dispute: {
+          id: string;
+          status: string;
+          reason?: string;
+          description?: string;
+          initiatorId?: string;
+          initiatorName?: string;
+          respondentId?: string;
+          respondentName?: string;
+          tradeAmount?: string;
+          createdAt: string;
+        }) => {
           const hasUnreadAlert = unreadEntityIds.has(String(dispute.id));
           return (
-          <Card key={dispute.id} className={`transition-colors ${hasUnreadAlert ? 'border-s-2 border-s-primary/40 bg-primary/5' : (dispute.status === 'pending' || dispute.status === 'open' ? 'border-s-2 border-s-yellow-500/50 bg-yellow-500/5' : '')}`}>
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold">{dispute.subject}</h3>
-                    <Badge variant={getStatusColor(dispute.status)}>{dispute.status}</Badge>
-                    <Badge variant={getPriorityColor(dispute.priority || "medium")}>{dispute.priority || "medium"}</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {dispute.description}
-                  </p>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <User className="h-3 w-3" />
-                      User: {dispute.userId}
-                    </span>
-                    {dispute.relatedAmount && (
+            <Card key={dispute.id} className={`transition-colors ${hasUnreadAlert ? 'border-s-2 border-s-primary/40 bg-primary/5' : (dispute.status === 'pending' || dispute.status === 'open' ? 'border-s-2 border-s-yellow-500/50 bg-yellow-500/5' : '')}`}>
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-semibold">{dispute.reason || "P2P Dispute"}</h3>
+                      <Badge variant={getStatusColor(dispute.status)}>{dispute.status}</Badge>
+                      <Badge variant={getPriorityColor(dispute.status === "open" ? "high" : dispute.status === "investigating" ? "medium" : "low")}>{dispute.status === "open" ? "high" : dispute.status === "investigating" ? "medium" : "low"}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {dispute.description}
+                    </p>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
-                        <DollarSign className="h-3 w-3" />
-                        ${dispute.relatedAmount}
+                        <User className="h-3 w-3" />
+                        {dispute.initiatorName || dispute.initiatorId} vs {dispute.respondentName || dispute.respondentId}
                       </span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {new Date(dispute.createdAt).toLocaleDateString()}
-                    </span>
+                      {dispute.tradeAmount && (
+                        <span className="flex items-center gap-1">
+                          <DollarSign className="h-3 w-3" />
+                          ${dispute.tradeAmount}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {new Date(dispute.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (hasUnreadAlert) {
+                          markAlertRead.mutate({ entityType: "p2p_dispute", entityId: String(dispute.id) });
+                        }
+                        setSelectedDispute(dispute);
+                      }}
+                      data-testid={`button-view-dispute-${dispute.id}`}
+                    >
+                      <MessageSquare className="h-4 w-4 me-1" />
+                      Review
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      if (hasUnreadAlert) {
-                        markAlertRead.mutate({ entityType: "complaint", entityId: String(dispute.id) });
-                      }
-                      setSelectedDispute(dispute);
-                    }}
-                    data-testid={`button-view-dispute-${dispute.id}`}
-                  >
-                    <MessageSquare className="h-4 w-4 me-1" />
-                    Review
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
           );
         })}
 
-        {(!complaints || complaints.length === 0) && (
+        {(!disputes || disputes.length === 0) && (
           <Card>
             <CardContent className="p-6 text-center">
               <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
@@ -265,19 +304,20 @@ export default function AdminDisputesPage() {
                   <Badge variant={getStatusColor(selectedDispute.status)}>
                     {selectedDispute.status}
                   </Badge>
-                  <Badge variant={getPriorityColor(selectedDispute.priority)}>
-                    {selectedDispute.priority}
+                  <Badge variant={getPriorityColor(selectedDispute.status === "open" ? "high" : selectedDispute.status === "investigating" ? "medium" : "low")}>
+                    {selectedDispute.status === "open" ? "high" : selectedDispute.status === "investigating" ? "medium" : "low"}
                   </Badge>
                 </div>
-                <h3 className="font-semibold">{selectedDispute.subject}</h3>
+                <h3 className="font-semibold">{selectedDispute.reason || "P2P Dispute"}</h3>
                 <p className="text-sm">{selectedDispute.description}</p>
                 <div className="flex gap-4 text-sm text-muted-foreground">
-                  <span>User ID: {selectedDispute.userId}</span>
+                  <span>Initiator: {selectedDispute.initiatorName || selectedDispute.initiatorId}</span>
+                  <span>Respondent: {selectedDispute.respondentName || selectedDispute.respondentId}</span>
                   <span>Created: {new Date(selectedDispute.createdAt).toLocaleString()}</span>
                 </div>
               </div>
 
-              {selectedDispute.status !== "resolved" && (
+              {selectedDispute.status !== "resolved" && selectedDispute.status !== "closed" && (
                 <>
                   <div className="space-y-2">
                     <Label>Resolution Type</Label>
@@ -286,12 +326,31 @@ export default function AdminDisputesPage() {
                         <SelectValue placeholder="Select resolution" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="resolved">Resolved - Issue Fixed</SelectItem>
-                        <SelectItem value="rejected">Rejected - Invalid Claim</SelectItem>
-                        <SelectItem value="in_review">Mark as In Review</SelectItem>
+                        <SelectItem value="resolved">Resolve dispute and settle trade</SelectItem>
+                        <SelectItem value="investigating">Escalate to investigation</SelectItem>
+                        <SelectItem value="closed">Close dispute (post-settlement only)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {resolutionType === "resolved" && (
+                    <div className="space-y-2">
+                      <Label>Winner</Label>
+                      <Select value={winnerId} onValueChange={setWinnerId}>
+                        <SelectTrigger data-testid="select-dispute-winner">
+                          <SelectValue placeholder="Select winner" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={selectedDispute.initiatorId}>
+                            {selectedDispute.initiatorName || selectedDispute.initiatorId} (initiator)
+                          </SelectItem>
+                          <SelectItem value={selectedDispute.respondentId}>
+                            {selectedDispute.respondentName || selectedDispute.respondentId} (respondent)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label>Admin Notes</Label>
@@ -306,10 +365,10 @@ export default function AdminDisputesPage() {
                 </>
               )}
 
-              {selectedDispute.adminNote && (
+              {selectedDispute.resolution && (
                 <div className="p-4 bg-green-500/10 rounded-lg">
-                  <p className="text-sm font-medium text-green-500">Admin Resolution</p>
-                  <p className="text-sm mt-1">{selectedDispute.adminNote}</p>
+                  <p className="text-sm font-medium text-green-500">Resolution</p>
+                  <p className="text-sm mt-1">{selectedDispute.resolution}</p>
                 </div>
               )}
             </div>
@@ -319,10 +378,10 @@ export default function AdminDisputesPage() {
             <Button variant="outline" onClick={() => setSelectedDispute(null)}>
               Close
             </Button>
-            {selectedDispute?.status !== "resolved" && (
+            {selectedDispute?.status !== "resolved" && selectedDispute?.status !== "closed" && (
               <Button
                 onClick={handleResolve}
-                disabled={!resolution || !resolutionType || resolveMutation.isPending}
+                disabled={!resolution || !resolutionType || (resolutionType === "resolved" && !winnerId) || resolveMutation.isPending}
                 data-testid="button-submit-resolution"
               >
                 Submit Resolution

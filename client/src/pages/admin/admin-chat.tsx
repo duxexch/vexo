@@ -272,10 +272,10 @@ export default function AdminChatPage() {
               });
               browserNotif.onclick = () => { window.focus(); browserNotif.close(); };
               setTimeout(() => browserNotif.close(), 15000);
-            } catch {}
+            } catch { }
           }
         }
-      } catch {}
+      } catch { }
     };
 
     ws.onerror = () => console.error("[Admin Chat WS] Connection error");
@@ -286,7 +286,7 @@ export default function AdminChatPage() {
   // Request browser notification permission for admin
   useEffect(() => {
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
+      Notification.requestPermission().catch(() => { });
     }
   }, []);
 
@@ -313,8 +313,10 @@ export default function AdminChatPage() {
       params.set("limit", "50");
       return adminFetch(`/api/admin/chat/messages?${params}`);
     },
-    enabled: activeTab === "messages",
+    enabled: false,
   });
+  void messagesData;
+  void refetchMessages;
 
   // Banned words
   const { data: bannedWordsData } = useQuery({
@@ -756,7 +758,7 @@ export default function AdminChatPage() {
   const handleAdminSendReply = async () => {
     if (replyMutation.isPending || adminUploading || !selectedTicketId) return;
     const trimmed = supportReply.trim();
-    
+
     if (adminMediaPreview) {
       setAdminUploading(true);
       try {
@@ -1380,9 +1382,8 @@ export default function AdminChatPage() {
                     {supportTickets?.map((ticket: SupportTicket) => (
                       <button
                         key={ticket.id}
-                        className={`w-full text-start p-3 hover:bg-muted/50 transition-colors ${
-                          selectedTicketId === ticket.id ? "bg-primary/10 border-s-2 border-primary" : ""
-                        }`}
+                        className={`w-full text-start p-3 hover:bg-muted/50 transition-colors ${selectedTicketId === ticket.id ? "bg-primary/10 border-s-2 border-primary" : ""
+                          }`}
                         onClick={() => setSelectedTicketId(ticket.id)}
                       >
                         <div className="flex items-center justify-between mb-1">
@@ -1529,13 +1530,12 @@ export default function AdminChatPage() {
                             className={`flex ${msg.senderType === "admin" ? "justify-end" : "justify-start"}`}
                           >
                             <div
-                              className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${
-                                msg.senderType === "admin"
+                              className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${msg.senderType === "admin"
                                   ? "bg-primary text-primary-foreground rounded-ee-sm"
                                   : msg.senderType === "system"
-                                  ? "bg-muted text-muted-foreground rounded-es-sm italic text-xs"
-                                  : "bg-card border border-border text-card-foreground rounded-es-sm"
-                              }`}
+                                    ? "bg-muted text-muted-foreground rounded-es-sm italic text-xs"
+                                    : "bg-card border border-border text-card-foreground rounded-es-sm"
+                                }`}
                             >
                               {msg.senderType === "system" && (
                                 <span className="flex items-center gap-1 text-[10px] font-semibold mb-0.5">
@@ -1812,7 +1812,7 @@ export default function AdminChatPage() {
                   محادثات مشفرة طرفياً (E2EE)
                 </h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  المحادثات الخاصة بين المستخدمين محمية بتشفير طرفي. 
+                  المحادثات الخاصة بين المستخدمين محمية بتشفير طرفي.
                   لا يمكن لأي شخص بما فيهم المشرفين قراءة هذه الرسائل.
                   يمكنك مراقبة محادثات P2P والتحديات فقط.
                 </p>
@@ -2299,7 +2299,7 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
 
       <div className="bg-amber-500/10 border border-amber-500/20 rounded p-3">
         <p className="text-xs text-muted-foreground">
-          ⚠️ إعادة التعيين ستزيل حماية PIN من محادثات المستخدم. 
+          ⚠️ إعادة التعيين ستزيل حماية PIN من محادثات المستخدم.
           استخدم فقط عندما يطلب المستخدم ذلك عبر الدعم الفني.
         </p>
       </div>

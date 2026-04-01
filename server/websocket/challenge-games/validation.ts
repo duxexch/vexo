@@ -134,6 +134,7 @@ const challengeGameMessageSchema = z.discriminatedUnion("type", [
         challengeId: challengeIdSchema,
         recipientId: shortStringSchema,
         giftId: shortStringSchema,
+        idempotencyKey: shortStringSchema.optional(),
     }),
     // Backward-compatibility alias used by some clients
     z.object({
@@ -141,6 +142,7 @@ const challengeGameMessageSchema = z.discriminatedUnion("type", [
         challengeId: challengeIdSchema,
         recipientId: shortStringSchema,
         giftId: shortStringSchema,
+        idempotencyKey: shortStringSchema.optional(),
     }),
 ]);
 

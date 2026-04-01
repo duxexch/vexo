@@ -13,8 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { 
-  Coins, Settings2, TrendingUp, Users, Clock, Check, X, AlertCircle, 
+import {
+  Coins, Settings2, TrendingUp, Users, Clock, Check, X, AlertCircle,
   RefreshCw, DollarSign, ArrowRightLeft, History, Loader2
 } from "lucide-react";
 import { format } from "date-fns";
@@ -70,6 +70,11 @@ interface CurrencyStats {
   dailyConversionTotal: string;
 }
 
+interface PlayGiftPolicy {
+  mode: "project_only" | "mixed";
+  projectOnly: boolean;
+}
+
 export default function AdminCurrencyPage() {
   const { toast } = useToast();
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
@@ -109,13 +114,24 @@ export default function AdminCurrencyPage() {
     },
   });
 
+  const { data: playGiftPolicy } = useQuery<PlayGiftPolicy>({
+    queryKey: ["/api/admin/project-currency/play-gift-policy"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/project-currency/play-gift-policy", {
+        headers: { "x-admin-token": adminToken() },
+      });
+      if (!res.ok) throw new Error("Failed to fetch play/gift policy");
+      return res.json();
+    },
+  });
+
   const updateSettingsMutation = useMutation({
     mutationFn: async (data: Partial<CurrencySettings>) => {
       const res = await fetch("/api/admin/project-currency/settings", {
         method: "PUT",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "x-admin-token": adminToken() 
+          "x-admin-token": adminToken()
         },
         body: JSON.stringify(data),
       });
@@ -157,9 +173,9 @@ export default function AdminCurrencyPage() {
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
       const res = await fetch(`/api/admin/project-currency/conversions/${id}/reject`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "x-admin-token": adminToken() 
+          "x-admin-token": adminToken()
         },
         body: JSON.stringify({ reason }),
       });
@@ -179,6 +195,34 @@ export default function AdminCurrencyPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Failed to reject", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updatePlayGiftPolicyMutation = useMutation({
+    mutationFn: async (mode: "project_only" | "mixed") => {
+      const res = await fetch("/api/admin/project-currency/play-gift-policy", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": adminToken(),
+        },
+        body: JSON.stringify({ mode }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Failed to update policy" }));
+        throw new Error(data.error || "Failed to update policy");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/play-gift-policy"] });
+      toast({
+        title: "Policy updated",
+        description: "Games and gift purchases currency mode was updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update policy", description: error.message, variant: "destructive" });
     },
   });
 
@@ -384,7 +428,7 @@ export default function AdminCurrencyPage() {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    {settings?.approvalMode === "manual" 
+                    {settings?.approvalMode === "manual"
                       ? "All conversions require admin approval before crediting"
                       : "Conversions are processed instantly without admin review"
                     }
@@ -473,6 +517,21 @@ export default function AdminCurrencyPage() {
                 <CardDescription>Configure where project currency can be used</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="flex items-center justify-between gap-4 border rounded-lg p-3 bg-muted/30">
+                  <div>
+                    <Label>Require Project Currency for Games & Gift Purchases</Label>
+                    <p className="text-xs text-muted-foreground">
+                      When enabled (default), real money is restricted from gameplay and gift purchases, while P2P can still use real money.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={playGiftPolicy?.projectOnly ?? true}
+                    onCheckedChange={(checked) => updatePlayGiftPolicyMutation.mutate(checked ? "project_only" : "mixed")}
+                    disabled={updatePlayGiftPolicyMutation.isPending}
+                    data-testid="switch-project-only-play-gifts"
+                  />
+                </div>
+
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <Label>Use in Games</Label>
@@ -634,9 +693,9 @@ export default function AdminCurrencyPage() {
                           <Badge
                             variant={
                               conv.status === "completed" ? "default" :
-                              conv.status === "pending" ? "secondary" :
-                              conv.status === "rejected" ? "destructive" :
-                              "secondary"
+                                conv.status === "pending" ? "secondary" :
+                                  conv.status === "rejected" ? "destructive" :
+                                    "secondary"
                             }
                           >
                             {conv.status}

@@ -173,3 +173,149 @@ export async function cancelP2PTradeAtomic(tradeId: string, cancelledByUserId: s
     return { success: true, trade: updatedTrade };
   });
 }
+
+// Resolve disputed/base-currency trade atomically in favor of buyer or seller.
+export async function resolveP2PDisputedTradeAtomic(
+  tradeId: string,
+  winnerUserId: string,
+  reason?: string,
+): Promise<{ success: boolean; trade?: P2PTrade; error?: string }> {
+  return await db.transaction(async (tx) => {
+    const [trade] = await tx
+      .select()
+      .from(p2pTrades)
+      .where(eq(p2pTrades.id, tradeId))
+      .for('update');
+
+    if (!trade) {
+      return { success: false, error: 'Trade not found' };
+    }
+
+    if (trade.status === 'completed' || trade.status === 'cancelled') {
+      return { success: true, trade };
+    }
+
+    if (winnerUserId !== trade.buyerId && winnerUserId !== trade.sellerId) {
+      return { success: false, error: 'Winner must be one of trade parties' };
+    }
+
+    if (!['disputed', 'pending', 'paid', 'confirmed'].includes(trade.status)) {
+      return { success: false, error: `Unsupported trade status for dispute resolution: ${trade.status}` };
+    }
+
+    const escrowAmount = parseFloat(trade.escrowAmount);
+    const tradeAmount = parseFloat(trade.amount);
+
+    // Buyer wins: release escrow minus fee to buyer.
+    if (winnerUserId === trade.buyerId) {
+      const platformFee = parseFloat(trade.platformFee || '0');
+      const releaseAmount = escrowAmount - platformFee;
+
+      if (releaseAmount < 0) {
+        return { success: false, error: 'Invalid escrow/fee configuration' };
+      }
+
+      const [buyer] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, trade.buyerId))
+        .for('update');
+
+      if (!buyer) {
+        return { success: false, error: 'Buyer not found' };
+      }
+
+      const buyerBalance = parseFloat(buyer.balance);
+      const newBuyerBalance = (buyerBalance + releaseAmount).toFixed(2);
+
+      await tx.update(users)
+        .set({ balance: newBuyerBalance, updatedAt: new Date() })
+        .where(eq(users.id, trade.buyerId));
+
+      const [updatedTrade] = await tx.update(p2pTrades)
+        .set({
+          status: 'completed',
+          completedAt: new Date(),
+          cancelReason: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(p2pTrades.id, tradeId))
+        .returning();
+
+      await tx.insert(transactions).values({
+        userId: trade.buyerId,
+        type: 'deposit',
+        amount: releaseAmount.toFixed(2),
+        balanceBefore: buyerBalance.toFixed(2),
+        balanceAfter: newBuyerBalance,
+        status: 'completed',
+        description: `P2P dispute resolution ${tradeId} - buyer awarded`,
+        processedAt: new Date(),
+      });
+
+      return { success: true, trade: updatedTrade };
+    }
+
+    // Seller wins: refund full escrow back to seller and cancel trade.
+    const [seller] = await tx
+      .select()
+      .from(users)
+      .where(eq(users.id, trade.sellerId))
+      .for('update');
+
+    if (!seller) {
+      return { success: false, error: 'Seller not found' };
+    }
+
+    const sellerBalance = parseFloat(seller.balance);
+    const newSellerBalance = (sellerBalance + escrowAmount).toFixed(2);
+
+    await tx.update(users)
+      .set({ balance: newSellerBalance, updatedAt: new Date() })
+      .where(eq(users.id, trade.sellerId));
+
+    if (trade.offerId && tradeAmount > 0) {
+      const [offer] = await tx
+        .select()
+        .from(p2pOffers)
+        .where(eq(p2pOffers.id, trade.offerId))
+        .for('update');
+
+      if (offer) {
+        const currentAvailable = parseFloat(offer.availableAmount);
+        const restoredAvailable = (currentAvailable + tradeAmount).toFixed(8);
+
+        await tx.update(p2pOffers)
+          .set({
+            availableAmount: restoredAvailable,
+            status: offer.status === 'cancelled' ? 'cancelled' : 'active',
+            updatedAt: new Date(),
+          })
+          .where(eq(p2pOffers.id, trade.offerId));
+      }
+    }
+
+    const [updatedTrade] = await tx.update(p2pTrades)
+      .set({
+        status: 'cancelled',
+        cancelReason: reason || 'Dispute resolved in favor of seller',
+        cancelledAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(p2pTrades.id, tradeId))
+      .returning();
+
+    await tx.insert(transactions).values({
+      userId: trade.sellerId,
+      type: 'deposit',
+      amount: trade.escrowAmount,
+      balanceBefore: sellerBalance.toFixed(2),
+      balanceAfter: newSellerBalance,
+      status: 'completed',
+      description: `P2P dispute resolution ${tradeId} - seller refund`,
+      processedAt: new Date(),
+    });
+
+    return { success: true, trade: updatedTrade };
+  });
+}

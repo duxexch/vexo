@@ -1,4 +1,6 @@
 import type { Express, Response } from "express";
+import fs from "fs";
+import path from "path";
 import { db } from "../../db";
 import {
   p2pDisputes,
@@ -14,6 +16,44 @@ import { sanitizeNullablePlainText, sanitizePlainText } from "../../lib/input-se
 
 /** POST /api/p2p/disputes/:id/messages + POST /api/p2p/disputes/:id/evidence */
 export function registerMessagesEvidenceRoutes(app: Express) {
+
+  const allowedEvidenceTypes = new Set(['screenshot', 'video', 'document', 'other']);
+  const maxEvidenceSizeBytes = 10 * 1024 * 1024;
+  const allowedMimeByExt: Record<string, string> = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".pdf": "application/pdf",
+  };
+
+  function parseAndValidateEvidenceUrl(rawFileUrl: string): { normalizedPath: string; fileName: string } | null {
+    const trimmed = String(rawFileUrl || "").trim();
+    if (!trimmed) return null;
+
+    const asRelativePath = (candidate: string): { normalizedPath: string; fileName: string } | null => {
+      if (!(candidate.startsWith('/uploads/') || candidate.startsWith('/storage/'))) return null;
+      if (candidate.includes('..')) return null;
+      const fileName = path.posix.basename(candidate);
+      if (!fileName || fileName.includes('/') || fileName.includes('\\')) return null;
+      return { normalizedPath: candidate, fileName };
+    };
+
+    if (trimmed.startsWith('/')) {
+      return asRelativePath(trimmed);
+    }
+
+    try {
+      const parsed = new URL(trimmed);
+      if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+      return asRelativePath(parsed.pathname);
+    } catch {
+      return null;
+    }
+  }
 
   // ==================== POST /api/p2p/disputes/:id/messages ====================
   // Send a message in the dispute chat
@@ -116,32 +156,43 @@ export function registerMessagesEvidenceRoutes(app: Express) {
         return res.status(400).json({ error: "fileName, fileUrl, fileType, and evidenceType are required" });
       }
 
-      // SECURITY: Validate fileUrl is a safe URL (no javascript: or data: schemes)
       const safeFileUrl = String(fileUrl).slice(0, 2000);
-      if (!/^https?:\/\//.test(safeFileUrl)) {
-        return res.status(400).json({ error: "Invalid file URL" });
+      const parsedEvidenceUrl = parseAndValidateEvidenceUrl(safeFileUrl);
+      if (!parsedEvidenceUrl) {
+        return res.status(400).json({ error: "Invalid evidence URL. Use uploaded files only." });
       }
-      // SECURITY: Block SSRF — reject internal/private IPs and hostnames
-      try {
-        const parsed = new URL(safeFileUrl);
-        const hostname = parsed.hostname.toLowerCase();
-        const isInternal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0'
-          || hostname === '::1' || hostname === '[::1]'
-          || hostname.endsWith('.local') || hostname.endsWith('.internal')
-          || /^10\./.test(hostname) || /^172\.(1[6-9]|2\d|3[01])\./.test(hostname)
-          || /^192\.168\./.test(hostname) || hostname === '169.254.169.254'
-          || hostname.startsWith('metadata');
-        if (isInternal) {
-          return res.status(400).json({ error: "External URLs only" });
-        }
-      } catch {
-        return res.status(400).json({ error: "Invalid file URL" });
-      }
+
       // Sanitize text inputs
       const safeFileName = sanitizePlainText(fileName, { maxLength: 255 });
       const safeDescription = sanitizeNullablePlainText(description, 1000);
       const safeEvidenceType = sanitizePlainText(evidenceType, { maxLength: 50 });
       const safeFileType = sanitizePlainText(fileType, { maxLength: 100 });
+      const ext = path.extname(parsedEvidenceUrl.fileName).toLowerCase();
+      const inferredMime = allowedMimeByExt[ext] || "";
+      const normalizedMime = inferredMime || safeFileType.toLowerCase();
+      let validatedFileSize = Number(fileSize || 0);
+
+      if (parsedEvidenceUrl.normalizedPath.startsWith('/uploads/')) {
+        const localUploadsPath = path.join(process.cwd(), 'uploads', parsedEvidenceUrl.fileName);
+        if (!fs.existsSync(localUploadsPath)) {
+          return res.status(400).json({ error: "Uploaded evidence file not found" });
+        }
+        const stat = fs.statSync(localUploadsPath);
+        validatedFileSize = stat.size;
+      }
+
+      const isAllowedMime = normalizedMime.startsWith('image/') || normalizedMime.startsWith('video/') || normalizedMime === 'application/pdf';
+      if (!isAllowedMime) {
+        return res.status(400).json({ error: 'Unsupported evidence file type' });
+      }
+
+      if (!Number.isFinite(validatedFileSize) || validatedFileSize <= 0 || validatedFileSize > maxEvidenceSizeBytes) {
+        return res.status(400).json({ error: 'Evidence file size must be between 1 byte and 10MB' });
+      }
+
+      if (!allowedEvidenceTypes.has(safeEvidenceType)) {
+        return res.status(400).json({ error: 'Invalid evidence type' });
+      }
 
       // 1. Validate dispute exists and user is party
       const [dispute] = await db
@@ -176,9 +227,9 @@ export function registerMessagesEvidenceRoutes(app: Express) {
           disputeId,
           uploaderId: userId,
           fileName: safeFileName,
-          fileUrl: safeFileUrl,
-          fileType: safeFileType,
-          fileSize: fileSize || 0,
+          fileUrl: parsedEvidenceUrl.normalizedPath,
+          fileType: normalizedMime,
+          fileSize: validatedFileSize,
           description: safeDescription,
           evidenceType: safeEvidenceType,
         })

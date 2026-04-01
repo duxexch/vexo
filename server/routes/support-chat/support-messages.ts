@@ -11,6 +11,36 @@ import { logger } from "../../lib/logger";
 import crypto from "crypto";
 import { getAutoReply } from "./support-ticket";
 import { sanitizeNullablePlainText, sanitizePlainText } from "../../lib/input-security";
+import { chatWithAiAgentSupport } from "../../lib/ai-agent-client";
+
+function shouldEscalateToLiveChat(aiReply: string, aiMeta?: { resolved?: boolean; escalateToLiveChat?: boolean; confidence?: number }): boolean {
+  if (aiMeta?.escalateToLiveChat) return true;
+  if (aiMeta?.resolved === false) return true;
+  if (typeof aiMeta?.confidence === "number" && aiMeta.confidence < 0.4) return true;
+
+  const normalized = aiReply.trim().toLowerCase();
+  if (!normalized) return true;
+
+  const escalationPhrases = [
+    "i can't", "i cannot", "not sure", "unable to", "contact support", "human agent",
+    "لا أستطيع", "غير متأكد", "تعذر", "يرجى التواصل", "موظف دعم", "تحويل",
+  ];
+  return escalationPhrases.some((phrase) => normalized.includes(phrase.toLowerCase()));
+}
+
+function buildLiveChatOfferMessage(input: string): string {
+  const looksArabic = /[\u0600-\u06FF]/.test(input);
+  if (looksArabic) {
+    return "حاول sam9 مساعدتك لكن يحتاج تدخل بشري الآن. إذا أردت التحويل لمحادثة حية مع فريق الدعم، اكتب: (محادثة حية).";
+  }
+  return "sam9 tried to help, but this case needs a human specialist. If you want to transfer to live chat with support, reply with: (live chat).";
+}
+
+function buildSam9Reply(aiReply: string, sourceMessage: string): string {
+  const looksArabic = /[\u0600-\u06FF]/.test(sourceMessage);
+  const prefix = looksArabic ? "sam9:" : "sam9:";
+  return `${prefix} ${aiReply.trim()}`;
+}
 
 export function registerSupportMessageRoutes(app: Express): void {
 
@@ -105,15 +135,48 @@ export function registerSupportMessageRoutes(app: Express): void {
         .set({ lastMessageAt: new Date(), status: "waiting", updatedAt: new Date() })
         .where(eq(supportTickets.id, ticketId));
 
-      // Check for auto-reply
+      // sam9 tries first. If unresolved, offer live chat handoff.
       const autoReplyInput = (content || "").trim().toLowerCase();
-      const autoReply = autoReplyInput ? await getAutoReply(autoReplyInput) : null;
-      if (autoReply) {
+      const aiSupport = autoReplyInput
+        ? await chatWithAiAgentSupport({ ticketId, userId, message: safeContent })
+        : null;
+
+      const aiReply = sanitizePlainText(aiSupport?.reply, { maxLength: 1600, fallback: "" });
+      const hasAiReply = aiReply.trim().length > 0;
+      const escalateToLiveChat = shouldEscalateToLiveChat(aiReply, {
+        resolved: aiSupport?.resolved,
+        escalateToLiveChat: aiSupport?.escalateToLiveChat,
+        confidence: aiSupport?.confidence,
+      });
+
+      if (hasAiReply && !escalateToLiveChat) {
         await db.insert(supportMessages).values({
           ticketId,
-          senderId: "system",
+          senderId: "sam9",
           senderType: "system",
-          content: autoReply,
+          content: buildSam9Reply(aiReply, safeContent),
+          isAutoReply: true,
+          isRead: false,
+        });
+      } else {
+        const keywordReply = autoReplyInput ? await getAutoReply(autoReplyInput) : null;
+
+        if (keywordReply) {
+          await db.insert(supportMessages).values({
+            ticketId,
+            senderId: "sam9",
+            senderType: "system",
+            content: buildSam9Reply(keywordReply, safeContent),
+            isAutoReply: true,
+            isRead: false,
+          });
+        }
+
+        await db.insert(supportMessages).values({
+          ticketId,
+          senderId: "sam9",
+          senderType: "system",
+          content: buildLiveChatOfferMessage(safeContent),
           isAutoReply: true,
           isRead: false,
         });

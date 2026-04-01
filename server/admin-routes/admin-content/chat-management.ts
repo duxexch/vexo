@@ -62,7 +62,7 @@ export function registerChatManagementRoutes(app: Express) {
     try {
       const [totalPrivate] = await db.select({ count: count() }).from(chatMessages);
       const [totalGame] = await db.select({ count: count() }).from(challengeChatMessages);
-      
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const [todayPrivate] = await db.select({ count: count() }).from(chatMessages)
@@ -82,6 +82,7 @@ export function registerChatManagementRoutes(app: Express) {
         todayPrivateMessages: todayPrivate.count,
         todayGameMessages: todayGame.count,
         activeChattersLast24h: (activeChatters.rows[0] as Record<string, unknown>)?.count || 0,
+        bannedWordsCount: getBannedWordsList().length,
         privacyNote: "Private messages are end-to-end encrypted. Admin cannot read message content.",
       });
     } catch (error: unknown) {
@@ -91,7 +92,7 @@ export function registerChatManagementRoutes(app: Express) {
 
   // PRIVACY: Admin CANNOT read private messages
   app.get("/api/admin/chat/messages", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
-    return res.status(403).json({ 
+    return res.status(403).json({
       error: "Access denied - Private messages are end-to-end encrypted",
       message: "لا يمكن للمسؤول قراءة الرسائل الخاصة. الرسائل مشفرة تشفيرًا تامًا.",
       privacyPolicy: "E2EE"
@@ -100,7 +101,7 @@ export function registerChatManagementRoutes(app: Express) {
 
   // PRIVACY: Admin CANNOT delete individual private messages
   app.delete("/api/admin/chat/messages/:messageId", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
-    return res.status(403).json({ 
+    return res.status(403).json({
       error: "Access denied - Private messages are end-to-end encrypted",
       message: "لا يمكن للمسؤول حذف الرسائل الخاصة. الرسائل مشفرة تشفيرًا تامًا.",
     });
@@ -108,7 +109,7 @@ export function registerChatManagementRoutes(app: Express) {
 
   // PRIVACY: Admin CANNOT delete all user private messages
   app.delete("/api/admin/chat/user/:userId/messages", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
-    return res.status(403).json({ 
+    return res.status(403).json({
       error: "Access denied - Private messages are end-to-end encrypted",
       message: "لا يمكن للمسؤول حذف الرسائل الخاصة. الرسائل مشفرة تشفيرًا تامًا.",
     });
@@ -131,7 +132,7 @@ export function registerChatManagementRoutes(app: Express) {
         return res.status(400).json({ error: "Word is required" });
       }
       addCustomBannedWord(word.trim());
-      
+
       await logAdminAction(req.admin!.id, "create", "banned_word", word.trim(), { metadata: word.trim() }, req);
 
       res.json({ success: true, words: getBannedWordsList() });

@@ -391,6 +391,34 @@ export async function chatWithAiAgentAdmin(message: string): Promise<AiAgentAdmi
     );
 }
 
+export interface AiAgentSupportChatResponse {
+    generatedAt?: string;
+    reply?: string;
+    confidence?: number;
+    resolved?: boolean;
+    escalateToLiveChat?: boolean;
+    reason?: string;
+}
+
+export async function chatWithAiAgentSupport(params: {
+    ticketId: string;
+    userId: string;
+    message: string;
+}): Promise<AiAgentSupportChatResponse | null> {
+    return requestAiAgentJson<AiAgentSupportChatResponse>(
+        '/v1/support/chat',
+        {
+            method: 'POST',
+            body: JSON.stringify({
+                ticketId: anonymizeIdentifier(params.ticketId),
+                userId: anonymizeIdentifier(params.userId),
+                message: sanitizeString(params.message),
+            }),
+        },
+        { timeoutMs: Math.max(700, AI_AGENT_TIMEOUT_MS) },
+    );
+}
+
 export async function getAiAgentHealth(): Promise<Record<string, unknown> | null> {
     return requestAiAgentJson<Record<string, unknown>>(
         '/health',

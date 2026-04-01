@@ -7,6 +7,7 @@ import {
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { sendNotification } from "../../websocket";
+import { storage } from "../../storage";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage } from "./helpers";
 
@@ -42,6 +43,28 @@ export function registerResolveRoutes(app: Express) {
         return res.status(400).json({ error: "Dispute is already resolved" });
       }
 
+      if (!winnerUserId || (winnerUserId !== dispute.initiatorId && winnerUserId !== dispute.respondentId)) {
+        return res.status(400).json({ error: "winnerUserId must be dispute initiator or respondent" });
+      }
+
+      const [trade] = await db
+        .select({ id: p2pTrades.id, currencyType: p2pTrades.currencyType })
+        .from(p2pTrades)
+        .where(eq(p2pTrades.id, dispute.tradeId))
+        .limit(1);
+
+      if (!trade) {
+        return res.status(404).json({ error: "Related trade not found" });
+      }
+
+      const settlementResult = trade.currencyType === 'project'
+        ? await storage.resolveP2PDisputedTradeProjectCurrencyAtomic(dispute.tradeId, winnerUserId, resolution || action)
+        : await storage.resolveP2PDisputedTradeAtomic(dispute.tradeId, winnerUserId, resolution || action);
+
+      if (!settlementResult.success) {
+        return res.status(400).json({ error: settlementResult.error || "Failed to settle disputed trade" });
+      }
+
       // Update the dispute
       await db
         .update(p2pDisputes)
@@ -49,7 +72,7 @@ export function registerResolveRoutes(app: Express) {
           status: "resolved",
           resolution: resolution || `Resolved by admin. Action: ${action}`,
           resolvedBy: userId,
-          winnerUserId: winnerUserId || null,
+          winnerUserId,
           resolvedAt: new Date(),
           updatedAt: new Date(),
         })
@@ -74,21 +97,21 @@ export function registerResolveRoutes(app: Express) {
         priority: 'high',
         title: 'Dispute Resolved by Admin',
         titleAr: 'تم حل النزاع بواسطة الإدارة',
-        message: `Dispute #${disputeId.slice(0,8)} has been resolved. ${resolutionMsg}`,
-        messageAr: `تم حل النزاع #${disputeId.slice(0,8)}. ${resolutionMsg}`,
+        message: `Dispute #${disputeId.slice(0, 8)} has been resolved. ${resolutionMsg}`,
+        messageAr: `تم حل النزاع #${disputeId.slice(0, 8)}. ${resolutionMsg}`,
         link: '/p2p/disputes',
         metadata: JSON.stringify({ disputeId, action: 'dispute_admin_resolved', winnerId: winnerUserId }),
-      }).catch(() => {});
+      }).catch(() => { });
       await sendNotification(dispute.respondentId, {
         type: 'system',
         priority: 'high',
         title: 'Dispute Resolved by Admin',
         titleAr: 'تم حل النزاع بواسطة الإدارة',
-        message: `Dispute #${disputeId.slice(0,8)} has been resolved. ${resolutionMsg}`,
-        messageAr: `تم حل النزاع #${disputeId.slice(0,8)}. ${resolutionMsg}`,
+        message: `Dispute #${disputeId.slice(0, 8)} has been resolved. ${resolutionMsg}`,
+        messageAr: `تم حل النزاع #${disputeId.slice(0, 8)}. ${resolutionMsg}`,
         link: '/p2p/disputes',
         metadata: JSON.stringify({ disputeId, action: 'dispute_admin_resolved', winnerId: winnerUserId }),
-      }).catch(() => {});
+      }).catch(() => { });
 
       res.json({ success: true, resolution, action });
     } catch (error: unknown) {

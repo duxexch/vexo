@@ -55,7 +55,7 @@ interface P2PTrade {
   amount: string;
   price: string;
   totalPrice: string;
-  status: "pending" | "processing" | "completed" | "cancelled" | "disputed";
+  status: "pending" | "paid" | "confirmed" | "completed" | "cancelled" | "disputed";
   createdAt: string;
   completedAt: string | null;
   counterpartyUsername: string;
@@ -207,11 +207,39 @@ function MarketplaceTab() {
     return true;
   }) || [];
 
-  const handleTrade = (offerId: string) => {
-    toast({
-      title: t('p2p.tradeInitiated'),
-      description: t('p2p.tradeInitiatedDesc'),
-    });
+  const createTradeMutation = useMutation({
+    mutationFn: async (offer: P2POffer) => {
+      const defaultAmount = offer.minLimit || offer.amount;
+      const paymentMethod = offer.paymentMethods?.[0];
+      if (!paymentMethod) {
+        throw new Error(t('p2p.paymentMethod'));
+      }
+
+      const res = await apiRequest("POST", "/api/p2p/trades", {
+        offerId: offer.id,
+        amount: defaultAmount,
+        paymentMethod,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/my-trades"] });
+      toast({
+        title: t('p2p.tradeInitiated'),
+        description: t('p2p.tradeInitiatedDesc'),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t('common.error'),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleTrade = (offer: P2POffer) => {
+    createTradeMutation.mutate(offer);
   };
 
   const getStatusBadge = (status: string) => {
@@ -363,7 +391,8 @@ function MarketplaceTab() {
                     <Button
                       size="sm"
                       className="min-h-[44px] min-w-[44px]"
-                      onClick={() => handleTrade(offer.id)}
+                      onClick={() => handleTrade(offer)}
+                      disabled={createTradeMutation.isPending}
                       data-testid={`button-trade-${offer.id}`}
                     >
                       {t('p2p.trade')}
@@ -693,14 +722,16 @@ function MyTradesTab() {
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
       pending: "secondary",
-      processing: "default",
+      paid: "default",
+      confirmed: "default",
       completed: "outline",
       cancelled: "destructive",
       disputed: "destructive",
     };
     const labels: Record<string, string> = {
       pending: t('p2p.tradePending'),
-      processing: t('p2p.tradeProcessing'),
+      paid: t('p2p.tradeProcessing'),
+      confirmed: t('p2p.tradeProcessing'),
       completed: t('p2p.tradeCompleted'),
       cancelled: t('p2p.tradeCancelled'),
       disputed: t('p2p.tradeDisputed'),
@@ -943,7 +974,7 @@ function DisputesTab() {
   };
 
   const eligibleTrades = trades?.filter(t =>
-    t.status === 'processing' || t.status === 'pending'
+    t.status === 'pending' || t.status === 'paid' || t.status === 'confirmed' || t.status === 'disputed'
   ) || [];
 
   const getActionBadgeColor = (action: string) => {

@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -34,21 +35,6 @@ interface GiftDef {
   bgColor: string;       // tailwind bg class for the circle
   animation: "bounce" | "spin" | "pulse" | "shake" | "float";
 }
-
-const ALL_GIFTS: GiftDef[] = [
-  { id: "rose",          icon: "heart",       name: "Rose",      nameAr: "وردة",      price: 1,    color: "text-red-500",    bgColor: "bg-red-500/15",    animation: "pulse" },
-  { id: "finger_heart",  icon: "thumbsUp",    name: "Like",      nameAr: "إعجاب",     price: 5,    color: "text-blue-500",   bgColor: "bg-blue-500/15",   animation: "bounce" },
-  { id: "ice_cream",     icon: "gem",         name: "Ice Cream", nameAr: "آيس كريم",  price: 5,    color: "text-cyan-400",   bgColor: "bg-cyan-400/15",   animation: "bounce" },
-  { id: "doughnut",      icon: "coffee",      name: "Coffee",    nameAr: "قهوة",      price: 10,   color: "text-amber-600",  bgColor: "bg-amber-600/15",  animation: "shake" },
-  { id: "wishing_bottle", icon: "star",       name: "Star",      nameAr: "نجمة",      price: 10,   color: "text-yellow-400", bgColor: "bg-yellow-400/15", animation: "spin" },
-  { id: "sunglasses",    icon: "zap",         name: "Energy",    nameAr: "طاقة",      price: 20,   color: "text-yellow-300", bgColor: "bg-yellow-300/15", animation: "pulse" },
-  { id: "party",         icon: "partyPopper", name: "Party",     nameAr: "حفلة",      price: 50,   color: "text-pink-500",   bgColor: "bg-pink-500/15",   animation: "shake" },
-  { id: "fire",          icon: "flame",       name: "Fire",      nameAr: "نار",       price: 50,   color: "text-orange-500", bgColor: "bg-orange-500/15", animation: "pulse" },
-  { id: "diamond",       icon: "gem",         name: "Diamond",   nameAr: "ألماس",     price: 100,  color: "text-purple-400", bgColor: "bg-purple-400/15", animation: "spin" },
-  { id: "crown",         icon: "crown",       name: "Crown",     nameAr: "تاج",       price: 200,  color: "text-yellow-500", bgColor: "bg-yellow-500/15", animation: "float" },
-  { id: "rocket",        icon: "rocket",      name: "Rocket",    nameAr: "صاروخ",     price: 500,  color: "text-blue-400",   bgColor: "bg-blue-400/15",   animation: "bounce" },
-  { id: "trophy",        icon: "trophy",      name: "Trophy",    nameAr: "كأس",       price: 1000, color: "text-yellow-400", bgColor: "bg-yellow-400/15", animation: "shake" },
-];
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   heart: Heart,
@@ -98,6 +84,38 @@ export function FullScreenGiftPanel({
   const [selectedGift, setSelectedGift] = useState<GiftDef | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+
+  const { data: giftCatalog = [] } = useQuery<Array<{
+    id: string;
+    name: string;
+    nameAr?: string;
+    iconUrl?: string;
+    price: string;
+    animationType?: string;
+    isActive?: boolean;
+  }>>({
+    queryKey: ["/api/gifts"],
+  });
+
+  const allGifts: GiftDef[] = giftCatalog
+    .filter((gift) => gift.isActive !== false)
+    .slice(0, 12)
+    .map((gift) => ({
+      id: gift.id,
+      icon: gift.iconUrl || "gift",
+      name: gift.name,
+      nameAr: gift.nameAr || gift.name,
+      price: Number(gift.price || 0),
+      color: "text-primary",
+      bgColor: "bg-primary/15",
+      animation: gift.animationType === "spin"
+        ? "spin"
+        : gift.animationType === "burst"
+          ? "shake"
+          : gift.animationType === "rain"
+            ? "float"
+            : "pulse",
+    }));
 
   const handleGiftClick = useCallback((gift: GiftDef) => {
     setSelectedGift((prev) => (prev?.id === gift.id ? null : gift));
@@ -209,7 +227,7 @@ export function FullScreenGiftPanel({
         {/* ─── 3×4 Gift Grid ─── */}
         <div className="flex-1 px-4 flex flex-col justify-center">
           <div className="grid grid-cols-3 gap-3">
-            {ALL_GIFTS.map((gift) => {
+            {allGifts.map((gift) => {
               const IconComponent = ICON_MAP[gift.icon] || Gift;
               const isSelected = selectedGift?.id === gift.id;
 
@@ -219,17 +237,17 @@ export function FullScreenGiftPanel({
                   onClick={() => handleGiftClick(gift)}
                   disabled={disabled}
                   className={cn(
-                    "relative flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all",
+                    "relative flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all gift-card-3d",
                     "active:scale-95",
                     isSelected
-                      ? "border-primary bg-primary/10 shadow-lg shadow-primary/25 scale-105"
+                      ? "border-primary bg-primary/10 shadow-[0_18px_45px_rgba(10,8,35,0.5)] scale-105"
                       : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
                   )}
                 >
                   {/* Icon circle */}
                   <div
                     className={cn(
-                      "w-12 h-12 rounded-full flex items-center justify-center transition-transform",
+                      "w-12 h-12 rounded-full flex items-center justify-center transition-transform gift-icon-3d",
                       gift.bgColor,
                       isSelected && gift.animation === "bounce" && "animate-bounce",
                       isSelected && gift.animation === "pulse" && "animate-pulse",
@@ -272,9 +290,9 @@ export function FullScreenGiftPanel({
             onClick={handleSend}
             disabled={!selectedGift || !effectivePlayer || disabled || sending}
             className={cn(
-              "w-full h-14 text-base font-bold gap-2 rounded-2xl transition-all",
+              "w-full h-14 text-base font-bold gap-2 rounded-2xl transition-all gift-send-button",
               selectedGift && effectivePlayer
-                ? "bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30"
+                ? "bg-primary hover:bg-primary/90 shadow-[0_18px_45px_rgba(30,20,85,0.5)]"
                 : "bg-white/10 text-white/40"
             )}
             data-testid="button-send-gift-fullscreen"
@@ -306,4 +324,4 @@ export function FullScreenGiftPanel({
   );
 }
 
-export { ALL_GIFTS, ICON_MAP as GIFT_ICON_MAP };
+export { ICON_MAP as GIFT_ICON_MAP };

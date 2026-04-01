@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { users, gameplaySettings, referralRewardsLog } from "@shared/schema";
+import { users, gameplaySettings, referralRewardsLog, projectCurrencyWallets, projectCurrencyLedger } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { registrationRateLimiter } from "../middleware";
 import { JWT_USER_SECRET, JWT_USER_EXPIRY } from "../../lib/auth-config";
@@ -116,9 +116,47 @@ export function registerUsernameRegistrationRoutes(app: Express) {
                 referredId: user.id,
                 rewardAmount: rewardAmount,
               });
-              await tx.update(users)
-                .set({ balance: sql`${users.balance} + ${rewardAmount}` })
-                .where(eq(users.id, referredBy!));
+
+              await tx.execute(sql`
+                INSERT INTO project_currency_wallets (user_id)
+                VALUES (${referredBy!})
+                ON CONFLICT (user_id) DO NOTHING
+              `);
+
+              const [wallet] = await tx.select()
+                .from(projectCurrencyWallets)
+                .where(eq(projectCurrencyWallets.userId, referredBy!))
+                .for('update');
+
+              if (!wallet) {
+                throw new Error('Referrer wallet not found');
+              }
+
+              const rewardValue = parseFloat(rewardAmount);
+              const balanceBefore = parseFloat(wallet.totalBalance || '0');
+              const earnedBefore = parseFloat(wallet.earnedBalance || '0');
+              const balanceAfter = (balanceBefore + rewardValue).toFixed(2);
+
+              await tx.update(projectCurrencyWallets)
+                .set({
+                  earnedBalance: (earnedBefore + rewardValue).toFixed(2),
+                  totalBalance: balanceAfter,
+                  totalEarned: (parseFloat(wallet.totalEarned || '0') + rewardValue).toFixed(2),
+                  updatedAt: new Date(),
+                })
+                .where(eq(projectCurrencyWallets.id, wallet.id));
+
+              await tx.insert(projectCurrencyLedger).values({
+                userId: referredBy!,
+                walletId: wallet.id,
+                type: 'bonus',
+                amount: rewardValue.toFixed(2),
+                balanceBefore: balanceBefore.toFixed(2),
+                balanceAfter,
+                referenceId: user.id,
+                referenceType: 'referral_reward',
+                description: `Referral reward for inviting ${username.trim()}`,
+              });
             });
 
             // Notify referrer about their bonus
@@ -127,8 +165,8 @@ export function registerUsernameRegistrationRoutes(app: Express) {
               priority: 'normal',
               title: 'Referral Bonus Earned!',
               titleAr: 'مكافأة إحالة!',
-              message: `You earned $${rewardAmount} because your referral "${username.trim()}" joined!`,
-              messageAr: `حصلت على $${rewardAmount} لأن المُحال "${username.trim()}" انضم!`,
+              message: `You earned ${rewardAmount} project coins because your referral "${username.trim()}" joined!`,
+              messageAr: `حصلت على ${rewardAmount} من عملات المشروع لأن المُحال "${username.trim()}" انضم!`,
               link: '/wallet',
               metadata: JSON.stringify({ action: 'referral_bonus', amount: rewardAmount, referredUsername: username.trim() }),
             }).catch(() => { });

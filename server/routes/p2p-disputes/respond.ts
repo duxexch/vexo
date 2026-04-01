@@ -4,9 +4,11 @@ import {
   p2pDisputes,
   p2pDisputeMessages,
   p2pTransactionLogs,
+  p2pTrades,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { sendNotification } from "../../websocket";
+import { storage } from "../../storage";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage } from "./helpers";
 
@@ -47,12 +49,31 @@ export function registerRespondRoutes(app: Express) {
       const userAgent = req.headers["user-agent"] || "";
 
       if (action === "accept") {
+        const [trade] = await db
+          .select({ id: p2pTrades.id, currencyType: p2pTrades.currencyType })
+          .from(p2pTrades)
+          .where(eq(p2pTrades.id, dispute.tradeId))
+          .limit(1);
+
+        if (!trade) {
+          return res.status(404).json({ error: "Related trade not found" });
+        }
+
+        const resolutionReason = details || "Respondent accepted the dispute";
+        const settleResult = trade.currencyType === 'project'
+          ? await storage.resolveP2PDisputedTradeProjectCurrencyAtomic(dispute.tradeId, dispute.initiatorId, resolutionReason)
+          : await storage.resolveP2PDisputedTradeAtomic(dispute.tradeId, dispute.initiatorId, resolutionReason);
+
+        if (!settleResult.success) {
+          return res.status(400).json({ error: settleResult.error || "Failed to settle trade" });
+        }
+
         // Respondent accepts the dispute — resolve in favour of initiator
         await db
           .update(p2pDisputes)
           .set({
             status: "resolved",
-            resolution: "Respondent accepted the dispute.",
+            resolution: resolutionReason,
             winnerUserId: dispute.initiatorId,
             resolvedAt: new Date(),
             updatedAt: new Date(),
@@ -80,7 +101,7 @@ export function registerRespondRoutes(app: Express) {
           messageAr: `قبل ${req.user!.username} نزاعك. تم حله لصالحك.`,
           link: '/p2p/disputes',
           metadata: JSON.stringify({ disputeId, action: 'dispute_accepted' }),
-        }).catch(() => {});
+        }).catch(() => { });
 
         return res.json({ success: true, action: "accepted", newStatus: "resolved" });
 
@@ -120,11 +141,11 @@ export function registerRespondRoutes(app: Express) {
           priority: 'high',
           title: 'Dispute Contested',
           titleAr: 'تم الاعتراض على النزاع',
-          message: `${req.user!.username} contested your dispute #${disputeId.slice(0,8)}. It has been escalated to support review.`,
-          messageAr: `اعترض ${req.user!.username} على نزاعك #${disputeId.slice(0,8)}. تم تصعيده لمراجعة الدعم.`,
+          message: `${req.user!.username} contested your dispute #${disputeId.slice(0, 8)}. It has been escalated to support review.`,
+          messageAr: `اعترض ${req.user!.username} على نزاعك #${disputeId.slice(0, 8)}. تم تصعيده لمراجعة الدعم.`,
           link: '/p2p/disputes',
           metadata: JSON.stringify({ disputeId, action: 'dispute_contested' }),
-        }).catch(() => {});
+        }).catch(() => { });
 
         return res.json({ success: true, action: "contested", newStatus: "investigating" });
 
@@ -155,11 +176,11 @@ export function registerRespondRoutes(app: Express) {
           priority: 'high',
           title: 'Dispute Escalated',
           titleAr: 'تم تصعيد النزاع',
-          message: `${req.user!.username} escalated the dispute #${disputeId.slice(0,8)} to admin support.`,
-          messageAr: `صعّد ${req.user!.username} النزاع #${disputeId.slice(0,8)} إلى دعم الإدارة.`,
+          message: `${req.user!.username} escalated the dispute #${disputeId.slice(0, 8)} to admin support.`,
+          messageAr: `صعّد ${req.user!.username} النزاع #${disputeId.slice(0, 8)} إلى دعم الإدارة.`,
           link: '/p2p/disputes',
           metadata: JSON.stringify({ disputeId, action: 'dispute_escalated' }),
-        }).catch(() => {});
+        }).catch(() => { });
 
         return res.json({ success: true, action: "escalated", newStatus: "investigating" });
       }

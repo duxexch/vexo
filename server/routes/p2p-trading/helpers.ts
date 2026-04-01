@@ -12,13 +12,13 @@ export async function calculateP2PFee(tradeAmount: number): Promise<number> {
   if (!settings) {
     return tradeAmount * 0.005;
   }
-  
+
   let fee = 0;
   const percentageRate = parseFloat(settings.platformFeePercentage);
   const fixedAmount = parseFloat(settings.platformFeeFixed);
   const minFee = parseFloat(settings.minFee);
   const maxFee = settings.maxFee ? parseFloat(settings.maxFee) : null;
-  
+
   switch (settings.feeType) {
     case "percentage":
       fee = tradeAmount * percentageRate;
@@ -32,13 +32,10 @@ export async function calculateP2PFee(tradeAmount: number): Promise<number> {
     default:
       fee = tradeAmount * 0.005;
   }
-  
+
   if (fee < minFee) fee = minFee;
   if (maxFee !== null && fee > maxFee) fee = maxFee;
-  
+
   return fee;
 }
 
-/** In-memory storage — used only when DB offers don't exist yet */
-export const userP2POffers: Record<string, unknown>[] = [];
-export const userP2PTrades: Record<string, unknown>[] = [];

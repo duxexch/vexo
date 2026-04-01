@@ -123,6 +123,23 @@ interface ChallengeGame {
   status: string;
 }
 
+type ChessSystemKey =
+  | 'bullet_1_0'
+  | 'blitz_3_2'
+  | 'blitz_5_0'
+  | 'rapid_10_0'
+  | 'rapid_15_10'
+  | 'classical_30_0';
+
+const CHESS_SYSTEM_OPTIONS: Array<{ key: ChessSystemKey; labelEn: string; labelAr: string; seconds: number }> = [
+  { key: 'bullet_1_0', labelEn: 'Bullet 1+0', labelAr: 'بوليت 1+0', seconds: 60 },
+  { key: 'blitz_3_2', labelEn: 'Blitz 3+2', labelAr: 'بليتز 3+2', seconds: 180 },
+  { key: 'blitz_5_0', labelEn: 'Blitz 5+0', labelAr: 'بليتز 5+0', seconds: 300 },
+  { key: 'rapid_10_0', labelEn: 'Rapid 10+0', labelAr: 'رابيد 10+0', seconds: 600 },
+  { key: 'rapid_15_10', labelEn: 'Rapid 15+10', labelAr: 'رابيد 15+10', seconds: 900 },
+  { key: 'classical_30_0', labelEn: 'Classical 30+0', labelAr: 'كلاسيك 30+0', seconds: 1800 },
+];
+
 const RANK_COLORS: Record<string, string> = {
   bronze: "bg-amber-700/20 text-amber-600",
   silver: "bg-gray-400/20 text-gray-400",
@@ -166,6 +183,7 @@ export default function ChallengesPage() {
   const [friendAccountId, setFriendAccountId] = useState("");
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [requiredPlayers, setRequiredPlayers] = useState<2 | 4>(2);
+  const [chessSystem, setChessSystem] = useState<ChessSystemKey>('rapid_10_0');
 
   const multiPlayerGames = ['domino', 'tarneeb', 'baloot'];
   const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
@@ -260,7 +278,7 @@ export default function ChallengesPage() {
   };
 
   const createChallengeMutation = useMutation({
-    mutationFn: (data: { gameType: string; betAmount: number; opponentType: string; friendAccountId?: string; visibility: string; requiredPlayers?: number }) =>
+    mutationFn: (data: { gameType: string; betAmount: number; opponentType: string; friendAccountId?: string; visibility: string; requiredPlayers?: number; chessSystem?: ChessSystemKey }) =>
       apiRequest('POST', '/api/challenges', data),
     onSuccess: () => {
       playSound('success');
@@ -339,6 +357,7 @@ export default function ChallengesPage() {
     setFriendAccountId("");
     setVisibility('public');
     setRequiredPlayers(2);
+    setChessSystem('rapid_10_0');
   };
 
   const handleCreateChallenge = () => {
@@ -374,6 +393,7 @@ export default function ChallengesPage() {
       friendAccountId: opponentType === 'friend' ? friendAccountId : undefined,
       visibility,
       requiredPlayers: multiPlayerGames.includes(selectedGame) ? requiredPlayers : 2,
+      chessSystem: selectedGame === 'chess' ? chessSystem : undefined,
     });
   };
 
@@ -1013,6 +1033,27 @@ export default function ChallengesPage() {
                     <Users className="h-4 w-4 me-2" />
                     4 {t('challenges.players') || 'Players'}
                   </Button>
+                </div>
+              </div>
+            )}
+
+            {selectedGame === 'chess' && (
+              <div>
+                <Label>{language === 'ar' ? 'نظام اللعب (الوقت)' : 'Chess System (Time Control)'}</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {CHESS_SYSTEM_OPTIONS.map((system) => (
+                    <Button
+                      key={system.key}
+                      type="button"
+                      variant={chessSystem === system.key ? 'default' : 'outline'}
+                      onClick={() => setChessSystem(system.key)}
+                      className="h-auto py-2 text-xs"
+                      data-testid={`button-chess-system-${system.key}`}
+                    >
+                      <Timer className="h-3.5 w-3.5 me-1" />
+                      {language === 'ar' ? system.labelAr : system.labelEn}
+                    </Button>
+                  ))}
                 </div>
               </div>
             )}

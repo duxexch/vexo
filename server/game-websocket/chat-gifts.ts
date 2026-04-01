@@ -1,7 +1,7 @@
 import { storage } from '../storage';
 import { db } from '../db';
-import { users } from '@shared/schema';
-import { eq } from 'drizzle-orm';
+import { gameplaySettings, users } from '@shared/schema';
+import { and, eq } from 'drizzle-orm';
 import { chatRateLimiter, giftRateLimiter } from '../lib/rate-limiter';
 import { filterMessage } from '../lib/word-filter';
 import { getCachedUserBlockLists } from '../lib/redis';
@@ -127,6 +127,16 @@ export async function handleSendGift(ws: AuthenticatedWebSocket, payload: { reci
   }
 
   try {
+    const [currencyModeSetting] = await db.select({ value: gameplaySettings.value })
+      .from(gameplaySettings)
+      .where(eq(gameplaySettings.key, 'play_gift_currency_mode'))
+      .limit(1);
+    const enforceProjectOnly = !currencyModeSetting || currencyModeSetting.value !== 'mixed';
+    if (enforceProjectOnly) {
+      sendError(ws, 'Direct real-money gifts are disabled. Purchase gifts with project currency first.');
+      return;
+    }
+
     const giftItem = await storage.getGiftItem(payload.giftItemId);
     if (!giftItem) {
       sendError(ws, 'Gift not found');
@@ -136,10 +146,33 @@ export async function handleSendGift(ws: AuthenticatedWebSocket, payload: { reci
     const totalPrice = parseFloat(giftItem.price) * payload.quantity;
     const recipientEarnings = totalPrice * (parseFloat(giftItem.creatorShare) / 100);
     const platformFee = totalPrice - recipientEarnings;
+    const normalizedIdempotencyKey = typeof (payload as { idempotencyKey?: unknown }).idempotencyKey === 'string'
+      ? (payload as { idempotencyKey?: string }).idempotencyKey!.trim().slice(0, 128)
+      : '';
+    const idempotencyReference = normalizedIdempotencyKey
+      ? `live_game_gift_idem:${ws.sessionId}:${ws.userId}:${normalizedIdempotencyKey}`
+      : undefined;
 
     // FIX: Single atomic transaction — deduct totalPrice from sender, credit recipientEarnings to recipient
     // Platform fee stays deducted (sender pays totalPrice, recipient gets recipientEarnings)
     const giftResult = await db.transaction(async (tx) => {
+      if (idempotencyReference) {
+        const { transactions } = await import('@shared/schema');
+        const [existing] = await tx.select({ id: transactions.id }).from(transactions)
+          .where(and(
+            eq(transactions.referenceId, idempotencyReference),
+            eq(transactions.userId, ws.userId!),
+            eq(transactions.type, 'gift_sent'),
+            eq(transactions.status, 'completed')
+          ))
+          .for('update')
+          .limit(1);
+
+        if (existing) {
+          return { success: false, error: 'Gift already processed' };
+        }
+      }
+
       // Lock both users in consistent order to prevent deadlocks
       const [id1, id2] = [ws.userId!, payload.recipientId].sort();
       const [user1] = await tx.select().from(users).where(eq(users.id, id1)).for('update');
@@ -165,6 +198,8 @@ export async function handleSendGift(ws: AuthenticatedWebSocket, payload: { reci
 
       // Audit trail
       const { transactions } = await import('@shared/schema');
+      const transferReference = idempotencyReference || `live_game_gift:${ws.sessionId}:${ws.userId}:${payload.recipientId}:${Date.now()}`;
+
       await tx.insert(transactions).values({
         userId: ws.userId!,
         type: 'gift_sent',
@@ -173,6 +208,7 @@ export async function handleSendGift(ws: AuthenticatedWebSocket, payload: { reci
         balanceAfter: senderNewBalance,
         status: 'completed',
         description: `Gift: ${giftItem.name} x${payload.quantity} to ${payload.recipientId}`,
+        referenceId: transferReference,
         processedAt: new Date()
       });
       await tx.insert(transactions).values({
@@ -183,10 +219,25 @@ export async function handleSendGift(ws: AuthenticatedWebSocket, payload: { reci
         balanceAfter: recipientNewBalance,
         status: 'completed',
         description: `Gift: ${giftItem.name} x${payload.quantity} from ${ws.userId}`,
+        referenceId: transferReference,
         processedAt: new Date()
       });
 
-      return { success: true, senderNewBalance };
+      if (platformFee > 0) {
+        await tx.insert(transactions).values({
+          userId: ws.userId!,
+          type: 'platform_fee',
+          amount: platformFee.toFixed(2),
+          balanceBefore: senderBalance.toFixed(2),
+          balanceAfter: senderNewBalance,
+          status: 'completed',
+          description: `Platform fee: ${giftItem.name} x${payload.quantity}`,
+          referenceId: transferReference,
+          processedAt: new Date()
+        });
+      }
+
+      return { success: true, senderNewBalance, transferReference };
     });
 
     if (!giftResult.success) {

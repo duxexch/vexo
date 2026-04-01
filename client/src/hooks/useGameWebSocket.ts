@@ -825,10 +825,14 @@ export function useGameWebSocket(sessionId: string | null) {
   const sendGift = useCallback((recipientId: string, giftItemId: string, quantity: number = 1, message?: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return false;
 
+    const idempotencyKey = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
     wsLog('[WS] Sending gift to', recipientId);
     wsRef.current.send(JSON.stringify({
       type: 'send_gift',
-      payload: { recipientId, giftItemId, quantity, message }
+      payload: { recipientId, giftItemId, quantity, message, idempotencyKey }
     }));
     return true;
   }, []);

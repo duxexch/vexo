@@ -10,12 +10,17 @@ export {
   updateP2PTraderMetrics,
   getP2PTraderMetrics,
   getP2POffer,
+  createP2POffer,
+  getActiveP2POffers,
+  getUserP2POffers,
+  cancelP2POfferByOwner,
   updateP2POffer,
 } from './crud';
 
 export { createP2PTradeAtomic } from './trade-create-atomic';
-export { completeP2PTradeAtomic, cancelP2PTradeAtomic } from './trade-settle-atomic';
+export { completeP2PTradeAtomic, cancelP2PTradeAtomic, resolveP2PDisputedTradeAtomic } from './trade-settle-atomic';
 
 export { createP2PTradeProjectCurrencyAtomic } from './atomic-project-create';
 export { completeP2PTradeProjectCurrencyAtomic } from './atomic-project-complete';
 export { cancelP2PTradeProjectCurrencyAtomic } from './atomic-project-cancel';
+export { resolveP2PDisputedTradeProjectCurrencyAtomic } from './atomic-project-resolve';

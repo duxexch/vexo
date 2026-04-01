@@ -26,6 +26,11 @@ interface ChessState {
   lastMove: { from: string; to: string } | null;
 }
 
+interface ChessInitOptions {
+  timeMs?: number;
+  incrementMs?: number;
+}
+
 const DEFAULT_TIME_MS = 600000; // 10 minutes
 const DEFAULT_INCREMENT_MS = 0;
 
@@ -34,7 +39,9 @@ export class ChessEngine implements GameEngine {
   minPlayers = 2;
   maxPlayers = 2;
 
-  private buildInitialState(player1Id = '', player2Id = ''): ChessState {
+  private buildInitialState(player1Id = '', player2Id = '', options?: ChessInitOptions): ChessState {
+    const configuredTimeMs = Math.max(1000, options?.timeMs ?? DEFAULT_TIME_MS);
+    const configuredIncrementMs = Math.max(0, options?.incrementMs ?? DEFAULT_INCREMENT_MS);
     return {
       fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
       history: [],
@@ -42,9 +49,9 @@ export class ChessEngine implements GameEngine {
       currentTurn: 'white',
       startTime: Date.now(),
       lastMoveTime: Date.now(),
-      whiteTimeMs: DEFAULT_TIME_MS,
-      blackTimeMs: DEFAULT_TIME_MS,
-      incrementMs: DEFAULT_INCREMENT_MS,
+      whiteTimeMs: configuredTimeMs,
+      blackTimeMs: configuredTimeMs,
+      incrementMs: configuredIncrementMs,
       capturedPieces: { white: [], black: [] },
       lastMove: null
     };
@@ -56,10 +63,10 @@ export class ChessEngine implements GameEngine {
       fen: state.fen,
       history: Array.isArray(state.history)
         ? state.history.map((h: any) =>
-            typeof h === 'string'
-              ? { san: h, from: '', to: '', color: 'w' as const }
-              : h
-          )
+          typeof h === 'string'
+            ? { san: h, from: '', to: '', color: 'w' as const }
+            : h
+        )
         : [],
       players: state.players,
       currentTurn: state.currentTurn ?? 'white',
@@ -77,8 +84,8 @@ export class ChessEngine implements GameEngine {
     return JSON.stringify(this.buildInitialState());
   }
 
-  initializeWithPlayers(player1Id: string, player2Id: string): string {
-    return JSON.stringify(this.buildInitialState(player1Id, player2Id));
+  initializeWithPlayers(player1Id: string, player2Id: string, options?: ChessInitOptions): string {
+    return JSON.stringify(this.buildInitialState(player1Id, player2Id, options));
   }
 
   validateMove(stateJson: string, playerId: string, move: MoveData): ValidationResult {
@@ -89,7 +96,7 @@ export class ChessEngine implements GameEngine {
 
       const playerColor = state.players.white === playerId ? 'white'
         : state.players.black === playerId ? 'black'
-        : null;
+          : null;
 
       if (!playerColor) {
         return { valid: false, error: 'You are not a player in this game', errorKey: 'chess.notPlayer' };
@@ -189,7 +196,7 @@ export class ChessEngine implements GameEngine {
 
       if (chess.isCheckmate()) {
         const winner = state.currentTurn === 'white' ? state.players.white : state.players.black;
-        const loser  = winner === state.players.white ? state.players.black : state.players.white;
+        const loser = winner === state.players.white ? state.players.black : state.players.white;
         events.push({ type: 'checkmate', data: { winner, loser } });
         events.push({ type: 'game_over', data: { winner, reason: 'checkmate' } });
       }
@@ -282,7 +289,7 @@ export class ChessEngine implements GameEngine {
 
       const playerColor = state.players.white === playerId ? 'white'
         : state.players.black === playerId ? 'black'
-        : null;
+          : null;
 
       if (!playerColor || state.currentTurn !== playerColor) return [];
 
@@ -306,11 +313,11 @@ export class ChessEngine implements GameEngine {
 
       const playerColor = state.players.white === playerId ? 'w'
         : state.players.black === playerId ? 'b'
-        : null;
+          : null;
 
       const isMyTurn = playerColor
         ? (playerColor === 'w' && state.currentTurn === 'white') ||
-          (playerColor === 'b' && state.currentTurn === 'black')
+        (playerColor === 'b' && state.currentTurn === 'black')
         : false;
 
       // Valid moves as "e2e4" strings
