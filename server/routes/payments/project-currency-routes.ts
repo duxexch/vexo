@@ -9,6 +9,22 @@ import { eq } from "drizzle-orm";
 
 export function registerProjectCurrencyRoutes(app: Express): void {
 
+  const ensureProjectCurrencySettings = async () => {
+    let settings = await storage.getProjectCurrencySettings();
+    if (!settings) {
+      settings = await storage.updateProjectCurrencySettings({
+        currencyName: "VEX Coin",
+        currencySymbol: "VXC",
+        exchangeRate: "100",
+        isActive: true,
+        useInGames: true,
+        useInP2P: true,
+        approvalMode: "automatic",
+      });
+    }
+    return settings;
+  };
+
   app.get("/api/project-currency/play-gift-policy", async (_req: Request, res: Response) => {
     try {
       const [setting] = await db.select({ value: gameplaySettings.value })
@@ -28,7 +44,7 @@ export function registerProjectCurrencyRoutes(app: Express): void {
 
   app.get("/api/project-currency/settings", async (req: Request, res: Response) => {
     try {
-      const settings = await storage.getProjectCurrencySettings();
+      const settings = await ensureProjectCurrencySettings();
       if (!settings || !settings.isActive) {
         return res.status(404).json({ error: "Project currency is not enabled" });
       }
@@ -50,7 +66,7 @@ export function registerProjectCurrencyRoutes(app: Express): void {
 
   app.get("/api/project-currency/wallet", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const settings = await storage.getProjectCurrencySettings();
+      const settings = await ensureProjectCurrencySettings();
       if (!settings || !settings.isActive) {
         return res.status(404).json({ error: "Project currency is not enabled" });
       }
@@ -76,7 +92,7 @@ export function registerProjectCurrencyRoutes(app: Express): void {
         return res.status(400).json({ error: "Invalid amount" });
       }
 
-      const settings = await storage.getProjectCurrencySettings();
+      const settings = await ensureProjectCurrencySettings();
       if (!settings || !settings.isActive) {
         return res.status(400).json({ error: "Project currency is not enabled" });
       }
@@ -141,7 +157,7 @@ export function registerProjectCurrencyRoutes(app: Express): void {
 
   app.get("/api/project-currency/conversions", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const settings = await storage.getProjectCurrencySettings();
+      const settings = await ensureProjectCurrencySettings();
       if (!settings || !settings.isActive) {
         return res.status(404).json({ error: "Project currency is not enabled" });
       }
@@ -159,7 +175,7 @@ export function registerProjectCurrencyRoutes(app: Express): void {
 
   app.get("/api/project-currency/ledger", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const settings = await storage.getProjectCurrencySettings();
+      const settings = await ensureProjectCurrencySettings();
       if (!settings || !settings.isActive) {
         return res.status(404).json({ error: "Project currency is not enabled" });
       }

@@ -1,7 +1,7 @@
 import { WebSocket } from "ws";
 import { db } from "../../db";
 import { storage } from "../../storage";
-import { users, challengeGameSessions, challenges, challengeSpectators } from "@shared/schema";
+import { users, challengeGameSessions, challenges, challengeSpectators, liveGameSessions } from "@shared/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { getGameEngine } from "../../game-engines";
 import { normalizeChallengeGameState } from "../../lib/challenge-game-state";
@@ -23,12 +23,34 @@ export async function handleJoinChallengeGame(ws: AuthenticatedSocket, data: any
 
   // SERVER-SIDE ROLE DETERMINATION: Check if user is actually a seated player in this challenge
   const socketUserId = ws.userId ?? null;
-  const isActualPlayer = [
+  let isActualPlayer = [
     challenge.player1Id,
     challenge.player2Id,
     challenge.player3Id,
     challenge.player4Id,
   ].includes(socketUserId);
+
+  // Reconnect fallback: if challenge row is stale, use latest live session seating.
+  if (!isActualPlayer && socketUserId) {
+    const [latestLiveSession] = await db.select({
+      player1Id: liveGameSessions.player1Id,
+      player2Id: liveGameSessions.player2Id,
+      player3Id: liveGameSessions.player3Id,
+      player4Id: liveGameSessions.player4Id,
+    }).from(liveGameSessions)
+      .where(eq(liveGameSessions.challengeId, challengeId))
+      .orderBy(desc(liveGameSessions.createdAt))
+      .limit(1);
+
+    if (latestLiveSession) {
+      isActualPlayer = [
+        latestLiveSession.player1Id,
+        latestLiveSession.player2Id,
+        latestLiveSession.player3Id,
+        latestLiveSession.player4Id,
+      ].includes(socketUserId);
+    }
+  }
 
   // Initialize room if needed
   if (!challengeGameRooms.has(challengeId)) {
@@ -104,6 +126,13 @@ export async function handleJoinChallengeGame(ws: AuthenticatedSocket, data: any
     ws.send(JSON.stringify({ type: "role_assigned", role: "spectator" }));
   } else {
     // User IS a player in this challenge
+    // If this user had a stale spectator mapping, clear it before assigning player role.
+    if (room.spectators.get(ws.userId!) === ws) {
+      room.spectators.delete(ws.userId!);
+    } else if (room.spectators.has(ws.userId!)) {
+      room.spectators.delete(ws.userId!);
+    }
+
     // Close previous connection from same user if exists (multi-tab)
     const existingSocket = room.players.get(ws.userId!);
     if (existingSocket && existingSocket !== ws && existingSocket.readyState === WebSocket.OPEN) {
@@ -188,7 +217,8 @@ export async function handleLeaveChallengeGame(ws: AuthenticatedSocket, data: an
   const room = challengeGameRooms.get(challengeId);
 
   if (room) {
-    if (room.spectators.has(ws.userId!)) {
+    const mappedSpectatorSocket = room.spectators.get(ws.userId!);
+    if (mappedSpectatorSocket && mappedSpectatorSocket === ws) {
       room.spectators.delete(ws.userId!);
 
       try {
@@ -220,7 +250,10 @@ export async function handleLeaveChallengeGame(ws: AuthenticatedSocket, data: an
         }
       });
     } else {
-      room.players.delete(ws.userId!);
+      const mappedPlayerSocket = room.players.get(ws.userId!);
+      if (!mappedPlayerSocket || mappedPlayerSocket === ws) {
+        room.players.delete(ws.userId!);
+      }
     }
 
     // Clean up empty room

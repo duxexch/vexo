@@ -98,9 +98,9 @@ function expandWsMessages(parsed) {
 function wsErrorText(message) {
   return String(
     message?.payload?.message
-      || message?.payload?.error
-      || message?.error
-      || "",
+    || message?.payload?.error
+    || message?.error
+    || "",
   );
 }
 
@@ -462,6 +462,30 @@ async function safeDelete(pool, sql, values) {
   }
 }
 
+async function detectChallengeCurrencyType(pool) {
+  const { rows } = await pool.query(
+    "SELECT value FROM gameplay_settings WHERE key = 'play_gift_currency_mode' LIMIT 1",
+  );
+
+  const modeValue = String(rows?.[0]?.value || "").toLowerCase();
+  return modeValue === "mixed" ? "usd" : "project";
+}
+
+async function seedProjectWallets(pool, userIds) {
+  for (const userId of userIds) {
+    await pool.query(
+      `INSERT INTO project_currency_wallets (
+          user_id, purchased_balance, earned_balance, total_balance,
+          total_converted, total_spent, total_earned, locked_balance
+        ) VALUES (
+          $1, '100.00', '100.00', '200.00',
+          '0.00', '0.00', '0.00', '0.00'
+        )`,
+      [userId],
+    );
+  }
+}
+
 async function cleanup(pool, setupData) {
   const challengeIds = Object.values(setupData.challengeIds);
   const userIds = Object.values(setupData.userIds);
@@ -484,7 +508,13 @@ async function cleanup(pool, setupData) {
   await safeDelete(pool, "DELETE FROM tarneeb_moves WHERE session_id IN (SELECT id FROM challenge_game_sessions WHERE challenge_id = ANY($1::text[]))", [challengeIds]);
   await safeDelete(pool, "DELETE FROM challenge_game_sessions WHERE challenge_id = ANY($1::text[])", [challengeIds]);
   await safeDelete(pool, "DELETE FROM live_game_sessions WHERE id = ANY($1::text[]) OR challenge_id = ANY($2::text[])", [liveSessionIds, challengeIds]);
+
+  await safeDelete(pool, "DELETE FROM transactions WHERE reference_id = ANY($1::text[]) OR user_id = ANY($2::text[])", [challengeIds, userIds]);
+  await safeDelete(pool, "DELETE FROM project_currency_ledger WHERE reference_id = ANY($1::text[]) OR user_id = ANY($2::text[])", [challengeIds, userIds]);
+
   await safeDelete(pool, "DELETE FROM challenges WHERE id = ANY($1::text[])", [challengeIds]);
+
+  await safeDelete(pool, "DELETE FROM project_currency_wallets WHERE user_id = ANY($1::text[])", [userIds]);
 
   await safeDelete(pool, "DELETE FROM user_relationships WHERE user_id = ANY($1::text[]) OR target_user_id = ANY($1::text[])", [userIds]);
   await safeDelete(pool, "DELETE FROM notifications WHERE user_id = ANY($1::text[])", [userIds]);
@@ -548,6 +578,11 @@ async function main() {
     await pool.query("SELECT 1");
     shouldAttemptCleanup = true;
 
+    const challengeCurrencyType = await detectChallengeCurrencyType(pool);
+    const isProjectMode = challengeCurrencyType === "project";
+
+    console.log(`[smoke:challenge-permissions] Challenge currency mode: ${challengeCurrencyType}`);
+
     if (options.resetSensitiveLimiter) {
       await resetSensitiveLimiterKeys(options.redisUrl);
     }
@@ -584,13 +619,18 @@ async function main() {
       [setupData.userIds.bystander, setupData.usernames.bystander, passwordHash],
     );
 
+    if (isProjectMode) {
+      await seedProjectWallets(pool, Object.values(setupData.userIds));
+      console.log("[smoke:challenge-permissions] Seeded project currency wallets for smoke users");
+    }
+
     await pool.query(
       `INSERT INTO challenges (
           id, game_type, bet_amount, currency_type, visibility, status,
           player1_id, player2_id, required_players, current_players,
           opponent_type, friend_account_id
         ) VALUES (
-          $1, 'chess', '1.00', 'usd', 'private', 'waiting',
+          $1, 'chess', '1.00', $5, 'private', 'waiting',
           $2, $3, 2, 1,
           'friend', $4
         )`,
@@ -599,6 +639,7 @@ async function main() {
         setupData.userIds.creator,
         setupData.userIds.invited,
         setupData.userIds.invited,
+        challengeCurrencyType,
       ],
     );
 
@@ -608,7 +649,7 @@ async function main() {
           player1_id, player2_id, player3_id, required_players, current_players,
           opponent_type
         ) VALUES (
-          $1, 'domino', '2.00', 'usd', 'public', 'waiting',
+          $1, 'domino', '2.00', $5, 'public', 'waiting',
           $2, $3, $4, 4, 3,
           'anyone'
         )`,
@@ -617,6 +658,7 @@ async function main() {
         setupData.userIds.creator,
         setupData.userIds.outsider,
         setupData.userIds.invited,
+        challengeCurrencyType,
       ],
     );
 
@@ -625,10 +667,10 @@ async function main() {
           id, game_type, bet_amount, currency_type, visibility, status,
           player1_id, required_players, current_players, opponent_type
         ) VALUES (
-          $1, 'backgammon', '3.00', 'usd', 'public', 'waiting',
+          $1, 'backgammon', '3.00', $3, 'public', 'waiting',
           $2, 2, 1, 'anyone'
         )`,
-      [setupData.challengeIds.publicOpen, setupData.userIds.creator],
+      [setupData.challengeIds.publicOpen, setupData.userIds.creator, challengeCurrencyType],
     );
 
     await pool.query(
@@ -637,7 +679,7 @@ async function main() {
           player1_id, player2_id, required_players, current_players,
           opponent_type
         ) VALUES (
-          $1, 'chess', '0.00', 'usd', 'public', 'active',
+          $1, 'chess', '0.00', $4, 'public', 'active',
           $2, $3, 2, 2,
           'anyone'
         )`,
@@ -645,6 +687,7 @@ async function main() {
         setupData.challengeIds.publicRealtime,
         setupData.userIds.creator,
         setupData.userIds.outsider,
+        challengeCurrencyType,
       ],
     );
 

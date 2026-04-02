@@ -155,10 +155,12 @@ export function setupWebSocket(server: Server) {
         // SECURITY: Clean up challengeGameRooms on disconnect to prevent memory leak
         const spectatorChallengesToClose: string[] = [];
         challengeGameRooms.forEach((room, challengeId) => {
-          if (room.players.has(ws.userId!)) {
+          const mappedPlayerSocket = room.players.get(ws.userId!);
+          if (mappedPlayerSocket && mappedPlayerSocket === ws) {
             room.players.delete(ws.userId!);
           }
-          if (room.spectators.has(ws.userId!)) {
+          const mappedSpectatorSocket = room.spectators.get(ws.userId!);
+          if (mappedSpectatorSocket && mappedSpectatorSocket === ws) {
             room.spectators.delete(ws.userId!);
             spectatorChallengesToClose.push(challengeId);
           }

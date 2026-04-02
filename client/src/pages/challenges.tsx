@@ -54,7 +54,9 @@ import {
   Filter,
   Search,
   Check,
-  SlidersHorizontal
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 
 interface PlayerRating {
@@ -123,6 +125,16 @@ interface ChallengeGame {
   status: string;
 }
 
+interface ProjectCurrencySettings {
+  currencyName: string;
+  currencySymbol: string;
+  exchangeRate: string;
+  minConversionAmount: string;
+  maxConversionAmount: string;
+  conversionCommissionRate: string;
+  isActive: boolean;
+}
+
 type CurrencyType = 'project' | 'usd';
 
 type ChessSystemKey =
@@ -188,6 +200,7 @@ export default function ChallengesPage() {
   const [chessSystem, setChessSystem] = useState<ChessSystemKey>('rapid_10_0');
   const [currencyType, setCurrencyType] = useState<CurrencyType>('project');
   const [quickConvertAmount, setQuickConvertAmount] = useState('5');
+  const [showAdvancedCreateOptions, setShowAdvancedCreateOptions] = useState(false);
 
   const multiPlayerGames = ['domino', 'tarneeb', 'baloot'];
   const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
@@ -237,6 +250,15 @@ export default function ChallengesPage() {
     queryFn: async () => {
       const res = await fetch('/api/project-currency/wallet', { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load wallet');
+      return res.json();
+    },
+  });
+
+  const { data: projectCurrencySettings } = useQuery<ProjectCurrencySettings>({
+    queryKey: ['/api/project-currency/settings'],
+    queryFn: async () => {
+      const res = await fetch('/api/project-currency/settings');
+      if (!res.ok) throw new Error('Failed to load currency settings');
       return res.json();
     },
   });
@@ -375,11 +397,15 @@ export default function ChallengesPage() {
 
   const quickConvertMutation = useMutation({
     mutationFn: (amount: string) => apiRequest('POST', '/api/project-currency/convert', { amount }),
-    onSuccess: async () => {
+    onSuccess: async (res: Response) => {
+      const payload = await res.json().catch(() => ({}));
       await refetchProjectWallet();
+      queryClient.invalidateQueries({ queryKey: ['/api/project-currency/conversions'] });
       toast({
         title: t('common.success'),
-        description: language === 'ar' ? 'تم التحويل بنجاح' : 'Converted successfully',
+        description: payload?.status === 'pending'
+          ? (language === 'ar' ? 'تم إرسال طلب التحويل للمراجعة' : 'Conversion request submitted for review')
+          : (language === 'ar' ? 'تم التحويل بنجاح' : 'Converted successfully'),
       });
     },
     onError: (err: Error) => {
@@ -396,6 +422,14 @@ export default function ChallengesPage() {
     setRequiredPlayers(2);
     setChessSystem('rapid_10_0');
     setCurrencyType(currencyPolicy?.projectOnly ? 'project' : 'usd');
+    setShowAdvancedCreateOptions(false);
+  };
+
+  const handleCreateDialogOpenChange = (open: boolean) => {
+    setShowCreateDialog(open);
+    if (!open) {
+      setShowAdvancedCreateOptions(false);
+    }
   };
 
   const handleCreateChallenge = () => {
@@ -440,6 +474,20 @@ export default function ChallengesPage() {
   const projectBalance = Number(projectWallet?.totalBalance || 0);
   const needProjectCurrency = (currencyPolicy?.projectOnly ?? true) || currencyType === 'project';
   const projectShortage = Math.max(0, numericBetAmount - projectBalance);
+  const minConvertAmount = Number(projectCurrencySettings?.minConversionAmount || 1);
+  const maxConvertAmount = Number(projectCurrencySettings?.maxConversionAmount || 10000);
+  const quickConvertAmountValue = Number(quickConvertAmount || 0);
+  const quickConvertSuggestedAmount = Math.min(
+    maxConvertAmount,
+    Math.max(minConvertAmount, Math.ceil(projectShortage || minConvertAmount)),
+  );
+  const quickConvertDisabled =
+    quickConvertMutation.isPending
+    || !quickConvertAmount
+    || quickConvertAmountValue <= 0
+    || quickConvertAmountValue < minConvertAmount
+    || quickConvertAmountValue > maxConvertAmount
+    || quickConvertAmountValue > Number(user?.balance || 0);
 
   const handleSpectate = (challenge: Challenge) => {
     setLocation(`/challenge/${challenge.id}/watch`);
@@ -1021,212 +1069,243 @@ export default function ChallengesPage() {
       </section>
 
       {/* Create Challenge Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+      <Dialog open={showCreateDialog} onOpenChange={handleCreateDialogOpenChange}>
+        <DialogContent className="max-w-md max-h-[92vh] overflow-hidden p-0">
+          <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-5">
             <DialogTitle className="flex items-center gap-2">
               <Swords className="h-5 w-5" />
               {t('challenges.createChallenge')}
             </DialogTitle>
             <DialogDescription>{t('challenges.createDescription')}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>{t('challenges.selectGame')}</Label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                {loadingGames ? (
-                  <div className="col-span-2 text-center text-muted-foreground">{t('common.loading')}</div>
-                ) : challengeGames.length === 0 ? (
-                  <div className="col-span-2 text-center text-muted-foreground">{t('challenges.noGamesAvailable')}</div>
-                ) : challengeGames.map(game => {
-                  const Icon = getGameIconByName(game.name);
-                  const gameKey = game.name.toLowerCase();
-                  return (
-                    <Button
-                      key={game.id}
-                      variant={selectedGame === gameKey ? "default" : "outline"}
-                      className="h-auto py-3 flex-col"
-                      onClick={() => setSelectedGame(gameKey)}
-                      data-testid={`button-game-${gameKey}`}
-                    >
-                      <Icon className="h-6 w-6 mb-1" />
-                      <span>{game.name}</span>
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {selectedGame && multiPlayerGames.includes(selectedGame) && (
+          <ScrollArea className="h-[calc(92vh-9.5rem)] px-4 sm:px-6">
+            <div className="space-y-3 pb-3">
               <div>
-                <Label>{t('challenges.numberOfPlayers') || 'Number of Players'}</Label>
+                <Label>{t('challenges.selectGame')}</Label>
                 <div className="grid grid-cols-2 gap-2 mt-2">
-                  <Button
-                    variant={requiredPlayers === 2 ? "default" : "outline"}
-                    onClick={() => setRequiredPlayers(2)}
-                    data-testid="button-players-2"
-                  >
-                    <Users className="h-4 w-4 me-2" />
-                    2 {t('challenges.players') || 'Players'}
-                  </Button>
-                  <Button
-                    variant={requiredPlayers === 4 ? "default" : "outline"}
-                    onClick={() => setRequiredPlayers(4)}
-                    data-testid="button-players-4"
-                  >
-                    <Users className="h-4 w-4 me-2" />
-                    4 {t('challenges.players') || 'Players'}
-                  </Button>
+                  {loadingGames ? (
+                    <div className="col-span-2 text-center text-muted-foreground">{t('common.loading')}</div>
+                  ) : challengeGames.length === 0 ? (
+                    <div className="col-span-2 text-center text-muted-foreground">{t('challenges.noGamesAvailable')}</div>
+                  ) : challengeGames.map(game => {
+                    const Icon = getGameIconByName(game.name);
+                    const gameKey = game.name.toLowerCase();
+                    return (
+                      <Button
+                        key={game.id}
+                        variant={selectedGame === gameKey ? "default" : "outline"}
+                        className="h-auto py-2.5 flex-col gap-1"
+                        onClick={() => setSelectedGame(gameKey)}
+                        data-testid={`button-game-${gameKey}`}
+                      >
+                        <Icon className="h-6 w-6 mb-1" />
+                        <span>{game.name}</span>
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
-            )}
 
-            {selectedGame === 'chess' && (
               <div>
-                <Label>{language === 'ar' ? 'نظام اللعب (الوقت)' : 'Chess System (Time Control)'}</Label>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  {CHESS_SYSTEM_OPTIONS.map((system) => (
-                    <Button
-                      key={system.key}
-                      type="button"
-                      variant={chessSystem === system.key ? 'default' : 'outline'}
-                      onClick={() => setChessSystem(system.key)}
-                      className="h-auto py-2 text-xs"
-                      data-testid={`button-chess-system-${system.key}`}
-                    >
-                      <Timer className="h-3.5 w-3.5 me-1" />
-                      {language === 'ar' ? system.labelAr : system.labelEn}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <Label>{t('challenges.stakeAmount')}</Label>
-              <div className="relative mt-2">
-                <Coins className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="number"
-                  value={betAmount}
-                  onChange={(e) => setBetAmount(e.target.value)}
-                  placeholder="10.00"
-                  className="ps-10"
-                  data-testid="input-stake-amount"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label>{language === 'ar' ? 'عملة الرهان' : 'Stake Currency'}</Label>
-              {currencyPolicy?.projectOnly ? (
-                <div className="mt-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
-                  {language === 'ar'
-                    ? 'وضع المنصة الحالي يفرض عملة المشروع للعب وشراء الهدايا.'
-                    : 'Current platform policy requires project currency for gameplay and gift purchases.'}
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <Button
-                    type="button"
-                    variant={currencyType === 'usd' ? 'default' : 'outline'}
-                    onClick={() => setCurrencyType('usd')}
-                  >
-                    USD
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={currencyType === 'project' ? 'default' : 'outline'}
-                    onClick={() => setCurrencyType('project')}
-                  >
-                    {projectWallet?.currencySymbol || 'VXC'}
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {needProjectCurrency && numericBetAmount > 0 && projectShortage > 0 && (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
-                <p className="text-sm font-medium">
-                  {language === 'ar' ? 'الرصيد غير كافٍ بعملة المشروع' : 'Insufficient project currency balance'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {language === 'ar'
-                    ? `المطلوب: ${projectShortage.toFixed(2)} ${projectWallet?.currencySymbol || 'VXC'} إضافية.`
-                    : `You need ${projectShortage.toFixed(2)} more ${projectWallet?.currencySymbol || 'VXC'}.`}
-                </p>
-                <div className="flex items-center gap-2">
+                <Label>{t('challenges.stakeAmount')}</Label>
+                <div className="relative mt-2">
+                  <Coins className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="number"
-                    min="1"
-                    step="1"
-                    value={quickConvertAmount}
-                    onChange={(e) => setQuickConvertAmount(e.target.value)}
+                    value={betAmount}
+                    onChange={(e) => setBetAmount(e.target.value)}
+                    placeholder="10.00"
+                    className="ps-10"
+                    data-testid="input-stake-amount"
                   />
-                  <Button
-                    type="button"
-                    onClick={() => quickConvertMutation.mutate(quickConvertAmount)}
-                    disabled={quickConvertMutation.isPending}
-                  >
-                    {quickConvertMutation.isPending ? t('common.loading') : (language === 'ar' ? 'تحويل سريع' : 'Quick Convert')}
-                  </Button>
                 </div>
               </div>
-            )}
 
-            <div className="flex items-center justify-between">
               <div>
-                <Label>{t('challenges.visibility')}</Label>
-                <p className="text-xs text-muted-foreground">
-                  {visibility === 'public' ? t('challenges.publicDesc') : t('challenges.privateDesc')}
-                </p>
+                <Label>{language === 'ar' ? 'عملة الرهان' : 'Stake Currency'}</Label>
+                {currencyPolicy?.projectOnly ? (
+                  <div className="mt-2 rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
+                    {language === 'ar'
+                      ? 'وضع المنصة الحالي يفرض عملة المشروع للعب وشراء الهدايا.'
+                      : 'Current platform policy requires project currency for gameplay and gift purchases.'}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <Button
+                      type="button"
+                      variant={currencyType === 'usd' ? 'default' : 'outline'}
+                      onClick={() => setCurrencyType('usd')}
+                    >
+                      USD
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={currencyType === 'project' ? 'default' : 'outline'}
+                      onClick={() => setCurrencyType('project')}
+                    >
+                      {projectWallet?.currencySymbol || 'VXC'}
+                    </Button>
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <Lock className={`h-4 w-4 ${visibility === 'private' ? 'text-primary' : 'text-muted-foreground'}`} />
-                <Switch
-                  checked={visibility === 'public'}
-                  onCheckedChange={(checked) => setVisibility(checked ? 'public' : 'private')}
-                  data-testid="switch-visibility"
-                />
-                <Globe className={`h-4 w-4 ${visibility === 'public' ? 'text-primary' : 'text-muted-foreground'}`} />
+
+              {needProjectCurrency && numericBetAmount > 0 && projectShortage > 0 && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
+                  <p className="text-sm font-medium">
+                    {language === 'ar' ? 'الرصيد غير كافٍ بعملة المشروع' : 'Insufficient project currency balance'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'ar'
+                      ? `المطلوب: ${projectShortage.toFixed(2)} ${projectWallet?.currencySymbol || 'VXC'} إضافية.`
+                      : `You need ${projectShortage.toFixed(2)} more ${projectWallet?.currencySymbol || 'VXC'}.`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {language === 'ar'
+                      ? `الحد الأدنى للتحويل: $${minConvertAmount.toFixed(2)} - الحد الأقصى: $${maxConvertAmount.toFixed(2)}`
+                      : `Min conversion: $${minConvertAmount.toFixed(2)} - Max: $${maxConvertAmount.toFixed(2)}`}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      step="0.01"
+                      value={quickConvertAmount}
+                      onChange={(e) => setQuickConvertAmount(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setQuickConvertAmount(String(quickConvertSuggestedAmount))}
+                    >
+                      {language === 'ar' ? 'اقتراح' : 'Suggest'}
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => quickConvertMutation.mutate(quickConvertAmount)}
+                      disabled={quickConvertDisabled}
+                    >
+                      {quickConvertMutation.isPending ? t('common.loading') : (language === 'ar' ? 'تحويل سريع' : 'Quick Convert')}
+                    </Button>
+                  </div>
+                  {quickConvertAmountValue > Number(user?.balance || 0) && (
+                    <p className="text-xs text-destructive">
+                      {language === 'ar' ? 'الرصيد بالدولار غير كافٍ للتحويل.' : 'Insufficient USD balance for conversion.'}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:hidden justify-between"
+                onClick={() => setShowAdvancedCreateOptions((prev) => !prev)}
+              >
+                <span>{language === 'ar' ? 'خيارات إضافية' : 'More options'}</span>
+                {showAdvancedCreateOptions ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+
+              <div className={`${showAdvancedCreateOptions ? 'space-y-3' : 'hidden'} sm:block sm:space-y-3`}>
+                {selectedGame && multiPlayerGames.includes(selectedGame) && (
+                  <div>
+                    <Label>{t('challenges.numberOfPlayers') || 'Number of Players'}</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <Button
+                        variant={requiredPlayers === 2 ? "default" : "outline"}
+                        onClick={() => setRequiredPlayers(2)}
+                        data-testid="button-players-2"
+                      >
+                        <Users className="h-4 w-4 me-2" />
+                        2 {t('challenges.players') || 'Players'}
+                      </Button>
+                      <Button
+                        variant={requiredPlayers === 4 ? "default" : "outline"}
+                        onClick={() => setRequiredPlayers(4)}
+                        data-testid="button-players-4"
+                      >
+                        <Users className="h-4 w-4 me-2" />
+                        4 {t('challenges.players') || 'Players'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {selectedGame === 'chess' && (
+                  <div>
+                    <Label>{language === 'ar' ? 'نظام اللعب (الوقت)' : 'Chess System (Time Control)'}</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      {CHESS_SYSTEM_OPTIONS.map((system) => (
+                        <Button
+                          key={system.key}
+                          type="button"
+                          variant={chessSystem === system.key ? 'default' : 'outline'}
+                          onClick={() => setChessSystem(system.key)}
+                          className="h-auto py-2 text-xs"
+                          data-testid={`button-chess-system-${system.key}`}
+                        >
+                          <Timer className="h-3.5 w-3.5 me-1" />
+                          {language === 'ar' ? system.labelAr : system.labelEn}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>{t('challenges.visibility')}</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {visibility === 'public' ? t('challenges.publicDesc') : t('challenges.privateDesc')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Lock className={`h-4 w-4 ${visibility === 'private' ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <Switch
+                      checked={visibility === 'public'}
+                      onCheckedChange={(checked) => setVisibility(checked ? 'public' : 'private')}
+                      data-testid="switch-visibility"
+                    />
+                    <Globe className={`h-4 w-4 ${visibility === 'public' ? 'text-primary' : 'text-muted-foreground'}`} />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>{t('challenges.opponentType')}</Label>
+                  <RadioGroup value={opponentType} onValueChange={(v) => setOpponentType(v as 'random' | 'friend')} className="mt-2">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="random" id="random" />
+                      <Label htmlFor="random" className="flex items-center gap-2">
+                        <Shuffle className="h-4 w-4" />
+                        {t('challenges.randomOpponent')}
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="friend" id="friend" />
+                      <Label htmlFor="friend" className="flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        {t('challenges.inviteFriend')}
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                {opponentType === 'friend' && (
+                  <div>
+                    <Label>{t('challenges.friendAccountId')}</Label>
+                    <Input
+                      value={friendAccountId}
+                      onChange={(e) => setFriendAccountId(e.target.value)}
+                      placeholder={t('challenges.enterAccountId')}
+                      className="mt-2"
+                      data-testid="input-friend-id"
+                    />
+                  </div>
+                )}
               </div>
             </div>
-
-            <div>
-              <Label>{t('challenges.opponentType')}</Label>
-              <RadioGroup value={opponentType} onValueChange={(v) => setOpponentType(v as 'random' | 'friend')} className="mt-2">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="random" id="random" />
-                  <Label htmlFor="random" className="flex items-center gap-2">
-                    <Shuffle className="h-4 w-4" />
-                    {t('challenges.randomOpponent')}
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="friend" id="friend" />
-                  <Label htmlFor="friend" className="flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    {t('challenges.inviteFriend')}
-                  </Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            {opponentType === 'friend' && (
-              <div>
-                <Label>{t('challenges.friendAccountId')}</Label>
-                <Input
-                  value={friendAccountId}
-                  onChange={(e) => setFriendAccountId(e.target.value)}
-                  placeholder={t('challenges.enterAccountId')}
-                  className="mt-2"
-                  data-testid="input-friend-id"
-                />
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+          </ScrollArea>
+          <DialogFooter className="px-4 sm:px-6 pb-4 sm:pb-5 pt-3 border-t bg-background">
+            <Button variant="outline" onClick={() => handleCreateDialogOpenChange(false)}>
               {t('common.cancel')}
             </Button>
             <Button onClick={handleCreateChallenge} disabled={createChallengeMutation.isPending}>
