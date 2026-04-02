@@ -7,7 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import DOMPurify from "dompurify";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -167,11 +166,12 @@ function canPreviewImageFile(mimeType: string): boolean {
 function sanitizeDisplayText(rawText: string): string {
   if (!rawText) return "";
 
-  return DOMPurify.sanitize(rawText, {
-    ALLOWED_TAGS: [],
-    ALLOWED_ATTR: [],
-    KEEP_CONTENT: true,
-  });
+  // Keep evidence filenames as plain text only.
+  return rawText
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
 }
 
 function normalizeSafeEvidenceUrl(rawUrl: string): string | null {
