@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { ProjectCurrencyAmount, ProjectCurrencySymbol } from "@/components/ProjectCurrencySymbol";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import {
@@ -256,7 +257,10 @@ export default function AdminCurrencyPage() {
           variant="outline"
           size="sm"
           onClick={() => {
-            queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/settings"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/conversions"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/stats"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/play-gift-policy"] });
           }}
           data-testid="button-refresh-currency"
         >
@@ -299,7 +303,7 @@ export default function AdminCurrencyPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-total-converted">
-              {settings?.currencySymbol || "VXC"} {parseFloat(stats?.totalConverted || "0").toFixed(2)}
+              <ProjectCurrencyAmount amount={stats?.totalConverted || "0"} symbolClassName="text-2xl" />
             </div>
             <p className="text-xs text-muted-foreground">All-time issued</p>
           </CardContent>
@@ -338,7 +342,7 @@ export default function AdminCurrencyPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold" data-testid="text-circulating">
-              {settings?.currencySymbol || "VXC"} {parseFloat(stats?.totalCirculating || "0").toFixed(2)}
+              <ProjectCurrencyAmount amount={stats?.totalCirculating || "0"} symbolClassName="text-2xl" />
             </div>
             <p className="text-xs text-muted-foreground">Total in user wallets</p>
           </CardContent>
@@ -395,14 +399,18 @@ export default function AdminCurrencyPage() {
                   <Label htmlFor="currencySymbol">Currency Symbol</Label>
                   <Input
                     id="currencySymbol"
-                    defaultValue={settings?.currencySymbol || "VXC"}
+                    defaultValue={settings?.currencySymbol || "v"}
                     onBlur={(e) => handleSettingChange("currencySymbol", e.target.value)}
                     data-testid="input-currency-symbol"
                   />
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="exchangeRate">Exchange Rate (1 USD = X {settings?.currencySymbol || "VXC"})</Label>
+                  <Label htmlFor="exchangeRate" className="inline-flex items-center gap-1">
+                    <span>Exchange Rate (1 USD = X</span>
+                    <ProjectCurrencySymbol className="text-sm" />
+                    <span>)</span>
+                  </Label>
                   <Input
                     id="exchangeRate"
                     type="number"
@@ -517,19 +525,36 @@ export default function AdminCurrencyPage() {
                 <CardDescription>Configure where project currency can be used</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between gap-4 border rounded-lg p-3 bg-muted/30">
+                <div className="space-y-2 border rounded-lg p-3 bg-muted/30">
                   <div>
-                    <Label>Require Project Currency for Games & Gift Purchases</Label>
+                    <Label>Gameplay & Gifts Currency Mode</Label>
                     <p className="text-xs text-muted-foreground">
-                      When enabled (default), real money is restricted from gameplay and gift purchases, while P2P can still use real money.
+                      Choose whether to force project currency only, or allow mixed mode (real money + project currency).
                     </p>
                   </div>
-                  <Switch
-                    checked={playGiftPolicy?.projectOnly ?? true}
-                    onCheckedChange={(checked) => updatePlayGiftPolicyMutation.mutate(checked ? "project_only" : "mixed")}
-                    disabled={updatePlayGiftPolicyMutation.isPending}
-                    data-testid="switch-project-only-play-gifts"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={(playGiftPolicy?.projectOnly ?? true) ? "default" : "outline"}
+                      onClick={() => updatePlayGiftPolicyMutation.mutate("project_only")}
+                      disabled={updatePlayGiftPolicyMutation.isPending}
+                      data-testid="button-project-only-play-gifts"
+                    >
+                      Project Currency Only
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={(playGiftPolicy?.projectOnly ?? true) ? "outline" : "default"}
+                      onClick={() => updatePlayGiftPolicyMutation.mutate("mixed")}
+                      disabled={updatePlayGiftPolicyMutation.isPending}
+                      data-testid="button-mixed-play-gifts"
+                    >
+                      Allow Real Currency (Mixed)
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Current mode: {(playGiftPolicy?.projectOnly ?? true) ? "Project only" : "Mixed"}
+                  </p>
                 </div>
 
                 <div className="flex items-center justify-between gap-4">
@@ -540,6 +565,7 @@ export default function AdminCurrencyPage() {
                   <Switch
                     checked={settings?.useInGames || false}
                     onCheckedChange={(checked) => handleSettingChange("useInGames", checked)}
+                    disabled={updateSettingsMutation.isPending}
                     data-testid="switch-use-in-games"
                   />
                 </div>
@@ -552,6 +578,7 @@ export default function AdminCurrencyPage() {
                   <Switch
                     checked={settings?.useInP2P || false}
                     onCheckedChange={(checked) => handleSettingChange("useInP2P", checked)}
+                    disabled={updateSettingsMutation.isPending}
                     data-testid="switch-use-in-p2p"
                   />
                 </div>
@@ -564,6 +591,7 @@ export default function AdminCurrencyPage() {
                   <Switch
                     checked={settings?.allowEarnedBalance || false}
                     onCheckedChange={(checked) => handleSettingChange("allowEarnedBalance", checked)}
+                    disabled={updateSettingsMutation.isPending}
                     data-testid="switch-allow-earned"
                   />
                 </div>
@@ -590,7 +618,12 @@ export default function AdminCurrencyPage() {
                     <TableRow>
                       <TableHead>User</TableHead>
                       <TableHead>Base Amount</TableHead>
-                      <TableHead>Net {settings?.currencySymbol || "VXC"}</TableHead>
+                      <TableHead>
+                        <span className="inline-flex items-center gap-1">
+                          <span>Net</span>
+                          <ProjectCurrencySymbol className="text-xs" />
+                        </span>
+                      </TableHead>
                       <TableHead>Commission</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Actions</TableHead>
@@ -607,7 +640,7 @@ export default function AdminCurrencyPage() {
                         </TableCell>
                         <TableCell>${parseFloat(conv.baseCurrencyAmount).toFixed(2)}</TableCell>
                         <TableCell className="font-medium text-primary">
-                          {settings?.currencySymbol} {parseFloat(conv.netAmount).toFixed(2)}
+                          <ProjectCurrencyAmount amount={conv.netAmount} symbolClassName="text-sm" />
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           ${parseFloat(conv.commissionAmount).toFixed(2)}
@@ -670,7 +703,12 @@ export default function AdminCurrencyPage() {
                     <TableRow>
                       <TableHead>User</TableHead>
                       <TableHead>Base Amount</TableHead>
-                      <TableHead>Net {settings?.currencySymbol || "VXC"}</TableHead>
+                      <TableHead>
+                        <span className="inline-flex items-center gap-1">
+                          <span>Net</span>
+                          <ProjectCurrencySymbol className="text-xs" />
+                        </span>
+                      </TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Reviewed By</TableHead>
@@ -687,7 +725,7 @@ export default function AdminCurrencyPage() {
                         </TableCell>
                         <TableCell>${parseFloat(conv.baseCurrencyAmount).toFixed(2)}</TableCell>
                         <TableCell className="font-medium">
-                          {settings?.currencySymbol} {parseFloat(conv.netAmount).toFixed(2)}
+                          <ProjectCurrencyAmount amount={conv.netAmount} symbolClassName="text-sm" />
                         </TableCell>
                         <TableCell>
                           <Badge

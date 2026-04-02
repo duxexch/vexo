@@ -41,7 +41,7 @@ interface SpectatorPanelProps {
   totalMoves?: number;
   currentTurn?: string;
   gameStatus?: string;
-  onSendGift?: (giftId: string, playerId: string) => void;
+  onSendGift?: (giftId: string, playerId: string, meta?: { price?: number; name?: string }) => void;
 }
 
 const RANK_COLORS: Record<string, string> = {
@@ -137,6 +137,12 @@ export function SpectatorPanel({
     });
   };
 
+  const openGiftPanel = (playerId?: string) => {
+    if (playerId) setSelectedPlayer(playerId);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setShowGiftPanel(true);
+  };
+
   const renderPlayerCard = (player: Player | undefined, label: string) => {
     if (!player) return null;
 
@@ -169,8 +175,7 @@ export function SpectatorPanel({
               size="sm"
               className="flex-1"
               onClick={() => {
-                setSelectedPlayer(player.id);
-                setShowGiftPanel(true);
+                openGiftPanel(player.id);
               }}
               data-testid={`button-gift-${player.id}`}
             >
@@ -259,26 +264,24 @@ export function SpectatorPanel({
           {renderPlayerCard(player2, language === "ar" ? "لاعب 2" : "Player 2")}
         </div>
 
-        <div>
-          <h4 className="text-sm font-medium text-muted-foreground mb-2">
-            {language === "ar" ? "هدايا سريعة" : "Quick Gifts"}
-          </h4>
-          <Button
-            variant="outline"
-            className="w-full h-12 gap-2"
-            onClick={() => setShowGiftPanel(true)}
-            data-testid="open-gift-panel"
-          >
-            <Gift className="h-5 w-5 text-primary" />
-            {language === "ar" ? "إرسال هدية" : "Send a Gift"}
-          </Button>
-        </div>
       </ScrollArea>
+
+      <div className="p-3 border-t bg-background/80 backdrop-blur-sm">
+        <Button
+          variant="outline"
+          className="w-full h-12 gap-2"
+          onClick={() => openGiftPanel()}
+          data-testid="open-gift-panel"
+        >
+          <Gift className="h-5 w-5 text-primary" />
+          {language === "ar" ? "إرسال هدية" : "Send a Gift"}
+        </Button>
+      </div>
 
       <FullScreenGiftPanel
         open={showGiftPanel}
         onClose={() => { setShowGiftPanel(false); setSelectedPlayer(null); }}
-        onSendGift={onSendGift || (() => {})}
+        onSendGift={onSendGift || (() => { })}
         player1Id={player1?.id}
         player2Id={player2?.id}
         player1Name={player1?.username}
@@ -297,7 +300,7 @@ export function SpectatorPanel({
 
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              {language === "ar" 
+              {language === "ar"
                 ? "أضف نقاط لرفع مستوى التحدي على هذا اللاعب"
                 : "Add points to boost the challenge level for this player"}
             </p>
@@ -339,8 +342,8 @@ export function SpectatorPanel({
             }}>
               {language === "ar" ? "إلغاء" : "Cancel"}
             </Button>
-            <Button 
-              onClick={handleAddPoints} 
+            <Button
+              onClick={handleAddPoints}
               disabled={!pointsAmount || addPointsMutation.isPending}
             >
               <TrendingUp className="h-4 w-4 me-2" />

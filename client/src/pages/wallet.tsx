@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,11 +13,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient, financialQueryOptions } from "@/lib/queryClient";
-import { 
-  Wallet, 
-  ArrowDownToLine, 
-  ArrowUpFromLine, 
-  History, 
+import {
+  Wallet,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  History,
   CreditCard,
   Building2,
   Smartphone,
@@ -36,6 +36,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { TableSkeleton } from "@/components/skeletons";
 import { QueryErrorState } from "@/components/QueryErrorState";
 import { BalanceDisplay } from "@/components/BalanceDisplay";
+import { ProjectCurrencyAmount, ProjectCurrencySymbol } from "@/components/ProjectCurrencySymbol";
 import { useBalance } from "@/hooks/useBalance";
 import { playSound } from "@/hooks/use-sound-effects";
 import type { Transaction, ProjectCurrencyConversion } from "@shared/schema";
@@ -72,7 +73,12 @@ export default function WalletPage() {
   const { t, language } = useI18n();
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
-  
+
+  const tOr = (key: string, fallback: string): string => {
+    const translated = t(key);
+    return translated === key ? fallback : translated;
+  };
+
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
@@ -83,6 +89,36 @@ export default function WalletPage() {
   const [paymentReference, setPaymentReference] = useState("");
   const [walletNumber, setWalletNumber] = useState("");
   const { isHidden: isBalanceHidden } = useBalance();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const modal = params.get("modal");
+    const amountParam = params.get("amount");
+    const parsedAmount = amountParam ? Number(amountParam) : NaN;
+    const hasValidAmount = Number.isFinite(parsedAmount) && parsedAmount > 0;
+
+    if (modal === "deposit") {
+      setShowDeposit(true);
+      if (hasValidAmount) {
+        setDepositAmount(parsedAmount.toFixed(2));
+      }
+    }
+
+    if (modal === "convert") {
+      setShowConvert(true);
+      if (hasValidAmount) {
+        setConvertAmount(parsedAmount.toFixed(2));
+      }
+    }
+
+    if (modal === "deposit" || modal === "convert") {
+      params.delete("modal");
+      params.delete("amount");
+      const remainingQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ""}`;
+      window.history.replaceState({}, "", nextUrl);
+    }
+  }, []);
 
   const { data: txResponse, isLoading: loadingTransactions, isError: isErrorTransactions, error: errorTransactions, refetch: refetchTransactions } = useQuery<{ data: Transaction[]; total: number }>({
     queryKey: ['/api/transactions', { pageSize: 10 }],
@@ -124,9 +160,9 @@ export default function WalletPage() {
       apiRequest('POST', '/api/project-currency/convert', data),
     onSuccess: async (res: Response) => {
       const result = await res.json().catch(() => ({}));
-      const message = result.status === 'pending' 
-        ? 'Conversion submitted for approval' 
-        : `Converted to ${currencySettings?.currencySymbol || 'VXC'} successfully!`;
+      const message = result.status === 'pending'
+        ? 'Conversion submitted for approval'
+        : 'Converted to project currency successfully!';
       toast({ title: t('common.success'), description: message });
       queryClient.invalidateQueries({ queryKey: ['/api/project-currency/wallet'] });
       queryClient.invalidateQueries({ queryKey: ['/api/project-currency/conversions'] });
@@ -277,13 +313,13 @@ export default function WalletPage() {
                     {currencySettings.currencyName || 'VEX Coin'}
                   </CardTitle>
                   <CardDescription>
-                    {currencySettings.useInGames && currencySettings.useInP2P 
-                      ? t('wallet.vexUsageGamesAndP2P') || 'Use for games and P2P trading'
-                      : currencySettings.useInGames 
-                        ? t('wallet.vexUsageGames') || 'Use for games'
-                        : currencySettings.useInP2P 
-                          ? t('wallet.vexUsageP2P') || 'Use for P2P trading' 
-                          : t('wallet.vexUsagePlatform') || 'Platform currency'
+                    {currencySettings.useInGames && currencySettings.useInP2P
+                      ? tOr('wallet.vexUsageGamesAndP2P', 'Use for games and P2P trading')
+                      : currencySettings.useInGames
+                        ? tOr('wallet.vexUsageGames', 'Use for games')
+                        : currencySettings.useInP2P
+                          ? tOr('wallet.vexUsageP2P', 'Use for P2P trading')
+                          : tOr('wallet.vexUsagePlatform', 'Platform currency')
                     }
                   </CardDescription>
                 </div>
@@ -295,56 +331,57 @@ export default function WalletPage() {
             <div className="grid gap-6 md:grid-cols-3">
               <div className="md:col-span-2">
                 <div className="text-4xl font-bold text-primary balance-glow mb-4" data-testid="text-vxc-balance">
-                  {isBalanceHidden 
-                    ? '******' 
-                    : `${currencySettings.currencySymbol} ${parseFloat(projectWallet?.totalBalance || "0").toFixed(2)}`
+                  {isBalanceHidden
+                    ? '******'
+                    : <ProjectCurrencyAmount amount={projectWallet?.totalBalance || "0"} symbolClassName="text-4xl" />
                   }
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-3 bg-muted/50 rounded-lg">
-                    <div className="text-xs text-muted-foreground mb-1">{t('wallet.purchased') || 'Purchased'}</div>
+                    <div className="text-xs text-muted-foreground mb-1">{tOr('wallet.purchased', 'Purchased')}</div>
                     <div className="text-lg font-semibold">
-                      {isBalanceHidden ? '***' : `${currencySettings.currencySymbol} ${parseFloat(projectWallet?.purchasedBalance || "0").toFixed(2)}`}
+                      {isBalanceHidden ? '***' : <ProjectCurrencyAmount amount={projectWallet?.purchasedBalance || "0"} symbolClassName="text-lg" />}
                     </div>
                   </div>
                   <div className="p-3 bg-muted/50 rounded-lg">
-                    <div className="text-xs text-muted-foreground mb-1">{t('wallet.earned') || 'Earned'}</div>
+                    <div className="text-xs text-muted-foreground mb-1">{tOr('wallet.earned', 'Earned')}</div>
                     <div className="text-lg font-semibold text-green-500">
-                      {isBalanceHidden ? '***' : `${currencySettings.currencySymbol} ${parseFloat(projectWallet?.earnedBalance || "0").toFixed(2)}`}
+                      {isBalanceHidden ? '***' : <ProjectCurrencyAmount amount={projectWallet?.earnedBalance || "0"} symbolClassName="text-lg" />}
                     </div>
                   </div>
                 </div>
               </div>
               <div className="flex flex-col justify-center gap-4 p-4 bg-muted/30 rounded-lg">
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">{t('wallet.exchangeRate') || 'Exchange Rate'}</div>
-                  <div className="text-lg font-bold">
-                    1 USD = {currencySettings.exchangeRate} {currencySettings.currencySymbol}
+                  <div className="text-xs text-muted-foreground mb-1">{tOr('wallet.exchangeRate', 'Exchange Rate')}</div>
+                  <div className="text-lg font-bold inline-flex items-center gap-1">
+                    <span>1 USD = {currencySettings.exchangeRate}</span>
+                    <ProjectCurrencySymbol className="text-lg" />
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">{t('wallet.commission') || 'Commission'}</div>
+                  <div className="text-xs text-muted-foreground mb-1">{tOr('wallet.commission', 'Commission')}</div>
                   <div className="text-sm font-medium">
                     {parseFloat(currencySettings.conversionCommissionRate || "0")}%
                   </div>
                 </div>
-                <Button 
-                  className="w-full" 
+                <Button
+                  className="w-full h-12 rounded-xl font-semibold gap-2 shadow-md bg-primary hover:bg-primary/90"
                   size="lg"
-                  onClick={() => setShowConvert(true)} 
+                  onClick={() => setShowConvert(true)}
                   data-testid="button-convert-to-vxc"
                 >
-                  <ArrowRightLeft className="h-5 w-5 me-2" />
-                  {t('wallet.convertNow') || 'Convert Now'}
+                  <ArrowRightLeft className="h-5 w-5" />
+                  {language === 'ar' ? 'تحويل الرصيد' : 'Convert Balance'}
                 </Button>
               </div>
             </div>
-            
+
             {currencyConversions && currencyConversions.length > 0 && (
               <div className="mt-6 pt-4 border-t">
                 <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
                   <History className="h-4 w-4" />
-                  {t('wallet.recentConversions') || 'Recent Conversions'}
+                  {tOr('wallet.recentConversions', 'Recent Conversions')}
                 </h4>
                 <div className="space-y-2">
                   {currencyConversions.slice(0, 5).map((conv) => (
@@ -355,11 +392,14 @@ export default function WalletPage() {
                         </div>
                         <div>
                           <div className="font-medium">
-                            ${parseFloat(conv.baseCurrencyAmount).toFixed(2)} → {currencySettings.currencySymbol} {parseFloat(conv.netAmount).toFixed(2)}
+                            <span className="inline-flex items-center gap-1">
+                              <span>${parseFloat(conv.baseCurrencyAmount).toFixed(2)} →</span>
+                              <ProjectCurrencyAmount amount={conv.netAmount} symbolClassName="text-sm" />
+                            </span>
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {new Date(conv.createdAt).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { 
-                              month: 'short', 
+                            {new Date(conv.createdAt).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
+                              month: 'short',
                               day: 'numeric',
                               hour: '2-digit',
                               minute: '2-digit'
@@ -367,7 +407,7 @@ export default function WalletPage() {
                           </div>
                         </div>
                       </div>
-                      <Badge 
+                      <Badge
                         variant={conv.status === 'completed' ? 'default' : conv.status === 'pending' ? 'secondary' : 'destructive'}
                       >
                         {conv.status === 'completed' && <CheckCircle className="h-3 w-3 me-1" />}
@@ -500,7 +540,7 @@ export default function WalletPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDeposit(false)}>{t('common.cancel')}</Button>
-            <Button 
+            <Button
               onClick={() => depositMutation.mutate({ amount: parseFloat(depositAmount), paymentMethod, paymentReference, walletNumber: walletNumber || undefined })}
               disabled={!depositAmount || !paymentMethod || !paymentReference || depositMutation.isPending}
               data-testid="button-confirm-deposit"
@@ -580,7 +620,7 @@ export default function WalletPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowWithdraw(false)}>{t('common.cancel')}</Button>
-            <Button 
+            <Button
               onClick={() => withdrawMutation.mutate({ amount: parseFloat(withdrawAmount), paymentMethod })}
               disabled={!withdrawAmount || !paymentMethod || withdrawMutation.isPending || parseFloat(withdrawAmount) > parseFloat(user?.balance || "0")}
               data-testid="button-confirm-withdraw"
@@ -600,11 +640,18 @@ export default function WalletPage() {
                 <Coins className="h-5 w-5 text-primary" />
                 Convert to {currencySettings.currencyName || 'VEX Coin'}
               </DialogTitle>
-              <DialogDescription>
-                Convert your USD balance to {currencySettings.currencySymbol}. 
-                Rate: 1 USD = {currencySettings.exchangeRate} {currencySettings.currencySymbol}
+              <DialogDescription className="space-y-1">
+                <p className="inline-flex items-center gap-1">
+                  <span>Convert your USD balance to</span>
+                  <ProjectCurrencySymbol className="text-sm" />
+                  <span>.</span>
+                </p>
+                <p className="inline-flex items-center gap-1">
+                  <span>Rate: 1 USD = {currencySettings.exchangeRate}</span>
+                  <ProjectCurrencySymbol className="text-sm" />
+                </p>
                 {parseFloat(currencySettings.conversionCommissionRate) > 0 && (
-                  <> (Fee: {(parseFloat(currencySettings.conversionCommissionRate) * 100).toFixed(1)}%)</>
+                  <p>(Fee: {(parseFloat(currencySettings.conversionCommissionRate) * 100).toFixed(1)}%)</p>
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -638,32 +685,40 @@ export default function WalletPage() {
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Gross amount:</span>
-                    <span>{currencySettings.currencySymbol} {(parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate)).toFixed(2)}</span>
+                    <ProjectCurrencyAmount
+                      amount={parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate)}
+                      symbolClassName="text-sm"
+                    />
                   </div>
                   {parseFloat(currencySettings.conversionCommissionRate) > 0 && (
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Fee ({(parseFloat(currencySettings.conversionCommissionRate) * 100).toFixed(1)}%):</span>
-                      <span>-{currencySettings.currencySymbol} {(parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate) * parseFloat(currencySettings.conversionCommissionRate)).toFixed(2)}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <span>-</span>
+                        <ProjectCurrencyAmount
+                          amount={parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate) * parseFloat(currencySettings.conversionCommissionRate)}
+                          symbolClassName="text-sm"
+                        />
+                      </span>
                     </div>
                   )}
                   <Separator className="my-2" />
                   <div className="flex justify-between text-base font-bold text-primary">
                     <span>You receive:</span>
-                    <span>
-                      {currencySettings.currencySymbol} {(
-                        parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate) * (1 - parseFloat(currencySettings.conversionCommissionRate))
-                      ).toFixed(2)}
-                    </span>
+                    <ProjectCurrencyAmount
+                      amount={parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate) * (1 - parseFloat(currencySettings.conversionCommissionRate))}
+                      symbolClassName="text-base"
+                    />
                   </div>
                 </div>
               )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowConvert(false)}>{t('common.cancel')}</Button>
-              <Button 
+              <Button
                 onClick={() => convertMutation.mutate({ amount: convertAmount })}
                 disabled={
-                  !convertAmount || 
+                  !convertAmount ||
                   parseFloat(convertAmount) <= 0 ||
                   parseFloat(convertAmount) < parseFloat(currencySettings.minConversionAmount) ||
                   parseFloat(convertAmount) > parseFloat(currencySettings.maxConversionAmount) ||
@@ -673,7 +728,10 @@ export default function WalletPage() {
                 data-testid="button-confirm-convert"
               >
                 {convertMutation.isPending && <Loader2 className="h-4 w-4 me-2 animate-spin" />}
-                Convert to {currencySettings.currencySymbol}
+                <span className="inline-flex items-center gap-1">
+                  <span>Convert to</span>
+                  <ProjectCurrencySymbol className="text-sm" />
+                </span>
               </Button>
             </DialogFooter>
           </DialogContent>

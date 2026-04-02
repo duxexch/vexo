@@ -8,7 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useGameSounds } from "@/hooks/use-game-sounds";
 import { useI18n } from "@/lib/i18n";
@@ -29,6 +30,7 @@ import { VoiceChat } from "@/components/games/VoiceChat";
 import { SpectatorPanel } from "@/components/games/SpectatorPanel";
 import { ShareMatchButton } from "@/components/games/ShareMatchButton";
 import { GiftAnimation } from "@/components/games/GiftAnimation";
+import { ProjectCurrencyAmount } from "@/components/ProjectCurrencySymbol";
 import {
   Crown,
   Target,
@@ -42,6 +44,7 @@ import {
   Gift,
   Star,
   Send,
+  ArrowRightLeft,
   Share2,
   Flag,
   X,
@@ -127,6 +130,14 @@ interface GiftAnimationState {
   message?: string;
 }
 
+interface ProjectCurrencySettings {
+  isActive: boolean;
+  exchangeRate: string;
+  conversionCommissionRate: string;
+  minConversionAmount: string;
+  maxConversionAmount: string;
+}
+
 interface ChallengeWSMessage {
   type: string;
   seq?: number;
@@ -198,6 +209,10 @@ export default function ChallengeGamePage() {
   const [wsConnState, setWsConnState] = useState<"connecting" | "connected" | "reconnecting" | "disconnected">("connecting");
   const [showQuickConvertCard, setShowQuickConvertCard] = useState(false);
   const [quickConvertAmount, setQuickConvertAmount] = useState("5");
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [showDepositDialog, setShowDepositDialog] = useState(false);
+  const [fundingShortageProject, setFundingShortageProject] = useState(0);
+  const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
   const authReadyRef = useRef(false);
@@ -216,6 +231,7 @@ export default function ChallengeGamePage() {
   const chessMovePendingRef = useRef(false);
   const chessMoveAckTimerRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutSignalSentRef = useRef(false);
+  const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(null);
 
   const { data: challenge, isLoading, isError: isChallengeError, error: challengeError } = useQuery<Challenge, Error>({
     queryKey: [`/api/challenges/${challengeId}`],
@@ -241,17 +257,31 @@ export default function ChallengeGamePage() {
     },
   });
 
+  const { data: projectCurrencySettings } = useQuery<ProjectCurrencySettings>({
+    queryKey: ["/api/project-currency/settings"],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await fetch("/api/project-currency/settings", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load currency settings");
+      return res.json();
+    },
+  });
+
   const quickConvertMutation = useMutation({
     mutationFn: (amount: string) => apiRequest("POST", "/api/project-currency/convert", { amount }),
-    onSuccess: async () => {
+    onSuccess: async (res: Response) => {
+      const payload = await res.json().catch(() => ({} as { status?: string }));
       await refetchProjectWallet();
+      queryClient.invalidateQueries({ queryKey: ["/api/project-currency/conversions"] });
       toast({
         title: language === "ar" ? "تم التحويل" : "Converted",
-        description: language === "ar"
-          ? "تمت إضافة رصيد عملة المشروع بنجاح."
-          : "Project currency balance was updated successfully.",
+        description: payload?.status === "pending"
+          ? (language === "ar" ? "تم إرسال طلب التحويل للمراجعة" : "Conversion request submitted for review")
+          : (language === "ar" ? "تمت إضافة رصيد عملة المشروع بنجاح." : "Project currency balance was updated successfully."),
       });
       setShowQuickConvertCard(false);
+      setShowConvertDialog(false);
+      setShowDepositDialog(false);
     },
     onError: (error: Error) => {
       toast({
@@ -283,8 +313,72 @@ export default function ChallengeGamePage() {
 
   const challengeErrorStatus = parseHttpStatus(challengeError ?? null);
 
+  const parseApiErrorMessage = useCallback((message: string): string => {
+    const raw = String(message || "").trim();
+    if (!raw) return language === "ar" ? "حدث خطأ غير متوقع" : "Unexpected error occurred";
+
+    const jsonStartIndex = raw.indexOf("{");
+    if (jsonStartIndex >= 0) {
+      try {
+        const parsed = JSON.parse(raw.slice(jsonStartIndex)) as { error?: string };
+        if (parsed?.error) return parsed.error;
+      } catch {
+        // Fallback to normalized message below
+      }
+    }
+
+    return raw.replace(/^\d+\s*:\s*/, "").trim();
+  }, [language]);
+
+  const estimateUsdForProjectCurrency = useCallback((projectAmount: number): number => {
+    const exchangeRate = Number(projectCurrencySettings?.exchangeRate || 0);
+    const commissionRate = Number(projectCurrencySettings?.conversionCommissionRate || 0);
+    const netRate = exchangeRate * Math.max(0, 1 - commissionRate);
+
+    if (!Number.isFinite(netRate) || netRate <= 0) {
+      return projectAmount;
+    }
+
+    return projectAmount / netRate;
+  }, [projectCurrencySettings?.exchangeRate, projectCurrencySettings?.conversionCommissionRate]);
+
+  const openFundingAssistance = useCallback((projectAmountNeeded: number, usdFallbackAmount = 0): void => {
+    const safeProjectAmount = Math.max(0, Number(projectAmountNeeded) || 0);
+    const estimatedUsd = Math.max(Number(usdFallbackAmount) || 0, estimateUsdForProjectCurrency(safeProjectAmount));
+    const minConvert = Number(projectCurrencySettings?.minConversionAmount || 1);
+    const maxConvert = Number(projectCurrencySettings?.maxConversionAmount || 10000);
+    const suggestedConvert = Math.min(maxConvert, Math.max(minConvert, Number(estimatedUsd.toFixed(2))));
+    const userUsdBalance = Number(user?.balance || 0);
+
+    setFundingShortageProject(safeProjectAmount);
+    setFundingUsdNeeded(estimatedUsd);
+    setQuickConvertAmount(String(suggestedConvert));
+    setShowQuickConvertCard(false);
+    setShowConvertDialog(false);
+    setShowDepositDialog(false);
+
+    if (!projectCurrencySettings?.isActive || userUsdBalance < suggestedConvert) {
+      setShowDepositDialog(true);
+      return;
+    }
+
+    setShowConvertDialog(true);
+  }, [estimateUsdForProjectCurrency, projectCurrencySettings?.isActive, projectCurrencySettings?.minConversionAmount, projectCurrencySettings?.maxConversionAmount, user?.balance]);
+
+  const toFiniteNumber = useCallback((value: unknown): number | null => {
+    const num = typeof value === "string" ? Number(value) : (typeof value === "number" ? value : Number.NaN);
+    if (!Number.isFinite(num) || num <= 0) return null;
+    return num;
+  }, []);
+
   const isPlayer = serverRole === "player";
   const isSpectator = serverRole === "spectator";
+  const isChallengeParticipant = Boolean(
+    user?.id
+    && [challenge?.player1Id, challenge?.player2Id, challenge?.player3Id, challenge?.player4Id]
+      .filter(Boolean)
+      .includes(user.id)
+  );
   // Do not allow gameplay actions until the server explicitly assigns role.
   const canPlayActions = serverRole === "player";
   const myColor = challenge?.player1Id === user?.id ? "white" : "black";
@@ -543,18 +637,51 @@ export default function ChallengeGamePage() {
     if (isWsErrorType(data.type)) {
       const { message, code } = extractWsErrorInfo(data);
       if (message) {
-        showWsErrorToast(message, code);
-        if (currencyPolicy?.projectOnly && /project currency|convert|insufficient/i.test(message)) {
-          setShowQuickConvertCard(true);
+        const parsedError = parseApiErrorMessage(message);
+        showWsErrorToast(parsedError, code);
+
+        const normalized = parsedError.toLowerCase();
+        const isGiftFundingError = code === "project_currency_required" || (
+          normalized.includes("direct real-money gifts are disabled")
+          || normalized.includes("purchase gifts with project currency first")
+          || normalized.includes("insufficient project currency")
+          || normalized.includes("project currency wallet")
+        );
+
+        if (isGiftFundingError) {
+          const requiredFromServer = toFiniteNumber((data as { requiredProjectAmount?: unknown }).requiredProjectAmount)
+            ?? toFiniteNumber((data as { giftPrice?: unknown }).giftPrice);
+          const shortfallFromServer = toFiniteNumber((data as { shortfallProjectAmount?: unknown }).shortfallProjectAmount);
+          const requiredFromRecentGift = toFiniteNumber(lastGiftAttemptRef.current?.price);
+          const requiredProjectAmount = requiredFromServer ?? requiredFromRecentGift ?? shortfallFromServer ?? 0;
+
+          if (requiredProjectAmount > 0) {
+            const projectBalanceNow = Number(projectWallet?.totalBalance || 0);
+            const projectShortage = shortfallFromServer ?? Math.max(0, requiredProjectAmount - projectBalanceNow);
+            openFundingAssistance(projectShortage > 0 ? projectShortage : requiredProjectAmount, requiredProjectAmount);
+          } else {
+            setShowQuickConvertCard(true);
+          }
         }
       }
       return;
     }
 
     switch (data.type) {
-      case "role_assigned":
-        setServerRole(data.role ?? null);
+      case "role_assigned": {
+        const assignedRole = data.role ?? null;
+
+        if (assignedRole === "spectator" && isChallengeParticipant) {
+          setServerRole("player");
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            requestRoleAssignment(wsRef.current);
+          }
+          break;
+        }
+
+        setServerRole(assignedRole);
         break;
+      }
       case "joined_challenge_game":
         break;
       case "game_state_sync":
@@ -687,7 +814,22 @@ export default function ChallengeGamePage() {
         setGameSession(prev => prev ? { ...prev, spectatorCount: (data.count as number) ?? 0 } : prev);
         break;
     }
-  }, [toast, playSound, user, gameSession?.gameType, showWsErrorToast, clearChessMovePending, currencyPolicy?.projectOnly, challengeId, challenge?.gameType]);
+  }, [
+    toast,
+    playSound,
+    user,
+    gameSession?.gameType,
+    showWsErrorToast,
+    clearChessMovePending,
+    challengeId,
+    challenge?.gameType,
+    parseApiErrorMessage,
+    openFundingAssistance,
+    projectWallet?.totalBalance,
+    toFiniteNumber,
+    isChallengeParticipant,
+    requestRoleAssignment,
+  ]);
 
   const sendMove = useCallback((move: object) => {
     if (!canPlayActions) {
@@ -816,7 +958,7 @@ export default function ChallengeGamePage() {
     setMessageInput("");
   }, [challengeId]);
 
-  const sendGiftToPlayer = useCallback((giftId: string, recipientId: string) => {
+  const sendGiftToPlayer = useCallback((giftId: string, recipientId: string, meta?: { price?: number }) => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) {
       toast({
         title: language === "ar" ? "الاتصال غير جاهز" : "Connection not ready",
@@ -825,6 +967,12 @@ export default function ChallengeGamePage() {
       });
       return;
     }
+
+    const attemptedGiftPrice = Number(meta?.price || 0);
+    lastGiftAttemptRef.current = {
+      giftId,
+      price: Number.isFinite(attemptedGiftPrice) ? attemptedGiftPrice : 0,
+    };
 
     const idempotencyKey = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
@@ -860,6 +1008,54 @@ export default function ChallengeGamePage() {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
+
+  // Keep timer calculations and timeout effect above conditional returns
+  // so hook order stays stable across loading/error/success renders.
+  const elapsedSinceSyncSec = Math.floor((Date.now() - lastSyncRef.current) / 1000);
+  const isMyTurnForTimer = gameSession?.currentTurn === user?.id;
+  const fallbackTimeLimit = challenge?.timeLimit ?? 0;
+  const isPlayerOne = challenge?.player1Id === user?.id;
+  const serverMyTime = isPlayerOne
+    ? (gameSession?.player1TimeRemaining ?? fallbackTimeLimit)
+    : (gameSession?.player2TimeRemaining ?? fallbackTimeLimit);
+  const serverOppTime = isPlayerOne
+    ? (gameSession?.player2TimeRemaining ?? fallbackTimeLimit)
+    : (gameSession?.player1TimeRemaining ?? fallbackTimeLimit);
+  void localTimerTick; // referenced to trigger re-render
+  const myTimeRemaining = Math.max(0, isMyTurnForTimer ? serverMyTime - elapsedSinceSyncSec : serverMyTime);
+  const opponentTimeRemaining = Math.max(0, !isMyTurnForTimer ? serverOppTime - elapsedSinceSyncSec : serverOppTime);
+
+  useEffect(() => {
+    if (gameSession?.status !== "playing" || !canPlayActions || challenge?.gameType !== "chess") {
+      timeoutSignalSentRef.current = false;
+      return;
+    }
+
+    const iAmCurrentTurn = gameSession.currentTurn === user?.id;
+    if (!iAmCurrentTurn || myTimeRemaining > 0 || timeoutSignalSentRef.current) {
+      return;
+    }
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      timeoutSignalSentRef.current = true;
+      wsRef.current.send(JSON.stringify({
+        type: "game_resign",
+        challengeId,
+        reason: "timeout",
+      }));
+    }
+  }, [gameSession?.status, gameSession?.currentTurn, canPlayActions, challenge?.gameType, myTimeRemaining, user?.id, challengeId]);
+
+  const minConvertAmount = Number(projectCurrencySettings?.minConversionAmount || 1);
+  const maxConvertAmount = Number(projectCurrencySettings?.maxConversionAmount || 10000);
+  const quickConvertAmountValue = Number(quickConvertAmount || 0);
+  const quickConvertDisabled =
+    quickConvertMutation.isPending
+    || !quickConvertAmount
+    || quickConvertAmountValue <= 0
+    || quickConvertAmountValue < minConvertAmount
+    || quickConvertAmountValue > maxConvertAmount
+    || quickConvertAmountValue > Number(user?.balance || 0);
 
   if (isLoading) {
     return (
@@ -959,41 +1155,6 @@ export default function ChallengeGamePage() {
     return undefined;
   })();
 
-  // Compute live timer: server time minus elapsed seconds since last sync
-  const elapsedSinceSyncSec = Math.floor((Date.now() - lastSyncRef.current) / 1000);
-  // Determine whose turn it is to subtract elapsed time from the correct player
-  const isMyTurnForTimer = gameSession?.currentTurn === user?.id;
-  const serverMyTime = challenge.player1Id === user?.id
-    ? (gameSession?.player1TimeRemaining ?? challenge.timeLimit)
-    : (gameSession?.player2TimeRemaining ?? challenge.timeLimit);
-  const serverOppTime = challenge.player1Id === user?.id
-    ? (gameSession?.player2TimeRemaining ?? challenge.timeLimit)
-    : (gameSession?.player1TimeRemaining ?? challenge.timeLimit);
-  void localTimerTick; // referenced to trigger re-render
-  const myTimeRemaining = Math.max(0, isMyTurnForTimer ? serverMyTime - elapsedSinceSyncSec : serverMyTime);
-  const opponentTimeRemaining = Math.max(0, !isMyTurnForTimer ? serverOppTime - elapsedSinceSyncSec : serverOppTime);
-
-  useEffect(() => {
-    if (gameSession?.status !== "playing" || !canPlayActions || challenge?.gameType !== "chess") {
-      timeoutSignalSentRef.current = false;
-      return;
-    }
-
-    const iAmCurrentTurn = gameSession.currentTurn === user?.id;
-    if (!iAmCurrentTurn || myTimeRemaining > 0 || timeoutSignalSentRef.current) {
-      return;
-    }
-
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      timeoutSignalSentRef.current = true;
-      wsRef.current.send(JSON.stringify({
-        type: "game_resign",
-        challengeId,
-        reason: "timeout",
-      }));
-    }
-  }, [gameSession?.status, gameSession?.currentTurn, canPlayActions, challenge?.gameType, myTimeRemaining, user?.id, challengeId]);
-
   const GAME_INFO: Record<string, { icon: React.ComponentType<{ className?: string }>; nameAr: string; nameEn: string }> = {
     chess: { icon: Crown, nameAr: "الشطرنج", nameEn: "Chess" },
     domino: { icon: Target, nameAr: "الدومينو", nameEn: "Domino" },
@@ -1025,26 +1186,26 @@ export default function ChallengeGamePage() {
       )}
       <div className="flex flex-col lg:flex-row h-screen">
         <div className="flex-1 flex flex-col">
-          <header className="flex items-center justify-between gap-4 p-3 border-b bg-card">
-            <div className="flex items-center gap-3">
-              <BackButton />
-              <div className="flex items-center gap-2">
+          <header className="flex items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <BackButton fallbackPath="/challenges" className="shrink-0" />
+              <div className="flex items-center gap-1.5 min-w-0">
                 <GameIcon className="h-5 w-5 text-primary" />
-                <span className="font-semibold">
+                <span className="font-semibold truncate">
                   {language === "ar" ? gameInfo.nameAr : gameInfo.nameEn}
                 </span>
-                <Badge variant={isSpectator ? "outline" : "default"}>
+                <Badge variant={isSpectator ? "outline" : "default"} className="hidden sm:inline-flex">
                   {isSpectator
                     ? (language === "ar" ? "مشاهد" : "Spectator")
                     : (language === "ar" ? "لاعب" : "Player")}
                 </Badge>
               </div>
-              <Badge variant="secondary">
+              <Badge variant="secondary" className="hidden sm:inline-flex shrink-0">
                 ${parseFloat(challenge.betAmount).toFixed(2)}
               </Badge>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               <ShareMatchButton challengeId={challengeId!} gameType={challenge.gameType} />
 
               <div className="flex items-center gap-1 text-muted-foreground">
@@ -1254,12 +1415,15 @@ export default function ChallengeGamePage() {
 
               {/* Floating game chat for players (Ludo King style) */}
               {!isSpectator && (
-                <GameChat
-                  messages={messages as unknown as { id: string; senderId: string; senderName: string; message: string; createdAt: string }[]}
-                  onSendMessage={sendChatMessage}
-                  quickMessages={QUICK_MESSAGES}
-                  language={language}
-                />
+                <div className="w-full max-w-lg mt-3 h-36 sm:h-40 relative">
+                  <GameChat
+                    messages={messages as unknown as { id: string; senderId: string; senderName: string; message: string; createdAt: string }[]}
+                    onSendMessage={sendChatMessage}
+                    quickMessages={QUICK_MESSAGES}
+                    language={language}
+                    currentUserId={user?.id}
+                  />
+                </div>
               )}
             </div>
 
@@ -1365,6 +1529,138 @@ export default function ChallengeGamePage() {
         onComplete={() => setActiveGiftAnimation(null)}
       />
 
+      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5" />
+              {language === "ar" ? "تحويل سريع لإرسال الهدية" : "Quick Conversion To Send Gift"}
+            </DialogTitle>
+            <DialogDescription>
+              {language === "ar"
+                ? (
+                  <span className="inline-flex items-center gap-1">
+                    <span>المطلوب للهدية:</span>
+                    <ProjectCurrencyAmount amount={fundingShortageProject} symbolClassName="text-sm" />
+                  </span>
+                )
+                : (
+                  <span className="inline-flex items-center gap-1">
+                    <span>Required for gift:</span>
+                    <ProjectCurrencyAmount amount={fundingShortageProject} symbolClassName="text-sm" />
+                  </span>
+                )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+              <p>
+                {language === "ar"
+                  ? `الرصيد الحالي بالدولار: $${Number(user?.balance || 0).toFixed(2)}`
+                  : `Current USD balance: $${Number(user?.balance || 0).toFixed(2)}`}
+              </p>
+              <p className="text-muted-foreground">
+                {language === "ar"
+                  ? `المبلغ المقترح للتحويل: $${fundingUsdNeeded.toFixed(2)}`
+                  : `Estimated USD needed to convert: $${fundingUsdNeeded.toFixed(2)}`}
+              </p>
+            </div>
+
+            <div>
+              <Label>{language === "ar" ? "مبلغ التحويل (USD)" : "Conversion Amount (USD)"}</Label>
+              <div className="flex items-center gap-2 mt-2">
+                <Input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={quickConvertAmount}
+                  onChange={(e) => setQuickConvertAmount(e.target.value)}
+                  data-testid="input-game-popup-convert-amount"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setQuickConvertAmount(String(Math.max(Number(projectCurrencySettings?.minConversionAmount || 1), Number(fundingUsdNeeded.toFixed(2) || 0))))}
+                >
+                  {language === "ar" ? "اقتراح" : "Suggest"}
+                </Button>
+              </div>
+            </div>
+
+            {quickConvertAmountValue > Number(user?.balance || 0) && (
+              <p className="text-xs text-destructive">
+                {language === "ar" ? "الرصيد بالدولار غير كافٍ، قم بالإيداع أولًا." : "Insufficient USD balance, deposit first."}
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConvertDialog(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowConvertDialog(false);
+                setShowDepositDialog(true);
+              }}
+            >
+              {language === "ar" ? "فتح نافذة الإيداع" : "Open Deposit Popup"}
+            </Button>
+            <Button
+              onClick={() => quickConvertMutation.mutate(quickConvertAmount)}
+              disabled={quickConvertDisabled}
+              data-testid="button-game-popup-quick-convert"
+            >
+              {quickConvertMutation.isPending ? t("common.loading") : (language === "ar" ? "تحويل الآن" : "Convert Now")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDepositDialog} onOpenChange={setShowDepositDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{language === "ar" ? "الرصيد غير كافٍ" : "Insufficient Balance"}</DialogTitle>
+            <DialogDescription>
+              {language === "ar"
+                ? "لا يوجد رصيد كافٍ للتحويل المطلوب لإرسال الهدية. يمكنك فتح نافذة الإيداع مباشرة."
+                : "You do not have enough balance to convert for this gift. Open deposit popup directly."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+            <p>
+              {language === "ar"
+                ? `الرصيد الحالي بالدولار: $${Number(user?.balance || 0).toFixed(2)}`
+                : `Current USD balance: $${Number(user?.balance || 0).toFixed(2)}`}
+            </p>
+            <p className="text-muted-foreground">
+              {language === "ar"
+                ? `الحد الأدنى المقترح للإيداع: $${Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0)).toFixed(2)}`
+                : `Suggested minimum deposit: $${Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0)).toFixed(2)}`}
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDepositDialog(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              onClick={() => {
+                const suggestedDeposit = Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0));
+                setShowDepositDialog(false);
+                setLocation(`/wallet?modal=deposit&amount=${suggestedDeposit.toFixed(2)}`);
+              }}
+              data-testid="button-game-open-wallet-deposit"
+            >
+              {language === "ar" ? "فتح كارت الإيداع" : "Open Deposit Card"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {showQuickConvertCard && currencyPolicy?.projectOnly && (
         <div className="fixed bottom-4 end-4 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-4 shadow-xl">
           <div className="flex items-start justify-between gap-3">
@@ -1400,7 +1696,8 @@ export default function ChallengeGamePage() {
           </div>
 
           <p className="text-xs text-muted-foreground mt-2">
-            {language === "ar" ? "رصيدك الحالي:" : "Current balance:"} {projectWallet?.currencySymbol || "VXC"} {Number(projectWallet?.totalBalance || 0).toFixed(2)}
+            {language === "ar" ? "رصيدك الحالي:" : "Current balance:"}{" "}
+            <ProjectCurrencyAmount amount={projectWallet?.totalBalance || 0} symbolClassName="text-xs" />
           </p>
         </div>
       )}

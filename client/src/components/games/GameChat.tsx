@@ -80,7 +80,7 @@ function FloatingBubble({ msg, isOwn, onExpire }: { msg: Message; isOwn: boolean
       )}
       <div
         className={cn(
-          "max-w-[180px] px-3 py-1.5 rounded-2xl shadow-lg text-sm break-words",
+          "max-w-[170px] sm:max-w-[220px] px-3 py-1.5 rounded-2xl shadow-lg text-sm break-words",
           isOwn
             ? "bg-primary text-primary-foreground rounded-br-sm"
             : "bg-card border border-border text-card-foreground rounded-bl-sm",
@@ -142,7 +142,7 @@ export function GameChat({
   useEffect(() => {
     if (messages.length > lastProcessedRef.current) {
       const newMsgs = messages.slice(lastProcessedRef.current);
-      setActiveBubbles(prev => [...prev, ...newMsgs].slice(-5)); // max 5 visible bubbles
+      setActiveBubbles(prev => [...prev, ...newMsgs].slice(-3)); // keep stack compact so it stays out of board area
       lastProcessedRef.current = messages.length;
     }
   }, [messages]);
@@ -189,7 +189,7 @@ export function GameChat({
   return (
     <>
       {/* Floating bubbles overlay — positioned at bottom of game area */}
-      <div className="absolute bottom-16 left-2 right-2 z-30 pointer-events-none flex flex-col gap-1.5 max-h-[200px] overflow-hidden">
+      <div className="absolute bottom-12 left-2 right-2 z-30 pointer-events-none flex flex-col gap-1.5 max-h-[84px] overflow-hidden">
         {activeBubbles.map((msg) => (
           <FloatingBubble
             key={msg.id}

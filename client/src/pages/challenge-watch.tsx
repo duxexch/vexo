@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +23,7 @@ import TarneebBoard from "@/components/games/TarneebBoard";
 import type { TarneebState } from "@/components/games/TarneebBoard";
 import BalootBoard from "@/components/games/BalootBoard";
 import type { BalootState } from "@/components/games/BalootBoard";
+import { ProjectCurrencyAmount } from "@/components/ProjectCurrencySymbol";
 import { SpectatorPanel } from "@/components/games/SpectatorPanel";
 import { ShareMatchButton } from "@/components/games/ShareMatchButton";
 import { FloatingGiftsOverlay } from "@/components/games/TikTokGiftBar";
@@ -45,6 +47,7 @@ import {
   Star,
   Gift,
   Info,
+  ArrowRightLeft,
 } from "lucide-react";
 
 interface Player {
@@ -150,6 +153,14 @@ interface ChallengeWatchWSMessage {
   [key: string]: unknown;
 }
 
+interface ProjectCurrencySettings {
+  isActive: boolean;
+  exchangeRate: string;
+  conversionCommissionRate: string;
+  minConversionAmount: string;
+  maxConversionAmount: string;
+}
+
 export default function ChallengeWatchPage() {
   const [, params] = useRoute("/challenge/:id/watch");
   const [, setLocation] = useLocation();
@@ -166,9 +177,16 @@ export default function ChallengeWatchPage() {
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [supportMode, setSupportMode] = useState<"instant" | "wait_for_match">("instant");
   const [showGiftPanel, setShowGiftPanel] = useState(false);
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
+  const [showDepositDialog, setShowDepositDialog] = useState(false);
+  const [fundingShortageProject, setFundingShortageProject] = useState(0);
+  const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
+  const [quickConvertAmount, setQuickConvertAmount] = useState("5");
 
   const wsRef = useRef<WebSocket | null>(null);
   const wsErrorToastRef = useRef<{ signature: string; at: number }>({ signature: "", at: 0 });
+  const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(null);
+  const supportSectionRef = useRef<HTMLDivElement | null>(null);
   const WS_ERROR_TOAST_DEDUPE_MS = 2000;
 
   const showWsErrorToast = useCallback((message: string, code?: string) => {
@@ -195,6 +213,59 @@ export default function ChallengeWatchPage() {
     enabled: !!challengeId,
   });
 
+  useEffect(() => {
+    if (!challengeId || !challenge || !user?.id) return;
+
+    const participantIds = [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id].filter(Boolean);
+    if (participantIds.includes(user.id)) {
+      setLocation(`/challenge/${challengeId}/play`);
+    }
+  }, [challengeId, challenge, user?.id, setLocation]);
+
+  const { data: projectWallet, refetch: refetchProjectWallet } = useQuery<{ totalBalance: string; currencySymbol: string }>({
+    queryKey: ["/api/project-currency/wallet"],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await fetch("/api/project-currency/wallet", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load project wallet");
+      return res.json();
+    },
+  });
+
+  const { data: projectCurrencySettings } = useQuery<ProjectCurrencySettings>({
+    queryKey: ["/api/project-currency/settings"],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await fetch("/api/project-currency/settings", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load currency settings");
+      return res.json();
+    },
+  });
+
+  const quickConvertMutation = useMutation({
+    mutationFn: (amount: string) => apiRequest("POST", "/api/project-currency/convert", { amount }),
+    onSuccess: async (res: Response) => {
+      const payload = await res.json().catch(() => ({} as { status?: string }));
+      await refetchProjectWallet();
+      queryClient.invalidateQueries({ queryKey: ["/api/project-currency/conversions"] });
+      toast({
+        title: language === "ar" ? "تم التحويل" : "Converted",
+        description: payload?.status === "pending"
+          ? (language === "ar" ? "تم إرسال طلب التحويل للمراجعة" : "Conversion request submitted for review")
+          : (language === "ar" ? "تمت إضافة رصيد عملة المشروع بنجاح." : "Project currency balance was updated successfully."),
+      });
+      setShowConvertDialog(false);
+      setShowDepositDialog(false);
+    },
+    onError: (err: Error) => {
+      toast({
+        title: language === "ar" ? "خطأ" : "Error",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const parseHttpStatus = (error: Error | null): number | null => {
     if (!error?.message) return null;
     const match = error.message.match(/^(\d{3})\s*:/);
@@ -204,6 +275,63 @@ export default function ChallengeWatchPage() {
   };
 
   const challengeErrorStatus = parseHttpStatus(challengeError ?? null);
+
+  const parseApiErrorMessage = useCallback((message: string): string => {
+    const raw = String(message || "").trim();
+    if (!raw) return language === "ar" ? "حدث خطأ غير متوقع" : "Unexpected error occurred";
+
+    const jsonStartIndex = raw.indexOf("{");
+    if (jsonStartIndex >= 0) {
+      try {
+        const parsed = JSON.parse(raw.slice(jsonStartIndex)) as { error?: string };
+        if (parsed?.error) return parsed.error;
+      } catch {
+        // Fallback to normalized message below
+      }
+    }
+
+    return raw.replace(/^\d+\s*:\s*/, "").trim();
+  }, [language]);
+
+  const estimateUsdForProjectCurrency = useCallback((projectAmount: number): number => {
+    const exchangeRate = Number(projectCurrencySettings?.exchangeRate || 0);
+    const commissionRate = Number(projectCurrencySettings?.conversionCommissionRate || 0);
+    const netRate = exchangeRate * Math.max(0, 1 - commissionRate);
+
+    if (!Number.isFinite(netRate) || netRate <= 0) {
+      return projectAmount;
+    }
+
+    return projectAmount / netRate;
+  }, [projectCurrencySettings?.exchangeRate, projectCurrencySettings?.conversionCommissionRate]);
+
+  const openFundingAssistance = useCallback((projectAmountNeeded: number, usdFallbackAmount = 0): void => {
+    const safeProjectAmount = Math.max(0, Number(projectAmountNeeded) || 0);
+    const estimatedUsd = Math.max(Number(usdFallbackAmount) || 0, estimateUsdForProjectCurrency(safeProjectAmount));
+    const minConvert = Number(projectCurrencySettings?.minConversionAmount || 1);
+    const maxConvert = Number(projectCurrencySettings?.maxConversionAmount || 10000);
+    const suggestedConvert = Math.min(maxConvert, Math.max(minConvert, Number(estimatedUsd.toFixed(2))));
+    const userUsdBalance = Number(user?.balance || 0);
+
+    setFundingShortageProject(safeProjectAmount);
+    setFundingUsdNeeded(estimatedUsd);
+    setQuickConvertAmount(String(suggestedConvert));
+    setShowConvertDialog(false);
+    setShowDepositDialog(false);
+
+    if (!projectCurrencySettings?.isActive || userUsdBalance < suggestedConvert) {
+      setShowDepositDialog(true);
+      return;
+    }
+
+    setShowConvertDialog(true);
+  }, [estimateUsdForProjectCurrency, projectCurrencySettings?.isActive, projectCurrencySettings?.maxConversionAmount, projectCurrencySettings?.minConversionAmount, user?.balance]);
+
+  const toFiniteNumber = useCallback((value: unknown): number | null => {
+    const num = typeof value === "string" ? Number(value) : (typeof value === "number" ? value : Number.NaN);
+    if (!Number.isFinite(num) || num <= 0) return null;
+    return num;
+  }, []);
 
   const { data: oddsData, isLoading: isLoadingOdds } = useQuery<OddsData>({
     queryKey: [`/api/challenges/${challengeId}/odds`],
@@ -284,7 +412,33 @@ export default function ChallengeWatchPage() {
     if (isWsErrorType(data.type)) {
       const { message, code } = extractWsErrorInfo(data);
       if (message) {
-        showWsErrorToast(message, code);
+        const parsedError = parseApiErrorMessage(message);
+        showWsErrorToast(parsedError, code);
+
+        const normalized = parsedError.toLowerCase();
+        const normalizedCode = String(code || "").toLowerCase();
+        const isGiftFundingError = normalizedCode === "project_currency_required"
+          || normalizedCode === "project_currency_wallet_required"
+          || (
+            normalized.includes("direct real-money gifts are disabled")
+            || normalized.includes("purchase gifts with project currency first")
+            || normalized.includes("insufficient project currency")
+            || normalized.includes("project currency wallet")
+          );
+
+        if (isGiftFundingError) {
+          const requiredFromServer = toFiniteNumber((data as { requiredProjectAmount?: unknown }).requiredProjectAmount)
+            ?? toFiniteNumber((data as { giftPrice?: unknown }).giftPrice);
+          const shortfallFromServer = toFiniteNumber((data as { shortfallProjectAmount?: unknown }).shortfallProjectAmount);
+          const requiredFromRecentGift = toFiniteNumber(lastGiftAttemptRef.current?.price);
+          const requiredProjectAmount = requiredFromServer ?? requiredFromRecentGift ?? shortfallFromServer ?? 0;
+
+          if (requiredProjectAmount > 0) {
+            const projectBalanceNow = Number(projectWallet?.totalBalance || 0);
+            const projectShortage = shortfallFromServer ?? Math.max(0, requiredProjectAmount - projectBalanceNow);
+            openFundingAssistance(projectShortage > 0 ? projectShortage : requiredProjectAmount, requiredProjectAmount);
+          }
+        }
       }
       return;
     }
@@ -321,7 +475,14 @@ export default function ChallengeWatchPage() {
         queryClient.invalidateQueries({ queryKey: [`/api/challenges/${challengeId}/supports`] });
         break;
     }
-  }, [challengeId, showWsErrorToast]);
+  }, [
+    challengeId,
+    showWsErrorToast,
+    parseApiErrorMessage,
+    toFiniteNumber,
+    projectWallet?.totalBalance,
+    openFundingAssistance,
+  ]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -346,7 +507,7 @@ export default function ChallengeWatchPage() {
     return amount * odds;
   };
 
-  const handleSendGift = useCallback((giftId: string, playerId: string) => {
+  const handleSendGift = useCallback((giftId: string, playerId: string, meta?: { price?: number }) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       toast({
         title: language === "ar" ? "خطأ" : "Error",
@@ -355,16 +516,29 @@ export default function ChallengeWatchPage() {
       });
       return;
     }
+
+    const attemptedGiftPrice = Number(meta?.price || 0);
+    lastGiftAttemptRef.current = {
+      giftId,
+      price: Number.isFinite(attemptedGiftPrice) ? attemptedGiftPrice : 0,
+    };
+
     wsRef.current.send(JSON.stringify({
       type: "send_gift",
       challengeId,
       giftId,
       recipientId: playerId,
     }));
-    toast({
-      title: language === "ar" ? "تم الإرسال!" : "Gift Sent!",
-    });
   }, [challengeId, language, toast]);
+
+  const openGiftPanel = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setShowGiftPanel(true);
+  }, []);
+
+  const jumpToSupportSection = useCallback(() => {
+    supportSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
 
   const handleAddSupport = () => {
     if (!selectedPlayer || !supportAmount) return;
@@ -393,6 +567,17 @@ export default function ChallengeWatchPage() {
       mode: supportMode,
     });
   };
+
+  const minConvertAmount = Number(projectCurrencySettings?.minConversionAmount || 1);
+  const maxConvertAmount = Number(projectCurrencySettings?.maxConversionAmount || 10000);
+  const quickConvertAmountValue = Number(quickConvertAmount || 0);
+  const quickConvertDisabled =
+    quickConvertMutation.isPending
+    || !quickConvertAmount
+    || quickConvertAmountValue <= 0
+    || quickConvertAmountValue < minConvertAmount
+    || quickConvertAmountValue > maxConvertAmount
+    || quickConvertAmountValue > Number(user?.balance || 0);
 
   if (isLoading) {
     return (
@@ -522,7 +707,7 @@ export default function ChallengeWatchPage() {
 
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             <ScrollArea className="flex-1">
-              <div className="p-4 flex flex-col items-center">
+              <div className="p-4 pb-24 lg:pb-4 flex flex-col items-center">
                 <div className="w-full max-w-lg mb-4">
                   <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
@@ -690,201 +875,203 @@ export default function ChallengeWatchPage() {
                 )}
 
                 {user && challenge.player2 && gameSession?.status === "playing" && !isTeamGame && (
-                  <Card className="w-full max-w-lg mt-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <TrendingUp className="h-5 w-5 text-primary" />
-                        <span>{language === "ar" ? "ادعم واربح" : "Support & Win"}</span>
-                        <Star className="h-4 w-4 text-yellow-500" />
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <button
-                          onClick={() => setSelectedPlayer(challenge.player1Id)}
-                          className={`p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player1Id
-                            ? "border-green-500 bg-green-500/10"
-                            : "border-transparent bg-card hover:bg-accent"
-                            }`}
-                          data-testid="support-player1-card"
-                        >
-                          <div className="flex flex-col items-center gap-2">
-                            <Avatar className="h-12 w-12">
-                              <AvatarImage src={challenge.player1?.avatarUrl} />
-                              <AvatarFallback>{challenge.player1?.username?.[0]?.toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                            <p className="font-medium text-sm truncate w-full text-center">
-                              {challenge.player1?.username}
-                            </p>
-                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                              x{supportMode === "instant" ? (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) : (oddsData?.player1?.odds?.toFixed(2) || "1.50")}
-                            </Badge>
-                            <Button
-                              size="sm"
-                              variant={selectedPlayer === challenge.player1Id ? "default" : "outline"}
-                              className="w-full"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedPlayer(challenge.player1Id);
-                              }}
-                              data-testid="button-support-player1"
-                            >
-                              {language === "ar" ? "ادعم" : "Support"}
-                            </Button>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => setSelectedPlayer(challenge.player2Id!)}
-                          className={`p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player2Id
-                            ? "border-blue-500 bg-blue-500/10"
-                            : "border-transparent bg-card hover:bg-accent"
-                            }`}
-                          data-testid="support-player2-card"
-                        >
-                          <div className="flex flex-col items-center gap-2">
-                            <Avatar className="h-12 w-12">
-                              <AvatarImage src={challenge.player2?.avatarUrl} />
-                              <AvatarFallback>{challenge.player2?.username?.[0]?.toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                            <p className="font-medium text-sm truncate w-full text-center">
-                              {challenge.player2?.username}
-                            </p>
-                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-                              x{supportMode === "instant" ? (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) : (oddsData?.player2?.odds?.toFixed(2) || "1.50")}
-                            </Badge>
-                            <Button
-                              size="sm"
-                              variant={selectedPlayer === challenge.player2Id ? "default" : "outline"}
-                              className="w-full"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedPlayer(challenge.player2Id!);
-                              }}
-                              data-testid="button-support-player2"
-                            >
-                              {language === "ar" ? "ادعم" : "Support"}
-                            </Button>
-                          </div>
-                        </button>
-                      </div>
-
-                      {selectedPlayer && (
-                        <div className="space-y-4 pt-3 border-t">
-                          <Tabs value={supportMode} onValueChange={(v) => setSupportMode(v as "instant" | "wait_for_match")}>
-                            <TabsList className="grid w-full grid-cols-2">
-                              <TabsTrigger value="instant" className="gap-2" data-testid="tab-instant">
-                                <Zap className="h-4 w-4" />
-                                {language === "ar" ? "فوري" : "Instant"}
-                              </TabsTrigger>
-                              <TabsTrigger value="wait_for_match" className="gap-2" data-testid="tab-wait">
-                                <Timer className="h-4 w-4" />
-                                {language === "ar" ? "انتظر مقابل" : "Wait for Match"}
-                              </TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="instant" className="mt-3">
-                              <p className="text-xs text-muted-foreground">
-                                {language === "ar"
-                                  ? "معدل ربح ثابت x" + (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) + " - نتيجة فورية!"
-                                  : "Fixed rate x" + (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) + " - instant result!"}
+                  <div ref={supportSectionRef} className="w-full max-w-lg mt-6">
+                    <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                          <TrendingUp className="h-5 w-5 text-primary" />
+                          <span>{language === "ar" ? "ادعم واربح" : "Support & Win"}</span>
+                          <Star className="h-4 w-4 text-yellow-500" />
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            onClick={() => setSelectedPlayer(challenge.player1Id)}
+                            className={`p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player1Id
+                              ? "border-green-500 bg-green-500/10"
+                              : "border-transparent bg-card hover:bg-accent"
+                              }`}
+                            data-testid="support-player1-card"
+                          >
+                            <div className="flex flex-col items-center gap-2">
+                              <Avatar className="h-12 w-12">
+                                <AvatarImage src={challenge.player1?.avatarUrl} />
+                                <AvatarFallback>{challenge.player1?.username?.[0]?.toUpperCase()}</AvatarFallback>
+                              </Avatar>
+                              <p className="font-medium text-sm truncate w-full text-center">
+                                {challenge.player1?.username}
                               </p>
-                            </TabsContent>
-                            <TabsContent value="wait_for_match" className="mt-3">
-                              <p className="text-xs text-muted-foreground">
-                                {language === "ar"
-                                  ? "معدل ربح ديناميكي حسب أداء اللاعب - انتظر نهاية المباراة"
-                                  : "Dynamic rate based on player performance - wait for match end"}
-                              </p>
-                            </TabsContent>
-                          </Tabs>
-
-                          <div>
-                            <label className="text-sm font-medium mb-2 block">
-                              {language === "ar" ? "مبلغ الدعم ($)" : "Support Amount ($)"}
-                            </label>
-                            <Input
-                              type="number"
-                              min={oddsData?.minSupportAmount || 1}
-                              max={oddsData?.maxSupportAmount || 1000}
-                              step="0.01"
-                              value={supportAmount}
-                              onChange={(e) => setSupportAmount(e.target.value)}
-                              placeholder={`${oddsData?.minSupportAmount || 1} - ${oddsData?.maxSupportAmount || 1000}`}
-                              className="text-lg"
-                              data-testid="input-support-amount"
-                            />
-                            <div className="flex gap-2 mt-2">
-                              {[5, 10, 25, 50, 100].map((amount) => (
-                                <Button
-                                  key={amount}
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setSupportAmount(String(amount))}
-                                  data-testid={`quick-amount-${amount}`}
-                                >
-                                  ${amount}
-                                </Button>
-                              ))}
+                              <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                                x{supportMode === "instant" ? (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) : (oddsData?.player1?.odds?.toFixed(2) || "1.50")}
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant={selectedPlayer === challenge.player1Id ? "default" : "outline"}
+                                className="w-full"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedPlayer(challenge.player1Id);
+                                }}
+                                data-testid="button-support-player1"
+                              >
+                                {language === "ar" ? "ادعم" : "Support"}
+                              </Button>
                             </div>
-                          </div>
+                          </button>
 
-                          {supportAmount && parseFloat(supportAmount) > 0 && (
-                            <div className="p-3 bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-lg border border-green-500/20">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm text-muted-foreground">
-                                  {language === "ar" ? "الربح المحتمل:" : "Potential Winnings:"}
-                                </span>
-                                <span className="text-xl font-bold text-green-500">
-                                  ${calculatePotentialWinnings().toFixed(2)}
+                          <button
+                            onClick={() => setSelectedPlayer(challenge.player2Id!)}
+                            className={`p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player2Id
+                              ? "border-blue-500 bg-blue-500/10"
+                              : "border-transparent bg-card hover:bg-accent"
+                              }`}
+                            data-testid="support-player2-card"
+                          >
+                            <div className="flex flex-col items-center gap-2">
+                              <Avatar className="h-12 w-12">
+                                <AvatarImage src={challenge.player2?.avatarUrl} />
+                                <AvatarFallback>{challenge.player2?.username?.[0]?.toUpperCase()}</AvatarFallback>
+                              </Avatar>
+                              <p className="font-medium text-sm truncate w-full text-center">
+                                {challenge.player2?.username}
+                              </p>
+                              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+                                x{supportMode === "instant" ? (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) : (oddsData?.player2?.odds?.toFixed(2) || "1.50")}
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant={selectedPlayer === challenge.player2Id ? "default" : "outline"}
+                                className="w-full"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedPlayer(challenge.player2Id!);
+                                }}
+                                data-testid="button-support-player2"
+                              >
+                                {language === "ar" ? "ادعم" : "Support"}
+                              </Button>
+                            </div>
+                          </button>
+                        </div>
+
+                        {selectedPlayer && (
+                          <div className="space-y-4 pt-3 border-t">
+                            <Tabs value={supportMode} onValueChange={(v) => setSupportMode(v as "instant" | "wait_for_match")}>
+                              <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="instant" className="gap-2" data-testid="tab-instant">
+                                  <Zap className="h-4 w-4" />
+                                  {language === "ar" ? "فوري" : "Instant"}
+                                </TabsTrigger>
+                                <TabsTrigger value="wait_for_match" className="gap-2" data-testid="tab-wait">
+                                  <Timer className="h-4 w-4" />
+                                  {language === "ar" ? "انتظر مقابل" : "Wait for Match"}
+                                </TabsTrigger>
+                              </TabsList>
+                              <TabsContent value="instant" className="mt-3">
+                                <p className="text-xs text-muted-foreground">
+                                  {language === "ar"
+                                    ? "معدل ربح ثابت x" + (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) + " - نتيجة فورية!"
+                                    : "Fixed rate x" + (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) + " - instant result!"}
+                                </p>
+                              </TabsContent>
+                              <TabsContent value="wait_for_match" className="mt-3">
+                                <p className="text-xs text-muted-foreground">
+                                  {language === "ar"
+                                    ? "معدل ربح ديناميكي حسب أداء اللاعب - انتظر نهاية المباراة"
+                                    : "Dynamic rate based on player performance - wait for match end"}
+                                </p>
+                              </TabsContent>
+                            </Tabs>
+
+                            <div>
+                              <label className="text-sm font-medium mb-2 block">
+                                {language === "ar" ? "مبلغ الدعم ($)" : "Support Amount ($)"}
+                              </label>
+                              <Input
+                                type="number"
+                                min={oddsData?.minSupportAmount || 1}
+                                max={oddsData?.maxSupportAmount || 1000}
+                                step="0.01"
+                                value={supportAmount}
+                                onChange={(e) => setSupportAmount(e.target.value)}
+                                placeholder={`${oddsData?.minSupportAmount || 1} - ${oddsData?.maxSupportAmount || 1000}`}
+                                className="text-lg"
+                                data-testid="input-support-amount"
+                              />
+                              <div className="flex gap-2 mt-2">
+                                {[5, 10, 25, 50, 100].map((amount) => (
+                                  <Button
+                                    key={amount}
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setSupportAmount(String(amount))}
+                                    data-testid={`quick-amount-${amount}`}
+                                  >
+                                    ${amount}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {supportAmount && parseFloat(supportAmount) > 0 && (
+                              <div className="p-3 bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-lg border border-green-500/20">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-muted-foreground">
+                                    {language === "ar" ? "الربح المحتمل:" : "Potential Winnings:"}
+                                  </span>
+                                  <span className="text-xl font-bold text-green-500">
+                                    ${calculatePotentialWinnings().toFixed(2)}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  ${supportAmount} × {getPlayerOdds(selectedPlayer).toFixed(2)} = ${calculatePotentialWinnings().toFixed(2)}
+                                </p>
+                              </div>
+                            )}
+
+                            {oddsData && (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Info className="h-3 w-3" />
+                                <span>
+                                  {language === "ar"
+                                    ? `رسوم المنصة: ${oddsData.houseFeePercent}% • الحد الأدنى: $${oddsData.minSupportAmount} • الحد الأقصى: $${oddsData.maxSupportAmount}`
+                                    : `House fee: ${oddsData.houseFeePercent}% • Min: $${oddsData.minSupportAmount} • Max: $${oddsData.maxSupportAmount}`}
                                 </span>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                ${supportAmount} × {getPlayerOdds(selectedPlayer).toFixed(2)} = ${calculatePotentialWinnings().toFixed(2)}
-                              </p>
-                            </div>
-                          )}
+                            )}
 
-                          {oddsData && (
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Info className="h-3 w-3" />
-                              <span>
-                                {language === "ar"
-                                  ? `رسوم المنصة: ${oddsData.houseFeePercent}% • الحد الأدنى: $${oddsData.minSupportAmount} • الحد الأقصى: $${oddsData.maxSupportAmount}`
-                                  : `House fee: ${oddsData.houseFeePercent}% • Min: $${oddsData.minSupportAmount} • Max: $${oddsData.maxSupportAmount}`}
-                              </span>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => {
+                                  setSelectedPlayer(null);
+                                  setSupportAmount("");
+                                }}
+                                data-testid="button-cancel-support"
+                              >
+                                {language === "ar" ? "إلغاء" : "Cancel"}
+                              </Button>
+                              <Button
+                                className="flex-1 gap-2"
+                                onClick={handleAddSupport}
+                                disabled={!supportAmount || parseFloat(supportAmount) <= 0 || addSupportMutation.isPending}
+                                data-testid="button-add-support"
+                              >
+                                {addSupportMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <DollarSign className="h-4 w-4" />
+                                )}
+                                {language === "ar" ? "أضف الدعم" : "Add Support"}
+                              </Button>
                             </div>
-                          )}
-
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              className="flex-1"
-                              onClick={() => {
-                                setSelectedPlayer(null);
-                                setSupportAmount("");
-                              }}
-                              data-testid="button-cancel-support"
-                            >
-                              {language === "ar" ? "إلغاء" : "Cancel"}
-                            </Button>
-                            <Button
-                              className="flex-1 gap-2"
-                              onClick={handleAddSupport}
-                              disabled={!supportAmount || parseFloat(supportAmount) <= 0 || addSupportMutation.isPending}
-                              data-testid="button-add-support"
-                            >
-                              {addSupportMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <DollarSign className="h-4 w-4" />
-                              )}
-                              {language === "ar" ? "أضف الدعم" : "Add Support"}
-                            </Button>
                           </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
                 )}
 
                 {supports && supports.length > 0 && (
@@ -951,12 +1138,33 @@ export default function ChallengeWatchPage() {
       {/* Floating Gift FAB */}
       {user && (
         <Button
-          onClick={() => setShowGiftPanel(true)}
-          className="fixed bottom-20 start-4 z-30 h-14 w-14 rounded-full shadow-lg shadow-primary/30 p-0"
+          onClick={openGiftPanel}
+          className="hidden lg:inline-flex fixed bottom-20 start-4 z-30 h-14 w-14 rounded-full shadow-lg shadow-primary/30 p-0"
           data-testid="fab-gift"
         >
           <Gift className="h-6 w-6" />
         </Button>
+      )}
+
+      {user && (
+        <div className="fixed bottom-4 inset-x-4 z-30 lg:hidden">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border bg-card/95 backdrop-blur-sm p-2 shadow-xl">
+            <Button onClick={openGiftPanel} className="gap-2" data-testid="button-mobile-open-gift">
+              <Gift className="h-4 w-4" />
+              {language === "ar" ? "هدية" : "Gift"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={jumpToSupportSection}
+              disabled={!challenge?.player2 || gameSession?.status !== "playing" || isTeamGame}
+              className="gap-2"
+              data-testid="button-mobile-jump-support"
+            >
+              <TrendingUp className="h-4 w-4" />
+              {language === "ar" ? "ادعم" : "Support"}
+            </Button>
+          </div>
+        </div>
       )}
 
       <FullScreenGiftPanel
@@ -971,6 +1179,138 @@ export default function ChallengeWatchPage() {
         player2Avatar={challenge?.player2?.avatarUrl}
         disabled={!user}
       />
+
+      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5" />
+              {language === "ar" ? "تحويل سريع لإرسال الهدية" : "Quick Conversion To Send Gift"}
+            </DialogTitle>
+            <DialogDescription>
+              {language === "ar"
+                ? (
+                  <span className="inline-flex items-center gap-1">
+                    <span>المطلوب للهدية:</span>
+                    <ProjectCurrencyAmount amount={fundingShortageProject} symbolClassName="text-sm" />
+                  </span>
+                )
+                : (
+                  <span className="inline-flex items-center gap-1">
+                    <span>Required for gift:</span>
+                    <ProjectCurrencyAmount amount={fundingShortageProject} symbolClassName="text-sm" />
+                  </span>
+                )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+              <p>
+                {language === "ar"
+                  ? `الرصيد الحالي بالدولار: $${Number(user?.balance || 0).toFixed(2)}`
+                  : `Current USD balance: $${Number(user?.balance || 0).toFixed(2)}`}
+              </p>
+              <p className="text-muted-foreground">
+                {language === "ar"
+                  ? `المبلغ المقترح للتحويل: $${fundingUsdNeeded.toFixed(2)}`
+                  : `Estimated USD needed to convert: $${fundingUsdNeeded.toFixed(2)}`}
+              </p>
+            </div>
+
+            <div>
+              <Label>{language === "ar" ? "مبلغ التحويل (USD)" : "Conversion Amount (USD)"}</Label>
+              <div className="flex items-center gap-2 mt-2">
+                <Input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={quickConvertAmount}
+                  onChange={(e) => setQuickConvertAmount(e.target.value)}
+                  data-testid="input-watch-popup-convert-amount"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setQuickConvertAmount(String(Math.max(Number(projectCurrencySettings?.minConversionAmount || 1), Number(fundingUsdNeeded.toFixed(2) || 0))))}
+                >
+                  {language === "ar" ? "اقتراح" : "Suggest"}
+                </Button>
+              </div>
+            </div>
+
+            {quickConvertAmountValue > Number(user?.balance || 0) && (
+              <p className="text-xs text-destructive">
+                {language === "ar" ? "الرصيد بالدولار غير كافٍ، قم بالإيداع أولًا." : "Insufficient USD balance, deposit first."}
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConvertDialog(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowConvertDialog(false);
+                setShowDepositDialog(true);
+              }}
+            >
+              {language === "ar" ? "فتح نافذة الإيداع" : "Open Deposit Popup"}
+            </Button>
+            <Button
+              onClick={() => quickConvertMutation.mutate(quickConvertAmount)}
+              disabled={quickConvertDisabled}
+              data-testid="button-watch-popup-quick-convert"
+            >
+              {quickConvertMutation.isPending ? t("common.loading") : (language === "ar" ? "تحويل الآن" : "Convert Now")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDepositDialog} onOpenChange={setShowDepositDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{language === "ar" ? "الرصيد غير كافٍ" : "Insufficient Balance"}</DialogTitle>
+            <DialogDescription>
+              {language === "ar"
+                ? "لا يوجد رصيد كافٍ للتحويل المطلوب لإرسال الهدية. يمكنك فتح نافذة الإيداع مباشرة."
+                : "You do not have enough balance to convert for this gift. Open deposit popup directly."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+            <p>
+              {language === "ar"
+                ? `الرصيد الحالي بالدولار: $${Number(user?.balance || 0).toFixed(2)}`
+                : `Current USD balance: $${Number(user?.balance || 0).toFixed(2)}`}
+            </p>
+            <p className="text-muted-foreground">
+              {language === "ar"
+                ? `الحد الأدنى المقترح للإيداع: $${Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0)).toFixed(2)}`
+                : `Suggested minimum deposit: $${Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0)).toFixed(2)}`}
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDepositDialog(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              onClick={() => {
+                const suggestedDeposit = Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0));
+                setShowDepositDialog(false);
+                setLocation(`/wallet?modal=deposit&amount=${suggestedDeposit.toFixed(2)}`);
+              }}
+              data-testid="button-watch-open-wallet-deposit"
+            >
+              {language === "ar" ? "فتح كارت الإيداع" : "Open Deposit Card"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {gameSession?.status === "finished" && (
         <Dialog open={true}>

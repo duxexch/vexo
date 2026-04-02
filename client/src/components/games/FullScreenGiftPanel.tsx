@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -56,7 +56,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
 interface FullScreenGiftPanelProps {
   open: boolean;
   onClose: () => void;
-  onSendGift: (giftId: string, playerId: string) => void;
+  onSendGift: (giftId: string, playerId: string, meta?: { price?: number; name?: string }) => void;
   player1Id?: string;
   player2Id?: string;
   player1Name?: string;
@@ -84,6 +84,7 @@ export function FullScreenGiftPanel({
   const [selectedGift, setSelectedGift] = useState<GiftDef | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const sendButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { data: giftCatalog = [] } = useQuery<Array<{
     id: string;
@@ -128,7 +129,10 @@ export function FullScreenGiftPanel({
   const handleSend = useCallback(() => {
     if (!selectedGift || !selectedPlayer || disabled) return;
     setSending(true);
-    onSendGift(selectedGift.id, selectedPlayer);
+    onSendGift(selectedGift.id, selectedPlayer, {
+      price: selectedGift.price,
+      name: selectedGift.name,
+    });
     // brief visual feedback
     setTimeout(() => {
       setSending(false);
@@ -140,6 +144,17 @@ export function FullScreenGiftPanel({
   // Auto-select lone player
   const autoPlayer = player1Id && !player2Id ? player1Id : player2Id && !player1Id ? player2Id : null;
   const effectivePlayer = selectedPlayer ?? autoPlayer;
+
+  useEffect(() => {
+    if (!open) return;
+
+    const rafId = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      sendButtonRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
+
+    return () => window.cancelAnimationFrame(rafId);
+  }, [open]);
 
   if (!open) return null;
 
@@ -287,6 +302,7 @@ export function FullScreenGiftPanel({
         {/* ─── Bottom: Send bar ─── */}
         <div className="px-4 py-4">
           <Button
+            ref={sendButtonRef}
             onClick={handleSend}
             disabled={!selectedGift || !effectivePlayer || disabled || sending}
             className={cn(

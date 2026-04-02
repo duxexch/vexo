@@ -258,8 +258,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const t = useCallback((key: string, params?: Record<string, string | number>): string => {
-    const value = translations[key] || en[key] || key;
-    if (language !== 'en' && !translations[key] && en[key]) {
+    const localizedValue = translations[key];
+    const hasValidLocalizedValue = typeof localizedValue === 'string'
+      && localizedValue.trim().length > 0
+      && localizedValue !== key;
+    const value = hasValidLocalizedValue ? localizedValue : (en[key] || key);
+
+    if (language !== 'en' && !hasValidLocalizedValue && en[key]) {
       trackMissingTranslation(language, key);
       if (import.meta.env.DEV && !loggedMissingKeys.has(`${language}:${key}`)) {
         loggedMissingKeys.add(`${language}:${key}`);
@@ -382,9 +387,8 @@ export function LanguageSwitcher() {
                     setOpen(false);
                     setSearch('');
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm hover-elevate ${
-                    language === lang.code ? 'bg-primary/10 text-primary' : ''
-                  }`}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm hover-elevate ${language === lang.code ? 'bg-primary/10 text-primary' : ''
+                    }`}
                   data-testid={`button-lang-${lang.code}`}
                 >
                   <span className="text-lg">{lang.flag}</span>

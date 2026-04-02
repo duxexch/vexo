@@ -1,7 +1,7 @@
 import { WebSocket } from "ws";
 import { db } from "../../db";
-import { users, challengeGameSessions, challengeChatMessages, challenges, transactions, gameplaySettings } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { users, challengeGameSessions, challengeChatMessages, challenges, transactions, gameplaySettings, projectCurrencyWallets, projectCurrencyLedger } from "@shared/schema";
+import { eq, and, sql } from "drizzle-orm";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import { filterMessage } from "../../lib/word-filter";
 import { storage } from "../../storage";
@@ -124,11 +124,6 @@ export async function handleGiftToPlayer(ws: AuthenticatedSocket, data: any): Pr
     .from(gameplaySettings)
     .where(eq(gameplaySettings.key, 'play_gift_currency_mode'))
     .limit(1);
-  const enforceProjectOnly = !currencyModeSetting || currencyModeSetting.value !== 'mixed';
-  if (enforceProjectOnly) {
-    ws.send(JSON.stringify({ type: "challenge_error", error: "Direct real-money gifts are disabled. Purchase gifts with project currency first." }));
-    return;
-  }
 
   // SECURITY: Validate gift exists in database and get server-side price/name
   const giftItem = await storage.getGiftFromCatalog(giftId);
@@ -143,6 +138,7 @@ export async function handleGiftToPlayer(ws: AuthenticatedSocket, data: any): Pr
     return;
   }
 
+  const enforceProjectOnly = !currencyModeSetting || currencyModeSetting.value !== 'mixed';
   const recipientEarnings = Math.min(giftPrice, Math.max(0, (giftItem.coinValue || 1) * 0.01));
   const platformFee = Math.max(0, giftPrice - recipientEarnings);
   const normalizedIdempotencyKey = typeof idempotencyKey === "string"
@@ -151,6 +147,187 @@ export async function handleGiftToPlayer(ws: AuthenticatedSocket, data: any): Pr
   const idempotencyReferenceId = normalizedIdempotencyKey
     ? `challenge_live_gift_idem:${challengeId}:${ws.userId}:${normalizedIdempotencyKey}`
     : undefined;
+
+  if (enforceProjectOnly) {
+    const projectTxResult = await db.transaction(async (tx) => {
+      if (idempotencyReferenceId) {
+        const [existingLedger] = await tx.select({ id: projectCurrencyLedger.id })
+          .from(projectCurrencyLedger)
+          .where(and(
+            eq(projectCurrencyLedger.referenceId, idempotencyReferenceId),
+            eq(projectCurrencyLedger.userId, ws.userId!),
+          ))
+          .for('update')
+          .limit(1);
+
+        if (existingLedger) {
+          return { success: false as const, error: 'Gift already processed' };
+        }
+      }
+
+      await tx.execute(sql`
+        INSERT INTO project_currency_wallets (user_id)
+        VALUES (${ws.userId!})
+        ON CONFLICT (user_id) DO NOTHING
+      `);
+
+      await tx.execute(sql`
+        INSERT INTO project_currency_wallets (user_id)
+        VALUES (${recipientId})
+        ON CONFLICT (user_id) DO NOTHING
+      `);
+
+      const [senderWallet] = await tx.select()
+        .from(projectCurrencyWallets)
+        .where(eq(projectCurrencyWallets.userId, ws.userId!))
+        .for('update');
+
+      const [recipientWallet] = await tx.select()
+        .from(projectCurrencyWallets)
+        .where(eq(projectCurrencyWallets.userId, recipientId))
+        .for('update');
+
+      if (!senderWallet || !recipientWallet) {
+        return { success: false as const, error: 'Project currency wallet not found' };
+      }
+
+      let senderEarned = parseFloat(senderWallet.earnedBalance || '0');
+      let senderPurchased = parseFloat(senderWallet.purchasedBalance || '0');
+      const senderTotalBefore = senderEarned + senderPurchased;
+
+      if (senderTotalBefore < giftPrice) {
+        return {
+          success: false as const,
+          error: 'Insufficient project currency balance',
+          code: 'project_currency_required' as const,
+          projectBalance: senderTotalBefore,
+          shortfallProjectAmount: Math.max(0, giftPrice - senderTotalBefore),
+        };
+      }
+
+      let remaining = giftPrice;
+      if (senderEarned >= remaining) {
+        senderEarned -= remaining;
+        remaining = 0;
+      } else {
+        remaining -= senderEarned;
+        senderEarned = 0;
+        senderPurchased -= remaining;
+      }
+
+      const senderTotalAfter = (senderEarned + senderPurchased).toFixed(2);
+
+      await tx.update(projectCurrencyWallets)
+        .set({
+          earnedBalance: senderEarned.toFixed(2),
+          purchasedBalance: senderPurchased.toFixed(2),
+          totalBalance: senderTotalAfter,
+          totalSpent: (parseFloat(senderWallet.totalSpent || '0') + giftPrice).toFixed(2),
+          updatedAt: new Date(),
+        })
+        .where(eq(projectCurrencyWallets.id, senderWallet.id));
+
+      const recipientBalanceBefore = parseFloat(recipientWallet.totalBalance || '0');
+      const recipientEarnedBefore = parseFloat(recipientWallet.earnedBalance || '0');
+      const recipientTotalAfter = (recipientBalanceBefore + recipientEarnings).toFixed(2);
+
+      await tx.update(projectCurrencyWallets)
+        .set({
+          earnedBalance: (recipientEarnedBefore + recipientEarnings).toFixed(2),
+          totalBalance: recipientTotalAfter,
+          totalEarned: (parseFloat(recipientWallet.totalEarned || '0') + recipientEarnings).toFixed(2),
+          updatedAt: new Date(),
+        })
+        .where(eq(projectCurrencyWallets.id, recipientWallet.id));
+
+      const { challengeGifts } = await import("@shared/schema");
+      const [giftRecord] = await tx.insert(challengeGifts).values({
+        challengeId,
+        senderId: ws.userId!,
+        recipientId,
+        giftId,
+        quantity: 1,
+        message: null,
+      }).returning();
+
+      const projectGiftReferenceId = idempotencyReferenceId || `challenge_live_gift_project:${giftRecord.id}`;
+
+      await tx.insert(projectCurrencyLedger).values({
+        userId: ws.userId!,
+        walletId: senderWallet.id,
+        type: 'admin_adjustment',
+        amount: (-giftPrice).toFixed(2),
+        balanceBefore: senderTotalBefore.toFixed(2),
+        balanceAfter: senderTotalAfter,
+        referenceId: projectGiftReferenceId,
+        referenceType: 'gift_send',
+        description: `Sent direct gift ${giftItem.name} to ${recipientId} in challenge ${challengeId}`,
+      });
+
+      await tx.insert(projectCurrencyLedger).values({
+        userId: recipientId,
+        walletId: recipientWallet.id,
+        type: 'bonus',
+        amount: recipientEarnings.toFixed(2),
+        balanceBefore: recipientBalanceBefore.toFixed(2),
+        balanceAfter: recipientTotalAfter,
+        referenceId: projectGiftReferenceId,
+        referenceType: 'gift_reward',
+        description: `Received direct gift ${giftItem.name} from ${ws.userId} in challenge ${challengeId}`,
+      });
+
+      const [senderUser] = await tx.select({ username: users.username })
+        .from(users)
+        .where(eq(users.id, ws.userId!))
+        .limit(1);
+
+      return {
+        success: true as const,
+        senderUsername: senderUser?.username || 'Supporter',
+      };
+    });
+
+    if (!projectTxResult.success) {
+      if ((projectTxResult as { code?: string }).code === 'project_currency_required') {
+        const payload = projectTxResult as {
+          error: string;
+          projectBalance?: number;
+          shortfallProjectAmount?: number;
+        };
+
+        ws.send(JSON.stringify({
+          type: "challenge_error",
+          code: "project_currency_required",
+          error: payload.error || "Direct real-money gifts are disabled. Purchase gifts with project currency first.",
+          requiredProjectAmount: giftPrice,
+          giftPrice,
+          projectBalance: payload.projectBalance ?? 0,
+          shortfallProjectAmount: payload.shortfallProjectAmount ?? giftPrice,
+          giftId: giftItem.id,
+        }));
+      } else {
+        ws.send(JSON.stringify({ type: "challenge_error", error: projectTxResult.error }));
+      }
+      return;
+    }
+
+    [...room.players.values(), ...room.spectators.values()].forEach((socket) => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          type: "gift_received",
+          gift: {
+            id: giftItem.id,
+            senderId: ws.userId,
+            senderName: projectTxResult.senderUsername,
+            recipientId,
+            giftName: giftItem.name,
+            amount: giftPrice,
+          }
+        }));
+      }
+    });
+    return;
+  }
 
   // SECURITY: Atomic balance deduction + credit + fee records — prevent double-spend
   const txResult = await db.transaction(async (tx) => {
