@@ -2,6 +2,12 @@
 
 This runbook standardizes local/prod-like runs and keeps port expectations explicit.
 
+## 0. Primary Production Runtime
+
+- Primary production runtime: Kubernetes.
+- Docker Compose is fallback/legacy only when Kubernetes is unavailable.
+- Local production-equivalent deployment should use Docker Desktop Kubernetes and [scripts/k8s-deploy-prod.ps1](scripts/k8s-deploy-prod.ps1).
+
 ## 1. Standard Port Policy
 
 - Application runtime default: `3001`.
@@ -18,7 +24,21 @@ This runbook standardizes local/prod-like runs and keeps port expectations expli
 - Direct server start (if needed):
   - `npx tsx server/index.ts`
 
-## 3. Local Production-like Start with Docker
+## 3. Local Production-like Start with Kubernetes (Primary)
+
+Use Docker Desktop Kubernetes as the default production path.
+
+1. Ensure Kubernetes is enabled in Docker Desktop.
+2. Ensure `.env` exists with production keys (secrets are created from it).
+3. Deploy the stack:
+
+- `pwsh -File scripts/k8s-deploy-prod.ps1`
+
+1. Verify health:
+
+- `curl -s -o NUL -w "%{http_code}" http://localhost:30081/api/health`
+
+## 4. Local Production-like Start with Docker Compose (Fallback)
 
 Use compose profile with production-oriented env values and mapped host port 3001.
 
@@ -29,15 +49,15 @@ Typical flow:
 
 - `docker compose -f docker-compose.yml build`
 
-3. Start stack:
+1. Start stack:
 
 - `docker compose -f docker-compose.yml up -d`
 
-4. Verify health:
+1. Verify health:
 
 - `curl -s -o NUL -w "%{http_code}" http://localhost:3001/api/health`
 
-## 4. Main Infra Files
+## 5. Main Infra Files
 
 - `docker-compose.yml` (local/ops stack)
 - `docker-compose.prod.yml` (production-oriented stack)
@@ -46,7 +66,7 @@ Typical flow:
 - `deploy/nginx.conf` (nginx reverse proxy model)
 - `deploy/ecosystem.config.js` (PM2 process model)
 
-## 5. Startup Safety Notes
+## 6. Startup Safety Notes
 
 Entrypoint responsibilities include:
 
@@ -56,13 +76,13 @@ Entrypoint responsibilities include:
 - optional seeding path
 - controlled app start with signal handling
 
-## 6. Cluster and High Concurrency
+## 7. Cluster and High Concurrency
 
 - Cluster entry: `server/cluster.ts`.
 - Sticky distribution is used to preserve websocket session affinity.
 - If proxy is used, keep sticky behavior and websocket upgrade headers consistent.
 
-## 7. Pre-Deployment Checklist
+## 8. Pre-Deployment Checklist
 
 - Type check passes.
 - Build succeeds.
@@ -71,7 +91,7 @@ Entrypoint responsibilities include:
 - Required secrets are present and valid length.
 - Docker services report healthy states.
 
-## 8. Incident Quick Triage
+## 9. Incident Quick Triage
 
 If app is not reachable on 3001:
 

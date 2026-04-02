@@ -1,0 +1,591 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vex-prod
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: vex-prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: vex-prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-data
+  namespace: vex-prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ai-agent-data
+  namespace: vex-prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-uploads
+  namespace: vex-prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-logs
+  namespace: vex-prod
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vex-db
+  namespace: vex-prod
+spec:
+  selector:
+    app: vex-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vex-db
+  namespace: vex-prod
+spec:
+  serviceName: vex-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vex-db
+  template:
+    metadata:
+      labels:
+        app: vex-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: POSTGRES_DB
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+              name: postgres
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vex-redis
+  namespace: vex-prod
+spec:
+  selector:
+    app: vex-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vex-redis
+  namespace: vex-prod
+spec:
+  serviceName: vex-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vex-redis
+  template:
+    metadata:
+      labels:
+        app: vex-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - >-
+              exec redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass "$REDIS_PASSWORD"
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: REDIS_PASSWORD
+          ports:
+            - containerPort: 6379
+              name: redis
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli -a "$REDIS_PASSWORD" ping
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli -a "$REDIS_PASSWORD" ping
+            initialDelaySeconds: 25
+            periodSeconds: 15
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vex-minio
+  namespace: vex-prod
+spec:
+  selector:
+    app: vex-minio
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: 9000
+    - name: console
+      port: 9001
+      targetPort: 9001
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vex-minio
+  namespace: vex-prod
+spec:
+  serviceName: vex-minio
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vex-minio
+  template:
+    metadata:
+      labels:
+        app: vex-minio
+    spec:
+      containers:
+        - name: minio
+          image: minio/minio:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - server
+            - /data
+            - --console-address
+            - :9001
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: MINIO_ROOT_PASSWORD
+          ports:
+            - containerPort: 9000
+              name: s3
+            - containerPort: 9001
+              name: console
+          volumeMounts:
+            - name: minio-data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: 9000
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: 9000
+            initialDelaySeconds: 45
+            periodSeconds: 20
+      volumes:
+        - name: minio-data
+          persistentVolumeClaim:
+            claimName: minio-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vex-ai-agent
+  namespace: vex-prod
+spec:
+  selector:
+    app: vex-ai-agent
+  ports:
+    - name: http
+      port: 3100
+      targetPort: 3100
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vex-ai-agent
+  namespace: vex-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vex-ai-agent
+  template:
+    metadata:
+      labels:
+        app: vex-ai-agent
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: desktop-worker
+      containers:
+        - name: ai-agent
+          image: vixo-ai-agent:k8s
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3100"
+            - name: AI_AGENT_DATA_DIR
+              value: /app/data
+            - name: AI_AGENT_SHARED_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: AI_AGENT_SHARED_TOKEN
+                  optional: true
+          ports:
+            - containerPort: 3100
+              name: http
+          volumeMounts:
+            - name: ai-agent-data
+              mountPath: /app/data
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3100
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3100
+            initialDelaySeconds: 40
+            periodSeconds: 20
+      volumes:
+        - name: ai-agent-data
+          persistentVolumeClaim:
+            claimName: ai-agent-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vex-app
+  namespace: vex-prod
+spec:
+  type: NodePort
+  selector:
+    app: vex-app
+  ports:
+    - name: http
+      port: 3001
+      targetPort: 3001
+      nodePort: 30081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vex-app
+  namespace: vex-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vex-app
+  template:
+    metadata:
+      labels:
+        app: vex-app
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: desktop-worker
+      containers:
+        - name: app
+          image: vixo-app:k8s
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3001"
+            - name: TZ
+              value: UTC
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: POSTGRES_DB
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: REDIS_PASSWORD
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: MINIO_ROOT_PASSWORD
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: SESSION_SECRET
+            - name: JWT_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: JWT_SIGNING_KEY
+            - name: ADMIN_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: ADMIN_JWT_SECRET
+            - name: ADMIN_BOOTSTRAP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: ADMIN_BOOTSTRAP_USERNAME
+                  optional: true
+            - name: ADMIN_BOOTSTRAP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: ADMIN_BOOTSTRAP_PASSWORD
+            - name: ADMIN_BOOTSTRAP_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: ADMIN_BOOTSTRAP_EMAIL
+                  optional: true
+            - name: ADMIN_RECOVERY_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: ADMIN_RECOVERY_EMAIL
+                  optional: true
+            - name: AI_AGENT_ENABLED
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: AI_AGENT_ENABLED
+                  optional: true
+            - name: AI_AGENT_SHARED_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: AI_AGENT_SHARED_TOKEN
+                  optional: true
+            - name: AI_AGENT_TIMEOUT_MS
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: AI_AGENT_TIMEOUT_MS
+                  optional: true
+            - name: ALLOW_FORCE_MIGRATIONS
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: ALLOW_FORCE_MIGRATIONS
+                  optional: true
+            - name: SKIP_MIGRATIONS
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: SKIP_MIGRATIONS
+                  optional: true
+            - name: SEED_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: SEED_DATABASE
+                  optional: true
+            - name: DB_SSL
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: DB_SSL
+                  optional: true
+            - name: DB_POOL_MAX
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: DB_POOL_MAX
+                  optional: true
+            - name: DB_POOL_MIN
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: DB_POOL_MIN
+                  optional: true
+            - name: DATABASE_URL
+              value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@vex-db:5432/$(POSTGRES_DB)
+            - name: REDIS_URL
+              value: redis://:$(REDIS_PASSWORD)@vex-redis:6379
+            - name: AI_AGENT_BASE_URL
+              value: http://vex-ai-agent:3100
+            - name: MINIO_ENDPOINT
+              value: vex-minio
+            - name: MINIO_PORT
+              value: "9000"
+            - name: MINIO_ACCESS_KEY
+              value: $(MINIO_ROOT_USER)
+            - name: MINIO_SECRET_KEY
+              value: $(MINIO_ROOT_PASSWORD)
+            - name: MINIO_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: MINIO_BUCKET
+                  optional: true
+            - name: MINIO_USE_SSL
+              value: "false"
+            - name: JWT_USER_SECRET
+              value: $(JWT_SIGNING_KEY)
+            - name: JWT_ADMIN_SECRET
+              value: $(ADMIN_JWT_SECRET)
+          ports:
+            - containerPort: 3001
+              name: http
+          volumeMounts:
+            - name: app-uploads
+              mountPath: /app/uploads
+            - name: app-logs
+              mountPath: /app/logs
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            initialDelaySeconds: 60
+            periodSeconds: 20
+      volumes:
+        - name: app-uploads
+          persistentVolumeClaim:
+            claimName: app-uploads
+        - name: app-logs
+          persistentVolumeClaim:
+            claimName: app-logs

@@ -1,6 +1,7 @@
 {
     "recommendations": [
         "redis.redis-for-vscode",
-        "amitpatole.mcp-marketplace"
+        "amitpatole.mcp-marketplace",
+        "ms-kubernetes-tools.vscode-kubernetes-tools"
     ]
 }

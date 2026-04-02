@@ -165,14 +165,14 @@ export function NotificationBell() {
           {hasUnread && (
             <Badge
               variant="destructive"
-              className={`absolute -top-1 -end-1 h-5 min-w-5 p-0 flex items-center justify-center text-xs no-default-hover-elevate no-default-active-elevate ${hasNewPulse ? 'animate-pulse' : ''}`}
+              className={`absolute top-0.5 end-0.5 h-5 min-w-5 p-0 flex items-center justify-center text-xs no-default-hover-elevate no-default-active-elevate ${hasNewPulse ? 'animate-pulse' : ''}`}
               data-testid="badge-unread-count"
             >
               {unreadCount > 99 ? "99+" : unreadCount}
             </Badge>
           )}
           {hasNewPulse && hasUnread && (
-            <span className="absolute -top-1 -end-1 h-5 w-5 rounded-full bg-destructive/40 animate-ping" />
+            <span className="absolute top-0.5 end-0.5 h-5 w-5 rounded-full bg-destructive/40 animate-ping" />
           )}
         </Button>
       </PopoverTrigger>
@@ -218,9 +218,8 @@ export function NotificationBell() {
                   <div key={notification.id}>
                     <button
                       onClick={() => handleNotificationClick(notification)}
-                      className={`w-full text-start p-3 hover-elevate transition-colors ${
-                        notification.isRead ? "opacity-70" : "bg-muted/30"
-                      }`}
+                      className={`w-full text-start p-3 hover-elevate transition-colors ${notification.isRead ? "opacity-70" : "bg-muted/30"
+                        }`}
                       data-testid={`notification-item-${notification.id}`}
                     >
                       <div className="flex gap-3">
@@ -232,9 +231,8 @@ export function NotificationBell() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <p
-                              className={`text-sm font-medium truncate ${
-                                notification.isRead ? "" : "font-semibold"
-                              }`}
+                              className={`text-sm font-medium truncate ${notification.isRead ? "" : "font-semibold"
+                                }`}
                               data-testid={`notification-title-${notification.id}`}
                             >
                               {getNotificationTitle(notification)}

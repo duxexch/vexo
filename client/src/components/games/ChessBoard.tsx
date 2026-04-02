@@ -46,6 +46,12 @@ const INITIAL_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
 
+function looksLikeFen(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || !trimmed.includes("/")) return false;
+  return /^[prnbqkPRNBQK1-8\/]+(?:\s+[wb])?/.test(trimmed);
+}
+
 function parseFEN(fen: string): { board: string[][]; activeColor: string; castling: string; enPassant: string } {
   const parts = fen.split(" ");
   const [position] = parts;
@@ -345,14 +351,34 @@ export function ChessBoard({
   const { language } = useI18n();
 
   const fenData = useMemo(() => {
-    try {
-      if (gameState) {
-        const parsed = JSON.parse(gameState);
-        return parseFEN(parsed.fen || INITIAL_FEN);
-      }
-    } catch {
+    if (!gameState) {
       return parseFEN(INITIAL_FEN);
     }
+
+    const rawState = gameState.trim();
+
+    // Accept direct FEN strings (used by watch/spectator flows).
+    if (looksLikeFen(rawState)) {
+      return parseFEN(rawState);
+    }
+
+    try {
+      const parsed = JSON.parse(rawState);
+
+      if (typeof parsed === "string" && looksLikeFen(parsed)) {
+        return parseFEN(parsed);
+      }
+
+      if (parsed && typeof parsed === "object") {
+        const maybeFen = (parsed as { fen?: unknown }).fen;
+        if (typeof maybeFen === "string" && looksLikeFen(maybeFen)) {
+          return parseFEN(maybeFen);
+        }
+      }
+    } catch {
+      // Fall through to initial board if payload is malformed.
+    }
+
     return parseFEN(INITIAL_FEN);
   }, [gameState]);
 

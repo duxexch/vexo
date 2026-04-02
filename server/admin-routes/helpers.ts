@@ -100,6 +100,84 @@ export const adminAuthMiddleware = async (req: AdminRequest, res: Response, next
   }
 };
 
+// Keep audit logging resilient across enum drifts between runtime DB and code.
+// The DB in some environments still uses a narrower enum set.
+const DB_SAFE_AUDIT_ACTIONS = new Set<string>([
+  "login",
+  "logout",
+  "user_update",
+  "user_ban",
+  "user_suspend",
+  "user_balance_adjust",
+  "reward_sent",
+  "dispute_resolve",
+  "theme_change",
+  "section_toggle",
+  "settings_update",
+  "announcement_create",
+  "announcement_update",
+  "game_update",
+  "promo_create",
+  "p2p_ban",
+  "p2p_unban",
+]);
+
+function normalizeAdminAuditAction(action: string): AdminAuditAction {
+  const normalized = (action || "").trim().toLowerCase();
+
+  if (DB_SAFE_AUDIT_ACTIONS.has(normalized)) {
+    return normalized as AdminAuditAction;
+  }
+
+  if (normalized.includes("logout")) return "logout" as AdminAuditAction;
+  if (normalized.includes("login") || normalized.includes("auth")) return "login" as AdminAuditAction;
+
+  if (normalized.startsWith("user_")) {
+    if (normalized.includes("balance")) return "user_balance_adjust" as AdminAuditAction;
+    if (normalized.includes("suspend")) return "user_suspend" as AdminAuditAction;
+    if (normalized.includes("ban")) return "user_ban" as AdminAuditAction;
+    return "user_update" as AdminAuditAction;
+  }
+
+  if (normalized.includes("reward")) return "reward_sent" as AdminAuditAction;
+  if (normalized.includes("dispute")) return "dispute_resolve" as AdminAuditAction;
+  if (normalized.includes("theme")) return "theme_change" as AdminAuditAction;
+  if (normalized.includes("section") || normalized.includes("toggle")) return "section_toggle" as AdminAuditAction;
+
+  if (normalized.includes("announcement")) {
+    return normalized.includes("create")
+      ? ("announcement_create" as AdminAuditAction)
+      : ("announcement_update" as AdminAuditAction);
+  }
+
+  if (normalized.includes("game")) return "game_update" as AdminAuditAction;
+  if (normalized.includes("promo")) return "promo_create" as AdminAuditAction;
+
+  if (normalized.startsWith("p2p_")) {
+    if (normalized.includes("ban")) return "p2p_ban" as AdminAuditAction;
+    if (normalized.includes("unban")) return "p2p_unban" as AdminAuditAction;
+  }
+
+  return "settings_update" as AdminAuditAction;
+}
+
+function mergeOriginalActionMetadata(metadata: string | undefined, originalAction: string): string {
+  if (!metadata) {
+    return JSON.stringify({ originalAction });
+  }
+
+  try {
+    const parsed = JSON.parse(metadata) as Record<string, unknown>;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return JSON.stringify({ ...parsed, originalAction });
+    }
+  } catch {
+    // Fall back to wrapping plain text metadata.
+  }
+
+  return JSON.stringify({ originalAction, metadata });
+}
+
 export async function logAdminAction(
   adminId: string,
   action: string,
@@ -109,15 +187,21 @@ export async function logAdminAction(
   req: Request
 ) {
   try {
+    const normalizedAction = normalizeAdminAuditAction(action);
+    const normalizedKey = (action || "").trim().toLowerCase();
+    const metadata = normalizedAction === normalizedKey
+      ? details.metadata
+      : mergeOriginalActionMetadata(details.metadata, action);
+
     await db.insert(adminAuditLogs).values({
       adminId,
-      action: action as AdminAuditAction,
+      action: normalizedAction,
       entityType,
       entityId,
       previousValue: details.previousValue,
       newValue: details.newValue,
       reason: details.reason,
-      metadata: details.metadata,
+      metadata,
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"],
     });
