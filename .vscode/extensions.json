@@ -1,5 +1,6 @@
 {
     "recommendations": [
-        "redis.redis-for-vscode"
+        "redis.redis-for-vscode",
+        "amitpatole.mcp-marketplace"
     ]
 }
