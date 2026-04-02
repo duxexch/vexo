@@ -19,15 +19,15 @@ function normalizeAmount(amount: string | number): number {
 
 export function ProjectCurrencySymbol({ className }: ProjectCurrencySymbolProps) {
     return (
-        <span
-            aria-label="Project currency symbol"
+        <img
+            src="/icons/vxc-currency-icon.png"
+            alt="VXC"
+            draggable={false}
             className={cn(
-                "inline-flex items-center justify-center leading-none font-black italic lowercase text-transparent bg-clip-text bg-gradient-to-b from-emerald-300 via-emerald-500 to-emerald-700 drop-shadow-[0_0_6px_rgba(16,185,129,0.45)]",
+                "inline-block h-[1em] w-[1em] min-h-[14px] min-w-[14px] rounded-[0.2em] object-contain align-[-0.12em] shadow-[0_0_6px_rgba(16,185,129,0.35)]",
                 className,
             )}
-        >
-            v
-        </span>
+        />
     );
 }
 
@@ -42,7 +42,7 @@ export function ProjectCurrencyAmount({
 
     return (
         <span className={cn("inline-flex items-center gap-1", className)}>
-            <ProjectCurrencySymbol className={cn("text-base", symbolClassName)} />
+            <ProjectCurrencySymbol className={cn("text-sm", symbolClassName)} />
             <span className={amountClassName}>{safeAmount.toFixed(fractionDigits)}</span>
         </span>
     );
