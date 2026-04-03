@@ -130,6 +130,7 @@ const AdminSupportSettingsPage = lazy(() => import("@/pages/admin/admin-support-
 const AdminTournamentsPage = lazy(() => import("@/pages/admin/admin-tournaments"));
 const AdminFreePlayPage = lazy(() => import("@/pages/admin/admin-free-play"));
 const AdminAuditLogsPage = lazy(() => import("@/pages/admin/admin-audit-logs"));
+const AdminPaymentSecurityPage = lazy(() => import("@/pages/admin/admin-payment-security"));
 const AdminChallengeSettingsPage = lazy(() => import("@/pages/admin/admin-challenge-settings"));
 const AdminChallengesPage = lazy(() => import("@/pages/admin/admin-challenges"));
 const AdminChatPage = lazy(() => import("@/pages/admin/admin-chat"));
@@ -575,6 +576,9 @@ function AdminRouter() {
           </Route>
           <Route path="/admin/audit-logs">
             <AdminLayout><AdminAuditLogsPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/payment-security">
+            <AdminLayout><AdminPaymentSecurityPage /></AdminLayout>
           </Route>
         </Switch>
       </Suspense>

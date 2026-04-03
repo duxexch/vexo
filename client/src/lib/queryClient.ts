@@ -9,7 +9,7 @@ async function throwIfResNotOk(res: Response) {
 
 function getAuthHeaders(url: string): Record<string, string> {
   const headers: Record<string, string> = {};
-  
+
   // For admin endpoints, use adminToken
   if (url.includes("/api/admin/")) {
     const adminToken = localStorage.getItem("adminToken");
@@ -23,7 +23,7 @@ function getAuthHeaders(url: string): Record<string, string> {
       headers["Authorization"] = `Bearer ${token}`;
     }
   }
-  
+
   return headers;
 }
 
@@ -31,13 +31,17 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
+  options?: { headers?: Record<string, string> },
 ): Promise<Response> {
-  const headers = getAuthHeaders(url);
-  
-  if (data) {
+  const headers = {
+    ...getAuthHeaders(url),
+    ...(options?.headers || {}),
+  };
+
+  if (data && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
-  
+
   const res = await fetch(url, {
     method,
     headers,
@@ -54,22 +58,22 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const url = queryKey[0] as string;
-    const headers = getAuthHeaders(url);
-    
-    const res = await fetch(url, {
-      credentials: "include",
-      headers,
-    });
+    async ({ queryKey }) => {
+      const url = queryKey[0] as string;
+      const headers = getAuthHeaders(url);
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
-    }
+      const res = await fetch(url, {
+        credentials: "include",
+        headers,
+      });
 
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
+      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
+        return null;
+      }
+
+      await throwIfResNotOk(res);
+      return await res.json();
+    };
 
 export const queryClient = new QueryClient({
   defaultOptions: {

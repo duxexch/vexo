@@ -24,6 +24,7 @@ import {
   Users,
   Settings,
   Shield,
+  ShieldAlert,
   BarChart3,
   AlertTriangle,
   LogOut,
@@ -94,6 +95,7 @@ function AdminSidebar() {
     { title: "ID Verification", url: "/admin/id-verification", icon: IdCard, hasBadge: true },
     { title: "Support Contacts", url: "/admin/support", icon: Headset },
     { title: "Anti-Cheat", url: "/admin/anti-cheat", icon: Shield },
+    { title: "Payment Security", url: "/admin/payment-security", icon: ShieldAlert, hasBadge: true },
     { title: "Chat Management", url: "/admin/chat-management", icon: MessageCircle },
     { title: "SAM9 Control", url: "/admin/sam9", icon: Bot },
     { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
@@ -136,23 +138,23 @@ function AdminSidebar() {
                 const count = item.hasBadge ? getSectionCount(item.url) : 0;
                 const isActive = location === item.url;
                 return (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton
-                    isActive={isActive}
-                    onClick={() => handleNavClick(item.url)}
-                    data-testid={`admin-link-${item.title.toLowerCase().replace(' ', '-')}`}
-                  >
-                    <div className="relative">
-                      <item.icon />
-                      {count > 0 && !isActive && (
-                        <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none px-1 animate-in fade-in zoom-in duration-200">
-                          {count > 99 ? "99+" : count}
-                        </span>
-                      )}
-                    </div>
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                  <SidebarMenuItem key={item.url}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      onClick={() => handleNavClick(item.url)}
+                      data-testid={`admin-link-${item.title.toLowerCase().replace(' ', '-')}`}
+                    >
+                      <div className="relative">
+                        <item.icon />
+                        {count > 0 && !isActive && (
+                          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none px-1 animate-in fade-in zoom-in duration-200">
+                            {count > 99 ? "99+" : count}
+                          </span>
+                        )}
+                      </div>
+                      <span>{item.title}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 );
               })}
             </SidebarMenu>
@@ -234,17 +236,17 @@ function LoginFallback() {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  
+
   useEffect(() => {
     const token = localStorage.getItem("adminToken");
     setIsAuthenticated(!!token);
   }, []);
-  
+
   // Show loading state while checking auth
   if (isAuthenticated === null) {
     return <LoginFallback />;
   }
-  
+
   // If no token, render login page directly (no Redirect, no navigation loops)
   if (!isAuthenticated) {
     return (

@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import type { CountryPaymentMethod } from "@shared/schema";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
 import { BackButton } from "@/components/BackButton";
@@ -258,7 +259,7 @@ export default function ChallengeWatchPage() {
   );
 
   const quickConvertMutation = useMutation({
-    mutationFn: (amount: string) => apiRequest("POST", "/api/project-currency/convert", { amount }),
+    mutationFn: (amount: string) => apiRequestWithPaymentToken("POST", "/api/project-currency/convert", { amount }, "convert"),
     onSuccess: async (res: Response) => {
       const payload = await res.json().catch(() => ({} as { status?: string }));
       await refetchProjectWallet();

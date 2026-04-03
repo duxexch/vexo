@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useGameSounds } from "@/hooks/use-game-sounds";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
+import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import type { CountryPaymentMethod } from "@shared/schema";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
 import {
@@ -320,7 +321,7 @@ export default function ChallengeGamePage() {
   );
 
   const quickConvertMutation = useMutation({
-    mutationFn: (amount: string) => apiRequest("POST", "/api/project-currency/convert", { amount }),
+    mutationFn: (amount: string) => apiRequestWithPaymentToken("POST", "/api/project-currency/convert", { amount }, "convert"),
     onSuccess: async (res: Response) => {
       const payload = await res.json().catch(() => ({} as { status?: string }));
       await refetchProjectWallet();
@@ -1488,6 +1489,7 @@ export default function ChallengeGamePage() {
   const isProjectChallengeCurrency = challengeCurrencyType === "project";
   const challengeBetAmountValue = Number.parseFloat(String(challenge.betAmount || 0));
 
+  const isDominoGame = challenge.gameType === "domino";
   const isTeamGame = challenge.gameType === "tarneeb" || challenge.gameType === "baloot";
   const playerIds = [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id].filter(Boolean);
   const mySeatIndex = playerIds.indexOf(user?.id || "");
@@ -1553,31 +1555,33 @@ export default function ChallengeGamePage() {
           </header>
 
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-            <div className="flex-1 p-2 sm:p-4 flex flex-col items-center justify-center overflow-y-auto relative">
-              <div className="w-full max-w-lg mb-4">
-                <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10">
-                      <AvatarImage src={opponent?.avatarUrl} />
-                      <AvatarFallback>{opponent?.username?.[0]?.toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium">{opponent?.username || "Waiting..."}</p>
-                      {opponent?.rating && (
-                        <p className="text-xs text-muted-foreground">
-                          {opponent.rating.wins}W / {opponent.rating.losses}L
-                        </p>
-                      )}
+            <div className={`flex-1 p-2 sm:p-4 flex flex-col items-center relative ${isDominoGame ? "justify-start overflow-hidden" : "justify-center overflow-y-auto"}`}>
+              {!isDominoGame && (
+                <div className="w-full max-w-lg mb-4">
+                  <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={opponent?.avatarUrl} />
+                        <AvatarFallback>{opponent?.username?.[0]?.toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium">{opponent?.username || "Waiting..."}</p>
+                        {opponent?.rating && (
+                          <p className="text-xs text-muted-foreground">
+                            {opponent.rating.wins}W / {opponent.rating.losses}L
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className={`font-mono text-lg ${opponentTimeRemaining < 30 ? "text-destructive" : ""}`}>
+                        {formatTime(opponentTimeRemaining)}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className={`font-mono text-lg ${opponentTimeRemaining < 30 ? "text-destructive" : ""}`}>
-                      {formatTime(opponentTimeRemaining)}
-                    </span>
-                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="relative">
                 {receivedGifts.map((gift) => (
@@ -1666,38 +1670,40 @@ export default function ChallengeGamePage() {
                 )}
               </div>
 
-              <div className="w-full max-w-lg mt-4">
-                <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 ring-2 ring-primary">
-                      <AvatarImage src={user?.profilePicture || undefined} />
-                      <AvatarFallback>{user?.username?.[0]?.toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium">
-                        {isSpectator
-                          ? `${user?.username} ${language === "ar" ? "(مشاهدة)" : "(Watching)"}`
-                          : `${user?.username} ${t('challenge.you')}`}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {isSpectator
-                          ? (language === "ar" ? "وضع المشاهدة" : "Spectator mode")
-                          : isTeamGame
-                            ? t('challenge.team', { num: String(myTeam + 1) })
-                            : challenge.gameType === "backgammon"
-                              ? (playerView?.myColor === "white" ? "⚪" : "⚫")
-                              : (myColor === "white" ? "⚪" : "⚫")}
-                      </p>
+              {!isDominoGame && (
+                <div className="w-full max-w-lg mt-4">
+                  <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10 ring-2 ring-primary">
+                        <AvatarImage src={user?.profilePicture || undefined} />
+                        <AvatarFallback>{user?.username?.[0]?.toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium">
+                          {isSpectator
+                            ? `${user?.username} ${language === "ar" ? "(مشاهدة)" : "(Watching)"}`
+                            : `${user?.username} ${t('challenge.you')}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {isSpectator
+                            ? (language === "ar" ? "وضع المشاهدة" : "Spectator mode")
+                            : isTeamGame
+                              ? t('challenge.team', { num: String(myTeam + 1) })
+                              : challenge.gameType === "backgammon"
+                                ? (playerView?.myColor === "white" ? "⚪" : "⚫")
+                                : (myColor === "white" ? "⚪" : "⚫")}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className={`font-mono text-lg ${myTimeRemaining < 30 ? "text-destructive" : ""}`}>
+                        {formatTime(myTimeRemaining)}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className={`font-mono text-lg ${myTimeRemaining < 30 ? "text-destructive" : ""}`}>
-                      {formatTime(myTimeRemaining)}
-                    </span>
-                  </div>
                 </div>
-              </div>
+              )}
 
               {canPlayActions && gameSession?.status === "playing" && (
                 <div className="mt-4 flex gap-2 items-center">
@@ -1746,7 +1752,7 @@ export default function ChallengeGamePage() {
               )}
 
               {/* Floating game chat for players (Ludo King style) */}
-              {!isSpectator && (
+              {!isSpectator && !isDominoGame && (
                 <div className="w-full max-w-lg mt-3 h-36 sm:h-40 relative">
                   <GameChat
                     messages={messages as unknown as { id: string; senderId: string; senderName: string; message: string; createdAt: string }[]}

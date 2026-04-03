@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import type { CountryPaymentMethod } from "@shared/schema";
 import { BackButton } from "@/components/BackButton";
 import { EmptyState } from "@/components/EmptyState";
@@ -521,7 +522,7 @@ export default function ChallengesPage() {
   });
 
   const quickConvertMutation = useMutation({
-    mutationFn: (amount: string) => apiRequest('POST', '/api/project-currency/convert', { amount }),
+    mutationFn: (amount: string) => apiRequestWithPaymentToken('POST', '/api/project-currency/convert', { amount }, 'convert'),
     onSuccess: async (res: Response) => {
       const payload = await res.json().catch(() => ({}));
       await refetchProjectWallet();

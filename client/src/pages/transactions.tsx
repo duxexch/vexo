@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth, useAuthHeaders } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,7 +61,7 @@ export default function TransactionsPage() {
 
   const depositMutation = useMutation({
     mutationFn: async (data: { amount: string; paymentMethod: string; paymentReference: string; walletNumber?: string }) => {
-      return apiRequest("POST", "/api/transactions/deposit", data);
+      return apiRequestWithPaymentToken("POST", "/api/transactions/deposit", data, "deposit");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
@@ -75,7 +76,7 @@ export default function TransactionsPage() {
 
   const withdrawMutation = useMutation({
     mutationFn: async (data: { amount: string }) => {
-      return apiRequest("POST", "/api/transactions/withdraw", data);
+      return apiRequestWithPaymentToken("POST", "/api/transactions/withdraw", data, "withdraw");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
@@ -180,7 +181,7 @@ export default function TransactionsPage() {
                   {t('transactions.selectPaymentMethod')}
                 </DialogDescription>
               </DialogHeader>
-              
+
               {depositStep === 'method' && (
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -296,9 +297,9 @@ export default function TransactionsPage() {
                     <Button
                       className="flex-1"
                       data-testid="button-submit-deposit"
-                      onClick={() => depositMutation.mutate({ 
-                        amount, 
-                        paymentMethod: selectedMethod.name, 
+                      onClick={() => depositMutation.mutate({
+                        amount,
+                        paymentMethod: selectedMethod.name,
                         paymentReference,
                         walletNumber: walletNumber || undefined
                       })}
@@ -363,7 +364,7 @@ export default function TransactionsPage() {
           <TabsTrigger value="all" data-testid="tab-all-transactions">{t('transactions.myTransactions')}</TabsTrigger>
           {isAgentOrAdmin && <TabsTrigger value="pending" data-testid="tab-pending">{t('transactions.pending')} ({pendingTx?.length || 0})</TabsTrigger>}
         </TabsList>
-        
+
         <TabsContent value="all" className="mt-4">
           <Card>
             <CardContent className="p-0">
@@ -396,7 +397,7 @@ export default function TransactionsPage() {
                     </div>
                   </div>
                 ))}
-                
+
                 {transactions?.length === 0 && (
                   <div className="p-8 text-center text-muted-foreground">
                     {t('transactions.noTransactions')}
@@ -406,7 +407,7 @@ export default function TransactionsPage() {
             </CardContent>
           </Card>
         </TabsContent>
-        
+
         {isAgentOrAdmin && (
           <TabsContent value="pending" className="mt-4">
             <Card>
@@ -431,9 +432,9 @@ export default function TransactionsPage() {
                           {tx.referenceId && (
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               Ref: {tx.referenceId}
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-4 w-4"
                                 onClick={() => copyToClipboard(tx.referenceId!)}
                               >
@@ -465,7 +466,7 @@ export default function TransactionsPage() {
                       </div>
                     </div>
                   ))}
-                  
+
                   {pendingTx?.length === 0 && (
                     <div className="p-8 text-center text-muted-foreground">
                       {t('transactions.noPending')}

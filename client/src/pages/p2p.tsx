@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -215,11 +216,11 @@ function MarketplaceTab() {
         throw new Error(t('p2p.paymentMethod'));
       }
 
-      const res = await apiRequest("POST", "/api/p2p/trades", {
+      const res = await apiRequestWithPaymentToken("POST", "/api/p2p/trades", {
         offerId: offer.id,
         amount: defaultAmount,
         paymentMethod,
-      });
+      }, "p2p_trade_create");
       return res.json();
     },
     onSuccess: () => {

@@ -12,7 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { apiRequest, queryClient, financialQueryOptions } from "@/lib/queryClient";
+import { queryClient, financialQueryOptions } from "@/lib/queryClient";
+import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import {
   Wallet,
   ArrowDownToLine,
@@ -157,7 +158,7 @@ export default function WalletPage() {
 
   const convertMutation = useMutation({
     mutationFn: (data: { amount: string }) =>
-      apiRequest('POST', '/api/project-currency/convert', data),
+      apiRequestWithPaymentToken('POST', '/api/project-currency/convert', data, 'convert'),
     onSuccess: async (res: Response) => {
       const result = await res.json().catch(() => ({}));
       const message = result.status === 'pending'
@@ -177,7 +178,7 @@ export default function WalletPage() {
 
   const depositMutation = useMutation({
     mutationFn: (data: { amount: number; paymentMethod: string; paymentReference: string; walletNumber?: string }) =>
-      apiRequest('POST', '/api/transactions/deposit', data),
+      apiRequestWithPaymentToken('POST', '/api/transactions/deposit', data, 'deposit'),
     onSuccess: () => {
       playSound('coin');
       toast({ title: t('common.success'), description: t('wallet.depositSuccess') });
@@ -195,7 +196,7 @@ export default function WalletPage() {
 
   const withdrawMutation = useMutation({
     mutationFn: (data: { amount: number; paymentMethod: string }) =>
-      apiRequest('POST', '/api/transactions/withdraw', data),
+      apiRequestWithPaymentToken('POST', '/api/transactions/withdraw', data, 'withdraw'),
     onSuccess: () => {
       playSound('success');
       toast({ title: t('common.success'), description: t('wallet.withdrawSuccess') });

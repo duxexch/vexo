@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { AuthRequest, authMiddleware, adminMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
+import { cancelPaymentOperationToken } from "../../lib/payment-security";
 
 export function registerFinancialAndAuthRoutes(app: Express): void {
 
@@ -32,6 +33,20 @@ export function registerFinancialAndAuthRoutes(app: Express): void {
       res.json(logs);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/financial/operation-token/cancel", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
+      if (!token) {
+        return res.status(400).json({ error: "token is required" });
+      }
+
+      const cancelled = await cancelPaymentOperationToken(req.user!.id, token, "USER_CANCELLED");
+      return res.json({ cancelled });
+    } catch (error: unknown) {
+      return res.status(500).json({ error: getErrorMessage(error) });
     }
   });
 

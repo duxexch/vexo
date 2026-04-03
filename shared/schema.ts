@@ -18,6 +18,15 @@ export const promoCodeTypeEnum = pgEnum("promo_code_type", ["percentage", "fixed
 export const paymentMethodTypeEnum = pgEnum("payment_method_type", ["bank_transfer", "e_wallet", "crypto", "card"]);
 export const auditActionEnum = pgEnum("audit_action", ["login", "logout", "deposit", "withdrawal", "stake", "win", "complaint", "settings_change", "user_update", "game_update", "login_failed", "account_locked", "password_reset", "password_changed", "otp_requested", "otp_verified"]);
 export const idVerificationStatusEnum = pgEnum("id_verification_status", ["pending", "approved", "rejected"]);
+export const paymentOperationTypeEnum = pgEnum("payment_operation_type", [
+  "deposit",
+  "withdraw",
+  "convert",
+  "p2p_trade_create",
+  "p2p_trade_pay",
+  "p2p_trade_confirm",
+]);
+export const paymentOperationTokenStatusEnum = pgEnum("payment_operation_token_status", ["pending", "completed", "failed", "cancelled", "expired"]);
 
 // ==================== ENUM TYPE HELPERS ====================
 export type UserRole = (typeof userRoleEnum.enumValues)[number];
@@ -47,6 +56,8 @@ export type AdminAuditAction = (typeof adminAuditActionEnum.enumValues)[number];
 export type GameMatchStatus = (typeof gameMatchStatusEnum.enumValues)[number];
 export type SupportStatus = (typeof supportStatusEnum.enumValues)[number];
 export type DepositRequestStatus = (typeof depositRequestStatusEnum.enumValues)[number];
+export type PaymentOperationType = (typeof paymentOperationTypeEnum.enumValues)[number];
+export type PaymentOperationTokenStatus = (typeof paymentOperationTokenStatusEnum.enumValues)[number];
 
 // ==================== USERS ====================
 
@@ -818,6 +829,86 @@ export const auditLogs = pgTable("audit_logs", {
 export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
   user: one(users, { fields: [auditLogs.userId], references: [users.id] }),
 }));
+
+// ==================== PAYMENT SECURITY (IP + OPERATION TOKEN) ====================
+
+export const paymentIpBlocks = pgTable("payment_ip_blocks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ipAddress: text("ip_address").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  blockReason: text("block_reason").notNull(),
+  autoBlocked: boolean("auto_blocked").notNull().default(true),
+  blockedBy: varchar("blocked_by").references(() => users.id),
+  unblockedBy: varchar("unblocked_by").references(() => users.id),
+  metadata: text("metadata"),
+  blockedAt: timestamp("blocked_at").notNull().defaultNow(),
+  unblockedAt: timestamp("unblocked_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_payment_ip_blocks_active").on(table.isActive),
+  index("idx_payment_ip_blocks_blocked_at").on(table.blockedAt),
+]);
+
+export const paymentIpBlocksRelations = relations(paymentIpBlocks, ({ one }) => ({
+  blocker: one(users, { fields: [paymentIpBlocks.blockedBy], references: [users.id] }),
+  unblocker: one(users, { fields: [paymentIpBlocks.unblockedBy], references: [users.id] }),
+}));
+
+export const paymentIpActivities = pgTable("payment_ip_activities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ipAddress: text("ip_address").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  operation: paymentOperationTypeEnum("operation").notNull(),
+  requestPath: text("request_path").notNull(),
+  operationToken: text("operation_token"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_payment_ip_activities_ip").on(table.ipAddress),
+  index("idx_payment_ip_activities_user").on(table.userId),
+  index("idx_payment_ip_activities_operation").on(table.operation),
+  index("idx_payment_ip_activities_created_at").on(table.createdAt),
+]);
+
+export const paymentIpActivitiesRelations = relations(paymentIpActivities, ({ one }) => ({
+  user: one(users, { fields: [paymentIpActivities.userId], references: [users.id] }),
+}));
+
+export const paymentOperationTokens = pgTable("payment_operation_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  token: text("token").notNull().unique(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  operation: paymentOperationTypeEnum("operation").notNull(),
+  status: paymentOperationTokenStatusEnum("status").notNull().default("pending"),
+  ipAddress: text("ip_address"),
+  requestPath: text("request_path").notNull(),
+  requestHash: text("request_hash"),
+  failureReason: text("failure_reason"),
+  expiresAt: timestamp("expires_at").notNull(),
+  finalizedAt: timestamp("finalized_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_payment_operation_tokens_user").on(table.userId),
+  index("idx_payment_operation_tokens_operation").on(table.operation),
+  index("idx_payment_operation_tokens_status").on(table.status),
+  index("idx_payment_operation_tokens_expires_at").on(table.expiresAt),
+]);
+
+export const paymentOperationTokensRelations = relations(paymentOperationTokens, ({ one }) => ({
+  user: one(users, { fields: [paymentOperationTokens.userId], references: [users.id] }),
+}));
+
+export const insertPaymentIpBlockSchema = createInsertSchema(paymentIpBlocks).omit({ id: true, blockedAt: true, createdAt: true, updatedAt: true });
+export type InsertPaymentIpBlock = z.infer<typeof insertPaymentIpBlockSchema>;
+export type PaymentIpBlock = typeof paymentIpBlocks.$inferSelect;
+
+export const insertPaymentIpActivitySchema = createInsertSchema(paymentIpActivities).omit({ id: true, createdAt: true });
+export type InsertPaymentIpActivity = z.infer<typeof insertPaymentIpActivitySchema>;
+export type PaymentIpActivity = typeof paymentIpActivities.$inferSelect;
+
+export const insertPaymentOperationTokenSchema = createInsertSchema(paymentOperationTokens).omit({ id: true, createdAt: true, finalizedAt: true });
+export type InsertPaymentOperationToken = z.infer<typeof insertPaymentOperationTokenSchema>;
+export type PaymentOperationToken = typeof paymentOperationTokens.$inferSelect;
 
 // ==================== SYSTEM SETTINGS ====================
 

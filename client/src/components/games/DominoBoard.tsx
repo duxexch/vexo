@@ -29,6 +29,17 @@ interface DominoTile {
   id?: string; // C7-F12: unique tile ID from server
 }
 
+interface BoardRowEntry {
+  item: GameState["boardTiles"][number];
+  index: number;
+  sequenceIndex: number;
+}
+
+interface BoardRow {
+  entries: BoardRowEntry[];
+  isReverse: boolean;
+}
+
 interface GameState {
   myHand: DominoTile[];
   opponentTileCount: number;
@@ -88,6 +99,79 @@ const PIP_LAYOUTS: Record<number, Array<{ x: number; y: number }>> = {
   5: [{ x: 30, y: 30 }, { x: 70, y: 30 }, { x: 50, y: 50 }, { x: 30, y: 70 }, { x: 70, y: 70 }],
   6: [{ x: 30, y: 24 }, { x: 70, y: 24 }, { x: 30, y: 50 }, { x: 70, y: 50 }, { x: 30, y: 76 }, { x: 70, y: 76 }],
 };
+
+function flipTile(tile: DominoTile): DominoTile {
+  return { left: tile.right, right: tile.left, id: tile.id };
+}
+
+function tilesShareValue(a: DominoTile, b: DominoTile): boolean {
+  return a.left === b.left || a.left === b.right || a.right === b.left || a.right === b.right;
+}
+
+function orientTileChain(tiles: DominoTile[], leftEnd: number, rightEnd: number): DominoTile[] {
+  if (tiles.length === 0) {
+    return [];
+  }
+
+  if (tiles.length === 1) {
+    const single = tiles[0];
+    if (leftEnd >= 0 && single.right === leftEnd) {
+      return [flipTile(single)];
+    }
+    return [single];
+  }
+
+  const oriented: DominoTile[] = [];
+  const first = tiles[0];
+  const firstCandidates = [first, flipTile(first)];
+  const second = tiles[1];
+
+  let bestFirst = firstCandidates[0];
+  let bestFirstScore = Number.NEGATIVE_INFINITY;
+  for (const candidate of firstCandidates) {
+    let score = 0;
+    if (leftEnd >= 0 && candidate.left === leftEnd) score += 4;
+    if (tilesShareValue(candidate, second) && (candidate.right === second.left || candidate.right === second.right)) score += 3;
+    if (leftEnd >= 0 && candidate.right === leftEnd) score -= 2;
+    if (score > bestFirstScore) {
+      bestFirstScore = score;
+      bestFirst = candidate;
+    }
+  }
+
+  oriented.push(bestFirst);
+
+  for (let i = 1; i < tiles.length; i += 1) {
+    const current = tiles[i];
+    const candidates = [current, flipTile(current)];
+    const need = oriented[i - 1].right;
+    const next = i + 1 < tiles.length ? tiles[i + 1] : null;
+
+    let best = candidates[0];
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (const candidate of candidates) {
+      let score = 0;
+      if (candidate.left === need) score += 6;
+      if (candidate.right === need) score += 2;
+      if (next && tilesShareValue(candidate, next)) score += 1;
+      if (i === tiles.length - 1 && rightEnd >= 0 && candidate.right === rightEnd) score += 3;
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+
+    oriented.push(best);
+  }
+
+  const lastIndex = oriented.length - 1;
+  const lastTile = oriented[lastIndex];
+  if (rightEnd >= 0 && lastTile.right !== rightEnd && lastTile.left === rightEnd) {
+    oriented[lastIndex] = flipTile(lastTile);
+  }
+
+  return oriented;
+}
 
 // C18-F9: Wrapped in memo to prevent re-renders when parent updates unrelated state
 const DominoTileComponent = memo(function DominoTileComponent({
@@ -483,59 +567,94 @@ export function DominoBoard({
     ? { background: `conic-gradient(hsl(var(--primary)) ${timerProgress * 360}deg, hsl(var(--muted)) 0deg)` }
     : undefined;
   const isTurnLive = isMyTurn && !isSpectator && status !== 'finished';
+  const isCompactMobile = isNarrowViewport;
   const boardTileCount = state.boardTiles.length;
   const boardLayoutMode = boardTileCount >= 28 ? "compact" : boardTileCount >= 18 ? "dense" : "normal";
-  const boardTileSize: DominoTileSize = "sm";
+  const boardTileSize: DominoTileSize = isCompactMobile ? "xs" : "sm";
   const boardGapClass = boardLayoutMode === "compact" ? "gap-0.5" : boardLayoutMode === "dense" ? "gap-1" : "gap-1.5";
-  const boardRowGapClass = boardLayoutMode === "compact" ? "gap-y-1" : boardLayoutMode === "dense" ? "gap-y-1.5" : "gap-y-2";
-  const boardEndCapClass = boardLayoutMode === "compact" ? "h-7 w-7 text-xs" : "h-8 w-8 text-sm";
-  const tilesPerRow = isNarrowViewport
-    ? 4
+  const boardRowGapClass = isCompactMobile
+    ? "gap-y-0.5"
+    : boardLayoutMode === "compact"
+      ? "gap-y-1"
+      : boardLayoutMode === "dense"
+        ? "gap-y-1.5"
+        : "gap-y-2";
+  const boardEndCapClass = isCompactMobile
+    ? "h-6 w-6 text-[11px]"
+    : boardLayoutMode === "compact"
+      ? "h-7 w-7 text-xs"
+      : "h-8 w-8 text-sm";
+  const tilesPerRow = isCompactMobile
+    ? 5
     : boardLayoutMode === "compact"
       ? 8
       : boardLayoutMode === "dense"
         ? 7
         : 6;
 
-  const boardRows = useMemo(() => {
-    const entries = state.boardTiles.map((item, index) => ({ item, index }));
-    const rows: Array<Array<{ item: GameState["boardTiles"][number]; index: number }>> = [];
+  const orientedBoardTiles = useMemo(
+    () => orientTileChain(state.boardTiles.map((entry) => entry.tile), state.leftEnd, state.rightEnd),
+    [state.boardTiles, state.leftEnd, state.rightEnd],
+  );
+
+  const boardRows = useMemo<BoardRow[]>(() => {
+    const entries: BoardRowEntry[] = state.boardTiles.map((item, index) => ({ item, index, sequenceIndex: index }));
+    const rows: BoardRow[] = [];
 
     for (let start = 0; start < entries.length; start += tilesPerRow) {
-      const row = entries.slice(start, start + tilesPerRow);
-      if (rows.length % 2 === 1) {
-        row.reverse();
-      }
-      rows.push(row);
+      const rowEntries = entries.slice(start, start + tilesPerRow);
+      rows.push({
+        entries: rowEntries,
+        isReverse: rows.length % 2 === 1,
+      });
     }
 
     return rows;
   }, [state.boardTiles, tilesPerRow]);
 
-  const boardMinHeight = Math.max(210, 88 + boardRows.length * (boardLayoutMode === "compact" ? 36 : 42));
+  const boardMinHeight = Math.max(
+    isCompactMobile ? 170 : 210,
+    (isCompactMobile ? 74 : 88) + boardRows.length * (boardLayoutMode === "compact" ? (isCompactMobile ? 30 : 36) : (isCompactMobile ? 34 : 42)),
+  );
 
   return (
     <div
-      className="relative mx-auto w-full max-w-[min(920px,100vw)] overflow-hidden rounded-2xl border border-[#6d4d34]/40 bg-[radial-gradient(circle_at_18%_18%,rgba(255,228,184,0.3),transparent_52%),radial-gradient(circle_at_82%_84%,rgba(24,16,10,0.34),transparent_50%),linear-gradient(160deg,rgba(106,70,42,0.18),rgba(40,25,17,0.28))] p-3 sm:p-4 shadow-[0_22px_42px_rgba(25,12,4,0.32)]"
+      className={cn(
+        "relative mx-auto w-full max-w-[min(920px,100vw)] overflow-hidden rounded-2xl border border-[#6d4d34]/40 bg-[radial-gradient(circle_at_18%_18%,rgba(255,228,184,0.3),transparent_52%),radial-gradient(circle_at_82%_84%,rgba(24,16,10,0.34),transparent_50%),linear-gradient(160deg,rgba(106,70,42,0.18),rgba(40,25,17,0.28))] shadow-[0_22px_42px_rgba(25,12,4,0.32)]",
+        isCompactMobile ? "p-2" : "p-3 sm:p-4",
+      )}
       style={{ touchAction: 'manipulation' }}
     >
       <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[linear-gradient(120deg,rgba(255,255,255,0.16),transparent_35%,transparent_65%,rgba(0,0,0,0.12))]" />
 
-      <div className="relative flex flex-col gap-5">
+      <div className={cn("relative flex flex-col", isCompactMobile ? "gap-2.5" : "gap-5")}>
         {/* F8: Per-opponent tile counts with player labels */}
-        <div className="rounded-2xl border border-border/60 bg-background/70 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] backdrop-blur-sm">
-          <p className="text-xs sm:text-sm text-muted-foreground mb-2 text-center">
+        <div className={cn(
+          "rounded-2xl border border-border/60 bg-background/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] backdrop-blur-sm",
+          isCompactMobile ? "px-2 py-1.5" : "px-3 py-2",
+        )}>
+          <p className={cn("text-muted-foreground text-center", isCompactMobile ? "mb-1 text-[11px]" : "mb-2 text-xs sm:text-sm")}>
             {t('domino.opponentTiles')}
           </p>
           {Object.keys(state.opponentTileCounts).length > 0 ? (
-            <div className="flex gap-4 justify-center flex-wrap">
+            <div className={cn("justify-center flex-wrap", isCompactMobile ? "flex gap-1.5" : "flex gap-4")}>
               {Object.entries(state.opponentTileCounts).map(([pid, count]) => {
                 const label = getPlayerLabel(pid);
                 return (
-                  <div key={pid} className="flex flex-col items-center gap-1 rounded-xl border border-border/50 bg-background/55 px-3 py-2">
-                    <PlaceholderTile count={count} />
-                    <span className="text-xs text-muted-foreground">{label} ({count})</span>
-                  </div>
+                  isCompactMobile ? (
+                    <span
+                      key={pid}
+                      className="inline-flex items-center gap-1 rounded-lg border border-border/60 bg-background/65 px-2 py-1 text-[11px] text-muted-foreground"
+                    >
+                      <span className="font-semibold text-foreground">{count}</span>
+                      <span>{label}</span>
+                    </span>
+                  ) : (
+                    <div key={pid} className="flex flex-col items-center gap-1 rounded-xl border border-border/50 bg-background/55 px-3 py-2">
+                      <PlaceholderTile count={count} />
+                      <span className="text-xs text-muted-foreground">{label} ({count})</span>
+                    </div>
+                  )
                 );
               })}
             </div>
@@ -548,8 +667,11 @@ export function DominoBoard({
 
         {/* C7-F11: Last action notification — includes play moves */}
         {state.lastAction && (
-          <div className="text-center py-1">
-            <span className="inline-flex items-center px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-xs sm:text-sm text-primary animate-[pulse_2.3s_ease-in-out_infinite] shadow-[0_6px_14px_rgba(59,130,246,0.18)]">
+          <div className="text-center">
+            <span className={cn(
+              "inline-flex items-center rounded-full border border-primary/30 bg-primary/10 text-primary animate-[pulse_2.3s_ease-in-out_infinite] shadow-[0_6px_14px_rgba(59,130,246,0.18)]",
+              isCompactMobile ? "px-2 py-0.5 text-[11px]" : "px-3 py-1 text-xs sm:text-sm",
+            )}>
               {(() => {
                 const pid = state.lastAction!.playerId;
                 const label = getPlayerLabel(pid);
@@ -566,7 +688,7 @@ export function DominoBoard({
         )}
 
         {/* F7: Scores display with player identity */}
-        {state.scores && Object.values(state.scores).some(s => s > 0) && (
+        {!isCompactMobile && state.scores && Object.values(state.scores).some(s => s > 0) && (
           <div className="flex justify-center gap-3 flex-wrap">
             {Object.entries(state.scores).map(([pid, score]) => {
               const label = getPlayerLabel(pid);
@@ -581,7 +703,7 @@ export function DominoBoard({
         )}
 
         {/* C7-F9: Blocked-game proximity warning */}
-        {state.passCount != null && state.passCount > 0 && status !== 'finished' && (
+        {!isCompactMobile && state.passCount != null && state.passCount > 0 && status !== 'finished' && (
           <div className="flex justify-center">
             <span className={cn(
               "inline-flex items-center px-2.5 py-1 rounded-full text-xs border",
@@ -596,9 +718,10 @@ export function DominoBoard({
 
         {/* Turn indicator + timer */}
         {status !== 'finished' && (
-          <div className="flex items-center justify-center gap-3">
+          <div className={cn("flex items-center justify-center", isCompactMobile ? "gap-2" : "gap-3")}>
             <span className={cn(
-              "inline-flex items-center px-3 py-1 rounded-full text-xs sm:text-sm font-semibold border shadow-sm",
+              "inline-flex items-center rounded-full font-semibold border shadow-sm",
+              isCompactMobile ? "px-2.5 py-0.5 text-[11px]" : "px-3 py-1 text-xs sm:text-sm",
               isMyTurn
                 ? "bg-primary/90 text-primary-foreground border-primary/60 animate-pulse"
                 : "bg-muted/85 text-muted-foreground border-border/60"
@@ -606,9 +729,13 @@ export function DominoBoard({
               {isMyTurn ? t('domino.yourTurn') : t('domino.opponentTurn')}
             </span>
             {turnTimeLimit > 0 && isMyTurn && !isSpectator && (
-              <span className="relative inline-flex items-center justify-center w-10 h-10 rounded-full p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.2)]" style={timerRingStyle}>
+              <span className={cn(
+                "relative inline-flex items-center justify-center rounded-full p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.2)]",
+                isCompactMobile ? "w-8 h-8" : "w-10 h-10",
+              )} style={timerRingStyle}>
                 <span className={cn(
-                  "inline-flex items-center justify-center w-full h-full rounded-full text-sm font-bold",
+                  "inline-flex items-center justify-center w-full h-full rounded-full font-bold",
+                  isCompactMobile ? "text-xs" : "text-sm",
                   timeLeft <= 5
                     ? "bg-destructive text-destructive-foreground animate-pulse"
                     : "bg-background text-foreground"
@@ -620,24 +747,25 @@ export function DominoBoard({
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:justify-center sm:gap-3">
+        <div className={cn("grid grid-cols-3", isCompactMobile ? "gap-1.5" : "gap-2 sm:flex sm:items-center sm:justify-center sm:gap-3")}>
           <div className="rounded-xl border border-border/65 bg-background/70 px-2.5 py-1.5 text-center animate-domino-chip-rise">
-            <div className="text-[10px] sm:text-xs text-muted-foreground">{t('domino.tiles')}</div>
-            <div className="text-sm sm:text-base font-semibold">{state.boardTiles.length}</div>
+            <div className={cn("text-muted-foreground", isCompactMobile ? "text-[9px]" : "text-[10px] sm:text-xs")}>{t('domino.tiles')}</div>
+            <div className={cn("font-semibold", isCompactMobile ? "text-xs" : "text-sm sm:text-base")}>{state.boardTiles.length}</div>
           </div>
           <div className="rounded-xl border border-primary/25 bg-primary/10 px-2.5 py-1.5 text-center animate-domino-chip-rise [animation-delay:60ms]">
-            <div className="text-[10px] sm:text-xs text-primary/80">{t('domino.playable')}</div>
-            <div className="text-sm sm:text-base font-semibold text-primary">{playableTiles.length}</div>
+            <div className={cn("text-primary/80", isCompactMobile ? "text-[9px]" : "text-[10px] sm:text-xs")}>{t('domino.playable')}</div>
+            <div className={cn("font-semibold text-primary", isCompactMobile ? "text-xs" : "text-sm sm:text-base")}>{playableTiles.length}</div>
           </div>
           <div className="rounded-xl border border-border/65 bg-background/70 px-2.5 py-1.5 text-center animate-domino-chip-rise [animation-delay:120ms]">
-            <div className="text-[10px] sm:text-xs text-muted-foreground">{t('domino.draw')}</div>
-            <div className="text-sm sm:text-base font-semibold">{state.boneyard}</div>
+            <div className={cn("text-muted-foreground", isCompactMobile ? "text-[9px]" : "text-[10px] sm:text-xs")}>{t('domino.draw')}</div>
+            <div className={cn("font-semibold", isCompactMobile ? "text-xs" : "text-sm sm:text-base")}>{state.boneyard}</div>
           </div>
         </div>
 
         <div
           className={cn(
-            "domino-board-depth relative overflow-hidden rounded-2xl border border-[#1d4f3b]/70 bg-game-felt p-4 sm:p-6 flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_18px_28px_rgba(8,26,19,0.4)]",
+            "domino-board-depth relative overflow-hidden rounded-2xl border border-[#1d4f3b]/70 bg-game-felt flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_18px_28px_rgba(8,26,19,0.4)]",
+            isCompactMobile ? "p-2" : "p-4 sm:p-6",
             isTurnLive ? "domino-board-turn-live" : ""
           )}
           style={{ minHeight: `${boardMinHeight}px` }}
@@ -686,26 +814,38 @@ export function DominoBoard({
                   <div
                     key={`board-row-${rowIndex}`}
                     className={cn(
-                      "flex w-full items-center",
+                      "flex w-full items-center justify-start",
                       boardGapClass,
-                      rowIndex % 2 === 0 ? "justify-start" : "justify-end",
+                      row.isReverse ? "flex-row-reverse" : "",
                     )}
                   >
-                    {row.map(({ item, index }) => {
+                    {row.entries.map(({ item, index, sequenceIndex }, entryIndex) => {
                       const isLastTile = index === state.boardTiles.length - 1;
+                      const orientedTile = orientedBoardTiles[sequenceIndex] || item.tile;
+                      const tileForRowDirection = row.isReverse && orientedTile.left !== orientedTile.right
+                        ? flipTile(orientedTile)
+                        : orientedTile;
+                      const isTurnStep = rowIndex > 0 && entryIndex < 2;
+                      const turnYOffset = isTurnStep
+                        ? (row.isReverse
+                          ? (entryIndex === 0 ? 9 : 4)
+                          : (entryIndex === 0 ? -9 : -4))
+                        : 0;
+                      const renderRotation = tileForRowDirection.left === tileForRowDirection.right ? 0 : 90;
+
                       return (
                         <motion.div
-                          key={item.tile.id ?? `${item.tile.left}-${item.tile.right}-${index}`}
+                          key={tileForRowDirection.id ?? `${tileForRowDirection.left}-${tileForRowDirection.right}-${index}`}
                           layout
                           initial={isLastTile ? {
                             opacity: 0,
-                            y: -10,
+                            y: turnYOffset - 10,
                             scale: 0.9,
                             rotate: rowIndex % 2 === 0 ? -5 : 5,
                           } : false}
                           animate={{
                             opacity: 1,
-                            y: 0,
+                            y: turnYOffset,
                             scale: 1,
                             rotate: boardLayoutMode === "normal" ? (rowIndex % 2 === 0 ? 0.3 : -0.3) : 0,
                           }}
@@ -716,9 +856,9 @@ export function DominoBoard({
                           )}
                         >
                           <DominoTileComponent
-                            tile={item.tile}
+                            tile={tileForRowDirection}
                             size={boardTileSize}
-                            rotation={item.rotation}
+                            rotation={renderRotation}
                           />
                         </motion.div>
                       );
@@ -755,17 +895,23 @@ export function DominoBoard({
           </div>
         )}
 
-        <div className="rounded-2xl border border-[#83603f]/35 bg-[linear-gradient(170deg,rgba(255,255,255,0.95),rgba(248,240,227,0.88))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_14px_28px_rgba(66,46,27,0.22)]">
-          <div className="mb-3 flex items-center justify-center gap-2">
-            <p className="text-xs sm:text-sm text-muted-foreground text-center">
+        <div className={cn(
+          "rounded-2xl border border-[#83603f]/35 bg-[linear-gradient(170deg,rgba(255,255,255,0.95),rgba(248,240,227,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_14px_28px_rgba(66,46,27,0.22)]",
+          isCompactMobile ? "p-2.5" : "p-4",
+        )}>
+          <div className={cn("flex items-center justify-center gap-2", isCompactMobile ? "mb-2" : "mb-3")}>
+            <p className={cn("text-muted-foreground text-center", isCompactMobile ? "text-[11px]" : "text-xs sm:text-sm")}>
               {t('domino.yourTiles')} ({state.myHand.length})
             </p>
-            <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+            <span className={cn(
+              "inline-flex items-center rounded-full border border-primary/25 bg-primary/10 font-semibold text-primary",
+              isCompactMobile ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]",
+            )}>
               {playableTiles.length}
             </span>
           </div>
 
-          <div className="flex flex-wrap gap-2 justify-center">
+          <div className={cn("flex flex-wrap justify-center", isCompactMobile ? "gap-1" : "gap-2")}>
             {state.myHand.map((tile, index) => {
               const isPlayable = playableTiles.some(p => p.index === index);
               const canInteract = isMyTurn && isPlayable && !isSpectator;
@@ -799,6 +945,7 @@ export function DominoBoard({
                     isSelected={selectedTile === index}
                     onClick={canInteract ? () => handleTileClick(index) : undefined}
                     isPlayable={canInteract}
+                    size={isCompactMobile ? "xs" : "sm"}
                   />
                 </motion.div>
               );
@@ -807,12 +954,13 @@ export function DominoBoard({
         </div>
 
         {/* F5: Button container — use server canDraw for draw eligibility */}
-        <div className="flex justify-center gap-3 flex-wrap animate-domino-fade-in">
+        <div className={cn("flex justify-center flex-wrap animate-domino-fade-in", isCompactMobile ? "gap-2" : "gap-3")}>
           {canAutoDraw && isMyTurn && !isSpectator && (
             <Button
               variant="secondary"
               onClick={handleDraw}
               disabled={drawPending}
+              size={isCompactMobile ? "sm" : "default"}
               className="shadow-md border border-border/70"
               aria-label={`${t('domino.draw')} - ${state.boneyard} ${t('domino.tilesRemaining')}`}
               data-testid="button-draw"
@@ -825,6 +973,7 @@ export function DominoBoard({
               variant="outline"
               onClick={handlePass}
               disabled={passPending}
+              size={isCompactMobile ? "sm" : "default"}
               className="shadow-md border-border/80"
               aria-label={t('domino.pass')}
               data-testid="button-pass"
