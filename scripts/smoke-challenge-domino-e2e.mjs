@@ -16,12 +16,18 @@ function parseArgs(argv) {
         password: "SmokePass123!",
         timeoutMs: Number.parseInt(process.env.SMOKE_TIMEOUT_MS || "", 10) || 12000,
         keepData: false,
+        drawPassOnly: false,
     };
 
     for (let i = 2; i < argv.length; i += 1) {
         const part = argv[i];
         if (part === "--keep-data") {
             args.keepData = true;
+            continue;
+        }
+
+        if (part === "--draw-pass-only") {
+            args.drawPassOnly = true;
             continue;
         }
 
@@ -299,7 +305,7 @@ function buildDrawPassState(player1Id, player2Id) {
         rightEnd: 6,
         hands: {
             [player1Id]: [{ left: 0, right: 1, id: "0-1" }],
-            [player2Id]: [{ left: 2, right: 2, id: "2-2" }],
+            [player2Id]: [{ left: 6, right: 1, id: "1-6" }],
         },
         boneyard: [{ left: 3, right: 4, id: "3-4" }],
         currentPlayer: player1Id,
@@ -576,14 +582,16 @@ async function main() {
             player2Id: setupData.userIds.player2,
         });
 
-        await runEndScenario({
-            wsBaseUrl,
-            timeoutMs: options.timeoutMs,
-            challengeId: setupData.challengeIds.endgame,
-            player1Token,
-            player2Token,
-            player1Id: setupData.userIds.player1,
-        });
+        if (!options.drawPassOnly) {
+            await runEndScenario({
+                wsBaseUrl,
+                timeoutMs: options.timeoutMs,
+                challengeId: setupData.challengeIds.endgame,
+                player1Token,
+                player2Token,
+                player1Id: setupData.userIds.player1,
+            });
+        }
 
         console.log("[smoke:challenge-domino-e2e] All checks passed.");
     } catch (error) {

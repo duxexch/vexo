@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { CountryPaymentMethod } from "@shared/schema";
 import { BackButton } from "@/components/BackButton";
 import { EmptyState } from "@/components/EmptyState";
 import { ProjectCurrencyAmount, ProjectCurrencySymbol } from "@/components/ProjectCurrencySymbol";
@@ -277,6 +278,20 @@ export default function ChallengesPage() {
       return res.json();
     },
   });
+
+  const { data: activePaymentMethods = [] } = useQuery<CountryPaymentMethod[]>({
+    queryKey: ['/api/payment-methods'],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await fetch('/api/payment-methods', { credentials: 'include' });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const hasActivePaymentMethod = activePaymentMethods.some(
+    (method) => method.isActive && (method.isAvailable ?? true),
+  );
 
   const { data: followedChallengers } = useQuery<{ userId: string }[]>({
     queryKey: ['/api/challenger-follows'],
@@ -1691,19 +1706,34 @@ export default function ChallengesPage() {
             </p>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDepositDialog(false)}>
+          <DialogFooter className="flex-col gap-2 sm:gap-2">
+            <div className="grid w-full grid-cols-2 gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowDepositDialog(false);
+                  setLocation('/p2p');
+                }}
+                disabled={!hasActivePaymentMethod}
+                data-testid="button-open-p2p-market"
+                className="w-full"
+              >
+                {t('nav.p2p')}
+              </Button>
+              <Button
+                onClick={() => {
+                  const suggestedDeposit = Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0));
+                  setShowDepositDialog(false);
+                  setLocation(`/wallet?modal=deposit&amount=${suggestedDeposit.toFixed(2)}`);
+                }}
+                data-testid="button-open-wallet-deposit"
+                className="w-full"
+              >
+                {language === 'ar' ? 'فتح كارت الإيداع' : 'Open Deposit Card'}
+              </Button>
+            </div>
+            <Button variant="outline" onClick={() => setShowDepositDialog(false)} className="w-full">
               {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={() => {
-                const suggestedDeposit = Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0));
-                setShowDepositDialog(false);
-                setLocation(`/wallet?modal=deposit&amount=${suggestedDeposit.toFixed(2)}`);
-              }}
-              data-testid="button-open-wallet-deposit"
-            >
-              {language === 'ar' ? 'فتح كارت الإيداع' : 'Open Deposit Card'}
             </Button>
           </DialogFooter>
         </DialogContent>

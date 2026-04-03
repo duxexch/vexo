@@ -15,6 +15,7 @@ import { useGameSounds } from "@/hooks/use-game-sounds";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { CountryPaymentMethod } from "@shared/schema";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
 import {
   adaptDominoBoardMoveToEngine,
@@ -304,6 +305,20 @@ export default function ChallengeGamePage() {
     },
   });
 
+  const { data: activePaymentMethods = [] } = useQuery<CountryPaymentMethod[]>({
+    queryKey: ["/api/payment-methods"],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await fetch("/api/payment-methods", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const hasActivePaymentMethod = activePaymentMethods.some(
+    (method) => method.isActive && (method.isAvailable ?? true),
+  );
+
   const quickConvertMutation = useMutation({
     mutationFn: (amount: string) => apiRequest("POST", "/api/project-currency/convert", { amount }),
     onSuccess: async (res: Response) => {
@@ -558,6 +573,19 @@ export default function ChallengeGamePage() {
       variant: "destructive",
     });
   }, [t, toast]);
+
+  useEffect(() => {
+    latestWsSeqRef.current = 0;
+    latestTotalMovesRef.current = 0;
+    latestViewMovesRef.current = 0;
+    dominoLastActionSigRef.current = "";
+    setGameSession(null);
+    setPlayerView(null);
+    setServerRole(null);
+    setDominoTimeline([]);
+    setDominoResultMeta(null);
+    setDominoMoveError(null);
+  }, [challengeId]);
 
   const clearRoleAssignmentTimer = useCallback(() => {
     if (roleAssignmentTimerRef.current) {
@@ -1495,7 +1523,7 @@ export default function ChallengeGamePage() {
                     : (language === "ar" ? "لاعب" : "Player")}
                 </Badge>
               </div>
-              <Badge variant="secondary" className="hidden sm:inline-flex shrink-0">
+              <Badge variant="secondary" className="inline-flex shrink-0 text-[11px] sm:text-xs">
                 {isProjectChallengeCurrency ? (
                   <ProjectCurrencyAmount amount={challengeBetAmountValue} symbolClassName="text-xs" amountClassName="text-xs font-medium" />
                 ) : (
@@ -1982,19 +2010,34 @@ export default function ChallengeGamePage() {
             </p>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDepositDialog(false)}>
+          <DialogFooter className="flex-col gap-2 sm:gap-2">
+            <div className="grid w-full grid-cols-2 gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowDepositDialog(false);
+                  setLocation("/p2p");
+                }}
+                disabled={!hasActivePaymentMethod}
+                data-testid="button-game-open-p2p-market"
+                className="w-full"
+              >
+                {t("nav.p2p")}
+              </Button>
+              <Button
+                onClick={() => {
+                  const suggestedDeposit = Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0));
+                  setShowDepositDialog(false);
+                  setLocation(`/wallet?modal=deposit&amount=${suggestedDeposit.toFixed(2)}`);
+                }}
+                data-testid="button-game-open-wallet-deposit"
+                className="w-full"
+              >
+                {language === "ar" ? "فتح كارت الإيداع" : "Open Deposit Card"}
+              </Button>
+            </div>
+            <Button variant="outline" onClick={() => setShowDepositDialog(false)} className="w-full">
               {t("common.cancel")}
-            </Button>
-            <Button
-              onClick={() => {
-                const suggestedDeposit = Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0));
-                setShowDepositDialog(false);
-                setLocation(`/wallet?modal=deposit&amount=${suggestedDeposit.toFixed(2)}`);
-              }}
-              data-testid="button-game-open-wallet-deposit"
-            >
-              {language === "ar" ? "فتح كارت الإيداع" : "Open Deposit Card"}
             </Button>
           </DialogFooter>
         </DialogContent>

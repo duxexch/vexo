@@ -73,21 +73,20 @@ const TILE_SIZES_SIDEWAYS: Record<DominoTileSize, string> = {
   lg: "w-28 h-14 sm:w-32 sm:h-16",
 };
 
-const DOT_SIZES: Record<DominoTileSize, string> = {
-  xs: "w-1 h-1 sm:w-1.5 sm:h-1.5",
-  sm: "w-1.5 h-1.5 sm:w-2 sm:h-2",
-  md: "w-2 h-2 sm:w-2.5 sm:h-2.5",
-  lg: "w-2.5 h-2.5 sm:w-3 sm:h-3",
+const PIP_SIZE_CLASSES: Record<DominoTileSize, string> = {
+  xs: "h-1 w-1",
+  sm: "h-1.5 w-1.5",
+  md: "h-2 w-2",
+  lg: "h-2.5 w-2.5",
 };
 
-// C8-F8: Hoisted to module scope — avoids re-creating on every render
-const DOT_POSITIONS: Record<number, number[][]> = {
-  1: [[1, 1]],
-  2: [[0, 0], [2, 2]],
-  3: [[0, 0], [1, 1], [2, 2]],
-  4: [[0, 0], [0, 2], [2, 0], [2, 2]],
-  5: [[0, 0], [0, 2], [1, 1], [2, 0], [2, 2]],
-  6: [[0, 0], [0, 2], [1, 0], [1, 2], [2, 0], [2, 2]],
+const PIP_LAYOUTS: Record<number, Array<{ x: number; y: number }>> = {
+  1: [{ x: 50, y: 50 }],
+  2: [{ x: 30, y: 30 }, { x: 70, y: 70 }],
+  3: [{ x: 30, y: 30 }, { x: 50, y: 50 }, { x: 70, y: 70 }],
+  4: [{ x: 30, y: 30 }, { x: 70, y: 30 }, { x: 30, y: 70 }, { x: 70, y: 70 }],
+  5: [{ x: 30, y: 30 }, { x: 70, y: 30 }, { x: 50, y: 50 }, { x: 30, y: 70 }, { x: 70, y: 70 }],
+  6: [{ x: 30, y: 24 }, { x: 70, y: 24 }, { x: 30, y: 50 }, { x: 70, y: 50 }, { x: 30, y: 76 }, { x: 70, y: 76 }],
 };
 
 // C18-F9: Wrapped in memo to prevent re-renders when parent updates unrelated state
@@ -110,29 +109,27 @@ const DominoTileComponent = memo(function DominoTileComponent({
 
   const renderDots = (value: number) => {
     if (value === 0) {
-      return <div className="w-full h-full rounded-[inherit] bg-[radial-gradient(circle_at_50%_38%,rgba(148,163,184,0.12),transparent_65%)]" />;
+      return (
+        <div className="relative h-full w-full">
+          <span className="absolute left-1/2 top-1/2 h-0.5 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#2f2a22]/35" />
+        </div>
+      );
     }
 
-    const positions = DOT_POSITIONS[value] || [];
+    const pips = PIP_LAYOUTS[value] || [];
 
     return (
-      <div className="grid grid-cols-3 grid-rows-3 gap-0.5 p-1 w-full h-full">
-        {[0, 1, 2].map(row =>
-          [0, 1, 2].map(col => {
-            const hasDot = positions.some(([r, c]) => r === row && c === col);
-            return (
-              <div
-                key={`${row}-${col}`}
-                className={cn(
-                  "rounded-full",
-                  hasDot
-                    ? `${DOT_SIZES[size]} bg-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_1px_1px_rgba(15,23,42,0.35)]`
-                    : ""
-                )}
-              />
-            );
-          })
-        )}
+      <div className="relative h-full w-full">
+        {pips.map((pip, index) => (
+          <span
+            key={`${value}-${index}`}
+            className={cn(
+              "absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#101010] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_1px_1px_rgba(0,0,0,0.35)]",
+              PIP_SIZE_CLASSES[size],
+            )}
+            style={{ left: `${pip.x}%`, top: `${pip.y}%` }}
+          />
+        ))}
       </div>
     );
   };
@@ -151,15 +148,15 @@ const DominoTileComponent = memo(function DominoTileComponent({
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
       className={cn(
         tileSizeClass,
-        "domino-tile-shell relative overflow-hidden rounded-xl border flex flex-col select-none transition-all duration-200",
-        "bg-[linear-gradient(145deg,#fefefe_0%,#f8f8f8_45%,#ececec_100%)]",
-        "shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_6px_10px_rgba(15,23,42,0.24)]",
+        "domino-tile-shell relative overflow-hidden rounded-lg border-[1.5px] flex flex-col select-none transition-all duration-200",
+        "border-[#3a3227] bg-[linear-gradient(146deg,#f6f0de_0%,#eee2c4_52%,#e4d2ad_100%)]",
+        "shadow-[inset_0_1px_0_rgba(255,255,255,0.68),0_6px_10px_rgba(35,24,14,0.35)]",
         isSelected
-          ? "domino-tile-selected border-amber-500 ring-2 ring-amber-400/70 scale-[1.08] z-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_14px_18px_rgba(217,119,6,0.32)]"
-          : "border-slate-400/80",
+          ? "domino-tile-selected border-[#d08f2d] ring-2 ring-[#d9a34a]/75 scale-[1.08] z-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_12px_18px_rgba(132,79,24,0.36)]"
+          : "",
         isPlayable
-          ? "domino-tile-can-play hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_12px_16px_rgba(15,23,42,0.3)]"
-          : "opacity-70",
+          ? "domino-tile-can-play hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_12px_16px_rgba(35,24,14,0.35)]"
+          : "opacity-80",
         isPlayable && !isSelected ? "domino-tile-playable" : "",
         onClick ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-1 focus-visible:ring-offset-background" : "",
         onClick && isPlayable ? "cursor-pointer" : "cursor-default",
@@ -167,23 +164,22 @@ const DominoTileComponent = memo(function DominoTileComponent({
       )}
       data-testid={`domino-tile-${tile.left}-${tile.right}`}
     >
-      <div className="domino-tile-sheen pointer-events-none absolute inset-0" />
-      <div className="pointer-events-none absolute inset-x-1 top-1 h-[2px] rounded-full bg-white/70" />
+      <div className="pointer-events-none absolute inset-x-1 top-1 h-[2px] rounded-full bg-white/50" />
       <div className={cn(
-        "pointer-events-none absolute bg-slate-400/35",
+        "pointer-events-none absolute bg-[#3a3227]/35",
         isSideways
           ? "inset-y-1.5 left-1/2 w-px -translate-x-1/2"
           : "inset-x-2 top-1/2 h-px -translate-y-1/2"
       )} />
-      <div className="pointer-events-none absolute inset-y-1 left-[2px] w-[2px] rounded-full bg-slate-900/8" />
-      <div className="pointer-events-none absolute inset-y-1 right-[2px] w-[2px] rounded-full bg-white/30" />
+      <div className="pointer-events-none absolute inset-y-1 left-[2px] w-[2px] rounded-full bg-[#2e271f]/10" />
+      <div className="pointer-events-none absolute inset-y-1 right-[2px] w-[2px] rounded-full bg-white/22" />
       <div className={cn(
-        "flex-1 flex items-center justify-center bg-[linear-gradient(180deg,rgba(255,255,255,0.66),rgba(248,250,252,0.18))]",
-        isSideways ? "border-r border-slate-300/85" : "border-b border-slate-300/85"
+        "flex-1 flex items-center justify-center bg-[linear-gradient(180deg,rgba(255,255,255,0.44),rgba(255,255,255,0.08))]",
+        isSideways ? "border-r border-[#5f5547]/40" : "border-b border-[#5f5547]/40"
       )}>
         {renderDots(tile.left)}
       </div>
-      <div className="flex-1 flex items-center justify-center bg-[linear-gradient(180deg,rgba(255,255,255,0.8),rgba(241,245,249,0.3))]">
+      <div className="flex-1 flex items-center justify-center bg-[linear-gradient(180deg,rgba(255,255,255,0.52),rgba(255,255,255,0.14))]">
         {renderDots(tile.right)}
       </div>
     </div>
@@ -234,7 +230,7 @@ export function DominoBoard({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoPlayedRef = useRef(false);
   const prevHandLenRef = useRef<number>(0); // F8: Track previous hand length for animation
-  const lastTileRef = useRef<HTMLDivElement>(null); // C7-F8: auto-scroll to latest board tile
+  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
 
   const state = useMemo<GameState>(() => {
     try {
@@ -299,6 +295,13 @@ export function DominoBoard({
     return playableTiles.length === 0 && (state.boneyard === 0 || !(state.canDraw ?? false));
   }, [state.validMoves, playableTiles, state.boneyard, state.canDraw]);
 
+  const canAutoDraw = useMemo(() => {
+    if (state.validMoves && state.validMoves.length > 0) {
+      return state.validMoves.some(m => m.type === 'draw');
+    }
+    return state.canDraw ?? false;
+  }, [state.validMoves, state.canDraw]);
+
   // F12: Clear selected tile when turn changes to avoid stale selection
   // C18-F4: Also reset when hand length changes (after draw, indices shift)
   useEffect(() => {
@@ -329,10 +332,15 @@ export function DominoBoard({
     prevHandLenRef.current = state.myHand.length;
   }, [state.myHand.length]);
 
-  // C7-F8: Auto-scroll board to latest tile when board grows
   useEffect(() => {
-    lastTileRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
-  }, [state.boardTiles.length]);
+    const updateViewport = () => {
+      setIsNarrowViewport(window.innerWidth < 640);
+    };
+
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
 
   // F1: Timer — reset on turn change only
   // C18-F6: Removed myHand.length and boneyard from deps — draw shouldn't reset timer
@@ -353,12 +361,30 @@ export function DominoBoard({
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isMyTurn, currentTurn, turnTimeLimit, isSpectator, status]);
 
+  // Failsafe: if the turn is still yours at zero for too long, allow another auto-action attempt.
+  useEffect(() => {
+    if (timeLeft !== 0 || !isMyTurn || isSpectator || status === 'finished' || !autoPlayedRef.current) return;
+
+    const retryTimer = setTimeout(() => {
+      autoPlayedRef.current = false;
+    }, 1800);
+
+    return () => clearTimeout(retryTimer);
+  }, [timeLeft, isMyTurn, isSpectator, status, currentTurn]);
+
+  // Re-arm timeout auto-action after a draw updates state while timer is already at 0.
+  // This lets timeout flow continue (draw -> play/pass) instead of stopping after the first draw.
+  useEffect(() => {
+    if (timeLeft !== 0 || !isMyTurn || isSpectator || status === 'finished') return;
+    autoPlayedRef.current = false;
+  }, [timeLeft, isMyTurn, isSpectator, status, state.myHand.length, state.boneyard, state.validMoves]);
+
   // Auto-play when timer hits 0
   useEffect(() => {
     if (timeLeft !== 0 || !isMyTurn || isSpectator || status === 'finished' || autoPlayedRef.current) return;
     autoPlayedRef.current = true;
 
-    // Timeout policy: play a random valid tile/end; if no playable tile, pass.
+    // Timeout policy: play a random valid tile/end; if none, draw when allowed; otherwise pass.
     if (playableTiles.length > 0) {
       const randomPlayable = playableTiles[Math.floor(Math.random() * playableTiles.length)];
       const randomTile = randomPlayable ? state.myHand[randomPlayable.index] : undefined;
@@ -371,8 +397,13 @@ export function DominoBoard({
       }
     }
 
+    if (canAutoDraw) {
+      onMove({ tileLeft: -1, tileRight: -1, placedEnd: 'left', isPassed: false });
+      return;
+    }
+
     onMove({ tileLeft: 0, tileRight: 0, placedEnd: 'left', isPassed: true });
-  }, [timeLeft, isMyTurn, isSpectator, status, state.boneyard, state.canDraw, state.myHand, playableTiles, onMove]);
+  }, [timeLeft, isMyTurn, isSpectator, status, canAutoDraw, state.myHand, playableTiles, onMove]);
 
   // C13-F4: Shared player label helper — eliminates 3x inline duplication
   const getPlayerLabel = (pid: string): string => {
@@ -435,7 +466,7 @@ export function DominoBoard({
   };
 
   const handleDraw = () => {
-    if (!isMyTurn || isSpectator || status === 'finished' || !(state.canDraw ?? false)) return;
+    if (!isMyTurn || isSpectator || status === 'finished' || !canAutoDraw) return;
     if (drawPending) return; // F9: prevent duplicate
     setDrawPending(true);
     onMove({
@@ -454,14 +485,38 @@ export function DominoBoard({
   const isTurnLive = isMyTurn && !isSpectator && status !== 'finished';
   const boardTileCount = state.boardTiles.length;
   const boardLayoutMode = boardTileCount >= 28 ? "compact" : boardTileCount >= 18 ? "dense" : "normal";
-  const boardTileSize: DominoTileSize = boardLayoutMode === "compact" ? "xs" : "sm";
-  const boardTileScale = boardLayoutMode === "compact" ? 0.9 : boardLayoutMode === "dense" ? 0.96 : 1;
+  const boardTileSize: DominoTileSize = "sm";
   const boardGapClass = boardLayoutMode === "compact" ? "gap-0.5" : boardLayoutMode === "dense" ? "gap-1" : "gap-1.5";
+  const boardRowGapClass = boardLayoutMode === "compact" ? "gap-y-1" : boardLayoutMode === "dense" ? "gap-y-1.5" : "gap-y-2";
   const boardEndCapClass = boardLayoutMode === "compact" ? "h-7 w-7 text-xs" : "h-8 w-8 text-sm";
+  const tilesPerRow = isNarrowViewport
+    ? 4
+    : boardLayoutMode === "compact"
+      ? 8
+      : boardLayoutMode === "dense"
+        ? 7
+        : 6;
+
+  const boardRows = useMemo(() => {
+    const entries = state.boardTiles.map((item, index) => ({ item, index }));
+    const rows: Array<Array<{ item: GameState["boardTiles"][number]; index: number }>> = [];
+
+    for (let start = 0; start < entries.length; start += tilesPerRow) {
+      const row = entries.slice(start, start + tilesPerRow);
+      if (rows.length % 2 === 1) {
+        row.reverse();
+      }
+      rows.push(row);
+    }
+
+    return rows;
+  }, [state.boardTiles, tilesPerRow]);
+
+  const boardMinHeight = Math.max(210, 88 + boardRows.length * (boardLayoutMode === "compact" ? 36 : 42));
 
   return (
     <div
-      className="relative mx-auto w-full max-w-[min(920px,100vw)] overflow-x-auto rounded-2xl border border-[#5a3d2b]/35 bg-[radial-gradient(circle_at_20%_18%,rgba(255,236,210,0.3),transparent_48%),radial-gradient(circle_at_85%_80%,rgba(45,25,12,0.32),transparent_52%),linear-gradient(165deg,rgba(120,76,44,0.14),rgba(39,25,17,0.24))] p-3 sm:p-4 shadow-[0_22px_42px_rgba(25,12,4,0.28)]"
+      className="relative mx-auto w-full max-w-[min(920px,100vw)] overflow-hidden rounded-2xl border border-[#6d4d34]/40 bg-[radial-gradient(circle_at_18%_18%,rgba(255,228,184,0.3),transparent_52%),radial-gradient(circle_at_82%_84%,rgba(24,16,10,0.34),transparent_50%),linear-gradient(160deg,rgba(106,70,42,0.18),rgba(40,25,17,0.28))] p-3 sm:p-4 shadow-[0_22px_42px_rgba(25,12,4,0.32)]"
       style={{ touchAction: 'manipulation' }}
     >
       <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[linear-gradient(120deg,rgba(255,255,255,0.16),transparent_35%,transparent_65%,rgba(0,0,0,0.12))]" />
@@ -582,9 +637,10 @@ export function DominoBoard({
 
         <div
           className={cn(
-            "domino-board-depth relative overflow-hidden rounded-2xl border border-[#2f5a45]/70 bg-game-felt p-4 sm:p-6 min-h-[30vh] flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_18px_28px_rgba(8,26,19,0.35)]",
+            "domino-board-depth relative overflow-hidden rounded-2xl border border-[#1d4f3b]/70 bg-game-felt p-4 sm:p-6 flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_18px_28px_rgba(8,26,19,0.4)]",
             isTurnLive ? "domino-board-turn-live" : ""
           )}
+          style={{ minHeight: `${boardMinHeight}px` }}
           role="region"
           aria-label={state.boardTiles.length === 0
             ? (isSpectator ? t('domino.board') : t('domino.placeFirst'))
@@ -621,50 +677,55 @@ export function DominoBoard({
           ) : (
             <div
               className={cn(
-                "domino-board-lane relative flex items-center overflow-x-auto max-w-full pb-2 px-1 scrollbar-thin snap-x snap-mandatory",
-                boardGapClass,
+                "domino-board-lane relative w-full max-w-full px-1 py-1",
+                boardRowGapClass,
               )}
-              style={{
-                transform: `scale(${boardTileScale})`,
-                transformOrigin: "center center",
-              }}
             >
-              {state.boardTiles.map((item, index) => {
-                const isLastTile = index === state.boardTiles.length - 1;
-                return (
-                  <motion.div
-                    key={item.tile.id ?? `${item.tile.left}-${item.tile.right}-${index}`}
-                    layout
-                    initial={isLastTile ? {
-                      opacity: 0,
-                      y: -12,
-                      scale: 0.84,
-                      rotate: index % 2 === 0 ? -6 : 6,
-                    } : false}
-                    animate={{
-                      opacity: 1,
-                      y: 0,
-                      scale: 1,
-                      rotate: index % 2 === 0 ? 0.35 : -0.35,
-                    }}
-                    transition={{ type: "spring", stiffness: 280, damping: 22, mass: 0.65 }}
+              <div className="mx-auto flex w-full max-w-[680px] flex-col">
+                {boardRows.map((row, rowIndex) => (
+                  <div
+                    key={`board-row-${rowIndex}`}
                     className={cn(
-                      "snap-center transition-transform duration-300",
-                      boardLayoutMode === "normal"
-                        ? (index % 2 === 0 ? "rotate-[0.35deg]" : "-rotate-[0.35deg]")
-                        : "rotate-0",
-                      isLastTile ? "animate-domino-place" : "opacity-95"
+                      "flex w-full items-center",
+                      boardGapClass,
+                      rowIndex % 2 === 0 ? "justify-start" : "justify-end",
                     )}
-                    ref={isLastTile ? lastTileRef : null}
                   >
-                    <DominoTileComponent
-                      tile={item.tile}
-                      size={boardTileSize}
-                      rotation={item.rotation}
-                    />
-                  </motion.div>
-                );
-              })}
+                    {row.map(({ item, index }) => {
+                      const isLastTile = index === state.boardTiles.length - 1;
+                      return (
+                        <motion.div
+                          key={item.tile.id ?? `${item.tile.left}-${item.tile.right}-${index}`}
+                          layout
+                          initial={isLastTile ? {
+                            opacity: 0,
+                            y: -10,
+                            scale: 0.9,
+                            rotate: rowIndex % 2 === 0 ? -5 : 5,
+                          } : false}
+                          animate={{
+                            opacity: 1,
+                            y: 0,
+                            scale: 1,
+                            rotate: boardLayoutMode === "normal" ? (rowIndex % 2 === 0 ? 0.3 : -0.3) : 0,
+                          }}
+                          transition={{ type: "spring", stiffness: 280, damping: 24, mass: 0.7 }}
+                          className={cn(
+                            "shrink-0 transition-transform duration-300",
+                            isLastTile ? "animate-domino-place" : "opacity-95",
+                          )}
+                        >
+                          <DominoTileComponent
+                            tile={item.tile}
+                            size={boardTileSize}
+                            rotation={item.rotation}
+                          />
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -747,7 +808,7 @@ export function DominoBoard({
 
         {/* F5: Button container — use server canDraw for draw eligibility */}
         <div className="flex justify-center gap-3 flex-wrap animate-domino-fade-in">
-          {(state.canDraw ?? false) && isMyTurn && !isSpectator && (
+          {canAutoDraw && isMyTurn && !isSpectator && (
             <Button
               variant="secondary"
               onClick={handleDraw}
