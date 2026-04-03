@@ -16,6 +16,11 @@ import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
+import {
+  adaptDominoBoardMoveToEngine,
+  extractDominoHandFromPlayerView,
+  normalizeDominoChallengePlayerView,
+} from "@/lib/domino-challenge-adapter";
 import { BackButton } from "@/components/BackButton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ChessBoard } from "@/components/games/ChessBoard";
@@ -1095,85 +1100,14 @@ export default function ChallengeGamePage() {
     setDominoMoveError(null);
     setDominoResyncing(false);
 
-    const isDraw = move.tileLeft === -1 && move.tileRight === -1;
-    if (isDraw) {
-      sendMove({ type: "draw" });
-      return;
-    }
-
-    if (move.isPassed) {
-      sendMove({ type: "pass" });
-      return;
-    }
-
-    const handRaw = (playerView as { hand?: unknown } | null)?.hand;
-    const hand = Array.isArray(handRaw)
-      ? handRaw as Array<{ left: number; right: number; id?: string }>
-      : [];
-
-    const matched = hand.find((tile) =>
-      (tile.left === move.tileLeft && tile.right === move.tileRight)
-      || (tile.left === move.tileRight && tile.right === move.tileLeft)
-    );
-
-    sendMove({
-      type: "play",
-      tile: {
-        left: move.tileLeft,
-        right: move.tileRight,
-        ...(matched?.id ? { id: matched.id } : {}),
-      },
-      end: move.placedEnd,
-    });
+    const hand = extractDominoHandFromPlayerView(playerView);
+    const adaptedMove = adaptDominoBoardMoveToEngine(move, hand);
+    sendMove(adaptedMove);
   }, [sendMove, playerView]);
 
   const dominoBoardState = useMemo(() => {
-    if (!playerView) {
-      return undefined;
-    }
-
-    const boardRaw = Array.isArray(playerView.board)
-      ? playerView.board as Array<{ left: number; right: number; id?: string }>
-      : [];
-    const handRaw = Array.isArray(playerView.hand)
-      ? playerView.hand as Array<{ left: number; right: number; id?: string }>
-      : [];
-
-    const otherCountsRaw = (playerView.otherHandCounts && typeof playerView.otherHandCounts === "object")
-      ? playerView.otherHandCounts as Record<string, unknown>
-      : {};
-    const opponentTileCounts = Object.fromEntries(
-      Object.entries(otherCountsRaw)
-        .filter(([, value]) => typeof value === "number" && Number.isFinite(value))
-        .map(([pid, value]) => [pid, value as number])
-    ) as Record<string, number>;
-
-    const playerOrder = Array.isArray(playerView.playerOrder)
-      ? playerView.playerOrder as string[]
-      : [];
-    const playerCount = Math.max(2, playerOrder.length || 2);
-
-    return {
-      myHand: handRaw,
-      opponentTileCount: Object.values(opponentTileCounts).reduce((sum, count) => sum + count, 0),
-      opponentTileCounts,
-      boardTiles: boardRaw.map((tile) => ({
-        tile,
-        rotation: tile.left === tile.right ? 0 : 90,
-      })),
-      leftEnd: typeof playerView.leftEnd === "number" ? playerView.leftEnd : -1,
-      rightEnd: typeof playerView.rightEnd === "number" ? playerView.rightEnd : -1,
-      boneyard: typeof playerView.boneyardCount === "number" ? playerView.boneyardCount : 0,
-      lastAction: playerView.lastAction,
-      scores: playerView.scores,
-      canDraw: typeof playerView.canDraw === "boolean" ? playerView.canDraw : false,
-      playerOrder,
-      validMoves: Array.isArray(playerView.validMoves) ? playerView.validMoves : [],
-      passCount: typeof playerView.passCount === "number" ? playerView.passCount : 0,
-      playerCount,
-      drawsThisTurn: typeof playerView.drawsThisTurn === "number" ? playerView.drawsThisTurn : 0,
-      maxDraws: Math.max(28 - playerCount * 7, 0),
-    };
+    const normalized = normalizeDominoChallengePlayerView(playerView);
+    return normalized as Record<string, unknown> | undefined;
   }, [playerView]);
 
   const dominoScoreRows = useMemo<DominoScoreRow[]>(() => {
