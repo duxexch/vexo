@@ -19,7 +19,13 @@ import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
 import { BackButton } from "@/components/BackButton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ChessBoard } from "@/components/games/ChessBoard";
-import { DominoBoard } from "@/components/games/DominoBoard";
+import {
+  DominoChallengeContainer,
+  type DominoBoardMove,
+  type DominoEndgameSummary,
+  type DominoScoreRow,
+  type DominoTimelineEntry,
+} from "@/components/games/DominoChallengeContainer";
 import { BackgammonBoard } from "@/components/games/backgammon/BackgammonBoard";
 import TarneebBoard from "@/components/games/TarneebBoard";
 import type { TarneebState } from "@/components/games/TarneebBoard";
@@ -154,11 +160,24 @@ interface ChallengeWSMessage {
   gift?: GiftInfo;
   winnerId?: string;
   reason?: string;
+  isDraw?: boolean;
+  scores?: Record<string, number>;
+  lowestPips?: number;
+  winningTeamPips?: number;
   offeredBy?: string;
   count?: number;
   moveType?: string;
   gameType?: string;
   [key: string]: unknown;
+}
+
+interface DominoGameResultMeta {
+  winnerId?: string;
+  reason?: string;
+  isDraw?: boolean;
+  scores?: Record<string, number>;
+  lowestPips?: number;
+  winningTeamPips?: number;
 }
 
 interface ChatMsg {
@@ -167,13 +186,6 @@ interface ChatMsg {
   username: string;
   message: string;
   timestamp: string | number;
-}
-
-interface DominoBoardMove {
-  tileLeft: number;
-  tileRight: number;
-  placedEnd: "left" | "right";
-  isPassed: boolean;
 }
 
 interface SpectatorInfo {
@@ -226,6 +238,8 @@ export default function ChallengeGamePage() {
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
   const [dominoMoveError, setDominoMoveError] = useState<string | null>(null);
   const [dominoResyncing, setDominoResyncing] = useState(false);
+  const [dominoTimeline, setDominoTimeline] = useState<DominoTimelineEntry[]>([]);
+  const [dominoResultMeta, setDominoResultMeta] = useState<DominoGameResultMeta | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const authReadyRef = useRef(false);
@@ -245,6 +259,9 @@ export default function ChallengeGamePage() {
   const chessMoveAckTimerRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutSignalSentRef = useRef(false);
   const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(null);
+  const dominoLastActionSigRef = useRef<string>("");
+  const dominoCanPlayRef = useRef(false);
+  const dominoStatusRef = useRef<GameSession["status"] | null>(null);
 
   const { data: challenge, isLoading, isError: isChallengeError, error: challengeError } = useQuery<Challenge, Error>({
     queryKey: [`/api/challenges/${challengeId}`],
@@ -418,6 +435,93 @@ export default function ChallengeGamePage() {
   // Do not allow gameplay actions until the server explicitly assigns role.
   const canPlayActions = serverRole === "player";
   const myColor = challenge?.player1Id === user?.id ? "white" : "black";
+
+  const dominoPlayerLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    const addPlayerLabel = (id?: string, username?: string, seat?: number) => {
+      if (!id) return;
+      if (id === user?.id) {
+        labels.set(id, t("domino.you"));
+        return;
+      }
+
+      if (username) {
+        labels.set(id, username);
+        return;
+      }
+
+      if (typeof seat === "number") {
+        labels.set(id, `${t("domino.player")} ${seat}`);
+        return;
+      }
+
+      labels.set(id, t("domino.player"));
+    };
+
+    addPlayerLabel(challenge?.player1Id, challenge?.player1?.username, 1);
+    addPlayerLabel(challenge?.player2Id, challenge?.player2?.username, 2);
+    addPlayerLabel(challenge?.player3Id, challenge?.player3?.username, 3);
+    addPlayerLabel(challenge?.player4Id, challenge?.player4?.username, 4);
+
+    return labels;
+  }, [challenge?.player1Id, challenge?.player1?.username, challenge?.player2Id, challenge?.player2?.username, challenge?.player3Id, challenge?.player3?.username, challenge?.player4Id, challenge?.player4?.username, t, user?.id]);
+
+  const appendDominoTimeline = useCallback((view: Record<string, unknown> | undefined, moveNumber?: number) => {
+    if (challenge?.gameType !== "domino" || !view) {
+      return;
+    }
+
+    const actionRaw = view.lastAction;
+    if (!actionRaw || typeof actionRaw !== "object") {
+      return;
+    }
+
+    const action = actionRaw as Record<string, unknown>;
+    const actionType = typeof action.type === "string" ? action.type : "";
+    const playerId = typeof action.playerId === "string" ? action.playerId : "";
+    const tile = action.tile && typeof action.tile === "object"
+      ? action.tile as { left?: number; right?: number }
+      : undefined;
+
+    if (!actionType || !playerId) {
+      return;
+    }
+
+    const signature = `${actionType}:${playerId}:${typeof tile?.left === "number" ? tile.left : ""}:${typeof tile?.right === "number" ? tile.right : ""}:${typeof moveNumber === "number" ? moveNumber : ""}`;
+    if (signature === dominoLastActionSigRef.current) {
+      return;
+    }
+    dominoLastActionSigRef.current = signature;
+
+    const actor = dominoPlayerLabels.get(playerId) || t("domino.player");
+    let text = `${actor} ${t("domino.lastMove")}`;
+
+    if (actionType === "draw") {
+      text = `${actor} ${t("domino.drewTile")}`;
+    } else if (actionType === "pass") {
+      text = `${actor} ${t("domino.passedTurn")}`;
+    } else if (actionType === "play") {
+      if (typeof tile?.left === "number" && typeof tile?.right === "number") {
+        text = `${actor} ${t("domino.played")} [${tile.left}|${tile.right}]`;
+      } else {
+        text = `${actor} ${t("domino.played")}`;
+      }
+    }
+
+    setDominoTimeline((prev) => [
+      {
+        id: `${signature}-${Date.now()}`,
+        text,
+        moveNumber,
+      },
+      ...prev,
+    ].slice(0, 12));
+  }, [challenge?.gameType, dominoPlayerLabels, t]);
+
+  useEffect(() => {
+    dominoCanPlayRef.current = canPlayActions;
+    dominoStatusRef.current = gameSession?.status ?? null;
+  }, [canPlayActions, gameSession?.status]);
 
   const showSpectatorActionBlocked = useCallback(() => {
     toast({
@@ -612,6 +716,37 @@ export default function ChallengeGamePage() {
     };
   }, [authToken, challengeId, user, clearRoleAssignmentTimer, language, requestRoleAssignment, setLocation, showWsErrorToast, t, clearChessMovePending]);
 
+  useEffect(() => {
+    if (challenge?.gameType !== "domino" || !challengeId) {
+      return;
+    }
+
+    const pushGuardHistory = () => {
+      window.history.pushState({ dominoChallengeId: challengeId }, "", window.location.href);
+    };
+
+    const onPopState = () => {
+      const inActiveMatch = dominoCanPlayRef.current && dominoStatusRef.current === "playing";
+      if (inActiveMatch) {
+        const leavePrompt = t("common.leaveConfirm") || t("challenge.backToChallenges");
+        const shouldLeave = window.confirm(leavePrompt);
+        if (!shouldLeave) {
+          pushGuardHistory();
+          return;
+        }
+      }
+
+      setLocation("/challenges");
+    };
+
+    pushGuardHistory();
+    window.addEventListener("popstate", onPopState);
+
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [challenge?.gameType, challengeId, setLocation, t]);
+
   // Live countdown timer — ticks every second when game is playing
   useEffect(() => { setSoundMuted(isMuted); }, [isMuted, setSoundMuted]);
   useEffect(() => {
@@ -732,16 +867,29 @@ export default function ChallengeGamePage() {
         }
 
         setServerRole(assignedRole);
+        if (assignedRole && challenge?.gameType === "domino") {
+          dominoLastActionSigRef.current = "";
+          setDominoTimeline([]);
+          setDominoResultMeta(null);
+        }
         break;
       }
       case "joined_challenge_game":
         setDominoResyncing(false);
+        if (challenge?.gameType === "domino") {
+          dominoLastActionSigRef.current = "";
+          setDominoTimeline([]);
+          setDominoResultMeta(null);
+        }
         break;
       case "game_state_sync":
         lastSyncRef.current = Date.now();
         if (shouldApplySessionUpdate(data.session, data.view, data.seq)) {
           if (data.session) setGameSession(data.session);
-          if (data.view) setPlayerView(data.view);
+          if (data.view) {
+            setPlayerView(data.view);
+            appendDominoTimeline(data.view, data.session?.totalMoves);
+          }
           setDominoResyncing(false);
           setDominoMoveError(null);
         }
@@ -753,7 +901,10 @@ export default function ChallengeGamePage() {
             setGameSession(prev => prev ? { ...prev, ...data.session } : (data.session ?? null));
             clearChessMovePending();
           }
-          if (data.view) setPlayerView(data.view);
+          if (data.view) {
+            setPlayerView(data.view);
+            appendDominoTimeline(data.view, data.session?.totalMoves);
+          }
           setDominoResyncing(false);
           setDominoMoveError(null);
         }
@@ -810,6 +961,16 @@ export default function ChallengeGamePage() {
           break;
         }
         setDominoResyncing(false);
+        if (challenge?.gameType === "domino") {
+          setDominoResultMeta({
+            winnerId: data.winnerId,
+            reason: data.reason,
+            isDraw: data.isDraw,
+            scores: data.scores,
+            lowestPips: data.lowestPips,
+            winningTeamPips: data.winningTeamPips,
+          });
+        }
         clearChessMovePending();
         setGameSession(prev => prev ? { ...prev, status: "finished", winnerId: data.winnerId ?? undefined, winReason: data.reason ?? undefined } : {
           id: "",
@@ -891,6 +1052,7 @@ export default function ChallengeGamePage() {
     isChallengeParticipant,
     requestRoleAssignment,
     getDominoMoveErrorText,
+    appendDominoTimeline,
   ]);
 
   const sendMove = useCallback((move: object) => {
@@ -1013,6 +1175,51 @@ export default function ChallengeGamePage() {
       maxDraws: Math.max(28 - playerCount * 7, 0),
     };
   }, [playerView]);
+
+  const dominoScoreRows = useMemo<DominoScoreRow[]>(() => {
+    const metaScores = dominoResultMeta?.scores;
+    const liveScores = playerView?.scores && typeof playerView.scores === "object"
+      ? playerView.scores as Record<string, unknown>
+      : undefined;
+    const source = metaScores || liveScores;
+
+    if (!source || typeof source !== "object") {
+      return [];
+    }
+
+    return Object.entries(source)
+      .filter(([, value]) => typeof value === "number" && Number.isFinite(value))
+      .map(([playerId, value], index) => ({
+        id: playerId,
+        label: dominoPlayerLabels.get(playerId) || `${t("domino.player")} ${index + 1}`,
+        score: value as number,
+      }))
+      .sort((a, b) => b.score - a.score);
+  }, [dominoResultMeta?.scores, playerView?.scores, dominoPlayerLabels, t]);
+
+  const dominoEndgameSummary = useMemo<DominoEndgameSummary>(() => {
+    const reason = dominoResultMeta?.reason || gameSession?.winReason;
+    const winnerId = dominoResultMeta?.winnerId || gameSession?.winnerId;
+    const isDraw = Boolean(dominoResultMeta?.isDraw)
+      || reason === "draw"
+      || reason === "draw_agreement";
+
+    const winnerLabel = winnerId
+      ? (winnerId === user?.id ? t("domino.you") : (dominoPlayerLabels.get(winnerId) || t("domino.player")))
+      : undefined;
+
+    const isFinished = challenge?.gameType === "domino"
+      && (gameSession?.status === "finished" || Boolean(dominoResultMeta));
+
+    return {
+      isFinished,
+      isDraw,
+      reason,
+      winnerLabel,
+      lowestPips: dominoResultMeta?.lowestPips,
+      winningTeamPips: dominoResultMeta?.winningTeamPips,
+    };
+  }, [challenge?.gameType, dominoPlayerLabels, dominoResultMeta, gameSession?.status, gameSession?.winReason, gameSession?.winnerId, t, user?.id]);
 
   // Backgammon-specific: roll dice
   const sendRoll = useCallback(() => {
@@ -1427,30 +1634,19 @@ export default function ChallengeGamePage() {
                   />
                 )}
                 {challenge.gameType === "domino" && (
-                  <div className="w-full">
-                    <DominoBoard
-                      gameState={dominoBoardState}
-                      currentTurn={gameSession?.currentTurn}
-                      isMyTurn={canPlayActions && ((playerView?.isMyTurn as boolean) ?? (gameSession?.currentTurn === user?.id))}
-                      isSpectator={isSpectator}
-                      onMove={canPlayActions ? sendDominoMove : () => { }}
-                      status={gameSession?.status}
-                    />
-                    {(dominoResyncing || dominoMoveError) && (
-                      <div className="mt-3 w-full max-w-lg mx-auto space-y-2">
-                        {dominoResyncing && (
-                          <div className="text-xs text-center text-muted-foreground">
-                            {t("common.reconnecting")}
-                          </div>
-                        )}
-                        {dominoMoveError && (
-                          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-center">
-                            {dominoMoveError}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <DominoChallengeContainer
+                    boardState={dominoBoardState}
+                    currentTurn={gameSession?.currentTurn}
+                    isMyTurn={canPlayActions && ((playerView?.isMyTurn as boolean) ?? (gameSession?.currentTurn === user?.id))}
+                    isSpectator={isSpectator}
+                    onMove={canPlayActions ? sendDominoMove : () => { }}
+                    status={gameSession?.status}
+                    dominoResyncing={dominoResyncing}
+                    dominoMoveError={dominoMoveError}
+                    timeline={dominoTimeline}
+                    scoreRows={dominoScoreRows}
+                    endgameSummary={dominoEndgameSummary}
+                  />
                 )}
                 {challenge.gameType === "backgammon" && playerView && (
                   <BackgammonBoard
