@@ -5,6 +5,7 @@ import { eq, desc } from "drizzle-orm";
 import { getGameEngine } from "../../game-engines";
 import { settleChallengePayout, settleDrawPayout } from "../../lib/payout";
 import { isChallengeSessionPlayableStatus, normalizeChallengeGameState } from "../../lib/challenge-game-state";
+import { trackDominoMoveError } from "../../lib/health";
 import { sendNotification } from "../notifications";
 import { logger } from "../../lib/logger";
 import { getErrorMessage, type AuthenticatedSocket } from "../shared";
@@ -444,6 +445,11 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
   } catch (error: unknown) {
     const moveType = typeof move?.type === "string" ? move.type : undefined;
     const payload = toMoveErrorPayload(error, resolvedGameType);
+    const shouldTrackDominoError = resolvedGameType === "domino" || String(payload.errorKey || "").startsWith("domino.");
+
+    if (shouldTrackDominoError) {
+      trackDominoMoveError(payload.errorKey);
+    }
 
     logger.warn("Challenge move rejected", {
       action: "challenge_game_move",

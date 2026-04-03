@@ -87,6 +87,24 @@ export function generateAlerts(
     });
   }
 
+  // Domino move-error telemetry alerts (challenge mode quality signal)
+  const dominoMoveErrorsPerMinute = services.dominoMoveErrors.lastMinuteTotal;
+  if (dominoMoveErrorsPerMinute >= THRESHOLDS.dominoMoveErrorRateCritical) {
+    alerts.push({
+      level: 'critical',
+      component: 'domino-move-errors',
+      message: `${dominoMoveErrorsPerMinute} domino move errors in last minute`,
+      timestamp,
+    });
+  } else if (dominoMoveErrorsPerMinute >= THRESHOLDS.dominoMoveErrorRateWarning) {
+    alerts.push({
+      level: 'warning',
+      component: 'domino-move-errors',
+      message: `${dominoMoveErrorsPerMinute} domino move errors in last minute`,
+      timestamp,
+    });
+  }
+
   return alerts;
 }
 

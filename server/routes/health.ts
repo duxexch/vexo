@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { db, pool } from "../db";
 import { sql } from "drizzle-orm";
 import os from "os";
-import { getHealthReport } from "../lib/health";
+import { getDominoMoveErrorTelemetry, getHealthReport } from "../lib/health";
 import { getAllCircuitBreakerStats } from "../lib/circuit-breaker";
 import { redisHealthCheck } from "../lib/redis";
 import { minioHealthCheck } from "../lib/minio-client";
@@ -91,6 +91,7 @@ export function registerHealthRoutes(app: Express): void {
           freeMemory: `${Math.round(os.freemem() / 1024 / 1024)}MB`,
           totalMemory: `${Math.round(os.totalmem() / 1024 / 1024)}MB`,
         },
+        dominoMoveErrors: getDominoMoveErrorTelemetry(),
         uptime: process.uptime(),
       });
     } catch (error: unknown) {
@@ -118,5 +119,9 @@ export function registerHealthRoutes(app: Express): void {
   app.get("/api/health/circuits", adminTokenMiddleware, async (_req: Request, res: Response) => {
     const circuitBreakers = getAllCircuitBreakerStats();
     res.json(circuitBreakers);
+  });
+
+  app.get("/api/health/domino-move-errors", adminTokenMiddleware, async (_req: Request, res: Response) => {
+    res.json(getDominoMoveErrorTelemetry());
   });
 }

@@ -33,10 +33,21 @@ export interface DatabaseHealth {
   };
 }
 
+export interface DominoMoveErrorTelemetry {
+  windowMs: number;
+  trackedKeys: string[];
+  lastMinuteTotal: number;
+  lastMinuteByKey: Record<string, number>;
+  lifetimeTotal: number;
+  lifetimeByKey: Record<string, number>;
+  lastEventAt?: string;
+}
+
 export interface ServiceHealth {
   circuitBreakers: Record<string, { state: string; failures: number }>;
   recentErrors: number;
   activeConnections: number;
+  dominoMoveErrors: DominoMoveErrorTelemetry;
 }
 
 export interface HealthReport {
@@ -62,4 +73,6 @@ export const THRESHOLDS = {
   dbLatencyCritical: 500, // ms
   errorRateWarning: 10, // per minute
   errorRateCritical: 50, // per minute
+  dominoMoveErrorRateWarning: 15, // per minute
+  dominoMoveErrorRateCritical: 40, // per minute
 };
