@@ -22,6 +22,7 @@
     "security:smoke:challenges": "node scripts/smoke-challenge-permissions.mjs",
     "security:smoke:challenges:deterministic": "node scripts/smoke-challenge-permissions.mjs --reset-sensitive-limiter",
     "security:smoke:ws-heartbeat": "node scripts/smoke-ws-heartbeat.mjs",
+    "security:smoke:domino-contract": "tsx scripts/smoke-domino-contract.ts",
     "security:smoke:settlement-idempotency": "tsx scripts/smoke-settlement-idempotency.ts",
     "security:csp": "node scripts/validate-csp-prod.mjs",
     "security:check": "npm run security:audit && npm run security:smoke",

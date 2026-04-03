@@ -10,6 +10,94 @@ import { logger } from "../../lib/logger";
 import { getErrorMessage, type AuthenticatedSocket } from "../shared";
 import { requireChallengePlayer } from "./guards";
 
+interface MoveErrorDetails {
+  code: string;
+  errorKey?: string;
+  requiresSync: boolean;
+}
+
+class ChallengeMoveError extends Error {
+  code: string;
+  errorKey?: string;
+  requiresSync: boolean;
+
+  constructor(message: string, details: MoveErrorDetails) {
+    super(message);
+    this.name = "ChallengeMoveError";
+    this.code = details.code;
+    this.errorKey = details.errorKey;
+    this.requiresSync = details.requiresSync;
+  }
+}
+
+function inferDominoErrorKey(message: string): string | undefined {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("not your turn")) return "domino.notYourTurn";
+  if (normalized.includes("cannot pass")) return "domino.cannotPass";
+  if (normalized.includes("must draw")) return "domino.mustDraw";
+  if (normalized.includes("cannot draw")) return "domino.cannotDraw";
+  if (normalized.includes("boneyard is empty")) return "domino.boneyardEmpty";
+  if (normalized.includes("tile not in your hand")) return "domino.tileNotInHand";
+  if (normalized.includes("cannot play this tile on this end") || normalized.includes("invalid placement")) {
+    return "domino.invalidPlacement";
+  }
+  if (normalized.includes("maximum draws reached")) return "domino.maxDrawsReached";
+  if (normalized.includes("game is already over")) return "domino.gameAlreadyOver";
+  if (normalized.includes("invalid game state") || normalized.includes("corrupted game state")) {
+    return "domino.invalidState";
+  }
+  if (normalized.includes("invalid move type") || normalized.includes("invalid tile payload")) {
+    return "domino.invalidMoveType";
+  }
+  return undefined;
+}
+
+function inferMoveErrorCode(message: string): string {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("not your turn")) return "not_your_turn";
+  if (normalized.includes("game not in progress") || normalized.includes("already over")) {
+    return "game_not_playable";
+  }
+  if (normalized.includes("challenge not found")) return "challenge_not_found";
+  if (normalized.includes("unknown game type")) return "unknown_game_type";
+  if (normalized.includes("corrupted game state") || normalized.includes("invalid game state")) {
+    return "invalid_game_state";
+  }
+  if (normalized.includes("invalid move") || normalized.includes("cannot play") || normalized.includes("tile not in your hand")) {
+    return "invalid_move";
+  }
+  if (normalized.includes("move apply failed") || normalized.includes("failed to apply move")) {
+    return "move_apply_failed";
+  }
+  return "move_failed";
+}
+
+function toMoveErrorPayload(
+  error: unknown,
+  gameType: string | undefined,
+): { error: string; code: string; errorKey?: string; requiresSync: boolean } {
+  if (error instanceof ChallengeMoveError) {
+    return {
+      error: error.message,
+      code: error.code,
+      errorKey: error.errorKey,
+      requiresSync: error.requiresSync,
+    };
+  }
+
+  const message = getErrorMessage(error) || "Invalid move";
+  const code = inferMoveErrorCode(message);
+  const errorKey = gameType === "domino" ? inferDominoErrorKey(message) : undefined;
+  const requiresSync = code === "not_your_turn" || code === "invalid_game_state" || code === "game_not_playable";
+
+  return {
+    error: message,
+    code,
+    errorKey,
+    requiresSync,
+  };
+}
+
 /** Handle game_move message — process a move with DB transaction and payout settlement */
 export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId, move } = data;
@@ -18,6 +106,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
     return;
   }
   const { room } = guard;
+  let resolvedGameType: string | undefined;
 
   try {
     // Use DB transaction with row lock for atomic move processing
@@ -30,19 +119,38 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
         .for('update');
 
       if (!session || !isChallengeSessionPlayableStatus(session.status)) {
-        throw new Error("Game not in progress");
+        throw new ChallengeMoveError("Game not in progress", {
+          code: "game_not_playable",
+          requiresSync: true,
+        });
       }
 
+      const gameType = String(session.gameType || "").toLowerCase();
+      resolvedGameType = gameType;
+
       if (session.currentTurn !== ws.userId) {
-        throw new Error("Not your turn");
+        throw new ChallengeMoveError("Not your turn", {
+          code: "not_your_turn",
+          errorKey: gameType === "domino" ? "domino.notYourTurn" : undefined,
+          requiresSync: true,
+        });
       }
 
       const [challenge] = await tx.select().from(challenges).where(eq(challenges.id, challengeId));
-      if (!challenge) throw new Error("Challenge not found");
+      if (!challenge) {
+        throw new ChallengeMoveError("Challenge not found", {
+          code: "challenge_not_found",
+          requiresSync: true,
+        });
+      }
 
-      const gameType = String(session.gameType || "").toLowerCase();
       const engine = getGameEngine(gameType);
-      if (!engine) throw new Error(`Unknown game type: ${gameType}`);
+      if (!engine) {
+        throw new ChallengeMoveError(`Unknown game type: ${gameType}`, {
+          code: "unknown_game_type",
+          requiresSync: false,
+        });
+      }
 
       // Get or initialize game state
       let stateJson: string;
@@ -57,7 +165,11 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
           challenge.player4Id,
         ].filter(Boolean) as string[];
         if ((session.totalMoves || 0) > 0) {
-          throw new Error("Corrupted game state");
+          throw new ChallengeMoveError("Corrupted game state", {
+            code: "invalid_game_state",
+            errorKey: gameType === "domino" ? "domino.invalidState" : undefined,
+            requiresSync: true,
+          });
         }
 
         if (gameType === "tarneeb") {
@@ -76,13 +188,21 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
       // Validate the move
       const validation = engine.validateMove(stateJson, ws.userId!, move);
       if (!validation.valid) {
-        throw new Error(validation.error || 'Invalid move');
+        throw new ChallengeMoveError(validation.error || 'Invalid move', {
+          code: "invalid_move",
+          errorKey: validation.errorKey || (gameType === "domino" ? inferDominoErrorKey(validation.error || "") : undefined),
+          requiresSync: false,
+        });
       }
 
       // Apply the move
       const applyResult = engine.applyMove(stateJson, ws.userId!, move);
       if (!applyResult.success) {
-        throw new Error(applyResult.error || 'Move apply failed');
+        throw new ChallengeMoveError(applyResult.error || 'Move apply failed', {
+          code: "move_apply_failed",
+          errorKey: gameType === "domino" ? inferDominoErrorKey(applyResult.error || "") : undefined,
+          requiresSync: true,
+        });
       }
 
       // Check game status
@@ -322,6 +442,30 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
       }
     }
   } catch (error: unknown) {
-    ws.send(JSON.stringify({ type: "move_error", error: getErrorMessage(error) || 'Invalid move' }));
+    const moveType = typeof move?.type === "string" ? move.type : undefined;
+    const payload = toMoveErrorPayload(error, resolvedGameType);
+
+    logger.warn("Challenge move rejected", {
+      action: "challenge_game_move",
+      challengeId,
+      userId: ws.userId,
+      gameType: resolvedGameType,
+      moveType,
+      code: payload.code,
+      errorKey: payload.errorKey,
+      requiresSync: payload.requiresSync,
+      error: payload.error,
+    });
+
+    ws.send(JSON.stringify({
+      type: "move_error",
+      error: payload.error,
+      code: payload.code,
+      errorKey: payload.errorKey,
+      requiresSync: payload.requiresSync,
+      challengeId,
+      gameType: resolvedGameType,
+      moveType,
+    }));
   }
 }

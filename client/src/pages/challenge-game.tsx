@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -143,7 +143,9 @@ interface ChallengeWSMessage {
   seq?: number;
   role?: "player" | "spectator";
   error?: string;
+  errorKey?: string;
   code?: string;
+  requiresSync?: boolean;
   session?: GameSession;
   view?: Record<string, unknown>;
   message?: Record<string, unknown>;
@@ -154,6 +156,8 @@ interface ChallengeWSMessage {
   reason?: string;
   offeredBy?: string;
   count?: number;
+  moveType?: string;
+  gameType?: string;
   [key: string]: unknown;
 }
 
@@ -163,6 +167,13 @@ interface ChatMsg {
   username: string;
   message: string;
   timestamp: string | number;
+}
+
+interface DominoBoardMove {
+  tileLeft: number;
+  tileRight: number;
+  placedEnd: "left" | "right";
+  isPassed: boolean;
 }
 
 interface SpectatorInfo {
@@ -213,6 +224,8 @@ export default function ChallengeGamePage() {
   const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [fundingShortageProject, setFundingShortageProject] = useState(0);
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
+  const [dominoMoveError, setDominoMoveError] = useState<string | null>(null);
+  const [dominoResyncing, setDominoResyncing] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const authReadyRef = useRef(false);
@@ -329,6 +342,29 @@ export default function ChallengeGamePage() {
 
     return raw.replace(/^\d+\s*:\s*/, "").trim();
   }, [language]);
+
+  const getDominoMoveErrorText = useCallback((errorText: string, errorKey?: string): string => {
+    if (errorKey && errorKey.startsWith("domino.")) {
+      return t(errorKey);
+    }
+
+    const normalized = String(errorText || "").toLowerCase();
+    if (normalized.includes("not your turn")) return t("domino.notYourTurn");
+    if (normalized.includes("cannot pass")) return t("domino.cannotPass");
+    if (normalized.includes("must draw")) return t("domino.mustDraw");
+    if (normalized.includes("cannot draw")) return t("domino.cannotDraw");
+    if (normalized.includes("boneyard is empty")) return t("domino.boneyardEmpty");
+    if (normalized.includes("tile not in your hand")) return t("domino.tileNotInHand");
+    if (normalized.includes("maximum draws reached")) return t("domino.maxDrawsReached");
+    if (normalized.includes("cannot play this tile on this end") || normalized.includes("invalid placement")) {
+      return t("domino.invalidPlacement");
+    }
+    if (normalized.includes("invalid game state") || normalized.includes("corrupted game state")) {
+      return t("domino.invalidState");
+    }
+    if (normalized.includes("invalid")) return t("domino.invalidMoveType");
+    return errorText;
+  }, [t]);
 
   const estimateUsdForProjectCurrency = useCallback((projectAmount: number): number => {
     const exchangeRate = Number(projectCurrencySettings?.exchangeRate || 0);
@@ -638,7 +674,23 @@ export default function ChallengeGamePage() {
       const { message, code } = extractWsErrorInfo(data);
       if (message) {
         const parsedError = parseApiErrorMessage(message);
-        showWsErrorToast(parsedError, code);
+        const rawErrorKey = typeof data.errorKey === "string" ? data.errorKey : undefined;
+        const displayError = challenge?.gameType === "domino"
+          ? getDominoMoveErrorText(parsedError, rawErrorKey)
+          : parsedError;
+
+        showWsErrorToast(displayError, code);
+
+        if (challenge?.gameType === "domino") {
+          setDominoMoveError(displayError);
+        }
+
+        if (data.requiresSync && wsRef.current?.readyState === WebSocket.OPEN) {
+          if (challenge?.gameType === "domino") {
+            setDominoResyncing(true);
+          }
+          requestRoleAssignment(wsRef.current);
+        }
 
         const normalized = parsedError.toLowerCase();
         const isGiftFundingError = code === "project_currency_required" || (
@@ -683,12 +735,15 @@ export default function ChallengeGamePage() {
         break;
       }
       case "joined_challenge_game":
+        setDominoResyncing(false);
         break;
       case "game_state_sync":
         lastSyncRef.current = Date.now();
         if (shouldApplySessionUpdate(data.session, data.view, data.seq)) {
           if (data.session) setGameSession(data.session);
           if (data.view) setPlayerView(data.view);
+          setDominoResyncing(false);
+          setDominoMoveError(null);
         }
         break;
       case "game_move":
@@ -699,6 +754,8 @@ export default function ChallengeGamePage() {
             clearChessMovePending();
           }
           if (data.view) setPlayerView(data.view);
+          setDominoResyncing(false);
+          setDominoMoveError(null);
         }
         // Sound: determine move type from game context
         if (gameSession?.gameType === "chess") {
@@ -752,6 +809,7 @@ export default function ChallengeGamePage() {
         if (!shouldAcceptSeqOnly(data.seq)) {
           break;
         }
+        setDominoResyncing(false);
         clearChessMovePending();
         setGameSession(prev => prev ? { ...prev, status: "finished", winnerId: data.winnerId ?? undefined, winReason: data.reason ?? undefined } : {
           id: "",
@@ -829,6 +887,7 @@ export default function ChallengeGamePage() {
     toFiniteNumber,
     isChallengeParticipant,
     requestRoleAssignment,
+    getDominoMoveErrorText,
   ]);
 
   const sendMove = useCallback((move: object) => {
@@ -846,6 +905,7 @@ export default function ChallengeGamePage() {
     }
 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
+      setDominoMoveError(null);
       if (isChessMove) {
         chessMovePendingRef.current = true;
         if (chessMoveAckTimerRef.current) {
@@ -864,6 +924,92 @@ export default function ChallengeGamePage() {
       }));
     }
   }, [challengeId, canPlayActions, showSpectatorActionBlocked, gameSession?.gameType]);
+
+  // DominoBoard emits UI-friendly move shape; challenge websocket expects engine move shape.
+  const sendDominoMove = useCallback((move: DominoBoardMove) => {
+    setDominoMoveError(null);
+    setDominoResyncing(false);
+
+    const isDraw = move.tileLeft === -1 && move.tileRight === -1;
+    if (isDraw) {
+      sendMove({ type: "draw" });
+      return;
+    }
+
+    if (move.isPassed) {
+      sendMove({ type: "pass" });
+      return;
+    }
+
+    const handRaw = (playerView as { hand?: unknown } | null)?.hand;
+    const hand = Array.isArray(handRaw)
+      ? handRaw as Array<{ left: number; right: number; id?: string }>
+      : [];
+
+    const matched = hand.find((tile) =>
+      (tile.left === move.tileLeft && tile.right === move.tileRight)
+      || (tile.left === move.tileRight && tile.right === move.tileLeft)
+    );
+
+    sendMove({
+      type: "play",
+      tile: {
+        left: move.tileLeft,
+        right: move.tileRight,
+        ...(matched?.id ? { id: matched.id } : {}),
+      },
+      end: move.placedEnd,
+    });
+  }, [sendMove, playerView]);
+
+  const dominoBoardState = useMemo(() => {
+    if (!playerView) {
+      return undefined;
+    }
+
+    const boardRaw = Array.isArray(playerView.board)
+      ? playerView.board as Array<{ left: number; right: number; id?: string }>
+      : [];
+    const handRaw = Array.isArray(playerView.hand)
+      ? playerView.hand as Array<{ left: number; right: number; id?: string }>
+      : [];
+
+    const otherCountsRaw = (playerView.otherHandCounts && typeof playerView.otherHandCounts === "object")
+      ? playerView.otherHandCounts as Record<string, unknown>
+      : {};
+    const opponentTileCounts = Object.fromEntries(
+      Object.entries(otherCountsRaw)
+        .filter(([, value]) => typeof value === "number" && Number.isFinite(value))
+        .map(([pid, value]) => [pid, value as number])
+    ) as Record<string, number>;
+
+    const playerOrder = Array.isArray(playerView.playerOrder)
+      ? playerView.playerOrder as string[]
+      : [];
+    const playerCount = Math.max(2, playerOrder.length || 2);
+
+    return {
+      myHand: handRaw,
+      opponentTileCount: Object.values(opponentTileCounts).reduce((sum, count) => sum + count, 0),
+      opponentTileCounts,
+      boardTiles: boardRaw.map((tile) => ({
+        tile,
+        rotation: tile.left === tile.right ? 0 : 90,
+      })),
+      leftEnd: typeof playerView.leftEnd === "number" ? playerView.leftEnd : -1,
+      rightEnd: typeof playerView.rightEnd === "number" ? playerView.rightEnd : -1,
+      boneyard: typeof playerView.boneyardCount === "number" ? playerView.boneyardCount : 0,
+      lastAction: playerView.lastAction,
+      scores: playerView.scores,
+      canDraw: typeof playerView.canDraw === "boolean" ? playerView.canDraw : false,
+      playerOrder,
+      validMoves: Array.isArray(playerView.validMoves) ? playerView.validMoves : [],
+      passCount: typeof playerView.passCount === "number" ? playerView.passCount : 0,
+      playerCount,
+      drawsThisTurn: typeof playerView.drawsThisTurn === "number" ? playerView.drawsThisTurn : 0,
+      maxDraws: Math.max(28 - playerCount * 7, 0),
+    };
+  }, [playerView]);
 
   // Backgammon-specific: roll dice
   const sendRoll = useCallback(() => {
@@ -1278,14 +1424,30 @@ export default function ChallengeGamePage() {
                   />
                 )}
                 {challenge.gameType === "domino" && (
-                  <DominoBoard
-                    gameState={(gameSession?.gameState as string) || (playerView ? JSON.stringify(playerView) : undefined)}
-                    currentTurn={gameSession?.currentTurn}
-                    isMyTurn={canPlayActions && ((playerView?.isMyTurn as boolean) ?? (gameSession?.currentTurn === user?.id))}
-                    isSpectator={isSpectator}
-                    onMove={canPlayActions ? sendMove : () => { }}
-                    status={gameSession?.status}
-                  />
+                  <div className="w-full">
+                    <DominoBoard
+                      gameState={dominoBoardState}
+                      currentTurn={gameSession?.currentTurn}
+                      isMyTurn={canPlayActions && ((playerView?.isMyTurn as boolean) ?? (gameSession?.currentTurn === user?.id))}
+                      isSpectator={isSpectator}
+                      onMove={canPlayActions ? sendDominoMove : () => { }}
+                      status={gameSession?.status}
+                    />
+                    {(dominoResyncing || dominoMoveError) && (
+                      <div className="mt-3 w-full max-w-lg mx-auto space-y-2">
+                        {dominoResyncing && (
+                          <div className="text-xs text-center text-muted-foreground">
+                            {t("common.reconnecting")}
+                          </div>
+                        )}
+                        {dominoMoveError && (
+                          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-center">
+                            {dominoMoveError}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {challenge.gameType === "backgammon" && playerView && (
                   <BackgammonBoard
