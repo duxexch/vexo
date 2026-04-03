@@ -75,9 +75,16 @@ export function registerSessionsPointsRoutes(app: Express) {
       let initialStateJson = "";
 
       if (engine && typeof engine.initializeWithPlayers === 'function' && playerIds.length >= 2) {
-        if (normalizedGameType === 'tarneeb' || normalizedGameType === 'baloot') {
-          // Card team games: pass array of player IDs (engine generates bots if needed)
+        if (normalizedGameType === 'tarneeb') {
+          // Team card game target is 31 points.
           initialStateJson = engine.initializeWithPlayers(playerIds, 31);
+        } else if (normalizedGameType === 'baloot') {
+          // Baloot match target is 152 points.
+          initialStateJson = engine.initializeWithPlayers(playerIds, 152);
+        } else if (normalizedGameType === 'domino') {
+          // Preserve challenge-selected domino target score (101/201).
+          const targetScore = challenge.dominoTargetScore === 201 ? 201 : 101;
+          initialStateJson = engine.initializeWithPlayers(playerIds, targetScore);
         } else if (normalizedGameType === 'chess') {
           const incrementMs = challenge.timeLimit === 180 ? 2000 : challenge.timeLimit === 900 ? 10000 : 0;
           initialStateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1], {

@@ -1,7 +1,8 @@
 import type { Express, Response } from "express";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { users } from "@shared/schema";
 import { authMiddleware, AuthRequest, sensitiveRateLimiter } from "../middleware";
 import { calculateOdds, calculatePotentialWinnings, type PlayerStats } from "../../lib/odds-calculator";
 import { getErrorMessage } from "../helpers";
@@ -147,6 +148,74 @@ function aggregatePlayerStats(players: PlayerStats[]): PlayerStats {
   };
 }
 
+type SupportCurrencyType = "project" | "usd";
+
+function normalizeSupportCurrencyType(currencyType: unknown): SupportCurrencyType {
+  return currencyType === "project" ? "project" : "usd";
+}
+
+async function reserveUsdSupportAmount(userId: string, supportAmount: number): Promise<{ success: boolean; error?: string }> {
+  try {
+    await db.transaction(async (tx) => {
+      const [userRecord] = await tx
+        .select({ id: users.id, balance: users.balance })
+        .from(users)
+        .where(eq(users.id, userId))
+        .for("update");
+
+      if (!userRecord) {
+        throw new Error("User not found");
+      }
+
+      const currentBalance = parseFloat(String(userRecord.balance || "0"));
+      if (!Number.isFinite(currentBalance) || currentBalance < supportAmount) {
+        throw new Error("Insufficient USD balance");
+      }
+
+      await tx
+        .update(users)
+        .set({ balance: (currentBalance - supportAmount).toFixed(2) })
+        .where(eq(users.id, userId));
+    });
+
+    return { success: true };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
+async function releaseReservedSupportAmount(
+  userId: string,
+  supportAmount: number,
+  currencyType: SupportCurrencyType,
+): Promise<{ success: boolean; error?: string }> {
+  if (!Number.isFinite(supportAmount) || supportAmount <= 0) {
+    return { success: true };
+  }
+
+  if (currencyType === "project") {
+    const wallet = await storage.getProjectCurrencyWallet(userId);
+    if (!wallet) {
+      return { success: false, error: "Project currency wallet not found" };
+    }
+
+    const unlockResult = await storage.unlockProjectCurrencyBalance(wallet.id, supportAmount.toFixed(8));
+    return unlockResult.success ? { success: true } : { success: false, error: unlockResult.error || "Failed to unlock project balance" };
+  }
+
+  try {
+    await db
+      .update(users)
+      .set({
+        balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${supportAmount.toFixed(2)})::text`,
+      })
+      .where(eq(users.id, userId));
+    return { success: true };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
 export function registerSupportActionRoutes(app: Express): void {
 
   // Place a support on a challenge
@@ -169,9 +238,9 @@ export function registerSupportActionRoutes(app: Express): void {
         return res.status(400).json({ error: "Invalid amount" });
       }
 
-      const { challenges, spectatorSupports, matchedSupports } = await import("@shared/schema");
+      const { challenges } = await import("@shared/schema");
       const [challenge] = await db.select().from(challenges).where(eq(challenges.id, challengeId));
-      
+
       if (!challenge) {
         return res.status(404).json({ error: "Challenge not found" });
       }
@@ -184,6 +253,8 @@ export function registerSupportActionRoutes(app: Express): void {
       if (challenge.status !== "waiting" && challenge.status !== "active") {
         return res.status(400).json({ error: "Challenge is not accepting supports" });
       }
+
+      const supportCurrencyType = normalizeSupportCurrencyType(challenge.currencyType);
 
       const participantIds = getChallengeParticipantIds(challenge);
 
@@ -203,8 +274,8 @@ export function registerSupportActionRoutes(app: Express): void {
       const minAmount = parseFloat(settings.minSupportAmount);
       const maxAmount = parseFloat(settings.maxSupportAmount);
       if (supportAmount < minAmount || supportAmount > maxAmount) {
-        return res.status(400).json({ 
-          error: `Support amount must be between ${minAmount} and ${maxAmount}` 
+        return res.status(400).json({
+          error: `Support amount must be between ${minAmount} and ${maxAmount}`
         });
       }
 
@@ -212,15 +283,27 @@ export function registerSupportActionRoutes(app: Express): void {
         return res.status(400).json({ error: "Instant match is not allowed for this game type" });
       }
 
-      const wallet = await storage.getOrCreateProjectCurrencyWallet(supporterId);
-      const availableBalance = parseFloat(wallet.purchasedBalance) + parseFloat(wallet.earnedBalance) - parseFloat(wallet.lockedBalance);
-      if (availableBalance < supportAmount) {
-        return res.status(400).json({ error: "Insufficient project currency balance" });
-      }
+      if (supportCurrencyType === "project") {
+        const wallet = await storage.getOrCreateProjectCurrencyWallet(supporterId);
+        const availableBalance = parseFloat(wallet.purchasedBalance) + parseFloat(wallet.earnedBalance) - parseFloat(wallet.lockedBalance);
+        if (availableBalance < supportAmount) {
+          return res.status(400).json({ error: "Insufficient project currency balance" });
+        }
 
-      const lockResult = await storage.lockProjectCurrencyBalance(wallet.id, supportAmount.toFixed(8));
-      if (!lockResult.success) {
-        return res.status(400).json({ error: lockResult.error || "Failed to lock balance" });
+        const lockResult = await storage.lockProjectCurrencyBalance(wallet.id, supportAmount.toFixed(8));
+        if (!lockResult.success) {
+          return res.status(400).json({ error: lockResult.error || "Failed to lock balance" });
+        }
+      } else {
+        const reserveUsdResult = await reserveUsdSupportAmount(supporterId, supportAmount);
+        if (!reserveUsdResult.success) {
+          const reserveError = reserveUsdResult.error || "Failed to reserve USD balance";
+          const normalizedReserveError = reserveError.toLowerCase();
+          if (normalizedReserveError.includes("insufficient")) {
+            return res.status(400).json({ error: "Insufficient USD balance" });
+          }
+          return res.status(400).json({ error: reserveError });
+        }
       }
 
       let odds: number;
@@ -235,7 +318,7 @@ export function registerSupportActionRoutes(app: Express): void {
         const targetPlayer = participantUsers.find((player) => player?.id === playerId);
 
         if (!targetPlayer) {
-          await storage.unlockProjectCurrencyBalance(wallet.id, supportAmount.toFixed(8));
+          await releaseReservedSupportAmount(supporterId, supportAmount, supportCurrencyType);
           return res.status(404).json({ error: "Target player not found" });
         }
 
@@ -249,7 +332,7 @@ export function registerSupportActionRoutes(app: Express): void {
           .filter((player): player is NonNullable<typeof player> => Boolean(player && opposingPlayerIds.includes(player.id)));
 
         if (opponentUsers.length === 0) {
-          await storage.unlockProjectCurrencyBalance(wallet.id, supportAmount.toFixed(8));
+          await releaseReservedSupportAmount(supporterId, supportAmount, supportCurrencyType);
           return res.status(400).json({ error: "No opponents available for odds calculation" });
         }
 
@@ -281,7 +364,7 @@ export function registerSupportActionRoutes(app: Express): void {
         const opposingPlayerIds = getChallengeOpposingParticipantIds(challenge, playerId);
 
         if (opposingPlayerIds.length === 0) {
-          await storage.unlockProjectCurrencyBalance(wallet.id, supportAmount.toFixed(8));
+          await releaseReservedSupportAmount(supporterId, supportAmount, supportCurrencyType);
           return res.status(400).json({ error: "No opposing players available for support matching" });
         }
 
@@ -336,8 +419,9 @@ export function registerSupportActionRoutes(app: Express): void {
   // Cancel a pending support
   app.delete("/api/supports/:supportId", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+      const { challenges } = await import("@shared/schema");
       const support = await storage.getSpectatorSupport(req.params.supportId);
-      
+
       if (!support) {
         return res.status(404).json({ error: "Support not found" });
       }
@@ -350,9 +434,17 @@ export function registerSupportActionRoutes(app: Express): void {
         return res.status(400).json({ error: "Only pending supports can be cancelled" });
       }
 
-      const wallet = await storage.getProjectCurrencyWallet(req.user!.id);
-      if (wallet) {
-        await storage.unlockProjectCurrencyBalance(wallet.id, support.amount);
+      const [challenge] = await db
+        .select({ currencyType: challenges.currencyType })
+        .from(challenges)
+        .where(eq(challenges.id, support.challengeId))
+        .limit(1);
+
+      const supportCurrencyType = normalizeSupportCurrencyType(challenge?.currencyType);
+      const supportAmount = parseFloat(String(support.amount || "0"));
+      const releaseResult = await releaseReservedSupportAmount(support.supporterId, supportAmount, supportCurrencyType);
+      if (!releaseResult.success) {
+        return res.status(400).json({ error: releaseResult.error || "Failed to refund support amount" });
       }
 
       await storage.updateSpectatorSupport(support.id, { status: "cancelled" });

@@ -8,10 +8,33 @@ import { broadcastChallengeUpdate, broadcastNotification } from "../../websocket
 import { sendNotification } from "../../websocket";
 import { getErrorMessage } from "./helpers";
 
+function normalizeChallengeCurrencyType(currencyType: unknown): "project" | "usd" {
+  return currencyType === "project" ? "project" : "usd";
+}
+
+function formatChallengeAmount(amount: number, currencyType: unknown): string {
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const normalizedCurrencyType = normalizeChallengeCurrencyType(currencyType);
+  if (normalizedCurrencyType === "project") {
+    return `VXC ${safeAmount.toFixed(2)}`;
+  }
+  return `$${safeAmount.toFixed(2)}`;
+}
+
 export function registerCreateRoute(app: Express) {
   app.post("/api/challenges", sensitiveRateLimiter, authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const { gameType, betAmount, opponentType, friendAccountId, visibility = 'public', currencyType = 'project', requiredPlayers = 2, chessSystem } = req.body;
+      const {
+        gameType,
+        betAmount,
+        opponentType,
+        friendAccountId,
+        visibility = 'public',
+        currencyType = 'project',
+        requiredPlayers = 2,
+        chessSystem,
+        dominoTargetScore,
+      } = req.body;
 
       const [currencyModeSetting] = await db.select({ value: gameplaySettings.value })
         .from(gameplaySettings)
@@ -81,6 +104,18 @@ export function registerCreateRoute(app: Express) {
       let timeLimit = gameConfig.defaultTimeLimit || 300;
 
       const normalizedGameType = String(gameType || '').toLowerCase();
+      let parsedDominoTargetScore: number | null = null;
+
+      if (normalizedGameType === 'domino') {
+        const targetValue = Number(dominoTargetScore ?? 101);
+        if (!Number.isInteger(targetValue) || ![101, 201].includes(targetValue)) {
+          return res.status(400).json({ error: 'Invalid domino target score. Allowed values: 101 or 201' });
+        }
+        parsedDominoTargetScore = targetValue;
+      } else if (dominoTargetScore !== undefined && dominoTargetScore !== null) {
+        return res.status(400).json({ error: 'dominoTargetScore can only be used with domino challenges' });
+      }
+
       if (normalizedGameType === 'chess') {
         const selectedChessSystem = typeof chessSystem === 'string' && chessSystem.trim().length > 0
           ? chessSystem.trim()
@@ -126,10 +161,10 @@ export function registerCreateRoute(app: Express) {
       const minStake = parseFloat(challengeConfig.minStake);
       const maxStake = parseFloat(challengeConfig.maxStake);
       if (minStake > 0 && parsedBetAmount < minStake) {
-        return res.status(400).json({ error: `Minimum stake is $${minStake.toFixed(2)}` });
+        return res.status(400).json({ error: `Minimum stake is ${formatChallengeAmount(minStake, effectiveCurrencyType)}` });
       }
       if (maxStake > 0 && parsedBetAmount > maxStake) {
-        return res.status(400).json({ error: `Maximum stake is $${maxStake.toFixed(2)}` });
+        return res.status(400).json({ error: `Maximum stake is ${formatChallengeAmount(maxStake, effectiveCurrencyType)}` });
       }
 
       // SECURITY: Limit concurrent active challenges to prevent balance drain exploit
@@ -246,6 +281,7 @@ export function registerCreateRoute(app: Express) {
           currentPlayers: 1,
           opponentType,
           friendAccountId: opponentType === 'friend' ? friendAccountId : null,
+          dominoTargetScore: parsedDominoTargetScore,
           timeLimit,
           player1Score: 0,
           player2Score: 0,
@@ -280,13 +316,14 @@ export function registerCreateRoute(app: Express) {
       // Notify targeted friend if this is a friend challenge
       if (opponentType === 'friend' && friendAccountId) {
         const gameName = gameType.charAt(0).toUpperCase() + gameType.slice(1);
+        const formattedChallengeAmount = formatChallengeAmount(parsedBetAmount, effectiveCurrencyType);
         sendNotification(friendAccountId, {
           type: 'system',
           priority: 'high',
           title: `You've Been Challenged! ⚔️`,
           titleAr: `تم تحديك! ⚔️`,
-          message: `${player1?.nickname || player1?.username} challenged you to a ${gameName} game for $${parsedBetAmount}!`,
-          messageAr: `${player1?.nickname || player1?.username} تحداك في لعبة ${gameName} بقيمة $${parsedBetAmount}!`,
+          message: `${player1?.nickname || player1?.username} challenged you to a ${gameName} game for ${formattedChallengeAmount}!`,
+          messageAr: `${player1?.nickname || player1?.username} تحداك في لعبة ${gameName} بقيمة ${formattedChallengeAmount}!`,
           link: `/challenges`,
           metadata: JSON.stringify({ challengeId: dbChallenge.id, gameType, betAmount: parsedBetAmount }),
         }).catch(() => { });
@@ -297,14 +334,15 @@ export function registerCreateRoute(app: Express) {
       if (followers.length > 0) {
         const followerIds = followers.map(f => f.userId);
         const gameName = gameType.charAt(0).toUpperCase() + gameType.slice(1);
+        const formattedChallengeAmount = formatChallengeAmount(parsedBetAmount, effectiveCurrencyType);
 
         await broadcastNotification({
           type: "system",
           priority: "normal",
           title: "New Challenge",
           titleAr: "تحدي جديد",
-          message: `${player1?.nickname || player1?.username} started a ${gameName} challenge for $${parsedBetAmount}! Watch and support now.`,
-          messageAr: `${player1?.nickname || player1?.username} بدأ تحدي ${gameName} بقيمة $${parsedBetAmount}! شاهد وادعم الآن.`,
+          message: `${player1?.nickname || player1?.username} started a ${gameName} challenge for ${formattedChallengeAmount}! Watch and support now.`,
+          messageAr: `${player1?.nickname || player1?.username} بدأ تحدي ${gameName} بقيمة ${formattedChallengeAmount}! شاهد وادعم الآن.`,
           link: `/watch/${dbChallenge.id}`,
           metadata: JSON.stringify({
             challengeId: dbChallenge.id,

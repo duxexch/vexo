@@ -15,7 +15,10 @@ export interface DominoState {
   passCount: number;
   drawsThisTurn: number;
   gameOver: boolean;
+  targetScore: number;
+  roundNumber: number;
   winner?: string | null;
+  winningTeam?: number;
   isDraw?: boolean;
   reason?: string; // C9-F10: game-over reason stored at mutation time
   scores: { [playerId: string]: number };

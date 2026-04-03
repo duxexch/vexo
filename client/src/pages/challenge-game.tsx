@@ -39,6 +39,7 @@ import type { BalootState } from "@/components/games/BalootBoard";
 import { GameChat } from "@/components/games/GameChat";
 import { VoiceChat } from "@/components/games/VoiceChat";
 import { SpectatorPanel } from "@/components/games/SpectatorPanel";
+import { DominoSpectatorInsights } from "@/components/games/DominoSpectatorInsights";
 import { ShareMatchButton } from "@/components/games/ShareMatchButton";
 import { GiftAnimation } from "@/components/games/GiftAnimation";
 import { ProjectCurrencyAmount } from "@/components/ProjectCurrencySymbol";
@@ -101,6 +102,7 @@ interface Challenge {
   id: string;
   gameType: string;
   betAmount: string;
+  currencyType?: "project" | "usd";
   visibility: "public" | "private";
   status: string;
   player1Id: string;
@@ -1454,6 +1456,9 @@ export default function ChallengeGamePage() {
   };
   const gameInfo = GAME_INFO[challenge.gameType] || GAME_INFO.chess;
   const GameIcon = gameInfo.icon;
+  const challengeCurrencyType = challenge.currencyType === "project" ? "project" : "usd";
+  const isProjectChallengeCurrency = challengeCurrencyType === "project";
+  const challengeBetAmountValue = Number.parseFloat(String(challenge.betAmount || 0));
 
   const isTeamGame = challenge.gameType === "tarneeb" || challenge.gameType === "baloot";
   const playerIds = [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id].filter(Boolean);
@@ -1491,7 +1496,11 @@ export default function ChallengeGamePage() {
                 </Badge>
               </div>
               <Badge variant="secondary" className="hidden sm:inline-flex shrink-0">
-                ${parseFloat(challenge.betAmount).toFixed(2)}
+                {isProjectChallengeCurrency ? (
+                  <ProjectCurrencyAmount amount={challengeBetAmountValue} symbolClassName="text-xs" amountClassName="text-xs font-medium" />
+                ) : (
+                  `$${challengeBetAmountValue.toFixed(2)}`
+                )}
               </Badge>
             </div>
 
@@ -1724,7 +1733,24 @@ export default function ChallengeGamePage() {
 
             {/* Spectator sidebar - only shown for spectators */}
             {isSpectator && (
-              <div className="w-full lg:w-80 border-s flex flex-col bg-card max-h-[30vh] lg:max-h-none">
+              <div className="w-full lg:w-[22rem] border-s flex flex-col bg-card max-h-[46vh] lg:max-h-none">
+                {challenge.gameType === "domino" && (
+                  <DominoSpectatorInsights
+                    spectatorCount={gameSession?.spectatorCount || 0}
+                    totalMoves={gameSession?.totalMoves}
+                    currentTurn={gameSession?.currentTurn}
+                    gameStatus={gameSession?.status}
+                    boardState={dominoBoardState}
+                    player1={challenge.player1 ? { id: challenge.player1.id, username: challenge.player1.username, avatarUrl: challenge.player1.avatarUrl } : undefined}
+                    player2={challenge.player2 ? { id: challenge.player2.id, username: challenge.player2.username, avatarUrl: challenge.player2.avatarUrl } : undefined}
+                    timeline={dominoTimeline}
+                    scoreRows={dominoScoreRows}
+                    endgameSummary={dominoEndgameSummary}
+                    dominoResyncing={dominoResyncing}
+                    dominoMoveError={dominoMoveError}
+                  />
+                )}
+
                 <SpectatorPanel
                   challengeId={challengeId!}
                   player1={challenge.player1}
@@ -1809,9 +1835,18 @@ export default function ChallengeGamePage() {
                 {gameSession.winReason === "draw" && (language === "ar" ? "تعادل" : "Draw")}
               </p>
               {canPlayActions && gameSession.winnerId === user?.id && (
-                <p className="text-lg font-bold text-green-500 mt-2">
-                  +${(parseFloat(challenge.betAmount) * 2 * (1 - parseFloat(challengeConfig?.commissionPercent || '5') / 100)).toFixed(2)}
-                </p>
+                <div className="mt-2 inline-flex items-center gap-1 text-lg font-bold text-green-500">
+                  <span>+</span>
+                  {isProjectChallengeCurrency ? (
+                    <ProjectCurrencyAmount
+                      amount={challengeBetAmountValue * 2 * (1 - parseFloat(challengeConfig?.commissionPercent || "5") / 100)}
+                      symbolClassName="text-base"
+                      amountClassName="text-lg font-bold text-green-500"
+                    />
+                  ) : (
+                    <span>${(challengeBetAmountValue * 2 * (1 - parseFloat(challengeConfig?.commissionPercent || "5") / 100)).toFixed(2)}</span>
+                  )}
+                </div>
               )}
             </div>
             <DialogFooter className="flex-col sm:flex-row gap-2">

@@ -16,11 +16,13 @@ export class DominoEngine implements GameEngine {
       hands: {}, boneyard: [], currentPlayer: '',
       playerOrder: [], passCount: 0, drawsThisTurn: 0,
       gameOver: false, scores: {},
+      targetScore: 101,
+      roundNumber: 1,
     });
   }
 
-  initializeWithPlayers(playerIds: string[]): string {
-    const state = this.createNewGame(playerIds);
+  initializeWithPlayers(playerIds: string[], targetScore?: number): string {
+    const state = this.createNewGame(playerIds, this.normalizeTargetScore(targetScore));
 
     // Identify bot players (IDs starting with 'bot-')
     const botPlayers = playerIds.filter(id => id.startsWith('bot-'));
@@ -54,9 +56,9 @@ export class DominoEngine implements GameEngine {
       const rightEndNew = tile.left === state.rightEnd ? tile.right : tile.left;
       // Score each option: connectivity to new end + connectivity to unchanged opposite end
       const leftScore = remainingHand.filter(t => t.left === leftEndNew || t.right === leftEndNew).length
-                      + remainingHand.filter(t => t.left === state.rightEnd || t.right === state.rightEnd).length * 0.5;
+        + remainingHand.filter(t => t.left === state.rightEnd || t.right === state.rightEnd).length * 0.5;
       const rightScore = remainingHand.filter(t => t.left === rightEndNew || t.right === rightEndNew).length
-                       + remainingHand.filter(t => t.left === state.leftEnd || t.right === state.leftEnd).length * 0.5;
+        + remainingHand.filter(t => t.left === state.leftEnd || t.right === state.leftEnd).length * 0.5;
       return { type: 'play', tile, end: leftScore >= rightScore ? 'left' : 'right' };
     }
     if (canLeft) return { type: 'play', tile, end: 'left' };
@@ -117,6 +119,34 @@ export class DominoEngine implements GameEngine {
     return { stateJson: JSON.stringify(result.state), events: result.events };
   }
 
+  private normalizeTargetScore(targetScore: unknown): number {
+    return Number(targetScore) === 201 ? 201 : 101;
+  }
+
+  private hydrateState(state: DominoState): void {
+    state.targetScore = this.normalizeTargetScore(state.targetScore);
+    state.roundNumber = Number.isInteger(state.roundNumber) && state.roundNumber > 0 ? state.roundNumber : 1;
+    if (!state.scores || typeof state.scores !== 'object') {
+      state.scores = {};
+    }
+    for (const playerId of state.playerOrder) {
+      if (!Number.isFinite(state.scores[playerId])) {
+        state.scores[playerId] = 0;
+      }
+    }
+  }
+
+  private getWinningTeam(state: DominoState, winnerId: string): number | undefined {
+    if (state.playerOrder.length !== 4) {
+      return undefined;
+    }
+    const winnerIdx = state.playerOrder.indexOf(winnerId);
+    if (winnerIdx === -1) {
+      return undefined;
+    }
+    return winnerIdx % 2 === 0 ? 0 : 1;
+  }
+
   /** C7-F1: Shared scoring helper — sums opponent pips for winner, credits teammate in 4p mode */
   private scoreWinner(state: DominoState, winnerId: string): number {
     let winnerScore = 0;
@@ -142,7 +172,178 @@ export class DominoEngine implements GameEngine {
     return winnerScore;
   }
 
-  private createNewGame(playerIds: string[]): DominoState {
+  private sumPlayerPips(state: DominoState, playerId: string): number {
+    return (state.hands[playerId] ?? []).reduce((sum, tile) => sum + tile.left + tile.right, 0);
+  }
+
+  /** Blocked-game scoring: winner gains the pip difference between winning and losing sides. */
+  private scoreBlockedWinnerByDifference(state: DominoState, winnerId: string): number {
+    if (!state.playerOrder.includes(winnerId)) {
+      return 0;
+    }
+
+    if (state.playerOrder.length === 4) {
+      const teamA = [state.playerOrder[0], state.playerOrder[2]];
+      const teamB = [state.playerOrder[1], state.playerOrder[3]];
+      const teamAPips = teamA.reduce((sum, pid) => sum + this.sumPlayerPips(state, pid), 0);
+      const teamBPips = teamB.reduce((sum, pid) => sum + this.sumPlayerPips(state, pid), 0);
+      const winnerOnTeamA = teamA.includes(winnerId);
+      const winningTeam = winnerOnTeamA ? teamA : teamB;
+      const winningTeamPips = winnerOnTeamA ? teamAPips : teamBPips;
+      const losingTeamPips = winnerOnTeamA ? teamBPips : teamAPips;
+      const scoreDelta = Math.max(0, losingTeamPips - winningTeamPips);
+
+      for (const pid of winningTeam) {
+        state.scores[pid] = (state.scores[pid] || 0) + scoreDelta;
+      }
+
+      return scoreDelta;
+    }
+
+    const winnerPips = this.sumPlayerPips(state, winnerId);
+    const highestOpponentPips = state.playerOrder
+      .filter(pid => pid !== winnerId)
+      .reduce((max, pid) => Math.max(max, this.sumPlayerPips(state, pid)), 0);
+
+    const scoreDelta = Math.max(0, highestOpponentPips - winnerPips);
+    state.scores[winnerId] = (state.scores[winnerId] || 0) + scoreDelta;
+    return scoreDelta;
+  }
+
+  private hasReachedTarget(state: DominoState, winnerId: string): boolean {
+    return (state.scores[winnerId] || 0) >= state.targetScore;
+  }
+
+  private startNextRound(state: DominoState): void {
+    const nextRoundState = this.createNewGame(
+      state.playerOrder,
+      state.targetScore,
+      state.scores,
+      (state.roundNumber || 1) + 1,
+    );
+
+    if (state.botPlayers?.length) {
+      nextRoundState.botPlayers = [...state.botPlayers];
+    }
+
+    Object.assign(state, nextRoundState);
+  }
+
+  private finalizeRound(
+    state: DominoState,
+    events: GameEvent[],
+    roundResult: {
+      winner: string | null;
+      reason: 'domino' | 'blocked' | 'draw';
+      scoreDelta: number;
+      lowestPips?: number;
+      winningTeamPips?: number;
+    },
+  ): void {
+    const { winner, reason, scoreDelta, lowestPips, winningTeamPips } = roundResult;
+
+    if (winner && this.hasReachedTarget(state, winner)) {
+      const winningTeam = this.getWinningTeam(state, winner);
+      state.gameOver = true;
+      state.winner = winner;
+      state.winningTeam = winningTeam;
+      state.isDraw = false;
+      state.reason = reason;
+
+      events.push({
+        type: 'game_over',
+        data: {
+          winner,
+          winningTeam,
+          reason,
+          isDraw: false,
+          score: scoreDelta,
+          lowestPips,
+          winningTeamPips,
+          targetScore: state.targetScore,
+          scores: state.scores,
+          roundNumber: state.roundNumber,
+        }
+      });
+      return;
+    }
+
+    events.push({
+      type: 'score',
+      data: {
+        reason,
+        roundWinner: winner,
+        isDraw: winner === null,
+        roundNumber: state.roundNumber,
+        score: scoreDelta,
+        lowestPips,
+        winningTeamPips,
+        targetScore: state.targetScore,
+        scores: state.scores,
+      }
+    });
+
+    this.startNextRound(state);
+    events.push({ type: 'turn_change', data: { nextPlayer: state.currentPlayer, roundNumber: state.roundNumber } });
+  }
+
+  private finalizeBlockedRound(state: DominoState, events: GameEvent[]): void {
+    const { winner, lowestPips, winningTeamPips } = findBlockedGameWinner(state);
+    const scoreDelta = winner ? this.scoreBlockedWinnerByDifference(state, winner) : 0;
+
+    this.finalizeRound(state, events, {
+      winner,
+      reason: winner ? 'blocked' : 'draw',
+      scoreDelta,
+      lowestPips,
+      winningTeamPips,
+    });
+  }
+
+  /** Auto-pass players who have no playable tiles so turns never stall. */
+  private autoPassUnplayableTurns(state: DominoState, events: GameEvent[]): void {
+    let safety = 0;
+    const maxIterations = Math.max(1, state.playerOrder.length + 1);
+
+    while (!state.gameOver && safety < maxIterations) {
+      const currentPlayer = state.currentPlayer;
+      if (!currentPlayer || !state.hands[currentPlayer]) {
+        break;
+      }
+
+      const playable = getPlayableTiles(state, currentPlayer);
+      if (playable.length > 0) {
+        break;
+      }
+
+      state.passCount++;
+      state.lastAction = { type: 'pass', playerId: currentPlayer };
+      events.push({ type: 'move', data: { action: 'pass', playerId: currentPlayer, auto: true } });
+
+      if (state.passCount >= state.playerOrder.length) {
+        this.finalizeBlockedRound(state, events);
+        break;
+      }
+
+      advanceTurn(state);
+      events.push({ type: 'turn_change', data: { nextPlayer: state.currentPlayer } });
+      safety++;
+    }
+
+    if (safety >= maxIterations && !state.gameOver) {
+      console.warn('[Domino] autoPassUnplayableTurns hit safety limit', {
+        currentPlayer: state.currentPlayer,
+        passCount: state.passCount,
+      });
+    }
+  }
+
+  private createNewGame(
+    playerIds: string[],
+    targetScore = 101,
+    existingScores?: { [playerId: string]: number },
+    roundNumber = 1,
+  ): DominoState {
     if (playerIds.length < 2 || playerIds.length > 4) {
       throw new Error('Domino requires 2-4 players');
     }
@@ -181,6 +382,12 @@ export class DominoEngine implements GameEngine {
       startingPlayer = playerIds[cryptoRandomInt(playerIds.length)];
     }
 
+    const normalizedTargetScore = this.normalizeTargetScore(targetScore);
+    const safeRoundNumber = Number.isInteger(roundNumber) && roundNumber > 0 ? roundNumber : 1;
+    const scores = Object.fromEntries(
+      playerIds.map((id) => [id, Number.isFinite(existingScores?.[id]) ? Number(existingScores?.[id]) : 0]),
+    );
+
     return {
       board: [],
       leftEnd: -1,
@@ -192,7 +399,14 @@ export class DominoEngine implements GameEngine {
       passCount: 0,
       drawsThisTurn: 0,
       gameOver: false,
-      scores: Object.fromEntries(playerIds.map(id => [id, 0])),
+      targetScore: normalizedTargetScore,
+      roundNumber: safeRoundNumber,
+      scores,
+      winner: undefined,
+      winningTeam: undefined,
+      isDraw: false,
+      reason: undefined,
+      lastAction: undefined,
     };
   }
 
@@ -385,6 +599,7 @@ export class DominoEngine implements GameEngine {
   validateMove(stateJson: string, playerId: string, move: MoveData): ValidationResult {
     try {
       const state: DominoState = JSON.parse(stateJson);
+      this.hydrateState(state);
       return this.validateMoveFromState(state, playerId, move);
     } catch {
       return { valid: false, error: 'Invalid game state', errorKey: 'domino.invalidState' };
@@ -395,6 +610,7 @@ export class DominoEngine implements GameEngine {
     try {
       // C8-F1: Single parse — guards moved into cloned state (moves.ts already validates)
       const clonedState: DominoState = JSON.parse(stateJson);
+      this.hydrateState(clonedState);
       if (clonedState.gameOver) {
         return { success: false, newState: stateJson, events: [], error: 'Game is already over' };
       }
@@ -419,7 +635,7 @@ export class DominoEngine implements GameEngine {
 
       // Auto-play any bot turns after this human move
       if (result.state.botPlayers && result.state.botPlayers.length > 0 && !result.state.gameOver
-          && this.isBotPlayer(result.state, result.state.currentPlayer)) {
+        && this.isBotPlayer(result.state, result.state.currentPlayer)) {
         const botResult = this.runBotTurnsWithEvents(result.state, result.events);
         return { success: true, newState: botResult.stateJson, events: botResult.events };
       }
@@ -470,19 +686,11 @@ export class DominoEngine implements GameEngine {
       events.push({ type: 'move', data: { action: 'pass', playerId } });
 
       if (state.passCount >= state.playerOrder.length) {
-        state.gameOver = true;
-        const { winner, lowestPips, winningTeamPips } = findBlockedGameWinner(state);
-        state.winner = winner;
-        state.isDraw = winner === null;
-        // C9-F10: Store reason directly in state for getGameStatus
-        state.reason = winner ? 'blocked' : 'draw';
-        if (winner) {
-          this.scoreWinner(state, winner);
-        }
-        events.push({ type: 'game_over', data: { winner, reason: state.reason, isDraw: winner === null, lowestPips, winningTeamPips } });
+        this.finalizeBlockedRound(state, events);
       } else {
         advanceTurn(state);
         events.push({ type: 'turn_change', data: { nextPlayer: state.currentPlayer } });
+        this.autoPassUnplayableTurns(state, events);
       }
 
       return { success: true, state, events };
@@ -582,15 +790,16 @@ export class DominoEngine implements GameEngine {
       events.push({ type: 'move', data: { action: 'play', playerId, tile, end } });
 
       if (state.hands[playerId].length === 0) {
-        state.gameOver = true;
-        state.winner = playerId;
-        state.reason = 'domino'; // C9-F10: Store reason in state
         const winnerScore = this.scoreWinner(state, playerId);
-
-        events.push({ type: 'game_over', data: { winner: playerId, reason: 'domino', score: winnerScore } });
+        this.finalizeRound(state, events, {
+          winner: playerId,
+          reason: 'domino',
+          scoreDelta: winnerScore,
+        });
       } else {
         advanceTurn(state);
         events.push({ type: 'turn_change', data: { nextPlayer: state.currentPlayer } });
+        this.autoPassUnplayableTurns(state, events);
       }
 
       return { success: true, state, events };
@@ -602,10 +811,12 @@ export class DominoEngine implements GameEngine {
   getGameStatus(stateJson: string): GameStatus {
     try {
       const state: DominoState = JSON.parse(stateJson);
+      this.hydrateState(state);
       // C9-F10: Use pre-stored reason from applyMoveInternal when available
       return {
         isOver: state.gameOver,
         winner: state.winner || undefined,
+        winningTeam: state.winningTeam,
         isDraw: state.isDraw || false,
         scores: state.scores,
         reason: state.reason
@@ -618,6 +829,7 @@ export class DominoEngine implements GameEngine {
   getValidMoves(stateJson: string, playerId: string): MoveData[] {
     try {
       const state: DominoState = JSON.parse(stateJson);
+      this.hydrateState(state);
       return this.getValidMovesFromState(state, playerId);
     } catch {
       return [];
@@ -656,6 +868,7 @@ export class DominoEngine implements GameEngine {
   getPlayerView(stateJson: string, playerId: string): PlayerView {
     try {
       const state: DominoState = JSON.parse(stateJson);
+      this.hydrateState(state);
       const isPlayer = state.playerOrder.includes(playerId);
 
       const otherHandCounts: { [id: string]: number } = {};
@@ -682,6 +895,8 @@ export class DominoEngine implements GameEngine {
         // C9-F2: Pass cached playable tiles to avoid re-computing inside getValidMovesFromState
         validMoves: isCurrentPlayer ? this.getValidMovesFromState(state, playerId, playable) : [],
         scores: state.scores,
+        targetScore: state.targetScore,
+        roundNumber: state.roundNumber,
         playerOrder: state.playerOrder,
         lastAction: state.lastAction,
         winner: state.winner,
@@ -689,8 +904,8 @@ export class DominoEngine implements GameEngine {
         drawsThisTurn: isPlayer ? state.drawsThisTurn : 0,
         canDraw: isPlayer && isCurrentPlayer
           ? (state.drawsThisTurn || 0) < getMaxDrawsPerTurn(state.playerOrder.length)
-            && state.boneyard.length > 0
-            && playable.length === 0
+          && state.boneyard.length > 0
+          && playable.length === 0
           : false
       };
     } catch {

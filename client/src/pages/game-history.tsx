@@ -43,6 +43,7 @@ interface ChallengeHistory {
   id: string;
   gameType: string;
   betAmount: string;
+  currencyType?: 'project' | 'usd';
   status: string;
   winnerId?: string;
   player1Id: string;
@@ -131,6 +132,11 @@ export default function GameHistoryPage() {
     });
   };
 
+  const formatChallengeAmountText = (amount: number | string | undefined, currencyType?: 'project' | 'usd') => {
+    const safeAmount = Number(amount || 0);
+    return currencyType === 'project' ? `${safeAmount.toFixed(2)} VXC` : `$${safeAmount.toFixed(2)}`;
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -216,7 +222,7 @@ export default function GameHistoryPage() {
                         vs {c.player1Id === user?.id ? c.player2Name || "..." : c.player1Name || "..."}
                       </p>
                     </div>
-                    <Badge variant="secondary">${parseFloat(c.betAmount).toFixed(2)}</Badge>
+                    <Badge variant="secondary">{formatChallengeAmountText(c.betAmount, c.currencyType)}</Badge>
                     <Badge className="bg-green-500/20 text-green-500">
                       {t('gameHistory.live')}
                     </Badge>
@@ -275,104 +281,104 @@ export default function GameHistoryPage() {
           </Card>
         ) : (
           <>
-          <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-2 pe-2">
-              {completed.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(c => {
-                const result = getResult(c);
-                const cfg = gameConfig[c.gameType];
-                const GameIcon = cfg?.icon || Gamepad2;
-                const bet = parseFloat(c.betAmount) || 0;
+            <ScrollArea className="max-h-[60vh]">
+              <div className="space-y-2 pe-2">
+                {completed.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(c => {
+                  const result = getResult(c);
+                  const cfg = gameConfig[c.gameType];
+                  const GameIcon = cfg?.icon || Gamepad2;
+                  const bet = parseFloat(c.betAmount) || 0;
 
-                return (
-                  <Card key={c.id} className="animate-list-enter">
-                    <CardContent className="p-3 flex items-center gap-3">
-                      <div className={cn(
-                        "p-2 rounded-lg shrink-0",
-                        result === "win" ? "bg-green-500/10" : result === "loss" ? "bg-red-500/10" : "bg-muted"
-                      )}>
-                        <GameIcon className={cn(
-                          "h-5 w-5",
-                          result === "win" ? "text-green-500" : result === "loss" ? "text-red-500" : "text-muted-foreground"
-                        )} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">
-                            {language === "ar" ? cfg?.ar : cfg?.en}
-                          </span>
-                          {result === "win" && (
-                            <Badge className="bg-green-500/20 text-green-600 text-xs">
-                              {t('gameHistory.win')}
-                            </Badge>
-                          )}
-                          {result === "loss" && (
-                            <Badge className="bg-red-500/20 text-red-600 text-xs">
-                              {t('gameHistory.loss')}
-                            </Badge>
-                          )}
-                          {result === "draw" && (
-                            <Badge className="bg-muted text-muted-foreground text-xs">
-                              {t('gameHistory.draw')}
-                            </Badge>
-                          )}
-                          {result === "cancelled" && (
-                            <Badge variant="outline" className="text-xs">
-                              {t('gameHistory.cancelled')}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate">
-                          vs <span
-                            className="hover:underline cursor-pointer text-primary/80"
-                            onClick={() => {
-                              const opponentId = c.player1Id === user?.id ? c.player2Id : c.player1Id;
-                              if (opponentId) navigate(`/player/${opponentId}`);
-                            }}
-                          >
-                            {c.player1Id === user?.id ? c.player2Name || "?" : c.player1Name || "?"}
-                          </span>
-                          <span className="mx-2">·</span>
-                          {formatDate(c.createdAt)}
-                        </p>
-                      </div>
-                      <div className="text-end shrink-0">
-                        <p className={cn(
-                          "font-mono font-bold text-sm",
-                          result === "win" ? "text-green-500" : result === "loss" ? "text-red-500" : "text-muted-foreground"
+                  return (
+                    <Card key={c.id} className="animate-list-enter">
+                      <CardContent className="p-3 flex items-center gap-3">
+                        <div className={cn(
+                          "p-2 rounded-lg shrink-0",
+                          result === "win" ? "bg-green-500/10" : result === "loss" ? "bg-red-500/10" : "bg-muted"
                         )}>
-                          {result === "win" ? "+" : result === "loss" ? "-" : ""}${bet.toFixed(2)}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </ScrollArea>
-          {/* Pagination */}
-          {completed.length > ITEMS_PER_PAGE && (
-            <div className="flex items-center justify-center gap-3 mt-3">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                {page} / {Math.ceil(completed.length / ITEMS_PER_PAGE)}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= Math.ceil(completed.length / ITEMS_PER_PAGE)}
-                onClick={() => setPage(p => Math.min(Math.ceil(completed.length / ITEMS_PER_PAGE), p + 1))}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+                          <GameIcon className={cn(
+                            "h-5 w-5",
+                            result === "win" ? "text-green-500" : result === "loss" ? "text-red-500" : "text-muted-foreground"
+                          )} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">
+                              {language === "ar" ? cfg?.ar : cfg?.en}
+                            </span>
+                            {result === "win" && (
+                              <Badge className="bg-green-500/20 text-green-600 text-xs">
+                                {t('gameHistory.win')}
+                              </Badge>
+                            )}
+                            {result === "loss" && (
+                              <Badge className="bg-red-500/20 text-red-600 text-xs">
+                                {t('gameHistory.loss')}
+                              </Badge>
+                            )}
+                            {result === "draw" && (
+                              <Badge className="bg-muted text-muted-foreground text-xs">
+                                {t('gameHistory.draw')}
+                              </Badge>
+                            )}
+                            {result === "cancelled" && (
+                              <Badge variant="outline" className="text-xs">
+                                {t('gameHistory.cancelled')}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            vs <span
+                              className="hover:underline cursor-pointer text-primary/80"
+                              onClick={() => {
+                                const opponentId = c.player1Id === user?.id ? c.player2Id : c.player1Id;
+                                if (opponentId) navigate(`/player/${opponentId}`);
+                              }}
+                            >
+                              {c.player1Id === user?.id ? c.player2Name || "?" : c.player1Name || "?"}
+                            </span>
+                            <span className="mx-2">·</span>
+                            {formatDate(c.createdAt)}
+                          </p>
+                        </div>
+                        <div className="text-end shrink-0">
+                          <p className={cn(
+                            "font-mono font-bold text-sm",
+                            result === "win" ? "text-green-500" : result === "loss" ? "text-red-500" : "text-muted-foreground"
+                          )}>
+                            {result === "win" ? "+" : result === "loss" ? "-" : ""}${bet.toFixed(2)}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+            {/* Pagination */}
+            {completed.length > ITEMS_PER_PAGE && (
+              <div className="flex items-center justify-center gap-3 mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {page} / {Math.ceil(completed.length / ITEMS_PER_PAGE)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= Math.ceil(completed.length / ITEMS_PER_PAGE)}
+                  onClick={() => setPage(p => Math.min(Math.ceil(completed.length / ITEMS_PER_PAGE), p + 1))}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </>
         )}
       </div>

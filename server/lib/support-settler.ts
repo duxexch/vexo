@@ -1,5 +1,8 @@
 import { storage } from "../storage";
 import type { SpectatorSupport, MatchedSupport } from "@shared/schema";
+import { challenges, users } from "@shared/schema";
+import { db } from "../db";
+import { eq, sql } from "drizzle-orm";
 import { getErrorMessage } from "../routes/helpers";
 
 interface SettlementResult {
@@ -7,6 +10,30 @@ interface SettlementResult {
   settledMatches: number;
   refundedSupports: number;
   errors: string[];
+}
+
+type SupportCurrencyType = "project" | "usd";
+
+function normalizeSupportCurrencyType(currencyType: unknown): SupportCurrencyType {
+  return currencyType === "project" ? "project" : "usd";
+}
+
+async function creditUsdBalance(userId: string, amount: number): Promise<{ success: boolean; error?: string }> {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { success: true };
+  }
+
+  try {
+    await db
+      .update(users)
+      .set({
+        balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${amount.toFixed(2)})::text`,
+      })
+      .where(eq(users.id, userId));
+    return { success: true };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) };
+  }
 }
 
 export async function settleSpectatorSupports(
@@ -22,6 +49,19 @@ export async function settleSpectatorSupports(
   };
 
   try {
+    const [challenge] = await db
+      .select({ currencyType: challenges.currencyType })
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!challenge) {
+      result.success = false;
+      result.errors.push(`Challenge not found: ${challengeId}`);
+      return result;
+    }
+
+    const supportCurrencyType = normalizeSupportCurrencyType(challenge.currencyType);
     const winnerIds = winnerTeamPlayerIds.length > 0
       ? winnerTeamPlayerIds
       : (winnerId ? [winnerId] : []);
@@ -65,47 +105,56 @@ export async function settleSpectatorSupports(
           settledAt: new Date(),
         });
 
-        // LOSER: Forfeit locked balance (deduct from locked without returning to available)
-        const loserWallet = await storage.getProjectCurrencyWallet(losingSupport.supporterId);
-        if (loserWallet) {
-          const forfeitResult = await storage.forfeitLockedProjectCurrencyBalance(
-            loserWallet.id,
-            losingSupport.amount
-          );
-          if (!forfeitResult.success) {
-            result.errors.push(
-              `Failed to forfeit balance for loser ${losingSupport.supporterId}: ${forfeitResult.error}`
+        if (supportCurrencyType === "project") {
+          // LOSER: Forfeit locked balance (deduct from locked without returning to available)
+          const loserWallet = await storage.getProjectCurrencyWallet(losingSupport.supporterId);
+          if (loserWallet) {
+            const forfeitResult = await storage.forfeitLockedProjectCurrencyBalance(
+              loserWallet.id,
+              losingSupport.amount
             );
+            if (!forfeitResult.success) {
+              result.errors.push(
+                `Failed to forfeit balance for loser ${losingSupport.supporterId}: ${forfeitResult.error}`
+              );
+            }
           }
-        }
 
-        // WINNER: Unlock their original stake (return locked → available)
-        const winnerWallet = await storage.getProjectCurrencyWallet(winningSupport.supporterId);
-        if (winnerWallet) {
-          const unlockWinnerResult = await storage.unlockProjectCurrencyBalance(
-            winnerWallet.id,
-            winningSupport.amount
-          );
-          if (!unlockWinnerResult.success) {
-            result.errors.push(
-              `Failed to unlock balance for winner ${winningSupport.supporterId}: ${unlockWinnerResult.error}`
+          // WINNER: Unlock their original stake (return locked → available)
+          const winnerWallet = await storage.getProjectCurrencyWallet(winningSupport.supporterId);
+          if (winnerWallet) {
+            const unlockWinnerResult = await storage.unlockProjectCurrencyBalance(
+              winnerWallet.id,
+              winningSupport.amount
             );
+            if (!unlockWinnerResult.success) {
+              result.errors.push(
+                `Failed to unlock balance for winner ${winningSupport.supporterId}: ${unlockWinnerResult.error}`
+              );
+            }
           }
-        }
 
-        // WINNER: Credit only the PROFIT (loser's stake minus house fee), not the full pool
-        if (winnerProfit > 0) {
-          const earnResult = await storage.earnProjectCurrencyAtomic(
-            winningSupport.supporterId,
-            winnerProfit.toFixed(2),
-            "support_winnings",
-            matched.id,
-            `Support winnings for challenge ${challengeId}`
-          );
+          // WINNER: Credit only the PROFIT (loser's stake minus house fee), not the full pool
+          if (winnerProfit > 0) {
+            const earnResult = await storage.earnProjectCurrencyAtomic(
+              winningSupport.supporterId,
+              winnerProfit.toFixed(2),
+              "support_winnings",
+              matched.id,
+              `Support winnings for challenge ${challengeId}`
+            );
 
-          if (!earnResult.success) {
+            if (!earnResult.success) {
+              result.errors.push(
+                `Failed to credit winnings to ${winningSupport.supporterId}: ${earnResult.error}`
+              );
+            }
+          }
+        } else {
+          const creditResult = await creditUsdBalance(winningSupport.supporterId, netPool);
+          if (!creditResult.success) {
             result.errors.push(
-              `Failed to credit winnings to ${winningSupport.supporterId}: ${earnResult.error}`
+              `Failed to credit USD winnings to ${winningSupport.supporterId}: ${creditResult.error}`
             );
           }
         }
@@ -122,16 +171,24 @@ export async function settleSpectatorSupports(
 
     for (const support of pendingSupports) {
       try {
-        const wallet = await storage.getProjectCurrencyWallet(support.supporterId);
-        if (wallet) {
-          const unlockResult = await storage.unlockProjectCurrencyBalance(
-            wallet.id,
-            support.amount
-          );
-          if (!unlockResult.success) {
-            result.errors.push(
-              `Failed to refund support ${support.id}: ${unlockResult.error}`
+        if (supportCurrencyType === "project") {
+          const wallet = await storage.getProjectCurrencyWallet(support.supporterId);
+          if (wallet) {
+            const unlockResult = await storage.unlockProjectCurrencyBalance(
+              wallet.id,
+              support.amount
             );
+            if (!unlockResult.success) {
+              result.errors.push(
+                `Failed to refund support ${support.id}: ${unlockResult.error}`
+              );
+              continue;
+            }
+          }
+        } else {
+          const refundResult = await creditUsdBalance(support.supporterId, parseFloat(support.amount));
+          if (!refundResult.success) {
+            result.errors.push(`Failed to refund USD support ${support.id}: ${refundResult.error}`);
             continue;
           }
         }
@@ -170,6 +227,19 @@ export async function refundPendingSupports(challengeId: string): Promise<Settle
   };
 
   try {
+    const [challenge] = await db
+      .select({ currencyType: challenges.currencyType })
+      .from(challenges)
+      .where(eq(challenges.id, challengeId))
+      .limit(1);
+
+    if (!challenge) {
+      result.success = false;
+      result.errors.push(`Challenge not found: ${challengeId}`);
+      return result;
+    }
+
+    const supportCurrencyType = normalizeSupportCurrencyType(challenge.currencyType);
     const allSupports = await storage.getSpectatorSupportsByChallenge(challengeId);
     const pendingOrMatchedSupports = allSupports.filter(
       (s) => s.status === "pending" || s.status === "matched"
@@ -177,16 +247,24 @@ export async function refundPendingSupports(challengeId: string): Promise<Settle
 
     for (const support of pendingOrMatchedSupports) {
       try {
-        const wallet = await storage.getProjectCurrencyWallet(support.supporterId);
-        if (wallet) {
-          const unlockResult = await storage.unlockProjectCurrencyBalance(
-            wallet.id,
-            support.amount
-          );
-          if (!unlockResult.success) {
-            result.errors.push(
-              `Failed to refund support ${support.id}: ${unlockResult.error}`
+        if (supportCurrencyType === "project") {
+          const wallet = await storage.getProjectCurrencyWallet(support.supporterId);
+          if (wallet) {
+            const unlockResult = await storage.unlockProjectCurrencyBalance(
+              wallet.id,
+              support.amount
             );
+            if (!unlockResult.success) {
+              result.errors.push(
+                `Failed to refund support ${support.id}: ${unlockResult.error}`
+              );
+              continue;
+            }
+          }
+        } else {
+          const refundResult = await creditUsdBalance(support.supporterId, parseFloat(support.amount));
+          if (!refundResult.success) {
+            result.errors.push(`Failed to refund USD support ${support.id}: ${refundResult.error}`);
             continue;
           }
         }

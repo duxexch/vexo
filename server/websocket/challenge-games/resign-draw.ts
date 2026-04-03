@@ -10,6 +10,19 @@ import type { AuthenticatedSocket } from "../shared";
 import { challengeGameRooms } from "../shared";
 import { requireChallengePlayer } from "./guards";
 
+function normalizeChallengeCurrencyType(currencyType: unknown): "project" | "usd" {
+  return currencyType === "project" ? "project" : "usd";
+}
+
+function formatChallengeAmount(amount: number, currencyType: unknown): string {
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const normalizedCurrencyType = normalizeChallengeCurrencyType(currencyType);
+  if (normalizedCurrencyType === "project") {
+    return `VXC ${safeAmount.toFixed(2)}`;
+  }
+  return `$${safeAmount.toFixed(2)}`;
+}
+
 /** Handle game_resign message — resign with payout settlement */
 export async function handleGameResign(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId } = data;
@@ -118,6 +131,7 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
 
     // Send DB notifications for resignation result
     const betAmount = result.challenge.betAmount ? parseFloat(result.challenge.betAmount) : 0;
+    const challengeCurrencyType = result.challenge.currencyType;
     const gameLabel = result.gameType || 'game';
     if (result.winnerId) {
       const winnerIds = result.winningTeam !== undefined
@@ -132,12 +146,14 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
           : [result.challenge.player1Id, result.challenge.player3Id]).filter(Boolean) as string[]
         : [ws.userId!];
 
-      winnerIds.forEach((winnerId) => {
-        sendNotification(winnerId, { type: 'success', priority: 'normal', title: `Opponent Resigned — ${gameLabel}`, titleAr: `استسلم الخصم — ${gameLabel}`, message: `Your opponent resigned. You win!${betAmount > 0 ? ` You earned $${(betAmount * 2 * 0.95).toFixed(2)}.` : ''}`, messageAr: `استسلم خصمك. فزت!${betAmount > 0 ? ` ربحت $${(betAmount * 2 * 0.95).toFixed(2)}.` : ''}`, link: '/challenges' }).catch(() => { });
+      loserIds.forEach((loserId) => {
+        const formattedLoserDeduction = formatChallengeAmount(betAmount, challengeCurrencyType);
+        sendNotification(loserId, { type: 'warning', priority: 'normal', title: `You Resigned — ${gameLabel}`, titleAr: `استسلمت — ${gameLabel}`, message: `You resigned from the challenge.${betAmount > 0 ? ` ${formattedLoserDeduction} deducted.` : ''}`, messageAr: `استسلمت من التحدي.${betAmount > 0 ? ` تم خصم ${formattedLoserDeduction}.` : ''}`, link: '/challenges' }).catch(() => { });
       });
 
-      loserIds.forEach((loserId) => {
-        sendNotification(loserId, { type: 'warning', priority: 'normal', title: `You Resigned — ${gameLabel}`, titleAr: `استسلمت — ${gameLabel}`, message: `You resigned from the challenge.${betAmount > 0 ? ` $${betAmount.toFixed(2)} deducted.` : ''}`, messageAr: `استسلمت من التحدي.${betAmount > 0 ? ` تم خصم $${betAmount.toFixed(2)}.` : ''}`, link: '/challenges' }).catch(() => { });
+      winnerIds.forEach((winnerId) => {
+        const formattedWinnerWinnings = formatChallengeAmount(betAmount * 2 * 0.95, challengeCurrencyType);
+        sendNotification(winnerId, { type: 'success', priority: 'normal', title: `Opponent Resigned — ${gameLabel}`, titleAr: `استسلم الخصم — ${gameLabel}`, message: `Your opponent resigned. You win!${betAmount > 0 ? ` You earned ${formattedWinnerWinnings}.` : ''}`, messageAr: `استسلم خصمك. فزت!${betAmount > 0 ? ` ربحت ${formattedWinnerWinnings}.` : ''}`, link: '/challenges' }).catch(() => { });
       });
     }
 
@@ -262,8 +278,10 @@ export async function handleRespondDraw(ws: AuthenticatedSocket, data: any): Pro
 
       // Send DB notifications for draw
       const betAmount = result.challenge.betAmount ? parseFloat(result.challenge.betAmount) : 0;
+      const challengeCurrencyType = result.challenge.currencyType;
       const gameLabel = result.gameType || 'game';
-      const drawMsg = { type: 'system' as const, priority: 'normal' as const, title: `${gameLabel} — Draw Agreement`, titleAr: `${gameLabel} — تعادل بالاتفاق`, message: `The game ended in a draw by agreement.${betAmount > 0 ? ` $${betAmount.toFixed(2)} refunded.` : ''}`, messageAr: `انتهت اللعبة بالتعادل بالاتفاق.${betAmount > 0 ? ` تم إرجاع $${betAmount.toFixed(2)}.` : ''}`, link: '/challenges' };
+      const formattedBetAmount = formatChallengeAmount(betAmount, challengeCurrencyType);
+      const drawMsg = { type: 'system' as const, priority: 'normal' as const, title: `${gameLabel} — Draw Agreement`, titleAr: `${gameLabel} — تعادل بالاتفاق`, message: `The game ended in a draw by agreement.${betAmount > 0 ? ` ${formattedBetAmount} refunded.` : ''}`, messageAr: `انتهت اللعبة بالتعادل بالاتفاق.${betAmount > 0 ? ` تم إرجاع ${formattedBetAmount}.` : ''}`, link: '/challenges' };
       [
         result.challenge.player1Id,
         result.challenge.player2Id,

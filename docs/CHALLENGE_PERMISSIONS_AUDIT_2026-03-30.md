@@ -25,6 +25,7 @@ This section reflects the current code snapshot after the Phase 1 and Phase 2 ha
 - Regression smoke coverage was added for private challenge access, friend-reserved join blocking, and available-list participant exclusion.
 - Challenge points policy is now narrowed: only active spectators can boost, seated players are blocked, and anti-spam cooldown/rate limiting is enforced.
 - Deeper realtime regression coverage is now active in `scripts/smoke-challenge-permissions.mjs`: private update audience scoping (`/ws`), private spectate authorization (`/ws/game`), realtime gifting recipient constraints (legacy + `/ws/game`), and voluntary-leave forfeit sequencing with DB persistence assertions.
+- Explicit gameplay regression coverage is now separated into `scripts/smoke-challenge-gameplay-regression.ts` for `chess/backgammon/tarneeb/baloot` move-path smoke checks (join, move ack, and session progression persistence).
 
 ### Open Findings (Current)
 
@@ -33,6 +34,7 @@ No open findings remain in this snapshot after the latest challenge-points harde
 ### Recommended Next Execution Block
 
 - Wire `scripts/smoke-challenge-permissions.mjs` into automated pipelines using the deterministic limiter-reset profile (`--reset-sensitive-limiter --redis-url=$REDIS_URL`) so repeated local/container runs remain warning-free.
+- Run `npm run quality:gate:phase-e` in CI to enforce both explicit multi-game gameplay regression (`chess/backgammon/tarneeb/baloot`) and Domino performance checks.
 
 ## Critical Findings
 

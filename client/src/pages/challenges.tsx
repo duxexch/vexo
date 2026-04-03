@@ -72,6 +72,7 @@ interface Challenge {
   id: string;
   gameType: string;
   betAmount: number;
+  dominoTargetScore?: number;
   visibility: 'public' | 'private';
   status: 'waiting' | 'active' | 'completed' | 'cancelled';
   currencyType?: 'project' | 'usd';
@@ -201,6 +202,7 @@ export default function ChallengesPage() {
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [requiredPlayers, setRequiredPlayers] = useState<2 | 4>(2);
   const [chessSystem, setChessSystem] = useState<ChessSystemKey>('rapid_10_0');
+  const [dominoTargetScore, setDominoTargetScore] = useState<101 | 201>(101);
   const [currencyType, setCurrencyType] = useState<CurrencyType>('project');
   const [quickConvertAmount, setQuickConvertAmount] = useState('5');
   const [showAdvancedCreateOptions, setShowAdvancedCreateOptions] = useState(false);
@@ -385,7 +387,17 @@ export default function ChallengesPage() {
   }
 
   const createChallengeMutation = useMutation({
-    mutationFn: (data: { gameType: string; betAmount: number; opponentType: string; friendAccountId?: string; visibility: string; requiredPlayers?: number; chessSystem?: ChessSystemKey; currencyType?: CurrencyType }) =>
+    mutationFn: (data: {
+      gameType: string;
+      betAmount: number;
+      opponentType: string;
+      friendAccountId?: string;
+      visibility: string;
+      requiredPlayers?: number;
+      chessSystem?: ChessSystemKey;
+      dominoTargetScore?: 101 | 201;
+      currencyType?: CurrencyType;
+    }) =>
       apiRequest('POST', '/api/challenges', data),
     onSuccess: () => {
       playSound('success');
@@ -520,6 +532,7 @@ export default function ChallengesPage() {
     setVisibility('public');
     setRequiredPlayers(2);
     setChessSystem('rapid_10_0');
+    setDominoTargetScore(101);
     setCurrencyType(currencyPolicy?.projectOnly ? 'project' : 'usd');
     setShowAdvancedCreateOptions(false);
   };
@@ -598,6 +611,7 @@ export default function ChallengesPage() {
       visibility,
       requiredPlayers: multiPlayerGames.includes(selectedGame) ? requiredPlayers : 2,
       chessSystem: selectedGame === 'chess' ? chessSystem : undefined,
+      dominoTargetScore: selectedGame === 'domino' ? dominoTargetScore : undefined,
       currencyType: currencyPolicy?.projectOnly ? 'project' : currencyType,
     });
   };
@@ -633,6 +647,17 @@ export default function ChallengesPage() {
   };
 
   const formatUsd = (amount: number | string | undefined) => Number(amount || 0).toFixed(2);
+  const normalizeChallengeCurrencyType = (currency: Challenge['currencyType'] | undefined): CurrencyType =>
+    currency === 'project' ? 'project' : 'usd';
+  const formatChallengeAmountText = (
+    amount: number | string | undefined,
+    currency: Challenge['currencyType'] | undefined,
+  ) => {
+    const safeAmount = Number(amount || 0);
+    return normalizeChallengeCurrencyType(currency) === 'project'
+      ? `${safeAmount.toFixed(2)} VXC`
+      : `$${safeAmount.toFixed(2)}`;
+  };
 
   const getChallengeParticipantIds = (challenge: Challenge): string[] =>
     [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id].filter(Boolean) as string[];
@@ -1006,11 +1031,11 @@ export default function ChallengesPage() {
                           <div className="flex items-center justify-between gap-2 text-sm">
                             <div className="flex items-center gap-1">
                               <Coins className="h-4 w-4 text-yellow-500" />
-                              <span>{t('challenges.totalBets')}: ${formatUsd(challenge.totalBets)}</span>
+                              <span>{t('challenges.totalBets')}: {formatChallengeAmountText(challenge.totalBets, challenge.currencyType)}</span>
                             </div>
                             <div className="flex items-center gap-1">
                               <Trophy className="h-4 w-4 text-primary" />
-                              <span>{t('challenges.prize')}: ${formatUsd(challenge.betAmount * 2)}</span>
+                              <span>{t('challenges.prize')}: {formatChallengeAmountText(challenge.betAmount * 2, challenge.currencyType)}</span>
                             </div>
                           </div>
                           <Button className="w-full" onClick={() => handleSpectate(challenge)} data-testid={`button-spectate-${challenge.id}`}>
@@ -1086,7 +1111,7 @@ export default function ChallengesPage() {
                           </div>
                           <div className="flex items-center gap-4">
                             <div className="text-end">
-                              <p className="font-bold text-lg">${formatUsd(challenge.betAmount)}</p>
+                              <p className="font-bold text-lg">{formatChallengeAmountText(challenge.betAmount, challenge.currencyType)}</p>
                               <p className="text-xs text-muted-foreground flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
                                 {challenge.timeLimit}s
@@ -1157,7 +1182,7 @@ export default function ChallengesPage() {
                             }>
                               {challenge.status}
                             </Badge>
-                            <p className="font-bold">${formatUsd(challenge.betAmount)}</p>
+                            <p className="font-bold">{formatChallengeAmountText(challenge.betAmount, challenge.currencyType)}</p>
                             {canPlay && (
                               <Button
                                 size="sm"
@@ -1398,6 +1423,30 @@ export default function ChallengesPage() {
                   </div>
                 )}
 
+                {selectedGame === 'domino' && (
+                  <div>
+                    <Label>{t('tarneeb.targetScore')}</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <Button
+                        type="button"
+                        variant={dominoTargetScore === 101 ? 'default' : 'outline'}
+                        onClick={() => setDominoTargetScore(101)}
+                        data-testid="button-domino-target-101"
+                      >
+                        101
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={dominoTargetScore === 201 ? 'default' : 'outline'}
+                        onClick={() => setDominoTargetScore(201)}
+                        data-testid="button-domino-target-201"
+                      >
+                        201
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between">
                   <div>
                     <Label>{t('challenges.visibility')}</Label>
@@ -1486,22 +1535,22 @@ export default function ChallengesPage() {
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-destructive">
                     {language === 'ar'
-                      ? `💸 العقوبة: $${(Number(activeChallenge.betAmount) * 0.7).toFixed(2)} (70%)`
-                      : `💸 Penalty: $${(Number(activeChallenge.betAmount) * 0.7).toFixed(2)} (70%)`
+                      ? `💸 العقوبة: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.7, activeChallenge.currencyType)} (70%)`
+                      : `💸 Penalty: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.7, activeChallenge.currencyType)} (70%)`
                     }
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {language === 'ar'
-                      ? `💰 سيتم استرداد: $${(Number(activeChallenge.betAmount) * 0.3).toFixed(2)} (30%)`
-                      : `💰 Refund: $${(Number(activeChallenge.betAmount) * 0.3).toFixed(2)} (30%)`
+                      ? `💰 سيتم استرداد: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.3, activeChallenge.currencyType)} (30%)`
+                      : `💰 Refund: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.3, activeChallenge.currencyType)} (30%)`
                     }
                   </p>
                 </div>
               ) : (
                 <p className="text-sm">
                   {language === 'ar'
-                    ? `✅ سيتم استرداد مبلغ الرهان بالكامل: $${Number(activeChallenge.betAmount).toFixed(2)}`
-                    : `✅ Your bet amount will be fully refunded: $${Number(activeChallenge.betAmount).toFixed(2)}`
+                    ? `✅ سيتم استرداد مبلغ الرهان بالكامل: ${formatChallengeAmountText(Number(activeChallenge.betAmount), activeChallenge.currencyType)}`
+                    : `✅ Your bet amount will be fully refunded: ${formatChallengeAmountText(Number(activeChallenge.betAmount), activeChallenge.currencyType)}`
                   }
                 </p>
               )}

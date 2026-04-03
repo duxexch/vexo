@@ -1,6 +1,7 @@
 import { WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { moveRateLimiter, resignRateLimiter } from '../lib/rate-limiter';
+import { redisRateLimit } from '../lib/redis';
 import type { AuthenticatedWebSocket } from './types';
 import { send, sendError } from './utils';
 import { handleAuthenticate, handleJoinGame, handleSpectate } from './auth-join';
@@ -48,9 +49,10 @@ export function setupGameWebSocket(server: Server): WebSocketServer {
     clearInterval(heartbeat);
   });
 
-  wss.on('connection', (ws: AuthenticatedWebSocket) => {
+  wss.on('connection', (ws: AuthenticatedWebSocket, req) => {
     ws.isAlive = true;
     ws.userAgent = ws.userAgent || undefined;
+    const clientIp = req.socket.remoteAddress || 'unknown';
 
     ws.on('pong', () => {
       ws.isAlive = true;
@@ -58,6 +60,22 @@ export function setupGameWebSocket(server: Server): WebSocketServer {
 
     ws.on('message', async (data) => {
       try {
+        const rateLimitKey = ws.userId
+          ? `ws:game:msg:user:${ws.userId}`
+          : `ws:game:msg:ip:${clientIp}`;
+        const wsRateLimit = await redisRateLimit(rateLimitKey, 120, 10_000);
+        if (!wsRateLimit.allowed) {
+          send(ws, {
+            type: 'error',
+            payload: {
+              error: 'Too many websocket messages, slow down',
+              code: 'rate_limit',
+              retryAfterMs: wsRateLimit.retryAfterMs
+            }
+          });
+          return;
+        }
+
         const parsed = JSON.parse(data.toString()) as unknown;
         const validation = validateGameMessage(parsed);
 

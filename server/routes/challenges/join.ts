@@ -11,6 +11,19 @@ import { getGameEngine } from "../../game-engines";
 
 type ChallengeRow = typeof challengesTable.$inferSelect;
 
+function normalizeChallengeCurrencyType(currencyType: unknown): "project" | "usd" {
+  return currencyType === "project" ? "project" : "usd";
+}
+
+function formatChallengeAmount(amount: number, currencyType: unknown): string {
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const normalizedCurrencyType = normalizeChallengeCurrencyType(currencyType);
+  if (normalizedCurrencyType === "project") {
+    return `VXC ${safeAmount.toFixed(2)}`;
+  }
+  return `$${safeAmount.toFixed(2)}`;
+}
+
 function buildInitialChallengeState(challenge: ChallengeRow): { gameState: string; currentTurn: string } {
   const gameType = challenge.gameType.toLowerCase();
   const engine = getGameEngine(gameType);
@@ -26,7 +39,8 @@ function buildInitialChallengeState(challenge: ChallengeRow): { gameState: strin
       } else if (gameType === "baloot") {
         gameState = engine.initializeWithPlayers(playerIds, 152);
       } else if (gameType === "domino") {
-        gameState = engine.initializeWithPlayers(playerIds);
+        const targetScore = challenge.dominoTargetScore === 201 ? 201 : 101;
+        gameState = engine.initializeWithPlayers(playerIds, targetScore);
       } else if (gameType === "chess") {
         const incrementMs = challenge.timeLimit === 180 ? 2000 : challenge.timeLimit === 900 ? 10000 : 0;
         gameState = engine.initializeWithPlayers(playerIds[0], playerIds[1], {
@@ -413,6 +427,10 @@ export function registerJoinRoute(app: Express) {
         updatedChallenge!.player3Id,
         updatedChallenge!.player4Id,
       ].filter(id => id) as string[];
+      const formattedChallengeAmount = formatChallengeAmount(
+        parseFloat(String(updatedChallenge!.betAmount || 0)),
+        updatedChallenge!.currencyType,
+      );
 
       // Persistent notification for game start
       for (const playerId of allPlayerIds) {
@@ -421,8 +439,8 @@ export function registerJoinRoute(app: Express) {
           priority: 'high',
           title: 'Game Starting! 🎮',
           titleAr: 'اللعبة تبدأ! 🎮',
-          message: `Your ${updatedChallenge!.gameType} match is starting now! Bet: $${updatedChallenge!.betAmount}`,
-          messageAr: `مباراة ${updatedChallenge!.gameType} الخاصة بك تبدأ الآن! الرهان: $${updatedChallenge!.betAmount}`,
+          message: `Your ${updatedChallenge!.gameType} match is starting now! Bet: ${formattedChallengeAmount}`,
+          messageAr: `مباراة ${updatedChallenge!.gameType} الخاصة بك تبدأ الآن! الرهان: ${formattedChallengeAmount}`,
           link: `/challenge/${challengeId}/play`,
           metadata: JSON.stringify({ challengeId, sessionId: gameSession.id, gameType: updatedChallenge!.gameType }),
         }).catch(() => { });

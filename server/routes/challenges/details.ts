@@ -10,10 +10,10 @@ export function registerDetailsRoutes(app: Express) {
   app.get("/api/challenges/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const challengeId = req.params.id;
-      
+
       // Fetch challenge from database
       const [dbChallenge] = await db.select().from(challengesTable).where(eq(challengesTable.id, challengeId)).limit(1);
-      
+
       if (!dbChallenge) {
         return res.status(404).json({ error: "Challenge not found" });
       }
@@ -22,24 +22,25 @@ export function registerDetailsRoutes(app: Express) {
       if (!access.allowed) {
         return res.status(access.status).json({ error: access.error });
       }
-      
+
       // Fetch player details
       const player1 = await storage.getUser(dbChallenge.player1Id);
       const player2 = dbChallenge.player2Id ? await storage.getUser(dbChallenge.player2Id) : null;
       const player3 = dbChallenge.player3Id ? await storage.getUser(dbChallenge.player3Id) : null;
       const player4 = dbChallenge.player4Id ? await storage.getUser(dbChallenge.player4Id) : null;
-      
+
       // Calculate player 1 stats
       const p1Won = player1?.gamesWon || 0;
       const p1Lost = player1?.gamesLost || 0;
       const p1Total = p1Won + p1Lost;
       const p1WinRate = p1Total > 0 ? Math.round((p1Won / p1Total) * 100) : 50;
       const p1Rank = p1WinRate >= 80 ? "diamond" : p1WinRate >= 60 ? "gold" : p1WinRate >= 40 ? "silver" : "bronze";
-      
+
       const result: Record<string, unknown> = {
         id: dbChallenge.id,
         gameType: dbChallenge.gameType,
         betAmount: parseFloat(dbChallenge.betAmount || "0"),
+        currencyType: dbChallenge.currencyType === "project" ? "project" : "usd",
         status: dbChallenge.status,
         visibility: dbChallenge.visibility,
         player1Id: dbChallenge.player1Id,
@@ -58,7 +59,7 @@ export function registerDetailsRoutes(app: Express) {
           vipLevel: player1?.vipLevel || 0,
         },
       };
-      
+
       // Add player 2 details if exists
       if (player2) {
         const p2Won = player2?.gamesWon || 0;
@@ -66,7 +67,7 @@ export function registerDetailsRoutes(app: Express) {
         const p2Total = p2Won + p2Lost;
         const p2WinRate = p2Total > 0 ? Math.round((p2Won / p2Total) * 100) : 50;
         const p2Rank = p2WinRate >= 80 ? "diamond" : p2WinRate >= 60 ? "gold" : p2WinRate >= 40 ? "silver" : "bronze";
-        
+
         result.player2Id = dbChallenge.player2Id;
         result.player2Name = player2?.nickname || player2?.username || "Unknown";
         result.player2Rating = { wins: p2Won, losses: p2Lost, winRate: p2WinRate, rank: p2Rank };
@@ -116,7 +117,7 @@ export function registerDetailsRoutes(app: Express) {
           vipLevel: player4?.vipLevel || 0,
         };
       }
-      
+
       res.json(result);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -128,7 +129,7 @@ export function registerDetailsRoutes(app: Express) {
       // Redirect to the proper spectator support system
       // This is a legacy endpoint — use POST /api/supports instead
       const { backedPlayerId, stakeAmount } = req.body;
-      res.status(301).json({ 
+      res.status(301).json({
         error: "This endpoint is deprecated. Use POST /api/supports with challengeId, playerId, amount, and mode instead.",
         redirect: "/api/supports"
       });

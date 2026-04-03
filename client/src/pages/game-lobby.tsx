@@ -45,6 +45,7 @@ interface Challenge {
   id: string;
   gameType: string;
   betAmount: number;
+  currencyType?: 'project' | 'usd';
   visibility: 'public' | 'private';
   status: 'waiting' | 'active' | 'completed' | 'cancelled';
   player1Id: string;
@@ -102,6 +103,11 @@ function savePreferences(prefs: Partial<LobbyPreferences>) {
   } catch (e) {
     console.warn('Failed to save lobby preferences:', e);
   }
+}
+
+function formatChallengeAmountText(amount: number | string | undefined, currencyType: Challenge['currencyType']): string {
+  const safeAmount = Number(amount || 0);
+  return currencyType === 'project' ? `${safeAmount.toFixed(2)} VXC` : `$${safeAmount.toFixed(2)}`;
 }
 
 interface ChallengeRowProps {
@@ -167,7 +173,7 @@ const ChallengeRow = memo(function ChallengeRow({
           </Badge>
           <span className="flex items-center gap-1">
             <Coins className="w-3 h-3 text-yellow-500" />
-            ${challenge.betAmount}
+            {formatChallengeAmountText(challenge.betAmount, challenge.currencyType)}
           </span>
           {challenge.player1Rating && (
             <span className="flex items-center gap-1">
@@ -838,7 +844,7 @@ export default function GameLobbyPage() {
                     data-testid="slider-quickmatch-bet"
                   />
                   <Badge variant="secondary" className="min-w-[60px] justify-center">
-                    ${quickMatchBet}
+                    {quickMatchBet}
                   </Badge>
                 </div>
               </div>

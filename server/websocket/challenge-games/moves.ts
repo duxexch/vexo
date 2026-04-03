@@ -99,6 +99,19 @@ function toMoveErrorPayload(
   };
 }
 
+function normalizeChallengeCurrencyType(currencyType: unknown): "project" | "usd" {
+  return currencyType === "project" ? "project" : "usd";
+}
+
+function formatChallengeAmount(amount: number, currencyType: unknown): string {
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const normalizedCurrencyType = normalizeChallengeCurrencyType(currencyType);
+  if (normalizedCurrencyType === "project") {
+    return `VXC ${safeAmount.toFixed(2)}`;
+  }
+  return `$${safeAmount.toFixed(2)}`;
+}
+
 /** Handle game_move message — process a move with DB transaction and payout settlement */
 export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId, move } = data;
@@ -180,7 +193,8 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
         } else if (gameType === "backgammon") {
           stateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
         } else if (gameType === "domino") {
-          stateJson = engine.initializeWithPlayers(playerIds);
+          const targetScore = challenge.dominoTargetScore === 201 ? 201 : 101;
+          stateJson = engine.initializeWithPlayers(playerIds, targetScore);
         } else {
           stateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
         }
@@ -392,6 +406,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
 
       // Send DB notifications for game result
       const betAmount = result.challenge.betAmount ? parseFloat(result.challenge.betAmount) : 0;
+      const challengeCurrencyType = result.challenge.currencyType;
       const gameLabel = result.gameType || 'game';
       if (result.isDraw) {
         // Notify all players of draw
@@ -401,7 +416,8 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
           result.challenge.player3Id,
           result.challenge.player4Id,
         ].filter(Boolean) as string[];
-        const drawMsg = { type: 'system' as const, priority: 'normal' as const, title: `${gameLabel} — Draw`, titleAr: `${gameLabel} — تعادل`, message: `The game ended in a draw. ${betAmount > 0 ? `$${betAmount.toFixed(2)} refunded.` : ''}`, messageAr: `انتهت اللعبة بالتعادل. ${betAmount > 0 ? `تم إرجاع $${betAmount.toFixed(2)}.` : ''}`, link: '/challenges' };
+        const formattedBetAmount = formatChallengeAmount(betAmount, challengeCurrencyType);
+        const drawMsg = { type: 'system' as const, priority: 'normal' as const, title: `${gameLabel} — Draw`, titleAr: `${gameLabel} — تعادل`, message: `The game ended in a draw. ${betAmount > 0 ? `${formattedBetAmount} refunded.` : ''}`, messageAr: `انتهت اللعبة بالتعادل. ${betAmount > 0 ? `تم إرجاع ${formattedBetAmount}.` : ''}`, link: '/challenges' };
         drawPlayerIds.forEach((playerId) => {
           sendNotification(playerId, drawMsg).catch(() => { });
         });
@@ -420,11 +436,13 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
             .filter((id): id is string => Boolean(id && id !== result.winnerId)));
 
         winnerIds.forEach((winnerId) => {
-          sendNotification(winnerId, { type: 'success', priority: 'normal', title: `You Won! — ${gameLabel}`, titleAr: `فزت! — ${gameLabel}`, message: `Congratulations! You won the challenge.${betAmount > 0 ? ` You earned $${(betAmount * 2 * 0.95).toFixed(2)}.` : ''}`, messageAr: `تهانينا! فزت بالتحدي.${betAmount > 0 ? ` ربحت $${(betAmount * 2 * 0.95).toFixed(2)}.` : ''}`, link: '/challenges' }).catch(() => { });
+          const formattedWinnerWinnings = formatChallengeAmount(betAmount * 2 * 0.95, challengeCurrencyType);
+          sendNotification(winnerId, { type: 'success', priority: 'normal', title: `You Won! — ${gameLabel}`, titleAr: `فزت! — ${gameLabel}`, message: `Congratulations! You won the challenge.${betAmount > 0 ? ` You earned ${formattedWinnerWinnings}.` : ''}`, messageAr: `تهانينا! فزت بالتحدي.${betAmount > 0 ? ` ربحت ${formattedWinnerWinnings}.` : ''}`, link: '/challenges' }).catch(() => { });
         });
 
         loserIds.forEach((loserId) => {
-          sendNotification(loserId, { type: 'warning', priority: 'normal', title: `You Lost — ${gameLabel}`, titleAr: `خسرت — ${gameLabel}`, message: `You lost the challenge.${betAmount > 0 ? ` $${betAmount.toFixed(2)} deducted.` : ''} Better luck next time!`, messageAr: `خسرت التحدي.${betAmount > 0 ? ` تم خصم $${betAmount.toFixed(2)}.` : ''} حظاً أوفر المرة القادمة!`, link: '/challenges' }).catch(() => { });
+          const formattedLoserDeduction = formatChallengeAmount(betAmount, challengeCurrencyType);
+          sendNotification(loserId, { type: 'warning', priority: 'normal', title: `You Lost — ${gameLabel}`, titleAr: `خسرت — ${gameLabel}`, message: `You lost the challenge.${betAmount > 0 ? ` ${formattedLoserDeduction} deducted.` : ''} Better luck next time!`, messageAr: `خسرت التحدي.${betAmount > 0 ? ` تم خصم ${formattedLoserDeduction}.` : ''} حظاً أوفر المرة القادمة!`, link: '/challenges' }).catch(() => { });
         });
       }
 

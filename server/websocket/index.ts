@@ -12,6 +12,7 @@ import { handleMatchmaking } from "./matchmaking";
 import { handleVoice } from "./voice";
 import { handleChallengeGames } from "./challenge-games";
 import { trackUserOffline } from "../lib/redis";
+import { redisRateLimit } from "../lib/redis";
 import { createWsProtocolError, type WebSocketProtocolError, validateWebSocketEnvelope } from "./validation";
 
 const challengeMessageTypes = new Set([
@@ -63,6 +64,7 @@ export function setupWebSocket(server: Server) {
   wss.on("connection", (ws: AuthenticatedSocket, req) => {
     ws.isAlive = true;
     ws.userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined;
+    const clientIp = req.socket.remoteAddress || "unknown";
 
     ws.on("pong", () => {
       ws.isAlive = true;
@@ -70,6 +72,15 @@ export function setupWebSocket(server: Server) {
 
     ws.on("message", async (message) => {
       try {
+        const rateLimitKey = ws.userId
+          ? `ws:general:msg:user:${ws.userId}`
+          : `ws:general:msg:ip:${clientIp}`;
+        const wsRateLimit = await redisRateLimit(rateLimitKey, 180, 10_000);
+        if (!wsRateLimit.allowed) {
+          sendWsProtocolError(ws, createWsProtocolError("Too many websocket messages, slow down", "rate_limit"));
+          return;
+        }
+
         const parsed = JSON.parse(message.toString()) as unknown;
         const validation = validateWebSocketEnvelope(parsed);
         if (!validation.ok) {

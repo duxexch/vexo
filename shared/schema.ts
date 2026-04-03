@@ -1620,6 +1620,7 @@ export const challenges = pgTable("challenges", {
   winnerId: varchar("winner_id").references(() => users.id),
   opponentType: text("opponent_type").default("random"), // random, friend
   friendAccountId: text("friend_account_id"),
+  dominoTargetScore: integer("domino_target_score"),
   timeLimit: integer("time_limit").notNull().default(300), // seconds
   player1Score: integer("player1_score").default(0),
   player2Score: integer("player2_score").default(0),

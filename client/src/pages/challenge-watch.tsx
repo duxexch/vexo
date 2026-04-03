@@ -42,7 +42,6 @@ import {
   TrendingUp,
   Zap,
   Timer,
-  DollarSign,
   Users,
   Star,
   Gift,
@@ -76,6 +75,7 @@ interface Challenge {
   id: string;
   gameType: string;
   betAmount: string;
+  currencyType?: "project" | "usd";
   visibility: "public" | "private";
   status: string;
   player1Id: string;
@@ -552,11 +552,17 @@ export default function ChallengeWatchPage() {
       return;
     }
     if (oddsData && (amount < oddsData.minSupportAmount || amount > oddsData.maxSupportAmount)) {
+      const minAmountText = challenge?.currencyType === "project"
+        ? `${oddsData.minSupportAmount.toFixed(2)} VXC`
+        : `$${oddsData.minSupportAmount.toFixed(2)}`;
+      const maxAmountText = challenge?.currencyType === "project"
+        ? `${oddsData.maxSupportAmount.toFixed(2)} VXC`
+        : `$${oddsData.maxSupportAmount.toFixed(2)}`;
       toast({
         title: language === "ar" ? "خطأ" : "Error",
         description: language === "ar"
-          ? `المبلغ يجب أن يكون بين $${oddsData.minSupportAmount} و $${oddsData.maxSupportAmount}`
-          : `Amount must be between $${oddsData.minSupportAmount} and $${oddsData.maxSupportAmount}`,
+          ? `المبلغ يجب أن يكون بين ${minAmountText} و ${maxAmountText}`
+          : `Amount must be between ${minAmountText} and ${maxAmountText}`,
         variant: "destructive",
       });
       return;
@@ -661,6 +667,14 @@ export default function ChallengeWatchPage() {
   const gameInfo = GAME_INFO[challenge.gameType] || GAME_INFO.chess;
   const GameIcon = gameInfo.icon;
   const isTeamGame = challenge.gameType === "tarneeb" || challenge.gameType === "baloot";
+  const challengeCurrencyType = challenge.currencyType === "project" ? "project" : "usd";
+  const isProjectChallengeCurrency = challengeCurrencyType === "project";
+
+  const formatChallengeAmountText = (amount: number | string): string => {
+    const parsed = typeof amount === "number" ? amount : Number.parseFloat(String(amount));
+    const safeAmount = Number.isFinite(parsed) ? parsed : 0;
+    return isProjectChallengeCurrency ? `${safeAmount.toFixed(2)} VXC` : `$${safeAmount.toFixed(2)}`;
+  };
 
   const resolveWinnerName = (winnerId?: string) => {
     if (!winnerId) return language === "ar" ? "غير معروف" : "Unknown";
@@ -691,7 +705,11 @@ export default function ChallengeWatchPage() {
                 </span>
               </div>
               <Badge variant="secondary">
-                ${parseFloat(challenge.betAmount).toFixed(2)}
+                {isProjectChallengeCurrency ? (
+                  <ProjectCurrencyAmount amount={challenge.betAmount} symbolClassName="text-xs" amountClassName="text-xs font-medium" />
+                ) : (
+                  `$${parseFloat(challenge.betAmount).toFixed(2)}`
+                )}
               </Badge>
             </div>
 
@@ -986,7 +1004,9 @@ export default function ChallengeWatchPage() {
 
                             <div>
                               <label className="text-sm font-medium mb-2 block">
-                                {language === "ar" ? "مبلغ الدعم ($)" : "Support Amount ($)"}
+                                {language === "ar"
+                                  ? `مبلغ الدعم (${isProjectChallengeCurrency ? "عملة المشروع" : "USD"})`
+                                  : `Support Amount (${isProjectChallengeCurrency ? "Project Currency" : "USD"})`}
                               </label>
                               <Input
                                 type="number"
@@ -1008,7 +1028,11 @@ export default function ChallengeWatchPage() {
                                     onClick={() => setSupportAmount(String(amount))}
                                     data-testid={`quick-amount-${amount}`}
                                   >
-                                    ${amount}
+                                    {isProjectChallengeCurrency ? (
+                                      <ProjectCurrencyAmount amount={amount} symbolClassName="text-xs" amountClassName="text-xs" fractionDigits={0} />
+                                    ) : (
+                                      `$${amount}`
+                                    )}
                                   </Button>
                                 ))}
                               </div>
@@ -1021,11 +1045,11 @@ export default function ChallengeWatchPage() {
                                     {language === "ar" ? "الربح المحتمل:" : "Potential Winnings:"}
                                   </span>
                                   <span className="text-xl font-bold text-green-500">
-                                    ${calculatePotentialWinnings().toFixed(2)}
+                                    {formatChallengeAmountText(calculatePotentialWinnings())}
                                   </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                  ${supportAmount} × {getPlayerOdds(selectedPlayer).toFixed(2)} = ${calculatePotentialWinnings().toFixed(2)}
+                                  {formatChallengeAmountText(parseFloat(supportAmount))} × {getPlayerOdds(selectedPlayer).toFixed(2)} = {formatChallengeAmountText(calculatePotentialWinnings())}
                                 </p>
                               </div>
                             )}
@@ -1035,8 +1059,8 @@ export default function ChallengeWatchPage() {
                                 <Info className="h-3 w-3" />
                                 <span>
                                   {language === "ar"
-                                    ? `رسوم المنصة: ${oddsData.houseFeePercent}% • الحد الأدنى: $${oddsData.minSupportAmount} • الحد الأقصى: $${oddsData.maxSupportAmount}`
-                                    : `House fee: ${oddsData.houseFeePercent}% • Min: $${oddsData.minSupportAmount} • Max: $${oddsData.maxSupportAmount}`}
+                                    ? `رسوم المنصة: ${oddsData.houseFeePercent}% • الحد الأدنى: ${formatChallengeAmountText(oddsData.minSupportAmount)} • الحد الأقصى: ${formatChallengeAmountText(oddsData.maxSupportAmount)}`
+                                    : `House fee: ${oddsData.houseFeePercent}% • Min: ${formatChallengeAmountText(oddsData.minSupportAmount)} • Max: ${formatChallengeAmountText(oddsData.maxSupportAmount)}`}
                                 </span>
                               </div>
                             )}
@@ -1062,7 +1086,7 @@ export default function ChallengeWatchPage() {
                                 {addSupportMutation.isPending ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                  <DollarSign className="h-4 w-4" />
+                                  <TrendingUp className="h-4 w-4" />
                                 )}
                                 {language === "ar" ? "أضف الدعم" : "Add Support"}
                               </Button>
@@ -1104,9 +1128,9 @@ export default function ChallengeWatchPage() {
                               </div>
                             </div>
                             <div className="text-end">
-                              <p className="text-sm font-bold text-primary">${parseFloat(support.amount).toFixed(2)}</p>
+                              <p className="text-sm font-bold text-primary">{formatChallengeAmountText(support.amount)}</p>
                               <p className="text-xs text-green-500">
-                                → ${parseFloat(support.potentialWinnings).toFixed(2)}
+                                → {formatChallengeAmountText(support.potentialWinnings)}
                               </p>
                             </div>
                           </div>
