@@ -1583,7 +1583,7 @@ export default function ChallengeGamePage() {
                 </div>
               )}
 
-              <div className="relative">
+              <div className={`relative ${isDominoGame ? "w-full" : ""}`}>
                 {receivedGifts.map((gift) => (
                   <div
                     key={gift.id}

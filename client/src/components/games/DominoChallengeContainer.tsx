@@ -90,31 +90,33 @@ export function DominoChallengeContainer({
     }, [boardState]);
 
     return (
-        <div className={`relative w-full max-w-5xl mx-auto overflow-hidden rounded-2xl border border-border/60 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.55),transparent_50%),radial-gradient(circle_at_85%_82%,rgba(59,130,246,0.08),transparent_52%),linear-gradient(175deg,rgba(255,255,255,0.35),rgba(15,23,42,0.06))] ${isCompactViewport ? "p-2" : "p-2.5 sm:p-3.5"} shadow-[0_22px_40px_rgba(15,23,42,0.16)]`}>
+        <div className={`relative w-full max-w-none mx-auto overflow-hidden rounded-2xl border border-border/60 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.55),transparent_50%),radial-gradient(circle_at_85%_82%,rgba(59,130,246,0.08),transparent_52%),linear-gradient(175deg,rgba(255,255,255,0.35),rgba(15,23,42,0.06))] ${isCompactViewport ? "p-2" : "p-2.5 sm:p-3.5"} shadow-[0_22px_40px_rgba(15,23,42,0.16)]`}>
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.2),transparent_35%,transparent_65%,rgba(0,0,0,0.08))]" />
             <div className="pointer-events-none absolute -top-16 -left-14 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-20 -right-16 h-44 w-44 rounded-full bg-amber-500/10 blur-3xl" />
 
             <div className={`relative ${isCompactViewport ? "space-y-2" : "space-y-4"}`}>
-                <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                    className={`grid grid-cols-3 ${isCompactViewport ? "gap-1.5" : "gap-2"}`}
-                >
-                    <div className="domino-kpi-pill rounded-xl border border-border/65 bg-background/75 px-2 py-1.5 text-center animate-domino-chip-rise">
-                        <div className={`${isCompactViewport ? "text-[9px]" : "text-[10px] sm:text-xs"} text-muted-foreground`}>{t("domino.tiles")}</div>
-                        <div className={`${isCompactViewport ? "text-xs" : "text-sm sm:text-base"} font-semibold`}>{boardStats.boardTileCount}</div>
-                    </div>
-                    <div className="domino-kpi-pill rounded-xl border border-primary/25 bg-primary/10 px-2 py-1.5 text-center animate-domino-chip-rise [animation-delay:70ms]">
-                        <div className={`${isCompactViewport ? "text-[9px]" : "text-[10px] sm:text-xs"} text-primary/80`}>{t("domino.draw")}</div>
-                        <div className={`${isCompactViewport ? "text-xs" : "text-sm sm:text-base"} font-semibold text-primary`}>{boardStats.boneyardCount}</div>
-                    </div>
-                    <div className="domino-kpi-pill rounded-xl border border-border/65 bg-background/75 px-2 py-1.5 text-center animate-domino-chip-rise [animation-delay:140ms]">
-                        <div className={`${isCompactViewport ? "text-[9px]" : "text-[10px] sm:text-xs"} text-muted-foreground`}>{t("domino.recentActivity")}</div>
-                        <div className={`${isCompactViewport ? "text-xs" : "text-sm sm:text-base"} font-semibold`}>{timeline.length}</div>
-                    </div>
-                </motion.div>
+                {!isCompactViewport && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                        className="grid grid-cols-3 gap-2"
+                    >
+                        <div className="domino-kpi-pill rounded-xl border border-border/65 bg-background/75 px-2 py-1.5 text-center animate-domino-chip-rise">
+                            <div className="text-[10px] sm:text-xs text-muted-foreground">{t("domino.tiles")}</div>
+                            <div className="text-sm sm:text-base font-semibold">{boardStats.boardTileCount}</div>
+                        </div>
+                        <div className="domino-kpi-pill rounded-xl border border-primary/25 bg-primary/10 px-2 py-1.5 text-center animate-domino-chip-rise [animation-delay:70ms]">
+                            <div className="text-[10px] sm:text-xs text-primary/80">{t("domino.draw")}</div>
+                            <div className="text-sm sm:text-base font-semibold text-primary">{boardStats.boneyardCount}</div>
+                        </div>
+                        <div className="domino-kpi-pill rounded-xl border border-border/65 bg-background/75 px-2 py-1.5 text-center animate-domino-chip-rise [animation-delay:140ms]">
+                            <div className="text-[10px] sm:text-xs text-muted-foreground">{t("domino.recentActivity")}</div>
+                            <div className="text-sm sm:text-base font-semibold">{timeline.length}</div>
+                        </div>
+                    </motion.div>
+                )}
 
                 <motion.div
                     initial={{ opacity: 0, y: 12, scale: 0.995 }}
@@ -162,16 +164,22 @@ export function DominoChallengeContainer({
                 )}
 
                 {isCompactViewport ? (
-                    <div className="grid grid-cols-2 gap-2">
-                        <div className="rounded-xl border border-border/65 bg-background/70 px-2 py-1.5 text-center">
-                            <p className="text-[10px] text-muted-foreground">{t("domino.recentActivity")}</p>
-                            <p className="text-xs font-semibold">{timeline.length}</p>
-                        </div>
-                        <div className="rounded-xl border border-border/65 bg-background/70 px-2 py-1.5 text-center">
-                            <p className="text-[10px] text-muted-foreground">{t("domino.score")}</p>
-                            <p className="text-xs font-semibold">
-                                {scoreRows.length > 0 ? `${scoreRows[0].label}: ${scoreRows[0].score}` : "-"}
-                            </p>
+                    <div className="w-full overflow-x-auto">
+                        <div className="flex min-w-max items-center gap-2">
+                            <div className="rounded-xl border border-border/65 bg-background/70 px-2 py-1 text-center">
+                                <p className="text-[10px] text-muted-foreground">{t("domino.recentActivity")}</p>
+                                <p className="text-xs font-semibold">{timeline.length}</p>
+                            </div>
+                            <div className="rounded-xl border border-border/65 bg-background/70 px-2 py-1 text-center">
+                                <p className="text-[10px] text-muted-foreground">{t("domino.score")}</p>
+                                <p className="text-xs font-semibold">
+                                    {scoreRows.length > 0 ? `${scoreRows[0].label}: ${scoreRows[0].score}` : "-"}
+                                </p>
+                            </div>
+                            <div className="rounded-xl border border-border/65 bg-background/70 px-2 py-1 text-center">
+                                <p className="text-[10px] text-muted-foreground">{t("domino.tiles")}</p>
+                                <p className="text-xs font-semibold">{boardStats.boardTileCount}</p>
+                            </div>
                         </div>
                     </div>
                 ) : (
