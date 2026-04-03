@@ -61,6 +61,16 @@ function main(): void {
     assertEqual(invalidTypeValidation.errorKey, "domino.invalidMoveType", "Expected domino.invalidMoveType error key");
     logPass("invalid type returns domino.invalidMoveType");
 
+    const cannotPassValidation = engine.validateMove(initialState, currentPlayer, { type: "pass" });
+    assertCondition(!cannotPassValidation.valid, "Expected cannot-pass validation failure");
+    assertEqual(cannotPassValidation.errorKey, "domino.cannotPass", "Expected domino.cannotPass error key");
+    logPass("pass with playable tiles returns domino.cannotPass");
+
+    const cannotDrawValidation = engine.validateMove(initialState, currentPlayer, { type: "draw" });
+    assertCondition(!cannotDrawValidation.valid, "Expected cannot-draw validation failure");
+    assertEqual(cannotDrawValidation.errorKey, "domino.cannotDraw", "Expected domino.cannotDraw error key");
+    logPass("draw with playable tiles returns domino.cannotDraw");
+
     const impossibleTileValidation = engine.validateMove(initialState, currentPlayer, {
         type: "play",
         tile: { left: 7, right: 7 },
@@ -69,6 +79,47 @@ function main(): void {
     assertCondition(!impossibleTileValidation.valid, "Expected tile-not-in-hand failure");
     assertEqual(impossibleTileValidation.errorKey, "domino.tileNotInHand", "Expected domino.tileNotInHand error key");
     logPass("unknown tile returns domino.tileNotInHand");
+
+    const mustDrawState = JSON.parse(initialState) as {
+        board: Array<{ left: number; right: number; id?: string }>;
+        leftEnd: number;
+        rightEnd: number;
+        currentPlayer: string;
+        drawsThisTurn: number;
+        hands: Record<string, Array<{ left: number; right: number; id?: string }>>;
+        boneyard: Array<{ left: number; right: number; id?: string }>;
+    };
+
+    mustDrawState.board = [{ left: 6, right: 6, id: "6-6" }];
+    mustDrawState.leftEnd = 6;
+    mustDrawState.rightEnd = 6;
+    mustDrawState.currentPlayer = currentPlayer;
+    mustDrawState.drawsThisTurn = 0;
+    mustDrawState.hands[currentPlayer] = [{ left: 0, right: 1, id: "0-1" }];
+    mustDrawState.boneyard = [{ left: 2, right: 3, id: "2-3" }];
+
+    const mustDrawPassValidation = engine.validateMove(JSON.stringify(mustDrawState), currentPlayer, { type: "pass" });
+    assertCondition(!mustDrawPassValidation.valid, "Expected must-draw validation failure");
+    assertEqual(mustDrawPassValidation.errorKey, "domino.mustDraw", "Expected domino.mustDraw error key");
+    logPass("pass with empty playable set and non-empty boneyard returns domino.mustDraw");
+
+    const boneyardEmptyState = {
+        ...mustDrawState,
+        boneyard: [] as Array<{ left: number; right: number; id?: string }>,
+    };
+    const boneyardEmptyValidation = engine.validateMove(JSON.stringify(boneyardEmptyState), currentPlayer, { type: "draw" });
+    assertCondition(!boneyardEmptyValidation.valid, "Expected boneyard-empty validation failure");
+    assertEqual(boneyardEmptyValidation.errorKey, "domino.boneyardEmpty", "Expected domino.boneyardEmpty error key");
+    logPass("draw with empty boneyard returns domino.boneyardEmpty");
+
+    const maxDrawsState = {
+        ...mustDrawState,
+        drawsThisTurn: 14,
+    };
+    const maxDrawsValidation = engine.validateMove(JSON.stringify(maxDrawsState), currentPlayer, { type: "draw" });
+    assertCondition(!maxDrawsValidation.valid, "Expected max-draws validation failure");
+    assertEqual(maxDrawsValidation.errorKey, "domino.maxDrawsReached", "Expected domino.maxDrawsReached error key");
+    logPass("draw after max draws returns domino.maxDrawsReached");
 
     const validMoves = engine.getValidMoves(initialState, currentPlayer);
     assertCondition(validMoves.length > 0, "Expected at least one valid move for current player");

@@ -827,8 +827,11 @@ export default function ChallengeGamePage() {
           totalGiftsValue: "0",
         });
         setDrawOffered(null);
+        const isDrawResult = data.reason === "draw_agreement"
+          || data.reason === "draw"
+          || data.isDraw === true;
         if (data.winnerId === user?.id) playSound("gameWin");
-        else if (data.reason === "draw_agreement") playSound("draw");
+        else if (isDrawResult) playSound("draw");
         else playSound("gameLose");
         break;
       case "draw_offered":
@@ -1635,6 +1638,13 @@ export default function ChallengeGamePage() {
                       {language === "ar" ? "انتهت المباراة" : "Match Finished"}
                     </span>
                   </div>
+                ) : challenge.gameType === "domino" && gameSession.winReason === "draw" ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <ArrowRightLeft className="h-12 w-12 text-yellow-500" />
+                    <span className="text-2xl">
+                      {language === "ar" ? "انتهت المباراة بالتعادل" : "Match Draw"}
+                    </span>
+                  </div>
                 ) : gameSession.winnerId === user?.id ? (
                   <div className="flex flex-col items-center gap-2">
                     <Trophy className="h-12 w-12 text-yellow-500" />
@@ -1658,6 +1668,7 @@ export default function ChallengeGamePage() {
                 {gameSession.winReason === "timeout" && (language === "ar" ? "انتهى الوقت" : "Time out")}
                 {gameSession.winReason === "resignation" && (language === "ar" ? "استسلام" : "Resignation")}
                 {gameSession.winReason === "domino_blocked" && (language === "ar" ? "اللعبة محظورة" : "Game blocked")}
+                {gameSession.winReason === "blocked" && (language === "ar" ? "اللعبة محظورة" : "Game blocked")}
                 {gameSession.winReason === "stalemate" && (language === "ar" ? "طريق مسدود" : "Stalemate")}
                 {gameSession.winReason === "gammon" && (language === "ar" ? "غامون!" : "Gammon!")}
                 {gameSession.winReason === "backgammon" && (language === "ar" ? "باكغامون!" : "Backgammon!")}
@@ -1665,6 +1676,7 @@ export default function ChallengeGamePage() {
                 {gameSession.winReason === "target_reached" && (language === "ar" ? "وصل للهدف" : "Target score reached")}
                 {gameSession.winReason === "normal" && (language === "ar" ? "فوز عادي" : "Normal win")}
                 {gameSession.winReason === "draw_agreement" && (language === "ar" ? "تعادل بالاتفاق" : "Draw by agreement")}
+                {gameSession.winReason === "draw" && (language === "ar" ? "تعادل" : "Draw")}
               </p>
               {canPlayActions && gameSession.winnerId === user?.id && (
                 <p className="text-lg font-bold text-green-500 mt-2">
