@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,6 +79,9 @@ interface GameSession {
   winReason?: string;
   totalMoves: number;
   spectatorCount: number;
+  lastMoveAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface Challenge {
@@ -634,6 +637,26 @@ export default function ChallengeWatchPage() {
       ? `${autoPlayActorName} انقطع عن المباراة. إذا لم يعد خلال ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} ثانية سيدخل التحدي وضع Auto Play.`
       : `${autoPlayActorName} disconnected from the match. If they do not return within ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} seconds, Auto Play will take over.`);
 
+  const dominoTurnStartedAtMs = useMemo(() => {
+    const rawLastMoveAt = gameSession?.lastMoveAt;
+    if (!rawLastMoveAt) {
+      return undefined;
+    }
+
+    const parsed = new Date(rawLastMoveAt).getTime();
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }, [gameSession?.lastMoveAt, gameSession?.totalMoves]);
+
+  const balootTurnStartedAtMs = useMemo(() => {
+    const rawStartedAt = gameSession?.lastMoveAt || gameSession?.updatedAt || gameSession?.createdAt;
+    if (!rawStartedAt) {
+      return undefined;
+    }
+
+    const parsed = new Date(rawStartedAt).getTime();
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }, [gameSession?.createdAt, gameSession?.lastMoveAt, gameSession?.totalMoves, gameSession?.updatedAt]);
+
   const getPlayerOdds = (playerId: string): number => {
     if (!oddsData || !challenge) return 1.5;
     const instantOdds = parseFloat(oddsData.instantMatchOdds) || 1.8;
@@ -1188,6 +1211,8 @@ export default function ChallengeWatchPage() {
                       isSpectator={true}
                       onMove={() => { }}
                       status={gameSession?.status}
+                      turnTimeLimitSeconds={30}
+                      turnStartedAtMs={dominoTurnStartedAtMs}
                       dominoResyncing={Boolean(dominoResyncing)}
                       dominoMoveError={null}
                       timeline={dominoTimeline}
@@ -1226,6 +1251,7 @@ export default function ChallengeWatchPage() {
                       gameState={playerView as TarneebState | null}
                       playerId="spectator"
                       playerPosition={0}
+                      playerNames={balootPlayerNames}
                       onPlayCard={() => { }}
                       onBid={() => { }}
                       onPass={() => { }}
@@ -1242,6 +1268,8 @@ export default function ChallengeWatchPage() {
                       onChooseTrump={() => { }}
                       onPass={() => { }}
                       playerNames={balootPlayerNames}
+                      turnTimeLimitSeconds={30}
+                      turnStartedAtMs={balootTurnStartedAtMs}
                     />
                   )}
 

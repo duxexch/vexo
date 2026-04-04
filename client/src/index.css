@@ -1047,6 +1047,83 @@ svg {
   }
 }
 
+@keyframes tarneeb-card-deal {
+  0% {
+    opacity: 0;
+    filter: blur(1px) brightness(0.88);
+  }
+
+  55% {
+    opacity: 0.92;
+    filter: blur(0.2px) brightness(0.96);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0) brightness(1);
+  }
+}
+
+@keyframes tarneeb-card-play {
+  0% {
+    opacity: 0;
+    filter: blur(0.8px) brightness(0.9);
+  }
+
+  60% {
+    opacity: 1;
+    filter: blur(0.12px) brightness(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0) brightness(1);
+  }
+}
+
+@keyframes tarneeb-trick-sweep {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+
+  45% {
+    transform: translate(var(--sweep-x, 0px), var(--sweep-y, 0px)) scale(0.84) rotate(6deg);
+    opacity: 0.92;
+  }
+
+  100% {
+    transform: translate(calc(var(--sweep-x, 0px) * 2), calc(var(--sweep-y, 0px) * 2)) scale(0.24) rotate(18deg);
+    opacity: 0;
+  }
+}
+
+@keyframes tarneeb-table-breathe {
+  0% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      inset 0 -18px 28px rgba(0, 0, 0, 0.34),
+      0 24px 34px rgba(8, 26, 19, 0.45),
+      0 0 0 rgba(56, 189, 248, 0);
+  }
+
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.24),
+      inset 0 -18px 28px rgba(0, 0, 0, 0.34),
+      0 26px 36px rgba(8, 26, 19, 0.48),
+      0 0 28px rgba(56, 189, 248, 0.16);
+  }
+
+  100% {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      inset 0 -18px 28px rgba(0, 0, 0, 0.34),
+      0 24px 34px rgba(8, 26, 19, 0.45),
+      0 0 0 rgba(56, 189, 248, 0);
+  }
+}
+
 /* Confetti celebration — particles fall from top */
 @keyframes confetti-fall {
   0% {
@@ -1316,6 +1393,18 @@ svg {
   animation: trick-sweep 500ms ease-in forwards;
 }
 
+.animate-tarneeb-card-deal {
+  animation: tarneeb-card-deal 360ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
+.animate-tarneeb-card-play {
+  animation: tarneeb-card-play 250ms cubic-bezier(0.17, 0.84, 0.34, 1) both;
+}
+
+.animate-tarneeb-trick-sweep {
+  animation: tarneeb-trick-sweep 520ms cubic-bezier(0.2, 0.82, 0.24, 1) forwards;
+}
+
 .animate-dice-roll {
   animation: dice-roll 600ms ease-out forwards;
 }
@@ -1511,13 +1600,317 @@ svg {
     0 4px 10px rgba(0, 0, 0, 0.28);
 }
 
+.backgammon-shell {
+  position: relative;
+  background: linear-gradient(145deg, #6e482e 0%, #4f311f 48%, #341f11 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 240, 221, 0.24),
+    inset 0 -10px 14px rgba(0, 0, 0, 0.32),
+    0 16px 30px rgba(9, 20, 15, 0.42);
+}
+
+.backgammon-shell::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 12% 16%, rgba(255, 255, 255, 0.1), transparent 48%),
+    radial-gradient(circle at 84% 82%, rgba(0, 0, 0, 0.25), transparent 56%),
+    repeating-linear-gradient(-28deg,
+      rgba(255, 255, 255, 0.02) 0px,
+      rgba(255, 255, 255, 0.02) 8px,
+      rgba(0, 0, 0, 0.03) 8px,
+      rgba(0, 0, 0, 0.03) 16px);
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+
+.backgammon-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 30%, transparent 74%, rgba(0, 0, 0, 0.16));
+  pointer-events: none;
+}
+
+.backgammon-felt-lane {
+  position: relative;
+  background: linear-gradient(180deg, rgba(9, 79, 62, 0.95) 0%, rgba(7, 64, 50, 0.96) 48%, rgba(6, 52, 40, 0.98) 100%);
+}
+
+.backgammon-felt-lane::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 35% 20%, rgba(255, 255, 255, 0.08), transparent 52%),
+    repeating-linear-gradient(24deg,
+      rgba(255, 255, 255, 0.015) 0px,
+      rgba(255, 255, 255, 0.015) 5px,
+      rgba(0, 0, 0, 0.015) 5px,
+      rgba(0, 0, 0, 0.015) 10px);
+  pointer-events: none;
+}
+
+.backgammon-point-cap {
+  filter: saturate(1.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -5px 8px rgba(0, 0, 0, 0.2);
+}
+
+.backgammon-point-light.backgammon-point-top {
+  background: linear-gradient(180deg, #a6764f 0%, #6f4a2f 58%, #4f311f 100%);
+}
+
+.backgammon-point-light.backgammon-point-bottom {
+  background: linear-gradient(0deg, #a6764f 0%, #6f4a2f 58%, #4f311f 100%);
+}
+
+.backgammon-point-dark.backgammon-point-top {
+  background: linear-gradient(180deg, #4a4e49 0%, #30332f 58%, #1f221f 100%);
+}
+
+.backgammon-point-dark.backgammon-point-bottom {
+  background: linear-gradient(0deg, #4a4e49 0%, #30332f 58%, #1f221f 100%);
+}
+
+.backgammon-checker {
+  width: var(--bg-checker-size);
+  height: var(--bg-checker-size);
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -4px 6px rgba(0, 0, 0, 0.34),
+    0 4px 8px rgba(0, 0, 0, 0.28);
+}
+
+.backgammon-checker::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  right: 4px;
+  height: 40%;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.46), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.backgammon-checker::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+}
+
+.backgammon-checker--white {
+  background: radial-gradient(circle at 30% 26%, #fff9e9 0%, #f0e2c3 62%, #cfbb91 100%);
+  border-color: #c9ae79;
+}
+
+.backgammon-checker--black {
+  background: radial-gradient(circle at 30% 26%, #5e5a56 0%, #37332f 56%, #1a1816 100%);
+  border-color: #4b4743;
+}
+
+.backgammon-bar-slot {
+  position: relative;
+  background: linear-gradient(180deg, #5f3b23 0%, #432816 54%, #301b10 100%);
+  box-shadow:
+    inset 1px 0 0 rgba(255, 219, 182, 0.18),
+    inset -1px 0 0 rgba(0, 0, 0, 0.34),
+    inset 0 10px 12px rgba(255, 255, 255, 0.03),
+    inset 0 -8px 12px rgba(0, 0, 0, 0.28);
+}
+
+.backgammon-bearoff-tray {
+  background:
+    linear-gradient(180deg, rgba(59, 36, 23, 0.94), rgba(31, 20, 13, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 229, 198, 0.16),
+    inset 0 -8px 10px rgba(0, 0, 0, 0.34),
+    0 6px 10px rgba(0, 0, 0, 0.24);
+}
+
+.backgammon-die-shell {
+  width: clamp(34px, 6vw, 42px);
+  height: clamp(34px, 6vw, 42px);
+  padding: clamp(3px, 0.7vw, 5px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid rgba(175, 163, 147, 0.85);
+  background: linear-gradient(145deg, #ffffff 0%, #eceff2 60%, #d3d7dd 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.16),
+    0 6px 12px rgba(0, 0, 0, 0.25);
+}
+
+.backgammon-die-pip {
+  width: clamp(4px, 0.9vw, 7px);
+  height: clamp(4px, 0.9vw, 7px);
+  border-radius: 9999px;
+  background: radial-gradient(circle at 30% 30%, #4a4a4a 0%, #141414 72%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.backgammon-cube-shell {
+  background: linear-gradient(145deg, #f8dca1 0%, #e6bf73 56%, #c18f3d 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 249, 230, 0.55),
+    inset 0 -3px 6px rgba(112, 70, 20, 0.35),
+    0 6px 12px rgba(56, 32, 7, 0.35);
+}
+
+.tarneeb-table-shell {
+  position: relative;
+  transform-style: preserve-3d;
+  background:
+    radial-gradient(circle at 50% 45%, #16914f 0%, #0f7a40 45%, #0a6032 78%, #084f29 100%);
+  border: 2px solid rgba(4, 73, 38, 0.95);
+  box-shadow:
+    inset 0 0 0 1px rgba(206, 255, 224, 0.12),
+    inset 0 0 90px rgba(0, 0, 0, 0.22),
+    0 18px 28px rgba(5, 34, 19, 0.34);
+}
+
+.tarneeb-table-live {
+  animation: tarneeb-table-breathe 3.4s ease-in-out infinite;
+}
+
+.tarneeb-felt-overlay {
+  background:
+    radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.09), transparent 42%),
+    radial-gradient(circle at 82% 74%, rgba(0, 0, 0, 0.2), transparent 48%),
+    repeating-linear-gradient(0deg,
+      rgba(255, 255, 255, 0.02) 0px,
+      rgba(255, 255, 255, 0.02) 1px,
+      rgba(0, 0, 0, 0.02) 1px,
+      rgba(0, 0, 0, 0.02) 2px);
+  opacity: 0.6;
+}
+
+.tarneeb-rim-highlight {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  opacity: 0.45;
+}
+
+.tarneeb-topbar {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(6, 48, 28, 0.62);
+  background: linear-gradient(180deg, rgba(7, 45, 28, 0.46), rgba(6, 37, 23, 0.28));
+}
+
+.tarneeb-card-shell {
+  position: relative;
+  overflow: hidden;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  background: linear-gradient(145deg, #ffffff 0%, #f9f9f9 62%, #eceff3 100%);
+  border-color: rgba(206, 212, 220, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.08),
+    0 4px 10px rgba(0, 0, 0, 0.22);
+}
+
+.tarneeb-card-sheen {
+  display: none;
+}
+
+.tarneeb-opponent-card {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  border-color: rgba(168, 68, 68, 0.7);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.88),
+    0 3px 8px rgba(0, 0, 0, 0.26);
+}
+
+.tarneeb-opponent-card::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 3px;
+  border: 1px solid rgba(170, 46, 46, 0.48);
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(186, 42, 42, 0.18) 0px,
+      rgba(186, 42, 42, 0.18) 3px,
+      rgba(255, 255, 255, 0.18) 3px,
+      rgba(255, 255, 255, 0.18) 6px);
+}
+
+.tarneeb-opponent-card::after {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 2px;
+  border: 1px solid rgba(166, 38, 38, 0.38);
+}
+
+.tarneeb-trick-card {
+  background: linear-gradient(145deg, #ffffff 0%, #f7f9fb 58%, #e8edf2 100%);
+  border-color: rgba(199, 206, 215, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.1),
+    0 8px 14px rgba(0, 0, 0, 0.26);
+}
+
+.tarneeb-table-shell.tarneeb-tier-ultra {
+  box-shadow:
+    inset 0 0 0 1px rgba(222, 255, 232, 0.15),
+    inset 0 0 100px rgba(0, 0, 0, 0.25),
+    0 20px 32px rgba(4, 31, 18, 0.42);
+}
+
+.tarneeb-tier-ultra .tarneeb-card-shell,
+.tarneeb-tier-ultra .tarneeb-trick-card {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -3px 7px rgba(0, 0, 0, 0.11),
+    0 9px 16px rgba(0, 0, 0, 0.28);
+}
+
+.tarneeb-tier-lite .tarneeb-felt-overlay {
+  opacity: 0.4;
+}
+
+.tarneeb-tier-lite .tarneeb-rim-highlight {
+  opacity: 0.25;
+}
+
+.tarneeb-tier-lite .tarneeb-card-sheen {
+  display: none;
+}
+
+.tarneeb-tier-lite .tarneeb-card-shell,
+.tarneeb-tier-lite .tarneeb-opponent-card,
+.tarneeb-tier-lite .tarneeb-trick-card {
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+}
+
 @media (prefers-reduced-motion: reduce) {
 
   .domino-board-turn-live,
   .domino-tile-playable,
   .domino-tile-sheen,
   .animate-domino-chip-rise,
-  .domino-insight-card::after {
+  .domino-insight-card::after,
+  .tarneeb-table-live,
+  .animate-tarneeb-card-deal,
+  .animate-tarneeb-card-play,
+  .animate-tarneeb-trick-sweep {
     animation: none !important;
   }
 }

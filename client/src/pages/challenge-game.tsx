@@ -98,6 +98,9 @@ interface GameSession {
   totalMoves: number;
   spectatorCount: number;
   totalGiftsValue: string;
+  lastMoveAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface Challenge {
@@ -1184,6 +1187,26 @@ export default function ChallengeGamePage() {
     return normalized as Record<string, unknown> | undefined;
   }, [playerView]);
 
+  const dominoTurnStartedAtMs = useMemo(() => {
+    const rawLastMoveAt = gameSession?.lastMoveAt;
+    if (!rawLastMoveAt) {
+      return undefined;
+    }
+
+    const parsed = new Date(rawLastMoveAt).getTime();
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }, [gameSession?.lastMoveAt, gameSession?.totalMoves]);
+
+  const balootTurnStartedAtMs = useMemo(() => {
+    const rawStartedAt = gameSession?.lastMoveAt || gameSession?.updatedAt || gameSession?.createdAt;
+    if (!rawStartedAt) {
+      return undefined;
+    }
+
+    const parsed = new Date(rawStartedAt).getTime();
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }, [gameSession?.createdAt, gameSession?.lastMoveAt, gameSession?.totalMoves, gameSession?.updatedAt]);
+
   const dominoScoreRows = useMemo<DominoScoreRow[]>(() => {
     const metaScores = dominoResultMeta?.scores;
     const liveScores = playerView?.scores && typeof playerView.scores === "object"
@@ -1264,8 +1287,14 @@ export default function ChallengeGamePage() {
 
   // Tarneeb/Baloot: pass
   const sendPass = useCallback(() => {
+    if (challenge?.gameType === "tarneeb") {
+      // Tarneeb engine treats pass as a bid=null move.
+      sendMove({ type: "bid", bid: null });
+      return;
+    }
+
     sendMove({ type: "pass" });
-  }, [sendMove]);
+  }, [challenge?.gameType, sendMove]);
 
   // Tarneeb: set trump suit after winning bid
   const sendSetTrump = useCallback((suit: string) => {
@@ -1785,6 +1814,8 @@ export default function ChallengeGamePage() {
                     isSpectator={isSpectator}
                     onMove={canPlayActions ? sendDominoMove : () => { }}
                     status={gameSession?.status}
+                    turnTimeLimitSeconds={30}
+                    turnStartedAtMs={dominoTurnStartedAtMs}
                     dominoResyncing={dominoResyncing}
                     dominoMoveError={dominoMoveError}
                     timeline={dominoTimeline}
@@ -1821,6 +1852,7 @@ export default function ChallengeGamePage() {
                     gameState={playerView as TarneebState | null}
                     playerId={isSpectator ? "__spectator__" : (user?.id || "")}
                     playerPosition={isSpectator ? 0 : ((playerView?.playerPosition as number) ?? mySeatIndex)}
+                    playerNames={balootPlayerNames}
                     onPlayCard={canPlayActions ? sendPlayCard : () => { }}
                     onBid={canPlayActions ? sendBid : () => { }}
                     onPass={canPlayActions ? sendPass : () => { }}
@@ -1836,6 +1868,8 @@ export default function ChallengeGamePage() {
                     onChooseTrump={canPlayActions ? sendChooseTrump : () => { }}
                     onPass={canPlayActions ? sendPass : () => { }}
                     playerNames={balootPlayerNames}
+                    turnTimeLimitSeconds={30}
+                    turnStartedAtMs={balootTurnStartedAtMs}
                   />
                 )}
               </div>

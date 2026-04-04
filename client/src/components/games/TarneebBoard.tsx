@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy, Volume2, VolumeX, Flag, Eye, Star, History, Clock, Layers, Timer } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import { isGameSoundEnabled, toggleGameSound } from "@/lib/game-sounds";
+import { cardSounds, isGameSoundEnabled, toggleGameSound } from "@/lib/game-sounds";
 
 // ─── Turn Timer Constants ────────────────────────────────────────
 const TURN_TIME_LIMIT_SEC = 30; // 30 seconds per turn
@@ -78,6 +78,8 @@ const SUITS: Record<string, { symbol: string; color: string; nameAr: string; nam
 
 const SUIT_ORDER: Record<string, number> = { spades: 0, hearts: 1, clubs: 2, diamonds: 3 };
 
+type TarneebVisualTier = "lite" | "standard" | "ultra";
+
 // ─── Helpers ─────────────────────────────────────────────────────────
 type Seat = "bottom" | "left" | "top" | "right";
 const SEAT_ORDER: Seat[] = ["bottom", "left", "top", "right"];
@@ -101,6 +103,32 @@ function sortHand(hand: PlayingCard[], trumpSuit?: string | null): PlayingCard[]
     if (suitDiff !== 0) return suitDiff;
     return a.value - b.value;
   });
+}
+
+function detectTarneebVisualTier(): TarneebVisualTier {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return "standard";
+  }
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return "lite";
+  }
+
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const cores = typeof nav.hardwareConcurrency === "number" ? nav.hardwareConcurrency : 4;
+  const memory = typeof nav.deviceMemory === "number" ? nav.deviceMemory : 4;
+  const width = window.innerWidth;
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent) || width <= 900;
+
+  if (isMobile) {
+    return cores >= 6 && memory >= 4 ? "ultra" : "lite";
+  }
+
+  if (cores >= 8 && memory >= 8) {
+    return "ultra";
+  }
+
+  return "standard";
 }
 
 // ─── Component ───────────────────────────────────────────────────────
@@ -150,7 +178,9 @@ export function TarneebBoard({
   const prevRedealRef = useRef(0);
   const [turnTimeLeft, setTurnTimeLeft] = useState(TURN_TIME_LIMIT_SEC);
   const turnStartRef = useRef(Date.now());
+  const timeoutActionTurnRef = useRef<string>('');
   const [showConfetti, setShowConfetti] = useState(false);
+  const [visualTier, setVisualTier] = useState<TarneebVisualTier>("standard");
   const { language } = useI18n();
   const isAr = language === "ar";
 
@@ -170,15 +200,61 @@ export function TarneebBoard({
 
   const playerOrder = state.playerOrder || [];
   const myIndex = playerOrder.indexOf(playerId);
-  const myHand = useMemo(() => sortHand(state.hand || state.hands[playerId] || [], state.trumpSuit), [state.hand, state.hands, playerId, state.trumpSuit]);
-  const isMyTurn = state.isMyTurn ?? (state.currentPlayer === playerId || state.currentTurn === playerId);
+  const anchorIndex = myIndex >= 0
+    ? myIndex
+    : (playerPosition >= 0 && playerPosition < playerOrder.length ? playerPosition : 0);
+  const isSpectatorView = myIndex < 0;
+  const anchorPlayerId = playerOrder[anchorIndex];
+  const myHand = useMemo(() => {
+    const directHand = state.hand || state.hands?.[playerId] || [];
+    if (directHand.length > 0) {
+      return sortHand(directHand, state.trumpSuit);
+    }
+
+    if (isSpectatorView && anchorPlayerId && Array.isArray(state.hands?.[anchorPlayerId])) {
+      return sortHand(state.hands?.[anchorPlayerId] || [], state.trumpSuit);
+    }
+
+    return [];
+  }, [state.hand, state.hands, playerId, state.trumpSuit, isSpectatorView, anchorPlayerId]);
+  const isMyTurn = !isSpectatorView && (state.isMyTurn ?? (state.currentPlayer === playerId || state.currentTurn === playerId));
   const gamePhase = state.gamePhase || state.phase;
-  const myTeam = state.myTeam ?? (myIndex >= 0 ? myIndex % 2 : 0);
+  const myTeam = state.myTeam ?? (anchorIndex % 2);
   const opponentTeam = myTeam === 0 ? 1 : 0;
-  const partnerId = state.partner || (myIndex >= 0 ? playerOrder[(myIndex + 2) % 4] : undefined);
+  const partnerId = state.partner || (playerOrder.length >= 4 ? playerOrder[(anchorIndex + 2) % 4] : undefined);
   const currentPlayer = state.currentTurn || state.currentPlayer;
   const roundNumber = state.roundNumber ?? 1;
   const targetScore = state.targetScore ?? 31;
+
+  useEffect(() => {
+    const applyTier = () => {
+      setVisualTier(detectTarneebVisualTier());
+    };
+
+    applyTier();
+    window.addEventListener("resize", applyTier);
+    return () => window.removeEventListener("resize", applyTier);
+  }, []);
+
+  const handleBidAction = useCallback((bid: number) => {
+    cardSounds.bid();
+    onBid(bid);
+  }, [onBid]);
+
+  const handlePassAction = useCallback(() => {
+    cardSounds.bidPass();
+    onPass();
+  }, [onPass]);
+
+  const handleTrumpAction = useCallback((suit: string) => {
+    cardSounds.trumpSelected();
+    onSetTrump?.(suit);
+  }, [onSetTrump]);
+
+  const handlePlayCardAction = useCallback((card: PlayingCard) => {
+    cardSounds.playCard();
+    onPlayCard(card);
+  }, [onPlayCard]);
 
   // ─── Trick-won indicator with sweep animation ─────────────────────
   const [trickWonBy, setTrickWonBy] = useState<string | null>(null);
@@ -192,6 +268,7 @@ export function TarneebBoard({
 
   useEffect(() => {
     if (state.lastTrickWinner) {
+      cardSounds.trickWon();
       // Show sweep animation with cached cards
       setTrickSweeping(true);
       // Haptic feedback on trick won
@@ -213,6 +290,7 @@ export function TarneebBoard({
   useEffect(() => {
     const round = roundNumber;
     if (round > prevRoundRef.current && prevRoundRef.current > 0) {
+      cardSounds.roundEnd();
       // A new round started — use lastRoundScores (persisted across round transition)
       const rs = state.lastRoundScores || state.roundScores || { team0: 0, team1: 0 };
       const ts = state.totalScores || { team0: 0, team1: 0 };
@@ -286,10 +364,15 @@ export function TarneebBoard({
 
   // ─── Confetti celebration on game win ───────────────────────────
   useEffect(() => {
-    if (gamePhase === 'finished' && state.winningTeam !== undefined && state.winningTeam === myTeam) {
-      setShowConfetti(true);
-      const timer = setTimeout(() => setShowConfetti(false), 5000);
-      return () => clearTimeout(timer);
+    if (gamePhase === 'finished' && state.winningTeam !== undefined) {
+      if (state.winningTeam === myTeam) {
+        cardSounds.victory();
+        setShowConfetti(true);
+        const timer = setTimeout(() => setShowConfetti(false), 5000);
+        return () => clearTimeout(timer);
+      }
+
+      cardSounds.defeat();
     }
   }, [gamePhase, state.winningTeam, myTeam]);
 
@@ -298,6 +381,7 @@ export function TarneebBoard({
     // Reset timer every time turn changes
     turnStartRef.current = Date.now();
     setTurnTimeLeft(TURN_TIME_LIMIT_SEC);
+    timeoutActionTurnRef.current = '';
   }, [currentPlayer]);
 
   // ─── F3: Auto-play single valid card after short delay ──────────
@@ -330,11 +414,11 @@ export function TarneebBoard({
     });
     if (playable.length === 1) {
       const timer = setTimeout(() => {
-        onPlayCard(playable[0]);
+        handlePlayCardAction(playable[0]);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [isMyTurn, gamePhase, state.trumpSuit, myHand, state.currentTrick, onPlayCard, graceExpired]);
+  }, [isMyTurn, gamePhase, state.trumpSuit, myHand, state.currentTrick, handlePlayCardAction, graceExpired]);
 
   useEffect(() => {
     if (gamePhase === 'finished') return;
@@ -345,9 +429,16 @@ export function TarneebBoard({
 
       // ── Auto-play on timeout (only for the local player) ──
       if (remaining <= 0 && isMyTurn) {
+        const timeoutKey = `${currentPlayer}:${gamePhase}`;
+        if (timeoutActionTurnRef.current === timeoutKey) {
+          return;
+        }
+
+        timeoutActionTurnRef.current = timeoutKey;
+
         if (gamePhase === 'bidding') {
           // Auto-pass when timeout during bidding
-          onPass();
+          handlePassAction();
         } else if (gamePhase === 'playing') {
           if (!state.trumpSuit && state.highestBid?.playerId === playerId && onSetTrump) {
             // Auto-select trump: pick the suit with most cards
@@ -355,7 +446,7 @@ export function TarneebBoard({
             const suitCounts: Record<string, number> = {};
             for (const c of h) suitCounts[c.suit] = (suitCounts[c.suit] || 0) + 1;
             const best = Object.entries(suitCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'spades';
-            onSetTrump(best);
+            handleTrumpAction(best);
           } else {
             // Auto-play: pick a random valid card
             const h = state.hand || state.hands?.[playerId] || [];
@@ -365,14 +456,14 @@ export function TarneebBoard({
               const followCards = leadSuit ? h.filter((c: PlayingCard) => c.suit === leadSuit) : [];
               const pool = followCards.length > 0 ? followCards : h;
               // Play the first card from pool (lowest)
-              onPlayCard(pool[0]);
+              handlePlayCardAction(pool[0]);
             }
           }
         }
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [currentPlayer, gamePhase, isMyTurn, playerId]);
+  }, [currentPlayer, gamePhase, isMyTurn, playerId, state.hand, state.hands, state.currentTrick, state.trumpSuit, state.highestBid?.playerId, handlePassAction, handleTrumpAction, handlePlayCardAction, onSetTrump]);
 
   // ─── Keyboard shortcuts ───────────────────────────────────────
   useEffect(() => {
@@ -385,12 +476,12 @@ export function TarneebBoard({
         const bid = bidMap[e.key];
         if (bid && bid >= minBid && bid <= 13) {
           e.preventDefault();
-          onBid(bid);
+          handleBidAction(bid);
           return;
         }
         if (e.key === 'p' || e.key === 'P' || e.key === ' ') {
           e.preventDefault();
-          onPass();
+          handlePassAction();
           return;
         }
       }
@@ -398,7 +489,7 @@ export function TarneebBoard({
       if (gamePhase === 'playing' && isMyTurn) {
         if (e.key === 'Enter' && selectedCard) {
           e.preventDefault();
-          onPlayCard(selectedCard);
+          handlePlayCardAction(selectedCard);
           setSelectedCard(null);
           return;
         }
@@ -423,18 +514,18 @@ export function TarneebBoard({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [gamePhase, isMyTurn, selectedCard, myHand, state.highestBid, onBid, onPass, onPlayCard]);
+  }, [gamePhase, isMyTurn, selectedCard, myHand, state.highestBid, handleBidAction, handlePassAction, handlePlayCardAction]);
 
   // ─── Seat mapping ─────────────────────────────────────────────────
   const seats = useMemo(() => {
-    if (playerOrder.length < 4 || myIndex < 0) return {} as Record<Seat, string>;
+    if (playerOrder.length < 4) return {} as Record<Seat, string>;
     return {
-      bottom: playerOrder[myIndex],
-      left: playerOrder[(myIndex + 1) % 4],
-      top: playerOrder[(myIndex + 2) % 4],
-      right: playerOrder[(myIndex + 3) % 4],
+      bottom: playerOrder[anchorIndex],
+      left: playerOrder[(anchorIndex + 1) % 4],
+      top: playerOrder[(anchorIndex + 2) % 4],
+      right: playerOrder[(anchorIndex + 3) % 4],
     };
-  }, [playerOrder, myIndex]);
+  }, [playerOrder, anchorIndex]);
 
   const getName = useCallback((pid: string) => {
     if (pid === playerId) return isAr ? "أنت" : "You";
@@ -467,7 +558,7 @@ export function TarneebBoard({
   const handleCardClick = (card: PlayingCard) => {
     if (!isValidPlay(card)) return;
     if (selectedCard?.suit === card.suit && selectedCard?.rank === card.rank) {
-      onPlayCard(card);
+      handlePlayCardAction(card);
       setSelectedCard(null);
       // Haptic feedback on card play
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
@@ -484,7 +575,7 @@ export function TarneebBoard({
 
   const handlePlayCard = () => {
     if (selectedCard) {
-      onPlayCard(selectedCard);
+      handlePlayCardAction(selectedCard);
       setSelectedCard(null);
       if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
         navigator.vibrate(15);
@@ -498,10 +589,16 @@ export function TarneebBoard({
   };
 
   // ─── Score display ────────────────────────────────────────────────
-  const myScore = myTeam === 0 ? (state.totalScores?.team0 ?? state.scores.team0 ?? 0) : (state.totalScores?.team1 ?? state.scores.team1 ?? 0);
-  const oppScore = opponentTeam === 0 ? (state.totalScores?.team0 ?? state.scores.team0 ?? 0) : (state.totalScores?.team1 ?? state.scores.team1 ?? 0);
-  const myTricks = myTeam === 0 ? (state.tricksWon.team0 ?? 0) : (state.tricksWon.team1 ?? 0);
-  const oppTricks = opponentTeam === 0 ? (state.tricksWon.team0 ?? 0) : (state.tricksWon.team1 ?? 0);
+  const myScore = myTeam === 0 ? (state.totalScores?.team0 ?? state.scores?.team0 ?? 0) : (state.totalScores?.team1 ?? state.scores?.team1 ?? 0);
+  const oppScore = opponentTeam === 0 ? (state.totalScores?.team0 ?? state.scores?.team0 ?? 0) : (state.totalScores?.team1 ?? state.scores?.team1 ?? 0);
+  const myTricks = myTeam === 0 ? (state.tricksWon?.team0 ?? 0) : (state.tricksWon?.team1 ?? 0);
+  const oppTricks = opponentTeam === 0 ? (state.tricksWon?.team0 ?? 0) : (state.tricksWon?.team1 ?? 0);
+  const dealAnimationClass = visualTier === "lite" ? "" : "animate-tarneeb-card-deal";
+  const playAnimationClass = visualTier === "lite" ? "" : "animate-tarneeb-card-play";
+  const sweepAnimationClass = visualTier === "lite" ? "" : "animate-tarneeb-trick-sweep";
+  const liveTableClass = isMyTurn && gamePhase === "playing" && visualTier !== "lite" ? "tarneeb-table-live" : "";
+  const boardPerspectiveClass = visualTier === "lite" ? "[perspective:860px]" : "[perspective:1200px]";
+  const confettiPieces = visualTier === "ultra" ? 60 : visualTier === "standard" ? 40 : 20;
 
   // ─── Render player card ───────────────────────────────────────────
   const renderPlayerCard = (card: PlayingCard, index: number, totalCards: number) => {
@@ -510,11 +607,11 @@ export function TarneebBoard({
     const isSelected = selectedCard?.suit === card.suit && selectedCard?.rank === card.rank;
     const isTrumpCard = state.trumpSuit && card.suit === state.trumpSuit;
 
-    const maxSpread = Math.min(totalCards * 32, 380);
+    const maxSpread = Math.min(totalCards * (visualTier === "lite" ? 20 : 24), 340);
     const startOffset = -maxSpread / 2;
     const step = totalCards > 1 ? maxSpread / (totalCards - 1) : 0;
     const xOffset = startOffset + step * index;
-    const angle = totalCards > 1 ? ((index - (totalCards - 1) / 2) * 3) : 0;
+    const angle = 0;
 
     return (
       <div
@@ -526,21 +623,24 @@ export function TarneebBoard({
         aria-label={`${card.rank} ${isAr ? SUITS[card.suit].nameAr : SUITS[card.suit].nameEn}${isSelected ? (isAr ? ' — محددة' : ' — selected') : ''}${!canPlay ? (isAr ? ' — غير قابلة للعب' : ' — not playable') : ''}`}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCardClick(card); } }}
         className={`
-          absolute w-[3.2rem] h-[4.5rem] sm:w-[3.8rem] sm:h-[5.2rem] bg-white rounded-lg border-2 shadow-lg
+          tarneeb-card-shell absolute w-[2.9rem] h-[4.3rem] sm:w-[3.2rem] sm:h-[4.8rem] rounded-[6px] border
           flex flex-col items-center justify-between py-1
-          transition-all duration-200 origin-bottom
-          ${canPlay ? "cursor-pointer hover:-translate-y-3 hover:shadow-xl" : "opacity-60 cursor-not-allowed"}
-          ${isSelected ? "ring-2 ring-yellow-400 -translate-y-5 shadow-yellow-400/30 shadow-xl z-10" : ""}
-          ${isTrumpCard && !isSelected ? "ring-1 ring-yellow-500/40" : ""}
-          animate-card-deal
+          transition-all duration-200 origin-bottom will-change-transform
+          ${canPlay ? "cursor-pointer hover:-translate-y-2" : "opacity-60 cursor-not-allowed"}
+          ${isSelected ? "ring-2 ring-emerald-500 shadow-emerald-900/40 z-10" : ""}
+          ${isTrumpCard && !isSelected ? "ring-1 ring-yellow-600/50" : ""}
+          ${dealAnimationClass}
         `}
         style={{
+          position: "absolute",
           left: "50%",
+          top: 0,
           transform: `translateX(${xOffset}px) rotate(${angle}deg) ${isSelected ? "translateY(-1.25rem)" : ""}`,
           animationDelay: `${index * 40}ms`,
           zIndex: isSelected ? 50 : index,
         }}
       >
+        <span className="tarneeb-card-sheen" aria-hidden="true" />
         <span className={`text-[10px] sm:text-xs font-bold leading-none ${suit.color}`}>{card.rank}</span>
         <span className={`text-xl sm:text-2xl leading-none ${suit.color}`}>{suit.symbol}</span>
         <span className={`text-[10px] sm:text-xs font-bold leading-none rotate-180 ${suit.color}`}>{card.rank}</span>
@@ -559,69 +659,36 @@ export function TarneebBoard({
     const isTurn = currentPlayer === pid;
     const name = getName(pid);
     const isDealer = state.dealerId === pid;
+    const isVerticalSeat = seat === "left" || seat === "right";
 
     return (
-      <div className={`flex flex-col items-center gap-1 ${isTurn ? "scale-105" : ""} transition-transform`}>
-        {/* Player name badge */}
-        <div className={`flex items-center gap-1.5 mb-1 ${isTurn ? "animate-pulse" : ""}`}>
-          <div
-            className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white
-              ${isTeammate ? "bg-blue-600 ring-2 ring-blue-400" : "bg-red-600 ring-2 ring-red-400"}
-              ${isTurn ? "ring-yellow-400 ring-2" : ""}
-            `}
-          >
-            {name[0]?.toUpperCase()}
-          </div>
-          <span className={`text-[11px] font-medium max-w-[60px] truncate
-            ${isTeammate ? "text-blue-300" : "text-red-300"}
-            ${isTurn ? "text-yellow-400 font-bold" : ""}
-          `}>{name}</span>
-          {isDealer && (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-yellow-900/50 border-yellow-600 text-yellow-300">
-              D
-            </Badge>
-          )}
-          {state.botPlayers?.includes(pid) && (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-gray-900/50 border-gray-500 text-gray-300">
-              🤖
-            </Badge>
-          )}
-          {isTeammate && pid === partnerId && (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-blue-900/50 border-blue-600 text-blue-300">
-              {isAr ? "شريك" : "Partner"}
-            </Badge>
-          )}
+      <div className={`flex flex-col items-center gap-1 ${isTurn ? "scale-[1.02]" : ""} transition-transform`}>
+        <div className={`mb-1 text-sm font-bold tracking-wide ${isTeammate ? "text-emerald-100" : "text-red-100"} ${isTurn ? "text-yellow-200" : ""}`}>
+          <span className="max-w-[92px] truncate inline-block align-middle">{name}</span>
+          {isTurn && <span className="ms-1 align-middle">←</span>}
+          {isDealer && <span className="ms-1 text-[10px] align-middle">D</span>}
+          {state.botPlayers?.includes(pid) && <span className="ms-1 text-[10px] align-middle">BOT</span>}
+          {isTeammate && pid === partnerId && <span className="ms-1 text-[10px] align-middle">P</span>}
         </div>
 
-        {/* Trick count badge during play */}
         {gamePhase === "playing" && state.trumpSuit && (
-          <div className="flex items-center gap-1 mb-0.5">
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${isTeammate ? 'bg-blue-900/60 text-blue-300' : 'bg-red-900/60 text-red-300'}`}>
-              {isTeammate
-                ? `${myTricks} ${isAr ? 'أكلة' : 't'}`
-                : `${oppTricks} ${isAr ? 'أكلة' : 't'}`
-              }
-            </span>
+          <div className="flex items-center gap-1 mb-0.5 text-[10px] font-semibold text-white/90 bg-black/35 px-1.5 py-0.5 rounded-sm">
+            {isTeammate ? myTricks : oppTricks}
           </div>
         )}
 
-        {/* Cards fan */}
-        <div className="flex items-center">
+        <div className={`tarneeb-opponent-stack flex items-center justify-center ${isVerticalSeat ? "flex-col" : "flex-row"}`}>
           {Array.from({ length: Math.min(count, 13) }).map((_, i) => (
             <div
               key={i}
-              className="w-8 h-11 sm:w-9 sm:h-12 bg-gradient-to-br from-blue-900 to-blue-700
-                rounded-md border border-blue-600 shadow-md animate-card-deal"
+              className={`tarneeb-opponent-card w-8 h-11 sm:w-9 sm:h-12 rounded-[4px] border ${dealAnimationClass}`}
               style={{
-                marginInlineStart: i > 0 ? "-18px" : "0",
+                marginInlineStart: !isVerticalSeat && i > 0 ? "-18px" : "0",
+                marginTop: isVerticalSeat && i > 0 ? "-30px" : "0",
                 animationDelay: `${i * 30}ms`,
                 zIndex: i,
               }}
-            >
-              <div className="w-full h-full rounded-md border border-blue-500/30 flex items-center justify-center">
-                <span className="text-blue-400/40 text-lg">♠</span>
-              </div>
-            </div>
+            />
           ))}
         </div>
       </div>
@@ -631,17 +698,17 @@ export function TarneebBoard({
   // ─── Trick cards positioned by seat (BUG #6 fix) ─────────────────
   const renderTrick = () => {
     const seatPositions: Record<Seat, React.CSSProperties> = {
-      bottom: { bottom: "28%", left: "50%", transform: "translateX(-50%)" },
-      left: { left: "28%", top: "50%", transform: "translateY(-50%)" },
-      top: { top: "28%", left: "50%", transform: "translateX(-50%)" },
-      right: { right: "28%", top: "50%", transform: "translateY(-50%)" },
+      bottom: { top: "58%", left: "50%", transform: "translate(-50%, -50%)" },
+      left: { left: "38%", top: "50%", transform: "translate(-50%, -50%)" },
+      top: { top: "38%", left: "50%", transform: "translate(-50%, -50%)" },
+      right: { left: "62%", top: "50%", transform: "translate(-50%, -50%)" },
     };
 
     // Show sweep animation with cached cards when trick completes
     if (trickSweeping && sweepingCards.length > 0) {
       // Compute sweep direction towards winner's seat
-      const winnerSeat = state.lastTrickWinner && playerOrder.length >= 4 && myIndex >= 0
-        ? getSeatForPlayer(state.lastTrickWinner, playerOrder, myIndex)
+      const winnerSeat = state.lastTrickWinner && playerOrder.length >= 4
+        ? getSeatForPlayer(state.lastTrickWinner, playerOrder, anchorIndex)
         : 'top';
       const sweepDir: Record<string, { x: string; y: string }> = {
         bottom: { x: '0px', y: '60px' },
@@ -654,16 +721,16 @@ export function TarneebBoard({
       return (
         <div className="absolute inset-0 pointer-events-none z-10">
           {sweepingCards.map((play, i) => {
-            const seat = playerOrder.length >= 4 && myIndex >= 0
-              ? getSeatForPlayer(play.playerId, playerOrder, myIndex)
+            const seat = playerOrder.length >= 4
+              ? getSeatForPlayer(play.playerId, playerOrder, anchorIndex)
               : SEAT_ORDER[i % 4];
             const pos = seatPositions[seat];
             const suit = SUITS[play.card.suit];
             return (
               <div
                 key={`sweep-${play.playerId}-${play.card.suit}-${play.card.rank}`}
-                className="absolute w-12 h-[4.2rem] sm:w-14 sm:h-[4.8rem] bg-white rounded-lg shadow-xl
-                  flex flex-col items-center justify-center animate-trick-sweep border-2"
+                className={`tarneeb-trick-card absolute w-12 h-[4.2rem] sm:w-14 sm:h-[4.8rem] rounded-lg
+                  flex flex-col items-center justify-center border-2 ${sweepAnimationClass}`}
                 style={{ ...pos, animationDelay: `${i * 40}ms`, '--sweep-x': dir.x, '--sweep-y': dir.y } as React.CSSProperties}
               >
                 <span className={`text-sm font-bold ${suit.color}`}>{play.card.rank}</span>
@@ -693,8 +760,8 @@ export function TarneebBoard({
     return (
       <div className="absolute inset-0 pointer-events-none z-10">
         {state.currentTrick.map((play, i) => {
-          const seat = playerOrder.length >= 4 && myIndex >= 0
-            ? getSeatForPlayer(play.playerId, playerOrder, myIndex)
+          const seat = playerOrder.length >= 4
+            ? getSeatForPlayer(play.playerId, playerOrder, anchorIndex)
             : SEAT_ORDER[i % 4];
           const pos = seatPositions[seat];
           const suit = SUITS[play.card.suit];
@@ -722,8 +789,8 @@ export function TarneebBoard({
           return (
             <div
               key={`${play.playerId}-${play.card.suit}-${play.card.rank}`}
-              className={`absolute w-12 h-[4.2rem] sm:w-14 sm:h-[4.8rem] bg-white rounded-lg shadow-xl
-                flex flex-col items-center justify-center animate-card-play
+              className={`tarneeb-trick-card absolute w-12 h-[4.2rem] sm:w-14 sm:h-[4.8rem] rounded-lg
+                flex flex-col items-center justify-center ${playAnimationClass}
                 ${isLead ? 'border-2 border-yellow-400 ring-1 ring-yellow-400/50' : isTeammate ? 'border-2 border-blue-400/50' : 'border-2 border-red-400/30'}
                 ${isCurrentWinner ? 'ring-2 ring-green-400 shadow-green-400/40 shadow-lg' : ''}`}
               style={{ ...pos, animationDelay: `${i * 60}ms` }}
@@ -878,7 +945,7 @@ export function TarneebBoard({
                       variant={disabled ? "ghost" : "outline"}
                       size="sm"
                       disabled={disabled}
-                      onClick={() => onBid(bid)}
+                      onClick={() => handleBidAction(bid)}
                       className={`text-base font-bold h-10 ${!disabled ? "hover:bg-yellow-500/20 hover:border-yellow-500" : ""}`}
                       data-testid={`button-bid-${bid}`}
                     >
@@ -890,7 +957,7 @@ export function TarneebBoard({
               <Button
                 variant="secondary"
                 className="w-full h-10"
-                onClick={onPass}
+                onClick={handlePassAction}
                 data-testid="button-pass"
               >
                 {isAr ? "باس ✋" : "Pass ✋"}
@@ -963,7 +1030,7 @@ export function TarneebBoard({
                   key={suit}
                   variant="outline"
                   className="h-16 text-xl flex flex-col gap-1 hover:bg-primary/10 hover:border-primary"
-                  onClick={() => onSetTrump?.(suit)}
+                  onClick={() => handleTrumpAction(suit)}
                   data-testid={`button-trump-${suit}`}
                 >
                   <span className={`text-3xl ${SUITS[suit].color}`}>{SUITS[suit].symbol}</span>
@@ -1003,13 +1070,16 @@ export function TarneebBoard({
   // ─── Main render ──────────────────────────────────────────────────
   return (
     <div
-      className="relative w-full h-[min(620px,calc(100vh-100px))] bg-game-felt rounded-xl overflow-hidden"
+      className={`tarneeb-table-shell tarneeb-tier-${visualTier} relative w-full h-[min(620px,calc(100vh-100px))] rounded-lg overflow-hidden ${boardPerspectiveClass} ${liveTableClass}`}
       data-testid="tarneeb-board"
       style={{ touchAction: "manipulation" }}
       role="application"
       aria-label={isAr ? 'لوحة لعبة الطرنيب' : 'Tarneeb game board'}
       aria-live="polite"
     >
+      <div className="tarneeb-felt-overlay pointer-events-none absolute inset-0" aria-hidden="true" />
+      <div className="tarneeb-rim-highlight pointer-events-none absolute inset-x-4 top-3 h-px" aria-hidden="true" />
+
       {/* ── Turn Timer Bar ── */}
       {gamePhase !== 'finished' && (
         <div className="absolute top-0 start-0 end-0 h-1 z-30">
@@ -1029,7 +1099,7 @@ export function TarneebBoard({
       {/* ── Confetti celebration ── */}
       {showConfetti && (
         <div className="absolute inset-0 z-[50] pointer-events-none overflow-hidden" aria-hidden="true">
-          {Array.from({ length: 60 }).map((_, i) => (
+          {Array.from({ length: confettiPieces }).map((_, i) => (
             <div
               key={i}
               className="absolute w-2 h-3 rounded-sm animate-confetti-fall"
@@ -1046,7 +1116,7 @@ export function TarneebBoard({
       )}
 
       {/* ── Top info bar ── */}
-      <div className="absolute top-1 start-0 end-0 flex items-center justify-between px-3 py-2 bg-black/30 z-20">
+      <div className="tarneeb-topbar absolute top-1 start-0 end-0 flex items-center justify-between px-3 py-2 z-20">
         <div className="flex items-center gap-2">
           {/* Round & Target (#13) */}
           <Badge variant="outline" className="bg-background/70 text-[10px] h-6">
@@ -1196,20 +1266,36 @@ export function TarneebBoard({
       {gamePhase === "playing" && renderTrick()}
 
       {/* ── My hand (sorted #9, fan layout #21) ── */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 w-full px-4 z-10" data-testid="my-hand">
-        {/* My card count badge */}
-        <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-20">
+      <div className="absolute bottom-10 sm:bottom-11 left-1/2 -translate-x-1/2 w-full px-4 z-10" data-testid="my-hand">
+        <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-20">
           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-900/60 text-blue-300">
-            {myHand.length} {isAr ? 'ورقة' : 'cards'}
+            {myHand.length > 0 ? myHand.length : (state.otherHandCounts?.[anchorPlayerId || ""] ?? 0)} {isAr ? 'ورقة' : 'cards'}
           </span>
         </div>
         <div className="relative h-[5.5rem] sm:h-[6rem] mx-auto" style={{ maxWidth: "420px" }}>
-          {myHand.map((card, i) => renderPlayerCard(card, i, myHand.length))}
+          {myHand.length > 0 && myHand.map((card, i) => renderPlayerCard(card, i, myHand.length))}
+          {myHand.length === 0 && isSpectatorView && Array.from({ length: Math.min(state.otherHandCounts?.[anchorPlayerId || ""] ?? 0, 13) }).map((_, i) => (
+            <div
+              key={`spectator-bottom-${i}`}
+              className={`tarneeb-opponent-card absolute w-8 h-11 sm:w-9 sm:h-12 rounded-[4px] border ${dealAnimationClass}`}
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: 0,
+                transform: `translateX(${(-((Math.min(state.otherHandCounts?.[anchorPlayerId || ""] ?? 0, 13) - 1) * 9)) + i * 18}px)`,
+                animationDelay: `${i * 30}ms`,
+                zIndex: i,
+              }}
+            />
+          ))}
         </div>
       </div>
 
       {/* ── Turn indicator & Play button ── */}
-      <div className="absolute bottom-[5.5rem] sm:bottom-[6.2rem] left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex flex-wrap items-center justify-center gap-2 pointer-events-auto">
+        <Badge variant="outline" className="h-7 text-xs bg-black/55 border-white/15 text-white/95">
+          {getName(anchorPlayerId || playerId)} {currentPlayer === (anchorPlayerId || playerId) ? "←" : ""}
+        </Badge>
         {isMyTurn && gamePhase === "playing" && (
           <Badge className="animate-pulse bg-yellow-500 text-black text-xs font-bold">
             {isAr ? "دورك!" : "Your turn!"}
@@ -1225,7 +1311,7 @@ export function TarneebBoard({
           <Button
             variant="outline"
             size="sm"
-            className="h-8 bg-background/60 text-xs"
+            className="h-8 bg-background/70 text-xs"
             onClick={() => setShowLastTrick(!showLastTrick)}
             data-testid="button-last-trick"
           >
