@@ -26,8 +26,17 @@ interface BackgammonBoardProps {
 }
 
 const CHECKER_COLORS = {
-  white: 'bg-amber-100 border-amber-300 shadow-amber-200',
-  black: 'bg-stone-800 border-stone-600 shadow-stone-900'
+  white: 'backgammon-checker--white',
+  black: 'backgammon-checker--black'
+};
+
+const DIE_PIP_CELLS: Record<number, number[]> = {
+  1: [4],
+  2: [0, 8],
+  3: [0, 4, 8],
+  4: [0, 2, 6, 8],
+  5: [0, 2, 4, 6, 8],
+  6: [0, 2, 3, 5, 6, 8],
 };
 
 export function BackgammonBoard({
@@ -214,7 +223,7 @@ export function BackgammonBoard({
           <div
             key={i}
             className={cn(
-              "w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 shadow-md transition-transform",
+              "backgammon-checker rounded-full border transition-transform",
               CHECKER_COLORS[color],
               stackIndex === displayed - 1 && showCount && "relative"
             )}
@@ -239,7 +248,8 @@ export function BackgammonBoard({
     const isEven = pointIndex % 2 === 0;
 
     const displayIndex = flipped ? 23 - pointIndex : pointIndex;
-    const triangleColor = isEven ? 'bg-game-board' : 'bg-stone-700';
+    const triangleTone = isEven ? 'backgammon-point-light' : 'backgammon-point-dark';
+    const pointDirectionClass = isTop ? 'backgammon-point-top' : 'backgammon-point-bottom';
 
     const pointLabel = color
       ? t('backgammon.pointLabel', { point: displayIndex + 1, color, count })
@@ -263,9 +273,10 @@ export function BackgammonBoard({
       >
         <div
           className={cn(
-            "absolute w-full",
+            "absolute w-full backgammon-point-cap",
             isTop ? "bottom-0" : "top-0",
-            triangleColor
+            triangleTone,
+            pointDirectionClass,
           )}
           style={{
             height: '80%',
@@ -305,7 +316,7 @@ export function BackgammonBoard({
         role="region"
         aria-label={t('backgammon.bar', { white: whiteOnBar, black: blackOnBar })}
         className={cn(
-          "w-12 bg-game-board flex flex-col items-center justify-center gap-4 py-4",
+          "backgammon-bar-slot w-[clamp(34px,6.2vw,56px)] flex flex-col items-center justify-center gap-4 py-4",
           canClickBar && "cursor-pointer hover-elevate",
           isSelected && "ring-2 ring-primary"
         )}
@@ -335,15 +346,14 @@ export function BackgammonBoard({
         role="region"
         aria-label={t('backgammon.bearOffArea', { color, count })}
         className={cn(
-          "w-10 flex flex-col items-center justify-center gap-1 py-2",
-          "bg-stone-900/50 rounded-md border border-stone-700",
+          "backgammon-bearoff-tray w-[clamp(34px,5.4vw,48px)] flex flex-col items-center justify-center gap-1 py-2 rounded-md border border-stone-700/60",
           isHighlighted && "ring-2 ring-green-500 bg-green-500/20 cursor-pointer"
         )}
         onClick={() => isHighlighted && onMove(selectedPoint!, color === 'white' ? 24 : -1)}
       >
         <span className="text-xs text-muted-foreground">{t('backgammon.off')}</span>
         <span className="text-lg font-bold">{count}</span>
-        <div className={cn("w-6 h-6 rounded-full border-2", CHECKER_COLORS[color])} />
+        <div className={cn("backgammon-checker rounded-full border scale-90", CHECKER_COLORS[color])} />
       </div>
     );
   };
@@ -359,13 +369,22 @@ export function BackgammonBoard({
             data-testid={`backgammon-die-${index}`}
             aria-label={`${t('backgammon.die')} ${index + 1}: ${die}${diceUsed[index] ? ` (${t('backgammon.used')})` : ''}`}
             className={cn(
-              "w-10 h-10 bg-white rounded-lg border-2 border-stone-300 shadow-md",
-              "flex items-center justify-center text-xl font-bold",
+              "backgammon-die-shell",
               diceUsed[index] && "opacity-30",
               !diceUsed[index] && "animate-dice-roll"
             )}
           >
-            {die}
+            {Array.from({ length: 9 }).map((_, pipIndex) => {
+              const showPip = DIE_PIP_CELLS[die]?.includes(pipIndex);
+              return (
+                <span
+                  key={pipIndex}
+                  className={cn("backgammon-die-pip", !showPip && "opacity-0")}
+                  aria-hidden="true"
+                />
+              );
+            })}
+            <span className="sr-only">{die}</span>
           </div>
         ))}
       </div>
@@ -387,8 +406,8 @@ export function BackgammonBoard({
           role="status"
           aria-label={t('backgammon.doublingCubeValue', { value: doublingCube })}
           className={cn(
-            "w-10 h-10 bg-gradient-to-br from-amber-100 to-amber-300 rounded-lg border-2 border-amber-500",
-            "flex items-center justify-center text-lg font-bold shadow-md",
+            "backgammon-cube-shell w-10 h-10 rounded-lg border border-amber-500/70",
+            "flex items-center justify-center text-lg font-bold",
             cubeOwner === playerColor && "ring-2 ring-primary"
           )}
           title={cubeOwner ? `${t('backgammon.cubeOwner')}: ${cubeOwner}` : t('backgammon.cubeCenter')}
@@ -444,7 +463,7 @@ export function BackgammonBoard({
     : Array.from({ length: 12 }, (_, i) => 11 - i);
 
   return (
-    <div className="flex flex-col gap-4 max-w-[min(800px,100vw)] mx-auto w-full overflow-hidden" data-testid="backgammon-board">
+    <div className="flex flex-col gap-3 sm:gap-4 max-w-[min(920px,100vw)] mx-auto w-full overflow-hidden px-1 sm:px-2 [--bg-checker-size:clamp(18px,3.2vw,32px)]" data-testid="backgammon-board">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {renderBearOff('black')}
@@ -487,10 +506,10 @@ export function BackgammonBoard({
       </div>
 
       <div
-        className="flex bg-game-felt rounded-lg overflow-hidden border-4 border-game-board shadow-xl min-h-[min(400px,60vh)]"
+        className="backgammon-shell relative flex bg-game-felt rounded-[18px] overflow-hidden border-2 border-[#5b3a22]/80 shadow-xl min-h-[clamp(260px,56vw,500px)]"
         style={{ touchAction: 'manipulation' }}
       >
-        <div className="flex-1 flex flex-col">
+        <div className="backgammon-felt-lane flex-1 flex flex-col">
           <div className="flex-1 flex">
             {topPoints.slice(6).reverse().map(i => renderPoint(i, true))}
           </div>
@@ -501,7 +520,7 @@ export function BackgammonBoard({
 
         {renderBar()}
 
-        <div className="flex-1 flex flex-col">
+        <div className="backgammon-felt-lane flex-1 flex flex-col">
           <div className="flex-1 flex">
             {topPoints.slice(0, 6).reverse().map(i => renderPoint(i, true))}
           </div>

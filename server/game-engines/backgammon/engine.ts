@@ -1,6 +1,11 @@
 import type { GameEngine, MoveData, ValidationResult, ApplyMoveResult, GameStatus, PlayerView, GameEvent } from '../types';
 import type { BackgammonState } from './types';
-import { getPlayerColor, getAllValidMoves, canBearOff } from './board-utils';
+import {
+  getPlayerColor,
+  getConstrainedMoveChoices,
+  canBearOff,
+  isOpeningRollPending,
+} from './board-utils';
 import { validateMove as validate } from './validation';
 import { createNewGame, applyMove as apply, getGameStatus } from './moves';
 
@@ -35,6 +40,10 @@ export class BackgammonEngine implements GameEngine {
 
   private isBotPlayer(state: BackgammonState, playerId: string): boolean {
     return state.botPlayers?.includes(playerId) ?? false;
+  }
+
+  private toMoveData(from: number, to: number): MoveData {
+    return { type: 'move', from: String(from), to: String(to) };
   }
 
   /** Score a move based on backgammon strategy heuristics */
@@ -119,7 +128,8 @@ export class BackgammonEngine implements GameEngine {
     }
 
     // Moving phase: pick best available move
-    const validMoves = getAllValidMoves(state, playerColor);
+    const validMoves = getConstrainedMoveChoices(state, playerColor)
+      .map((choice) => this.toMoveData(choice.from, choice.to));
 
     if (validMoves.length === 0) {
       return { type: 'end_turn' };
@@ -198,8 +208,8 @@ export class BackgammonEngine implements GameEngine {
     try {
       const state: BackgammonState = JSON.parse(result.newState);
       if (state.botPlayers && state.botPlayers.length > 0
-          && state.gamePhase !== 'finished'
-          && this.isBotPlayer(state, state.players[state.currentTurn])) {
+        && state.gamePhase !== 'finished'
+        && this.isBotPlayer(state, state.players[state.currentTurn])) {
         const botResult = this.runBotTurnsWithEvents(state, result.events);
         return { success: true, newState: botResult.stateJson, events: botResult.events };
       }
@@ -217,7 +227,7 @@ export class BackgammonEngine implements GameEngine {
     try {
       const state: BackgammonState = JSON.parse(stateJson);
       const playerColor = getPlayerColor(state, playerId);
-      
+
       if (!playerColor || state.currentTurn !== playerColor) {
         // Can respond to double even if not your turn
         if (playerColor && state.cubeOffered && state.cubeOfferedBy !== playerColor) {
@@ -233,13 +243,14 @@ export class BackgammonEngine implements GameEngine {
       if (state.mustRoll) {
         const moves: MoveData[] = [{ type: 'roll' }];
         // Can double before rolling if you own cube or cube is centered
-        if (state.doublingCube < 64 && (state.cubeOwner === null || state.cubeOwner === playerColor)) {
+        if (!isOpeningRollPending(state) && state.doublingCube < 64 && (state.cubeOwner === null || state.cubeOwner === playerColor)) {
           moves.push({ type: 'double' });
         }
         return moves;
       }
 
-      return getAllValidMoves(state, playerColor);
+      return getConstrainedMoveChoices(state, playerColor)
+        .map((choice) => this.toMoveData(choice.from, choice.to));
     } catch {
       return [];
     }
@@ -267,9 +278,10 @@ export class BackgammonEngine implements GameEngine {
         cubeOwner: state.cubeOwner,
         cubeOffered: state.cubeOffered,
         cubeOfferedBy: state.cubeOfferedBy,
-        validMoves: isMyTurn && playerColor ? getAllValidMoves(state, playerColor) 
-          : (playerColor && state.cubeOffered && state.cubeOfferedBy !== playerColor 
-             ? [{ type: 'accept_double' }, { type: 'decline_double' }] : []),
+        validMoves: isMyTurn && playerColor
+          ? getConstrainedMoveChoices(state, playerColor).map((choice) => this.toMoveData(choice.from, choice.to))
+          : (playerColor && state.cubeOffered && state.cubeOfferedBy !== playerColor
+            ? [{ type: 'accept_double' }, { type: 'decline_double' }] : []),
         players: state.players,
         canBearOff: playerColor ? canBearOff(state, playerColor) : false
       };

@@ -4,6 +4,9 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { WebSocket } from "ws";
 import { Pool } from "pg";
+import { applyMove as applyBackgammonMove, createNewGame as createBackgammonGame, getGameStatus as getBackgammonStatus } from "../server/game-engines/backgammon/moves";
+import { validateMove as validateBackgammonMove } from "../server/game-engines/backgammon/validation";
+import type { BackgammonState } from "../server/game-engines/backgammon/types";
 
 const SMOKE_USER_AGENT = "smoke-challenge-gameplay-regression/1.0";
 
@@ -71,6 +74,121 @@ function assertCondition(condition: unknown, message: string, details?: unknown)
     if (!condition) {
         fail(message, details);
     }
+}
+
+function createBackgammonRuleState(overrides?: Partial<BackgammonState>): BackgammonState {
+    return {
+        board: Array(24).fill(0),
+        bar: { white: 0, black: 0 },
+        borneOff: { white: 0, black: 0 },
+        openingRoll: { white: null, black: null, resolved: true },
+        players: { white: "W", black: "B" },
+        currentTurn: "white",
+        dice: [],
+        diceUsed: [],
+        doublingCube: 1,
+        cubeOwner: null,
+        cubeOffered: false,
+        cubeOfferedBy: null,
+        gamePhase: "moving",
+        startTime: 0,
+        lastMoveTime: 0,
+        moveHistory: [],
+        mustRoll: false,
+        ...overrides,
+    };
+}
+
+function runBackgammonEngineRuleChecks(): void {
+    const openingStart = createBackgammonGame("W", "B");
+    const openingDoubleValidation = validateBackgammonMove(openingStart, "W", { type: "double" });
+    assertCondition(!openingDoubleValidation.valid, "backgammon opening roll must reject doubling", openingDoubleValidation);
+
+    let openingStateJson = JSON.stringify(openingStart);
+    const firstRoll = applyBackgammonMove(openingStateJson, "W", { type: "roll" });
+    assertCondition(firstRoll.success, "backgammon opening first roll failed", firstRoll);
+
+    let openingState = JSON.parse(firstRoll.newState) as BackgammonState;
+    assertCondition(openingState.currentTurn === "black", "backgammon opening first roll should pass turn to black", openingState);
+    assertCondition(openingState.mustRoll === true, "backgammon opening first roll must keep mustRoll true", openingState);
+    assertCondition(Array.isArray(openingState.dice) && openingState.dice.length === 1, "backgammon opening first roll should expose one die", openingState);
+
+    let safetyCounter = 0;
+    while (!openingState.openingRoll.resolved && safetyCounter < 20) {
+        const actorId = openingState.currentTurn === "white" ? "W" : "B";
+        const rollResult = applyBackgammonMove(JSON.stringify(openingState), actorId, { type: "roll" });
+        assertCondition(rollResult.success, "backgammon opening subsequent roll failed", rollResult);
+        openingState = JSON.parse(rollResult.newState) as BackgammonState;
+        safetyCounter += 1;
+    }
+
+    assertCondition(openingState.openingRoll.resolved, "backgammon opening roll did not resolve starter", openingState);
+    assertCondition(openingState.mustRoll === false, "backgammon opening resolution must enter moving phase", openingState);
+    assertCondition(Array.isArray(openingState.dice) && openingState.dice.length === 2, "backgammon opening resolution must set two playable dice", openingState);
+
+    const maxDiceState = createBackgammonRuleState({
+        dice: [1, 6],
+        diceUsed: [false, false],
+        board: (() => {
+            const board = Array(24).fill(0);
+            board[0] = 1;
+            board[5] = 1;
+            board[7] = -2;
+            board[11] = -2;
+            return board;
+        })(),
+    });
+
+    const lowMoveValidation = validateBackgammonMove(maxDiceState, "W", { type: "move", from: "0", to: "1" });
+    assertCondition(!lowMoveValidation.valid, "backgammon should reject low-die move when two-dice sequence exists", lowMoveValidation);
+
+    const highMoveValidation = validateBackgammonMove(maxDiceState, "W", { type: "move", from: "0", to: "6" });
+    assertCondition(highMoveValidation.valid, "backgammon should allow the move path that preserves max dice usage", highMoveValidation);
+
+    const higherDiePriorityState = createBackgammonRuleState({
+        dice: [1, 2],
+        diceUsed: [false, false],
+        board: (() => {
+            const board = Array(24).fill(0);
+            board[0] = 1;
+            board[3] = -2;
+            return board;
+        })(),
+    });
+
+    const lowerDieMove = validateBackgammonMove(higherDiePriorityState, "W", { type: "move", from: "0", to: "1" });
+    assertCondition(!lowerDieMove.valid, "backgammon should enforce higher-die priority when only one die can be played", lowerDieMove);
+
+    const higherDieMove = validateBackgammonMove(higherDiePriorityState, "W", { type: "move", from: "0", to: "2" });
+    assertCondition(higherDieMove.valid, "backgammon should accept higher-die move in single-die playable case", higherDieMove);
+
+    const gammonState = createBackgammonRuleState({
+        borneOff: { white: 15, black: 0 },
+        board: (() => {
+            const board = Array(24).fill(0);
+            board[0] = -1;
+            return board;
+        })(),
+        gamePhase: "finished",
+    });
+
+    const gammonStatus = getBackgammonStatus(JSON.stringify(gammonState));
+    assertCondition(gammonStatus.reason === "gammon", "backgammon status should classify gammon correctly", gammonStatus);
+
+    const backgammonState = createBackgammonRuleState({
+        borneOff: { white: 15, black: 0 },
+        board: (() => {
+            const board = Array(24).fill(0);
+            board[18] = -1;
+            return board;
+        })(),
+        gamePhase: "finished",
+    });
+
+    const backgammonStatus = getBackgammonStatus(JSON.stringify(backgammonState));
+    assertCondition(backgammonStatus.reason === "backgammon", "backgammon status should classify backgammon correctly", backgammonStatus);
+
+    console.log("[smoke:challenge-gameplay-regression] PASS backgammon deterministic engine rules");
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -651,6 +769,8 @@ async function main(): Promise<void> {
         await pool.query("SELECT 1");
         shouldCleanup = true;
 
+        runBackgammonEngineRuleChecks();
+
         const challengeCurrencyType = await detectChallengeCurrencyType(pool);
         console.log(`[smoke:challenge-gameplay-regression] Challenge currency mode: ${challengeCurrencyType}`);
 
@@ -683,10 +803,12 @@ async function main(): Promise<void> {
             {
                 gameType: "backgammon",
                 move: { type: "roll" },
-                expectedCurrentTurn: setupData.userIds.player1,
+                expectedCurrentTurn: setupData.userIds.player2,
                 assertAck: (ack) => {
                     const dice = (ack.view as { dice?: unknown })?.dice;
-                    assertCondition(Array.isArray(dice) && dice.length >= 2, "backgammon dice not present after roll", ack);
+                    const mustRoll = (ack.view as { mustRoll?: unknown })?.mustRoll;
+                    assertCondition(Array.isArray(dice) && dice.length === 1, "backgammon opening roll should expose one die", ack);
+                    assertCondition(mustRoll === true, "backgammon opening roll should keep mustRoll=true for opponent", ack);
                 },
             },
             {

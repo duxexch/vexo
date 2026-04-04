@@ -97,21 +97,32 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
         })
         .where(eq(challenges.id, challengeId));
 
-      return { winnerId, winningTeam, challenge, gameType: session?.gameType || challenge.gameType };
+      return {
+        winnerId,
+        winningTeam,
+        challenge,
+        gameType: session?.gameType || challenge.gameType,
+        sessionGameState: session?.gameState || undefined,
+      };
     });
 
     // CRITICAL: Settle payout on resignation
+    let settledStakeForNotifications = result.challenge.betAmount;
     if (result.winnerId) {
       const payoutResult = await settleChallengePayout(
         challengeId,
         result.winnerId,
         ws.userId!,
-        result.gameType
+        result.gameType,
+        undefined,
+        typeof result.sessionGameState === 'string' ? result.sessionGameState : undefined,
       );
 
       if (!payoutResult.success) {
         throw new Error(payoutResult.error || "Payout settlement failed");
       }
+
+      settledStakeForNotifications = payoutResult.stakeAmount || settledStakeForNotifications;
     }
 
     // Broadcast game ended
@@ -130,7 +141,7 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
     });
 
     // Send DB notifications for resignation result
-    const betAmount = result.challenge.betAmount ? parseFloat(result.challenge.betAmount) : 0;
+    const betAmount = settledStakeForNotifications ? parseFloat(settledStakeForNotifications) : 0;
     const challengeCurrencyType = result.challenge.currencyType;
     const gameLabel = result.gameType || 'game';
     if (result.winnerId) {

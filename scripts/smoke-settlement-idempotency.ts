@@ -53,8 +53,10 @@ interface SetupData {
         usdWin: string;
         usdResign: string;
         usdDraw: string;
+        usdBackgammonCube: string;
         projectWin: string;
         projectDraw: string;
+        projectBackgammonCube: string;
     };
 }
 
@@ -136,6 +138,7 @@ async function createChallenge(
     player2Id: string,
     betAmount: string,
     currencyType: "usd" | "project",
+    gameType: "chess" | "backgammon" = "chess",
 ): Promise<void> {
     await pool.query(
         `INSERT INTO challenges (
@@ -152,18 +155,18 @@ async function createChallenge(
       opponent_type
     ) VALUES (
       $1,
-      'chess',
-      $2,
-      $3,
+        $2,
+        $3,
+        $4,
       'public',
       'active',
-      $4,
-      $5,
+        $5,
+        $6,
       2,
       2,
       'anyone'
     )`,
-        [id, betAmount, currencyType, player1Id, player2Id],
+        [id, gameType, betAmount, currencyType, player1Id, player2Id],
     );
 }
 
@@ -429,6 +432,114 @@ async function runProjectDrawReplayCase(setupData: SetupData): Promise<void> {
     console.log("[smoke:settlement-idempotency] PASS project draw refund replay");
 }
 
+async function runUsdBackgammonCubeReplayCase(setupData: SetupData): Promise<void> {
+    const challengeId = setupData.challengeIds.usdBackgammonCube;
+    const winnerId = setupData.userIds.usdWinWinner;
+    const loserId = setupData.userIds.usdWinLoser;
+    const effectiveStake = 5 * 4; // base 5.00 with cube x4
+
+    const winnerBefore = await getUserBalance(winnerId);
+
+    const firstResult = await settleChallengePayout(
+        challengeId,
+        winnerId,
+        loserId,
+        "backgammon",
+        undefined,
+        JSON.stringify({ doublingCube: 4 }),
+    );
+    assertCondition(firstResult.success, "USD backgammon cube first settlement failed", firstResult);
+
+    const winnerAfterFirst = await getUserBalance(winnerId);
+    assertNumberEqual(
+        winnerAfterFirst,
+        winnerBefore + (effectiveStake * 2),
+        "USD backgammon cube winner balance mismatch after first payout",
+    );
+
+    const secondResult = await settleChallengePayout(
+        challengeId,
+        winnerId,
+        loserId,
+        "backgammon",
+        undefined,
+        JSON.stringify({ doublingCube: 4 }),
+    );
+    assertCondition(secondResult.success, "USD backgammon cube second settlement failed", secondResult);
+
+    const winnerAfterSecond = await getUserBalance(winnerId);
+    assertNumberEqual(
+        winnerAfterSecond,
+        winnerAfterFirst,
+        "USD backgammon cube replay changed winner balance",
+    );
+
+    const winRows = await countCompletedTransactions(challengeId, "win", winnerId);
+    const stakeRows = await countCompletedTransactions(challengeId, "stake", loserId);
+    assertCondition(winRows === 1, "USD backgammon cube win transaction duplicated", { challengeId, winRows });
+    assertCondition(stakeRows === 1, "USD backgammon cube stake transaction duplicated", { challengeId, stakeRows });
+
+    console.log("[smoke:settlement-idempotency] PASS usd backgammon cube replay");
+}
+
+async function runProjectBackgammonCubeReplayCase(setupData: SetupData): Promise<void> {
+    const challengeId = setupData.challengeIds.projectBackgammonCube;
+    const winnerId = setupData.userIds.projectWinWinner;
+    const loserId = setupData.userIds.projectWinLoser;
+    const effectiveStake = 3 * 4; // base 3.00 with cube x4
+
+    const winnerBefore = await getWalletSnapshot(winnerId);
+
+    const firstResult = await settleChallengePayout(
+        challengeId,
+        winnerId,
+        loserId,
+        "backgammon",
+        undefined,
+        JSON.stringify({ doublingCube: 4 }),
+    );
+    assertCondition(firstResult.success, "Project backgammon cube first settlement failed", firstResult);
+
+    const winnerAfterFirst = await getWalletSnapshot(winnerId);
+    assertNumberEqual(
+        winnerAfterFirst.earned,
+        winnerBefore.earned + (effectiveStake * 2),
+        "Project backgammon cube earned mismatch after first payout",
+    );
+    assertNumberEqual(
+        winnerAfterFirst.total,
+        winnerBefore.total + (effectiveStake * 2),
+        "Project backgammon cube total mismatch after first payout",
+    );
+
+    const secondResult = await settleChallengePayout(
+        challengeId,
+        winnerId,
+        loserId,
+        "backgammon",
+        undefined,
+        JSON.stringify({ doublingCube: 4 }),
+    );
+    assertCondition(secondResult.success, "Project backgammon cube second settlement failed", secondResult);
+
+    const winnerAfterSecond = await getWalletSnapshot(winnerId);
+    assertNumberEqual(
+        winnerAfterSecond.earned,
+        winnerAfterFirst.earned,
+        "Project backgammon cube replay changed earned balance",
+    );
+    assertNumberEqual(
+        winnerAfterSecond.total,
+        winnerAfterFirst.total,
+        "Project backgammon cube replay changed total balance",
+    );
+
+    const winRows = await countProjectLedgerEntries(challengeId, "game_win", winnerId);
+    assertCondition(winRows === 1, "Project backgammon cube win ledger duplicated", { challengeId, winRows });
+
+    console.log("[smoke:settlement-idempotency] PASS project backgammon cube replay");
+}
+
 async function cleanup(setupData: SetupData): Promise<void> {
     const challengeIds = Object.values(setupData.challengeIds);
     const userIds = Object.values(setupData.userIds);
@@ -501,8 +612,10 @@ async function main(): Promise<void> {
             usdWin: crypto.randomUUID(),
             usdResign: crypto.randomUUID(),
             usdDraw: crypto.randomUUID(),
+            usdBackgammonCube: crypto.randomUUID(),
             projectWin: crypto.randomUUID(),
             projectDraw: crypto.randomUUID(),
+            projectBackgammonCube: crypto.randomUUID(),
         },
     };
 
@@ -546,6 +659,15 @@ async function main(): Promise<void> {
         );
 
         await createChallenge(
+            setupData.challengeIds.usdBackgammonCube,
+            setupData.userIds.usdWinWinner,
+            setupData.userIds.usdWinLoser,
+            "5.00",
+            "usd",
+            "backgammon",
+        );
+
+        await createChallenge(
             setupData.challengeIds.projectWin,
             setupData.userIds.projectWinWinner,
             setupData.userIds.projectWinLoser,
@@ -561,11 +683,22 @@ async function main(): Promise<void> {
             "project",
         );
 
+        await createChallenge(
+            setupData.challengeIds.projectBackgammonCube,
+            setupData.userIds.projectWinWinner,
+            setupData.userIds.projectWinLoser,
+            "3.00",
+            "project",
+            "backgammon",
+        );
+
         await runUsdWinReplayCase(setupData);
         await runUsdResignReplayCase(setupData);
         await runUsdDrawReplayCase(setupData);
+        await runUsdBackgammonCubeReplayCase(setupData);
         await runProjectWinReplayCase(setupData);
         await runProjectDrawReplayCase(setupData);
+        await runProjectBackgammonCubeReplayCase(setupData);
 
         console.log("[smoke:settlement-idempotency] All checks passed.");
     } finally {

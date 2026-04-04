@@ -60,6 +60,48 @@ function resolveWinnerLoserTeams(challenge: ChallengeRecord, winnerId: string): 
   };
 }
 
+function normalizeBackgammonCube(candidate: unknown): number | null {
+  const cube = Number(candidate);
+  if (!Number.isFinite(cube)) {
+    return null;
+  }
+
+  const allowed = new Set([1, 2, 4, 8, 16, 32, 64]);
+  if (!allowed.has(cube)) {
+    return null;
+  }
+
+  return cube;
+}
+
+function resolveEffectiveStakeAmount(
+  baseStakeAmount: string,
+  gameType: string,
+  settlementStateJson?: string,
+): string {
+  if (gameType !== 'backgammon' || !settlementStateJson) {
+    return baseStakeAmount;
+  }
+
+  try {
+    const parsed = JSON.parse(settlementStateJson) as { doublingCube?: unknown };
+    const cube = normalizeBackgammonCube(parsed?.doublingCube);
+    if (!cube || cube <= 1) {
+      return baseStakeAmount;
+    }
+
+    const base = parseFloat(baseStakeAmount);
+    if (!Number.isFinite(base) || base <= 0) {
+      return baseStakeAmount;
+    }
+
+    return (base * cube).toFixed(2);
+  } catch (error: unknown) {
+    logger.warn(`[Payout] Failed to parse settlement state for cube multiplier: ${getErrorMessage(error)}`);
+    return baseStakeAmount;
+  }
+}
+
 async function hasWinnerPayoutRecord(referenceId: string, winnerId: string, currencyType: string): Promise<boolean> {
   if (currencyType === 'project') {
     const [existingLedger] = await db.select({ id: projectCurrencyLedger.id })
@@ -119,8 +161,10 @@ async function settleHeadToHeadPayout(
   loserId: string,
   gameType: string,
   sessionId?: string,
+  effectiveStakeAmount?: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const betAmount = parseFloat(challenge.betAmount);
+  const stakeAmount = effectiveStakeAmount || challenge.betAmount;
+  const betAmount = parseFloat(stakeAmount);
 
   if (betAmount <= 0) {
     await storage.updateGameStats(
@@ -130,7 +174,7 @@ async function settleHeadToHeadPayout(
       winnerId,
       loserId,
       false,
-      '0'
+      '0',
     );
     return { success: true };
   }
@@ -140,9 +184,9 @@ async function settleHeadToHeadPayout(
       sessionId || challenge.id,
       winnerId,
       loserId,
-      challenge.betAmount,
+      stakeAmount,
       0,
-      gameType
+      gameType,
     );
   }
 
@@ -150,9 +194,9 @@ async function settleHeadToHeadPayout(
     sessionId || challenge.id,
     winnerId,
     loserId,
-    challenge.betAmount,
+    stakeAmount,
     0,
-    gameType
+    gameType,
   );
 }
 
@@ -204,7 +248,8 @@ export async function settleChallengePayout(
   winnerId: string,
   loserId: string,
   gameType: string,
-  sessionId?: string
+  sessionId?: string,
+  settlementStateJson?: string,
 ): Promise<PayoutResult> {
   try {
     // Get challenge to read amount and currency
@@ -214,6 +259,11 @@ export async function settleChallengePayout(
     }
 
     const settlementReferenceId = sessionId || challenge.id;
+    const effectiveStakeAmount = resolveEffectiveStakeAmount(
+      challenge.betAmount,
+      gameType,
+      settlementStateJson,
+    );
     const { winners, losers } = resolveWinnerLoserTeams(challenge, winnerId);
     if (winners.length === 0 || losers.length === 0) {
       return { success: false, error: 'Unable to resolve winners/losers for payout' };
@@ -238,6 +288,7 @@ export async function settleChallengePayout(
         losers[i],
         gameType,
         settlementReferenceId,
+        effectiveStakeAmount,
       );
 
       if (!settleResult.success) {
@@ -246,7 +297,7 @@ export async function settleChallengePayout(
       }
     }
 
-    logger.info(`[Payout] Settled: challenge=${challengeId}, winner=${winnerId}, stake=${challenge.betAmount}, currency=${challenge.currencyType || 'usd'}`);
+    logger.info(`[Payout] Settled: challenge=${challengeId}, winner=${winnerId}, stake=${effectiveStakeAmount}, currency=${challenge.currencyType || 'usd'}`);
 
     // Settle spectator supports
     try {
@@ -260,7 +311,7 @@ export async function settleChallengePayout(
       logger.error(`[Payout] Error settling spectator supports: ${settleError}`);
     }
 
-    return { success: true, winnerId, loserId, stakeAmount: challenge.betAmount };
+    return { success: true, winnerId, loserId, stakeAmount: effectiveStakeAmount };
   } catch (error: unknown) {
     logger.error(`[Payout] Unexpected error for challenge ${challengeId}: ${getErrorMessage(error)}`);
     return { success: false, error: getErrorMessage(error) };

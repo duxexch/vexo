@@ -40,6 +40,8 @@ interface DominoChallengeContainerProps {
     isMyTurn: boolean;
     isSpectator: boolean;
     status?: string;
+    turnTimeLimitSeconds?: number;
+    turnStartedAtMs?: number;
     onMove: (move: DominoBoardMove) => void;
     dominoResyncing: boolean;
     dominoMoveError: string | null;
@@ -54,6 +56,8 @@ export function DominoChallengeContainer({
     isMyTurn,
     isSpectator,
     status,
+    turnTimeLimitSeconds,
+    turnStartedAtMs,
     onMove,
     dominoResyncing,
     dominoMoveError,
@@ -131,6 +135,8 @@ export function DominoChallengeContainer({
                         isSpectator={isSpectator}
                         onMove={onMove}
                         status={status}
+                        turnTimeLimit={turnTimeLimitSeconds}
+                        turnStartedAtMs={turnStartedAtMs}
                     />
                 </motion.div>
 

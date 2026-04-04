@@ -1162,8 +1162,20 @@ export default function ChallengesPage() {
               ) : filterChallenges(myChallenges).length > 0 ? (
                 filterChallenges(myChallenges).map(challenge => {
                   const GameIcon = getGameIcon(challenge.gameType);
-                  const canPlay = challenge.status === 'active' && isChallengeParticipant(challenge);
-                  const canWithdraw = (challenge.status === 'waiting' || challenge.status === 'active') && isChallengeParticipant(challenge);
+                  const isParticipant = isChallengeParticipant(challenge);
+                  const isCreator = challenge.player1Id === user?.id;
+                  const isWaiting = challenge.status === 'waiting';
+                  const isActive = challenge.status === 'active';
+                  const isWaitingTeamLobby = isWaiting && Number(challenge.requiredPlayers || 2) > 2;
+                  const canLeaveWaitingSeat = isWaitingTeamLobby && isParticipant && !isCreator && Number(challenge.currentPlayers || 1) > 1;
+                  const canCancelWaiting = isWaiting && isParticipant && isCreator;
+                  const canWithdrawActive = isActive && isParticipant;
+                  const canPlay = isActive && isParticipant;
+                  const canWithdraw = canCancelWaiting || canLeaveWaitingSeat || canWithdrawActive;
+                  const withdrawButtonLabel = isActive
+                    ? t('challenges.withdraw')
+                    : (canLeaveWaitingSeat ? t('challenges.withdraw') : t('common.cancel'));
+                  const withdrawButtonVariant = isActive || canLeaveWaitingSeat ? 'outline' : 'destructive';
                   const opponentName = [
                     { id: challenge.player1Id, name: challenge.player1Name },
                     { id: challenge.player2Id, name: challenge.player2Name },
@@ -1211,7 +1223,7 @@ export default function ChallengesPage() {
                             )}
                             {canWithdraw && (
                               <Button
-                                variant={challenge.status === 'active' ? 'outline' : 'destructive'}
+                                variant={withdrawButtonVariant}
                                 size="sm"
                                 onClick={() => {
                                   setActiveChallenge(challenge);
@@ -1220,7 +1232,7 @@ export default function ChallengesPage() {
                                 data-testid={`button-withdraw-${challenge.id}`}
                               >
                                 <X className="h-4 w-4 me-1" />
-                                {challenge.status === 'waiting' ? (language === 'ar' ? 'إلغاء' : 'Cancel') : (language === 'ar' ? 'انسحاب' : 'Withdraw')}
+                                {withdrawButtonLabel}
                               </Button>
                             )}
                           </div>
@@ -1530,63 +1542,82 @@ export default function ChallengesPage() {
       {/* Withdraw Dialog */}
       <Dialog open={showWithdrawDialog} onOpenChange={setShowWithdrawDialog}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              {activeChallenge?.status === 'active'
-                ? (language === 'ar' ? 'تأكيد الانسحاب — عقوبة 70%' : 'Confirm Withdrawal — 70% Penalty')
-                : (language === 'ar' ? 'تأكيد إلغاء التحدي' : 'Confirm Challenge Cancellation')
-              }
-            </DialogTitle>
-            <DialogDescription>
-              {activeChallenge?.status === 'active'
-                ? (language === 'ar' ? 'سيتم خصم 70% من رهانك كعقوبة للانسحاب من تحدي نشط' : 'You will lose 70% of your stake as a penalty for withdrawing from an active challenge')
-                : (language === 'ar' ? 'سيتم استرداد مبلغ الرهان بالكامل' : 'Your bet amount will be fully refunded')
-              }
-            </DialogDescription>
-          </DialogHeader>
-          {activeChallenge && (
-            <div className={`p-4 rounded-md ${activeChallenge.status === 'active' ? 'bg-destructive/15 border border-destructive/30' : 'bg-muted'}`}>
-              {activeChallenge.status === 'active' ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-destructive">
-                    {language === 'ar'
-                      ? `💸 العقوبة: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.7, activeChallenge.currencyType)} (70%)`
-                      : `💸 Penalty: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.7, activeChallenge.currencyType)} (70%)`
+          {(() => {
+            const isWaitingLeaveAction = Boolean(
+              activeChallenge
+              && activeChallenge.status === 'waiting'
+              && Number(activeChallenge.requiredPlayers || 2) > 2
+              && activeChallenge.player1Id !== user?.id,
+            );
+
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-5 w-5" />
+                    {activeChallenge?.status === 'active'
+                      ? (language === 'ar' ? 'تأكيد الانسحاب — عقوبة 70%' : 'Confirm Withdrawal — 70% Penalty')
+                      : (isWaitingLeaveAction
+                        ? t('challenges.withdrawTitle')
+                        : (language === 'ar' ? 'تأكيد إلغاء التحدي' : 'Confirm Challenge Cancellation'))
                     }
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {language === 'ar'
-                      ? `💰 سيتم استرداد: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.3, activeChallenge.currencyType)} (30%)`
-                      : `💰 Refund: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.3, activeChallenge.currencyType)} (30%)`
+                  </DialogTitle>
+                  <DialogDescription>
+                    {activeChallenge?.status === 'active'
+                      ? (language === 'ar' ? 'سيتم خصم 70% من رهانك كعقوبة للانسحاب من تحدي نشط' : 'You will lose 70% of your stake as a penalty for withdrawing from an active challenge')
+                      : (isWaitingLeaveAction
+                        ? t('challenges.withdrawWarning')
+                        : (language === 'ar' ? 'سيتم استرداد مبلغ الرهان بالكامل' : 'Your bet amount will be fully refunded'))
                     }
-                  </p>
-                </div>
-              ) : (
-                <p className="text-sm">
-                  {language === 'ar'
-                    ? `✅ سيتم استرداد مبلغ الرهان بالكامل: ${formatChallengeAmountText(Number(activeChallenge.betAmount), activeChallenge.currencyType)}`
-                    : `✅ Your bet amount will be fully refunded: ${formatChallengeAmountText(Number(activeChallenge.betAmount), activeChallenge.currencyType)}`
-                  }
-                </p>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowWithdrawDialog(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => activeChallenge && withdrawChallengeMutation.mutate(activeChallenge.id)}
-              disabled={withdrawChallengeMutation.isPending}
-            >
-              {activeChallenge?.status === 'active'
-                ? (language === 'ar' ? 'تأكيد الانسحاب' : 'Confirm Withdrawal')
-                : (language === 'ar' ? 'تأكيد الإلغاء' : 'Confirm Cancellation')
-              }
-            </Button>
-          </DialogFooter>
+                  </DialogDescription>
+                </DialogHeader>
+                {activeChallenge && (
+                  <div className={`p-4 rounded-md ${activeChallenge.status === 'active' ? 'bg-destructive/15 border border-destructive/30' : 'bg-muted'}`}>
+                    {activeChallenge.status === 'active' ? (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-destructive">
+                          {language === 'ar'
+                            ? `💸 العقوبة: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.7, activeChallenge.currencyType)} (70%)`
+                            : `💸 Penalty: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.7, activeChallenge.currencyType)} (70%)`
+                          }
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {language === 'ar'
+                            ? `💰 سيتم استرداد: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.3, activeChallenge.currencyType)} (30%)`
+                            : `💰 Refund: ${formatChallengeAmountText(Number(activeChallenge.betAmount) * 0.3, activeChallenge.currencyType)} (30%)`
+                          }
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm">
+                        {language === 'ar'
+                          ? `✅ سيتم استرداد مبلغ الرهان بالكامل: ${formatChallengeAmountText(Number(activeChallenge.betAmount), activeChallenge.currencyType)}`
+                          : `✅ Your bet amount will be fully refunded: ${formatChallengeAmountText(Number(activeChallenge.betAmount), activeChallenge.currencyType)}`
+                        }
+                      </p>
+                    )}
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowWithdrawDialog(false)}>
+                    {t('common.cancel')}
+                  </Button>
+                  <Button
+                    variant={activeChallenge?.status === 'active' || !isWaitingLeaveAction ? 'destructive' : 'outline'}
+                    onClick={() => activeChallenge && withdrawChallengeMutation.mutate(activeChallenge.id)}
+                    disabled={withdrawChallengeMutation.isPending}
+                  >
+                    {activeChallenge?.status === 'active'
+                      ? (language === 'ar' ? 'تأكيد الانسحاب' : 'Confirm Withdrawal')
+                      : (isWaitingLeaveAction
+                        ? t('challenges.confirmWithdraw')
+                        : (language === 'ar' ? 'تأكيد الإلغاء' : 'Confirm Cancellation'))
+                    }
+                  </Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

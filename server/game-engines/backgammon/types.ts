@@ -4,6 +4,7 @@ export interface BackgammonState {
   board: number[];
   bar: { white: number; black: number };
   borneOff: { white: number; black: number };
+  openingRoll: { white: number | null; black: number | null; resolved: boolean };
   players: { white: string; black: string };
   currentTurn: 'white' | 'black';
   dice: number[];

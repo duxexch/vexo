@@ -443,6 +443,16 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
     // Broadcast to players with personalized views (hide opponent cards)
     const seq = typeof result.updatedSession.totalMoves === "number" ? result.updatedSession.totalMoves : 0;
 
+    room.currentState = {
+      challengeId,
+      gameType: result.gameType,
+      gameState: result.newState,
+      currentTurn: result.updatedSession.currentTurn || "",
+      totalMoves: seq,
+      status: result.updatedSession.status,
+      spectatorCount: room.spectators.size,
+    };
+
     // Valid move flow completed successfully — clear suspicious counters for this user/challenge pair.
     resetSuspiciousMoveFailures(userId, challengeId);
 
@@ -479,6 +489,8 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
 
     // CRITICAL: Settle payout if game is over
     if (result.isGameOver && result.challenge) {
+      let settledStakeForNotifications = result.challenge.betAmount;
+
       if (result.isDraw) {
         const drawSettlement = await settleDrawPayout(
           challengeId,
@@ -514,12 +526,16 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
           challengeId,
           result.winnerId,
           loserId,
-          result.gameType
+          result.gameType,
+          undefined,
+          result.newState,
         );
 
         if (!payoutSettlement.success) {
           throw new Error(payoutSettlement.error || "Winner payout settlement failed");
         }
+
+        settledStakeForNotifications = payoutSettlement.stakeAmount || settledStakeForNotifications;
       }
 
       // Update challenge status after successful settlement to keep money/state consistency
@@ -546,7 +562,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
       });
 
       // Send DB notifications for game result
-      const betAmount = result.challenge.betAmount ? parseFloat(result.challenge.betAmount) : 0;
+      const betAmount = settledStakeForNotifications ? parseFloat(settledStakeForNotifications) : 0;
       const challengeCurrencyType = result.challenge.currencyType;
       const gameLabel = result.gameType || 'game';
       if (result.isDraw) {

@@ -14,6 +14,8 @@ interface BalootBoardProps {
   onChooseTrump: (type: "sun" | "hokm", suit?: string) => void;
   onPass: () => void;
   playerNames?: { [id: string]: string };
+  turnTimeLimitSeconds?: number;
+  turnStartedAtMs?: number;
 }
 
 interface PlayingCard {
@@ -69,7 +71,6 @@ const SUITS = {
 
 // ─── Constants (outside component to avoid re-creation) ─────────
 const TURN_TIME_LIMIT = 30; // 30 seconds per turn
-const CHOOSE_TIME_LIMIT = 30; // 30 seconds to choose
 const SUIT_ORDER: Record<string, number> = { spades: 0, hearts: 1, diamonds: 2, clubs: 3 };
 const RANK_VALUE: Record<string, number> = { '7': 1, '8': 2, '9': 3, '10': 4, 'J': 5, 'Q': 6, 'K': 7, 'A': 8 };
 
@@ -81,6 +82,8 @@ export function BalootBoard({
   onChooseTrump,
   onPass,
   playerNames = {},
+  turnTimeLimitSeconds = TURN_TIME_LIMIT,
+  turnStartedAtMs,
 }: BalootBoardProps) {
   const [selectedCard, setSelectedCard] = useState<PlayingCard | null>(null);
   const [selectedCardIndex, setSelectedCardIndex] = useState(-1);
@@ -90,7 +93,7 @@ export function BalootBoard({
   const [trickWonBy, setTrickWonBy] = useState<string | null>(null);
   const [trickWonPoints, setTrickWonPoints] = useState<number>(0);
   const [trickSweep, setTrickSweep] = useState(false);
-  const [turnTimeLeft, setTurnTimeLeft] = useState(TURN_TIME_LIMIT);
+  const [turnTimeLeft, setTurnTimeLeft] = useState(Math.max(1, turnTimeLimitSeconds));
   const [shakeCardKey, setShakeCardKey] = useState<string | null>(null);
   const [showKabootOverlay, setShowKabootOverlay] = useState(false);
   const [showChoiceNotification, setShowChoiceNotification] = useState(false);
@@ -208,52 +211,53 @@ export function BalootBoard({
     return 8;
   };
 
-  // ─── Turn Timer with auto-play ──────────────────────────────────
+  // ─── Turn Timer (authoritative server clock) ────────────────────
   useEffect(() => {
-    const isPlayTurn = isMyTurn && gamePhase === "playing";
-    const isChooseTurn = isMyChoice && gamePhase === "choosing";
-    if (isPlayTurn || isChooseTurn) {
-      const timeLimit = isChooseTurn ? CHOOSE_TIME_LIMIT : TURN_TIME_LIMIT;
-      setTurnTimeLeft(timeLimit);
-      turnTimerRef.current = setInterval(() => {
-        setTurnTimeLeft(prev => {
-          if (prev <= 1) {
-            if (isChooseTurn) {
-              // Auto-pass in round 1, auto-choose sun in round 2
-              if (passRound >= 2) {
-                onChooseTrump("sun");
-              } else {
-                onPass();
-              }
-            } else {
-              // Auto-play lowest-point valid card on timeout (minimize loss)
-              const validCards = state.validMoves && state.validMoves.length > 0 ? state.validMoves : [];
-              if (validCards.length > 0) {
-                const HOKM_PTS: Record<string, number> = { 'J': 20, '9': 14, 'A': 11, '10': 10, 'K': 4, 'Q': 3 };
-                const SUN_PTS: Record<string, number> = { 'A': 11, '10': 10, 'K': 4, 'Q': 3, 'J': 2 };
-                const sorted = [...validCards].sort((a, b) => {
-                  const aPts = (state.gameType === 'hokm' && a.suit === state.trumpSuit) ? (HOKM_PTS[a.rank] || 0) : (SUN_PTS[a.rank] || 0);
-                  const bPts = (state.gameType === 'hokm' && b.suit === state.trumpSuit) ? (HOKM_PTS[b.rank] || 0) : (SUN_PTS[b.rank] || 0);
-                  return aPts - bPts;
-                });
-                onPlayCard(sorted[0]);
-              }
-            }
-            return 0;
-          }
-          if (prev === 11) {
-            cardSounds.yourTurn();
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      setTurnTimeLeft(TURN_TIME_LIMIT);
-    }
-    return () => { if (turnTimerRef.current) clearInterval(turnTimerRef.current); };
-  }, [isMyTurn, isMyChoice, gamePhase, state.currentTurn, passRound]);
+    const activeTimeLimit = Math.max(1, turnTimeLimitSeconds);
+    const isChoosingPhase = gamePhase === "choosing" && Boolean(state.choosingPlayer);
+    const isPlayingPhase = gamePhase === "playing" && Boolean(state.currentPlayer);
+    const hasActiveTurn = isChoosingPhase || isPlayingPhase;
 
-  const activeTimeLimit = (isMyChoice && gamePhase === "choosing") ? CHOOSE_TIME_LIMIT : TURN_TIME_LIMIT;
+    if (!hasActiveTurn) {
+      setTurnTimeLeft(activeTimeLimit);
+      return () => {
+        if (turnTimerRef.current) clearInterval(turnTimerRef.current);
+      };
+    }
+
+    const startedAt = Number.isFinite(turnStartedAtMs)
+      ? Number(turnStartedAtMs)
+      : Date.now();
+
+    let warned = false;
+    const tick = () => {
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+      const remaining = Math.max(0, activeTimeLimit - elapsedSeconds);
+      setTurnTimeLeft(remaining);
+
+      if (!warned && (isMyTurn || isMyChoice) && remaining > 0 && remaining <= 10) {
+        cardSounds.yourTurn();
+        warned = true;
+      }
+    };
+
+    tick();
+    turnTimerRef.current = setInterval(tick, 1000);
+
+    return () => { if (turnTimerRef.current) clearInterval(turnTimerRef.current); };
+  }, [
+    gamePhase,
+    isMyChoice,
+    isMyTurn,
+    state.choosingPlayer,
+    state.currentPlayer,
+    turnStartedAtMs,
+    turnTimeLimitSeconds,
+  ]);
+
+  const hasActiveTimedTurn = (gamePhase === "playing" && Boolean(state.currentPlayer))
+    || (gamePhase === "choosing" && Boolean(state.choosingPlayer));
+  const activeTimeLimit = Math.max(1, turnTimeLimitSeconds);
   const timerPercent = (turnTimeLeft / activeTimeLimit) * 100;
   const timerColor = timerPercent > 50 ? "bg-green-500" : timerPercent > 20 ? "bg-yellow-500" : "bg-red-500";
   const timerUrgent = turnTimeLeft <= 10;
@@ -669,7 +673,7 @@ export function BalootBoard({
       </div>
 
       {/* ── Turn Timer Bar + Seconds Display ── */}
-      {((isMyTurn && gamePhase === "playing") || (isMyChoice && gamePhase === "choosing")) && (
+      {hasActiveTimedTurn && (
         <div className="absolute top-0 start-0 end-0 z-30">
           <div className={`h-1.5 overflow-hidden rounded-t-2xl bg-black/20 ${timerUrgent ? "animate-pulse" : ""}`} aria-label={`${t('baloot.timeRemaining')}: ${Math.floor(turnTimeLeft / 60)}:${String(turnTimeLeft % 60).padStart(2, "0")}`}>
             <div
