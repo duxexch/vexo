@@ -894,16 +894,19 @@ svg {
 /* Chess: piece move */
 @keyframes chess-move {
   0% {
-    transform: translate(var(--move-from-x, 0), var(--move-from-y, 0)) scale(0.96);
-    filter: brightness(1.08);
+    transform: translate3d(calc(var(--move-from-col, 0) * var(--chess-cell-size, 56px)),
+        calc(var(--move-from-row, 0) * var(--chess-cell-size, 56px)),
+        0) scale(0.9);
+    filter: brightness(1.05) drop-shadow(0 8px 10px rgba(0, 0, 0, 0.22));
   }
 
-  70% {
-    transform: translate(0, 0) scale(1.02);
+  62% {
+    transform: translate3d(0, 0, 0) scale(1.06);
+    filter: brightness(1.14) drop-shadow(0 10px 14px rgba(0, 0, 0, 0.24));
   }
 
   100% {
-    transform: translate(0, 0) scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
     filter: brightness(1);
   }
 }
@@ -913,10 +916,31 @@ svg {
   0% {
     transform: scale(1);
     opacity: 1;
+    filter: brightness(1);
+  }
+
+  45% {
+    transform: scale(1.16) rotate(-4deg);
+    opacity: 0.92;
+    filter: brightness(1.16);
   }
 
   100% {
-    transform: scale(0);
+    transform: scale(0.34) rotate(8deg);
+    opacity: 0;
+    filter: blur(1.2px) brightness(1.24);
+  }
+}
+
+/* Chess: capture burst ring */
+@keyframes chess-capture-ring {
+  0% {
+    transform: scale(0.44);
+    opacity: 0.78;
+  }
+
+  100% {
+    transform: scale(1.35);
     opacity: 0;
   }
 }
@@ -1257,11 +1281,15 @@ svg {
 
 /* Utility classes for game animations */
 .animate-chess-move {
-  animation: chess-move 280ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation: chess-move 360ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .animate-chess-capture {
-  animation: chess-capture 200ms ease-out forwards;
+  animation: chess-capture 290ms cubic-bezier(0.2, 0.8, 0.25, 1) forwards;
+}
+
+.animate-chess-capture-ring {
+  animation: chess-capture-ring 320ms ease-out forwards;
 }
 
 .animate-chess-check {
@@ -1504,10 +1532,9 @@ svg {
 
 /* ===== Premium Chess Look ===== */
 .chess-board-frame {
+  --chess-cell-size: calc(100% / 8);
   border-color: #4b2f1e;
-  background:
-    linear-gradient(145deg, rgba(255, 214, 153, 0.18), rgba(71, 42, 17, 0.3)),
-    linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 2px, transparent 2px 100%);
+  background: linear-gradient(145deg, rgba(255, 214, 153, 0.18), rgba(71, 42, 17, 0.3));
   box-shadow:
     inset 0 0 0 1px rgba(255, 234, 204, 0.25),
     0 16px 28px rgba(25, 14, 6, 0.35);
@@ -1554,7 +1581,12 @@ svg {
 .chess-piece {
   transform-origin: center center;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35), 0 3px 4px rgba(0, 0, 0, 0.45);
-  will-change: transform;
+  will-change: transform, filter;
+}
+
+.chess-piece-moving {
+  position: relative;
+  z-index: 12;
 }
 
 .chess-piece-white {

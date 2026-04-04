@@ -42,7 +42,7 @@ export function DominoSpectatorInsights({
     dominoResyncing,
     dominoMoveError,
 }: DominoSpectatorInsightsProps) {
-    const { t } = useI18n();
+    const { t, language } = useI18n();
 
     const boardTilesCount = useMemo(() => {
         const boardTiles = boardState?.boardTiles;
@@ -64,14 +64,14 @@ export function DominoSpectatorInsights({
                 <div className="rounded-xl border border-border/70 bg-background/75 px-2 py-1.5 text-center shadow-sm">
                     <div className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
                         <Eye className="h-3 w-3" />
-                        <span>{t("domino.player")}</span>
+                        <span>{language === "ar" ? "المشاهدون" : "Viewers"}</span>
                     </div>
                     <div className="text-sm font-semibold">{spectatorCount}</div>
                 </div>
                 <div className="rounded-xl border border-border/70 bg-background/75 px-2 py-1.5 text-center shadow-sm">
                     <div className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
                         <Hourglass className="h-3 w-3" />
-                        <span>{t("domino.lastMove")}</span>
+                        <span>{language === "ar" ? "الحركات" : "Moves"}</span>
                     </div>
                     <div className="text-sm font-semibold">{totalMoves ?? 0}</div>
                 </div>

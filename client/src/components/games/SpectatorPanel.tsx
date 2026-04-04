@@ -18,6 +18,7 @@ import {
   UserPlus,
   UserCheck,
   TrendingUp,
+  MessageCircle,
 } from "lucide-react";
 
 interface Player {
@@ -41,6 +42,7 @@ interface SpectatorPanelProps {
   totalMoves?: number;
   currentTurn?: string;
   gameStatus?: string;
+  panelMode?: "spectator" | "player";
   onSendGift?: (giftId: string, playerId: string, meta?: { price?: number; name?: string }) => void;
   chatMessages?: Array<{
     id?: string;
@@ -53,6 +55,8 @@ interface SpectatorPanelProps {
   supportTotalText?: string;
   giftCount?: number;
   giftTotalText?: string;
+  onSendChat?: (message: string) => void;
+  canSendChat?: boolean;
 }
 
 const RANK_COLORS: Record<string, string> = {
@@ -71,20 +75,26 @@ export function SpectatorPanel({
   totalMoves,
   currentTurn,
   gameStatus,
+  panelMode = "spectator",
   onSendGift,
   chatMessages,
   supportCount,
   supportTotalText,
   giftCount,
   giftTotalText,
+  onSendChat,
+  canSendChat = false,
 }: SpectatorPanelProps) {
   const { language } = useI18n();
   const { toast } = useToast();
 
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [pointsAmount, setPointsAmount] = useState("");
+  const [chatDraft, setChatDraft] = useState("");
   const [showGiftPanel, setShowGiftPanel] = useState(false);
   const [showPointsDialog, setShowPointsDialog] = useState(false);
+  const isViewerPanel = panelMode === "spectator";
+  const participantCount = [player1, player2].filter(Boolean).length;
 
   const { data: followedChallengers } = useQuery<{ id: string; followedId: string }[]>({
     queryKey: ["/api/challenger-follows"],
@@ -158,6 +168,13 @@ export function SpectatorPanel({
     setShowGiftPanel(true);
   };
 
+  const handleSendChat = () => {
+    const safeMessage = chatDraft.trim();
+    if (!safeMessage || !onSendChat || !canSendChat) return;
+    onSendChat(safeMessage);
+    setChatDraft("");
+  };
+
   const formatChatTime = (timestamp: string | number) => {
     const date = new Date(timestamp);
     if (Number.isNaN(date.getTime())) {
@@ -175,7 +192,7 @@ export function SpectatorPanel({
     const isFollowing = followedIds.has(player.id);
 
     return (
-      <Card className="mb-3">
+      <Card className="mb-3 overflow-hidden border-border/60 bg-background/70 shadow-sm backdrop-blur-sm">
         <CardContent className="p-3">
           <div className="flex items-center gap-3">
             <Avatar className="h-12 w-12">
@@ -236,18 +253,27 @@ export function SpectatorPanel({
   };
 
   return (
-    <div className="flex flex-col h-full w-full md:w-72">
-      <div className="p-3 border-b flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Eye className="h-5 w-5 text-primary" />
-          <span className="font-medium">
-            {language === "ar" ? "المشاهدة" : "Spectating"}
-          </span>
+    <div className="flex h-full w-full flex-col md:w-72">
+      <div className="border-b border-border/60 bg-gradient-to-r from-primary/5 via-transparent to-amber-500/5 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Eye className="h-5 w-5 text-primary" />
+            <span className="font-semibold">
+              {isViewerPanel
+                ? (language === "ar" ? "المشاهدة المباشرة" : "Live Spectating")
+                : (language === "ar" ? "لوحة المباراة" : "Match Panel")}
+            </span>
+          </div>
+          <Badge variant="secondary" className="rounded-full px-2.5">
+            <Eye className="h-3 w-3 me-1" />
+            {spectatorCount}
+          </Badge>
         </div>
-        <Badge variant="secondary">
-          <Eye className="h-3 w-3 me-1" />
-          {spectatorCount}
-        </Badge>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {isViewerPanel
+            ? (language === "ar" ? "لوحة متابعة سريعة وواضحة للمشاهدين." : "A cleaner, faster match overview for spectators.")
+            : (language === "ar" ? "توضيح المشاركين الفعليين والمشاهدين داخل المباراة." : "A clear split between real participants and live viewers.")}
+        </p>
       </div>
 
       <ScrollArea className="flex-1 p-3">
@@ -283,70 +309,104 @@ export function SpectatorPanel({
         )}
 
         <div className="mb-4">
-          <h4 className="text-sm font-medium text-muted-foreground mb-2">
-            {language === "ar" ? "اللاعبون" : "Players"}
-          </h4>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h4 className="text-sm font-medium text-muted-foreground">
+              {language === "ar" ? "المشاركون" : "Participants"}
+            </h4>
+            <Badge variant="outline" className="rounded-full px-2 text-[10px]">
+              {participantCount}
+            </Badge>
+          </div>
           {renderPlayerCard(player1, language === "ar" ? "لاعب 1" : "Player 1")}
           {renderPlayerCard(player2, language === "ar" ? "لاعب 2" : "Player 2")}
         </div>
 
         <div className="mb-4">
-          <h4 className="text-sm font-medium text-muted-foreground mb-2">
+          <h4 className="mb-2 text-sm font-medium text-muted-foreground">
             {language === "ar" ? "ملخص المشاهدة" : "Watch Summary"}
           </h4>
           <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg border bg-muted/30 p-2">
+            <div className="rounded-xl border border-border/60 bg-background/60 p-2.5 shadow-sm">
               <p className="text-[11px] text-muted-foreground">{language === "ar" ? "المشاهدون" : "Viewers"}</p>
               <p className="text-sm font-semibold">{spectatorCount}</p>
             </div>
-            <div className="rounded-lg border bg-muted/30 p-2">
+            <div className="rounded-xl border border-border/60 bg-background/60 p-2.5 shadow-sm">
               <p className="text-[11px] text-muted-foreground">{language === "ar" ? "مرات الدعم" : "Supports"}</p>
               <p className="text-sm font-semibold">{supportCount ?? 0}</p>
             </div>
-            <div className="rounded-lg border bg-muted/30 p-2">
+            <div className="rounded-xl border border-border/60 bg-background/60 p-2.5 shadow-sm">
               <p className="text-[11px] text-muted-foreground">{language === "ar" ? "قيمة الدعم" : "Support Value"}</p>
               <p className="text-sm font-semibold truncate">{supportTotalText || "0"}</p>
             </div>
-            <div className="rounded-lg border bg-muted/30 p-2">
+            <div className="rounded-xl border border-border/60 bg-background/60 p-2.5 shadow-sm">
               <p className="text-[11px] text-muted-foreground">{language === "ar" ? "الهدايا" : "Gifts"}</p>
               <p className="text-sm font-semibold">{giftCount ?? 0}</p>
             </div>
           </div>
-          <div className="mt-2 rounded-lg border bg-muted/30 p-2">
+          <div className="mt-2 rounded-xl border border-border/60 bg-background/60 p-2.5 shadow-sm">
             <p className="text-[11px] text-muted-foreground">{language === "ar" ? "قيمة الهدايا" : "Gift Value"}</p>
             <p className="text-sm font-semibold">{giftTotalText || "0 VXC"}</p>
           </div>
         </div>
 
         <div className="mb-2">
-          <h4 className="text-sm font-medium text-muted-foreground mb-2">
-            {language === "ar" ? "دردشة اللاعبين" : "Players Chat"}
+          <h4 className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <MessageCircle className="h-4 w-4 text-primary" />
+            {language === "ar" ? "الدردشة المباشرة" : "Live Match Chat"}
           </h4>
-          <div className="rounded-lg border bg-muted/20 p-2 space-y-2 max-h-64 overflow-y-auto">
+          <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-border/60 bg-background/60 p-2.5 shadow-sm">
             {!chatMessages || chatMessages.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-3">
+              <p className="py-3 text-center text-xs text-muted-foreground">
                 {language === "ar" ? "لا توجد رسائل حتى الآن" : "No messages yet"}
               </p>
             ) : (
               chatMessages.slice(-40).map((msg, index) => (
                 <div key={msg.id || `${msg.userId || "msg"}-${index}-${String(msg.timestamp)}`} className="rounded-md border bg-background/80 px-2 py-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium truncate">{msg.username}</span>
-                    <span className="text-[10px] text-muted-foreground shrink-0">{formatChatTime(msg.timestamp)}</span>
+                    <span className="truncate text-xs font-medium">{msg.username}</span>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">{formatChatTime(msg.timestamp)}</span>
                   </div>
-                  <p className="text-xs mt-1 break-words">{msg.message}</p>
+                  <p className="mt-1 text-xs break-words">{msg.message}</p>
                 </div>
               ))
             )}
           </div>
+
+          {onSendChat && (
+            <div className="mt-2 space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  value={chatDraft}
+                  onChange={(e) => setChatDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSendChat();
+                    }
+                  }}
+                  placeholder={language === "ar" ? "اكتب رسالة للمشاهدين..." : "Write a message to viewers..."}
+                  maxLength={300}
+                  disabled={!canSendChat}
+                />
+                <Button onClick={handleSendChat} disabled={!canSendChat || !chatDraft.trim()}>
+                  {language === "ar" ? "إرسال" : "Send"}
+                </Button>
+              </div>
+              {!canSendChat && (
+                <p className="text-xs text-muted-foreground">
+                  {language === "ar" ? "سجّل الدخول للمشاركة في الدردشة المباشرة." : "Sign in to participate in live chat."}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
       </ScrollArea>
 
-      <div className="p-3 border-t bg-background/80 backdrop-blur-sm">
+      <div className="border-t border-border/60 bg-background/80 p-3 backdrop-blur-sm">
         <Button
           variant="outline"
-          className="w-full h-12 gap-2"
+          className="h-12 w-full gap-2 rounded-xl border-primary/30 bg-gradient-to-r from-primary/5 to-amber-500/5"
           onClick={() => openGiftPanel()}
           data-testid="open-gift-panel"
         >

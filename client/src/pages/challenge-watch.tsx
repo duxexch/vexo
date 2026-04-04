@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +55,7 @@ import {
   Gift,
   Info,
   ArrowRightLeft,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -198,8 +199,18 @@ export default function ChallengeWatchPage() {
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [supportMode, setSupportMode] = useState<"instant" | "wait_for_match">("instant");
   const [showGiftPanel, setShowGiftPanel] = useState(false);
+  const [showMobileChat, setShowMobileChat] = useState(false);
+  const [mobileChatInput, setMobileChatInput] = useState("");
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showDepositDialog, setShowDepositDialog] = useState(false);
+  const [autoPlayNotice, setAutoPlayNotice] = useState<{
+    mode: "grace" | "autoplay";
+    username?: string;
+    reason?: string;
+    seconds?: number;
+    startedAtMs?: number;
+  } | null>(null);
+  const [autoPlayNowMs, setAutoPlayNowMs] = useState(() => Date.now());
   const [fundingShortageProject, setFundingShortageProject] = useState(0);
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
   const [quickConvertAmount, setQuickConvertAmount] = useState("5");
@@ -516,7 +527,40 @@ export default function ChallengeWatchPage() {
           }, 1500);
         }
         break;
+      case "player_disconnected_grace": {
+        const payload = (data.payload || {}) as Record<string, unknown>;
+        const graceMs = toFiniteNumber(payload.graceMs);
+        setAutoPlayNotice({
+          mode: "grace",
+          username: typeof payload.username === "string" ? payload.username : undefined,
+          reason: "disconnect",
+          seconds: graceMs ? Math.max(1, Math.round(graceMs / 1000)) : 60,
+          startedAtMs: Date.now(),
+        });
+        break;
+      }
+      case "player_absent_auto": {
+        const payload = (data.payload || {}) as Record<string, unknown>;
+        const turnTimeLimitMs = toFiniteNumber(payload.turnTimeLimitMs);
+        const username = typeof payload.username === "string" ? payload.username : undefined;
+        const seconds = turnTimeLimitMs ? Math.max(1, Math.round(turnTimeLimitMs / 1000)) : 30;
+        setAutoPlayNotice({
+          mode: "autoplay",
+          username,
+          reason: typeof payload.reason === "string" ? payload.reason : "disconnect",
+          seconds,
+          startedAtMs: Date.now(),
+        });
+        toast({
+          title: language === "ar" ? "تم تفعيل اللعب التلقائي" : "Auto Play enabled",
+          description: language === "ar"
+            ? `${username || "أحد اللاعبين"} أصبح غائبًا، وسيقوم النظام باللعب تلقائيًا كل ${seconds} ثانية حتى تنتهي المباراة.`
+            : `${username || "A player"} is now absent, so the system will auto-play every ${seconds} seconds until the match ends.`,
+        });
+        break;
+      }
       case "game_ended":
+        setAutoPlayNotice(null);
         setGameSession(prev => prev ? { ...prev, status: "finished", winnerId: data.winnerId, winReason: data.reason } : null);
         break;
       case "spectator_count":
@@ -533,6 +577,8 @@ export default function ChallengeWatchPage() {
     toFiniteNumber,
     projectWallet?.totalBalance,
     openFundingAssistance,
+    language,
+    toast,
   ]);
 
   const formatTime = (seconds: number) => {
@@ -540,6 +586,53 @@ export default function ChallengeWatchPage() {
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
+
+  useEffect(() => {
+    if (!autoPlayNotice || gameSession?.status !== "playing") {
+      return;
+    }
+
+    setAutoPlayNowMs(Date.now());
+    const ticker = setInterval(() => {
+      setAutoPlayNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      clearInterval(ticker);
+    };
+  }, [autoPlayNotice?.mode, autoPlayNotice?.seconds, autoPlayNotice?.startedAtMs, gameSession?.status]);
+
+  const formatChatTimestamp = (timestamp: string | number) => {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleTimeString(language === "ar" ? "ar-EG" : "en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const autoPlayActorName = autoPlayNotice?.username || (language === "ar" ? "أحد اللاعبين" : "A player");
+  const autoPlayBaseSeconds = Math.max(1, autoPlayNotice?.seconds ?? (autoPlayNotice?.mode === "grace" ? 60 : 30));
+  const autoPlayElapsedSeconds = autoPlayNotice
+    ? Math.max(0, Math.floor((autoPlayNowMs - (autoPlayNotice.startedAtMs ?? autoPlayNowMs)) / 1000))
+    : 0;
+  const autoPlayLiveSeconds = autoPlayNotice
+    ? (autoPlayNotice.mode === "grace"
+      ? Math.max(0, autoPlayBaseSeconds - autoPlayElapsedSeconds)
+      : Math.max(1, autoPlayBaseSeconds - (autoPlayElapsedSeconds % autoPlayBaseSeconds)))
+    : null;
+  const autoPlayTitle = autoPlayNotice?.mode === "autoplay"
+    ? (language === "ar" ? "تم تفعيل Auto Play" : "Auto Play is active")
+    : (language === "ar" ? "بانتظار عودة اللاعب" : "Waiting for reconnection");
+  const autoPlayDescription = autoPlayNotice?.mode === "autoplay"
+    ? (language === "ar"
+      ? `${autoPlayActorName} أصبح غائبًا، وسيكمل النظام اللعب تلقائيًا كل ${autoPlayBaseSeconds} ثانية حتى تنتهي المباراة.`
+      : `${autoPlayActorName} is absent, so the system will auto-play every ${autoPlayBaseSeconds} seconds until the match ends.`)
+    : (language === "ar"
+      ? `${autoPlayActorName} انقطع عن المباراة. إذا لم يعد خلال ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} ثانية سيدخل التحدي وضع Auto Play.`
+      : `${autoPlayActorName} disconnected from the match. If they do not return within ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} seconds, Auto Play will take over.`);
 
   const getPlayerOdds = (playerId: string): number => {
     if (!oddsData || !challenge) return 1.5;
@@ -581,6 +674,36 @@ export default function ChallengeWatchPage() {
       recipientId: playerId,
     }));
   }, [challengeId, language, toast]);
+
+  const sendLiveChatMessage = useCallback((message: string) => {
+    const safeMessage = message.trim();
+    if (!safeMessage) return;
+
+    if (!user) {
+      toast({
+        title: language === "ar" ? "سجل الدخول أولاً" : "Login required",
+        description: language === "ar" ? "سجّل الدخول للمشاركة في الدردشة المباشرة." : "Sign in to join the live chat.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      toast({
+        title: language === "ar" ? "خطأ" : "Error",
+        description: language === "ar" ? "الاتصال غير جاهز الآن" : "Connection is not ready right now",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    wsRef.current.send(JSON.stringify({
+      type: "challenge_chat",
+      challengeId,
+      message: safeMessage,
+    }));
+    setMobileChatInput("");
+  }, [challengeId, language, toast, user]);
 
   const openGiftPanel = useCallback(() => {
     setShowGiftPanel(true);
@@ -726,50 +849,60 @@ export default function ChallengeWatchPage() {
     return isProjectChallengeCurrency ? `${safeAmount.toFixed(2)} VXC` : `$${safeAmount.toFixed(2)}`;
   };
 
-  const supportAggregate = useMemo(() => {
-    if (!supports || supports.length === 0) {
-      return { count: 0, totalAmount: 0 };
-    }
-
-    const totalAmount = supports.reduce((sum, support) => {
-      const numericAmount = Number(support.amount);
-      return sum + (Number.isFinite(numericAmount) ? numericAmount : 0);
-    }, 0);
-
-    return {
+  const supportAggregate = !supports || supports.length === 0
+    ? { count: 0, totalAmount: 0 }
+    : {
       count: supports.length,
-      totalAmount,
+      totalAmount: supports.reduce((sum, support) => {
+        const numericAmount = Number(support.amount);
+        return sum + (Number.isFinite(numericAmount) ? numericAmount : 0);
+      }, 0),
     };
-  }, [supports]);
 
-  const participantIds = useMemo(() => {
-    return new Set(
-      [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id]
-        .filter((id): id is string => typeof id === "string" && id.length > 0),
-    );
-  }, [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id]);
+  const participantIds = new Set(
+    [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id]
+      .filter((id): id is string => typeof id === "string" && id.length > 0),
+  );
 
-  const playerChatMessages = useMemo(() => {
-    return messages
-      .filter((msg) => {
-        const text = String(msg.message || "").trim();
-        if (!text) return false;
-        if (!msg.userId) return true;
-        return participantIds.has(msg.userId);
-      })
-      .slice(-60)
-      .map((msg, index) => ({
+  const liveChatMessages = messages
+    .filter((msg) => String(msg.message || "").trim().length > 0)
+    .slice(-80)
+    .map((msg, index) => {
+      const isPlayerMessage = Boolean(msg.userId && participantIds.has(msg.userId));
+      return {
         id: msg.id || `${msg.userId || "chat"}-${index}-${String(msg.timestamp)}`,
         userId: msg.userId,
-        username: msg.username || (language === "ar" ? "لاعب" : "Player"),
+        username: msg.username || (isPlayerMessage
+          ? (language === "ar" ? "لاعب" : "Player")
+          : (language === "ar" ? "مشاهد" : "Viewer")),
         message: String(msg.message || ""),
         timestamp: msg.timestamp,
-      }));
-  }, [language, messages, participantIds]);
+      };
+    });
 
-  const playerInfoWidthClass = challenge.gameType === "domino" ? "w-full max-w-5xl mb-4" : "w-full max-w-lg mb-4";
-  const boardWidthClass = challenge.gameType === "domino" ? "w-full max-w-5xl" : "w-full max-w-lg";
+  const isWideBoardGame = challenge.gameType === "domino"
+    || challenge.gameType === "backgammon"
+    || challenge.gameType === "tarneeb"
+    || challenge.gameType === "baloot";
+  const playerInfoWidthClass = challenge.gameType === "baloot"
+    ? "w-full max-w-6xl mb-4"
+    : (isWideBoardGame ? "w-full max-w-5xl mb-4" : "w-full max-w-lg mb-4");
+  const boardWidthClass = challenge.gameType === "baloot"
+    ? "w-full max-w-6xl"
+    : (isWideBoardGame ? "w-full max-w-5xl" : "w-full max-w-lg");
   const supportActionsDisabled = !challenge.player2 || gameSession?.status !== "playing" || isTeamGame;
+
+  const balootPlayerNames: Record<string, string> = {};
+  for (const [id, username] of [
+    [challenge.player1Id, challenge.player1?.username],
+    [challenge.player2Id, challenge.player2?.username],
+    [challenge.player3Id, challenge.player3?.username],
+    [challenge.player4Id, challenge.player4?.username],
+  ] as const) {
+    if (id && username) {
+      balootPlayerNames[id] = username;
+    }
+  }
 
   const resolveWinnerName = (winnerId?: string) => {
     if (!winnerId) return language === "ar" ? "غير معروف" : "Unknown";
@@ -782,34 +915,18 @@ export default function ChallengeWatchPage() {
     return playerMap.get(winnerId) || winnerId;
   };
 
-  const dominoPlayerLabels = useMemo(() => {
-    const labels = new Map<string, string>();
-    const players = [
-      { id: challenge.player1Id, username: challenge.player1?.username, seat: 1 },
-      { id: challenge.player2Id, username: challenge.player2?.username, seat: 2 },
-      { id: challenge.player3Id, username: challenge.player3?.username, seat: 3 },
-      { id: challenge.player4Id, username: challenge.player4?.username, seat: 4 },
-    ];
+  const dominoPlayerLabels = new Map<string, string>();
+  for (const player of [
+    { id: challenge.player1Id, username: challenge.player1?.username, seat: 1 },
+    { id: challenge.player2Id, username: challenge.player2?.username, seat: 2 },
+    { id: challenge.player3Id, username: challenge.player3?.username, seat: 3 },
+    { id: challenge.player4Id, username: challenge.player4?.username, seat: 4 },
+  ]) {
+    if (!player.id) continue;
+    dominoPlayerLabels.set(player.id, player.username || `${t("domino.player")} ${player.seat}`);
+  }
 
-    for (const player of players) {
-      if (!player.id) continue;
-      labels.set(player.id, player.username || `${t("domino.player")} ${player.seat}`);
-    }
-
-    return labels;
-  }, [
-    challenge.player1?.username,
-    challenge.player1Id,
-    challenge.player2?.username,
-    challenge.player2Id,
-    challenge.player3?.username,
-    challenge.player3Id,
-    challenge.player4?.username,
-    challenge.player4Id,
-    t,
-  ]);
-
-  const dominoRawView = useMemo<Record<string, unknown> | undefined>(() => {
+  const dominoRawView = (() => {
     if (playerView && typeof playerView === "object") {
       return playerView;
     }
@@ -828,18 +945,13 @@ export default function ChallengeWatchPage() {
     }
 
     return undefined;
-  }, [playerView, gameSession?.gameState]);
+  })();
 
-  const dominoBoardState = useMemo(() => {
-    if (!dominoRawView) {
-      return undefined;
-    }
+  const dominoBoardState = dominoRawView
+    ? normalizeDominoChallengePlayerView(dominoRawView) as Record<string, unknown> | undefined
+    : undefined;
 
-    const normalized = normalizeDominoChallengePlayerView(dominoRawView);
-    return normalized as Record<string, unknown> | undefined;
-  }, [dominoRawView]);
-
-  const dominoTimeline = useMemo<DominoTimelineEntry[]>(() => {
+  const dominoTimeline: DominoTimelineEntry[] = (() => {
     const state = dominoBoardState as { lastAction?: unknown } | undefined;
     const lastAction = state?.lastAction;
 
@@ -878,9 +990,9 @@ export default function ChallengeWatchPage() {
       text,
       moveNumber: typeof gameSession?.totalMoves === "number" ? gameSession.totalMoves : undefined,
     }];
-  }, [dominoBoardState, dominoPlayerLabels, gameSession?.totalMoves, t]);
+  })();
 
-  const dominoScoreRows = useMemo<DominoScoreRow[]>(() => {
+  const dominoScoreRows: DominoScoreRow[] = (() => {
     const scores = dominoBoardState
       && typeof (dominoBoardState as { scores?: unknown }).scores === "object"
       ? (dominoBoardState as { scores?: Record<string, unknown> }).scores
@@ -898,20 +1010,27 @@ export default function ChallengeWatchPage() {
         score: value as number,
       }))
       .sort((a, b) => b.score - a.score);
-  }, [dominoBoardState, dominoPlayerLabels, t]);
+  })();
 
-  const dominoEndgameSummary = useMemo<DominoEndgameSummary>(() => {
-    const reason = gameSession?.winReason;
-    const winnerId = gameSession?.winnerId;
-    const isDraw = reason === "draw" || reason === "draw_agreement";
+  const dominoScoreLookup = new Map(dominoScoreRows.map((row) => [row.id, row.score]));
+  const dominoPlayer1Score = challenge?.player1Id ? (dominoScoreLookup.get(challenge.player1Id) ?? 0) : 0;
+  const dominoPlayer2Score = challenge?.player2Id ? (dominoScoreLookup.get(challenge.player2Id) ?? 0) : 0;
+  const dominoAutoPlayBadgeText = autoPlayNotice && autoPlayLiveSeconds !== null
+    ? (autoPlayNotice.mode === "grace"
+      ? (language === "ar"
+        ? `اللعب التلقائي خلال ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
+        : `Auto Play in ${autoPlayLiveSeconds}s · ${autoPlayActorName}`)
+      : (language === "ar"
+        ? `اللعب التلقائي ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
+        : `Auto Play ${autoPlayLiveSeconds}s · ${autoPlayActorName}`))
+    : null;
 
-    return {
-      isFinished: challenge.gameType === "domino" && gameSession?.status === "finished",
-      isDraw,
-      reason,
-      winnerLabel: winnerId ? (dominoPlayerLabels.get(winnerId) || winnerId) : undefined,
-    };
-  }, [challenge.gameType, gameSession?.status, gameSession?.winReason, gameSession?.winnerId, dominoPlayerLabels]);
+  const dominoEndgameSummary: DominoEndgameSummary = {
+    isFinished: challenge.gameType === "domino" && gameSession?.status === "finished",
+    isDraw: gameSession?.winReason === "draw" || gameSession?.winReason === "draw_agreement",
+    reason: gameSession?.winReason,
+    winnerLabel: gameSession?.winnerId ? (dominoPlayerLabels.get(gameSession.winnerId) || gameSession.winnerId) : undefined,
+  };
 
   const dominoResyncing = challenge.gameType === "domino"
     && gameSession?.status === "playing"
@@ -981,14 +1100,61 @@ export default function ChallengeWatchPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className={`font-mono text-lg ${(gameSession?.player1TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}>
-                        {formatTime(gameSession?.player1TimeRemaining || challenge.timeLimit)}
-                      </span>
-                    </div>
+                    {challenge.gameType === "domino" ? (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1">
+                        <span className="text-xs text-muted-foreground">{t("domino.score")}</span>
+                        <span className="font-mono text-base font-semibold">{dominoPlayer1Score}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span className={`font-mono text-lg ${(gameSession?.player1TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}>
+                          {formatTime(gameSession?.player1TimeRemaining || challenge.timeLimit)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {challenge.gameType === "domino" && dominoAutoPlayBadgeText && (
+                  <div className={cn(playerInfoWidthClass, "mt-3 mb-0 flex justify-center")}>
+                    <Badge variant="outline" className="rounded-full border-amber-500/35 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-200">
+                      <Timer className="me-1 h-3.5 w-3.5" />
+                      <span className="font-mono tabular-nums">{dominoAutoPlayBadgeText}</span>
+                    </Badge>
+                  </div>
+                )}
+
+                {autoPlayNotice && (
+                  <div className={cn(boardWidthClass, "mb-3")}>
+                    <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-amber-950 shadow-sm dark:text-amber-100">
+                      <div className="mt-0.5 rounded-full bg-amber-500/15 p-2">
+                        <Timer className="h-4 w-4 text-amber-600 dark:text-amber-300" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold">{autoPlayTitle}</p>
+                          <Badge variant="secondary" className="rounded-full bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-200">
+                            {autoPlayNotice.mode === "autoplay" ? "Auto Play" : (language === "ar" ? "مهلة عودة" : "Reconnect")}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs leading-5 text-amber-900/80 dark:text-amber-100/85">
+                          {autoPlayDescription}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 rounded-full text-amber-700 hover:bg-amber-500/10 dark:text-amber-200"
+                        onClick={() => setAutoPlayNotice(null)}
+                      >
+                        <X className="h-4 w-4" />
+                        <span className="sr-only">{language === "ar" ? "إغلاق" : "Dismiss"}</span>
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 <div className={cn("relative", boardWidthClass)}>
                   {receivedGifts.map((gift) => (
@@ -1075,6 +1241,7 @@ export default function ChallengeWatchPage() {
                       onPlayCard={() => { }}
                       onChooseTrump={() => { }}
                       onPass={() => { }}
+                      playerNames={balootPlayerNames}
                     />
                   )}
 
@@ -1110,12 +1277,19 @@ export default function ChallengeWatchPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className={`font-mono text-lg ${(gameSession?.player2TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}>
-                        {formatTime(gameSession?.player2TimeRemaining || challenge.timeLimit)}
-                      </span>
-                    </div>
+                    {challenge.gameType === "domino" ? (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1">
+                        <span className="text-xs text-muted-foreground">{t("domino.score")}</span>
+                        <span className="font-mono text-base font-semibold">{dominoPlayer2Score}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        <span className={`font-mono text-lg ${(gameSession?.player2TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}>
+                          {formatTime(gameSession?.player2TimeRemaining || challenge.timeLimit)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1377,7 +1551,7 @@ export default function ChallengeWatchPage() {
               </div>
             </ScrollArea>
 
-            <div className="w-full lg:w-80 border-s flex flex-col bg-card">
+            <div className="w-full border-s border-border/60 bg-gradient-to-b from-card via-card to-muted/10 lg:w-80">
               <SpectatorPanel
                 challengeId={challengeId!}
                 player1={challenge.player1}
@@ -1386,12 +1560,15 @@ export default function ChallengeWatchPage() {
                 totalMoves={gameSession?.totalMoves}
                 currentTurn={gameSession?.currentTurn || undefined}
                 gameStatus={gameSession?.status}
-                chatMessages={playerChatMessages}
+                panelMode="spectator"
+                chatMessages={liveChatMessages}
                 supportCount={supportAggregate.count}
                 supportTotalText={formatChallengeAmountText(supportAggregate.totalAmount)}
                 giftCount={giftAggregate.count}
                 giftTotalText={`${giftAggregate.totalValue.toFixed(2)} VXC`}
                 onSendGift={handleSendGift}
+                onSendChat={sendLiveChatMessage}
+                canSendChat={Boolean(user)}
               />
             </div>
           </div>
@@ -1402,33 +1579,108 @@ export default function ChallengeWatchPage() {
         gifts={receivedGifts.map(g => ({ id: g.id, giftId: g.giftId || 'heart', senderName: g.senderName }))}
       />
 
-      {user && (
-        <div className="fixed bottom-4 start-3 z-40 flex flex-col gap-2">
-          <Button
-            onClick={openGiftPanel}
-            className="h-12 w-12 rounded-full p-0 shadow-lg shadow-primary/25 animate-pulse [animation-duration:2.8s]"
-            data-testid="fab-gift"
-            title={language === "ar" ? "إرسال هدية" : "Send Gift"}
-          >
-            <Gift className="h-5 w-5" />
-            <span className="sr-only">{language === "ar" ? "هدية" : "Gift"}</span>
-          </Button>
+      <div className="pointer-events-none fixed inset-y-0 start-0 end-0 z-40 flex items-center justify-between px-2 lg:hidden">
+        <div className="pointer-events-auto flex flex-col gap-2">
           <Button
             variant="outline"
-            onClick={jumpToSupportSection}
-            disabled={supportActionsDisabled}
-            className={cn(
-              "h-12 w-12 rounded-full p-0 border-primary/40 bg-card/95 shadow-lg",
-              supportActionsDisabled ? "opacity-60" : "animate-pulse [animation-duration:3.2s]",
-            )}
-            data-testid="button-mobile-jump-support"
-            title={language === "ar" ? "ادعم" : "Support"}
+            onClick={() => setShowMobileChat(true)}
+            className="relative h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md"
+            data-testid="button-mobile-open-chat"
+            title={language === "ar" ? "الدردشة المباشرة" : "Live Chat"}
           >
-            <TrendingUp className="h-5 w-5" />
-            <span className="sr-only">{language === "ar" ? "ادعم" : "Support"}</span>
+            <MessageCircle className="h-5 w-5" />
+            <span className="sr-only">{language === "ar" ? "الدردشة" : "Chat"}</span>
+            {liveChatMessages.length > 0 && (
+              <span className="absolute -end-1 -top-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
+                {liveChatMessages.length > 99 ? "99+" : liveChatMessages.length}
+              </span>
+            )}
           </Button>
         </div>
-      )}
+
+        {user && (
+          <div className="pointer-events-auto flex flex-col gap-2">
+            <Button
+              onClick={openGiftPanel}
+              className="h-11 w-11 rounded-full p-0 shadow-2xl"
+              data-testid="fab-gift"
+              title={language === "ar" ? "إرسال هدية" : "Send Gift"}
+            >
+              <Gift className="h-5 w-5" />
+              <span className="sr-only">{language === "ar" ? "هدية" : "Gift"}</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={jumpToSupportSection}
+              disabled={supportActionsDisabled}
+              className="h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md"
+              data-testid="button-mobile-jump-support"
+              title={language === "ar" ? "ادعم" : "Support"}
+            >
+              <TrendingUp className="h-5 w-5" />
+              <span className="sr-only">{language === "ar" ? "ادعم" : "Support"}</span>
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <Dialog open={showMobileChat} onOpenChange={setShowMobileChat}>
+        <DialogContent className="overflow-hidden p-0 sm:max-w-md lg:hidden">
+          <DialogHeader className="border-b px-4 py-3">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <MessageCircle className="h-4 w-4 text-primary" />
+              {language === "ar" ? "الدردشة المباشرة للمباراة" : "Live Match Chat"}
+              <Badge variant="secondary" className="ms-auto">{liveChatMessages.length}</Badge>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="max-h-[65vh] overflow-y-auto px-4 py-3">
+            {liveChatMessages.length === 0 ? (
+              <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
+                {language === "ar" ? "لا توجد رسائل بعد — ستظهر رسائل الدردشة هنا لكل المشاهدين." : "No messages yet — live chat will appear here for all spectators."}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {liveChatMessages.map((msg) => (
+                  <div key={msg.id} className="rounded-xl border bg-card/70 px-3 py-2 shadow-sm">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="truncate text-xs font-semibold">{msg.username}</span>
+                      <span className="text-[10px] text-muted-foreground">{formatChatTimestamp(msg.timestamp)}</span>
+                    </div>
+                    <p className="text-sm leading-6 break-words">{msg.message}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t px-4 py-3">
+            {user ? (
+              <div className="flex gap-2">
+                <Input
+                  value={mobileChatInput}
+                  onChange={(e) => setMobileChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      sendLiveChatMessage(mobileChatInput);
+                    }
+                  }}
+                  placeholder={language === "ar" ? "اكتب رسالة للمشاهدين..." : "Write a message to the viewers..."}
+                  maxLength={300}
+                />
+                <Button onClick={() => sendLiveChatMessage(mobileChatInput)} disabled={!mobileChatInput.trim()}>
+                  {language === "ar" ? "إرسال" : "Send"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {language === "ar" ? "سجّل الدخول للمشاركة في الدردشة المباشرة." : "Sign in to participate in the live chat."}
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <FullScreenGiftPanel
         open={showGiftPanel}

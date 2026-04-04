@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { Chess } from 'chess.js';
 import { db } from '../db';
 import { storage } from '../storage';
 import { logger } from '../lib/logger';
@@ -6,7 +7,7 @@ import { getGameEngine } from '../game-engines';
 import { gameMoves, liveGameSessions } from '@shared/schema';
 import type { MoveData } from '../game-engines/types';
 import type { AuthenticatedWebSocket, GameRoom } from './types';
-import { rooms, userConnections, disconnectedPlayers, RECONNECT_GRACE_MS, TURN_TIMEOUT_MS, turnTimers, forfeitingSessionsLock } from './types';
+import { rooms, userConnections, disconnectedPlayers, RECONNECT_GRACE_MS, TURN_TIMEOUT_MS, turnTimers } from './types';
 import { broadcastToRoom, determineWinnerOnForfeit, send } from './utils';
 import { handleGameOver } from './game-over';
 import { getAdaptiveAiSessionConfig, isAdaptiveAiPlayer, recordAbandonedGame, resolveCurrentPlayerFromState } from '../lib/adaptive-ai';
@@ -28,9 +29,33 @@ function sanitizeMove(move: MoveData): Record<string, unknown> {
   return sanitized;
 }
 
+function safeParseState(stateJson: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(stateJson);
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
 function selectDominoTimeoutAutoMove(validMoves: MoveData[]): MoveData | null {
-  const playable = validMoves.find((move) => move.type === 'play');
-  if (playable) return playable;
+  const plays = validMoves.filter((move) => move.type === 'play');
+  if (plays.length > 0) {
+    const scored = plays
+      .map((move) => {
+        const tile = move.tile as { left?: number; right?: number } | undefined;
+        const left = typeof tile?.left === 'number' ? tile.left : 0;
+        const right = typeof tile?.right === 'number' ? tile.right : 0;
+        const isDouble = left === right;
+        return {
+          move,
+          score: (left + right) + (isDouble ? 12 : 0),
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    return scored[0]?.move ?? plays[0];
+  }
 
   const drawMove = validMoves.find((move) => move.type === 'draw');
   if (drawMove) return drawMove;
@@ -41,11 +66,133 @@ function selectDominoTimeoutAutoMove(validMoves: MoveData[]): MoveData | null {
   return null;
 }
 
-async function tryHandleDominoTimeoutAutoMove(sessionId: string, room: GameRoom, currentPlayerId: string): Promise<boolean> {
-  if (room.gameType !== 'domino') {
-    return false;
+const CHESS_TIMEOUT_PIECE_VALUES: Record<string, number> = {
+  p: 100,
+  n: 320,
+  b: 330,
+  r: 500,
+  q: 900,
+  k: 0,
+};
+const CHESS_TIMEOUT_CENTER_SQUARES = new Set(['c4', 'd4', 'e4', 'f4', 'c5', 'd5', 'e5', 'f5']);
+
+type EngineWithTimeoutBots = {
+  generateBotMove?: (state: Record<string, unknown>) => MoveData;
+  generateBotMoveFromState?: (state: Record<string, unknown>, playerId: string) => MoveData;
+};
+
+function scoreChessTimeoutMove(stateJson: string, move: MoveData): number {
+  if (typeof move.from !== 'string' || typeof move.to !== 'string') {
+    return Number.NEGATIVE_INFINITY;
   }
 
+  const parsed = safeParseState(stateJson);
+  const fen = typeof parsed?.fen === 'string' ? parsed.fen : stateJson;
+
+  try {
+    const chess = new Chess(fen);
+    const piece = chess.get(move.from as never);
+    const target = chess.get(move.to as never);
+
+    let score = 0;
+    if (target) {
+      score += (CHESS_TIMEOUT_PIECE_VALUES[target.type] ?? 0) + 120;
+    }
+
+    if (typeof move.promotion === 'string') {
+      score += move.promotion.toLowerCase() === 'q' ? 320 : 220;
+    }
+
+    if (CHESS_TIMEOUT_CENTER_SQUARES.has(move.to)) {
+      score += 24;
+    }
+
+    if (piece?.type === 'n' || piece?.type === 'b') {
+      score += 12;
+    }
+
+    if (piece?.type === 'p') {
+      const targetRank = Number.parseInt(move.to[1] ?? '0', 10);
+      if (targetRank === 4 || targetRank === 5) {
+        score += 10;
+      }
+    }
+
+    const applied = chess.move({
+      from: move.from,
+      to: move.to,
+      promotion: typeof move.promotion === 'string' ? move.promotion : 'q',
+    });
+
+    if (applied) {
+      if (chess.isCheckmate()) {
+        score += 10000;
+      } else if (chess.inCheck()) {
+        score += 80;
+      }
+    }
+
+    return score;
+  } catch {
+    return 0;
+  }
+}
+
+function selectChessTimeoutAutoMove(stateJson: string, validMoves: MoveData[]): MoveData | null {
+  const moves = validMoves.filter((move) => move.type === 'move');
+  if (moves.length === 0) {
+    return validMoves[0] ?? null;
+  }
+
+  const scored = moves
+    .map((move) => ({ move, score: scoreChessTimeoutMove(stateJson, move) }))
+    .sort((a, b) => b.score - a.score);
+
+  return scored[0]?.move ?? moves[0] ?? null;
+}
+
+function selectTimeoutAutoMove(
+  room: GameRoom,
+  engine: NonNullable<ReturnType<typeof getGameEngine>>,
+  stateJson: string,
+  currentPlayerId: string,
+  validMoves: MoveData[],
+): MoveData | null {
+  if (validMoves.length === 0) {
+    return null;
+  }
+
+  const parsedState = safeParseState(stateJson);
+  const engineWithBots = engine as unknown as EngineWithTimeoutBots;
+
+  try {
+    if (room.gameType === 'domino') {
+      const botMove = parsedState && typeof engineWithBots.generateBotMoveFromState === 'function'
+        ? engineWithBots.generateBotMoveFromState(parsedState, currentPlayerId)
+        : null;
+      return botMove ?? selectDominoTimeoutAutoMove(validMoves);
+    }
+
+    if ((room.gameType === 'backgammon' || room.gameType === 'tarneeb' || room.gameType === 'baloot')
+      && parsedState
+      && typeof engineWithBots.generateBotMove === 'function') {
+      const botMove = engineWithBots.generateBotMove(parsedState);
+      if (botMove) {
+        return botMove;
+      }
+    }
+
+    if (room.gameType === 'chess') {
+      return selectChessTimeoutAutoMove(stateJson, validMoves);
+    }
+  } catch (error) {
+    logger.warn(`[WS] Timeout auto-move selector fallback for ${room.gameType} in session ${room.sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return validMoves[0] ?? null;
+}
+
+async function tryHandleTimeoutAutoMove(sessionId: string, room: GameRoom, currentPlayerId: string): Promise<boolean> {
   const engine = getGameEngine(room.gameType);
   if (!engine) {
     return false;
@@ -75,20 +222,20 @@ async function tryHandleDominoTimeoutAutoMove(sessionId: string, room: GameRoom,
     }
 
     const validMoves = engine.getValidMoves(lockedState, currentPlayerId);
-    const autoMove = selectDominoTimeoutAutoMove(validMoves);
+    const autoMove = selectTimeoutAutoMove(room, engine, lockedState, currentPlayerId, validMoves);
     if (!autoMove) {
       return { outcome: 'failed' as const };
     }
 
     const validation = engine.validateMove(lockedState, currentPlayerId, autoMove);
     if (!validation.valid) {
-      logger.warn(`[WS] Domino timeout auto-move invalid for player ${currentPlayerId} in session ${sessionId}: ${validation.error || 'unknown error'}`);
+      logger.warn(`[WS] ${room.gameType} timeout auto-move invalid for player ${currentPlayerId} in session ${sessionId}: ${validation.error || 'unknown error'}`);
       return { outcome: 'failed' as const };
     }
 
     const applyResult = engine.applyMove(lockedState, currentPlayerId, autoMove);
     if (!applyResult.success) {
-      logger.warn(`[WS] Domino timeout auto-move apply failed for player ${currentPlayerId} in session ${sessionId}: ${applyResult.error || 'unknown error'}`);
+      logger.warn(`[WS] ${room.gameType} timeout auto-move apply failed for player ${currentPlayerId} in session ${sessionId}: ${applyResult.error || 'unknown error'}`);
       return { outcome: 'failed' as const };
     }
 
@@ -137,13 +284,13 @@ async function tryHandleDominoTimeoutAutoMove(sessionId: string, room: GameRoom,
 
   room.gameState = txResult.newState;
 
-  logger.info(`[WS] Domino timeout auto-move applied for player ${currentPlayerId} in session ${sessionId}: ${txResult.autoMove.type}`);
+  logger.info(`[WS] ${room.gameType} timeout auto-move applied for player ${currentPlayerId} in session ${sessionId}: ${txResult.autoMove.type}`);
 
   broadcastToRoom(room, {
     type: 'turn_timeout',
     payload: {
       timedOutPlayer: currentPlayerId,
-      autoAction: 'move',
+      autoAction: 'auto_move',
       moveType: txResult.autoMove.type,
     }
   });
@@ -178,6 +325,7 @@ async function tryHandleDominoTimeoutAutoMove(sessionId: string, room: GameRoom,
   if (gameStatus.isOver) {
     clearTurnTimer(sessionId);
     await handleGameOver(room, gameStatus);
+    cleanupCompletedRoomIfEmpty(sessionId, room);
     return true;
   }
 
@@ -189,6 +337,58 @@ async function tryHandleDominoTimeoutAutoMove(sessionId: string, room: GameRoom,
     await processAdaptiveAiTurns(sessionId, room);
   } else if (nextPlayer) {
     startTurnTimer(sessionId, nextPlayer, room.turnTimeLimitMs);
+  }
+
+  return true;
+}
+
+function cleanupCompletedRoomIfEmpty(sessionId: string, room: GameRoom) {
+  if (room.players.size === 0 && room.spectators.size === 0) {
+    rooms.delete(sessionId);
+  }
+}
+
+async function continueMatchWithAbsentPlayer(
+  sessionId: string,
+  room: GameRoom,
+  absentPlayerId: string,
+  username?: string,
+  reason: 'disconnect' | 'abandonment' = 'disconnect',
+) {
+  const session = await storage.getLiveGameSession(sessionId);
+  if (!session || session.status !== 'in_progress') {
+    return false;
+  }
+
+  const latestState = session.gameState || room.gameState;
+  if (latestState) {
+    room.gameState = latestState;
+  }
+
+  const currentPlayer = latestState
+    ? resolveCurrentPlayerFromState(room.gameType, latestState, {
+      player1Id: session.player1Id,
+      player2Id: session.player2Id,
+      player3Id: session.player3Id,
+      player4Id: session.player4Id,
+    })
+    : null;
+
+  logger.info(`[WS] Player ${absentPlayerId} is absent (${reason}) in session ${sessionId} — autoplay timer will keep the match running until it ends`);
+
+  broadcastToRoom(room, {
+    type: 'player_absent_auto',
+    payload: {
+      userId: absentPlayerId,
+      username,
+      reason,
+      autoPlay: true,
+      turnTimeLimitMs: room.turnTimeLimitMs || TURN_TIMEOUT_MS,
+    }
+  });
+
+  if (currentPlayer && !turnTimers.has(sessionId)) {
+    startTurnTimer(sessionId, currentPlayer, room.turnTimeLimitMs);
   }
 
   return true;
@@ -209,11 +409,9 @@ export function startTurnTimer(sessionId: string, currentPlayerId: string, timeL
       const session = await storage.getLiveGameSession(sessionId);
       if (!session || session.status === 'completed') return;
 
-      if (room.gameType === 'domino') {
-        const handledByAutoMove = await tryHandleDominoTimeoutAutoMove(sessionId, room, currentPlayerId);
-        if (handledByAutoMove) {
-          return;
-        }
+      const handledByAutoMove = await tryHandleTimeoutAutoMove(sessionId, room, currentPlayerId);
+      if (handledByAutoMove) {
+        return;
       }
 
       // FIX: Determine winner correctly for both 2-player and 4-player team games
@@ -234,6 +432,7 @@ export function startTurnTimer(sessionId: string, currentPlayerId: string, timeL
           winningTeam,
           reason: 'timeout'
         });
+        cleanupCompletedRoomIfEmpty(sessionId, room);
       }
     } catch (error) {
       console.error('[WS] Turn timer error:', error);
@@ -281,45 +480,22 @@ export async function handleDisconnect(ws: AuthenticatedWebSocket, isVoluntaryLe
           payload: { userId: disconnectedPlayerId, username: ws.username }
         });
 
-        // Voluntary leave = immediate forfeit. Disconnect = grace period for reconnection.
+        // Absence should not freeze the challenge. After the reconnect grace window,
+        // the 30-second turn timer keeps auto-playing until the match reaches a winner.
         if (isVoluntaryLeave) {
-          // Immediate forfeit for voluntary leave
-          if (!forfeitingSessionsLock.has(sessionId)) {
-            forfeitingSessionsLock.add(sessionId);
-            try {
-              const session = await storage.getLiveGameSession(sessionId);
-
-              if (session && session.status === 'in_progress') {
-                // FIX: Handle both 2-player and 4-player team games
-                const { winner: opponentId, winningTeam } = determineWinnerOnForfeit(session, disconnectedPlayerId);
-                const hasForfeitDecision = Boolean(opponentId) || winningTeam !== undefined;
-                if (hasForfeitDecision) {
-                  logger.info(`[WS] Player ${disconnectedPlayerId} left voluntarily — forfeiting (${opponentId ? `winner=${opponentId}` : `team=${winningTeam}`})`);
-                  clearTurnTimer(sessionId);
-                  await handleGameOver(room, { isOver: true, winner: opponentId || undefined, winningTeam, reason: 'abandonment' });
-                  broadcastToRoom(room, {
-                    type: 'player_forfeited',
-                    payload: { forfeitedBy: disconnectedPlayerId, winner: opponentId, reason: 'abandonment' }
-                  });
-                  // Notify adaptive AI that this human abandoned the game
-                  const aiConfig = await getAdaptiveAiSessionConfig(sessionId);
-                  if (aiConfig?.enabled && aiConfig.humanPlayerIds.includes(disconnectedPlayerId)) {
-                    await recordAbandonedGame({ sessionId, gameType: room.gameType, humanPlayerIds: [disconnectedPlayerId] });
-                  }
-                }
-              }
-            } catch (error) {
-              console.error('[WS] Error handling voluntary leave forfeit:', error);
-            } finally {
-              setTimeout(() => forfeitingSessionsLock.delete(sessionId), 5000);
+          try {
+            await continueMatchWithAbsentPlayer(sessionId, room, disconnectedPlayerId, ws.username, 'abandonment');
+            const aiConfig = await getAdaptiveAiSessionConfig(sessionId);
+            if (aiConfig?.enabled && aiConfig.humanPlayerIds.includes(disconnectedPlayerId)) {
+              await recordAbandonedGame({ sessionId, gameType: room.gameType, humanPlayerIds: [disconnectedPlayerId] });
             }
+          } catch (error) {
+            console.error('[WS] Error keeping abandoned match running:', error);
           }
         } else {
-          // Network disconnect — give grace period before forfeiting
           const disconnectKey = `${sessionId}:${disconnectedPlayerId}`;
 
           if (!disconnectedPlayers.has(disconnectKey)) {
-            // Notify room about grace period
             broadcastToRoom(room, {
               type: 'player_disconnected_grace',
               payload: {
@@ -332,39 +508,16 @@ export async function handleDisconnect(ws: AuthenticatedWebSocket, isVoluntaryLe
             const timer = setTimeout(async () => {
               disconnectedPlayers.delete(disconnectKey);
 
-              // After grace period, check if player reconnected
               const currentRoom = rooms.get(sessionId);
               if (currentRoom && !currentRoom.players.has(disconnectedPlayerId)) {
-                // Player didn't reconnect — forfeit
-                if (!forfeitingSessionsLock.has(sessionId)) {
-                  forfeitingSessionsLock.add(sessionId);
-                  try {
-                    const session = await storage.getLiveGameSession(sessionId);
-
-                    if (session && session.status === 'in_progress') {
-                      // FIX: Handle both 2-player and 4-player team games
-                      const { winner: opponentId, winningTeam } = determineWinnerOnForfeit(session, disconnectedPlayerId);
-                      const hasForfeitDecision = Boolean(opponentId) || winningTeam !== undefined;
-                      if (hasForfeitDecision) {
-                        logger.info(`[WS] Player ${disconnectedPlayerId} did not reconnect within ${RECONNECT_GRACE_MS}ms — forfeiting (${opponentId ? `winner=${opponentId}` : `team=${winningTeam}`})`);
-                        clearTurnTimer(sessionId);
-                        await handleGameOver(currentRoom, { isOver: true, winner: opponentId || undefined, winningTeam, reason: 'disconnect' });
-                        broadcastToRoom(currentRoom, {
-                          type: 'player_forfeited',
-                          payload: { forfeitedBy: disconnectedPlayerId, winner: opponentId, reason: 'disconnect' }
-                        });
-                        // Notify adaptive AI that this human abandoned the game
-                        const aiConfig = await getAdaptiveAiSessionConfig(sessionId);
-                        if (aiConfig?.enabled && aiConfig.humanPlayerIds.includes(disconnectedPlayerId)) {
-                          await recordAbandonedGame({ sessionId, gameType: currentRoom.gameType, humanPlayerIds: [disconnectedPlayerId] });
-                        }
-                      }
-                    }
-                  } catch (error) {
-                    console.error('[WS] Error handling disconnect forfeit after grace:', error);
-                  } finally {
-                    setTimeout(() => forfeitingSessionsLock.delete(sessionId), 5000);
+                try {
+                  await continueMatchWithAbsentPlayer(sessionId, currentRoom, disconnectedPlayerId, ws.username, 'disconnect');
+                  const aiConfig = await getAdaptiveAiSessionConfig(sessionId);
+                  if (aiConfig?.enabled && aiConfig.humanPlayerIds.includes(disconnectedPlayerId)) {
+                    await recordAbandonedGame({ sessionId, gameType: currentRoom.gameType, humanPlayerIds: [disconnectedPlayerId] });
                   }
+                } catch (error) {
+                  console.error('[WS] Error enabling autoplay after disconnect grace:', error);
                 }
               }
             }, RECONNECT_GRACE_MS);
@@ -375,11 +528,29 @@ export async function handleDisconnect(ws: AuthenticatedWebSocket, isVoluntaryLe
       }
 
       if (room.players.size === 0 && room.spectators.size === 0) {
-        // Don't immediately clean up room if there are disconnected players with grace period
         const hasGracePeriodPlayers = Array.from(disconnectedPlayers.keys()).some(k => k.startsWith(ws.sessionId + ':'));
         if (!hasGracePeriodPlayers) {
-          clearTurnTimer(ws.sessionId);
-          rooms.delete(ws.sessionId);
+          const session = await storage.getLiveGameSession(ws.sessionId);
+          if (session?.status === 'in_progress') {
+            const latestState = session.gameState || room.gameState;
+            const currentPlayer = latestState
+              ? resolveCurrentPlayerFromState(room.gameType, latestState, {
+                player1Id: session.player1Id,
+                player2Id: session.player2Id,
+                player3Id: session.player3Id,
+                player4Id: session.player4Id,
+              })
+              : null;
+
+            if (currentPlayer && !turnTimers.has(ws.sessionId)) {
+              startTurnTimer(ws.sessionId, currentPlayer, room.turnTimeLimitMs);
+            }
+
+            logger.info(`[WS] Keeping empty room ${ws.sessionId} alive so autoplay can finish the match while all players are absent`);
+          } else {
+            clearTurnTimer(ws.sessionId);
+            rooms.delete(ws.sessionId);
+          }
         }
       }
     }

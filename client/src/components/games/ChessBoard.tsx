@@ -11,6 +11,7 @@ interface ChessBoardProps {
   authoritativeValidMoves?: unknown;
   onMove: (move: ChessMove) => void;
   status?: string;
+  turnTimeLimit?: number;
 }
 
 interface ChessMove {
@@ -32,6 +33,20 @@ interface AuthoritativeMove {
   from: string;
   to: string;
   promotion?: string;
+}
+
+interface BoardDiffSquare {
+  row: number;
+  col: number;
+  piece: string;
+  previousPiece?: string;
+}
+
+interface BoardMoveDelta {
+  from: string;
+  to: string;
+  capturedPiece?: string;
+  captureSquare?: string;
 }
 
 type PieceType = "K" | "Q" | "R" | "B" | "N" | "P" | "k" | "q" | "r" | "b" | "n" | "p";
@@ -330,6 +345,78 @@ function parseAuthoritativeMoves(input: unknown): AuthoritativeMove[] {
   });
 }
 
+function detectBoardMoveDelta(previousBoard: string[][], nextBoard: string[][]): BoardMoveDelta | null {
+  const removed: BoardDiffSquare[] = [];
+  const added: BoardDiffSquare[] = [];
+
+  for (let row = 0; row < 8; row += 1) {
+    for (let col = 0; col < 8; col += 1) {
+      const previousPiece = previousBoard[row]?.[col] || "";
+      const nextPiece = nextBoard[row]?.[col] || "";
+
+      if (previousPiece === nextPiece) continue;
+
+      if (previousPiece) {
+        removed.push({ row, col, piece: previousPiece });
+      }
+
+      if (nextPiece) {
+        added.push({ row, col, piece: nextPiece, previousPiece: previousPiece || undefined });
+      }
+    }
+  }
+
+  if (removed.length === 0 || added.length === 0) return null;
+
+  const prioritizeKingMove = (entry: BoardDiffSquare) => (entry.piece.toUpperCase() === "K" ? 0 : 1);
+  const orderedAdded = [...added].sort((a, b) => prioritizeKingMove(a) - prioritizeKingMove(b));
+
+  for (const candidate of orderedAdded) {
+    const fromCandidates = removed.filter((entry) => {
+      if (entry.piece !== candidate.piece) return false;
+      return entry.row !== candidate.row || entry.col !== candidate.col;
+    });
+
+    if (fromCandidates.length === 0) continue;
+
+    const from = fromCandidates.sort((a, b) => {
+      const aDistance = Math.abs(a.row - candidate.row) + Math.abs(a.col - candidate.col);
+      const bDistance = Math.abs(b.row - candidate.row) + Math.abs(b.col - candidate.col);
+      return aDistance - bDistance;
+    })[0];
+
+    const movedPieceColor = getPieceColor(candidate.piece);
+    const destinationPreviousColor = getPieceColor(candidate.previousPiece || "");
+    let capturedPiece: string | undefined;
+    let captureSquare: string | undefined;
+
+    if (candidate.previousPiece && movedPieceColor && destinationPreviousColor && destinationPreviousColor !== movedPieceColor) {
+      capturedPiece = candidate.previousPiece;
+      captureSquare = coordsToSquare(candidate.row, candidate.col);
+    } else {
+      const sideCapture = removed.find((entry) => {
+        if (entry.row === from.row && entry.col === from.col) return false;
+        const removedColor = getPieceColor(entry.piece);
+        return Boolean(removedColor && movedPieceColor && removedColor !== movedPieceColor);
+      });
+
+      if (sideCapture) {
+        capturedPiece = sideCapture.piece;
+        captureSquare = coordsToSquare(sideCapture.row, sideCapture.col);
+      }
+    }
+
+    return {
+      from: coordsToSquare(from.row, from.col),
+      to: coordsToSquare(candidate.row, candidate.col),
+      capturedPiece,
+      captureSquare,
+    };
+  }
+
+  return null;
+}
+
 export function ChessBoard({
   gameState,
   currentTurn,
@@ -339,6 +426,7 @@ export function ChessBoard({
   authoritativeValidMoves,
   onMove,
   status,
+  turnTimeLimit = 30,
 }: ChessBoardProps) {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [validMoves, setValidMoves] = useState<string[]>([]);
@@ -346,7 +434,9 @@ export function ChessBoard({
   const [showPromotion, setShowPromotion] = useState<{ from: string; to: string } | null>(null);
   const [animSquare, setAnimSquare] = useState<string | null>(null);
   const [animDelta, setAnimDelta] = useState<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  const [captureFx, setCaptureFx] = useState<{ square: string; piece: string } | null>(null);
   const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const captureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevBoardRef = useRef<string[][] | null>(null);
   const { language } = useI18n();
 
@@ -389,46 +479,194 @@ export function ChessBoard({
     () => parseAuthoritativeMoves(authoritativeValidMoves),
     [authoritativeValidMoves]
   );
+  const [timeLeft, setTimeLeft] = useState(turnTimeLimit);
+  const turnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutAutoMoveRef = useRef<string | null>(null);
+
+  const toVisualCoords = useCallback((row: number, col: number) => {
+    if (myColor === "black") {
+      return { row: 7 - row, col: 7 - col };
+    }
+    return { row, col };
+  }, [myColor]);
+
+  const animateMoveBetweenSquares = useCallback((fromSquare: string, toSquare: string) => {
+    const [fromRow, fromCol] = squareToCoords(fromSquare);
+    const [toRow, toCol] = squareToCoords(toSquare);
+    const fromVisual = toVisualCoords(fromRow, fromCol);
+    const toVisual = toVisualCoords(toRow, toCol);
+
+    setAnimDelta({
+      dx: fromVisual.col - toVisual.col,
+      dy: fromVisual.row - toVisual.row,
+    });
+    setAnimSquare(toSquare);
+
+    if (animTimerRef.current) clearTimeout(animTimerRef.current);
+    animTimerRef.current = setTimeout(() => setAnimSquare(null), 340);
+  }, [toVisualCoords]);
+
+  const triggerCaptureEffect = useCallback((square: string, capturedPiece?: string) => {
+    if (!capturedPiece) return;
+
+    setCaptureFx({ square, piece: capturedPiece });
+    if (captureTimerRef.current) clearTimeout(captureTimerRef.current);
+    captureTimerRef.current = setTimeout(() => setCaptureFx(null), 320);
+  }, []);
+
+  const fallbackMoves = useMemo(() => {
+    const moves: AuthoritativeMove[] = [];
+
+    for (let row = 0; row < 8; row += 1) {
+      for (let col = 0; col < 8; col += 1) {
+        const piece = board[row]?.[col];
+        if (!piece || getPieceColor(piece) !== myColor) continue;
+
+        const from = coordsToSquare(row, col);
+        const destinations = getValidMoves(board, row, col, piece, castling, enPassant);
+        for (const to of destinations) {
+          moves.push({
+            from,
+            to,
+            promotion: piece.toUpperCase() === "P" && (to.endsWith("1") || to.endsWith("8")) ? "q" : undefined,
+          });
+        }
+      }
+    }
+
+    return moves;
+  }, [board, myColor, castling, enPassant]);
+
+  const timeoutActionKey = useMemo(() => {
+    const sourceMoves = authoritativeMoves.length > 0 ? authoritativeMoves : fallbackMoves;
+    return `${currentTurn ?? 'no-turn'}:${sourceMoves.map((move) => `${move.from}${move.to}${move.promotion ?? ''}`).join('|')}`;
+  }, [currentTurn, authoritativeMoves, fallbackMoves]);
+
+  const selectAutoMove = useCallback((): AuthoritativeMove | null => {
+    const sourceMoves = authoritativeMoves.length > 0 ? authoritativeMoves : fallbackMoves;
+    if (sourceMoves.length === 0) return null;
+
+    const pieceValues: Record<string, number> = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 0 };
+    const centerSquares = new Set(["c4", "d4", "e4", "f4", "c5", "d5", "e5", "f5"]);
+
+    const scoredMoves = sourceMoves
+      .map((move) => {
+        const [fromRow, fromCol] = squareToCoords(move.from);
+        const [toRow, toCol] = squareToCoords(move.to);
+        const movingPiece = board[fromRow]?.[fromCol] || "";
+        const capturedPiece = board[toRow]?.[toCol] || "";
+
+        let score = 0;
+        if (capturedPiece) {
+          score += (pieceValues[capturedPiece.toLowerCase()] ?? 0) + 120;
+        }
+        if (move.promotion) {
+          score += move.promotion === "q" ? 320 : 220;
+        }
+        if (centerSquares.has(move.to)) {
+          score += 24;
+        }
+        if (movingPiece.toLowerCase() === "n" || movingPiece.toLowerCase() === "b") {
+          score += 12;
+        }
+        if (movingPiece.toLowerCase() === "p" && (move.to.endsWith("4") || move.to.endsWith("5"))) {
+          score += 8;
+        }
+
+        return { move, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    return scoredMoves[0]?.move ?? sourceMoves[0] ?? null;
+  }, [authoritativeMoves, fallbackMoves, board]);
+
+  useEffect(() => {
+    setTimeLeft(turnTimeLimit);
+    timeoutAutoMoveRef.current = null;
+    if (turnTimerRef.current) clearInterval(turnTimerRef.current);
+    if (status === "finished" || turnTimeLimit <= 0 || !currentTurn) return;
+
+    turnTimerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          if (turnTimerRef.current) clearInterval(turnTimerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (turnTimerRef.current) clearInterval(turnTimerRef.current);
+    };
+  }, [currentTurn, status, turnTimeLimit]);
+
+  useEffect(() => {
+    if (timeLeft !== 0 || !isMyTurn || isSpectator || status === "finished") return;
+    if (timeoutAutoMoveRef.current === timeoutActionKey) return;
+
+    timeoutAutoMoveRef.current = timeoutActionKey;
+    const autoMove = selectAutoMove();
+    if (!autoMove) return;
+
+    const [fromRow, fromCol] = squareToCoords(autoMove.from);
+    const [toRow, toCol] = squareToCoords(autoMove.to);
+    const movingPiece = board[fromRow]?.[fromCol];
+    if (!movingPiece) return;
+
+    const capturedPiece = board[toRow]?.[toCol] || undefined;
+    onMove({
+      from: autoMove.from,
+      to: autoMove.to,
+      piece: movingPiece.toUpperCase(),
+      captured: capturedPiece,
+      promotion: autoMove.promotion,
+    });
+    if (capturedPiece) {
+      triggerCaptureEffect(autoMove.to, capturedPiece);
+    }
+    setLastMove({ from: autoMove.from, to: autoMove.to });
+    setSelectedSquare(null);
+    setValidMoves([]);
+  }, [timeLeft, isMyTurn, isSpectator, status, timeoutActionKey, selectAutoMove, board, onMove, triggerCaptureEffect]);
 
   // Trigger slide animation when lastMove changes (local move)
   useEffect(() => {
     if (!lastMove) return;
-    const [fromR, fromC] = squareToCoords(lastMove.from);
-    const [toR, toC] = squareToCoords(lastMove.to);
-    const dy = (fromR - toR) * 100;
-    const dx = (fromC - toC) * 100;
-    setAnimDelta({ dx, dy });
-    setAnimSquare(lastMove.to);
-    if (animTimerRef.current) clearTimeout(animTimerRef.current);
-    animTimerRef.current = setTimeout(() => setAnimSquare(null), 220);
-    return () => { if (animTimerRef.current) clearTimeout(animTimerRef.current); };
-  }, [lastMove]);
+    animateMoveBetweenSquares(lastMove.from, lastMove.to);
+  }, [lastMove, animateMoveBetweenSquares]);
 
   // Detect opponent moves via board diff
   useEffect(() => {
     const prev = prevBoardRef.current;
     prevBoardRef.current = board;
     if (!prev) return;
-    // Find the piece that appeared and disappeared
-    let fromR = -1, fromC = -1, toR = -1, toC = -1;
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        if (prev[r][c] && !board[r][c]) { fromR = r; fromC = c; }
-        if (board[r][c] && board[r][c] !== prev[r][c] && (!prev[r][c] || getPieceColor(board[r][c]) !== getPieceColor(prev[r][c]))) {
-          toR = r; toC = c;
-        }
+    const moveDelta = detectBoardMoveDelta(prev, board);
+    if (!moveDelta) return;
+
+    const isSameAsLastMove =
+      lastMove &&
+      lastMove.from === moveDelta.from &&
+      lastMove.to === moveDelta.to;
+
+    if (isSameAsLastMove) return;
+
+    if (moveDelta.capturedPiece) {
+      triggerCaptureEffect(moveDelta.captureSquare || moveDelta.to, moveDelta.capturedPiece);
+    }
+    setLastMove({ from: moveDelta.from, to: moveDelta.to });
+  }, [board, lastMove, triggerCaptureEffect]);
+
+  useEffect(() => {
+    return () => {
+      if (animTimerRef.current) {
+        clearTimeout(animTimerRef.current);
       }
-    }
-    if (fromR >= 0 && toR >= 0 && !(lastMove && lastMove.to === coordsToSquare(toR, toC))) {
-      const dy = (fromR - toR) * 100;
-      const dx = (fromC - toC) * 100;
-      setAnimDelta({ dx, dy });
-      setAnimSquare(coordsToSquare(toR, toC));
-      setLastMove({ from: coordsToSquare(fromR, fromC), to: coordsToSquare(toR, toC) });
-      if (animTimerRef.current) clearTimeout(animTimerRef.current);
-      animTimerRef.current = setTimeout(() => setAnimSquare(null), 220);
-    }
-  }, [board]);
+      if (captureTimerRef.current) {
+        clearTimeout(captureTimerRef.current);
+      }
+    };
+  }, []);
 
   // Compute captured pieces by comparing current board with full starting set
   const capturedPieces = useMemo(() => {
@@ -505,6 +743,9 @@ export function ChessBoard({
             captured: piece || undefined,
           };
           onMove(move);
+          if (piece) {
+            triggerCaptureEffect(square, piece);
+          }
           setLastMove({ from: selectedSquare, to: square });
         }
         setSelectedSquare(null);
@@ -528,7 +769,7 @@ export function ChessBoard({
           : getValidMoves(board, actualRow, actualCol, piece, castling, enPassant));
       }
     }
-  }, [selectedSquare, validMoves, board, myColor, isMyTurn, isSpectator, onMove, status, castling, enPassant, authoritativeMoves]);
+  }, [selectedSquare, validMoves, board, myColor, isMyTurn, isSpectator, onMove, status, castling, enPassant, authoritativeMoves, triggerCaptureEffect]);
 
   const handlePromotion = (promotionPiece: string) => {
     if (!showPromotion) return;
@@ -545,6 +786,9 @@ export function ChessBoard({
       promotion: promotionPiece.toLowerCase(),
     };
     onMove(move);
+    if (capturedPiece) {
+      triggerCaptureEffect(showPromotion.to, capturedPiece);
+    }
     setLastMove({ from: showPromotion.from, to: showPromotion.to });
     setShowPromotion(null);
   };
@@ -576,6 +820,23 @@ export function ChessBoard({
 
   return (
     <div className="relative">
+      {status !== "finished" && currentTurn && (
+        <div className="mb-2 flex justify-center">
+          <div
+            className={cn(
+              "rounded-full border px-3 py-1 text-sm font-semibold font-mono shadow-sm",
+              timeLeft <= 10
+                ? "border-red-500/60 bg-red-500/15 text-red-600"
+                : isMyTurn
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border/60 bg-muted/70 text-foreground"
+            )}
+          >
+            {timeLeft}s
+          </div>
+        </div>
+      )}
+
       {/* Opponent's captures (pieces they took from us) */}
       {bottomCaptures.length > 0 && (
         <div className="flex items-center gap-0.5 mb-1 min-h-[1.25rem]">
@@ -584,7 +845,7 @@ export function ChessBoard({
           ))}
         </div>
       )}
-      <div className="grid grid-cols-8 border-2 rounded-lg overflow-hidden shadow-lg chess-board-frame">
+      <div className="grid grid-cols-8 w-full aspect-square border-2 rounded-lg overflow-hidden shadow-lg chess-board-frame">
         {flippedBoard.map((rowPieces, row) => (
           rowPieces.map((piece, col) => {
             const actualRow = myColor === "black" ? 7 - row : row;
@@ -596,7 +857,7 @@ export function ChessBoard({
               <div
                 key={`${row}-${col}`}
                 className={cn(
-                  "w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 flex items-center justify-center cursor-pointer relative transition-colors",
+                  "w-full h-full min-w-0 min-h-0 aspect-square flex items-center justify-center cursor-pointer relative transition-colors",
                   getSquareColor(row, col),
                   isMyTurn && !isSpectator && "hover:brightness-110",
                   kingInCheck === square && "animate-chess-check"
@@ -607,17 +868,30 @@ export function ChessBoard({
                 {piece && (
                   <span
                     className={cn(
-                      "text-2xl sm:text-3xl md:text-4xl select-none chess-piece",
+                      "text-[clamp(1.3rem,5.4vw,2.25rem)] select-none chess-piece",
                       isWhitePiece(piece) ? "chess-piece-white" : "chess-piece-black",
-                      animSquare === square && "animate-chess-move"
+                      animSquare === square && "animate-chess-move chess-piece-moving"
                     )}
                     style={animSquare === square ? {
-                      "--move-from-x": `${animDelta.dx}%`,
-                      "--move-from-y": `${animDelta.dy}%`,
+                      "--move-from-col": `${animDelta.dx}`,
+                      "--move-from-row": `${animDelta.dy}`,
                     } as React.CSSProperties : undefined}
                   >
                     {PIECE_SYMBOLS[piece]}
                   </span>
+                )}
+                {captureFx?.square === square && (
+                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                    <span
+                      className={cn(
+                        "text-[clamp(1.3rem,5.4vw,2.25rem)] select-none chess-piece animate-chess-capture",
+                        isWhitePiece(captureFx.piece) ? "chess-piece-white" : "chess-piece-black"
+                      )}
+                    >
+                      {PIECE_SYMBOLS[captureFx.piece]}
+                    </span>
+                    <span className="absolute inset-1 rounded-full border border-red-500/50 animate-chess-capture-ring" />
+                  </div>
                 )}
                 {isValidMove && !piece && (
                   <div className="absolute w-3 h-3 rounded-full bg-green-500/50" />

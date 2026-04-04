@@ -12,9 +12,10 @@ import {
 } from '../lib/adaptive-ai';
 import { AuthVerificationError, verifyUserAccessToken } from '../lib/auth-verification';
 import type { AuthenticatedWebSocket } from './types';
-import { rooms, userConnections, disconnectedPlayers } from './types';
+import { rooms, userConnections, disconnectedPlayers, TURN_TIMEOUT_MS, turnTimers } from './types';
 import { send, sendError, broadcastToRoom, getPlayerList } from './utils';
 import { processAdaptiveAiTurns } from './ai-turns';
+import { startTurnTimer } from './timers-disconnect';
 
 export async function handleAuthenticate(ws: AuthenticatedWebSocket, payload: { token: string }) {
   try {
@@ -81,17 +82,7 @@ export async function handleJoinGame(ws: AuthenticatedWebSocket, payload: { sess
 
     let room = rooms.get(sessionId);
     if (!room) {
-      // Determine turn time limit from associated challenge or challenge settings
-      let turnTimeLimitMs: number | undefined;
-      if (session.challengeId) {
-        const [ch] = await db.select().from(challenges).where(eq(challenges.id, session.challengeId)).limit(1);
-        if (ch?.timeLimit) turnTimeLimitMs = ch.timeLimit * 1000; // timeLimit is in seconds
-      }
-      // SECURITY: Fallback to challenge settings timeout instead of hardcoded 2 min
-      if (!turnTimeLimitMs) {
-        const challengeConfig = await storage.getChallengeSettings(session.gameType);
-        turnTimeLimitMs = challengeConfig.turnTimeoutSeconds * 1000;
-      }
+      const turnTimeLimitMs = TURN_TIMEOUT_MS;
       room = {
         sessionId,
         players: new Map(),
@@ -101,6 +92,8 @@ export async function handleJoinGame(ws: AuthenticatedWebSocket, payload: { sess
         turnTimeLimitMs,
       };
       rooms.set(sessionId, room);
+    } else if (!room.turnTimeLimitMs) {
+      room.turnTimeLimitMs = TURN_TIMEOUT_MS;
     }
 
     room.players.set(ws.userId, ws);
@@ -177,6 +170,8 @@ export async function handleJoinGame(ws: AuthenticatedWebSocket, payload: { sess
           logger.error('[AdaptiveAI] Failed to process AI turns on join', error as Error);
         });
       }, 80);
+    } else if (session.status === 'in_progress' && currentPlayer && !turnTimers.has(sessionId)) {
+      startTurnTimer(sessionId, currentPlayer, room.turnTimeLimitMs);
     }
 
   } catch (error) {

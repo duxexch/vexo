@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
 import { motion } from "framer-motion";
+import { Clock3 } from "lucide-react";
 
 type DominoTileSize = "xs" | "sm" | "md" | "lg";
 
@@ -33,6 +34,12 @@ interface BoardRowEntry {
   item: GameState["boardTiles"][number];
   index: number;
   sequenceIndex: number;
+}
+
+interface DominoPathPlacement extends BoardRowEntry {
+  x: number;
+  y: number;
+  renderRotation: number;
 }
 
 interface GameState {
@@ -298,6 +305,163 @@ function orientPlacementTile(
   return tile;
 }
 
+type DominoDirection = "left" | "right" | "up" | "down";
+
+function resolveBoardRenderRotation(tile: DominoTile, rotation?: number): number {
+  return Number.isFinite(rotation)
+    ? (rotation as number)
+    : (tile.left === tile.right ? 0 : 90);
+}
+
+function resolvePlacementRotation(tile: DominoTile, direction: DominoDirection): number {
+  const flowRotation = direction === "left" || direction === "right" ? 90 : 0;
+  return tile.left === tile.right ? (flowRotation === 90 ? 0 : 90) : flowRotation;
+}
+
+function getDirectionSign(direction: DominoDirection): number {
+  return direction === "left" || direction === "up" ? -1 : 1;
+}
+
+function getTileFootprint(renderRotation: number, compact: boolean) {
+  const long = compact ? 48 : 64;
+  const short = compact ? 24 : 32;
+  const normalizedRotation = ((renderRotation % 360) + 360) % 360;
+  const isSideways = normalizedRotation === 90 || normalizedRotation === 270;
+  return {
+    halfWidth: (isSideways ? long : short) / 2,
+    halfHeight: (isSideways ? short : long) / 2,
+  };
+}
+
+function getConnectedTileDelta(
+  direction: DominoDirection,
+  nextDirection: DominoDirection,
+  currentFootprint: { halfWidth: number; halfHeight: number },
+  nextFootprint: { halfWidth: number; halfHeight: number },
+  seamOverlap: number,
+) {
+  if (direction === nextDirection) {
+    if (direction === "left" || direction === "right") {
+      return {
+        dx: getDirectionSign(direction) * Math.max(0, currentFootprint.halfWidth + nextFootprint.halfWidth - seamOverlap),
+        dy: 0,
+      };
+    }
+
+    return {
+      dx: 0,
+      dy: getDirectionSign(direction) * Math.max(0, currentFootprint.halfHeight + nextFootprint.halfHeight - seamOverlap),
+    };
+  }
+
+  const cornerOverlap = seamOverlap / 2;
+
+  if (direction === "left" || direction === "right") {
+    return {
+      dx: getDirectionSign(direction) * Math.max(0, currentFootprint.halfWidth - cornerOverlap),
+      dy: getDirectionSign(nextDirection) * Math.max(0, nextFootprint.halfHeight - cornerOverlap),
+    };
+  }
+
+  return {
+    dx: getDirectionSign(nextDirection) * Math.max(0, nextFootprint.halfWidth - cornerOverlap),
+    dy: getDirectionSign(direction) * Math.max(0, currentFootprint.halfHeight - cornerOverlap),
+  };
+}
+
+function buildDominoSnakePlacements(
+  entries: BoardRowEntry[],
+  side: "left" | "right",
+  compact: boolean,
+  anchorRenderRotation: number,
+): DominoPathPlacement[] {
+  if (entries.length === 0) return [];
+
+  const seamOverlap = compact ? 0.8 : 1.2;
+  const horizontalRun = compact ? 4 : 5;
+  const verticalRun = compact ? 1 : 2;
+  const directions = side === "left"
+    ? (["left", "down", "right", "up"] as const)
+    : (["right", "up", "left", "down"] as const);
+
+  const firstDirection = directions[0];
+  const firstRotation = resolvePlacementRotation(entries[0].item.tile, firstDirection);
+  const anchorFootprint = getTileFootprint(anchorRenderRotation, compact);
+  const firstFootprint = getTileFootprint(firstRotation, compact);
+  const firstGap = Math.max(0, anchorFootprint.halfWidth + firstFootprint.halfWidth - seamOverlap);
+
+  let x = side === "left" ? -firstGap : firstGap;
+  let y = 0;
+  let directionIndex = 0;
+  let segmentRemaining = horizontalRun;
+
+  return entries.map((entry, index) => {
+    const direction = directions[directionIndex % directions.length];
+    const nextDirection = segmentRemaining === 1
+      ? directions[(directionIndex + 1) % directions.length]
+      : direction;
+    const renderRotation = resolvePlacementRotation(entry.item.tile, direction);
+
+    const placement: DominoPathPlacement = {
+      ...entry,
+      x,
+      y,
+      renderRotation,
+    };
+
+    const nextEntry = entries[index + 1];
+    if (nextEntry) {
+      const nextRenderRotation = resolvePlacementRotation(nextEntry.item.tile, nextDirection);
+      const currentFootprint = getTileFootprint(renderRotation, compact);
+      const nextFootprint = getTileFootprint(nextRenderRotation, compact);
+      const delta = getConnectedTileDelta(direction, nextDirection, currentFootprint, nextFootprint, seamOverlap);
+      x += delta.dx;
+      y += delta.dy;
+    }
+
+    segmentRemaining -= 1;
+    if (segmentRemaining <= 0) {
+      directionIndex += 1;
+      const upcomingDirection = directions[directionIndex % directions.length];
+      segmentRemaining = upcomingDirection === "left" || upcomingDirection === "right"
+        ? horizontalRun
+        : verticalRun;
+    }
+
+    return placement;
+  });
+}
+
+function getDominoPlacementBounds(
+  placements: Array<{ x: number; y: number; renderRotation: number }>,
+  compact: boolean,
+) {
+  if (placements.length === 0) {
+    return { offsetX: 0, offsetY: 0, width: 0, height: 0 };
+  }
+
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const placement of placements) {
+    const { halfWidth, halfHeight } = getTileFootprint(placement.renderRotation, compact);
+
+    minX = Math.min(minX, placement.x - halfWidth);
+    maxX = Math.max(maxX, placement.x + halfWidth);
+    minY = Math.min(minY, placement.y - halfHeight);
+    maxY = Math.max(maxY, placement.y + halfHeight);
+  }
+
+  return {
+    offsetX: -((minX + maxX) / 2),
+    offsetY: -((minY + maxY) / 2),
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY),
+  };
+}
+
 // C18-F9: Wrapped in memo to prevent re-renders when parent updates unrelated state
 const DominoTileComponent = memo(function DominoTileComponent({
   tile,
@@ -436,6 +600,9 @@ export function DominoBoard({
   const [movePending, setMovePending] = useState(false); // C10-F11: prevent duplicate place clicks
   const [passPending, setPassPending] = useState(false); // C11-F11: prevent duplicate pass
   const [timeLeft, setTimeLeft] = useState(turnTimeLimit);
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1280,
+  );
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoActionKeyRef = useRef<string | null>(null);
   const prevHandLenRef = useRef<number>(0); // F8: Track previous hand length for animation
@@ -555,6 +722,7 @@ export function DominoBoard({
   useEffect(() => {
     const updateViewport = () => {
       setIsNarrowViewport(window.innerWidth < 640);
+      setViewportWidth(window.innerWidth);
     };
 
     updateViewport();
@@ -617,17 +785,24 @@ export function DominoBoard({
     if (autoActionKeyRef.current === timeoutActionKey) return;
     autoActionKeyRef.current = timeoutActionKey;
 
-    // Timeout policy: play a random valid tile/end; if none, draw when allowed; otherwise pass.
+    // Timeout policy: prefer the strongest legal tile, then draw, then pass.
     if (playableTiles.length > 0) {
-      const randomPlayable = playableTiles.length > 1
-        ? playableTiles[Math.floor(Math.random() * playableTiles.length)]
-        : playableTiles[0];
-      const randomTile = randomPlayable ? state.myHand[randomPlayable.index] : undefined;
+      const bestPlayable = playableTiles
+        .map((playable) => {
+          const tile = state.myHand[playable.index];
+          const pipTotal = tile ? tile.left + tile.right : 0;
+          const isDouble = tile ? tile.left === tile.right : false;
+          return {
+            playable,
+            tile,
+            score: pipTotal + (isDouble ? 12 : 0),
+          };
+        })
+        .sort((a, b) => b.score - a.score)[0];
 
-      if (randomPlayable && randomTile) {
-        const ends: Array<'left' | 'right'> = randomPlayable.ends.length > 0 ? randomPlayable.ends : ['left'];
-        const randomEnd = ends[Math.floor(Math.random() * ends.length)] || 'left';
-        onMove({ tileLeft: randomTile.left, tileRight: randomTile.right, placedEnd: randomEnd, isPassed: false });
+      if (bestPlayable?.tile) {
+        const preferredEnd = bestPlayable.playable.ends.includes('right') ? 'right' : (bestPlayable.playable.ends[0] || 'left');
+        onMove({ tileLeft: bestPlayable.tile.left, tileRight: bestPlayable.tile.right, placedEnd: preferredEnd, isPassed: false });
         return;
       }
     }
@@ -737,7 +912,6 @@ export function DominoBoard({
   const isCompactMobile = isNarrowViewport;
   const boardTileCount = state.boardTiles.length;
   const boardTileSize: DominoTileSize = isCompactMobile ? "xs" : "sm";
-  const boardGapClass = "gap-0";
 
   const anchorTileIndex = useMemo(() => {
     if (state.boardTiles.length === 0) {
@@ -758,35 +932,64 @@ export function DominoBoard({
     () => (anchorTileIndex >= 0 ? boardEntries[anchorTileIndex] : undefined),
     [boardEntries, anchorTileIndex],
   );
-  const leftSideEntries = useMemo(
-    () => (anchorTileIndex > 0 ? boardEntries.slice(0, anchorTileIndex) : []),
-    [boardEntries, anchorTileIndex],
+  const anchorRenderRotation = useMemo(
+    () => (anchorEntry ? resolveBoardRenderRotation(anchorEntry.item.tile, anchorEntry.item.rotation) : 90),
+    [anchorEntry],
   );
-  const rightSideEntries = useMemo(
-    () => (anchorTileIndex >= 0 ? boardEntries.slice(anchorTileIndex + 1) : []),
-    [boardEntries, anchorTileIndex],
+  const leftPlacements = useMemo(
+    () => buildDominoSnakePlacements(
+      anchorTileIndex > 0 ? [...boardEntries.slice(0, anchorTileIndex)].reverse() : [],
+      "left",
+      isCompactMobile,
+      anchorRenderRotation,
+    ),
+    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation],
   );
-  const boardZoom = useMemo(() => {
-    if (boardTileCount <= 8) return 1;
-    return Math.max(0.58, 1 - (boardTileCount - 8) * 0.02);
-  }, [boardTileCount]);
-  const anchorHalfPx = isCompactMobile ? 24 : 32;
+  const rightPlacements = useMemo(
+    () => buildDominoSnakePlacements(
+      anchorTileIndex >= 0 ? boardEntries.slice(anchorTileIndex + 1) : [],
+      "right",
+      isCompactMobile,
+      anchorRenderRotation,
+    ),
+    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation],
+  );
+  const boardBounds = useMemo(() => {
+    const placementsForBounds = [
+      ...leftPlacements,
+      ...(anchorEntry ? [{ x: 0, y: 0, renderRotation: anchorRenderRotation }] : []),
+      ...rightPlacements,
+    ];
+    return getDominoPlacementBounds(placementsForBounds, isCompactMobile);
+  }, [leftPlacements, anchorEntry, rightPlacements, isCompactMobile, anchorRenderRotation]);
   const boardHeight = useMemo(() => {
-    const minHeight = isCompactMobile
-      ? (isSpectator ? 170 : 200)
-      : (isSpectator ? 240 : 280);
-    const maxHeight = isCompactMobile
-      ? (isSpectator ? 220 : 260)
-      : (isSpectator ? 320 : 360);
-    return Math.min(maxHeight, Math.max(minHeight, 180));
-  }, [isCompactMobile, isSpectator]);
+    const baseHeight = isCompactMobile
+      ? (isSpectator ? 220 : 252)
+      : (isSpectator ? 290 : 340);
+    const wrapBonus = Math.max(0, boardBounds.height - (isCompactMobile ? 120 : 168));
+    return Math.round(baseHeight + Math.min(isCompactMobile ? 44 : 78, wrapBonus * 0.55));
+  }, [boardBounds.height, isCompactMobile, isSpectator]);
+  const boardZoom = useMemo(() => {
+    const densityZoom = boardTileCount <= 10 ? 1 : boardTileCount <= 16 ? 0.95 : Math.max(0.7, 1 - (boardTileCount - 16) * 0.018);
+    const safePadding = isCompactMobile ? 28 : 44;
+    const estimatedBoardWidth = isCompactMobile
+      ? Math.max(252, viewportWidth - 48)
+      : Math.max(540, Math.min(isSpectator ? 860 : 1020, viewportWidth - (isSpectator ? 420 : 220)));
+    const fitWidthZoom = (estimatedBoardWidth - safePadding * 2) / Math.max(boardBounds.width, 1);
+    const fitHeightZoom = (boardHeight - safePadding * 2) / Math.max(boardBounds.height, 1);
+    return Math.max(0.58, Math.min(1, densityZoom, fitWidthZoom, fitHeightZoom));
+  }, [boardTileCount, isCompactMobile, viewportWidth, isSpectator, boardBounds.width, boardBounds.height, boardHeight]);
+  const boardOffset = useMemo(() => ({
+    offsetX: boardBounds.offsetX,
+    offsetY: boardBounds.offsetY,
+  }), [boardBounds.offsetX, boardBounds.offsetY]);
   const lastActionTileKey = state.lastAction?.tile ? tileSignature(state.lastAction.tile) : null;
 
-  const renderBoardTile = (entry: BoardRowEntry, rowId: string) => {
+  const renderBoardTile = (entry: BoardRowEntry, rowId: string, forcedRotation?: number) => {
     const boardTile = entry.item.tile;
-    const renderRotation = Number.isFinite(entry.item.rotation)
-      ? entry.item.rotation
-      : (boardTile.left === boardTile.right ? 0 : 90);
+    const renderRotation = typeof forcedRotation === "number"
+      ? forcedRotation
+      : resolveBoardRenderRotation(boardTile, entry.item.rotation);
     const tileKey = `${tileSignature(entry.item.tile)}-${entry.index}`;
     const isLastActionTile = lastActionTileKey !== null && tileSignature(entry.item.tile) === lastActionTileKey;
 
@@ -858,32 +1061,48 @@ export function DominoBoard({
           )}
         </div>
 
-        {/* F7: Scores display with player identity */}
-        {!isCompactMobile && state.scores && Object.values(state.scores).some(s => s > 0) && (
-          <div className="flex justify-center gap-3 flex-wrap">
-            {Object.entries(state.scores).map(([pid, score]) => {
+        {(turnTimeLimit > 0 || (state.scores && Object.values(state.scores).some((s) => s >= 0)) || (state.passCount != null && state.passCount > 0)) && (
+          <div className={cn("flex flex-wrap items-center justify-center", isCompactMobile ? "gap-1.5" : "gap-2")}>
+            {turnTimeLimit > 0 && status !== 'finished' && (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm",
+                  timeLeft <= 5
+                    ? "border-rose-500/45 bg-rose-500/12 text-rose-600 animate-pulse"
+                    : isTurnLive
+                      ? "border-emerald-500/40 bg-emerald-500/12 text-emerald-600"
+                      : "border-border/60 bg-background/75 text-muted-foreground",
+                )}
+                aria-live={isTurnLive ? "polite" : undefined}
+              >
+                <Clock3 className="h-3.5 w-3.5" />
+                <span>{Math.max(0, timeLeft)}s</span>
+              </span>
+            )}
+
+            {state.passCount != null && state.passCount > 0 && status !== 'finished' && (
+              <span className={cn(
+                "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
+                state.passCount >= (state.playerCount ?? 2) - 1
+                  ? "border-amber-500/40 bg-amber-500/18 text-amber-600"
+                  : "border-border/60 bg-background/75 text-muted-foreground"
+              )}>
+                {t('domino.pass')}: {state.passCount}/{state.playerCount ?? 2}
+              </span>
+            )}
+
+            {state.scores && Object.entries(state.scores).length > 0 && Object.entries(state.scores).map(([pid, score]) => {
               const label = getPlayerLabel(pid);
               return (
-                <div key={pid} className="text-center px-3 py-1.5 rounded-xl border border-border/55 bg-background/70 shadow-sm">
-                  <span className="text-xs text-muted-foreground">{label}</span>
-                  <span className="ms-1 text-sm font-semibold text-foreground">{score}</span>
-                </div>
+                <span
+                  key={pid}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/75 px-2.5 py-1 text-[11px] text-foreground shadow-sm"
+                >
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-semibold">{score}</span>
+                </span>
               );
             })}
-          </div>
-        )}
-
-        {/* C7-F9: Blocked-game proximity warning */}
-        {!isCompactMobile && state.passCount != null && state.passCount > 0 && status !== 'finished' && (
-          <div className="flex justify-center">
-            <span className={cn(
-              "inline-flex items-center px-2.5 py-1 rounded-full text-xs border",
-              state.passCount >= (state.playerCount ?? 2) - 1
-                ? "border-amber-500/40 bg-amber-500/18 text-amber-600 animate-pulse font-semibold"
-                : "border-border/60 bg-muted/70 text-muted-foreground"
-            )}>
-              {t('domino.pass')}: {state.passCount}/{state.playerCount ?? 2}
-            </span>
           </div>
         )}
 
@@ -957,38 +1176,44 @@ export function DominoBoard({
               {isSpectator ? t('domino.board') : t('domino.placeFirst')}
             </p>
           ) : (
-            <div className="domino-board-lane relative h-full w-full max-w-full px-1 py-1">
+            <div className="domino-board-lane relative h-full w-full max-w-full px-3 py-2 sm:px-5 sm:py-4">
               {anchorEntry && (
                 <>
-                  <div
-                    className={cn("absolute left-1/2 top-1/2 flex items-center", boardGapClass)}
-                    style={{
-                      transform: `translate(calc(-100% - ${anchorHalfPx}px), -50%) scale(${boardZoom})`,
-                      transformOrigin: "right center",
-                    }}
-                  >
-                    {[...leftSideEntries].reverse().map((entry) => renderBoardTile(entry, "left-chain"))}
-                  </div>
+                  {leftPlacements.map((placement) => (
+                    <div
+                      key={`left-${placement.index}`}
+                      className="absolute left-1/2 top-1/2"
+                      style={{
+                        transform: `translate(calc(-50% + ${placement.x + boardOffset.offsetX}px), calc(-50% + ${placement.y + boardOffset.offsetY}px)) scale(${boardZoom})`,
+                        transformOrigin: "center center",
+                      }}
+                    >
+                      {renderBoardTile(placement, "left-snake", placement.renderRotation)}
+                    </div>
+                  ))}
 
                   <div
                     className="absolute left-1/2 top-1/2"
                     style={{
-                      transform: `translate(-50%, -50%) scale(${boardZoom})`,
+                      transform: `translate(calc(-50% + ${boardOffset.offsetX}px), calc(-50% + ${boardOffset.offsetY}px)) scale(${boardZoom})`,
                       transformOrigin: "center center",
                     }}
                   >
                     {renderBoardTile(anchorEntry, "anchor")}
                   </div>
 
-                  <div
-                    className={cn("absolute left-1/2 top-1/2 flex items-center", boardGapClass)}
-                    style={{
-                      transform: `translate(${anchorHalfPx}px, -50%) scale(${boardZoom})`,
-                      transformOrigin: "left center",
-                    }}
-                  >
-                    {rightSideEntries.map((entry) => renderBoardTile(entry, "right-chain"))}
-                  </div>
+                  {rightPlacements.map((placement) => (
+                    <div
+                      key={`right-${placement.index}`}
+                      className="absolute left-1/2 top-1/2"
+                      style={{
+                        transform: `translate(calc(-50% + ${placement.x + boardOffset.offsetX}px), calc(-50% + ${placement.y + boardOffset.offsetY}px)) scale(${boardZoom})`,
+                        transformOrigin: "center center",
+                      }}
+                    >
+                      {renderBoardTile(placement, "right-snake", placement.renderRotation)}
+                    </div>
+                  ))}
                 </>
               )}
             </div>

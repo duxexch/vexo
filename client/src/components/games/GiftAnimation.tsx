@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -67,28 +67,43 @@ export function GiftAnimation({ gift, onComplete }: GiftAnimationProps) {
   const { language } = useI18n();
   const [isVisible, setIsVisible] = useState(false);
   const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; size: number; delay: number }>>([]);
+  const onCompleteRef = useRef(onComplete);
 
   useEffect(() => {
-    if (gift) {
-      setIsVisible(true);
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
-      const newParticles = Array.from({ length: 24 }, (_, i) => ({
-        id: i,
-        x: Math.random() * 220 - 110,
-        y: Math.random() * 220 - 110,
-        size: 4 + Math.random() * 8,
-        delay: Math.random() * 280,
-      }));
-      setParticles(newParticles);
-
-      const timer = setTimeout(() => {
-        setIsVisible(false);
-        onComplete?.();
-      }, 1500);
-
-      return () => clearTimeout(timer);
+  useEffect(() => {
+    if (!gift) {
+      setIsVisible(false);
+      setParticles([]);
+      return;
     }
-  }, [gift, onComplete]);
+
+    setIsVisible(true);
+
+    const newParticles = Array.from({ length: 24 }, (_, i) => ({
+      id: i,
+      x: Math.random() * 220 - 110,
+      y: Math.random() * 220 - 110,
+      size: 4 + Math.random() * 8,
+      delay: Math.random() * 280,
+    }));
+    setParticles(newParticles);
+
+    const hideTimer = window.setTimeout(() => {
+      setIsVisible(false);
+    }, 1350);
+
+    const completeTimer = window.setTimeout(() => {
+      onCompleteRef.current?.();
+    }, 1500);
+
+    return () => {
+      window.clearTimeout(hideTimer);
+      window.clearTimeout(completeTimer);
+    };
+  }, [gift?.id]);
 
   if (!gift || !isVisible) return null;
 

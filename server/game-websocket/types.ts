@@ -36,7 +36,7 @@ export const RECONNECT_GRACE_MS = 60000; // 60 seconds to reconnect
 export const disconnectedPlayers: Map<string, { sessionId: string; userId: string; timer: NodeJS.Timeout }> = new Map();
 
 // Turn timer tracking
-export const TURN_TIMEOUT_MS = 300000; // 5 minutes per turn (configurable per game type)
+export const TURN_TIMEOUT_MS = 30000; // Fixed 30 seconds per turn across challenge games
 export const turnTimers: Map<string, NodeJS.Timeout> = new Map();
 
 // Track sessions that are already being processed for forfeit to prevent double execution

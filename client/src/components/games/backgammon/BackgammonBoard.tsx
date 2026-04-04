@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 
@@ -22,6 +22,7 @@ interface BackgammonBoardProps {
   cubeOffered?: boolean;
   cubeOfferedBy?: 'white' | 'black' | null;
   disabled?: boolean;
+  turnTimeLimit?: number;
 }
 
 const CHECKER_COLORS = {
@@ -48,10 +49,14 @@ export function BackgammonBoard({
   cubeOwner = null,
   cubeOffered = false,
   cubeOfferedBy = null,
-  disabled = false
+  disabled = false,
+  turnTimeLimit = 30,
 }: BackgammonBoardProps) {
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [highlightedPoints, setHighlightedPoints] = useState<number[]>([]);
+  const [timeLeft, setTimeLeft] = useState(turnTimeLimit);
+  const turnTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutAutoActionRef = useRef<string | null>(null);
   const { t } = useI18n();
 
   const isPlayerTurn = playerColor !== 'spectator' && currentTurn === playerColor;
@@ -59,6 +64,93 @@ export function BackgammonBoard({
 
   const barPosition = playerColor === 'white' ? -1 : 24;
   const bearOffPosition = playerColor === 'white' ? 24 : -1;
+
+  const timeoutActionKey = useMemo(() => {
+    const moveKey = validMoves.map((move) => `${move.type}:${move.from}:${move.to}`).join('|');
+    return `${currentTurn}:${mustRoll ? 1 : 0}:${cubeOffered ? 1 : 0}:${moveKey}`;
+  }, [currentTurn, mustRoll, cubeOffered, validMoves]);
+
+  const selectTimeoutMove = useCallback(() => {
+    if (cubeOffered && cubeOfferedBy !== playerColor) {
+      return { type: 'accept_double' };
+    }
+
+    if (mustRoll) {
+      return { type: 'roll' };
+    }
+
+    const scoredMoves = validMoves
+      .filter((move) => move.type === 'move')
+      .map((move) => {
+        const from = Number.parseInt(move.from, 10);
+        const to = Number.parseInt(move.to, 10);
+        const target = Number.isFinite(to) && to >= 0 && to <= 23 ? board[to] : 0;
+        const hitsBlot = playerColor === 'white' ? target === -1 : target === 1;
+        const makesPoint = playerColor === 'white' ? target === 1 : target === -1;
+
+        let score = 0;
+        if (to === bearOffPosition) score += 120;
+        if (from === barPosition) score += 70;
+        if (hitsBlot) score += 60;
+        if (makesPoint) score += 24;
+        if (Number.isFinite(from) && Number.isFinite(to)) {
+          score += playerColor === 'white' ? (to - from) * 3 : (from - to) * 3;
+        }
+
+        return { move, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    return scoredMoves[0]?.move ?? validMoves[0] ?? null;
+  }, [cubeOffered, cubeOfferedBy, playerColor, mustRoll, validMoves, board, bearOffPosition, barPosition]);
+
+  useEffect(() => {
+    setTimeLeft(turnTimeLimit);
+    timeoutAutoActionRef.current = null;
+    if (turnTimerRef.current) clearInterval(turnTimerRef.current);
+    if (turnTimeLimit <= 0 || !currentTurn) return;
+
+    turnTimerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          if (turnTimerRef.current) clearInterval(turnTimerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (turnTimerRef.current) clearInterval(turnTimerRef.current);
+    };
+  }, [currentTurn, mustRoll, turnTimeLimit, dice, diceUsed]);
+
+  useEffect(() => {
+    if (timeLeft !== 0 || !isPlayerTurn || disabled) return;
+    if (timeoutAutoActionRef.current === timeoutActionKey) return;
+
+    timeoutAutoActionRef.current = timeoutActionKey;
+    const autoMove = selectTimeoutMove();
+    if (!autoMove) return;
+
+    if (autoMove.type === 'accept_double') {
+      onAcceptDouble?.();
+      return;
+    }
+
+    if (autoMove.type === 'roll') {
+      onRoll();
+      return;
+    }
+
+    if (autoMove.type === 'move' && 'from' in autoMove && 'to' in autoMove) {
+      const from = Number.parseInt(String(autoMove.from), 10);
+      const to = Number.parseInt(String(autoMove.to), 10);
+      if (Number.isFinite(from) && Number.isFinite(to)) {
+        onMove(from, to);
+      }
+    }
+  }, [timeLeft, isPlayerTurn, disabled, timeoutActionKey, selectTimeoutMove, onAcceptDouble, onRoll, onMove]);
 
   // Calculate pip counts for both colors
   const pipCounts = useMemo(() => {
@@ -83,10 +175,10 @@ export function BackgammonBoard({
     if (disabled || !isPlayerTurn || mustRoll) return;
 
     const checkerValue = point === barPosition ? (playerColor === 'white' ? bar.white : bar.black) :
-                         point >= 0 && point <= 23 ? board[point] : 0;
-    
+      point >= 0 && point <= 23 ? board[point] : 0;
+
     const hasOwnChecker = point === barPosition ? checkerValue > 0 :
-                          playerColor === 'white' ? checkerValue > 0 : checkerValue < 0;
+      playerColor === 'white' ? checkerValue > 0 : checkerValue < 0;
 
     if (selectedPoint !== null) {
       if (highlightedPoints.includes(point)) {
@@ -149,8 +241,8 @@ export function BackgammonBoard({
     const displayIndex = flipped ? 23 - pointIndex : pointIndex;
     const triangleColor = isEven ? 'bg-game-board' : 'bg-stone-700';
 
-    const pointLabel = color 
-      ? t('backgammon.pointLabel', { point: displayIndex + 1, color, count }) 
+    const pointLabel = color
+      ? t('backgammon.pointLabel', { point: displayIndex + 1, color, count })
       : t('backgammon.pointEmpty', { point: displayIndex + 1 });
 
     return (
@@ -177,8 +269,8 @@ export function BackgammonBoard({
           )}
           style={{
             height: '80%',
-            clipPath: isTop 
-              ? 'polygon(50% 100%, 0% 0%, 100% 0%)' 
+            clipPath: isTop
+              ? 'polygon(50% 100%, 0% 0%, 100% 0%)'
               : 'polygon(50% 0%, 0% 100%, 100% 100%)'
           }}
         />
@@ -343,10 +435,10 @@ export function BackgammonBoard({
     );
   };
 
-  const topPoints = flipped 
+  const topPoints = flipped
     ? Array.from({ length: 12 }, (_, i) => i)
     : Array.from({ length: 12 }, (_, i) => 12 + i);
-  
+
   const bottomPoints = flipped
     ? Array.from({ length: 12 }, (_, i) => 23 - i)
     : Array.from({ length: 12 }, (_, i) => 11 - i);
@@ -365,6 +457,18 @@ export function BackgammonBoard({
           {renderDoublingCube()}
         </div>
         <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "rounded-full border px-3 py-1 text-sm font-semibold font-mono shadow-sm",
+              timeLeft <= 10
+                ? "border-red-500/60 bg-red-500/15 text-red-600"
+                : isPlayerTurn
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border/60 bg-muted/70 text-foreground"
+            )}
+          >
+            {timeLeft}s
+          </span>
           {mustRoll && isPlayerTurn && (
             <button
               data-testid="button-roll-dice"
@@ -382,7 +486,7 @@ export function BackgammonBoard({
         </div>
       </div>
 
-      <div 
+      <div
         className="flex bg-game-felt rounded-lg overflow-hidden border-4 border-game-board shadow-xl min-h-[min(400px,60vh)]"
         style={{ touchAction: 'manipulation' }}
       >
@@ -419,8 +523,8 @@ export function BackgammonBoard({
             "text-sm font-medium px-3 py-1 rounded-full",
             currentTurn === playerColor ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
           )}>
-            {currentTurn === playerColor 
-              ? t('backgammon.yourTurn') 
+            {currentTurn === playerColor
+              ? t('backgammon.yourTurn')
               : t('backgammon.opponentTurn')}
           </span>
         </div>

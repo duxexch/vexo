@@ -10,10 +10,10 @@ import type { AuthenticatedSocket } from "../shared";
 import { challengeGameRooms } from "../shared";
 import { requireChallengeParticipant, requireChallengePlayer } from "./guards";
 
-/** Handle challenge_chat message — only game participants (players), NOT spectators */
+/** Handle challenge_chat message from players and broadcast it to both players and spectators */
 export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): Promise<void> {
   const { challengeId, message, isQuickMessage, quickMessageKey } = data;
-  const guard = requireChallengePlayer(ws, challengeId);
+  const guard = requireChallengeParticipant(ws, challengeId, { allowSpectator: true });
   if (!guard.ok) {
     return;
   }
@@ -55,7 +55,7 @@ export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): P
     message: chatFilterResult.filteredMessage,
     isQuickMessage: isQuickMessage || false,
     quickMessageKey: quickMessageKey ? String(quickMessageKey).slice(0, 50) : undefined,
-    isSpectator: false,
+    isSpectator: guard.role === "spectator",
   }).returning();
 
   const messageWithSender = {
@@ -64,13 +64,20 @@ export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): P
     senderAvatar: sender.avatarUrl,
   };
 
-  // Broadcast to players only (not spectators)
+  const outgoing = JSON.stringify({
+    type: "chat_message",
+    message: messageWithSender
+  });
+
   room.players.forEach((socket) => {
     if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({
-        type: "chat_message",
-        message: messageWithSender
-      }));
+      socket.send(outgoing);
+    }
+  });
+
+  room.spectators.forEach((socket) => {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(outgoing);
     }
   });
 }

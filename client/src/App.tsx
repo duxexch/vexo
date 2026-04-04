@@ -422,7 +422,7 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const { t, language, dir } = useI18n();
-  const sidebarSide = language === 'ar' ? 'right' : 'left';
+  const sidebarSide = dir === 'rtl' ? 'right' : 'left';
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   const style = {

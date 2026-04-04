@@ -7,7 +7,7 @@ import { useI18n } from "@/lib/i18n";
 import { isGameSoundEnabled, toggleGameSound } from "@/lib/game-sounds";
 
 // ─── Turn Timer Constants ────────────────────────────────────────
-const TURN_TIME_LIMIT_SEC = 60; // 60 seconds per turn
+const TURN_TIME_LIMIT_SEC = 30; // 30 seconds per turn
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface PlayingCard {
@@ -70,10 +70,10 @@ interface TarneebBoardProps {
 
 // ─── Constants ───────────────────────────────────────────────────────
 const SUITS: Record<string, { symbol: string; color: string; nameAr: string; nameEn: string }> = {
-  hearts:   { symbol: "♥", color: "text-red-500",     nameAr: "كبة",    nameEn: "Hearts" },
-  diamonds: { symbol: "♦", color: "text-red-500",     nameAr: "ديناري", nameEn: "Diamonds" },
-  clubs:    { symbol: "♣", color: "text-foreground",  nameAr: "سباتي",  nameEn: "Clubs" },
-  spades:   { symbol: "♠", color: "text-foreground",  nameAr: "بستوني", nameEn: "Spades" },
+  hearts: { symbol: "♥", color: "text-red-500", nameAr: "كبة", nameEn: "Hearts" },
+  diamonds: { symbol: "♦", color: "text-red-500", nameAr: "ديناري", nameEn: "Diamonds" },
+  clubs: { symbol: "♣", color: "text-foreground", nameAr: "سباتي", nameEn: "Clubs" },
+  spades: { symbol: "♠", color: "text-foreground", nameAr: "بستوني", nameEn: "Spades" },
 };
 
 const SUIT_ORDER: Record<string, number> = { spades: 0, hearts: 1, clubs: 2, diamonds: 3 };
@@ -632,9 +632,9 @@ export function TarneebBoard({
   const renderTrick = () => {
     const seatPositions: Record<Seat, React.CSSProperties> = {
       bottom: { bottom: "28%", left: "50%", transform: "translateX(-50%)" },
-      left:   { left: "28%",   top: "50%",  transform: "translateY(-50%)" },
-      top:    { top: "28%",    left: "50%", transform: "translateX(-50%)" },
-      right:  { right: "28%",  top: "50%",  transform: "translateY(-50%)" },
+      left: { left: "28%", top: "50%", transform: "translateY(-50%)" },
+      top: { top: "28%", left: "50%", transform: "translateX(-50%)" },
+      right: { right: "28%", top: "50%", transform: "translateY(-50%)" },
     };
 
     // Show sweep animation with cached cards when trick completes
@@ -959,17 +959,17 @@ export function TarneebBoard({
             {(Object.keys(SUITS) as Array<keyof typeof SUITS>).map(suit => {
               const suitCount = (state.hand || state.hands?.[playerId] || []).filter((c: PlayingCard) => c.suit === suit).length;
               return (
-              <Button
-                key={suit}
-                variant="outline"
-                className="h-16 text-xl flex flex-col gap-1 hover:bg-primary/10 hover:border-primary"
-                onClick={() => onSetTrump?.(suit)}
-                data-testid={`button-trump-${suit}`}
-              >
-                <span className={`text-3xl ${SUITS[suit].color}`}>{SUITS[suit].symbol}</span>
-                <span className="text-xs">{isAr ? SUITS[suit].nameAr : SUITS[suit].nameEn}</span>
-                <span className="text-[9px] text-muted-foreground">({suitCount})</span>
-              </Button>
+                <Button
+                  key={suit}
+                  variant="outline"
+                  className="h-16 text-xl flex flex-col gap-1 hover:bg-primary/10 hover:border-primary"
+                  onClick={() => onSetTrump?.(suit)}
+                  data-testid={`button-trump-${suit}`}
+                >
+                  <span className={`text-3xl ${SUITS[suit].color}`}>{SUITS[suit].symbol}</span>
+                  <span className="text-xs">{isAr ? SUITS[suit].nameAr : SUITS[suit].nameEn}</span>
+                  <span className="text-[9px] text-muted-foreground">({suitCount})</span>
+                </Button>
               );
             })}
           </div>
@@ -1014,9 +1014,8 @@ export function TarneebBoard({
       {gamePhase !== 'finished' && (
         <div className="absolute top-0 start-0 end-0 h-1 z-30">
           <div
-            className={`h-full transition-all duration-1000 ease-linear rounded-e-full ${
-              turnTimeLeft <= 15 ? 'bg-red-500 animate-pulse' : turnTimeLeft <= 30 ? 'bg-yellow-500' : 'bg-green-500'
-            }`}
+            className={`h-full transition-all duration-1000 ease-linear rounded-e-full ${turnTimeLeft <= 15 ? 'bg-red-500 animate-pulse' : turnTimeLeft <= 30 ? 'bg-yellow-500' : 'bg-green-500'
+              }`}
             style={{ width: `${(turnTimeLeft / TURN_TIME_LIMIT_SEC) * 100}%` }}
             role="progressbar"
             aria-label={isAr ? `الوقت المتبقي: ${turnTimeLeft} ثانية` : `Time remaining: ${turnTimeLeft} seconds`}
@@ -1070,33 +1069,33 @@ export function TarneebBoard({
             const defNeeded = Math.max(0, (14 - state.highestBid.bid) - defenderTricks);
             return (
               <>
-              <Badge variant="outline" className={`bg-background/70 text-[10px] h-6 ${state.highestBid.bid === 13 ? 'border-purple-500 text-purple-300' : iMyBid ? 'border-blue-500/50' : 'border-red-500/50'}`}>
-                {isAr ? "مزايدة" : "Bid"}: {state.highestBid.bid}
-                {state.highestBid.bid === 13 && " 👑"}
-                {needed > 0 && (
-                  <span className={`ms-1 ${iMyBid ? 'text-blue-300' : 'text-red-300'}`}>
-                    ({isAr ? `بحاجة ${needed}` : `need ${needed}`})
-                  </span>
-                )}
-                {needed === 0 && (
-                  <span className="ms-1 text-green-400">✓</span>
-                )}
-              </Badge>
-              {/* F8: Show defender objective — tricks needed to set */}
-              {!iMyBid && defNeeded > 0 && (
-                <Badge variant="outline" className="bg-background/70 text-[10px] h-6 border-green-500/50">
-                  <span className="text-green-300">
-                    {isAr ? `كسر: ${defNeeded}` : `set: ${defNeeded}`}
-                  </span>
+                <Badge variant="outline" className={`bg-background/70 text-[10px] h-6 ${state.highestBid.bid === 13 ? 'border-purple-500 text-purple-300' : iMyBid ? 'border-blue-500/50' : 'border-red-500/50'}`}>
+                  {isAr ? "مزايدة" : "Bid"}: {state.highestBid.bid}
+                  {state.highestBid.bid === 13 && " 👑"}
+                  {needed > 0 && (
+                    <span className={`ms-1 ${iMyBid ? 'text-blue-300' : 'text-red-300'}`}>
+                      ({isAr ? `بحاجة ${needed}` : `need ${needed}`})
+                    </span>
+                  )}
+                  {needed === 0 && (
+                    <span className="ms-1 text-green-400">✓</span>
+                  )}
                 </Badge>
-              )}
-              {iMyBid && defNeeded > 0 && (
-                <Badge variant="outline" className="bg-background/70 text-[10px] h-6 border-orange-500/50">
-                  <span className="text-orange-300">
-                    {isAr ? `هدفهم: ${defNeeded}` : `def: ${defNeeded}`}
-                  </span>
-                </Badge>
-              )}
+                {/* F8: Show defender objective — tricks needed to set */}
+                {!iMyBid && defNeeded > 0 && (
+                  <Badge variant="outline" className="bg-background/70 text-[10px] h-6 border-green-500/50">
+                    <span className="text-green-300">
+                      {isAr ? `كسر: ${defNeeded}` : `set: ${defNeeded}`}
+                    </span>
+                  </Badge>
+                )}
+                {iMyBid && defNeeded > 0 && (
+                  <Badge variant="outline" className="bg-background/70 text-[10px] h-6 border-orange-500/50">
+                    <span className="text-orange-300">
+                      {isAr ? `هدفهم: ${defNeeded}` : `def: ${defNeeded}`}
+                    </span>
+                  </Badge>
+                )}
               </>
             );
           })()}
@@ -1437,9 +1436,8 @@ export function TarneebBoard({
                           }).map((c, i) => (
                             <span
                               key={i}
-                              className={`text-[10px] font-mono font-bold ${suitInfo.color} ${
-                                ['A', 'K', 'Q'].includes(c.rank) ? 'underline' : ''
-                              }`}
+                              className={`text-[10px] font-mono font-bold ${suitInfo.color} ${['A', 'K', 'Q'].includes(c.rank) ? 'underline' : ''
+                                }`}
                             >
                               {c.rank}
                             </span>
@@ -1481,7 +1479,7 @@ export function TarneebBoard({
                   const myHighInHand = myHand.filter(c => c.suit === suit && HIGH_RANKS.includes(c.rank));
                   // F10-cycle10: Also exclude high cards currently in the trick
                   const trickHigh = (state.currentTrick || []).filter(t => t.card.suit === suit && HIGH_RANKS.includes(t.card.rank));
-                  const remainingHigh = HIGH_RANKS.filter(r => 
+                  const remainingHigh = HIGH_RANKS.filter(r =>
                     !playedHigh.some(p => p.rank === r) && !myHighInHand.some(h => h.rank === r) && !trickHigh.some(t => t.card.rank === r)
                   );
                   return (

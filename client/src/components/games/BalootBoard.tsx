@@ -68,7 +68,7 @@ const SUITS = {
 };
 
 // ─── Constants (outside component to avoid re-creation) ─────────
-const TURN_TIME_LIMIT = 60; // 60 seconds per turn
+const TURN_TIME_LIMIT = 30; // 30 seconds per turn
 const CHOOSE_TIME_LIMIT = 30; // 30 seconds to choose
 const SUIT_ORDER: Record<string, number> = { spades: 0, hearts: 1, diamonds: 2, clubs: 3 };
 const RANK_VALUE: Record<string, number> = { '7': 1, '8': 2, '9': 3, '10': 4, 'J': 5, 'Q': 6, 'K': 7, 'A': 8 };
@@ -125,8 +125,14 @@ export function BalootBoard({
       return (RANK_VALUE[b.rank] ?? 0) - (RANK_VALUE[a.rank] ?? 0);
     });
   }, [rawHand]);
+  const isPlayerInOrder = Boolean(state.playerOrder?.includes(playerId));
+  const viewerAnchorId = isPlayerInOrder
+    ? playerId
+    : (state.playerOrder?.[playerPosition] || state.playerOrder?.[0] || playerId);
+  const viewerIndex = (state.playerOrder || []).indexOf(viewerAnchorId);
+
   // Dynamic card overlap for responsive touch targets
-  const cardOverlap = myHand.length <= 3 ? -8 : myHand.length <= 5 ? -16 : -24;
+  const cardOverlap = myHand.length <= 4 ? -6 : myHand.length <= 6 ? -10 : -14;
   const gamePhase = state.gamePhase || state.phase;
   const isMyTurn = state.isMyTurn ?? state.currentPlayer === playerId;
   const isMyChoice = state.choosingPlayer === playerId;
@@ -134,9 +140,19 @@ export function BalootBoard({
   const passRound = (state as BalootState).passRound ?? 1;
   // Team-aware score helpers: "us" = myTeam, "them" = opponent
   const usKey = myTeam === 0 ? 'team0' : 'team1';
-  const themKey = myTeam === 0 ? 'team1' : 'team0';  const usTotal = state.totalPoints?.[usKey as 'team0' | 'team1'] ?? 0;
+  const themKey = myTeam === 0 ? 'team1' : 'team0';
+  const usTotal = state.totalPoints?.[usKey as 'team0' | 'team1'] ?? 0;
   const themTotal = state.totalPoints?.[themKey as 'team0' | 'team1'] ?? 0;
   const target = state.targetPoints ?? 152;
+  const totalTricksPlayed = (state.tricksWon?.team0 || 0) + (state.tricksWon?.team1 || 0);
+  const boardAuraClass = state.gameType === "sun"
+    ? "from-amber-500/20 via-orange-500/10 to-transparent"
+    : state.trumpSuit === "hearts" || state.trumpSuit === "diamonds"
+      ? "from-rose-500/18 via-fuchsia-500/8 to-transparent"
+      : "from-sky-500/18 via-violet-500/8 to-transparent";
+  const handDockClass = isMyTurn
+    ? "border-primary/40 shadow-[0_0_30px_rgba(59,130,246,0.18)]"
+    : "border-white/10 shadow-[0_16px_36px_rgba(15,23,42,0.28)]";
   // ─── Project labels via i18n ────────────────────────────────────
   const projectLabels: Record<string, string> = useMemo(() => ({
     sra: t('baloot.projectSra'),
@@ -157,35 +173,32 @@ export function BalootBoard({
   // ─── Get opponent ID for a given screen position ───────────────
   const getOppId = useCallback((position: "left" | "top" | "right"): string => {
     const order = state.playerOrder || [];
-    const myIdx = order.indexOf(playerId);
-    if (myIdx === -1) return "";
+    if (viewerIndex === -1) return "";
     const offsets: Record<string, number> = { left: 1, top: 2, right: 3 };
-    return order[(myIdx + offsets[position]) % 4] || "";
-  }, [state.playerOrder, playerId]);
+    return order[(viewerIndex + offsets[position]) % 4] || "";
+  }, [state.playerOrder, viewerIndex]);
 
   // ─── Player name helper ─────────────────────────────────────────
   const getPlayerName = useCallback((position: "left" | "top" | "right"): string => {
     const order = state.playerOrder || [];
-    const myIdx = order.indexOf(playerId);
-    if (myIdx === -1) return "";
+    if (viewerIndex === -1) return "";
     const offsets: Record<string, number> = { left: 1, top: 2, right: 3 };
-    const oppIdx = (myIdx + offsets[position]) % 4;
+    const oppIdx = (viewerIndex + offsets[position]) % 4;
     const oppId = order[oppIdx];
     if (!oppId) return "";
     if (playerNames[oppId]) return playerNames[oppId];
     if (oppId.startsWith("bot-")) return isAr ? "بوت" : "Bot";
     return `P${oppId.slice(-3)}`;
-  }, [state.playerOrder, playerId, playerNames, isAr]);
+  }, [state.playerOrder, viewerIndex, playerNames, isAr]);
 
   const getPlayerTeamLabel = useCallback((position: "left" | "top" | "right"): string => {
     const order = state.playerOrder || [];
-    const myIdx = order.indexOf(playerId);
-    if (myIdx === -1) return "";
+    if (viewerIndex === -1) return "";
     const offsets: Record<string, number> = { left: 1, top: 2, right: 3 };
-    const oppIdx = (myIdx + offsets[position]) % 4;
-    const isPartner = oppIdx % 2 === myIdx % 2;
+    const oppIdx = (viewerIndex + offsets[position]) % 4;
+    const isPartner = oppIdx % 2 === viewerIndex % 2;
     return isPartner ? t('baloot.partner') : "";
-  }, [state.playerOrder, playerId, t]);
+  }, [state.playerOrder, viewerIndex, t]);
 
   const getOpponentCardCount = (position: "top" | "left" | "right"): number => {
     if (state.otherHandCounts) {
@@ -276,7 +289,7 @@ export function BalootBoard({
       if (state.lastRoundKaboot) {
         setShowKabootOverlay(true);
         setTimeout(() => setShowKabootOverlay(false), 3000);
-      }      const timer = setTimeout(() => setShowRoundSummary(false), 12000);
+      } const timer = setTimeout(() => setShowRoundSummary(false), 12000);
       prevRoundRef.current = currentRound;
       return () => clearTimeout(timer);
     }
@@ -429,22 +442,21 @@ export function BalootBoard({
         onClick={() => handleCardClick(card, index)}
         onDoubleClick={() => isPlayable && handleCardDoubleClick(card)}
         className={`
-          relative w-12 h-[4.5rem] sm:w-14 sm:h-20 bg-white rounded-lg border-2 shadow-md
-          flex flex-col items-center justify-between p-1
-          transition-all duration-200 animate-card-deal
-          ${isPlayable ? "cursor-pointer hover:-translate-y-2 focus:outline-none focus:ring-2 focus:ring-primary" : "opacity-70"}
-          ${isSelected ? "ring-2 ring-primary -translate-y-4" : ""}
+          relative flex h-[4.35rem] w-11 flex-col items-center justify-between overflow-hidden rounded-xl border bg-gradient-to-b from-white via-slate-50 to-slate-200 p-1 text-slate-900 shadow-[0_12px_28px_rgba(15,23,42,0.35)]
+          transition-all duration-200 animate-card-deal sm:h-[4.7rem] sm:w-12 md:h-20 md:w-14
+          ${isPlayable ? "cursor-pointer hover:-translate-y-2 focus:outline-none focus:ring-2 focus:ring-primary" : "opacity-75"}
+          ${isSelected ? "ring-2 ring-primary -translate-y-4 shadow-[0_18px_36px_rgba(59,130,246,0.28)]" : ""}
           ${isKeyboardSelected && !isSelected ? "ring-2 ring-blue-400 -translate-y-2" : ""}
-          ${isTrump ? "ring-1 ring-yellow-500" : ""}
+          ${isTrump ? "border-yellow-400 shadow-[0_0_0_1px_rgba(250,204,21,0.45),0_16px_30px_rgba(15,23,42,0.4)]" : "border-slate-200"}
           ${!isPlayable && isMyTurn && gamePhase === "playing" ? "cursor-not-allowed" : ""}
           ${shakeCardKey === `${card.suit}-${card.rank}` ? "animate-shake" : ""}
         `}
-        style={{ marginLeft: index > 0 ? `${cardOverlap}px` : "0", animationDelay: `${index * 50}ms` }}
+        style={{ marginLeft: index > 0 ? `${cardOverlap}px` : "0", zIndex: index + 1, animationDelay: `${index * 50}ms` }}
       >
-        <div className={`text-xs font-bold ${suit.color}`}>{card.rank}</div>
-        <div className={`text-2xl ${suit.color}`}>{suit.symbol}</div>
-        <div className={`text-xs font-bold ${suit.color} rotate-180`}>{card.rank}</div>
-        {isTrump && <Crown className="absolute -top-1 -end-1 h-3 w-3 text-yellow-500" />}
+        <div className={`rounded-full bg-white/90 px-1 text-[10px] font-bold shadow-sm sm:text-xs ${suit.color}`}>{card.rank}</div>
+        <div className={`text-[1.15rem] sm:text-[1.35rem] md:text-2xl ${suit.color}`}>{suit.symbol}</div>
+        <div className={`rounded-full bg-white/80 px-1 text-[10px] font-bold rotate-180 shadow-sm sm:text-xs ${suit.color}`}>{card.rank}</div>
+        {isTrump && <Crown className="absolute -top-1 -end-1 h-3.5 w-3.5 text-yellow-500" />}
       </div>
     );
   };
@@ -453,57 +465,57 @@ export function BalootBoard({
     const isVertical = position === "left" || position === "right";
     const name = getPlayerName(position);
     const teamLabel = getPlayerTeamLabel(position);
-    // Get opponent ID for turn/dealer/bot checks
     const oppId = getOppId(position);
     const order = state.playerOrder || [];
-    const myIdx = order.indexOf(playerId);
     const oppIdx = order.indexOf(oppId);
     const isTurn = (state.currentTurn || state.currentPlayer) === oppId;
     const isDealer = state.dealerId === oppId;
     const isBot = oppId.startsWith("bot-");
-    const isPartner = myIdx >= 0 && oppIdx >= 0 && oppIdx % 2 === myIdx % 2;
+    const isPartner = viewerIndex >= 0 && oppIdx >= 0 && oppIdx % 2 === viewerIndex % 2;
 
     return (
       <div
-        className={`flex flex-col items-center gap-1 ${isTurn ? "scale-110" : ""} transition-all duration-300`}
+        className={`rounded-2xl border px-2 py-2 backdrop-blur-sm transition-all duration-300 ${isTurn ? "scale-[1.03] border-amber-400/50 bg-amber-500/10 shadow-[0_0_22px_rgba(250,204,21,0.18)]" : "border-white/10 bg-slate-950/30"}`}
         data-testid={`baloot-opponent-${position}`}
         aria-label={`${name} - ${cardCount} ${t('baloot.cards')}`}
       >
-        <div className={`flex items-center gap-1.5 text-xs ${isTurn ? "animate-pulse" : ""}`}>
+        <div className={`flex max-w-[148px] items-center gap-1.5 text-xs ${isTurn ? "animate-pulse" : ""}`}>
           <div
-            className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white
-              ${isPartner ? "bg-blue-600 ring-2 ring-blue-400" : "bg-red-600 ring-2 ring-red-400"}
-              ${isTurn ? "ring-yellow-400 ring-3 shadow-[0_0_12px_rgba(250,204,21,0.6)]" : ""}
+            className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-md
+              ${isPartner ? "bg-blue-600 ring-2 ring-blue-400/70" : "bg-red-600 ring-2 ring-red-400/70"}
+              ${isTurn ? "ring-yellow-300 shadow-[0_0_14px_rgba(250,204,21,0.5)]" : ""}
             `}
           >
-            {name[0]?.toUpperCase()}
+            {name[0]?.toUpperCase() || "P"}
           </div>
-          <span className={`font-medium truncate max-w-[60px]
-            ${isPartner ? "text-blue-300" : "text-red-300"}
-            ${isTurn ? "text-yellow-400 font-bold" : ""}
-          `}>{name}</span>
+          <span
+            className={`max-w-[88px] truncate font-medium sm:max-w-[120px]
+              ${isPartner ? "text-blue-200" : "text-red-200"}
+              ${isTurn ? "font-bold text-yellow-300" : ""}
+            `}
+          >
+            {name}
+          </span>
           {isDealer && (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-yellow-900/50 border-yellow-600 text-yellow-300">
+            <Badge variant="outline" className="h-4 border-yellow-600 bg-yellow-900/50 px-1 py-0 text-[9px] text-yellow-300">
               D
             </Badge>
           )}
           {isBot && (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-gray-900/50 border-gray-500 text-gray-300">
+            <Badge variant="outline" className="h-4 border-gray-500 bg-gray-900/50 px-1 py-0 text-[9px] text-gray-300">
               🤖
             </Badge>
           )}
-          {teamLabel && <Badge variant="secondary" className="text-[10px] px-1 py-0">{teamLabel}</Badge>}
+          {teamLabel && <Badge variant="secondary" className="px-1 py-0 text-[10px]">{teamLabel}</Badge>}
         </div>
-        <div className={`flex ${isVertical ? "flex-col" : ""} items-center`}>
+        <div className={`mt-1 flex ${isVertical ? "flex-col" : "flex-row"} items-center justify-center`}>
           {Array.from({ length: Math.min(cardCount, 8) }).map((_, i) => (
             <div
               key={i}
-              className={`
-                w-10 h-14 bg-gradient-to-br from-green-900 to-green-700
-                rounded-lg border-2 border-green-800 shadow-md
-                ${isVertical ? "mt-[-24px]" : "ml-[-24px]"}
-              `}
-              style={i === 0 ? { marginLeft: 0, marginTop: 0 } : {}}
+              className="h-11 w-8 rounded-md border border-emerald-700/80 bg-gradient-to-br from-emerald-950 via-green-900 to-lime-700 shadow-[0_8px_18px_rgba(0,0,0,0.28)] sm:h-12 sm:w-9"
+              style={isVertical
+                ? { marginTop: i === 0 ? 0 : "-12px" }
+                : { marginLeft: i === 0 ? 0 : "-10px" }}
             />
           ))}
         </div>
@@ -512,24 +524,25 @@ export function BalootBoard({
   };
 
   const renderTrick = () => {
-    // Map each card to the correct screen position relative to the current player
     const order = state.playerOrder || [];
-    const myIdx = order.indexOf(playerId);
+    const anchorIndex = viewerIndex >= 0 ? viewerIndex : 0;
 
     return (
-    <div className={`absolute inset-0 flex items-center justify-center pointer-events-none ${trickSweep ? "animate-trick-sweep" : ""}`}>
-      <div className="relative w-28 h-28">
+      <div className={`relative mx-auto flex h-40 w-full max-w-[320px] items-center justify-center rounded-[24px] border border-white/10 bg-black/20 px-3 py-2 shadow-inner backdrop-blur-sm sm:h-48 sm:max-w-[420px] ${trickSweep ? "animate-trick-sweep" : ""}`}>
+        <div className="pointer-events-none absolute inset-0 rounded-[24px] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.08),transparent_70%)]" />
+        {state.currentTrick.length === 0 && (
+          <div className="pointer-events-none text-3xl text-white/20">♠</div>
+        )}
         {state.currentTrick.map((play, i) => {
-          // Position cards based on the player's seat relative to viewer
           const allPositions: React.CSSProperties[] = [
-            { bottom: 0, left: "50%", transform: "translateX(-50%)" },   // bottom (me)
-            { left: 0, top: "50%", transform: "translateY(-50%)" },      // left
-            { top: 0, left: "50%", transform: "translateX(-50%)" },      // top
-            { right: 0, top: "50%", transform: "translateY(-50%)" },     // right
+            { bottom: "8%", left: "50%", transform: "translateX(-50%)" },
+            { left: "6%", top: "50%", transform: "translateY(-50%)" },
+            { top: "8%", left: "50%", transform: "translateX(-50%)" },
+            { right: "6%", top: "50%", transform: "translateY(-50%)" },
           ];
           const playerIdx = order.indexOf(play.playerId);
-          const relativePos = myIdx >= 0 && playerIdx >= 0
-            ? (playerIdx - myIdx + 4) % 4
+          const relativePos = playerIdx >= 0
+            ? (playerIdx - anchorIndex + 4) % 4
             : i % 4;
           const pos = allPositions[relativePos];
           const suit = SUITS[play.card.suit];
@@ -537,23 +550,22 @@ export function BalootBoard({
           return (
             <div
               key={i}
-              className="absolute w-12 h-16 bg-white rounded-lg border shadow-lg flex flex-col items-center justify-center animate-card-play"
+              className="absolute flex h-16 w-11 flex-col items-center justify-center rounded-lg border bg-white shadow-lg animate-card-play sm:h-[4.5rem] sm:w-12"
               style={{ ...pos, animationDelay: `${i * 80}ms` }}
               aria-label={`${play.card.rank} ${t('baloot.' + play.card.suit)}`}
             >
-              <span className={`text-xs sm:text-sm font-bold ${suit.color}`}>{play.card.rank}</span>
-              <span className={`text-xl ${suit.color}`}>{suit.symbol}</span>
+              <span className={`text-xs font-bold sm:text-sm ${suit.color}`}>{play.card.rank}</span>
+              <span className={`text-lg sm:text-xl ${suit.color}`}>{suit.symbol}</span>
             </div>
           );
         })}
       </div>
-    </div>
-  );
+    );
   };
 
   const renderChoosingPhase = () => (
-    <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-10" role="dialog" aria-label={t('baloot.chooseGameType')}>
-      <Card className="w-full max-w-96 px-4">
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/55 p-3 backdrop-blur-sm" role="dialog" aria-label={t('baloot.chooseGameType')}>
+      <Card className="max-h-[85%] w-full max-w-md overflow-y-auto border-white/10 bg-slate-950/95 px-2 text-white shadow-[0_24px_80px_rgba(15,23,42,0.45)] sm:px-4">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5" />
@@ -584,7 +596,7 @@ export function BalootBoard({
               )}
               <Button
                 variant="outline"
-                className="w-full h-16 text-lg"
+                className="h-16 w-full border-amber-400/50 bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-orange-500/15 text-lg text-white hover:bg-amber-500/20"
                 onClick={() => onChooseTrump("sun")}
                 data-testid="button-choose-sun"
                 aria-label={`${t('baloot.sunNoTrump')} - S`}
@@ -603,7 +615,7 @@ export function BalootBoard({
                     <Button
                       key={suit}
                       variant="outline"
-                      className="h-12"
+                      className="h-12 border-white/10 bg-white/5 text-white hover:bg-white/10"
                       onClick={() => onChooseTrump("hokm", suit)}
                       data-testid={`button-choose-hokm-${suit}`}
                       aria-label={`${t('baloot.hokm')} ${t('baloot.' + suit)} - ${idx + 1}`}
@@ -619,7 +631,7 @@ export function BalootBoard({
               {passRound < 2 && (
                 <Button
                   variant="secondary"
-                  className="w-full"
+                  className="w-full bg-white/10 text-white hover:bg-white/15"
                   onClick={onPass}
                   data-testid="button-baloot-pass"
                   aria-label={`${t('baloot.pass')} - P`}
@@ -630,8 +642,8 @@ export function BalootBoard({
               )}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-8">
-              {t('baloot.waitingForPlayerName')} <span className="font-bold text-foreground">{chooserName}</span> {t('baloot.toChoose')}
+            <p className="py-8 text-center text-slate-300">
+              {t('baloot.waitingForPlayerName')} <span className="font-bold text-white">{chooserName}</span> {t('baloot.toChoose')}
             </p>
           )}
         </CardContent>
@@ -640,156 +652,188 @@ export function BalootBoard({
   );
 
   return (
-    <div className="relative w-full h-[min(550px,calc(100vh-120px))] bg-game-felt rounded-xl p-4" style={{ touchAction: "manipulation" }} data-testid="baloot-board" role="region" aria-label={t('baloot.board')}>
+    <div
+      className="relative w-full min-h-[clamp(520px,68vh,760px)] overflow-hidden rounded-[28px] border border-white/10 bg-game-felt p-3 shadow-[0_26px_80px_rgba(2,6,23,0.4)] sm:p-4 md:p-5"
+      style={{ touchAction: "manipulation" }}
+      data-testid="baloot-board"
+      role="region"
+      aria-label={t('baloot.board')}
+    >
+      <div className="pointer-events-none absolute inset-0">
+        <div className={`absolute inset-0 bg-gradient-to-br ${boardAuraClass}`} />
+        <div className="absolute inset-3 rounded-[24px] border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" />
+        <div className="absolute -top-12 -start-8 h-32 w-32 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -bottom-14 end-0 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl" />
+        <div className="absolute start-4 top-10 text-6xl text-white/5">♠</div>
+        <div className="absolute end-6 bottom-16 text-6xl text-white/5">♥</div>
+      </div>
+
       {/* ── Turn Timer Bar + Seconds Display ── */}
       {((isMyTurn && gamePhase === "playing") || (isMyChoice && gamePhase === "choosing")) && (
         <div className="absolute top-0 start-0 end-0 z-30">
-          <div className={`h-1.5 bg-black/20 rounded-t-xl overflow-hidden ${timerUrgent ? "animate-pulse" : ""}`} aria-label={`${t('baloot.timeRemaining')}: ${Math.floor(turnTimeLeft / 60)}:${String(turnTimeLeft % 60).padStart(2, "0")}`}>
+          <div className={`h-1.5 overflow-hidden rounded-t-2xl bg-black/20 ${timerUrgent ? "animate-pulse" : ""}`} aria-label={`${t('baloot.timeRemaining')}: ${Math.floor(turnTimeLeft / 60)}:${String(turnTimeLeft % 60).padStart(2, "0")}`}>
             <div
               className={`h-full ${timerColor} transition-all duration-1000 ease-linear`}
               style={{ width: `${timerPercent}%` }}
             />
           </div>
           <div className="absolute top-1.5 left-1/2 -translate-x-1/2">
-            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-black/50 ${timerUrgent ? 'text-red-400' : 'text-white/80'}`}>
+            <span className={`rounded bg-black/50 px-1.5 py-0.5 text-[10px] font-mono font-bold ${timerUrgent ? 'text-red-400' : 'text-white/80'}`}>
               {turnTimeLeft}s
             </span>
           </div>
         </div>
       )}
 
-      {/* Game info header */}
-      <div className="absolute top-2 start-2 end-2 flex justify-between items-center z-20">
-        <div className="flex gap-2">
-          <Badge variant="outline" className="bg-background/80">
-            {t('baloot.us')}: {state.roundPoints[usKey as keyof typeof state.roundPoints]}{state.gameType === 'sun' ? ' ×2' : ''}
-          </Badge>
-          <Badge variant="outline" className="bg-background/80">
-            {t('baloot.them')}: {state.roundPoints[themKey as keyof typeof state.roundPoints]}{state.gameType === 'sun' ? ' ×2' : ''}
-          </Badge>
-          <Badge variant="outline" className="bg-background/80 text-xs">
-            {t('baloot.tricksWonCount')}: {state.tricksWon[usKey as keyof typeof state.tricksWon]}-{state.tricksWon[themKey as keyof typeof state.tricksWon]}
-          </Badge>
-          {gamePhase === 'playing' && (
-            <Badge variant="outline" className="bg-background/80 text-xs font-bold border-yellow-500/50">
-              ⚔ {(state.tricksWon?.team0 || 0) + (state.tricksWon?.team1 || 0)}/8
-            </Badge>
-          )}
-        </div>
+      <div className="relative z-10 flex h-full flex-col gap-3 pt-3">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/35 p-3 shadow-[0_20px_50px_rgba(15,23,42,0.35)] backdrop-blur-md sm:p-4">
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge variant="outline" className="bg-background/80">
+                  {t('baloot.us')}: {state.roundPoints[usKey as keyof typeof state.roundPoints]}{state.gameType === 'sun' ? ' ×2' : ''}
+                </Badge>
+                <Badge variant="outline" className="bg-background/80">
+                  {t('baloot.them')}: {state.roundPoints[themKey as keyof typeof state.roundPoints]}{state.gameType === 'sun' ? ' ×2' : ''}
+                </Badge>
+                <Badge variant="outline" className="bg-background/80 text-xs">
+                  {t('baloot.tricksWonCount')}: {state.tricksWon[usKey as keyof typeof state.tricksWon]}-{state.tricksWon[themKey as keyof typeof state.tricksWon]}
+                </Badge>
+                {gamePhase === 'playing' && (
+                  <Badge variant="outline" className="border-yellow-500/50 bg-background/80 text-xs font-bold">
+                    ⚔ {totalTricksPlayed}/8
+                  </Badge>
+                )}
+              </div>
 
-        <div className="flex items-center gap-2">
-          {state.gameType && (
-            <Badge className={`bg-background/80 ${state.gameType === "sun" ? "text-yellow-500" : ""}`}>
-              {state.gameType === "sun" ? (
-                <><Zap className="h-3 w-3 me-1" />{t('baloot.sun')}</>
-              ) : (
-                <>
-                  <span className={SUITS[state.trumpSuit as keyof typeof SUITS]?.color}>
-                    {SUITS[state.trumpSuit as keyof typeof SUITS]?.symbol}
-                  </span>
-                  <span className="ms-1">{t('baloot.hokm')}</span>
-                </>
-              )}
-            </Badge>
-          )}
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                {state.gameType && (
+                  <Badge className={`bg-background/80 ${state.gameType === "sun" ? "text-yellow-500" : ""}`}>
+                    {state.gameType === "sun" ? (
+                      <><Zap className="me-1 h-3 w-3" />{t('baloot.sun')}</>
+                    ) : (
+                      <>
+                        <span className={SUITS[state.trumpSuit as keyof typeof SUITS]?.color}>
+                          {SUITS[state.trumpSuit as keyof typeof SUITS]?.symbol}
+                        </span>
+                        <span className="ms-1">{t('baloot.hokm')}</span>
+                      </>
+                    )}
+                  </Badge>
+                )}
 
-          {state.roundNumber && (
-            <Badge variant="outline" className="bg-background/80 text-xs">
-              {t('baloot.round')} {state.roundNumber}
-            </Badge>
-          )}
-        </div>
-      </div>
+                {state.roundNumber && (
+                  <Badge variant="outline" className="bg-background/80 text-xs">
+                    {t('baloot.round')} {state.roundNumber}
+                  </Badge>
+                )}
+              </div>
+            </div>
 
-      {/* Total scores */}
-      <div className="absolute top-10 start-2 end-2 flex justify-center gap-4 z-20">
-        <Badge className={`bg-blue-600 ${usTotal >= target * 0.8 ? 'ring-1 ring-blue-300' : ''}`}>{t('baloot.totalUs')}: {usTotal}/{target}</Badge>
-        <Badge className={`bg-red-600 ${themTotal >= target * 0.8 ? 'ring-1 ring-red-300' : ''}`}>{t('baloot.totalThem')}: {themTotal}/{target}</Badge>
-        {/* Last trick peek button */}
-        {state.lastCompletedTrick && state.lastCompletedTrick.length > 0 && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 bg-background/60"
-            onClick={() => setShowLastTrick(prev => !prev)}
-            aria-label={t('baloot.showLastTrick')}
-            data-testid="button-last-trick"
-          >
-            <Eye className="h-3.5 w-3.5" />
-          </Button>
-        )}
-      </div>
-
-      {/* Projects display + chooser indicator */}
-      {state.projects.length > 0 && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 flex gap-1 z-20 flex-wrap justify-center">
-          {state.projects.map((p, i) => {
-            const isUs = p.playerId === playerId || p.playerId === state.partner;
-            return (
-              <Badge key={i} variant="secondary" className={`text-xs animate-in zoom-in ${isUs ? 'border-blue-500/60 text-blue-300' : 'border-red-500/60 text-red-300'}`}>
-                {projectLabels[p.project] || p.project}
+            <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+              <Badge className={`bg-blue-600 ${usTotal >= target * 0.8 ? 'ring-1 ring-blue-300' : ''}`}>
+                {t('baloot.totalUs')}: {usTotal}/{target}
               </Badge>
-            );
-          })}
-        </div>
-      )}
-      {gamePhase === "playing" && state.choosingPlayer && (
-        <div className="absolute top-16 end-2 z-20">
-          <Badge variant="outline" className="text-[10px] bg-purple-900/50 border-purple-500 text-purple-300">
-            {t('baloot.chooser')}: {playerNames[state.choosingPlayer] || state.choosingPlayer.slice(-4)}
-          </Badge>
-        </div>
-      )}
-
-      {/* Opponent hands */}
-      <div className="absolute top-20 left-1/2 -translate-x-1/2">
-        {renderOpponentHand("top", getOpponentCardCount("top"))}
-      </div>
-      <div className="absolute start-2 top-1/2 -translate-y-1/2">
-        {renderOpponentHand("left", getOpponentCardCount("left"))}
-      </div>
-      <div className="absolute end-2 top-1/2 -translate-y-1/2">
-        {renderOpponentHand("right", getOpponentCardCount("right"))}
-      </div>
-
-      {/* Trick won indicator */}
-      {trickWonBy && (() => {
-        const order = state.playerOrder || [];
-        const myIdx = order.indexOf(playerId);
-        const wonIdx = order.indexOf(trickWonBy);
-        const isPartnerWon = myIdx >= 0 && wonIdx >= 0 && wonIdx % 2 === myIdx % 2;
-        const isSelfWon = trickWonBy === playerId;
-        const teamLabel = isSelfWon ? '' : isPartnerWon ? ` (${t('baloot.partner')})` : '';
-        return (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-25 pointer-events-none">
-            <Badge className={`${isPartnerWon || isSelfWon ? 'bg-green-600' : 'bg-red-600'} text-white text-sm animate-in zoom-in fade-in`}>
-              ✓ {t('baloot.trickWon')}{trickWonPoints > 0 ? ` +${trickWonPoints}` : ''} — {playerNames[trickWonBy] || trickWonBy.slice(-4)}{teamLabel}
-            </Badge>
+              <Badge className={`bg-red-600 ${themTotal >= target * 0.8 ? 'ring-1 ring-red-300' : ''}`}>
+                {t('baloot.totalThem')}: {themTotal}/{target}
+              </Badge>
+              {state.lastCompletedTrick && state.lastCompletedTrick.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 bg-background/60"
+                  onClick={() => setShowLastTrick(prev => !prev)}
+                  aria-label={t('baloot.showLastTrick')}
+                  data-testid="button-last-trick"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {gamePhase === "playing" && state.choosingPlayer && (
+                <Badge variant="outline" className="border-purple-500 bg-purple-900/50 text-[10px] text-purple-300">
+                  {t('baloot.chooser')}: {playerNames[state.choosingPlayer] || state.choosingPlayer.slice(-4)}
+                </Badge>
+              )}
+              {state.projects.map((p, i) => {
+                const isUs = p.playerId === viewerAnchorId || p.playerId === state.partner;
+                return (
+                  <Badge key={i} variant="secondary" className={`text-xs animate-in zoom-in ${isUs ? 'border-blue-500/60 text-blue-300' : 'border-red-500/60 text-red-300'}`}>
+                    {projectLabels[p.project] || p.project}
+                  </Badge>
+                );
+              })}
+            </div>
           </div>
-        );
-      })()}
-
-      {/* Current trick */}
-      {gamePhase === "playing" && renderTrick()}
-
-      {/* My hand */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex" data-testid="baloot-my-hand" role="group" aria-label={t('baloot.yourHand')}>
-        {myHand.map((card, i) => (
-          <div key={`${state.roundNumber ?? 1}-${card.suit}-${card.rank}`}>
-            {renderCard(card, isMyTurn && gamePhase === "playing", i)}
-          </div>
-        ))}
-      </div>
-
-      {/* Play button */}
-      {selectedCard && (
-        <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-20">
-          <Button onClick={handlePlayCard} data-testid="button-baloot-play" aria-label={`${t('baloot.playCard')} - Enter`}>
-            {t('baloot.play')}
-            <kbd className="ms-2 text-xs border px-1 rounded">↵</kbd>
-          </Button>
         </div>
-      )}
+
+        <div className="grid flex-1 grid-cols-[minmax(56px,0.45fr)_minmax(0,1fr)_minmax(56px,0.45fr)] grid-rows-[auto_minmax(180px,1fr)_auto] items-center gap-2 sm:gap-4">
+          <div className="col-start-2 row-start-1 flex justify-center px-4">
+            {renderOpponentHand("top", getOpponentCardCount("top"))}
+          </div>
+
+          <div className="col-start-1 row-start-2 flex items-center justify-start">
+            {renderOpponentHand("left", getOpponentCardCount("left"))}
+          </div>
+
+          <div className="col-start-2 row-start-2 flex items-center justify-center">
+            {gamePhase === "playing" ? renderTrick() : (
+              <div className="mx-auto h-32 w-full max-w-[320px] rounded-[24px] border border-white/10 bg-black/20 shadow-inner backdrop-blur-sm sm:h-40 sm:max-w-[420px]" />
+            )}
+          </div>
+
+          <div className="col-start-3 row-start-2 flex items-center justify-end">
+            {renderOpponentHand("right", getOpponentCardCount("right"))}
+          </div>
+
+          <div className="col-span-3 row-start-3 flex flex-col items-center gap-2 pt-1">
+            {selectedCard && (
+              <Button onClick={handlePlayCard} data-testid="button-baloot-play" aria-label={`${t('baloot.playCard')} - Enter`}>
+                {t('baloot.play')}
+                <kbd className="ms-2 rounded border px-1 text-xs">↵</kbd>
+              </Button>
+            )}
+
+            {isMyTurn && gamePhase === "playing" && !selectedCard && (
+              <Badge className="animate-pulse bg-primary flex items-center gap-1">
+                <Timer className="h-3 w-3" />
+                {t('baloot.yourTurn')}!
+              </Badge>
+            )}
+
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {state.dealerId === playerId && (
+                <Badge variant="outline" className="border-yellow-600 bg-yellow-900/50 text-[10px] text-yellow-300">
+                  D — {t('baloot.dealer')}
+                </Badge>
+              )}
+
+              {trickWonBy && (() => {
+                const order = state.playerOrder || [];
+                const anchorIdx = viewerIndex;
+                const wonIdx = order.indexOf(trickWonBy);
+                const isPartnerWon = anchorIdx >= 0 && wonIdx >= 0 && wonIdx % 2 === anchorIdx % 2;
+                const isSelfWon = trickWonBy === viewerAnchorId;
+                const teamLabel = isSelfWon ? '' : isPartnerWon ? ` (${t('baloot.partner')})` : '';
+                return (
+                  <Badge className={`${isPartnerWon || isSelfWon ? 'bg-green-600' : 'bg-red-600'} text-white text-sm animate-in zoom-in fade-in`}>
+                    ✓ {t('baloot.trickWon')}{trickWonPoints > 0 ? ` +${trickWonPoints}` : ''} — {playerNames[trickWonBy] || trickWonBy.slice(-4)}{teamLabel}
+                  </Badge>
+                );
+              })()}
+            </div>
+
+            <div className="w-full overflow-x-auto pb-2" data-testid="baloot-my-hand" role="group" aria-label={t('baloot.yourHand')}>
+              <div className={`mx-auto flex w-max items-end rounded-2xl border bg-slate-950/35 px-3 py-3 backdrop-blur-md sm:px-5 ${handDockClass}`}>
+                {myHand.map((card, i) => (
+                  <div key={`${state.roundNumber ?? 1}-${card.suit}-${card.rank}`}>
+                    {renderCard(card, isMyTurn && gamePhase === "playing", i)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Choosing phase overlay */}
       {gamePhase === "choosing" && renderChoosingPhase()}
@@ -855,10 +899,10 @@ export function BalootBoard({
                 {state.lastRoundGameType === "sun"
                   ? `☀️ ${t('baloot.sun')} (×2)`
                   : <>{state.lastChoice?.trumpSuit && SUITS[state.lastChoice.trumpSuit as keyof typeof SUITS] ? (
-                      <span className={SUITS[state.lastChoice.trumpSuit as keyof typeof SUITS].color}>
-                        {SUITS[state.lastChoice.trumpSuit as keyof typeof SUITS].symbol}{' '}
-                      </span>
-                    ) : null}{t('baloot.hokm')}</>}
+                    <span className={SUITS[state.lastChoice.trumpSuit as keyof typeof SUITS].color}>
+                      {SUITS[state.lastChoice.trumpSuit as keyof typeof SUITS].symbol}{' '}
+                    </span>
+                  ) : null}{t('baloot.hokm')}</>}
                 {state.lastChoice && (
                   <span className="ms-1">— {playerNames[state.lastChoice.playerId] || state.lastChoice.playerId.slice(-4)}</span>
                 )}
@@ -906,25 +950,6 @@ export function BalootBoard({
         </div>
       )}
 
-      {/* Turn indicator */}
-      {isMyTurn && gamePhase === "playing" && !selectedCard && (
-        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-20">
-          <Badge className="animate-pulse bg-primary flex items-center gap-1">
-            <Timer className="h-3 w-3" />
-            {t('baloot.yourTurn')}!
-          </Badge>
-        </div>
-      )}
-
-      {/* ── Self-dealer indicator ── */}
-      {state.dealerId === playerId && (
-        <div className="absolute bottom-24 start-4 z-20">
-          <Badge variant="outline" className="bg-yellow-900/50 border-yellow-600 text-yellow-300 text-[10px]">
-            D — {t('baloot.dealer')}
-          </Badge>
-        </div>
-      )}
-
       {/* ── Confetti ── */}
       {showConfetti && (
         <div className="absolute inset-0 pointer-events-none z-40 overflow-hidden" aria-hidden="true">
@@ -946,7 +971,7 @@ export function BalootBoard({
 
       {/* ── Game Type Chosen Notification ── */}
       {showChoiceNotification && state.lastChoice && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 pointer-events-none animate-in fade-in zoom-in duration-300">
+        <div className="absolute top-24 left-1/2 z-30 -translate-x-1/2 pointer-events-none animate-in fade-in zoom-in duration-300 sm:top-28">
           <Badge className="bg-purple-600 text-white text-sm px-4 py-2 shadow-lg">
             {playerNames[state.lastChoice.playerId] || state.lastChoice.playerId.slice(-4)}
             {' '}

@@ -249,6 +249,12 @@ export default function ChallengeGamePage() {
   const [dominoResyncing, setDominoResyncing] = useState(false);
   const [dominoTimeline, setDominoTimeline] = useState<DominoTimelineEntry[]>([]);
   const [dominoResultMeta, setDominoResultMeta] = useState<DominoGameResultMeta | null>(null);
+  const [autoPlayNotice, setAutoPlayNotice] = useState<{
+    mode: "grace" | "autoplay";
+    username?: string;
+    seconds?: number;
+    startedAtMs?: number;
+  } | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const authReadyRef = useRef(false);
@@ -997,7 +1003,38 @@ export default function ChallengeGamePage() {
           }, 1500);
         }
         break;
+      case "player_disconnected_grace": {
+        const payload = (data.payload || {}) as Record<string, unknown>;
+        const graceMs = Number(payload.graceMs);
+        setAutoPlayNotice({
+          mode: "grace",
+          username: typeof payload.username === "string" ? payload.username : undefined,
+          seconds: Number.isFinite(graceMs) && graceMs > 0 ? Math.max(1, Math.round(graceMs / 1000)) : 60,
+          startedAtMs: Date.now(),
+        });
+        break;
+      }
+      case "player_absent_auto": {
+        const payload = (data.payload || {}) as Record<string, unknown>;
+        const username = typeof payload.username === "string" ? payload.username : undefined;
+        const turnTimeLimitMs = Number(payload.turnTimeLimitMs);
+        const seconds = Number.isFinite(turnTimeLimitMs) && turnTimeLimitMs > 0 ? Math.max(1, Math.round(turnTimeLimitMs / 1000)) : 30;
+        setAutoPlayNotice({
+          mode: "autoplay",
+          username,
+          seconds,
+          startedAtMs: Date.now(),
+        });
+        toast({
+          title: language === "ar" ? "تم تفعيل اللعب التلقائي" : "Auto Play enabled",
+          description: language === "ar"
+            ? `${username || "أحد اللاعبين"} أصبح غائبًا، وسيكمل النظام اللعب تلقائيًا كل ${seconds} ثانية حتى نهاية التحدي.`
+            : `${username || "A player"} is absent, so the system will auto-play every ${seconds} seconds until the challenge ends.`,
+        });
+        break;
+      }
       case "game_ended":
+        setAutoPlayNotice(null);
         if (!shouldAcceptSeqOnly(data.seq)) {
           break;
         }
@@ -1094,6 +1131,7 @@ export default function ChallengeGamePage() {
     requestRoleAssignment,
     getDominoMoveErrorText,
     appendDominoTimeline,
+    language,
   ]);
 
   const sendMove = useCallback((move: object) => {
@@ -1313,6 +1351,10 @@ export default function ChallengeGamePage() {
     }));
   }, [challengeId, toast, language]);
 
+  const clearGiftAnimation = useCallback(() => {
+    setActiveGiftAnimation(null);
+  }, []);
+
   const handleResign = useCallback(() => {
     if (!canPlayActions) {
       showSpectatorActionBlocked();
@@ -1356,6 +1398,38 @@ export default function ChallengeGamePage() {
   const rawPlayer2Time = gameSession?.player2TimeRemaining ?? fallbackTimeLimit;
   const player1TimeRemaining = Math.max(0, player1TurnActive ? rawPlayer1Time - elapsedSinceSyncSec : rawPlayer1Time);
   const player2TimeRemaining = Math.max(0, player2TurnActive ? rawPlayer2Time - elapsedSinceSyncSec : rawPlayer2Time);
+  const autoPlayActorName = autoPlayNotice?.username || (language === "ar" ? "أحد اللاعبين" : "A player");
+  const autoPlayBaseSeconds = Math.max(1, autoPlayNotice?.seconds ?? (autoPlayNotice?.mode === "grace" ? 60 : 30));
+  const autoPlayElapsedSeconds = autoPlayNotice
+    ? Math.max(0, Math.floor((Date.now() - (autoPlayNotice.startedAtMs ?? Date.now())) / 1000))
+    : 0;
+  const autoPlayLiveSeconds = autoPlayNotice
+    ? (autoPlayNotice.mode === "grace"
+      ? Math.max(0, autoPlayBaseSeconds - autoPlayElapsedSeconds)
+      : Math.max(1, autoPlayBaseSeconds - (autoPlayElapsedSeconds % autoPlayBaseSeconds)))
+    : null;
+  const autoPlayTitle = autoPlayNotice?.mode === "autoplay"
+    ? (language === "ar" ? "تم تفعيل Auto Play" : "Auto Play is active")
+    : (language === "ar" ? "بانتظار عودة اللاعب" : "Waiting for reconnection");
+  const autoPlayDescription = autoPlayNotice?.mode === "autoplay"
+    ? (language === "ar"
+      ? `${autoPlayActorName} أصبح غائبًا، وسيقوم النظام بحركة تلقائية كل ${autoPlayBaseSeconds} ثانية حتى تنتهي المباراة.`
+      : `${autoPlayActorName} is absent, so the system will auto-play every ${autoPlayBaseSeconds} seconds until the match ends.`)
+    : (language === "ar"
+      ? `${autoPlayActorName} انقطع عن المباراة. إذا لم يعد خلال ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} ثانية سيدخل التحدي وضع Auto Play.`
+      : `${autoPlayActorName} disconnected from the match. If they do not return within ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} seconds, Auto Play will take over.`);
+  const dominoScoreLookup = useMemo(() => new Map(dominoScoreRows.map((row) => [row.id, row.score])), [dominoScoreRows]);
+  const dominoPlayer1Score = challenge?.player1Id ? (dominoScoreLookup.get(challenge.player1Id) ?? 0) : 0;
+  const dominoPlayer2Score = challenge?.player2Id ? (dominoScoreLookup.get(challenge.player2Id) ?? 0) : 0;
+  const dominoAutoPlayBadgeText = autoPlayNotice && autoPlayLiveSeconds !== null
+    ? (autoPlayNotice.mode === "grace"
+      ? (language === "ar"
+        ? `اللعب التلقائي خلال ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
+        : `Auto Play in ${autoPlayLiveSeconds}s · ${autoPlayActorName}`)
+      : (language === "ar"
+        ? `اللعب التلقائي ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
+        : `Auto Play ${autoPlayLiveSeconds}s · ${autoPlayActorName}`))
+    : null;
 
   useEffect(() => {
     if (gameSession?.status !== "playing" || !canPlayActions || challenge?.gameType !== "chess") {
@@ -1502,9 +1576,25 @@ export default function ChallengeGamePage() {
 
   const isDominoGame = challenge.gameType === "domino";
   const isTeamGame = challenge.gameType === "tarneeb" || challenge.gameType === "baloot";
+  const isWideBoardGame = isDominoGame || challenge.gameType === "backgammon" || isTeamGame;
+  const boardShellWidthClass = challenge.gameType === "baloot"
+    ? "w-full max-w-6xl"
+    : (isWideBoardGame ? "w-full max-w-5xl" : "w-full max-w-lg");
   const playerIds = [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id].filter(Boolean);
   const mySeatIndex = playerIds.indexOf(user?.id || "");
   const myTeam = mySeatIndex % 2 === 0 ? 0 : 1;
+
+  const balootPlayerNames: Record<string, string> = {};
+  for (const [id, username] of [
+    [challenge.player1Id, challenge.player1?.username],
+    [challenge.player2Id, challenge.player2?.username],
+    [challenge.player3Id, challenge.player3?.username],
+    [challenge.player4Id, challenge.player4?.username],
+  ] as const) {
+    if (id && username) {
+      balootPlayerNames[id] = username;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -1565,40 +1655,78 @@ export default function ChallengeGamePage() {
             </div>
           </header>
 
-          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-            <div className={`flex-1 p-2 sm:p-4 flex flex-col items-center relative ${isDominoGame ? "justify-start overflow-y-auto" : "justify-center overflow-y-auto"}`}>
-              {isDominoGame && (
-                <div className="w-full max-w-5xl mb-3 grid grid-cols-2 gap-2 sm:gap-3">
-                  <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2">
-                    <div className="min-w-0 me-2">
-                      <p className="truncate text-xs text-muted-foreground">
-                        {challenge.player1?.username || "Player 1"}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className={`font-mono text-sm sm:text-base ${player1TimeRemaining < 30 ? "text-destructive" : ""}`}>
-                        {formatTime(player1TimeRemaining)}
-                      </span>
-                    </div>
+          {autoPlayNotice && (
+            <div className="px-2 pt-2 sm:px-3">
+              <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-amber-950 shadow-sm dark:text-amber-100">
+                <div className="mt-0.5 rounded-full bg-amber-500/15 p-2">
+                  <Clock className="h-4 w-4 text-amber-600 dark:text-amber-300" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold">{autoPlayTitle}</p>
+                    <Badge variant="secondary" className="rounded-full bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-200">
+                      {autoPlayNotice.mode === "autoplay" ? "Auto Play" : (language === "ar" ? "مهلة عودة" : "Reconnect")}
+                    </Badge>
                   </div>
-                  <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2">
-                    <div className="min-w-0 me-2">
-                      <p className="truncate text-xs text-muted-foreground">
-                        {challenge.player2?.username || "Player 2"}
-                      </p>
+                  <p className="mt-1 text-xs leading-5 text-amber-900/80 dark:text-amber-100/85">
+                    {autoPlayDescription}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 rounded-full text-amber-700 hover:bg-amber-500/10 dark:text-amber-200"
+                  onClick={() => setAutoPlayNotice(null)}
+                >
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">{language === "ar" ? "إغلاق" : "Dismiss"}</span>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+            <div className={`flex-1 p-2 sm:p-4 flex flex-col items-center relative ${isWideBoardGame ? "justify-start overflow-y-auto" : "justify-center overflow-y-auto"}`}>
+              {isDominoGame && (
+                <div className="mb-3 w-full max-w-5xl space-y-2">
+                  {dominoAutoPlayBadgeText && (
+                    <div className="flex justify-center">
+                      <Badge variant="outline" className="rounded-full border-amber-500/35 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-200">
+                        <Clock className="me-1 h-3.5 w-3.5" />
+                        <span className="font-mono tabular-nums">{dominoAutoPlayBadgeText}</span>
+                      </Badge>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className={`font-mono text-sm sm:text-base ${player2TimeRemaining < 30 ? "text-destructive" : ""}`}>
-                        {formatTime(player2TimeRemaining)}
-                      </span>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
+                    <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2">
+                      <div className="min-w-0 me-2">
+                        <p className="truncate text-xs text-muted-foreground">
+                          {challenge.player1?.username || "Player 1"}
+                        </p>
+                      </div>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 shrink-0">
+                        <span className="text-[11px] text-muted-foreground">{t("domino.score")}</span>
+                        <span className="font-mono text-sm font-semibold sm:text-base">{dominoPlayer1Score}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2">
+                      <div className="min-w-0 me-2">
+                        <p className="truncate text-xs text-muted-foreground">
+                          {challenge.player2?.username || "Player 2"}
+                        </p>
+                      </div>
+                      <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 shrink-0">
+                        <span className="text-[11px] text-muted-foreground">{t("domino.score")}</span>
+                        <span className="font-mono text-sm font-semibold sm:text-base">{dominoPlayer2Score}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
               {!isDominoGame && (
-                <div className="w-full max-w-lg mb-4">
+                <div className={`${boardShellWidthClass} mb-4`}>
                   <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
@@ -1624,7 +1752,7 @@ export default function ChallengeGamePage() {
                 </div>
               )}
 
-              <div className={`relative ${isDominoGame ? "w-full" : ""}`}>
+              <div className={`relative ${boardShellWidthClass}`}>
                 {receivedGifts.map((gift) => (
                   <div
                     key={gift.id}
@@ -1703,16 +1831,17 @@ export default function ChallengeGamePage() {
                   <BalootBoard
                     gameState={playerView as BalootState | null}
                     playerId={isSpectator ? "__spectator__" : (user?.id || "")}
-                    playerPosition={isSpectator ? 0 : ((playerView?.playerPosition as number) ?? 0)}
+                    playerPosition={isSpectator ? 0 : ((playerView?.playerPosition as number) ?? mySeatIndex)}
                     onPlayCard={canPlayActions ? sendPlayCard : () => { }}
                     onChooseTrump={canPlayActions ? sendChooseTrump : () => { }}
                     onPass={canPlayActions ? sendPass : () => { }}
+                    playerNames={balootPlayerNames}
                   />
                 )}
               </div>
 
               {!isDominoGame && (
-                <div className="w-full max-w-lg mt-4">
+                <div className={`${boardShellWidthClass} mt-4`}>
                   <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10 ring-2 ring-primary">
@@ -1794,7 +1923,7 @@ export default function ChallengeGamePage() {
 
               {/* Floating game chat for players (Ludo King style) */}
               {!isSpectator && (
-                <div className={`w-full mt-3 h-36 sm:h-40 relative ${isDominoGame ? "max-w-5xl" : "max-w-lg"}`}>
+                <div className={`w-full mt-3 h-36 sm:h-40 relative ${isWideBoardGame ? "max-w-5xl" : "max-w-lg"}`}>
                   <GameChat
                     messages={messages as unknown as { id: string; senderId: string; senderName: string; message: string; createdAt: string }[]}
                     onSendMessage={sendChatMessage}
@@ -1834,6 +1963,7 @@ export default function ChallengeGamePage() {
                   totalMoves={gameSession?.totalMoves}
                   currentTurn={gameSession?.currentTurn}
                   gameStatus={gameSession?.status}
+                  panelMode={isSpectator ? "spectator" : "player"}
                   onSendGift={sendGiftToPlayer}
                   chatMessages={messages}
                   supportCount={receivedGifts.length}
@@ -1944,7 +2074,7 @@ export default function ChallengeGamePage() {
 
       <GiftAnimation
         gift={activeGiftAnimation}
-        onComplete={() => setActiveGiftAnimation(null)}
+        onComplete={clearGiftAnimation}
       />
 
       <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
