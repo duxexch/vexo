@@ -6,6 +6,7 @@ import { getGameEngine } from "../../game-engines";
 import { settleChallengePayout, settleDrawPayout } from "../../lib/payout";
 import { isChallengeSessionPlayableStatus, normalizeChallengeGameState } from "../../lib/challenge-game-state";
 import { trackDominoMoveError } from "../../lib/health";
+import { moveRateLimiter } from "../../lib/rate-limiter";
 import { sendNotification } from "../notifications";
 import { logger } from "../../lib/logger";
 import { getErrorMessage, type AuthenticatedSocket } from "../shared";
@@ -29,6 +30,92 @@ class ChallengeMoveError extends Error {
     this.errorKey = details.errorKey;
     this.requiresSync = details.requiresSync;
   }
+}
+
+interface SuspiciousMoveTrackerEntry {
+  count: number;
+  windowStart: number;
+  blockedUntil?: number;
+}
+
+const suspiciousMoveTracker = new Map<string, SuspiciousMoveTrackerEntry>();
+const SUSPICIOUS_MOVE_WINDOW_MS = 20_000;
+const SUSPICIOUS_MOVE_THRESHOLD = 8;
+const SUSPICIOUS_MOVE_BLOCK_MS = 45_000;
+const SUSPICIOUS_MOVE_MAX_IDLE_MS = 10 * 60_000;
+
+function buildSuspiciousMoveTrackerKey(userId: string, challengeId: string): string {
+  return `${userId}:${challengeId}`;
+}
+
+function pruneSuspiciousMoveTracker(now = Date.now()): void {
+  for (const [key, entry] of suspiciousMoveTracker.entries()) {
+    const isWindowExpired = now - entry.windowStart >= SUSPICIOUS_MOVE_MAX_IDLE_MS;
+    const isBlockExpired = typeof entry.blockedUntil === 'number' && entry.blockedUntil <= now;
+    if (isWindowExpired || (isBlockExpired && entry.count <= 0)) {
+      suspiciousMoveTracker.delete(key);
+    }
+  }
+}
+
+function getSuspiciousMoveBlockRemainingMs(userId: string, challengeId: string): number {
+  const now = Date.now();
+  const key = buildSuspiciousMoveTrackerKey(userId, challengeId);
+  const entry = suspiciousMoveTracker.get(key);
+
+  if (!entry || typeof entry.blockedUntil !== 'number') {
+    return 0;
+  }
+
+  if (entry.blockedUntil <= now) {
+    entry.blockedUntil = undefined;
+    entry.count = 0;
+    entry.windowStart = now;
+    return 0;
+  }
+
+  return entry.blockedUntil - now;
+}
+
+function registerSuspiciousMoveFailure(userId: string, challengeId: string): { blocked: boolean; retryAfterMs?: number; count: number } {
+  const now = Date.now();
+  const key = buildSuspiciousMoveTrackerKey(userId, challengeId);
+  const current = suspiciousMoveTracker.get(key);
+
+  const entry: SuspiciousMoveTrackerEntry = (!current || now - current.windowStart >= SUSPICIOUS_MOVE_WINDOW_MS)
+    ? { count: 0, windowStart: now }
+    : current;
+
+  entry.count += 1;
+
+  if (entry.count >= SUSPICIOUS_MOVE_THRESHOLD) {
+    entry.blockedUntil = now + SUSPICIOUS_MOVE_BLOCK_MS;
+  }
+
+  suspiciousMoveTracker.set(key, entry);
+
+  if (typeof entry.blockedUntil === 'number' && entry.blockedUntil > now) {
+    return {
+      blocked: true,
+      retryAfterMs: entry.blockedUntil - now,
+      count: entry.count,
+    };
+  }
+
+  return { blocked: false, count: entry.count };
+}
+
+function resetSuspiciousMoveFailures(userId: string, challengeId: string): void {
+  const key = buildSuspiciousMoveTrackerKey(userId, challengeId);
+  suspiciousMoveTracker.delete(key);
+}
+
+const suspiciousMovePruneInterval = setInterval(() => {
+  pruneSuspiciousMoveTracker();
+}, 60_000);
+
+if (typeof (suspiciousMovePruneInterval as any).unref === "function") {
+  (suspiciousMovePruneInterval as any).unref();
 }
 
 function inferDominoErrorKey(message: string): string | undefined {
@@ -119,6 +206,56 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
   if (!guard.ok) {
     return;
   }
+
+  const userId = ws.userId;
+  if (!userId) {
+    return;
+  }
+
+  const moveType = typeof move?.type === "string" ? move.type : undefined;
+
+  const moveRateLimitResult = moveRateLimiter.check(`challenge:${challengeId}:${userId}`);
+  if (!moveRateLimitResult.allowed) {
+    logger.security("Challenge move rate limit", {
+      userId,
+      action: "challenge_game_move",
+      result: "blocked",
+      reason: `rate_limit:${moveType || "unknown"}`,
+    });
+
+    ws.send(JSON.stringify({
+      type: "move_error",
+      error: "Too many moves, slow down",
+      code: "rate_limit",
+      requiresSync: false,
+      retryAfterMs: moveRateLimitResult.retryAfterMs,
+      challengeId,
+      moveType,
+    }));
+    return;
+  }
+
+  const suspiciousBlockRemainingMs = getSuspiciousMoveBlockRemainingMs(userId, challengeId);
+  if (suspiciousBlockRemainingMs > 0) {
+    logger.security("Challenge move blocked due to suspicious attempts", {
+      userId,
+      action: "challenge_game_move",
+      result: "blocked",
+      reason: `suspicious_activity_block:${moveType || "unknown"}`,
+    });
+
+    ws.send(JSON.stringify({
+      type: "move_error",
+      error: "Too many invalid move attempts. Please wait and resync.",
+      code: "suspicious_activity",
+      requiresSync: true,
+      retryAfterMs: suspiciousBlockRemainingMs,
+      challengeId,
+      moveType,
+    }));
+    return;
+  }
+
   const { room } = guard;
   let resolvedGameType: string | undefined;
 
@@ -305,6 +442,10 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
 
     // Broadcast to players with personalized views (hide opponent cards)
     const seq = typeof result.updatedSession.totalMoves === "number" ? result.updatedSession.totalMoves : 0;
+
+    // Valid move flow completed successfully — clear suspicious counters for this user/challenge pair.
+    resetSuspiciousMoveFailures(userId, challengeId);
+
     for (const [playerId, socket] of room.players) {
       if (socket.readyState === WebSocket.OPEN) {
         const playerView = result.engine.getPlayerView(result.newState, playerId);
@@ -461,18 +602,56 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
       }
     }
   } catch (error: unknown) {
-    const moveType = typeof move?.type === "string" ? move.type : undefined;
-    const payload = toMoveErrorPayload(error, resolvedGameType);
+    let payload = toMoveErrorPayload(error, resolvedGameType);
+    let retryAfterMs: number | undefined;
     const shouldTrackDominoError = resolvedGameType === "domino" || String(payload.errorKey || "").startsWith("domino.");
 
     if (shouldTrackDominoError) {
-      trackDominoMoveError(payload.errorKey);
+      trackDominoMoveError(payload.errorKey, {
+        userId,
+        challengeId,
+        code: payload.code,
+      });
+    }
+
+    const isSuspiciousFailure = payload.code === "invalid_move"
+      || payload.code === "invalid_game_state"
+      || payload.code === "move_apply_failed";
+
+    if (isSuspiciousFailure) {
+      const suspiciousResult = registerSuspiciousMoveFailure(userId, challengeId);
+
+      if (payload.code === "invalid_game_state" || payload.code === "move_apply_failed") {
+        logger.security("Challenge move suspicious signal", {
+          userId,
+          action: "challenge_game_move",
+          result: "suspicious",
+          reason: payload.code,
+        });
+      }
+
+      if (suspiciousResult.blocked) {
+        retryAfterMs = suspiciousResult.retryAfterMs;
+        payload = {
+          error: "Too many invalid move attempts. Please wait and resync.",
+          code: "suspicious_activity",
+          errorKey: payload.errorKey,
+          requiresSync: true,
+        };
+
+        logger.security("Challenge move blocked due to repeated invalid attempts", {
+          userId,
+          action: "challenge_game_move",
+          result: "blocked",
+          reason: `suspicious_activity_threshold:${suspiciousResult.count}`,
+        });
+      }
     }
 
     logger.warn("Challenge move rejected", {
       action: "challenge_game_move",
       challengeId,
-      userId: ws.userId,
+      userId,
       gameType: resolvedGameType,
       moveType,
       code: payload.code,
@@ -487,6 +666,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
       code: payload.code,
       errorKey: payload.errorKey,
       requiresSync: payload.requiresSync,
+      retryAfterMs,
       challengeId,
       gameType: resolvedGameType,
       moveType,

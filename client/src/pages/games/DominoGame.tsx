@@ -1,12 +1,16 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useParams, useLocation } from 'wouter';
-import { DominoBoard } from '@/components/games/DominoBoard';
+import {
+  DominoChallengeContainer,
+  type DominoEndgameSummary,
+  type DominoScoreRow,
+  type DominoTimelineEntry,
+} from '@/components/games/DominoChallengeContainer';
 import { GiftAnimation } from '@/components/games/GiftAnimation';
 import { GameStartCinematic } from '@/components/games/GameStartCinematic';
 import { useGameWebSocket, type DominoGameState } from '@/hooks/useGameWebSocket';
 import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, Wifi, WifiOff, Users, ArrowLeft, Share2, AlertCircle, RefreshCw } from 'lucide-react';
@@ -56,6 +60,7 @@ export default function DominoGame() {
 
   const isSpectator = hookIsSpectator;
   const isMyTurn = canPlayActions && (dominoState?.isMyTurn || false);
+  const dominoResyncing = connectionStatus === 'reconnecting' || connectionStatus === 'syncing';
   const isGameActive = !gameResult && dominoState && isValidDominoState &&
     dominoState.gamePhase !== 'finished';
 
@@ -192,18 +197,68 @@ export default function DominoGame() {
     return `${t('domino.player')} ${playerNo}`;
   };
 
-  const lastActionText = useMemo(() => {
+  const dominoTimeline = useMemo<DominoTimelineEntry[]>(() => {
     const action = dominoState?.lastAction;
-    if (!action) return null;
-    const actor = getPlayerLabel(action.playerId);
+    if (!action) return [];
 
-    if (action.type === 'pass') return `${actor} ${t('domino.passedTurn')}`;
-    if (action.type === 'draw') return `${actor} ${t('domino.drewTile')}`;
-    if (action.type === 'play' && action.tile) {
-      return `${actor} ${t('domino.played')} ${action.tile.left}|${action.tile.right}`;
+    const actor = getPlayerLabel(action.playerId);
+    let text: string;
+
+    if (action.type === 'pass') {
+      text = `${actor} ${t('domino.passedTurn')}`;
+    } else if (action.type === 'draw') {
+      text = `${actor} ${t('domino.drewTile')}`;
+    } else if (action.type === 'play' && action.tile) {
+      text = `${actor} ${t('domino.played')} ${action.tile.left}|${action.tile.right}`;
+    } else {
+      text = `${actor} ${action.type}`;
     }
-    return `${actor} ${action.type}`;
-  }, [dominoState?.lastAction, dominoState?.playerOrder, opponent, user?.id, t]);
+
+    return [{
+      id: `${action.type}-${action.playerId}-${action.tile?.id ?? `${action.tile?.left ?? 'x'}-${action.tile?.right ?? 'y'}`}`,
+      text,
+      moveNumber: dominoState?.board?.length,
+    }];
+  }, [dominoState?.lastAction, dominoState?.board?.length, dominoState?.playerOrder, opponent, user?.id, t]);
+
+  const dominoScoreRows = useMemo<DominoScoreRow[]>(() => {
+    const scores = dominoState?.scores as Record<string, number> | undefined;
+    if (!scores || typeof scores !== 'object') {
+      return [];
+    }
+
+    return Object.entries(scores)
+      .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+      .map(([playerId, score], index) => ({
+        id: playerId,
+        label: getPlayerLabel(playerId) || `${t('domino.player')} ${index + 1}`,
+        score,
+      }))
+      .sort((a, b) => b.score - a.score);
+  }, [dominoState?.scores, dominoState?.playerOrder, opponent, user?.id, t]);
+
+  const dominoEndgameSummary = useMemo<DominoEndgameSummary>(() => {
+    const winnerLabel = gameResult?.winner
+      ? getPlayerLabel(gameResult.winner)
+      : undefined;
+
+    return {
+      isFinished: Boolean(gameResult) || dominoState?.gamePhase === 'finished',
+      isDraw: Boolean(gameResult?.isDraw),
+      reason: gameResult?.reason,
+      winnerLabel,
+      lowestPips: gameResult?.lowestPips,
+      winningTeamPips: gameResult?.winningTeamPips,
+    };
+  }, [gameResult, dominoState?.gamePhase, dominoState?.playerOrder, opponent, user?.id, t]);
+
+  const dominoMoveError = useMemo(() => {
+    if (!moveError) {
+      return null;
+    }
+
+    return getMoveErrorText(moveError, moveErrorKey);
+  }, [moveError, moveErrorKey, t]);
 
   const handleMove = (move: { tileLeft: number; tileRight: number; placedEnd: 'left' | 'right'; isPassed: boolean }) => {
     if (!canPlayActions) {
@@ -291,14 +346,12 @@ export default function DominoGame() {
     );
   }
 
-  if (connectionStatus === 'connecting' || connectionStatus === 'reconnecting') {
+  if (connectionStatus === 'connecting') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
         <p className="text-muted-foreground">
-          {connectionStatus === 'reconnecting'
-            ? t('common.reconnecting')
-            : t('domino.connecting')}
+          {t('domino.connecting')}
         </p>
       </div>
     );
@@ -376,106 +429,40 @@ export default function DominoGame() {
           </div>
         </div>
 
-        {gameResult && (
-          <Card className="bg-card/80 backdrop-blur">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold mb-2">
-                  {t('domino.gameOver')}
-                </h2>
-                <p className={`text-lg ${gameResult.isDraw ? 'text-yellow-500'
-                    : isSpectator ? 'text-blue-500'
-                      : isWinner ? 'text-green-500'
-                        : 'text-red-500'
-                  }`}>
-                  {gameResult.isDraw
-                    ? t('domino.itsADraw')
-                    : isSpectator
-                      ? (language === 'ar' ? 'انتهت المباراة' : 'Match finished')
-                      : isWinner ? t('domino.youWon') : t('domino.youLost')}
-                </p>
-                {gameResult.reason === 'blocked' && (
-                  <p className="text-muted-foreground mt-1">
-                    {/* C18-F5: Prefer winningTeamPips in 4p mode, fall back to lowestPips */}
-                    {typeof (gameResult.winningTeamPips ?? gameResult.lowestPips) === 'number'
-                      ? `${t('domino.blocked')} - ${t('domino.score')}: ${gameResult.winningTeamPips ?? gameResult.lowestPips}`
-                      : t('domino.blocked')}
-                  </p>
-                )}
-                {/* C7-F4: Show final scores with correct playerOrder labels */}
-                {/* C18-F10: Use opponent username from WebSocket hook when available */}
-                {dominoState?.scores && (
-                  <div className="flex gap-3 justify-center mt-2">
-                    {Object.entries(dominoState.scores as Record<string, number>).map(([pid, score]) => {
-                      const playerIdx = dominoState?.playerOrder?.indexOf(pid) ?? -1;
-                      const playerNo = Math.max(1, playerIdx + 1);
-                      const isMe = pid === String(user?.id);
-                      const isOpponent = opponent && pid === opponent.id;
-                      return (
-                        <div key={pid} className="text-center px-3 py-1 rounded bg-muted/50">
-                          <span className="text-xs text-muted-foreground">
-                            {isMe ? t('domino.you')
-                              : isOpponent ? opponent.username
-                                : pid.startsWith('bot-') ? `${t('domino.bot')} ${playerNo}`
-                                  : `${t('domino.player')} ${playerNo}`}
-                          </span>
-                          <span className="block text-sm font-semibold">{score}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                <div className="flex gap-2 mt-4 justify-center">
-                  <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')}>
-                    <ArrowLeft className="w-4 h-4 me-1.5" />
-                    {t('common.back')}
-                  </Button>
-                  <Button size="sm" onClick={() => setLocation('/challenges?game=domino')}>
-                    <RefreshCw className="w-4 h-4 me-1.5" />
-                    {t('common.playAgain')}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {moveError && (
-          <Card className="border-amber-500/50 bg-amber-500/10">
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm text-amber-600">
-                  {getMoveErrorText(moveError, moveErrorKey)}
-                </p>
-                <Button variant="ghost" size="sm" onClick={clearMoveError}>
-                  {t('common.close')}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {lastActionText && (
-          <Card className="bg-card/70 backdrop-blur">
-            <CardContent className="pt-4 pb-4 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">{t('domino.recentActivity')}</p>
-                <p className="text-sm font-medium">{lastActionText}</p>
-              </div>
-              <Badge variant="outline">{t('domino.lastMove')}</Badge>
-            </CardContent>
-          </Card>
-        )}
-
-        <DominoBoard
-          gameState={boardState}
+        <DominoChallengeContainer
+          boardState={boardState}
           currentTurn={dominoState.currentTurn}
           isMyTurn={isMyTurn}
           isSpectator={isSpectator}
           onMove={handleMove}
           status={dominoState.gamePhase}
-          turnTimeLimit={dominoState.turnTimeLimit}
+          dominoResyncing={dominoResyncing}
+          dominoMoveError={dominoMoveError}
+          timeline={dominoTimeline}
+          scoreRows={dominoScoreRows}
+          endgameSummary={dominoEndgameSummary}
         />
+
+        {dominoMoveError && (
+          <div className="flex justify-center">
+            <Button variant="ghost" size="sm" onClick={clearMoveError}>
+              {t('common.close')}
+            </Button>
+          </div>
+        )}
+
+        {gameResult && (
+          <div className="flex gap-2 justify-center">
+            <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')}>
+              <ArrowLeft className="w-4 h-4 me-1.5" />
+              {t('common.back')}
+            </Button>
+            <Button size="sm" onClick={() => setLocation('/challenges?game=domino')}>
+              <RefreshCw className="w-4 h-4 me-1.5" />
+              {t('common.playAgain')}
+            </Button>
+          </div>
+        )}
       </div>
 
       <GiftAnimation

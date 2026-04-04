@@ -51,6 +51,40 @@ function main(): void {
     assertEqual(invalidStateValidation.errorKey, "domino.invalidState", "Expected domino.invalidState error key");
     logPass("invalid state returns domino.invalidState");
 
+    const brokenChainState = JSON.parse(initialState) as {
+        board: Array<{ left: number; right: number; id?: string }>;
+        leftEnd: number;
+        rightEnd: number;
+        currentPlayer: string;
+        hands: Record<string, Array<{ left: number; right: number; id?: string }>>;
+    };
+    brokenChainState.currentPlayer = currentPlayer;
+    brokenChainState.board = [
+        { left: 6, right: 4, id: "4-6" },
+        { left: 2, right: 1, id: "1-2" },
+    ];
+    brokenChainState.leftEnd = 6;
+    brokenChainState.rightEnd = 1;
+
+    const brokenChainValidation = engine.validateMove(JSON.stringify(brokenChainState), currentPlayer, { type: "pass" });
+    assertCondition(!brokenChainValidation.valid, "Expected invalid state for broken board chain");
+    assertEqual(brokenChainValidation.errorKey, "domino.invalidState", "Expected domino.invalidState for broken chain");
+    logPass("broken board chain is rejected as domino.invalidState");
+
+    const duplicatedTileState = JSON.parse(initialState) as {
+        currentPlayer: string;
+        board: Array<{ left: number; right: number; id?: string }>;
+        hands: Record<string, Array<{ left: number; right: number; id?: string }>>;
+    };
+    duplicatedTileState.currentPlayer = currentPlayer;
+    const duplicatedTile = duplicatedTileState.hands[currentPlayer][0];
+    duplicatedTileState.board = [{ ...duplicatedTile }];
+
+    const duplicateTileValidation = engine.validateMove(JSON.stringify(duplicatedTileState), currentPlayer, { type: "pass" });
+    assertCondition(!duplicateTileValidation.valid, "Expected invalid state for duplicated tile");
+    assertEqual(duplicateTileValidation.errorKey, "domino.invalidState", "Expected domino.invalidState for duplicate tile");
+    logPass("duplicate tile across hand/board is rejected as domino.invalidState");
+
     const notYourTurnValidation = engine.validateMove(initialState, otherPlayer, { type: "pass" });
     assertCondition(!notYourTurnValidation.valid, "Expected not-your-turn validation failure");
     assertEqual(notYourTurnValidation.errorKey, "domino.notYourTurn", "Expected domino.notYourTurn error key");
@@ -90,23 +124,59 @@ function main(): void {
         boneyard: Array<{ left: number; right: number; id?: string }>;
     };
 
-    mustDrawState.board = [{ left: 6, right: 6, id: "6-6" }];
-    mustDrawState.leftEnd = 6;
-    mustDrawState.rightEnd = 6;
     mustDrawState.currentPlayer = currentPlayer;
     mustDrawState.drawsThisTurn = 0;
-    mustDrawState.hands[currentPlayer] = [{ left: 0, right: 1, id: "0-1" }];
-    mustDrawState.boneyard = [{ left: 2, right: 3, id: "2-3" }];
+
+    const boardStarter = mustDrawState.boneyard.find((tile) => tile.left === 6 && tile.right === 6)
+        || mustDrawState.boneyard[0];
+    assertCondition(boardStarter, "Expected boneyard tile to seed must-draw board state");
+    mustDrawState.boneyard = mustDrawState.boneyard.filter((tile) => tile.id !== boardStarter.id);
+    mustDrawState.board = [{ ...boardStarter }];
+    mustDrawState.leftEnd = boardStarter.left;
+    mustDrawState.rightEnd = boardStarter.right;
+
+    const playerHand = mustDrawState.hands[currentPlayer] || [];
+    let chosenTile = playerHand.find((tile) =>
+        tile.left !== mustDrawState.leftEnd
+        && tile.right !== mustDrawState.leftEnd
+        && tile.left !== mustDrawState.rightEnd
+        && tile.right !== mustDrawState.rightEnd,
+    );
+
+    if (chosenTile) {
+        mustDrawState.hands[currentPlayer] = [{ ...chosenTile }];
+        const movedToBoneyard = playerHand.filter((tile) => tile.id !== chosenTile!.id);
+        mustDrawState.boneyard.push(...movedToBoneyard);
+    } else {
+        const fallbackTile = mustDrawState.boneyard.find((tile) =>
+            tile.left !== mustDrawState.leftEnd
+            && tile.right !== mustDrawState.leftEnd
+            && tile.left !== mustDrawState.rightEnd
+            && tile.right !== mustDrawState.rightEnd,
+        );
+        assertCondition(fallbackTile, "Expected a non-playable tile for must-draw scenario");
+        mustDrawState.boneyard = mustDrawState.boneyard.filter((tile) => tile.id !== fallbackTile.id);
+        mustDrawState.boneyard.push(...playerHand);
+        mustDrawState.hands[currentPlayer] = [{ ...fallbackTile }];
+        chosenTile = fallbackTile;
+    }
+
+    assertCondition(Boolean(chosenTile), "Expected must-draw fixture tile");
 
     const mustDrawPassValidation = engine.validateMove(JSON.stringify(mustDrawState), currentPlayer, { type: "pass" });
     assertCondition(!mustDrawPassValidation.valid, "Expected must-draw validation failure");
     assertEqual(mustDrawPassValidation.errorKey, "domino.mustDraw", "Expected domino.mustDraw error key");
     logPass("pass with empty playable set and non-empty boneyard returns domino.mustDraw");
 
-    const boneyardEmptyState = {
-        ...mustDrawState,
-        boneyard: [] as Array<{ left: number; right: number; id?: string }>,
+    const boneyardEmptyState = JSON.parse(JSON.stringify(mustDrawState)) as {
+        boneyard: Array<{ left: number; right: number; id?: string }>;
+        hands: Record<string, Array<{ left: number; right: number; id?: string }>>;
     };
+    boneyardEmptyState.hands[otherPlayer] = [
+        ...(boneyardEmptyState.hands[otherPlayer] || []),
+        ...boneyardEmptyState.boneyard,
+    ];
+    boneyardEmptyState.boneyard = [];
     const boneyardEmptyValidation = engine.validateMove(JSON.stringify(boneyardEmptyState), currentPlayer, { type: "draw" });
     assertCondition(!boneyardEmptyValidation.valid, "Expected boneyard-empty validation failure");
     assertEqual(boneyardEmptyValidation.errorKey, "domino.boneyardEmpty", "Expected domino.boneyardEmpty error key");

@@ -968,9 +968,14 @@ export default function ChallengeGamePage() {
       case "gift_received":
         if (data.gift) {
           const gift = data.gift as GiftInfo;
-          setReceivedGifts(prev => [...prev, gift]);
+          const displayId = `${String(gift.id || "gift")}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const displayGift: GiftInfo = {
+            ...gift,
+            id: displayId,
+          };
+          setReceivedGifts(prev => [...prev, displayGift]);
           setActiveGiftAnimation({
-            id: String(gift.id || `${Date.now()}`),
+            id: displayId,
             senderId: String(gift.senderId || "unknown"),
             senderUsername: String(gift.senderName || "Supporter"),
             recipientId: String(gift.recipientId || "unknown"),
@@ -988,8 +993,8 @@ export default function ChallengeGamePage() {
             description: `${gift.senderName} sent ${gift.giftName}`,
           });
           setTimeout(() => {
-            setReceivedGifts(prev => prev.filter(g => g.id !== gift.id));
-          }, 3000);
+            setReceivedGifts(prev => prev.filter(g => g.id !== displayId));
+          }, 1500);
         }
         break;
       case "game_ended":
@@ -1345,6 +1350,12 @@ export default function ChallengeGamePage() {
   void localTimerTick; // referenced to trigger re-render
   const myTimeRemaining = Math.max(0, isMyTurnForTimer ? serverMyTime - elapsedSinceSyncSec : serverMyTime);
   const opponentTimeRemaining = Math.max(0, !isMyTurnForTimer ? serverOppTime - elapsedSinceSyncSec : serverOppTime);
+  const player1TurnActive = gameSession?.currentTurn === challenge?.player1Id;
+  const player2TurnActive = gameSession?.currentTurn === challenge?.player2Id;
+  const rawPlayer1Time = gameSession?.player1TimeRemaining ?? fallbackTimeLimit;
+  const rawPlayer2Time = gameSession?.player2TimeRemaining ?? fallbackTimeLimit;
+  const player1TimeRemaining = Math.max(0, player1TurnActive ? rawPlayer1Time - elapsedSinceSyncSec : rawPlayer1Time);
+  const player2TimeRemaining = Math.max(0, player2TurnActive ? rawPlayer2Time - elapsedSinceSyncSec : rawPlayer2Time);
 
   useEffect(() => {
     if (gameSession?.status !== "playing" || !canPlayActions || challenge?.gameType !== "chess") {
@@ -1555,7 +1566,37 @@ export default function ChallengeGamePage() {
           </header>
 
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-            <div className={`flex-1 p-2 sm:p-4 flex flex-col items-center relative ${isDominoGame ? "justify-start overflow-hidden" : "justify-center overflow-y-auto"}`}>
+            <div className={`flex-1 p-2 sm:p-4 flex flex-col items-center relative ${isDominoGame ? "justify-start overflow-y-auto" : "justify-center overflow-y-auto"}`}>
+              {isDominoGame && (
+                <div className="w-full max-w-5xl mb-3 grid grid-cols-2 gap-2 sm:gap-3">
+                  <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2">
+                    <div className="min-w-0 me-2">
+                      <p className="truncate text-xs text-muted-foreground">
+                        {challenge.player1?.username || "Player 1"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className={`font-mono text-sm sm:text-base ${player1TimeRemaining < 30 ? "text-destructive" : ""}`}>
+                        {formatTime(player1TimeRemaining)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2">
+                    <div className="min-w-0 me-2">
+                      <p className="truncate text-xs text-muted-foreground">
+                        {challenge.player2?.username || "Player 2"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <span className={`font-mono text-sm sm:text-base ${player2TimeRemaining < 30 ? "text-destructive" : ""}`}>
+                        {formatTime(player2TimeRemaining)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
               {!isDominoGame && (
                 <div className="w-full max-w-lg mb-4">
                   <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
@@ -1752,8 +1793,8 @@ export default function ChallengeGamePage() {
               )}
 
               {/* Floating game chat for players (Ludo King style) */}
-              {!isSpectator && !isDominoGame && (
-                <div className="w-full max-w-lg mt-3 h-36 sm:h-40 relative">
+              {!isSpectator && (
+                <div className={`w-full mt-3 h-36 sm:h-40 relative ${isDominoGame ? "max-w-5xl" : "max-w-lg"}`}>
                   <GameChat
                     messages={messages as unknown as { id: string; senderId: string; senderName: string; message: string; createdAt: string }[]}
                     onSendMessage={sendChatMessage}
@@ -1765,10 +1806,10 @@ export default function ChallengeGamePage() {
               )}
             </div>
 
-            {/* Spectator sidebar - only shown for spectators */}
-            {isSpectator && (
-              <div className="w-full lg:w-[22rem] border-s flex flex-col bg-card max-h-[46vh] lg:max-h-none">
-                {challenge.gameType === "domino" && (
+            {/* Sidebar with gifts/comments for spectators and domino players */}
+            {(isSpectator || isDominoGame) && (
+              <div className="w-full lg:w-[22rem] border-t lg:border-t-0 lg:border-s flex flex-col bg-card max-h-[46vh] lg:max-h-none">
+                {isSpectator && challenge.gameType === "domino" && (
                   <DominoSpectatorInsights
                     spectatorCount={gameSession?.spectatorCount || 0}
                     totalMoves={gameSession?.totalMoves}
@@ -1794,6 +1835,10 @@ export default function ChallengeGamePage() {
                   currentTurn={gameSession?.currentTurn}
                   gameStatus={gameSession?.status}
                   onSendGift={sendGiftToPlayer}
+                  chatMessages={messages}
+                  supportCount={receivedGifts.length}
+                  giftCount={receivedGifts.length}
+                  giftTotalText={gameSession?.totalGiftsValue}
                 />
               </div>
             )}

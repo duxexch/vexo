@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -84,7 +84,6 @@ export function FullScreenGiftPanel({
   const [selectedGift, setSelectedGift] = useState<GiftDef | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const sendButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { data: giftCatalog = [] } = useQuery<Array<{
     id: string;
@@ -145,17 +144,6 @@ export function FullScreenGiftPanel({
   const autoPlayer = player1Id && !player2Id ? player1Id : player2Id && !player1Id ? player2Id : null;
   const effectivePlayer = selectedPlayer ?? autoPlayer;
 
-  useEffect(() => {
-    if (!open) return;
-
-    const rafId = window.requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      sendButtonRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    });
-
-    return () => window.cancelAnimationFrame(rafId);
-  }, [open]);
-
   if (!open) return null;
 
   return (
@@ -170,10 +158,10 @@ export function FullScreenGiftPanel({
       />
 
       {/* Panel */}
-      <div className="relative z-10 flex flex-col h-full max-w-md mx-auto w-full animate-in slide-in-from-bottom duration-300">
+      <div className="relative z-10 mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-black/90 backdrop-blur-md animate-in slide-in-from-bottom duration-300">
 
         {/* ─── Header ─── */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <div className="shrink-0 flex items-center justify-between border-b border-white/10 px-4 pt-4 pb-3">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <Gift className="h-5 w-5 text-primary" />
             {isRTL ? "إرسال هدية" : "Send Gift"}
@@ -189,11 +177,11 @@ export function FullScreenGiftPanel({
         </div>
 
         {/* ─── Player selection ─── */}
-        <div className="px-4 pb-3">
+        <div className="shrink-0 px-4 pb-3 pt-2">
           <p className="text-xs text-white/50 mb-2">
             {isRTL ? "اختر المستلم" : "Choose recipient"}
           </p>
-          <div className="flex gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {player1Id && (
               <button
                 onClick={() => handlePlayerClick(player1Id)}
@@ -240,8 +228,8 @@ export function FullScreenGiftPanel({
         </div>
 
         {/* ─── 3×4 Gift Grid ─── */}
-        <div className="flex-1 px-4 flex flex-col justify-center">
-          <div className="grid grid-cols-3 gap-3">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-3 overscroll-contain">
+          <div className="grid grid-cols-3 gap-3 content-start">
             {allGifts.map((gift) => {
               const IconComponent = ICON_MAP[gift.icon] || Gift;
               const isSelected = selectedGift?.id === gift.id;
@@ -296,13 +284,18 @@ export function FullScreenGiftPanel({
                 </button>
               );
             })}
+
+            {allGifts.length === 0 && (
+              <div className="col-span-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-center text-sm text-white/70">
+                {isRTL ? "لا توجد هدايا متاحة الآن" : "No gifts available right now"}
+              </div>
+            )}
           </div>
         </div>
 
         {/* ─── Bottom: Send bar ─── */}
-        <div className="px-4 py-4">
+        <div className="shrink-0 border-t border-white/10 bg-black/55 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.9rem)] backdrop-blur-xl">
           <Button
-            ref={sendButtonRef}
             onClick={handleSend}
             disabled={!selectedGift || !effectivePlayer || disabled || sending}
             className={cn(

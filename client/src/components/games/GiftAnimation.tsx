@@ -84,7 +84,7 @@ export function GiftAnimation({ gift, onComplete }: GiftAnimationProps) {
       const timer = setTimeout(() => {
         setIsVisible(false);
         onComplete?.();
-      }, 3400);
+      }, 1500);
 
       return () => clearTimeout(timer);
     }

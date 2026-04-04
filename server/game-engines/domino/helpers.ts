@@ -1,6 +1,173 @@
 import type { DominoTile, DominoState } from './types';
 import { shuffleSecure } from '../../lib/game-utils';
 
+interface DominoIntegrityIssue {
+  code: string;
+  message: string;
+}
+
+const DOMINO_MIN_PIP = 0;
+const DOMINO_MAX_PIP = 6;
+const DOMINO_TOTAL_TILES = 28;
+
+function canonicalTileId(tile: DominoTile): string {
+  const low = Math.min(tile.left, tile.right);
+  const high = Math.max(tile.left, tile.right);
+  return `${low}-${high}`;
+}
+
+function isValidTileValue(value: number): boolean {
+  return Number.isInteger(value) && value >= DOMINO_MIN_PIP && value <= DOMINO_MAX_PIP;
+}
+
+function validateTileShape(tile: DominoTile, source: string): DominoIntegrityIssue | null {
+  if (!Number.isFinite(tile.left) || !Number.isFinite(tile.right)) {
+    return { code: 'invalid_tile_shape', message: `Tile in ${source} has non-numeric values` };
+  }
+
+  if (!isValidTileValue(tile.left) || !isValidTileValue(tile.right)) {
+    return { code: 'invalid_tile_value', message: `Tile in ${source} is outside 0-6 range` };
+  }
+
+  if (typeof tile.id === 'string' && tile.id.length > 0) {
+    const expectedId = canonicalTileId(tile);
+    if (tile.id !== expectedId) {
+      return {
+        code: 'invalid_tile_id',
+        message: `Tile id mismatch in ${source}. Expected ${expectedId}, got ${tile.id}`,
+      };
+    }
+  }
+
+  return null;
+}
+
+function verifyBoardChain(board: DominoTile[]): DominoIntegrityIssue | null {
+  if (board.length <= 1) {
+    return null;
+  }
+
+  for (let i = 0; i < board.length - 1; i += 1) {
+    const current = board[i];
+    const next = board[i + 1];
+    if (current.right !== next.left) {
+      return {
+        code: 'broken_board_chain',
+        message: `Board chain break between index ${i} and ${i + 1}`,
+      };
+    }
+  }
+
+  return null;
+}
+
+export function validateDominoStateIntegrity(state: DominoState): DominoIntegrityIssue | null {
+  if (!Array.isArray(state.playerOrder) || state.playerOrder.length < 2 || state.playerOrder.length > 4) {
+    return { code: 'invalid_player_order', message: 'Player order must contain 2-4 players' };
+  }
+
+  if (!state.currentPlayer || !state.playerOrder.includes(state.currentPlayer)) {
+    return { code: 'invalid_current_player', message: 'Current player is not part of player order' };
+  }
+
+  if (!state.hands || typeof state.hands !== 'object') {
+    return { code: 'invalid_hands', message: 'Hands object is missing or invalid' };
+  }
+
+  for (const playerId of state.playerOrder) {
+    if (!Array.isArray(state.hands[playerId])) {
+      return { code: 'missing_player_hand', message: `Missing hand for player ${playerId}` };
+    }
+  }
+
+  if (!Array.isArray(state.board) || !Array.isArray(state.boneyard)) {
+    return { code: 'invalid_collections', message: 'Board or boneyard is not an array' };
+  }
+
+  if (!Number.isInteger(state.passCount) || state.passCount < 0) {
+    return { code: 'invalid_pass_count', message: 'passCount must be a non-negative integer' };
+  }
+
+  if (!Number.isInteger(state.drawsThisTurn) || state.drawsThisTurn < 0) {
+    return { code: 'invalid_draw_count', message: 'drawsThisTurn must be a non-negative integer' };
+  }
+
+  const tileIdCounts = new Map<string, number>();
+  let totalTiles = 0;
+
+  const checkTileCollection = (tiles: DominoTile[], source: string): DominoIntegrityIssue | null => {
+    for (const tile of tiles) {
+      const tileError = validateTileShape(tile, source);
+      if (tileError) {
+        return tileError;
+      }
+
+      const id = typeof tile.id === 'string' && tile.id.length > 0
+        ? tile.id
+        : canonicalTileId(tile);
+
+      const currentCount = tileIdCounts.get(id) || 0;
+      tileIdCounts.set(id, currentCount + 1);
+      if (currentCount + 1 > 1) {
+        return { code: 'duplicate_tile', message: `Duplicate tile detected (${id})` };
+      }
+
+      totalTiles += 1;
+    }
+    return null;
+  };
+
+  const boardIssue = checkTileCollection(state.board, 'board');
+  if (boardIssue) {
+    return boardIssue;
+  }
+
+  for (const playerId of state.playerOrder) {
+    const handIssue = checkTileCollection(state.hands[playerId], `hand:${playerId}`);
+    if (handIssue) {
+      return handIssue;
+    }
+  }
+
+  const boneyardIssue = checkTileCollection(state.boneyard, 'boneyard');
+  if (boneyardIssue) {
+    return boneyardIssue;
+  }
+
+  if (totalTiles !== DOMINO_TOTAL_TILES) {
+    return {
+      code: 'tile_count_mismatch',
+      message: `Expected ${DOMINO_TOTAL_TILES} total tiles, got ${totalTiles}`,
+    };
+  }
+
+  if (state.board.length === 0) {
+    if (state.leftEnd !== -1 || state.rightEnd !== -1) {
+      return {
+        code: 'invalid_ends_on_empty_board',
+        message: 'leftEnd/rightEnd must be -1 when board is empty',
+      };
+    }
+    return null;
+  }
+
+  const chainIssue = verifyBoardChain(state.board);
+  if (chainIssue) {
+    return chainIssue;
+  }
+
+  const first = state.board[0];
+  const last = state.board[state.board.length - 1];
+  if (state.leftEnd !== first.left || state.rightEnd !== last.right) {
+    return {
+      code: 'board_end_mismatch',
+      message: `Board ends mismatch. leftEnd=${state.leftEnd}, rightEnd=${state.rightEnd}`,
+    };
+  }
+
+  return null;
+}
+
 export function createAllTiles(): DominoTile[] {
   const tiles: DominoTile[] = [];
   for (let i = 0; i <= 6; i++) {
@@ -96,10 +263,10 @@ export function findBlockedGameWinner(state: DominoState): { winner: string | nu
     pips: sumPips(pid)
   }));
   pipCounts.sort((a, b) => a.pips - b.pips);
-  
+
   const lowestPips = pipCounts[0].pips;
   const tiedPlayers = pipCounts.filter(p => p.pips === lowestPips);
-  
+
   // If multiple players tie, it's a draw  
   if (tiedPlayers.length > 1) {
     return { winner: null, lowestPips };

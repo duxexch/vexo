@@ -10,25 +10,73 @@ const ERROR_WINDOW_MS = 60000; // 1 minute
 
 const DOMINO_ERROR_WINDOW_MS = 60000; // 1 minute
 const DOMINO_TRACKED_ERROR_KEYS = [
+  'domino.invalidState',
+  'domino.notYourTurn',
   'domino.invalidMoveType',
   'domino.tileNotInHand',
+  'domino.invalidPlacement',
   'domino.cannotDraw',
+  'domino.maxDrawsReached',
   'domino.other',
 ] as const;
 
 type DominoTrackedKey = (typeof DOMINO_TRACKED_ERROR_KEYS)[number];
 
-const dominoMoveErrors: { timestamp: number; key: DominoTrackedKey }[] = [];
+interface DominoMoveErrorContext {
+  userId?: string;
+  challengeId?: string;
+  code?: string;
+}
+
+interface DominoMoveErrorEvent {
+  timestamp: number;
+  key: DominoTrackedKey;
+  userId?: string;
+  challengeId?: string;
+  code?: string;
+}
+
+const dominoMoveErrors: DominoMoveErrorEvent[] = [];
 const dominoLifetimeByKey = new Map<DominoTrackedKey, number>(
   DOMINO_TRACKED_ERROR_KEYS.map((key) => [key, 0]),
 );
 let lastDominoMoveErrorAt: number | null = null;
 
 function normalizeDominoErrorKey(errorKey?: string): DominoTrackedKey {
+  if (errorKey === 'domino.invalidState') return 'domino.invalidState';
+  if (errorKey === 'domino.notYourTurn') return 'domino.notYourTurn';
   if (errorKey === 'domino.invalidMoveType') return 'domino.invalidMoveType';
   if (errorKey === 'domino.tileNotInHand') return 'domino.tileNotInHand';
+  if (errorKey === 'domino.invalidPlacement') return 'domino.invalidPlacement';
   if (errorKey === 'domino.cannotDraw') return 'domino.cannotDraw';
+  if (errorKey === 'domino.maxDrawsReached') return 'domino.maxDrawsReached';
   return 'domino.other';
+}
+
+function normalizeDominoMoveErrorContext(context?: DominoMoveErrorContext): DominoMoveErrorContext {
+  if (!context) {
+    return {};
+  }
+
+  const userId = typeof context.userId === 'string' && context.userId.trim()
+    ? context.userId.trim().slice(0, 64)
+    : undefined;
+
+  const challengeId = typeof context.challengeId === 'string' && context.challengeId.trim()
+    ? context.challengeId.trim().slice(0, 128)
+    : undefined;
+
+  const code = typeof context.code === 'string' && context.code.trim()
+    ? context.code.trim().slice(0, 64)
+    : undefined;
+
+  return { userId, challengeId, code };
+}
+
+function isSuspiciousDominoMoveCode(code?: string): boolean {
+  return code === 'invalid_game_state'
+    || code === 'move_apply_failed'
+    || code === 'suspicious_activity';
 }
 
 function pruneDominoWindow(now = Date.now()): void {
@@ -38,11 +86,18 @@ function pruneDominoWindow(now = Date.now()): void {
   }
 }
 
-export function trackDominoMoveError(errorKey?: string): void {
+export function trackDominoMoveError(errorKey?: string, context?: DominoMoveErrorContext): void {
   const now = Date.now();
   const key = normalizeDominoErrorKey(errorKey);
+  const normalizedContext = normalizeDominoMoveErrorContext(context);
 
-  dominoMoveErrors.push({ timestamp: now, key });
+  dominoMoveErrors.push({
+    timestamp: now,
+    key,
+    userId: normalizedContext.userId,
+    challengeId: normalizedContext.challengeId,
+    code: normalizedContext.code,
+  });
   dominoLifetimeByKey.set(key, (dominoLifetimeByKey.get(key) || 0) + 1);
   lastDominoMoveErrorAt = now;
   pruneDominoWindow(now);
@@ -55,8 +110,34 @@ export function getDominoMoveErrorTelemetry(): DominoMoveErrorTelemetry {
     DOMINO_TRACKED_ERROR_KEYS.map((key) => [key, 0]),
   );
 
+  const lastMinuteByCode: Record<string, number> = {};
+  const uniqueUsers = new Set<string>();
+  const uniqueChallenges = new Set<string>();
+  let invalidStateLastMinute = 0;
+  let suspiciousCodesLastMinute = 0;
+
   dominoMoveErrors.forEach((event) => {
     lastMinuteByKey[event.key] = (lastMinuteByKey[event.key] || 0) + 1;
+
+    if (event.key === 'domino.invalidState') {
+      invalidStateLastMinute += 1;
+    }
+
+    if (isSuspiciousDominoMoveCode(event.code)) {
+      suspiciousCodesLastMinute += 1;
+    }
+
+    if (event.userId) {
+      uniqueUsers.add(event.userId);
+    }
+
+    if (event.challengeId) {
+      uniqueChallenges.add(event.challengeId);
+    }
+
+    if (event.code) {
+      lastMinuteByCode[event.code] = (lastMinuteByCode[event.code] || 0) + 1;
+    }
   });
 
   const lifetimeByKey: Record<string, number> = Object.fromEntries(
@@ -72,6 +153,13 @@ export function getDominoMoveErrorTelemetry(): DominoMoveErrorTelemetry {
     lastMinuteByKey,
     lifetimeTotal,
     lifetimeByKey,
+    securitySignals: {
+      invalidStateLastMinute,
+      suspiciousCodesLastMinute,
+      uniqueUsersLastMinute: uniqueUsers.size,
+      uniqueChallengesLastMinute: uniqueChallenges.size,
+      lastMinuteByCode,
+    },
     lastEventAt: typeof lastDominoMoveErrorAt === 'number'
       ? new Date(lastDominoMoveErrorAt).toISOString()
       : undefined,

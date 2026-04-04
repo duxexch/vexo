@@ -35,14 +35,6 @@ interface BoardRowEntry {
   sequenceIndex: number;
 }
 
-interface AnchoredBoardRow {
-  id: string;
-  level: number;
-  leftEntries: BoardRowEntry[];
-  rightEntries: BoardRowEntry[];
-  anchorEntry?: BoardRowEntry;
-}
-
 interface GameState {
   myHand: DominoTile[];
   opponentTileCount: number;
@@ -289,73 +281,21 @@ function flipTile(tile: DominoTile): DominoTile {
   return { left: tile.right, right: tile.left, id: tile.id };
 }
 
-function tilesShareValue(a: DominoTile, b: DominoTile): boolean {
-  return a.left === b.left || a.left === b.right || a.right === b.left || a.right === b.right;
-}
-
-function orientTileChain(tiles: DominoTile[], leftEnd: number, rightEnd: number): DominoTile[] {
-  if (tiles.length === 0) {
-    return [];
+function orientPlacementTile(
+  tile: DominoTile,
+  end: "left" | "right",
+  leftEnd: number,
+  rightEnd: number,
+): DominoTile {
+  if (end === "left") {
+    if (tile.right === leftEnd) return tile;
+    if (tile.left === leftEnd) return flipTile(tile);
+    return tile;
   }
 
-  if (tiles.length === 1) {
-    const single = tiles[0];
-    if (leftEnd >= 0 && single.right === leftEnd) {
-      return [flipTile(single)];
-    }
-    return [single];
-  }
-
-  const oriented: DominoTile[] = [];
-  const first = tiles[0];
-  const firstCandidates = [first, flipTile(first)];
-  const second = tiles[1];
-
-  let bestFirst = firstCandidates[0];
-  let bestFirstScore = Number.NEGATIVE_INFINITY;
-  for (const candidate of firstCandidates) {
-    let score = 0;
-    if (leftEnd >= 0 && candidate.left === leftEnd) score += 4;
-    if (tilesShareValue(candidate, second) && (candidate.right === second.left || candidate.right === second.right)) score += 3;
-    if (leftEnd >= 0 && candidate.right === leftEnd) score -= 2;
-    if (score > bestFirstScore) {
-      bestFirstScore = score;
-      bestFirst = candidate;
-    }
-  }
-
-  oriented.push(bestFirst);
-
-  for (let i = 1; i < tiles.length; i += 1) {
-    const current = tiles[i];
-    const candidates = [current, flipTile(current)];
-    const need = oriented[i - 1].right;
-    const next = i + 1 < tiles.length ? tiles[i + 1] : null;
-
-    let best = candidates[0];
-    let bestScore = Number.NEGATIVE_INFINITY;
-    for (const candidate of candidates) {
-      let score = 0;
-      if (candidate.left === need) score += 6;
-      if (candidate.right === need) score += 2;
-      if (next && tilesShareValue(candidate, next)) score += 1;
-      if (i === tiles.length - 1 && rightEnd >= 0 && candidate.right === rightEnd) score += 3;
-      if (score > bestScore) {
-        bestScore = score;
-        best = candidate;
-      }
-    }
-
-    oriented.push(best);
-  }
-
-  const lastIndex = oriented.length - 1;
-  const lastTile = oriented[lastIndex];
-  if (rightEnd >= 0 && lastTile.right !== rightEnd && lastTile.left === rightEnd) {
-    oriented[lastIndex] = flipTile(lastTile);
-  }
-
-  return oriented;
+  if (tile.left === rightEnd) return tile;
+  if (tile.right === rightEnd) return flipTile(tile);
+  return tile;
 }
 
 // C18-F9: Wrapped in memo to prevent re-renders when parent updates unrelated state
@@ -637,10 +577,8 @@ export function DominoBoard({
       }
     }
 
-    const fallbackIndex = state.boardTiles.length === 1
-      ? 0
-      : Math.floor((state.boardTiles.length - 1) / 2);
-    const nextAnchorKey = tileSignature(state.boardTiles[fallbackIndex].tile);
+    // Keep the first placed tile anchored at center for the whole round.
+    const nextAnchorKey = tileSignature(state.boardTiles[0].tile);
 
     if (nextAnchorKey !== anchorTileKey) {
       setAnchorTileKey(nextAnchorKey);
@@ -741,9 +679,9 @@ export function DominoBoard({
       return;
     }
 
-    const ends: Array<"left" | "right"> = playable.ends.length > 0 ? playable.ends : ["left"];
-    const randomEnd = ends[Math.floor(Math.random() * ends.length)] ?? "left";
-    submitTileMove(index, randomEnd);
+    if (playable.ends.length === 1) {
+      submitTileMove(index, playable.ends[0]);
+    }
   };
 
   const handlePlaceTile = (end: "left" | "right") => {
@@ -757,10 +695,6 @@ export function DominoBoard({
     }
 
     submitTileMove(selectedTile, end);
-  };
-
-  const handleEndCapClick = (end: "left" | "right") => {
-    handlePlaceTile(end);
   };
 
   const handlePass = () => {
@@ -792,120 +726,67 @@ export function DominoBoard({
   const canChooseEnd = Boolean(selectedPlayable) && isMyTurn && !isSpectator && status !== 'finished';
   const leftEndSelectable = canChooseEnd && Boolean(selectedPlayable?.ends.includes("left"));
   const rightEndSelectable = canChooseEnd && Boolean(selectedPlayable?.ends.includes("right"));
-  const timerProgress = turnTimeLimit > 0 ? Math.max(0, Math.min(1, timeLeft / turnTimeLimit)) : 0;
-  const timerRingStyle = turnTimeLimit > 0
-    ? { background: `conic-gradient(hsl(var(--primary)) ${timerProgress * 360}deg, hsl(var(--muted)) 0deg)` }
-    : undefined;
+  const selectedTileData = selectedTile !== null ? state.myHand[selectedTile] : undefined;
+  const leftGhostTile = selectedTileData && leftEndSelectable
+    ? orientPlacementTile(selectedTileData, "left", state.leftEnd, state.rightEnd)
+    : null;
+  const rightGhostTile = selectedTileData && rightEndSelectable
+    ? orientPlacementTile(selectedTileData, "right", state.leftEnd, state.rightEnd)
+    : null;
   const isTurnLive = isMyTurn && !isSpectator && status !== 'finished';
   const isCompactMobile = isNarrowViewport;
   const boardTileCount = state.boardTiles.length;
-  const boardLayoutMode = boardTileCount >= 28 ? "compact" : boardTileCount >= 18 ? "dense" : "normal";
   const boardTileSize: DominoTileSize = isCompactMobile ? "xs" : "sm";
-  const boardGapClass = boardLayoutMode === "compact" ? "gap-0.5" : boardLayoutMode === "dense" ? "gap-1" : "gap-1.5";
-  const boardEndCapClass = isCompactMobile
-    ? "h-6 w-6 text-[11px]"
-    : boardLayoutMode === "compact"
-      ? "h-7 w-7 text-xs"
-      : "h-8 w-8 text-sm";
-  const tilesPerRow = isCompactMobile
-    ? 5
-    : boardLayoutMode === "compact"
-      ? 8
-      : boardLayoutMode === "dense"
-        ? 7
-        : 6;
-  const sideSlotsPerRow = Math.max(1, Math.floor((tilesPerRow - 1) / 2));
-
-  const orientedBoardTiles = useMemo(
-    () => orientTileChain(state.boardTiles.map((entry) => entry.tile), state.leftEnd, state.rightEnd),
-    [state.boardTiles, state.leftEnd, state.rightEnd],
-  );
+  const boardGapClass = "gap-0";
 
   const anchorTileIndex = useMemo(() => {
     if (state.boardTiles.length === 0) {
       return -1;
     }
 
-    if (!anchorTileKey) {
-      return Math.floor((state.boardTiles.length - 1) / 2);
-    }
+    if (!anchorTileKey) return 0;
 
     const index = state.boardTiles.findIndex((entry) => tileSignature(entry.tile) === anchorTileKey);
-    return index >= 0 ? index : Math.floor((state.boardTiles.length - 1) / 2);
+    return index >= 0 ? index : 0;
   }, [state.boardTiles, anchorTileKey]);
 
-  const anchoredRows = useMemo<AnchoredBoardRow[]>(() => {
-    if (state.boardTiles.length === 0) {
-      return [];
-    }
-
-    const entries: BoardRowEntry[] = state.boardTiles.map((item, index) => ({ item, index, sequenceIndex: index }));
-    const safeAnchorIndex = anchorTileIndex >= 0 ? anchorTileIndex : Math.floor((entries.length - 1) / 2);
-    const anchorEntry = entries[safeAnchorIndex];
-
-    if (!anchorEntry) {
-      return [];
-    }
-
-    const leftBranch = entries.slice(0, safeAnchorIndex);
-    const rightBranch = entries.slice(safeAnchorIndex + 1);
-    const rowCount = Math.max(
-      1,
-      Math.ceil(leftBranch.length / sideSlotsPerRow),
-      Math.ceil(rightBranch.length / sideSlotsPerRow),
-    );
-
-    const rows: AnchoredBoardRow[] = [];
-
-    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-      const leftEnd = leftBranch.length - rowIndex * sideSlotsPerRow;
-      const leftStart = Math.max(0, leftEnd - sideSlotsPerRow);
-      const leftEntries = leftBranch.slice(leftStart, leftEnd);
-
-      const rightStart = rowIndex * sideSlotsPerRow;
-      const rightEntries = rightBranch.slice(rightStart, rightStart + sideSlotsPerRow);
-
-      const level = rowIndex === 0
-        ? 0
-        : rowIndex % 2 === 1
-          ? -Math.ceil(rowIndex / 2)
-          : Math.ceil(rowIndex / 2);
-
-      rows.push({
-        id: `anchored-row-${rowIndex}`,
-        level,
-        leftEntries,
-        rightEntries,
-        anchorEntry: rowIndex === 0 ? anchorEntry : undefined,
-      });
-    }
-
-    return rows.sort((a, b) => a.level - b.level);
-  }, [state.boardTiles, anchorTileIndex, sideSlotsPerRow]);
-
-  const boardRowSpacing = isCompactMobile
-    ? 32
-    : boardLayoutMode === "compact"
-      ? 34
-      : boardLayoutMode === "dense"
-        ? 38
-        : 44;
-  const maxRowDepth = useMemo(
-    () => anchoredRows.reduce((maxDepth, row) => Math.max(maxDepth, Math.abs(row.level)), 0),
-    [anchoredRows],
+  const boardEntries = useMemo<BoardRowEntry[]>(
+    () => state.boardTiles.map((item, index) => ({ item, index, sequenceIndex: index })),
+    [state.boardTiles],
   );
-  const boardSlotClass = boardTileSize === "xs" ? "w-12 sm:w-14" : "w-14 sm:w-16";
+  const anchorEntry = useMemo(
+    () => (anchorTileIndex >= 0 ? boardEntries[anchorTileIndex] : undefined),
+    [boardEntries, anchorTileIndex],
+  );
+  const leftSideEntries = useMemo(
+    () => (anchorTileIndex > 0 ? boardEntries.slice(0, anchorTileIndex) : []),
+    [boardEntries, anchorTileIndex],
+  );
+  const rightSideEntries = useMemo(
+    () => (anchorTileIndex >= 0 ? boardEntries.slice(anchorTileIndex + 1) : []),
+    [boardEntries, anchorTileIndex],
+  );
+  const boardZoom = useMemo(() => {
+    if (boardTileCount <= 8) return 1;
+    return Math.max(0.58, 1 - (boardTileCount - 8) * 0.02);
+  }, [boardTileCount]);
+  const anchorHalfPx = isCompactMobile ? 24 : 32;
   const boardHeight = useMemo(() => {
-    const minHeight = isCompactMobile ? 200 : 280;
-    const maxHeight = isCompactMobile ? 260 : 360;
-    const neededHeight = 120 + maxRowDepth * boardRowSpacing * 2;
-    return Math.min(maxHeight, Math.max(minHeight, neededHeight));
-  }, [isCompactMobile, maxRowDepth, boardRowSpacing]);
+    const minHeight = isCompactMobile
+      ? (isSpectator ? 170 : 200)
+      : (isSpectator ? 240 : 280);
+    const maxHeight = isCompactMobile
+      ? (isSpectator ? 220 : 260)
+      : (isSpectator ? 320 : 360);
+    return Math.min(maxHeight, Math.max(minHeight, 180));
+  }, [isCompactMobile, isSpectator]);
   const lastActionTileKey = state.lastAction?.tile ? tileSignature(state.lastAction.tile) : null;
 
   const renderBoardTile = (entry: BoardRowEntry, rowId: string) => {
-    const orientedTile = orientedBoardTiles[entry.sequenceIndex] || entry.item.tile;
-    const renderRotation = orientedTile.left === orientedTile.right ? 0 : 90;
+    const boardTile = entry.item.tile;
+    const renderRotation = Number.isFinite(entry.item.rotation)
+      ? entry.item.rotation
+      : (boardTile.left === boardTile.right ? 0 : 90);
     const tileKey = `${tileSignature(entry.item.tile)}-${entry.index}`;
     const isLastActionTile = lastActionTileKey !== null && tileSignature(entry.item.tile) === lastActionTileKey;
 
@@ -913,7 +794,7 @@ export function DominoBoard({
       <motion.div
         key={`${rowId}-${tileKey}`}
         initial={isLastActionTile ? { opacity: 0, y: -10, scale: 0.9, rotate: -4 } : false}
-        animate={{ opacity: 1, y: 0, scale: 1, rotate: boardLayoutMode === "normal" ? 0.2 : 0 }}
+        animate={{ opacity: 1, y: 0, scale: 1, rotate: 0.2 }}
         transition={{ type: "spring", stiffness: 260, damping: 24, mass: 0.72 }}
         className={cn(
           "shrink-0 transition-transform duration-300",
@@ -921,7 +802,7 @@ export function DominoBoard({
         )}
       >
         <DominoTileComponent
-          tile={orientedTile}
+          tile={boardTile}
           size={boardTileSize}
           rotation={renderRotation}
         />
@@ -939,7 +820,7 @@ export function DominoBoard({
     >
       <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[linear-gradient(120deg,rgba(255,255,255,0.16),transparent_35%,transparent_65%,rgba(0,0,0,0.12))]" />
 
-      <div className={cn("relative flex flex-col", isCompactMobile ? "gap-2.5" : "gap-5")}>
+      <div className={cn("relative flex flex-col", isCompactMobile ? (isSpectator ? "gap-2" : "gap-2.5") : "gap-5")}>
         {/* F8: Per-opponent tile counts with player labels */}
         <div className={cn(
           "rounded-2xl border border-border/60 bg-background/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.5)] backdrop-blur-sm",
@@ -976,125 +857,6 @@ export function DominoBoard({
             </div>
           )}
         </div>
-
-        {isCompactMobile ? (
-          <div className="w-full overflow-x-auto">
-            <div className="flex min-w-max items-center gap-2 pb-0.5">
-              {state.lastAction && (
-                <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
-                  {(() => {
-                    const pid = state.lastAction!.playerId;
-                    const label = getPlayerLabel(pid);
-                    if (state.lastAction!.type === 'draw') return `${label} ${t('domino.drewTile')}`;
-                    if (state.lastAction!.type === 'pass') return `${label} ${t('domino.passedTurn')}`;
-                    const tile = state.lastAction!.tile;
-                    return tile
-                      ? `${label} ${t('domino.played')} [${tile.left}|${tile.right}]`
-                      : `${label} ${t('domino.played')}`;
-                  })()}
-                </span>
-              )}
-
-              {status !== 'finished' && (
-                <span className={cn(
-                  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold shadow-sm",
-                  isMyTurn
-                    ? "bg-primary/90 text-primary-foreground border-primary/60"
-                    : "bg-muted/85 text-muted-foreground border-border/60"
-                )}>
-                  {isMyTurn ? t('domino.yourTurn') : t('domino.opponentTurn')}
-                </span>
-              )}
-
-              {turnTimeLimit > 0 && isMyTurn && !isSpectator && status !== 'finished' && (
-                <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-full p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.2)]" style={timerRingStyle}>
-                  <span className={cn(
-                    "inline-flex h-full w-full items-center justify-center rounded-full text-xs font-bold",
-                    timeLeft <= 5
-                      ? "bg-destructive text-destructive-foreground animate-pulse"
-                      : "bg-background text-foreground"
-                  )}>
-                    {timeLeft}
-                  </span>
-                </span>
-              )}
-
-              <span className="inline-flex items-center gap-1 rounded-lg border border-border/65 bg-background/70 px-2 py-0.5 text-[11px]">
-                <span className="text-muted-foreground">{t('domino.tiles')}</span>
-                <span className="font-semibold">{state.boardTiles.length}</span>
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-lg border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
-                <span>{t('domino.playable')}</span>
-                <span className="font-semibold">{playableTiles.length}</span>
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-lg border border-border/65 bg-background/70 px-2 py-0.5 text-[11px]">
-                <span className="text-muted-foreground">{t('domino.draw')}</span>
-                <span className="font-semibold">{state.boneyard}</span>
-              </span>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* C7-F11: Last action notification — includes play moves */}
-            {state.lastAction && (
-              <div className="text-center">
-                <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary animate-[pulse_2.3s_ease-in-out_infinite] shadow-[0_6px_14px_rgba(59,130,246,0.18)] sm:text-sm">
-                  {(() => {
-                    const pid = state.lastAction!.playerId;
-                    const label = getPlayerLabel(pid);
-                    if (state.lastAction!.type === 'draw') return `${label} ${t('domino.drewTile')}`;
-                    if (state.lastAction!.type === 'pass') return `${label} ${t('domino.passedTurn')}`;
-                    const tile = state.lastAction!.tile;
-                    return tile
-                      ? `${label} ${t('domino.played')} [${tile.left}|${tile.right}]`
-                      : `${label} ${t('domino.played')}`;
-                  })()}
-                </span>
-              </div>
-            )}
-
-            {/* Turn indicator + timer */}
-            {status !== 'finished' && (
-              <div className="flex items-center justify-center gap-3">
-                <span className={cn(
-                  "inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border shadow-sm sm:text-sm",
-                  isMyTurn
-                    ? "bg-primary/90 text-primary-foreground border-primary/60 animate-pulse"
-                    : "bg-muted/85 text-muted-foreground border-border/60"
-                )}>
-                  {isMyTurn ? t('domino.yourTurn') : t('domino.opponentTurn')}
-                </span>
-                {turnTimeLimit > 0 && isMyTurn && !isSpectator && (
-                  <span className="relative inline-flex items-center justify-center rounded-full p-[3px] w-10 h-10 shadow-[0_0_0_1px_rgba(255,255,255,0.2)]" style={timerRingStyle}>
-                    <span className={cn(
-                      "inline-flex items-center justify-center w-full h-full rounded-full text-sm font-bold",
-                      timeLeft <= 5
-                        ? "bg-destructive text-destructive-foreground animate-pulse"
-                        : "bg-background text-foreground"
-                    )}>
-                      {timeLeft}
-                    </span>
-                  </span>
-                )}
-              </div>
-            )}
-
-            <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:justify-center sm:gap-3">
-              <div className="rounded-xl border border-border/65 bg-background/70 px-2.5 py-1.5 text-center animate-domino-chip-rise">
-                <div className="text-[10px] sm:text-xs text-muted-foreground">{t('domino.tiles')}</div>
-                <div className="text-sm sm:text-base font-semibold">{state.boardTiles.length}</div>
-              </div>
-              <div className="rounded-xl border border-primary/25 bg-primary/10 px-2.5 py-1.5 text-center animate-domino-chip-rise [animation-delay:60ms]">
-                <div className="text-[10px] sm:text-xs text-primary/80">{t('domino.playable')}</div>
-                <div className="text-sm sm:text-base font-semibold text-primary">{playableTiles.length}</div>
-              </div>
-              <div className="rounded-xl border border-border/65 bg-background/70 px-2.5 py-1.5 text-center animate-domino-chip-rise [animation-delay:120ms]">
-                <div className="text-[10px] sm:text-xs text-muted-foreground">{t('domino.draw')}</div>
-                <div className="text-sm sm:text-base font-semibold">{state.boneyard}</div>
-              </div>
-            </div>
-          </>
-        )}
 
         {/* F7: Scores display with player identity */}
         {!isCompactMobile && state.scores && Object.values(state.scores).some(s => s > 0) && (
@@ -1140,44 +902,53 @@ export function DominoBoard({
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_20%,rgba(255,255,255,0.18),transparent_50%),radial-gradient(circle_at_78%_74%,rgba(0,0,0,0.3),transparent_46%)]" />
           <div className="pointer-events-none absolute inset-x-4 top-3 h-px bg-white/25" />
 
-          {state.boardTiles.length > 0 && (
+          {selectedTileData && (leftGhostTile || rightGhostTile) && (
             <>
-              <div className="absolute left-2 top-1/2 -translate-y-1/2">
+              {leftGhostTile && (
                 <button
                   type="button"
-                  onClick={() => handleEndCapClick("left")}
-                  disabled={!leftEndSelectable}
+                  onClick={() => handlePlaceTile("left")}
                   className={cn(
-                    "domino-end-cap inline-flex items-center justify-center rounded-full border font-semibold text-white shadow-[0_6px_10px_rgba(0,0,0,0.25)] transition-all",
-                    boardEndCapClass,
-                    leftEndSelectable
-                      ? "border-primary/70 bg-primary/30 ring-2 ring-primary/40"
-                      : "border-white/35 bg-white/15",
+                    "absolute left-10 top-1/2 z-20 -translate-y-1/2 transition-transform",
+                    leftEndSelectable ? "cursor-pointer" : "cursor-default",
                   )}
                   aria-label={t('domino.placeLeft')}
-                  data-testid="button-endcap-left"
                 >
-                  {state.leftEnd}
+                  <div className="rounded-lg border border-dashed border-primary/70 bg-primary/15 p-1 shadow-[0_8px_18px_rgba(0,0,0,0.28)]">
+                    <div className="opacity-50 saturate-110">
+                      <DominoTileComponent
+                        tile={leftGhostTile}
+                        size={boardTileSize}
+                        rotation={leftGhostTile.left === leftGhostTile.right ? 0 : 90}
+                        isPlayable
+                      />
+                    </div>
+                  </div>
                 </button>
-              </div>
-              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+              )}
+
+              {rightGhostTile && (
                 <button
                   type="button"
-                  onClick={() => handleEndCapClick("right")}
-                  disabled={!rightEndSelectable}
+                  onClick={() => handlePlaceTile("right")}
                   className={cn(
-                    "domino-end-cap inline-flex items-center justify-center rounded-full border font-semibold text-white shadow-[0_6px_10px_rgba(0,0,0,0.25)] transition-all",
-                    boardEndCapClass,
-                    rightEndSelectable
-                      ? "border-primary/70 bg-primary/30 ring-2 ring-primary/40"
-                      : "border-white/35 bg-white/15",
+                    "absolute right-10 top-1/2 z-20 -translate-y-1/2 transition-transform",
+                    rightEndSelectable ? "cursor-pointer" : "cursor-default",
                   )}
                   aria-label={t('domino.placeRight')}
-                  data-testid="button-endcap-right"
                 >
-                  {state.rightEnd}
+                  <div className="rounded-lg border border-dashed border-primary/70 bg-primary/15 p-1 shadow-[0_8px_18px_rgba(0,0,0,0.28)]">
+                    <div className="opacity-50 saturate-110">
+                      <DominoTileComponent
+                        tile={rightGhostTile}
+                        size={boardTileSize}
+                        rotation={rightGhostTile.left === rightGhostTile.right ? 0 : 90}
+                        isPlayable
+                      />
+                    </div>
+                  </div>
                 </button>
-              </div>
+              )}
             </>
           )}
 
@@ -1187,162 +958,133 @@ export function DominoBoard({
             </p>
           ) : (
             <div className="domino-board-lane relative h-full w-full max-w-full px-1 py-1">
-              {anchoredRows.map((row) => {
-                const leftPadCount = Math.max(0, sideSlotsPerRow - row.leftEntries.length);
-                const rightPadCount = Math.max(0, sideSlotsPerRow - row.rightEntries.length);
-
-                return (
+              {anchorEntry && (
+                <>
                   <div
-                    key={row.id}
-                    className={cn(
-                      "absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center",
-                      boardGapClass,
-                    )}
-                    style={{ top: `calc(50% + ${row.level * boardRowSpacing}px)` }}
+                    className={cn("absolute left-1/2 top-1/2 flex items-center", boardGapClass)}
+                    style={{
+                      transform: `translate(calc(-100% - ${anchorHalfPx}px), -50%) scale(${boardZoom})`,
+                      transformOrigin: "right center",
+                    }}
                   >
-                    {Array.from({ length: leftPadCount }).map((_, index) => (
-                      <span
-                        key={`${row.id}-left-pad-${index}`}
-                        className={cn("block shrink-0 opacity-0", boardSlotClass)}
-                        aria-hidden
-                      />
-                    ))}
-
-                    {row.leftEntries.map((entry) => renderBoardTile(entry, row.id))}
-
-                    {row.anchorEntry ? (
-                      renderBoardTile(row.anchorEntry, row.id)
-                    ) : (
-                      <span className={cn("block shrink-0 opacity-0", boardSlotClass)} aria-hidden />
-                    )}
-
-                    {row.rightEntries.map((entry) => renderBoardTile(entry, row.id))}
-
-                    {Array.from({ length: rightPadCount }).map((_, index) => (
-                      <span
-                        key={`${row.id}-right-pad-${index}`}
-                        className={cn("block shrink-0 opacity-0", boardSlotClass)}
-                        aria-hidden
-                      />
-                    ))}
+                    {[...leftSideEntries].reverse().map((entry) => renderBoardTile(entry, "left-chain"))}
                   </div>
-                );
-              })}
+
+                  <div
+                    className="absolute left-1/2 top-1/2"
+                    style={{
+                      transform: `translate(-50%, -50%) scale(${boardZoom})`,
+                      transformOrigin: "center center",
+                    }}
+                  >
+                    {renderBoardTile(anchorEntry, "anchor")}
+                  </div>
+
+                  <div
+                    className={cn("absolute left-1/2 top-1/2 flex items-center", boardGapClass)}
+                    style={{
+                      transform: `translate(${anchorHalfPx}px, -50%) scale(${boardZoom})`,
+                      transformOrigin: "left center",
+                    }}
+                  >
+                    {rightSideEntries.map((entry) => renderBoardTile(entry, "right-chain"))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
 
-        {selectedTile !== null && selectedPlayable && (
-          <div className="flex justify-center gap-3 flex-wrap rounded-xl border border-border/60 bg-background/65 p-2 animate-domino-fade-in">
-            {selectedPlayable.ends.includes("left") && (
+        {!isSpectator && (
+          <div className={cn(
+            "rounded-2xl border border-[#83603f]/35 bg-[linear-gradient(170deg,rgba(255,255,255,0.95),rgba(248,240,227,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_14px_28px_rgba(66,46,27,0.22)]",
+            isCompactMobile ? "p-2.5" : "p-4",
+          )}>
+            <div className={cn("flex items-center justify-center gap-2", isCompactMobile ? "mb-2" : "mb-3")}>
+              <p className={cn("text-muted-foreground text-center", isCompactMobile ? "text-[11px]" : "text-xs sm:text-sm")}>
+                {t('domino.yourTiles')} ({state.myHand.length})
+              </p>
+              <span className={cn(
+                "inline-flex items-center rounded-full border border-primary/25 bg-primary/10 font-semibold text-primary",
+                isCompactMobile ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]",
+              )}>
+                {playableTiles.length}
+              </span>
+            </div>
+
+            <div className={cn("flex flex-wrap justify-center", isCompactMobile ? "gap-1" : "gap-2")}>
+              {state.myHand.map((tile, index) => {
+                const isPlayable = playableTiles.some(p => p.index === index);
+                const canInteract = isMyTurn && isPlayable && !isSpectator;
+                // F8: Only animate tiles that are newly added (index >= previous hand length)
+                const isNewTile = index >= prevHandLenRef.current;
+                return (
+                  <motion.div
+                    key={tile.id ?? `${tile.left}-${tile.right}-${index}`}
+                    initial={isNewTile ? {
+                      opacity: 0,
+                      x: -18,
+                      y: 8,
+                      rotate: -5,
+                      scale: 0.92,
+                    } : false}
+                    animate={{
+                      opacity: 1,
+                      x: 0,
+                      y: selectedTile === index ? -8 : 0,
+                      rotate: 0,
+                      scale: selectedTile === index ? 1.08 : 1,
+                    }}
+                    whileHover={canInteract ? { y: -4, scale: 1.045 } : undefined}
+                    transition={{ type: "spring", stiffness: 300, damping: 24, mass: 0.65 }}
+                    className={isNewTile ? "animate-domino-draw" : ""}
+                    style={isNewTile ? { animationDelay: `${(index - prevHandLenRef.current) * 60}ms` } : undefined}
+                  >
+                    <DominoTileComponent
+                      tile={tile}
+                      isSelected={selectedTile === index}
+                      onClick={canInteract ? () => handleTileClick(index) : undefined}
+                      isPlayable={canInteract}
+                      size={isCompactMobile ? "xs" : "sm"}
+                    />
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* F5: Button container — use server canDraw for draw eligibility */}
+        {!isSpectator && (
+          <div className={cn("flex justify-center flex-wrap animate-domino-fade-in", isCompactMobile ? "gap-2" : "gap-3")}>
+            {canAutoDraw && isMyTurn && !isSpectator && (
               <Button
-                onClick={() => handlePlaceTile("left")}
-                className="shadow-md"
-                aria-label={t('domino.placeLeft')}
-                data-testid="button-place-left"
+                variant="secondary"
+                onClick={handleDraw}
+                disabled={drawPending}
+                size={isCompactMobile ? "sm" : "default"}
+                className="shadow-md border border-border/70"
+                aria-label={`${t('domino.draw')} - ${state.boneyard} ${t('domino.tilesRemaining')}`}
+                data-testid="button-draw"
               >
-                {t('domino.placeLeft')}
+                {drawPending ? '...' : `${t('domino.draw')} (${state.boneyard})${state.maxDraws ? ` [${state.drawsThisTurn ?? 0}/${state.maxDraws}]` : ''}`}
               </Button>
             )}
-            {selectedPlayable.ends.includes("right") && (
+            {canPass && isMyTurn && !isSpectator && (
               <Button
-                onClick={() => handlePlaceTile("right")}
-                className="shadow-md"
-                aria-label={t('domino.placeRight')}
-                data-testid="button-place-right"
+                variant="outline"
+                onClick={handlePass}
+                disabled={passPending}
+                size={isCompactMobile ? "sm" : "default"}
+                className="shadow-md border-border/80"
+                aria-label={t('domino.pass')}
+                data-testid="button-pass"
               >
-                {t('domino.placeRight')}
+                {passPending ? '...' : t('domino.pass')}
               </Button>
             )}
           </div>
         )}
-
-        <div className={cn(
-          "rounded-2xl border border-[#83603f]/35 bg-[linear-gradient(170deg,rgba(255,255,255,0.95),rgba(248,240,227,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_14px_28px_rgba(66,46,27,0.22)]",
-          isCompactMobile ? "p-2.5" : "p-4",
-        )}>
-          <div className={cn("flex items-center justify-center gap-2", isCompactMobile ? "mb-2" : "mb-3")}>
-            <p className={cn("text-muted-foreground text-center", isCompactMobile ? "text-[11px]" : "text-xs sm:text-sm")}>
-              {t('domino.yourTiles')} ({state.myHand.length})
-            </p>
-            <span className={cn(
-              "inline-flex items-center rounded-full border border-primary/25 bg-primary/10 font-semibold text-primary",
-              isCompactMobile ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-0.5 text-[10px]",
-            )}>
-              {playableTiles.length}
-            </span>
-          </div>
-
-          <div className={cn("flex flex-wrap justify-center", isCompactMobile ? "gap-1" : "gap-2")}>
-            {state.myHand.map((tile, index) => {
-              const isPlayable = playableTiles.some(p => p.index === index);
-              const canInteract = isMyTurn && isPlayable && !isSpectator;
-              // F8: Only animate tiles that are newly added (index >= previous hand length)
-              const isNewTile = index >= prevHandLenRef.current;
-              return (
-                <motion.div
-                  key={tile.id ?? `${tile.left}-${tile.right}-${index}`}
-                  initial={isNewTile ? {
-                    opacity: 0,
-                    x: -18,
-                    y: 8,
-                    rotate: -5,
-                    scale: 0.92,
-                  } : false}
-                  animate={{
-                    opacity: 1,
-                    x: 0,
-                    y: 0,
-                    rotate: 0,
-                    scale: selectedTile === index ? 1.05 : 1,
-                  }}
-                  whileHover={canInteract ? { y: -4, scale: 1.045 } : undefined}
-                  transition={{ type: "spring", stiffness: 300, damping: 24, mass: 0.65 }}
-                  className={isNewTile ? "animate-domino-draw" : ""}
-                  style={isNewTile ? { animationDelay: `${(index - prevHandLenRef.current) * 60}ms` } : undefined}
-                >
-                  <DominoTileComponent
-                    tile={tile}
-                    isSelected={selectedTile === index}
-                    onClick={canInteract ? () => handleTileClick(index) : undefined}
-                    isPlayable={canInteract}
-                    size={isCompactMobile ? "xs" : "sm"}
-                  />
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* F5: Button container — use server canDraw for draw eligibility */}
-        <div className={cn("flex justify-center flex-wrap animate-domino-fade-in", isCompactMobile ? "gap-2" : "gap-3")}>
-          {canAutoDraw && isMyTurn && !isSpectator && (
-            <Button
-              variant="secondary"
-              onClick={handleDraw}
-              disabled={drawPending}
-              size={isCompactMobile ? "sm" : "default"}
-              className="shadow-md border border-border/70"
-              aria-label={`${t('domino.draw')} - ${state.boneyard} ${t('domino.tilesRemaining')}`}
-              data-testid="button-draw"
-            >
-              {drawPending ? '...' : `${t('domino.draw')} (${state.boneyard})${state.maxDraws ? ` [${state.drawsThisTurn ?? 0}/${state.maxDraws}]` : ''}`}
-            </Button>
-          )}
-          {canPass && isMyTurn && !isSpectator && (
-            <Button
-              variant="outline"
-              onClick={handlePass}
-              disabled={passPending}
-              size={isCompactMobile ? "sm" : "default"}
-              className="shadow-md border-border/80"
-              aria-label={t('domino.pass')}
-              data-testid="button-pass"
-            >
-              {passPending ? '...' : t('domino.pass')}
-            </Button>
-          )}
-        </div>
       </div>
 
       {status === "finished" && (

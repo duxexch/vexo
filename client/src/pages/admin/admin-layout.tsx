@@ -101,6 +101,7 @@ function AdminSidebar() {
     { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
     { title: "Disputes", url: "/admin/disputes", icon: AlertTriangle, hasBadge: true },
     { title: "Free Play", url: "/admin/free-play", icon: Gift },
+    { title: "Gift Catalog", url: "/admin/gifts", icon: Gift },
     { title: "Tournaments", url: "/admin/tournaments", icon: Trophy },
     { title: "Audit Logs", url: "/admin/audit-logs", icon: FileText },
   ];

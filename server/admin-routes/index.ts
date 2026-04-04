@@ -17,6 +17,7 @@ import { registerAdminChatAutoDeleteRoutes } from "./chat-auto-delete";
 import { registerAdminChatPinRoutes } from "./chat-pin";
 import { registerAdminAiAgentRoutes } from "./admin-ai-agent";
 import { registerAdminPaymentSecurityRoutes } from "./admin-payment-security";
+import { registerAdminGiftsRoutes } from "./admin-gifts";
 
 /**
  * Register all admin routes.
@@ -43,4 +44,5 @@ export function registerAdminRoutes(app: Express) {
   registerAdminChatPinRoutes(app);
   registerAdminAiAgentRoutes(app);
   registerAdminPaymentSecurityRoutes(app);
+  registerAdminGiftsRoutes(app);
 }

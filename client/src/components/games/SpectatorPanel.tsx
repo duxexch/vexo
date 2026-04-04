@@ -42,6 +42,17 @@ interface SpectatorPanelProps {
   currentTurn?: string;
   gameStatus?: string;
   onSendGift?: (giftId: string, playerId: string, meta?: { price?: number; name?: string }) => void;
+  chatMessages?: Array<{
+    id?: string;
+    userId?: string;
+    username: string;
+    message: string;
+    timestamp: string | number;
+  }>;
+  supportCount?: number;
+  supportTotalText?: string;
+  giftCount?: number;
+  giftTotalText?: string;
 }
 
 const RANK_COLORS: Record<string, string> = {
@@ -61,6 +72,11 @@ export function SpectatorPanel({
   currentTurn,
   gameStatus,
   onSendGift,
+  chatMessages,
+  supportCount,
+  supportTotalText,
+  giftCount,
+  giftTotalText,
 }: SpectatorPanelProps) {
   const { language } = useI18n();
   const { toast } = useToast();
@@ -139,8 +155,18 @@ export function SpectatorPanel({
 
   const openGiftPanel = (playerId?: string) => {
     if (playerId) setSelectedPlayer(playerId);
-    window.scrollTo({ top: 0, behavior: "smooth" });
     setShowGiftPanel(true);
+  };
+
+  const formatChatTime = (timestamp: string | number) => {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleTimeString(language === "ar" ? "ar-EG" : "en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   const renderPlayerCard = (player: Player | undefined, label: string) => {
@@ -262,6 +288,57 @@ export function SpectatorPanel({
           </h4>
           {renderPlayerCard(player1, language === "ar" ? "لاعب 1" : "Player 1")}
           {renderPlayerCard(player2, language === "ar" ? "لاعب 2" : "Player 2")}
+        </div>
+
+        <div className="mb-4">
+          <h4 className="text-sm font-medium text-muted-foreground mb-2">
+            {language === "ar" ? "ملخص المشاهدة" : "Watch Summary"}
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg border bg-muted/30 p-2">
+              <p className="text-[11px] text-muted-foreground">{language === "ar" ? "المشاهدون" : "Viewers"}</p>
+              <p className="text-sm font-semibold">{spectatorCount}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-2">
+              <p className="text-[11px] text-muted-foreground">{language === "ar" ? "مرات الدعم" : "Supports"}</p>
+              <p className="text-sm font-semibold">{supportCount ?? 0}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-2">
+              <p className="text-[11px] text-muted-foreground">{language === "ar" ? "قيمة الدعم" : "Support Value"}</p>
+              <p className="text-sm font-semibold truncate">{supportTotalText || "0"}</p>
+            </div>
+            <div className="rounded-lg border bg-muted/30 p-2">
+              <p className="text-[11px] text-muted-foreground">{language === "ar" ? "الهدايا" : "Gifts"}</p>
+              <p className="text-sm font-semibold">{giftCount ?? 0}</p>
+            </div>
+          </div>
+          <div className="mt-2 rounded-lg border bg-muted/30 p-2">
+            <p className="text-[11px] text-muted-foreground">{language === "ar" ? "قيمة الهدايا" : "Gift Value"}</p>
+            <p className="text-sm font-semibold">{giftTotalText || "0 VXC"}</p>
+          </div>
+        </div>
+
+        <div className="mb-2">
+          <h4 className="text-sm font-medium text-muted-foreground mb-2">
+            {language === "ar" ? "دردشة اللاعبين" : "Players Chat"}
+          </h4>
+          <div className="rounded-lg border bg-muted/20 p-2 space-y-2 max-h-64 overflow-y-auto">
+            {!chatMessages || chatMessages.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-3">
+                {language === "ar" ? "لا توجد رسائل حتى الآن" : "No messages yet"}
+              </p>
+            ) : (
+              chatMessages.slice(-40).map((msg, index) => (
+                <div key={msg.id || `${msg.userId || "msg"}-${index}-${String(msg.timestamp)}`} className="rounded-md border bg-background/80 px-2 py-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium truncate">{msg.username}</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">{formatChatTime(msg.timestamp)}</span>
+                  </div>
+                  <p className="text-xs mt-1 break-words">{msg.message}</p>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
       </ScrollArea>

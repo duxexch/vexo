@@ -105,6 +105,40 @@ export function generateAlerts(
     });
   }
 
+  const invalidStatePerMinute = services.dominoMoveErrors.securitySignals.invalidStateLastMinute;
+  if (invalidStatePerMinute >= THRESHOLDS.dominoInvalidStateCritical) {
+    alerts.push({
+      level: 'critical',
+      component: 'domino-invalid-state',
+      message: `${invalidStatePerMinute} domino invalid-state events in last minute`,
+      timestamp,
+    });
+  } else if (invalidStatePerMinute >= THRESHOLDS.dominoInvalidStateWarning) {
+    alerts.push({
+      level: 'warning',
+      component: 'domino-invalid-state',
+      message: `${invalidStatePerMinute} domino invalid-state events in last minute`,
+      timestamp,
+    });
+  }
+
+  const suspiciousCodesPerMinute = services.dominoMoveErrors.securitySignals.suspiciousCodesLastMinute;
+  if (suspiciousCodesPerMinute >= THRESHOLDS.dominoSuspiciousCodeCritical) {
+    alerts.push({
+      level: 'critical',
+      component: 'domino-suspicious-codes',
+      message: `${suspiciousCodesPerMinute} suspicious domino move codes in last minute`,
+      timestamp,
+    });
+  } else if (suspiciousCodesPerMinute >= THRESHOLDS.dominoSuspiciousCodeWarning) {
+    alerts.push({
+      level: 'warning',
+      component: 'domino-suspicious-codes',
+      message: `${suspiciousCodesPerMinute} suspicious domino move codes in last minute`,
+      timestamp,
+    });
+  }
+
   return alerts;
 }
 

@@ -1,10 +1,198 @@
+import { eq } from 'drizzle-orm';
+import { db } from '../db';
 import { storage } from '../storage';
 import { logger } from '../lib/logger';
-import type { AuthenticatedWebSocket } from './types';
+import { getGameEngine } from '../game-engines';
+import { gameMoves, liveGameSessions } from '@shared/schema';
+import type { MoveData } from '../game-engines/types';
+import type { AuthenticatedWebSocket, GameRoom } from './types';
 import { rooms, userConnections, disconnectedPlayers, RECONNECT_GRACE_MS, TURN_TIMEOUT_MS, turnTimers, forfeitingSessionsLock } from './types';
-import { broadcastToRoom, determineWinnerOnForfeit } from './utils';
+import { broadcastToRoom, determineWinnerOnForfeit, send } from './utils';
 import { handleGameOver } from './game-over';
-import { getAdaptiveAiSessionConfig, recordAbandonedGame } from '../lib/adaptive-ai';
+import { getAdaptiveAiSessionConfig, isAdaptiveAiPlayer, recordAbandonedGame, resolveCurrentPlayerFromState } from '../lib/adaptive-ai';
+
+const allowedMoveKeys = [
+  'type', 'from', 'to', 'promotion', 'die', 'dieValues', 'position', 'tileId', 'side',
+  'card', 'bid', 'suit', 'rank', 'action', 'target', 'source', 'destination', 'piece', 'selectedTile',
+  'playedTile', 'drawFromBoneyard', 'pass', 'endSide', 'trump', 'declaration', 'team', 'points',
+  'gameType', 'trumpSuit', 'tile', 'end',
+] as const;
+
+function sanitizeMove(move: MoveData): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
+  for (const key of allowedMoveKeys) {
+    if (key in move) {
+      sanitized[key] = (move as Record<string, unknown>)[key];
+    }
+  }
+  return sanitized;
+}
+
+function selectDominoTimeoutAutoMove(validMoves: MoveData[]): MoveData | null {
+  const playable = validMoves.find((move) => move.type === 'play');
+  if (playable) return playable;
+
+  const drawMove = validMoves.find((move) => move.type === 'draw');
+  if (drawMove) return drawMove;
+
+  const passMove = validMoves.find((move) => move.type === 'pass');
+  if (passMove) return passMove;
+
+  return null;
+}
+
+async function tryHandleDominoTimeoutAutoMove(sessionId: string, room: GameRoom, currentPlayerId: string): Promise<boolean> {
+  if (room.gameType !== 'domino') {
+    return false;
+  }
+
+  const engine = getGameEngine(room.gameType);
+  if (!engine) {
+    return false;
+  }
+
+  const txResult = await db.transaction(async (tx) => {
+    const [lockedSession] = await tx
+      .select()
+      .from(liveGameSessions)
+      .where(eq(liveGameSessions.id, sessionId))
+      .for('update');
+
+    if (!lockedSession || lockedSession.status !== 'in_progress') {
+      return { outcome: 'stale' as const };
+    }
+
+    const lockedState = lockedSession.gameState || room.gameState || engine.createInitialState();
+    const activePlayerId = resolveCurrentPlayerFromState(room.gameType, lockedState, {
+      player1Id: lockedSession.player1Id,
+      player2Id: lockedSession.player2Id,
+      player3Id: lockedSession.player3Id,
+      player4Id: lockedSession.player4Id,
+    });
+
+    if (!activePlayerId || activePlayerId !== currentPlayerId) {
+      return { outcome: 'stale' as const };
+    }
+
+    const validMoves = engine.getValidMoves(lockedState, currentPlayerId);
+    const autoMove = selectDominoTimeoutAutoMove(validMoves);
+    if (!autoMove) {
+      return { outcome: 'failed' as const };
+    }
+
+    const validation = engine.validateMove(lockedState, currentPlayerId, autoMove);
+    if (!validation.valid) {
+      logger.warn(`[WS] Domino timeout auto-move invalid for player ${currentPlayerId} in session ${sessionId}: ${validation.error || 'unknown error'}`);
+      return { outcome: 'failed' as const };
+    }
+
+    const applyResult = engine.applyMove(lockedState, currentPlayerId, autoMove);
+    if (!applyResult.success) {
+      logger.warn(`[WS] Domino timeout auto-move apply failed for player ${currentPlayerId} in session ${sessionId}: ${applyResult.error || 'unknown error'}`);
+      return { outcome: 'failed' as const };
+    }
+
+    const nextTurnNumber = (lockedSession.turnNumber || 0) + 1;
+
+    await tx
+      .update(liveGameSessions)
+      .set({
+        gameState: applyResult.newState,
+        turnNumber: nextTurnNumber,
+        updatedAt: new Date(),
+      })
+      .where(eq(liveGameSessions.id, sessionId));
+
+    await tx.insert(gameMoves).values({
+      sessionId,
+      playerId: currentPlayerId,
+      moveNumber: nextTurnNumber,
+      moveType: autoMove.type || 'move',
+      moveData: JSON.stringify({ ...sanitizeMove(autoMove), timeoutAuto: true }),
+      isValid: true,
+    });
+
+    return {
+      outcome: 'applied' as const,
+      newState: applyResult.newState,
+      events: applyResult.events,
+      turnNumber: nextTurnNumber,
+      autoMove,
+      playerFallback: {
+        player1Id: lockedSession.player1Id,
+        player2Id: lockedSession.player2Id,
+        player3Id: lockedSession.player3Id,
+        player4Id: lockedSession.player4Id,
+      },
+    };
+  });
+
+  if (txResult.outcome === 'stale') {
+    return true;
+  }
+
+  if (txResult.outcome !== 'applied') {
+    return false;
+  }
+
+  room.gameState = txResult.newState;
+
+  logger.info(`[WS] Domino timeout auto-move applied for player ${currentPlayerId} in session ${sessionId}: ${txResult.autoMove.type}`);
+
+  broadcastToRoom(room, {
+    type: 'turn_timeout',
+    payload: {
+      timedOutPlayer: currentPlayerId,
+      autoAction: 'move',
+      moveType: txResult.autoMove.type,
+    }
+  });
+
+  for (const [playerId, playerWs] of room.players) {
+    const playerView = engine.getPlayerView(txResult.newState, playerId);
+    send(playerWs, {
+      type: 'game_update',
+      payload: {
+        gameType: room.gameType,
+        events: txResult.events,
+        view: playerView,
+        turnNumber: txResult.turnNumber,
+      }
+    });
+  }
+
+  const spectatorView = engine.getPlayerView(txResult.newState, 'spectator');
+  for (const [, spectatorWs] of room.spectators) {
+    send(spectatorWs, {
+      type: 'game_update',
+      payload: {
+        gameType: room.gameType,
+        events: txResult.events,
+        view: spectatorView,
+        turnNumber: txResult.turnNumber,
+      }
+    });
+  }
+
+  const gameStatus = engine.getGameStatus(txResult.newState);
+  if (gameStatus.isOver) {
+    clearTurnTimer(sessionId);
+    await handleGameOver(room, gameStatus);
+    return true;
+  }
+
+  const aiConfig = await getAdaptiveAiSessionConfig(sessionId);
+  const nextPlayer = resolveCurrentPlayerFromState(room.gameType, txResult.newState, txResult.playerFallback);
+
+  if (isAdaptiveAiPlayer(aiConfig, nextPlayer)) {
+    const { processAdaptiveAiTurns } = await import('./ai-turns');
+    await processAdaptiveAiTurns(sessionId, room);
+  } else if (nextPlayer) {
+    startTurnTimer(sessionId, nextPlayer, room.turnTimeLimitMs);
+  }
+
+  return true;
+}
 
 // Turn timer management
 export function startTurnTimer(sessionId: string, currentPlayerId: string, timeLimitMs?: number) {
@@ -20,6 +208,13 @@ export function startTurnTimer(sessionId: string, currentPlayerId: string, timeL
     try {
       const session = await storage.getLiveGameSession(sessionId);
       if (!session || session.status === 'completed') return;
+
+      if (room.gameType === 'domino') {
+        const handledByAutoMove = await tryHandleDominoTimeoutAutoMove(sessionId, room, currentPlayerId);
+        if (handledByAutoMove) {
+          return;
+        }
+      }
 
       // FIX: Determine winner correctly for both 2-player and 4-player team games
       const { winner: opponentId, winningTeam } = determineWinnerOnForfeit(session, currentPlayerId);

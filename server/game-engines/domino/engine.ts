@@ -1,7 +1,16 @@
 import type { GameEngine, MoveData, ValidationResult, ApplyMoveResult, GameStatus, PlayerView, GameEvent } from '../types';
 import type { DominoTile, DominoState } from './types';
 import { getMaxDrawsPerTurn } from './types';
-import { createAllTiles, shuffleTiles, canPlayTile, matchesTile, getPlayableTiles, advanceTurn, findBlockedGameWinner } from './helpers';
+import {
+  createAllTiles,
+  shuffleTiles,
+  canPlayTile,
+  matchesTile,
+  getPlayableTiles,
+  advanceTurn,
+  findBlockedGameWinner,
+  validateDominoStateIntegrity,
+} from './helpers';
 import { cryptoRandomInt } from '../../lib/game-utils';
 
 export class DominoEngine implements GameEngine {
@@ -600,6 +609,16 @@ export class DominoEngine implements GameEngine {
     try {
       const state: DominoState = JSON.parse(stateJson);
       this.hydrateState(state);
+
+      const integrityIssue = validateDominoStateIntegrity(state);
+      if (integrityIssue) {
+        return {
+          valid: false,
+          error: `Invalid game state integrity (${integrityIssue.code})`,
+          errorKey: 'domino.invalidState',
+        };
+      }
+
       return this.validateMoveFromState(state, playerId, move);
     } catch {
       return { valid: false, error: 'Invalid game state', errorKey: 'domino.invalidState' };
@@ -611,6 +630,17 @@ export class DominoEngine implements GameEngine {
       // C8-F1: Single parse — guards moved into cloned state (moves.ts already validates)
       const clonedState: DominoState = JSON.parse(stateJson);
       this.hydrateState(clonedState);
+
+      const integrityIssue = validateDominoStateIntegrity(clonedState);
+      if (integrityIssue) {
+        return {
+          success: false,
+          newState: stateJson,
+          events: [],
+          error: `State integrity check failed (${integrityIssue.code})`,
+        };
+      }
+
       if (clonedState.gameOver) {
         return { success: false, newState: stateJson, events: [], error: 'Game is already over' };
       }
@@ -633,10 +663,43 @@ export class DominoEngine implements GameEngine {
         return { success: false, newState: stateJson, events: [], error: result.error || 'Failed to apply move' };
       }
 
+      const postMoveIntegrityIssue = validateDominoStateIntegrity(result.state);
+      if (postMoveIntegrityIssue) {
+        console.error('[Domino] State integrity check failed after move', {
+          playerId,
+          moveType: move.type,
+          code: postMoveIntegrityIssue.code,
+          message: postMoveIntegrityIssue.message,
+        });
+        return {
+          success: false,
+          newState: stateJson,
+          events: [],
+          error: `State integrity check failed after move (${postMoveIntegrityIssue.code})`,
+        };
+      }
+
       // Auto-play any bot turns after this human move
       if (result.state.botPlayers && result.state.botPlayers.length > 0 && !result.state.gameOver
         && this.isBotPlayer(result.state, result.state.currentPlayer)) {
         const botResult = this.runBotTurnsWithEvents(result.state, result.events);
+
+        try {
+          const botState = JSON.parse(botResult.stateJson) as DominoState;
+          this.hydrateState(botState);
+          const botIntegrityIssue = validateDominoStateIntegrity(botState);
+          if (botIntegrityIssue) {
+            return {
+              success: false,
+              newState: stateJson,
+              events: [],
+              error: `Bot state integrity check failed (${botIntegrityIssue.code})`,
+            };
+          }
+        } catch {
+          return { success: false, newState: stateJson, events: [], error: 'Bot state is invalid' };
+        }
+
         return { success: true, newState: botResult.stateJson, events: botResult.events };
       }
 
@@ -812,6 +875,10 @@ export class DominoEngine implements GameEngine {
     try {
       const state: DominoState = JSON.parse(stateJson);
       this.hydrateState(state);
+      const integrityIssue = validateDominoStateIntegrity(state);
+      if (integrityIssue) {
+        return { isOver: false, reason: 'invalid_state' };
+      }
       // C9-F10: Use pre-stored reason from applyMoveInternal when available
       return {
         isOver: state.gameOver,
@@ -830,6 +897,10 @@ export class DominoEngine implements GameEngine {
     try {
       const state: DominoState = JSON.parse(stateJson);
       this.hydrateState(state);
+      const integrityIssue = validateDominoStateIntegrity(state);
+      if (integrityIssue) {
+        return [];
+      }
       return this.getValidMovesFromState(state, playerId);
     } catch {
       return [];
@@ -869,6 +940,15 @@ export class DominoEngine implements GameEngine {
     try {
       const state: DominoState = JSON.parse(stateJson);
       this.hydrateState(state);
+      const integrityIssue = validateDominoStateIntegrity(state);
+      if (integrityIssue) {
+        return {
+          board: undefined,
+          isMyTurn: false,
+          gamePhase: 'error',
+          error: `state_integrity_failed:${integrityIssue.code}`,
+        };
+      }
       const isPlayer = state.playerOrder.includes(playerId);
 
       const otherHandCounts: { [id: string]: number } = {};

@@ -40,6 +40,13 @@ export interface DominoMoveErrorTelemetry {
   lastMinuteByKey: Record<string, number>;
   lifetimeTotal: number;
   lifetimeByKey: Record<string, number>;
+  securitySignals: {
+    invalidStateLastMinute: number;
+    suspiciousCodesLastMinute: number;
+    uniqueUsersLastMinute: number;
+    uniqueChallengesLastMinute: number;
+    lastMinuteByCode: Record<string, number>;
+  };
   lastEventAt?: string;
 }
 
@@ -75,4 +82,8 @@ export const THRESHOLDS = {
   errorRateCritical: 50, // per minute
   dominoMoveErrorRateWarning: 15, // per minute
   dominoMoveErrorRateCritical: 40, // per minute
+  dominoInvalidStateWarning: 5, // per minute
+  dominoInvalidStateCritical: 15, // per minute
+  dominoSuspiciousCodeWarning: 8, // per minute
+  dominoSuspiciousCodeCritical: 20, // per minute
 };

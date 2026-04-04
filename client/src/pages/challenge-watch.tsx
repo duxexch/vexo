@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,9 +17,15 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import type { CountryPaymentMethod } from "@shared/schema";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
+import { normalizeDominoChallengePlayerView } from "@/lib/domino-challenge-adapter";
 import { BackButton } from "@/components/BackButton";
 import { ChessBoard } from "@/components/games/ChessBoard";
-import { DominoBoard } from "@/components/games/DominoBoard";
+import {
+  DominoChallengeContainer,
+  type DominoEndgameSummary,
+  type DominoScoreRow,
+  type DominoTimelineEntry,
+} from "@/components/games/DominoChallengeContainer";
 import { BackgammonBoard } from "@/components/games/backgammon/BackgammonBoard";
 import TarneebBoard from "@/components/games/TarneebBoard";
 import type { TarneebState } from "@/components/games/TarneebBoard";
@@ -50,6 +56,7 @@ import {
   Info,
   ArrowRightLeft,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Player {
   id: string;
@@ -134,7 +141,16 @@ interface WatchGiftInfo {
   senderName: string;
   giftName: string;
   giftId?: string;
+  amount?: number | string;
   [key: string]: unknown;
+}
+
+interface WatchChatMessage {
+  id?: string;
+  userId?: string;
+  username: string;
+  message: string;
+  timestamp: string | number;
 }
 
 interface ChallengeWatchWSMessage {
@@ -146,6 +162,7 @@ interface ChallengeWatchWSMessage {
   };
   session?: GameSession;
   view?: Record<string, unknown>;
+  message?: WatchChatMessage;
   gift?: WatchGiftInfo;
   error?: string;
   code?: string;
@@ -173,7 +190,9 @@ export default function ChallengeWatchPage() {
 
   const [gameSession, setGameSession] = useState<GameSession | null>(null);
   const [playerView, setPlayerView] = useState<Record<string, unknown> | null>(null);
+  const [messages, setMessages] = useState<WatchChatMessage[]>([]);
   const [receivedGifts, setReceivedGifts] = useState<WatchGiftInfo[]>([]);
+  const [giftAggregate, setGiftAggregate] = useState<{ count: number; totalValue: number }>({ count: 0, totalValue: 0 });
 
   const [supportAmount, setSupportAmount] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
@@ -468,17 +487,33 @@ export default function ChallengeWatchPage() {
         if (data.session) setGameSession(prev => prev ? { ...prev, ...data.session } : null);
         if (data.view) setPlayerView(data.view);
         break;
+      case "chat_message":
+        if (data.message) {
+          setMessages((prev) => [...prev, data.message as WatchChatMessage].slice(-160));
+        }
+        break;
       case "gift_received":
         if (data.gift) {
           const gift = data.gift;
-          setReceivedGifts(prev => [...prev, gift]);
+          const parsedGiftAmount = Number((gift as { amount?: unknown }).amount);
+          const safeGiftAmount = Number.isFinite(parsedGiftAmount) && parsedGiftAmount > 0 ? parsedGiftAmount : 0;
+          const displayId = `${String(gift.id || "gift")}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const displayGift: WatchGiftInfo = {
+            ...gift,
+            id: displayId,
+          };
+          setReceivedGifts(prev => [...prev, displayGift]);
+          setGiftAggregate((prev) => ({
+            count: prev.count + 1,
+            totalValue: prev.totalValue + safeGiftAmount,
+          }));
           toast({
             title: language === "ar" ? "هدية!" : "Gift!",
             description: `${gift.senderName} sent ${gift.giftName}`,
           });
           setTimeout(() => {
-            setReceivedGifts(prev => prev.filter(g => g.id !== gift.id));
-          }, 3000);
+            setReceivedGifts(prev => prev.filter(g => g.id !== displayId));
+          }, 1500);
         }
         break;
       case "game_ended":
@@ -548,7 +583,6 @@ export default function ChallengeWatchPage() {
   }, [challengeId, language, toast]);
 
   const openGiftPanel = useCallback(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
     setShowGiftPanel(true);
   }, []);
 
@@ -692,6 +726,51 @@ export default function ChallengeWatchPage() {
     return isProjectChallengeCurrency ? `${safeAmount.toFixed(2)} VXC` : `$${safeAmount.toFixed(2)}`;
   };
 
+  const supportAggregate = useMemo(() => {
+    if (!supports || supports.length === 0) {
+      return { count: 0, totalAmount: 0 };
+    }
+
+    const totalAmount = supports.reduce((sum, support) => {
+      const numericAmount = Number(support.amount);
+      return sum + (Number.isFinite(numericAmount) ? numericAmount : 0);
+    }, 0);
+
+    return {
+      count: supports.length,
+      totalAmount,
+    };
+  }, [supports]);
+
+  const participantIds = useMemo(() => {
+    return new Set(
+      [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id]
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    );
+  }, [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id]);
+
+  const playerChatMessages = useMemo(() => {
+    return messages
+      .filter((msg) => {
+        const text = String(msg.message || "").trim();
+        if (!text) return false;
+        if (!msg.userId) return true;
+        return participantIds.has(msg.userId);
+      })
+      .slice(-60)
+      .map((msg, index) => ({
+        id: msg.id || `${msg.userId || "chat"}-${index}-${String(msg.timestamp)}`,
+        userId: msg.userId,
+        username: msg.username || (language === "ar" ? "لاعب" : "Player"),
+        message: String(msg.message || ""),
+        timestamp: msg.timestamp,
+      }));
+  }, [language, messages, participantIds]);
+
+  const playerInfoWidthClass = challenge.gameType === "domino" ? "w-full max-w-5xl mb-4" : "w-full max-w-lg mb-4";
+  const boardWidthClass = challenge.gameType === "domino" ? "w-full max-w-5xl" : "w-full max-w-lg";
+  const supportActionsDisabled = !challenge.player2 || gameSession?.status !== "playing" || isTeamGame;
+
   const resolveWinnerName = (winnerId?: string) => {
     if (!winnerId) return language === "ar" ? "غير معروف" : "Unknown";
     const playerMap = new Map<string, string>([
@@ -702,6 +781,141 @@ export default function ChallengeWatchPage() {
     ]);
     return playerMap.get(winnerId) || winnerId;
   };
+
+  const dominoPlayerLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    const players = [
+      { id: challenge.player1Id, username: challenge.player1?.username, seat: 1 },
+      { id: challenge.player2Id, username: challenge.player2?.username, seat: 2 },
+      { id: challenge.player3Id, username: challenge.player3?.username, seat: 3 },
+      { id: challenge.player4Id, username: challenge.player4?.username, seat: 4 },
+    ];
+
+    for (const player of players) {
+      if (!player.id) continue;
+      labels.set(player.id, player.username || `${t("domino.player")} ${player.seat}`);
+    }
+
+    return labels;
+  }, [
+    challenge.player1?.username,
+    challenge.player1Id,
+    challenge.player2?.username,
+    challenge.player2Id,
+    challenge.player3?.username,
+    challenge.player3Id,
+    challenge.player4?.username,
+    challenge.player4Id,
+    t,
+  ]);
+
+  const dominoRawView = useMemo<Record<string, unknown> | undefined>(() => {
+    if (playerView && typeof playerView === "object") {
+      return playerView;
+    }
+
+    if (!gameSession?.gameState) {
+      return undefined;
+    }
+
+    try {
+      const parsed = JSON.parse(gameSession.gameState) as unknown;
+      if (parsed && typeof parsed === "object") {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return undefined;
+    }
+
+    return undefined;
+  }, [playerView, gameSession?.gameState]);
+
+  const dominoBoardState = useMemo(() => {
+    if (!dominoRawView) {
+      return undefined;
+    }
+
+    const normalized = normalizeDominoChallengePlayerView(dominoRawView);
+    return normalized as Record<string, unknown> | undefined;
+  }, [dominoRawView]);
+
+  const dominoTimeline = useMemo<DominoTimelineEntry[]>(() => {
+    const state = dominoBoardState as { lastAction?: unknown } | undefined;
+    const lastAction = state?.lastAction;
+
+    if (!lastAction || typeof lastAction !== "object") {
+      return [];
+    }
+
+    const action = lastAction as {
+      type?: unknown;
+      playerId?: unknown;
+      tile?: { left?: unknown; right?: unknown };
+    };
+
+    if (typeof action.type !== "string" || typeof action.playerId !== "string") {
+      return [];
+    }
+
+    const actor = dominoPlayerLabels.get(action.playerId) || t("domino.player");
+    let text = `${actor} ${action.type}`;
+
+    if (action.type === "pass") {
+      text = `${actor} ${t("domino.passedTurn")}`;
+    } else if (action.type === "draw") {
+      text = `${actor} ${t("domino.drewTile")}`;
+    } else if (
+      action.type === "play"
+      && action.tile
+      && typeof action.tile.left === "number"
+      && typeof action.tile.right === "number"
+    ) {
+      text = `${actor} ${t("domino.played")} ${action.tile.left}|${action.tile.right}`;
+    }
+
+    return [{
+      id: `${action.type}-${action.playerId}`,
+      text,
+      moveNumber: typeof gameSession?.totalMoves === "number" ? gameSession.totalMoves : undefined,
+    }];
+  }, [dominoBoardState, dominoPlayerLabels, gameSession?.totalMoves, t]);
+
+  const dominoScoreRows = useMemo<DominoScoreRow[]>(() => {
+    const scores = dominoBoardState
+      && typeof (dominoBoardState as { scores?: unknown }).scores === "object"
+      ? (dominoBoardState as { scores?: Record<string, unknown> }).scores
+      : undefined;
+
+    if (!scores) {
+      return [];
+    }
+
+    return Object.entries(scores)
+      .filter(([, value]) => typeof value === "number" && Number.isFinite(value))
+      .map(([playerId, value], index) => ({
+        id: playerId,
+        label: dominoPlayerLabels.get(playerId) || `${t("domino.player")} ${index + 1}`,
+        score: value as number,
+      }))
+      .sort((a, b) => b.score - a.score);
+  }, [dominoBoardState, dominoPlayerLabels, t]);
+
+  const dominoEndgameSummary = useMemo<DominoEndgameSummary>(() => {
+    const reason = gameSession?.winReason;
+    const winnerId = gameSession?.winnerId;
+    const isDraw = reason === "draw" || reason === "draw_agreement";
+
+    return {
+      isFinished: challenge.gameType === "domino" && gameSession?.status === "finished",
+      isDraw,
+      reason,
+      winnerLabel: winnerId ? (dominoPlayerLabels.get(winnerId) || winnerId) : undefined,
+    };
+  }, [challenge.gameType, gameSession?.status, gameSession?.winReason, gameSession?.winnerId, dominoPlayerLabels]);
+
+  const dominoResyncing = challenge.gameType === "domino"
+    && gameSession?.status === "playing"
+    && !dominoBoardState;
 
   return (
     <div className="min-h-screen bg-background" dir={isRTL ? "rtl" : "ltr"}>
@@ -741,8 +955,8 @@ export default function ChallengeWatchPage() {
 
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             <ScrollArea className="flex-1">
-              <div className="p-4 pb-24 lg:pb-4 flex flex-col items-center">
-                <div className="w-full max-w-lg mb-4">
+              <div className="p-4 pb-28 lg:pb-6 flex flex-col items-center">
+                <div className={playerInfoWidthClass}>
                   <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
@@ -776,7 +990,7 @@ export default function ChallengeWatchPage() {
                   </div>
                 </div>
 
-                <div className="relative">
+                <div className={cn("relative", boardWidthClass)}>
                   {receivedGifts.map((gift) => (
                     <div
                       key={gift.id}
@@ -801,13 +1015,18 @@ export default function ChallengeWatchPage() {
                   )}
 
                   {challenge.gameType === "domino" && (
-                    <DominoBoard
-                      gameState={playerView || gameSession?.gameState}
+                    <DominoChallengeContainer
+                      boardState={dominoBoardState}
                       currentTurn={gameSession?.currentTurn || undefined}
                       isMyTurn={false}
                       isSpectator={true}
                       onMove={() => { }}
                       status={gameSession?.status}
+                      dominoResyncing={Boolean(dominoResyncing)}
+                      dominoMoveError={null}
+                      timeline={dominoTimeline}
+                      scoreRows={dominoScoreRows}
+                      endgameSummary={dominoEndgameSummary}
                     />
                   )}
 
@@ -866,7 +1085,7 @@ export default function ChallengeWatchPage() {
                   )}
                 </div>
 
-                <div className="w-full max-w-lg mt-4">
+                <div className={cn(playerInfoWidthClass, "mt-4 mb-0")}>
                   <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
@@ -1164,6 +1383,14 @@ export default function ChallengeWatchPage() {
                 player1={challenge.player1}
                 player2={challenge.player2}
                 spectatorCount={gameSession?.spectatorCount || 0}
+                totalMoves={gameSession?.totalMoves}
+                currentTurn={gameSession?.currentTurn || undefined}
+                gameStatus={gameSession?.status}
+                chatMessages={playerChatMessages}
+                supportCount={supportAggregate.count}
+                supportTotalText={formatChallengeAmountText(supportAggregate.totalAmount)}
+                giftCount={giftAggregate.count}
+                giftTotalText={`${giftAggregate.totalValue.toFixed(2)} VXC`}
                 onSendGift={handleSendGift}
               />
             </div>
@@ -1175,35 +1402,31 @@ export default function ChallengeWatchPage() {
         gifts={receivedGifts.map(g => ({ id: g.id, giftId: g.giftId || 'heart', senderName: g.senderName }))}
       />
 
-      {/* Floating Gift FAB */}
       {user && (
-        <Button
-          onClick={openGiftPanel}
-          className="hidden lg:inline-flex fixed bottom-20 start-4 z-30 h-14 w-14 rounded-full shadow-lg shadow-primary/30 p-0"
-          data-testid="fab-gift"
-        >
-          <Gift className="h-6 w-6" />
-        </Button>
-      )}
-
-      {user && (
-        <div className="fixed bottom-4 inset-x-4 z-30 lg:hidden">
-          <div className="grid grid-cols-2 gap-2 rounded-xl border bg-card/95 backdrop-blur-sm p-2 shadow-xl">
-            <Button onClick={openGiftPanel} className="gap-2" data-testid="button-mobile-open-gift">
-              <Gift className="h-4 w-4" />
-              {language === "ar" ? "هدية" : "Gift"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={jumpToSupportSection}
-              disabled={!challenge?.player2 || gameSession?.status !== "playing" || isTeamGame}
-              className="gap-2"
-              data-testid="button-mobile-jump-support"
-            >
-              <TrendingUp className="h-4 w-4" />
-              {language === "ar" ? "ادعم" : "Support"}
-            </Button>
-          </div>
+        <div className="fixed bottom-4 start-3 z-40 flex flex-col gap-2">
+          <Button
+            onClick={openGiftPanel}
+            className="h-12 w-12 rounded-full p-0 shadow-lg shadow-primary/25 animate-pulse [animation-duration:2.8s]"
+            data-testid="fab-gift"
+            title={language === "ar" ? "إرسال هدية" : "Send Gift"}
+          >
+            <Gift className="h-5 w-5" />
+            <span className="sr-only">{language === "ar" ? "هدية" : "Gift"}</span>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={jumpToSupportSection}
+            disabled={supportActionsDisabled}
+            className={cn(
+              "h-12 w-12 rounded-full p-0 border-primary/40 bg-card/95 shadow-lg",
+              supportActionsDisabled ? "opacity-60" : "animate-pulse [animation-duration:3.2s]",
+            )}
+            data-testid="button-mobile-jump-support"
+            title={language === "ar" ? "ادعم" : "Support"}
+          >
+            <TrendingUp className="h-5 w-5" />
+            <span className="sr-only">{language === "ar" ? "ادعم" : "Support"}</span>
+          </Button>
         </div>
       )}
 
