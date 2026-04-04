@@ -1,7 +1,6 @@
 import type { AuthenticatedSocket } from "../shared";
 import { handleJoinChallengeGame, handleLeaveChallengeGame } from "./join-leave";
 import { handleGameMove } from "./moves";
-import { handleRollDice, handleEndTurn } from "./backgammon";
 import { handleChallengeChat, handleGiftToPlayer } from "./chat-gifts";
 import { handleGameResign, handleOfferDraw, handleRespondDraw } from "./resign-draw";
 import { validateChallengeGameMessage } from "./validation";
@@ -37,9 +36,15 @@ export async function handleChallengeGames(ws: AuthenticatedSocket, data: unknow
     case "game_move":
       return handleGameMove(ws, message);
     case "roll_dice":
-      return handleRollDice(ws, message);
+      return handleGameMove(ws, {
+        challengeId: message.challengeId,
+        move: { type: "roll" },
+      });
     case "end_turn":
-      return handleEndTurn(ws, message);
+      return handleGameMove(ws, {
+        challengeId: message.challengeId,
+        move: { type: "end_turn" },
+      });
     case "challenge_chat":
       return handleChallengeChat(ws, message);
     case "game_resign":

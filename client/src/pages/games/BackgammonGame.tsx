@@ -29,12 +29,15 @@ export default function BackgammonGame() {
     spectatorCount,
     gameResult,
     error,
+    moveError,
+    moveErrorKey,
     isSpectator,
     canPlayActions,
     makeMove,
     forceReconnect,
     lastGift,
-    clearLastGift
+    clearLastGift,
+    clearMoveError
   } = useGameWebSocket(sessionId || null);
 
   const bgState = gameState as BackgammonGameState | null;
@@ -138,6 +141,28 @@ export default function BackgammonGame() {
     }
   }, [gameResult?.winner]);
 
+  // Surface move validation errors from server as localized toasts.
+  useEffect(() => {
+    if (!moveError && !moveErrorKey) {
+      return;
+    }
+
+    const translated = moveErrorKey ? t(moveErrorKey) : '';
+    const description = moveErrorKey && translated && translated !== moveErrorKey
+      ? translated
+      : (moveError || translated);
+
+    if (description) {
+      toast({
+        title: t('common.error'),
+        description,
+        variant: 'destructive'
+      });
+    }
+
+    clearMoveError();
+  }, [moveError, moveErrorKey, t, toast, clearMoveError]);
+
   const handleRoll = () => {
     if (!canPlayActions) {
       toast({
@@ -162,6 +187,45 @@ export default function BackgammonGame() {
     }
 
     makeMove({ type: 'move', from: from.toString(), to: to.toString() });
+  };
+
+  const handleDouble = () => {
+    if (!canPlayActions) {
+      toast({
+        title: language === 'ar' ? 'وضع المشاهدة' : 'Spectator mode',
+        description: language === 'ar' ? 'هذا الإجراء متاح للاعبين فقط.' : 'This action is available to players only.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    makeMove({ type: 'double' });
+  };
+
+  const handleAcceptDouble = () => {
+    if (!canPlayActions) {
+      toast({
+        title: language === 'ar' ? 'وضع المشاهدة' : 'Spectator mode',
+        description: language === 'ar' ? 'هذا الإجراء متاح للاعبين فقط.' : 'This action is available to players only.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    makeMove({ type: 'accept_double' });
+  };
+
+  const handleDeclineDouble = () => {
+    if (!canPlayActions) {
+      toast({
+        title: language === 'ar' ? 'وضع المشاهدة' : 'Spectator mode',
+        description: language === 'ar' ? 'هذا الإجراء متاح للاعبين فقط.' : 'This action is available to players only.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    makeMove({ type: 'decline_double' });
   };
 
   const handleShare = async () => {
@@ -300,6 +364,13 @@ export default function BackgammonGame() {
                 mustRoll={bgState.mustRoll || false}
                 onMove={handleMove}
                 onRoll={handleRoll}
+                onDouble={handleDouble}
+                onAcceptDouble={handleAcceptDouble}
+                onDeclineDouble={handleDeclineDouble}
+                doublingCube={bgState.doublingCube ?? 1}
+                cubeOwner={bgState.cubeOwner ?? null}
+                cubeOffered={Boolean(bgState.cubeOffered)}
+                cubeOfferedBy={bgState.cubeOfferedBy ?? null}
                 disabled={!isGameActive || mappedPlayerColor === 'spectator' || !canPlayActions}
               />
             </CardContent>
@@ -386,7 +457,7 @@ export default function BackgammonGame() {
               <CardContent>
                 <p className="text-lg font-medium">
                   {gameResult.winner === null
-                    ? t('backgammon.draw')
+                    ? t('profile.draw')
                     : isSpectator
                       ? (language === 'ar' ? 'انتهت المباراة' : 'Match finished')
                       : gameResult.winner === user?.id
