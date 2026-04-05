@@ -21,12 +21,12 @@ services:
       - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
       - traefik_letsencrypt:/letsencrypt
     networks:
-      - traefik-proxy
+      - vex-traefik
 
 networks:
-  traefik-proxy:
+  vex-traefik:
     external: true
-    name: ${TRAEFIK_EXTERNAL_NETWORK:-traefik-proxy}
+    name: ${TRAEFIK_EXTERNAL_NETWORK:-vex-traefik}
 
 volumes:
   traefik_letsencrypt:

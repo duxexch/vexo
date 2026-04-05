@@ -1,6 +1,6 @@
 # VEX Platform - Production Docker Compose
 # Uses an existing Traefik reverse-proxy via a shared external Docker network.
-# Default external network name: traefik-proxy (override with TRAEFIK_EXTERNAL_NETWORK).
+# Default external network name: vex-traefik (override with TRAEFIK_EXTERNAL_NETWORK).
 # Domain: vixo.click
 # Usage: docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 
@@ -234,11 +234,11 @@ services:
       - app_uploads:/app/uploads
     networks:
       - vex-internal
-      - traefik-proxy
+      - vex-traefik
     labels:
       # Enable Traefik
       - "traefik.enable=true"
-      - "traefik.docker.network=${TRAEFIK_EXTERNAL_NETWORK:-traefik-proxy}"
+      - "traefik.docker.network=${TRAEFIK_EXTERNAL_NETWORK:-vex-traefik}"
       # HTTPS Router
       - "traefik.http.routers.vex.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
       - "traefik.http.routers.vex.entrypoints=websecure"
@@ -279,9 +279,9 @@ services:
 networks:
   vex-internal:
     driver: bridge
-  traefik-proxy:
+  vex-traefik:
     external: true
-    name: ${TRAEFIK_EXTERNAL_NETWORK:-traefik-proxy}
+    name: ${TRAEFIK_EXTERNAL_NETWORK:-vex-traefik}
 
 volumes:
   postgres_data:

@@ -88,7 +88,7 @@ services:
     labels:
       # Traefik configuration for vixo.click
       - "traefik.enable=true"
-      - "traefik.docker.network=${TRAEFIK_EXTERNAL_NETWORK:-traefik-proxy}"
+      - "traefik.docker.network=${TRAEFIK_EXTERNAL_NETWORK:-vex-traefik}"
       
       # HTTPS router
       - "traefik.http.routers.vex-secure.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
@@ -136,7 +136,7 @@ services:
       - ./uploads:/app/uploads
     networks:
       - vex-network
-      - traefik-proxy
+      - vex-traefik
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
       interval: 15s
@@ -147,9 +147,9 @@ services:
 networks:
   vex-network:
     driver: bridge
-  traefik-proxy:
+  vex-traefik:
     external: true
-    name: ${TRAEFIK_EXTERNAL_NETWORK:-traefik-proxy}
+    name: ${TRAEFIK_EXTERNAL_NETWORK:-vex-traefik}
 
 volumes:
   postgres_data:
