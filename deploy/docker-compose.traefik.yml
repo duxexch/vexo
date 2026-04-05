@@ -21,11 +21,12 @@ services:
       - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
       - traefik_letsencrypt:/letsencrypt
     networks:
-      - classitest_classify-network
+      - traefik-proxy
 
 networks:
-  classitest_classify-network:
+  traefik-proxy:
     external: true
+    name: ${TRAEFIK_EXTERNAL_NETWORK:-traefik-proxy}
 
 volumes:
   traefik_letsencrypt:
