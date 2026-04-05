@@ -1207,6 +1207,16 @@ export default function ChallengeGamePage() {
     return Number.isFinite(parsed) ? parsed : undefined;
   }, [gameSession?.createdAt, gameSession?.lastMoveAt, gameSession?.totalMoves, gameSession?.updatedAt]);
 
+  const tarneebTurnStartedAtMs = useMemo(() => {
+    const rawStartedAt = gameSession?.lastMoveAt || gameSession?.updatedAt || gameSession?.createdAt;
+    if (!rawStartedAt) {
+      return undefined;
+    }
+
+    const parsed = new Date(rawStartedAt).getTime();
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }, [gameSession?.createdAt, gameSession?.lastMoveAt, gameSession?.totalMoves, gameSession?.updatedAt]);
+
   const dominoScoreRows = useMemo<DominoScoreRow[]>(() => {
     const metaScores = dominoResultMeta?.scores;
     const liveScores = playerView?.scores && typeof playerView.scores === "object"
@@ -1857,6 +1867,8 @@ export default function ChallengeGamePage() {
                     onBid={canPlayActions ? sendBid : () => { }}
                     onPass={canPlayActions ? sendPass : () => { }}
                     onSetTrump={canPlayActions ? sendSetTrump : () => { }}
+                    turnTimeLimitSeconds={30}
+                    turnStartedAtMs={tarneebTurnStartedAtMs}
                   />
                 )}
                 {challenge.gameType === "baloot" && (

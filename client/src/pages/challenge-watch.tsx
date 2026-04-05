@@ -657,6 +657,16 @@ export default function ChallengeWatchPage() {
     return Number.isFinite(parsed) ? parsed : undefined;
   }, [gameSession?.createdAt, gameSession?.lastMoveAt, gameSession?.totalMoves, gameSession?.updatedAt]);
 
+  const tarneebTurnStartedAtMs = useMemo(() => {
+    const rawStartedAt = gameSession?.lastMoveAt || gameSession?.updatedAt || gameSession?.createdAt;
+    if (!rawStartedAt) {
+      return undefined;
+    }
+
+    const parsed = new Date(rawStartedAt).getTime();
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }, [gameSession?.createdAt, gameSession?.lastMoveAt, gameSession?.totalMoves, gameSession?.updatedAt]);
+
   const getPlayerOdds = (playerId: string): number => {
     if (!oddsData || !challenge) return 1.5;
     const instantOdds = parseFloat(oddsData.instantMatchOdds) || 1.8;
@@ -1256,6 +1266,8 @@ export default function ChallengeWatchPage() {
                       onBid={() => { }}
                       onPass={() => { }}
                       onSetTrump={() => { }}
+                      turnTimeLimitSeconds={30}
+                      turnStartedAtMs={tarneebTurnStartedAtMs}
                     />
                   )}
 

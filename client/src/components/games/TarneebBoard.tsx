@@ -66,6 +66,8 @@ interface TarneebBoardProps {
   onPass: () => void;
   onSetTrump?: (suit: string) => void;
   onResign?: () => void;
+  turnTimeLimitSeconds?: number;
+  turnStartedAtMs?: number;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -143,6 +145,8 @@ export function TarneebBoard({
   onPass,
   onSetTrump,
   onResign,
+  turnTimeLimitSeconds = TURN_TIME_LIMIT_SEC,
+  turnStartedAtMs,
 }: TarneebBoardProps) {
   const [selectedCard, setSelectedCard] = useState<PlayingCard | null>(null);
   const [soundOn, setSoundOn] = useState(isGameSoundEnabled);
@@ -176,8 +180,7 @@ export function TarneebBoard({
   const prevTrickLenRef = useRef(0);
   const prevRoundRef = useRef(0);
   const prevRedealRef = useRef(0);
-  const [turnTimeLeft, setTurnTimeLeft] = useState(TURN_TIME_LIMIT_SEC);
-  const turnStartRef = useRef(Date.now());
+  const [turnTimeLeft, setTurnTimeLeft] = useState(Math.max(1, turnTimeLimitSeconds));
   const timeoutActionTurnRef = useRef<string>('');
   const [showConfetti, setShowConfetti] = useState(false);
   const [visualTier, setVisualTier] = useState<TarneebVisualTier>("standard");
@@ -225,6 +228,7 @@ export function TarneebBoard({
   const currentPlayer = state.currentTurn || state.currentPlayer;
   const roundNumber = state.roundNumber ?? 1;
   const targetScore = state.targetScore ?? 31;
+  const activeTurnTimeLimit = Math.max(1, turnTimeLimitSeconds);
 
   useEffect(() => {
     const applyTier = () => {
@@ -378,11 +382,8 @@ export function TarneebBoard({
 
   // ─── Turn Timer countdown with auto-play ────────────────────────
   useEffect(() => {
-    // Reset timer every time turn changes
-    turnStartRef.current = Date.now();
-    setTurnTimeLeft(TURN_TIME_LIMIT_SEC);
     timeoutActionTurnRef.current = '';
-  }, [currentPlayer]);
+  }, [currentPlayer, gamePhase, state.trumpSuit]);
 
   // ─── F3: Auto-play single valid card after short delay ──────────
   // F12: Track when we first become "my turn" to add reconnect grace period
@@ -421,10 +422,23 @@ export function TarneebBoard({
   }, [isMyTurn, gamePhase, state.trumpSuit, myHand, state.currentTrick, handlePlayCardAction, graceExpired]);
 
   useEffect(() => {
-    if (gamePhase === 'finished') return;
-    const interval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - turnStartRef.current) / 1000);
-      const remaining = Math.max(0, TURN_TIME_LIMIT_SEC - elapsed);
+    if (gamePhase === 'finished') {
+      setTurnTimeLeft(activeTurnTimeLimit);
+      return;
+    }
+
+    if (!currentPlayer) {
+      setTurnTimeLeft(activeTurnTimeLimit);
+      return;
+    }
+
+    const startedAt = Number.isFinite(turnStartedAtMs)
+      ? Number(turnStartedAtMs)
+      : Date.now();
+
+    const tick = () => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+      const remaining = Math.max(0, activeTurnTimeLimit - elapsed);
       setTurnTimeLeft(remaining);
 
       // ── Auto-play on timeout (only for the local player) ──
@@ -461,9 +475,12 @@ export function TarneebBoard({
           }
         }
       }
-    }, 1000);
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [currentPlayer, gamePhase, isMyTurn, playerId, state.hand, state.hands, state.currentTrick, state.trumpSuit, state.highestBid?.playerId, handlePassAction, handleTrumpAction, handlePlayCardAction, onSetTrump]);
+  }, [activeTurnTimeLimit, currentPlayer, gamePhase, isMyTurn, playerId, state.hand, state.hands, state.currentTrick, state.trumpSuit, state.highestBid?.playerId, turnStartedAtMs, handlePassAction, handleTrumpAction, handlePlayCardAction, onSetTrump]);
 
   // ─── Keyboard shortcuts ───────────────────────────────────────
   useEffect(() => {
@@ -806,6 +823,13 @@ export function TarneebBoard({
     );
   };
 
+  const renderDecisionCountdown = () => (
+    <Badge variant="outline" className={`text-[10px] h-6 font-mono ${turnTimeLeft <= 15 ? 'bg-red-900/60 border-red-500 text-red-300 animate-pulse' : 'bg-yellow-900/60 border-yellow-500 text-yellow-300'}`}>
+      <Timer className="w-3 h-3 me-0.5" />
+      {Math.floor(turnTimeLeft / 60)}:{(turnTimeLeft % 60).toString().padStart(2, '0')}
+    </Badge>
+  );
+
   // ─── Bidding Phase (hand stays visible below) ──────────────────
   const renderBiddingPhase = () => (
     <div className="absolute inset-x-0 top-0 bottom-24 flex items-center justify-center bg-black/40 z-20 backdrop-blur-sm rounded-b-xl">
@@ -814,9 +838,12 @@ export function TarneebBoard({
           <CardTitle className="flex items-center gap-2 text-lg">
             <Trophy className="h-5 w-5 text-yellow-500" />
             {isAr ? "مرحلة المزايدة" : "Bidding Phase"}
-            <Badge variant="outline" className="ms-auto text-xs">
-              {isAr ? `الجولة ${roundNumber}` : `Round ${roundNumber}`}
-            </Badge>
+            <div className="ms-auto flex items-center gap-1">
+              <Badge variant="outline" className="text-xs">
+                {isAr ? `الجولة ${roundNumber}` : `Round ${roundNumber}`}
+              </Badge>
+              {renderDecisionCountdown()}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -977,6 +1004,7 @@ export function TarneebBoard({
           <CardTitle className="flex items-center gap-2 text-lg">
             <Trophy className="h-5 w-5 text-yellow-500" />
             {isAr ? "اختر نوع الحكم" : "Choose Trump Suit"}
+            <div className="ms-auto">{renderDecisionCountdown()}</div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -1084,14 +1112,14 @@ export function TarneebBoard({
       {gamePhase !== 'finished' && (
         <div className="absolute top-0 start-0 end-0 h-1 z-30">
           <div
-            className={`h-full transition-all duration-1000 ease-linear rounded-e-full ${turnTimeLeft <= 15 ? 'bg-red-500 animate-pulse' : turnTimeLeft <= 30 ? 'bg-yellow-500' : 'bg-green-500'
+            className={`h-full transition-all duration-1000 ease-linear rounded-e-full ${turnTimeLeft <= 15 ? 'bg-red-500 animate-pulse' : turnTimeLeft <= Math.ceil(activeTurnTimeLimit / 2) ? 'bg-yellow-500' : 'bg-green-500'
               }`}
-            style={{ width: `${(turnTimeLeft / TURN_TIME_LIMIT_SEC) * 100}%` }}
+            style={{ width: `${(turnTimeLeft / activeTurnTimeLimit) * 100}%` }}
             role="progressbar"
             aria-label={isAr ? `الوقت المتبقي: ${turnTimeLeft} ثانية` : `Time remaining: ${turnTimeLeft} seconds`}
             aria-valuenow={turnTimeLeft}
             aria-valuemin={0}
-            aria-valuemax={TURN_TIME_LIMIT_SEC}
+            aria-valuemax={activeTurnTimeLimit}
           />
         </div>
       )}
@@ -1338,6 +1366,7 @@ export function TarneebBoard({
                   ? `${getName(currentPlayer)} يختار نوع الحكم...`
                   : `${getName(currentPlayer)} is choosing trump suit...`}
               </p>
+              <div className="flex justify-center">{renderDecisionCountdown()}</div>
             </CardContent>
           </Card>
         </div>
