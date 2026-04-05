@@ -5,6 +5,15 @@ import { db } from "../../db";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
+import { normalizeCurrencyCode } from "../../lib/p2p-currency-controls";
+
+const currencyCodeSchema = z
+  .string()
+  .trim()
+  .min(2)
+  .max(16)
+  .regex(/^[A-Za-z0-9._-]+$/)
+  .transform((value) => value.toUpperCase());
 
 const updateP2pSettingsSchema = z.object({
   feeType: z.enum(["percentage", "fixed", "hybrid"]).optional(),
@@ -18,7 +27,23 @@ const updateP2pSettingsSchema = z.object({
   paymentTimeoutMinutes: z.number().int().positive().optional(),
   autoExpireEnabled: z.boolean().optional(),
   isEnabled: z.boolean().optional(),
+  p2pBuyCurrencies: z.array(currencyCodeSchema).max(100).optional(),
+  p2pSellCurrencies: z.array(currencyCodeSchema).max(100).optional(),
+  depositEnabledCurrencies: z.array(currencyCodeSchema).max(100).optional(),
 });
+
+function normalizeCurrencyArray(currencies: string[]): string[] {
+  const uniqueCurrencies = new Set<string>();
+
+  for (const currency of currencies) {
+    const normalized = normalizeCurrencyCode(currency);
+    if (normalized) {
+      uniqueCurrencies.add(normalized);
+    }
+  }
+
+  return Array.from(uniqueCurrencies);
+}
 
 export function registerP2pSettingsRoutes(app: Express) {
 
@@ -41,21 +66,34 @@ export function registerP2pSettingsRoutes(app: Express) {
   app.put("/api/admin/p2p/settings", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
       const data = updateP2pSettingsSchema.parse(req.body);
-      
+
+      const normalizedData = {
+        ...data,
+        p2pBuyCurrencies: data.p2pBuyCurrencies !== undefined
+          ? normalizeCurrencyArray(data.p2pBuyCurrencies)
+          : undefined,
+        p2pSellCurrencies: data.p2pSellCurrencies !== undefined
+          ? normalizeCurrencyArray(data.p2pSellCurrencies)
+          : undefined,
+        depositEnabledCurrencies: data.depositEnabledCurrencies !== undefined
+          ? normalizeCurrencyArray(data.depositEnabledCurrencies)
+          : undefined,
+      };
+
       // Get current settings or create if not exists
       let [existing] = await db.select().from(p2pSettings).limit(1);
       if (!existing) {
         [existing] = await db.insert(p2pSettings).values({}).returning();
       }
-      
+
       const previousValue = JSON.stringify(existing);
-      
+
       // Update settings
       const [updated] = await db.update(p2pSettings)
-        .set({ ...data, updatedAt: new Date() })
+        .set({ ...normalizedData, updatedAt: new Date() })
         .where(eq(p2pSettings.id, existing.id))
         .returning();
-      
+
       // Log admin action
       await logAdminAction(
         req.admin!.id,
@@ -65,13 +103,13 @@ export function registerP2pSettingsRoutes(app: Express) {
         { previousValue, newValue: JSON.stringify(updated) },
         req
       );
-      
+
       // Broadcast settings change
       broadcastSystemEvent({
         type: "p2p_settings_changed",
         data: updated,
       });
-      
+
       res.json(updated);
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
@@ -88,15 +126,15 @@ export function registerP2pSettingsRoutes(app: Express) {
       if (!amount || isNaN(parseFloat(amount))) {
         return res.status(400).json({ error: "Valid amount required" });
       }
-      
+
       const [settings] = await db.select().from(p2pSettings).limit(1);
       if (!settings) {
         return res.json({ fee: "0.00", feeType: "none" });
       }
-      
+
       const tradeAmount = parseFloat(amount);
       let fee = 0;
-      
+
       switch (settings.feeType) {
         case "percentage":
           fee = tradeAmount * parseFloat(settings.platformFeePercentage);
@@ -108,16 +146,16 @@ export function registerP2pSettingsRoutes(app: Express) {
           fee = (tradeAmount * parseFloat(settings.platformFeePercentage)) + parseFloat(settings.platformFeeFixed);
           break;
       }
-      
+
       // Apply min/max bounds
       const minFee = parseFloat(settings.minFee);
       const maxFee = settings.maxFee ? parseFloat(settings.maxFee) : null;
-      
+
       if (fee < minFee) fee = minFee;
       if (maxFee !== null && fee > maxFee) fee = maxFee;
-      
-      res.json({ 
-        fee: fee.toFixed(2), 
+
+      res.json({
+        fee: fee.toFixed(2),
         feeType: settings.feeType,
         breakdown: {
           percentageFee: (tradeAmount * parseFloat(settings.platformFeePercentage)).toFixed(2),

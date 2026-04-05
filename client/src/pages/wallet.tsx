@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,14 @@ interface ProjectCurrencyWallet {
   currencySymbol: string;
 }
 
+interface DepositConfig {
+  allowedDepositCurrencies: string[];
+  defaultDepositCurrency: string;
+  disabledDepositCurrencies?: string[];
+  balanceCurrency?: string;
+  usdRateByCurrency?: Record<string, number>;
+}
+
 export default function WalletPage() {
   const { t, language } = useI18n();
   const { user, refreshUser } = useAuth();
@@ -89,6 +97,7 @@ export default function WalletPage() {
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [walletNumber, setWalletNumber] = useState("");
+  const [depositCurrency, setDepositCurrency] = useState("USD");
   const { isHidden: isBalanceHidden } = useBalance();
 
   useEffect(() => {
@@ -140,6 +149,51 @@ export default function WalletPage() {
     ...financialQueryOptions,
   });
 
+  const { data: depositConfig } = useQuery<DepositConfig>({
+    queryKey: ['/api/transactions/deposit-config'],
+    ...financialQueryOptions,
+  });
+
+  useEffect(() => {
+    if (!depositConfig) return;
+
+    setDepositCurrency((currentCurrency) => {
+      if (depositConfig.allowedDepositCurrencies.includes(currentCurrency)) {
+        return currentCurrency;
+      }
+
+      return depositConfig.defaultDepositCurrency || depositConfig.allowedDepositCurrencies[0] || 'USD';
+    });
+  }, [depositConfig]);
+
+  const depositFxPreview = useMemo(() => {
+    if (!depositConfig?.usdRateByCurrency) {
+      return null;
+    }
+
+    const parsedAmount = Number(depositAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return null;
+    }
+
+    const usdToDepositRate = Number(depositConfig.usdRateByCurrency[depositCurrency]);
+    if (!Number.isFinite(usdToDepositRate) || usdToDepositRate <= 0) {
+      return null;
+    }
+
+    const estimatedCredit = Math.round(((parsedAmount / usdToDepositRate) + Number.EPSILON) * 100) / 100;
+    if (!Number.isFinite(estimatedCredit) || estimatedCredit <= 0) {
+      return null;
+    }
+
+    return {
+      usdToDepositRate,
+      estimatedCredit,
+      balanceCurrency: depositConfig.balanceCurrency || "USD",
+      parsedAmount,
+    };
+  }, [depositConfig?.balanceCurrency, depositConfig?.usdRateByCurrency, depositAmount, depositCurrency]);
+
   const { data: currencySettings } = useQuery<ProjectCurrencySettings>({
     queryKey: ['/api/project-currency/settings'],
     retry: false,
@@ -177,7 +231,7 @@ export default function WalletPage() {
   });
 
   const depositMutation = useMutation({
-    mutationFn: (data: { amount: number; paymentMethod: string; paymentReference: string; walletNumber?: string }) =>
+    mutationFn: (data: { amount: number; paymentMethod: string; paymentReference: string; walletNumber?: string; currency: string }) =>
       apiRequestWithPaymentToken('POST', '/api/transactions/deposit', data, 'deposit'),
     onSuccess: () => {
       playSound('coin');
@@ -501,6 +555,29 @@ export default function WalletPage() {
               </div>
             </div>
             <div>
+              <Label>{language === 'ar' ? 'عملة الإيداع' : 'Deposit Currency'}</Label>
+              <Select value={depositCurrency} onValueChange={setDepositCurrency}>
+                <SelectTrigger className="mt-2" data-testid="select-deposit-currency">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(depositConfig?.allowedDepositCurrencies || ['USD']).map((currencyCode) => (
+                    <SelectItem key={currencyCode} value={currencyCode}>{currencyCode}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {depositFxPreview ? (
+                <div className="mt-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground space-y-1">
+                  <div>
+                    {tOr('wallet.exchangeRate', 'Exchange Rate')}: 1 USD = {depositFxPreview.usdToDepositRate.toFixed(6)} {depositCurrency}
+                  </div>
+                  <div className="font-medium text-foreground">
+                    {depositFxPreview.parsedAmount.toFixed(2)} {depositCurrency} ≈ {depositFxPreview.estimatedCredit.toFixed(2)} {depositFxPreview.balanceCurrency}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <div>
               <Label>{t('wallet.paymentMethod')}</Label>
               <div className="grid grid-cols-2 gap-2 mt-2">
                 {paymentMethods.map(method => {
@@ -542,8 +619,14 @@ export default function WalletPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDeposit(false)}>{t('common.cancel')}</Button>
             <Button
-              onClick={() => depositMutation.mutate({ amount: parseFloat(depositAmount), paymentMethod, paymentReference, walletNumber: walletNumber || undefined })}
-              disabled={!depositAmount || !paymentMethod || !paymentReference || depositMutation.isPending}
+              onClick={() => depositMutation.mutate({
+                amount: parseFloat(depositAmount),
+                paymentMethod,
+                paymentReference,
+                walletNumber: walletNumber || undefined,
+                currency: depositCurrency,
+              })}
+              disabled={!depositAmount || !paymentMethod || !paymentReference || !depositCurrency || depositMutation.isPending}
               data-testid="button-confirm-deposit"
             >
               {depositMutation.isPending && <RefreshCw className="h-4 w-4 me-2 animate-spin" />}

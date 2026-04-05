@@ -1,11 +1,23 @@
 import type { Express, Response } from "express";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { sql } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
+import { currencies, p2pSettings } from "@shared/schema";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 import { emitSystemAlert } from "../../lib/admin-alerts";
+import { getDepositFxSnapshot } from "../../lib/deposit-fx";
+import { normalizeCurrencyCode, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
 
 export function registerAdminProjectCurrencyRoutes(app: Express) {
+
+  const sanitizeCurrencyDisplayText = (rawValue: unknown, fallback: string, maxLength: number): string => {
+    const normalized = String(rawValue ?? "").trim();
+    if (!normalized) {
+      return fallback;
+    }
+
+    return normalized.slice(0, maxLength);
+  };
 
   const shouldEmitSystemAlert = async (entityType: string, entityId: string, cooldownMinutes = 10): Promise<boolean> => {
     const [row] = await db.execute(sql`
@@ -117,6 +129,188 @@ export function registerAdminProjectCurrencyRoutes(app: Express) {
       );
 
       res.json(updated);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/admin/project-currency/deposit-fx-currencies", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
+    try {
+      const [settings] = await db
+        .select({
+          depositEnabledCurrencies: p2pSettings.depositEnabledCurrencies,
+          p2pBuyCurrencies: p2pSettings.p2pBuyCurrencies,
+          p2pSellCurrencies: p2pSettings.p2pSellCurrencies,
+        })
+        .from(p2pSettings)
+        .limit(1);
+
+      const currencyControls = resolveP2PCurrencyControls(settings);
+      const depositCurrencies = currencyControls.depositEnabledCurrencies;
+      const fxSnapshot = await getDepositFxSnapshot(depositCurrencies);
+
+      const currencyRows = depositCurrencies.length > 0
+        ? await db
+          .select({
+            code: currencies.code,
+            name: currencies.name,
+            symbol: currencies.symbol,
+            exchangeRate: currencies.exchangeRate,
+            isActive: currencies.isActive,
+          })
+          .from(currencies)
+          .where(inArray(currencies.code, depositCurrencies))
+          .orderBy(asc(currencies.code))
+        : [];
+
+      const rowByCode = new Map(
+        currencyRows.map((row) => [String(row.code || "").toUpperCase(), row]),
+      );
+
+      const list = depositCurrencies.map((currencyCode) => {
+        const currencyRow = rowByCode.get(currencyCode);
+
+        return {
+          code: currencyCode,
+          name: currencyRow?.name ?? currencyCode,
+          symbol: currencyRow?.symbol ?? currencyCode,
+          exchangeRate: currencyRow?.exchangeRate ?? null,
+          isActive: currencyRow?.isActive ?? false,
+          isOperational: fxSnapshot.operationalCurrencies.includes(currencyCode),
+        };
+      });
+
+      res.json({
+        currencies: list,
+        operationalCurrencies: fxSnapshot.operationalCurrencies,
+        missingRateCurrencies: fxSnapshot.missingRateCurrencies,
+        balanceCurrency: "USD",
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/admin/project-currency/deposit-fx-currencies/:code", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const normalizedCode = normalizeCurrencyCode(req.params.code);
+      if (!normalizedCode) {
+        return res.status(400).json({ error: "Invalid currency code" });
+      }
+
+      const hasExchangeRate = req.body?.exchangeRate !== undefined;
+      const hasIsActive = req.body?.isActive !== undefined;
+      const hasName = req.body?.name !== undefined;
+      const hasSymbol = req.body?.symbol !== undefined;
+
+      if (!hasExchangeRate && !hasIsActive && !hasName && !hasSymbol) {
+        return res.status(400).json({ error: "At least one field is required" });
+      }
+
+      let normalizedExchangeRate: string | undefined;
+      if (hasExchangeRate) {
+        const parsedRate = Number(req.body.exchangeRate);
+        if (!Number.isFinite(parsedRate) || parsedRate <= 0) {
+          return res.status(400).json({ error: "exchangeRate must be a positive number" });
+        }
+        normalizedExchangeRate = parsedRate.toFixed(6);
+      }
+
+      const [existingCurrency] = await db
+        .select({
+          code: currencies.code,
+          name: currencies.name,
+          symbol: currencies.symbol,
+          exchangeRate: currencies.exchangeRate,
+          isActive: currencies.isActive,
+        })
+        .from(currencies)
+        .where(eq(currencies.code, normalizedCode))
+        .limit(1);
+
+      const nextName = sanitizeCurrencyDisplayText(
+        req.body?.name,
+        existingCurrency?.name ?? normalizedCode,
+        64,
+      );
+      const nextSymbol = sanitizeCurrencyDisplayText(
+        req.body?.symbol,
+        existingCurrency?.symbol ?? normalizedCode,
+        24,
+      );
+      const nextExchangeRate = normalizedExchangeRate
+        ?? existingCurrency?.exchangeRate
+        ?? "1.000000";
+      const nextIsActive = hasIsActive
+        ? Boolean(req.body.isActive)
+        : (existingCurrency?.isActive ?? true);
+
+      let savedCurrency:
+        | {
+          code: string;
+          name: string;
+          symbol: string;
+          exchangeRate: string;
+          isActive: boolean;
+        }
+        | undefined;
+
+      if (existingCurrency) {
+        [savedCurrency] = await db
+          .update(currencies)
+          .set({
+            name: nextName,
+            symbol: nextSymbol,
+            exchangeRate: nextExchangeRate,
+            isActive: nextIsActive,
+          })
+          .where(eq(currencies.code, normalizedCode))
+          .returning({
+            code: currencies.code,
+            name: currencies.name,
+            symbol: currencies.symbol,
+            exchangeRate: currencies.exchangeRate,
+            isActive: currencies.isActive,
+          });
+      } else {
+        [savedCurrency] = await db
+          .insert(currencies)
+          .values({
+            code: normalizedCode,
+            name: nextName,
+            symbol: nextSymbol,
+            exchangeRate: nextExchangeRate,
+            isActive: nextIsActive,
+            isDefault: false,
+            country: null,
+            sortOrder: 999,
+          })
+          .returning({
+            code: currencies.code,
+            name: currencies.name,
+            symbol: currencies.symbol,
+            exchangeRate: currencies.exchangeRate,
+            isActive: currencies.isActive,
+          });
+      }
+
+      if (!savedCurrency) {
+        return res.status(500).json({ error: "Failed to save currency" });
+      }
+
+      await logAdminAction(
+        req.admin!.id,
+        "update",
+        "currency_rate",
+        normalizedCode,
+        {
+          previousValue: JSON.stringify(existingCurrency ?? null),
+          newValue: JSON.stringify(savedCurrency),
+        },
+        req,
+      );
+
+      res.json(savedCurrency);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

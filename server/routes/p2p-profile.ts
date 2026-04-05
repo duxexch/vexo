@@ -4,6 +4,7 @@ import { getErrorMessage } from "./helpers";
 import { storage } from "../storage";
 import { db } from "../db";
 import {
+    countryPaymentMethods,
     p2pBadgeDefinitions,
     p2pSettings,
     p2pTraderBadges,
@@ -12,7 +13,7 @@ import {
     p2pTraderProfiles,
     p2pTrades,
 } from "@shared/schema";
-import { and, asc, desc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { sanitizePlainText } from "../lib/input-security";
 import {
     ensureP2PUsername,
@@ -26,6 +27,19 @@ function toNumber(value: string | number | null | undefined, fallback = 0): numb
     return Number.isFinite(n) ? n : fallback;
 }
 
+function pickLargestMetricValue(...values: Array<string | number | null | undefined>): number {
+    let largest = 0;
+
+    for (const value of values) {
+        const numericValue = Number(value);
+        if (Number.isFinite(numericValue) && numericValue > largest) {
+            largest = numericValue;
+        }
+    }
+
+    return largest;
+}
+
 function maskAccountNumber(accountNumber: string | null): string {
     if (!accountNumber) return "";
     const trimmed = accountNumber.trim();
@@ -37,6 +51,7 @@ export function registerP2PProfileRoutes(app: Express): void {
     app.get("/api/p2p/profile/:userId", authMiddleware, async (req: AuthRequest, res: Response) => {
         try {
             const userId = req.params.userId === "me" ? req.user!.id : req.params.userId;
+            const includePrivateProfileContext = req.user!.id === userId;
             const user = await storage.getUser(userId);
 
             if (!user) return res.status(404).json({ error: "User not found" });
@@ -52,6 +67,24 @@ export function registerP2PProfileRoutes(app: Express): void {
                 .from(p2pTraderMetrics)
                 .where(eq(p2pTraderMetrics.userId, userId))
                 .limit(1);
+
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const [derivedTradeStats] = await db
+                .select({
+                    totalTrades: sql<string>`count(*)`,
+                    completedTrades: sql<string>`coalesce(sum(case when ${p2pTrades.status} = 'completed' then 1 else 0 end), 0)`,
+                    cancelledTrades: sql<string>`coalesce(sum(case when ${p2pTrades.status} = 'cancelled' then 1 else 0 end), 0)`,
+                    totalBuyTrades: sql<string>`coalesce(sum(case when ${p2pTrades.buyerId} = ${userId} then 1 else 0 end), 0)`,
+                    totalSellTrades: sql<string>`coalesce(sum(case when ${p2pTrades.sellerId} = ${userId} then 1 else 0 end), 0)`,
+                    totalVolumeUsdt: sql<string>`coalesce(sum(case when ${p2pTrades.status} <> 'cancelled' then cast(${p2pTrades.fiatAmount} as numeric) else 0 end), 0)`,
+                    trades30d: sql<string>`coalesce(sum(case when ${p2pTrades.createdAt} >= ${thirtyDaysAgo} then 1 else 0 end), 0)`,
+                    completed30d: sql<string>`coalesce(sum(case when ${p2pTrades.createdAt} >= ${thirtyDaysAgo} and ${p2pTrades.status} = 'completed' then 1 else 0 end), 0)`,
+                    volume30d: sql<string>`coalesce(sum(case when ${p2pTrades.createdAt} >= ${thirtyDaysAgo} and ${p2pTrades.status} <> 'cancelled' then cast(${p2pTrades.fiatAmount} as numeric) else 0 end), 0)`,
+                    firstTradeAt: sql<Date | null>`min(${p2pTrades.createdAt})`,
+                    lastTradeAt: sql<Date | null>`max(${p2pTrades.createdAt})`,
+                })
+                .from(p2pTrades)
+                .where(or(eq(p2pTrades.buyerId, userId), eq(p2pTrades.sellerId, userId)));
 
             const p2pUsernameSettings = await getP2PUsernameSettings(userId);
 
@@ -74,6 +107,7 @@ export function registerP2PProfileRoutes(app: Express): void {
                     id: p2pTraderPaymentMethods.id,
                     type: p2pTraderPaymentMethods.type,
                     name: p2pTraderPaymentMethods.name,
+                    displayLabel: p2pTraderPaymentMethods.displayLabel,
                     holderName: p2pTraderPaymentMethods.holderName,
                     isVerified: p2pTraderPaymentMethods.isVerified,
                 })
@@ -110,12 +144,51 @@ export function registerP2PProfileRoutes(app: Express): void {
                 }),
             );
 
-            const completionRate = metrics ? toNumber(metrics.completionRate) : 0;
-            const disputeRate = metrics ? toNumber(metrics.disputeRate) : 0;
+            const derivedTotalTrades = toNumber(derivedTradeStats?.totalTrades);
+            const derivedCompletedTrades = toNumber(derivedTradeStats?.completedTrades);
+            const derivedCancelledTrades = toNumber(derivedTradeStats?.cancelledTrades);
+            const derivedBuyTrades = toNumber(derivedTradeStats?.totalBuyTrades);
+            const derivedSellTrades = toNumber(derivedTradeStats?.totalSellTrades);
+            const derivedVolumeUsdt = toNumber(derivedTradeStats?.totalVolumeUsdt);
+            const derivedTrades30d = toNumber(derivedTradeStats?.trades30d);
+            const derivedCompleted30d = toNumber(derivedTradeStats?.completed30d);
+            const derivedVolume30d = toNumber(derivedTradeStats?.volume30d);
+
+            const totalTrades = pickLargestMetricValue(metrics?.totalTrades, user.p2pTotalTrades, derivedTotalTrades);
+            const completedTrades = pickLargestMetricValue(metrics?.completedTrades, user.p2pSuccessfulTrades, derivedCompletedTrades);
+            const cancelledTrades = pickLargestMetricValue(metrics?.cancelledTrades, derivedCancelledTrades);
+            const totalBuyTrades = pickLargestMetricValue(metrics?.totalBuyTrades, derivedBuyTrades);
+            const totalSellTrades = pickLargestMetricValue(metrics?.totalSellTrades, derivedSellTrades);
+            const totalVolumeUsdt = pickLargestMetricValue(metrics?.totalVolumeUsdt, derivedVolumeUsdt);
+            const trades30d = pickLargestMetricValue(metrics?.trades30d, derivedTrades30d);
+            const volume30d = pickLargestMetricValue(metrics?.volume30d, derivedVolume30d);
+
+            const calculatedCompletionRate = totalTrades > 0 ? (completedTrades / totalTrades) * 100 : 0;
+            const completionRate = pickLargestMetricValue(metrics?.completionRate, calculatedCompletionRate);
+
+            const totalDisputes = toNumber(metrics?.totalDisputes);
+            const calculatedDisputeRate = totalTrades > 0 ? (totalDisputes / totalTrades) * 100 : 0;
+            const disputeRate = pickLargestMetricValue(metrics?.disputeRate, calculatedDisputeRate);
+
+            const completion30dCalculated = derivedTrades30d > 0
+                ? (derivedCompleted30d / derivedTrades30d) * 100
+                : 0;
+            const completion30d = pickLargestMetricValue(metrics?.completion30d, completion30dCalculated);
+
+            const profileVerificationLevel = profile?.verificationLevel
+                || (user.idVerificationStatus === "approved"
+                    ? "kyc_basic"
+                    : user.phoneVerified
+                        ? "phone"
+                        : user.emailVerified
+                            ? "email"
+                            : "none");
 
             const derivedDisplayName = profile?.displayName
                 || `${user.firstName || ""} ${user.lastName || ""}`.trim()
-                || p2pUsernameSettings.p2pUsername;
+                || user.nickname
+                || p2pUsernameSettings.p2pUsername
+                || user.username;
 
             res.json({
                 id: userId,
@@ -124,21 +197,42 @@ export function registerP2PProfileRoutes(app: Express): void {
                 p2pUsernameChangeCount: p2pUsernameSettings.p2pUsernameChangeCount,
                 canChangeP2PUsername: p2pUsernameSettings.canChangeP2PUsername,
                 displayName: derivedDisplayName,
-                bio: profile?.bio || "",
+                bio: profile?.bio || user.nickname || "",
                 region: profile?.region || "",
-                verificationLevel: profile?.verificationLevel || (user.phoneVerified ? "phone" : "email"),
+                verificationLevel: profileVerificationLevel,
                 isOnline: profile?.isOnline || false,
                 lastSeenAt: profile?.lastSeenAt || user.createdAt,
                 memberSince: user.createdAt,
+                account: includePrivateProfileContext
+                    ? {
+                        accountId: user.accountId || null,
+                        emailVerified: Boolean(user.emailVerified),
+                        phoneVerified: Boolean(user.phoneVerified),
+                        idVerificationStatus: user.idVerificationStatus || "none",
+                    }
+                    : null,
+                settings: includePrivateProfileContext
+                    ? {
+                        canTradeP2P: Boolean(profile?.canTradeP2P),
+                        canCreateOffers: Boolean(profile?.canCreateOffers),
+                        monthlyTradeLimit: profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
+                            ? String(profile.monthlyTradeLimit)
+                            : null,
+                        autoReplyEnabled: profile?.autoReplyEnabled ?? false,
+                        notifyOnTrade: profile?.notifyOnTrade ?? true,
+                        notifyOnDispute: profile?.notifyOnDispute ?? true,
+                        notifyOnMessage: profile?.notifyOnMessage ?? true,
+                    }
+                    : null,
                 metrics: {
-                    totalTrades: toNumber(metrics?.totalTrades),
-                    completedTrades: toNumber(metrics?.completedTrades),
-                    cancelledTrades: toNumber(metrics?.cancelledTrades),
+                    totalTrades,
+                    completedTrades,
+                    cancelledTrades,
                     completionRate,
-                    totalBuyTrades: toNumber(metrics?.totalBuyTrades),
-                    totalSellTrades: toNumber(metrics?.totalSellTrades),
-                    totalVolumeUsdt: String(metrics?.totalVolumeUsdt || "0"),
-                    totalDisputes: toNumber(metrics?.totalDisputes),
+                    totalBuyTrades,
+                    totalSellTrades,
+                    totalVolumeUsdt: totalVolumeUsdt.toFixed(2),
+                    totalDisputes,
                     disputesWon: toNumber(metrics?.disputesWon),
                     disputesLost: toNumber(metrics?.disputesLost),
                     disputeRate,
@@ -147,12 +241,12 @@ export function registerP2PProfileRoutes(app: Express): void {
                     avgResponseTimeSeconds: toNumber(metrics?.avgResponseTimeSeconds),
                     positiveRatings: toNumber(metrics?.positiveRatings),
                     negativeRatings: toNumber(metrics?.negativeRatings),
-                    overallRating: toNumber(metrics?.overallRating),
-                    trades30d: toNumber(metrics?.trades30d),
-                    completion30d: toNumber(metrics?.completion30d),
-                    volume30d: String(metrics?.volume30d || "0"),
-                    firstTradeAt: metrics?.firstTradeAt || null,
-                    lastTradeAt: metrics?.lastTradeAt || null,
+                    overallRating: pickLargestMetricValue(metrics?.overallRating, user.p2pRating),
+                    trades30d,
+                    completion30d,
+                    volume30d: volume30d.toFixed(2),
+                    firstTradeAt: metrics?.firstTradeAt || derivedTradeStats?.firstTradeAt || null,
+                    lastTradeAt: metrics?.lastTradeAt || derivedTradeStats?.lastTradeAt || null,
                 },
                 badges,
                 paymentMethods,
@@ -341,7 +435,23 @@ export function registerP2PProfileRoutes(app: Express): void {
     app.get("/api/p2p/payment-methods", authMiddleware, async (req: AuthRequest, res: Response) => {
         try {
             const methods = await db
-                .select()
+                .select({
+                    id: p2pTraderPaymentMethods.id,
+                    userId: p2pTraderPaymentMethods.userId,
+                    type: p2pTraderPaymentMethods.type,
+                    name: p2pTraderPaymentMethods.name,
+                    displayLabel: p2pTraderPaymentMethods.displayLabel,
+                    countryCode: p2pTraderPaymentMethods.countryCode,
+                    countryPaymentMethodId: p2pTraderPaymentMethods.countryPaymentMethodId,
+                    accountNumber: p2pTraderPaymentMethods.accountNumber,
+                    bankName: p2pTraderPaymentMethods.bankName,
+                    holderName: p2pTraderPaymentMethods.holderName,
+                    details: p2pTraderPaymentMethods.details,
+                    isVerified: p2pTraderPaymentMethods.isVerified,
+                    isActive: p2pTraderPaymentMethods.isActive,
+                    sortOrder: p2pTraderPaymentMethods.sortOrder,
+                    createdAt: p2pTraderPaymentMethods.createdAt,
+                })
                 .from(p2pTraderPaymentMethods)
                 .where(and(eq(p2pTraderPaymentMethods.userId, req.user!.id), eq(p2pTraderPaymentMethods.isActive, true)))
                 .orderBy(asc(p2pTraderPaymentMethods.sortOrder), asc(p2pTraderPaymentMethods.createdAt));
@@ -357,32 +467,55 @@ export function registerP2PProfileRoutes(app: Express): void {
 
     app.post("/api/p2p/payment-methods", authMiddleware, async (req: AuthRequest, res: Response) => {
         try {
-            const type = sanitizePlainText(String(req.body?.type || ""), { maxLength: 30 }) as "bank_transfer" | "e_wallet" | "crypto";
-            const allowedTypes = new Set(["bank_transfer", "e_wallet", "crypto"]);
-            if (!allowedTypes.has(type)) {
-                return res.status(400).json({ error: "Invalid payment method type" });
+            const countryPaymentMethodId = sanitizePlainText(String(req.body?.countryPaymentMethodId || ""), { maxLength: 64 });
+            if (!countryPaymentMethodId) {
+                return res.status(400).json({ error: "countryPaymentMethodId is required" });
             }
 
-            const name = sanitizePlainText(String(req.body?.name || ""), { maxLength: 120 });
+            const [catalogMethod] = await db
+                .select({
+                    id: countryPaymentMethods.id,
+                    countryCode: countryPaymentMethods.countryCode,
+                    type: countryPaymentMethods.type,
+                    name: countryPaymentMethods.name,
+                })
+                .from(countryPaymentMethods)
+                .where(and(
+                    eq(countryPaymentMethods.id, countryPaymentMethodId),
+                    eq(countryPaymentMethods.isActive, true),
+                    eq(countryPaymentMethods.isAvailable, true),
+                ))
+                .limit(1);
+
+            if (!catalogMethod) {
+                return res.status(400).json({ error: "Selected payment method is unavailable" });
+            }
+
             const accountNumber = sanitizePlainText(String(req.body?.accountNumber || ""), { maxLength: 120 });
             const bankName = req.body?.bankName ? sanitizePlainText(String(req.body.bankName), { maxLength: 120 }) : null;
             const holderName = req.body?.holderName ? sanitizePlainText(String(req.body.holderName), { maxLength: 120 }) : null;
             const details = req.body?.details ? sanitizePlainText(String(req.body.details), { maxLength: 500 }) : null;
+            const displayLabel = req.body?.displayLabel
+                ? sanitizePlainText(String(req.body.displayLabel), { maxLength: 120 })
+                : null;
 
-            if (!name || !accountNumber) {
-                return res.status(400).json({ error: "name and accountNumber are required" });
+            if (!accountNumber) {
+                return res.status(400).json({ error: "accountNumber is required" });
             }
 
             const [created] = await db
                 .insert(p2pTraderPaymentMethods)
                 .values({
                     userId: req.user!.id,
-                    type,
-                    name,
+                    type: catalogMethod.type,
+                    name: catalogMethod.name,
+                    countryCode: catalogMethod.countryCode,
+                    countryPaymentMethodId: catalogMethod.id,
                     accountNumber,
                     bankName,
                     holderName,
                     details,
+                    displayLabel,
                     isVerified: false,
                     isActive: true,
                 })

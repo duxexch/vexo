@@ -1,0 +1,29 @@
+http:
+  routers:
+    vex-http:
+      rule: Host(`vixo.click`) || Host(`www.vixo.click`)
+      entryPoints:
+        - web
+      middlewares:
+        - redirect-to-https
+      service: vex-service
+
+    vex-https:
+      rule: Host(`vixo.click`) || Host(`www.vixo.click`)
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      service: vex-service
+
+  middlewares:
+    redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+  services:
+    vex-service:
+      loadBalancer:
+        servers:
+          - url: http://vex-app:3001

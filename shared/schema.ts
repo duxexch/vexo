@@ -1388,6 +1388,9 @@ export const p2pSettings = pgTable("p2p_settings", {
   // Trade limits
   minTradeAmount: decimal("min_trade_amount", { precision: 15, scale: 2 }).notNull().default("10.00"),
   maxTradeAmount: decimal("max_trade_amount", { precision: 15, scale: 2 }).notNull().default("100000.00"),
+  p2pBuyCurrencies: text("p2p_buy_currencies").array().notNull().default(sql`ARRAY['USD','USDT','EUR','GBP','SAR','AED','EGP']::text[]`),
+  p2pSellCurrencies: text("p2p_sell_currencies").array().notNull().default(sql`ARRAY['USD','USDT','EUR','GBP','SAR','AED','EGP']::text[]`),
+  depositEnabledCurrencies: text("deposit_enabled_currencies").array().notNull().default(sql`ARRAY['USD','USDT','EUR','GBP','SAR','AED','EGP']::text[]`),
   // Timeouts
   escrowTimeoutHours: integer("escrow_timeout_hours").notNull().default(24),
   paymentTimeoutMinutes: integer("payment_timeout_minutes").notNull().default(15),
@@ -1518,6 +1521,9 @@ export const p2pTraderPaymentMethods = pgTable("p2p_trader_payment_methods", {
   userId: varchar("user_id").notNull().references(() => users.id),
   type: paymentMethodTypeEnum("type").notNull(),
   name: text("name").notNull(),
+  displayLabel: text("display_label"),
+  countryCode: text("country_code"),
+  countryPaymentMethodId: varchar("country_payment_method_id").references(() => countryPaymentMethods.id),
   accountNumber: text("account_number"),
   bankName: text("bank_name"),
   holderName: text("holder_name"),
@@ -1528,6 +1534,8 @@ export const p2pTraderPaymentMethods = pgTable("p2p_trader_payment_methods", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_p2p_trader_payment_methods_user_id").on(table.userId),
+  index("idx_p2p_trader_payment_methods_country_code").on(table.countryCode),
+  index("idx_p2p_trader_payment_methods_country_payment_method_id").on(table.countryPaymentMethodId),
 ]);
 
 // ==================== NOTIFICATIONS ====================

@@ -9,7 +9,19 @@ export function registerPaymentMethodRoutes(app: Express): void {
   app.get("/api/payment-methods", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const methods = await storage.listCountryPaymentMethods();
-      res.json(methods.filter(m => m.isActive));
+      const countryCode = typeof req.query?.country === "string"
+        ? req.query.country.trim().toUpperCase()
+        : "";
+
+      const activeMethods = methods.filter((method) => method.isActive && method.isAvailable);
+      if (!countryCode) {
+        return res.json(activeMethods);
+      }
+
+      res.json(activeMethods.filter((method) => {
+        const methodCountryCode = String(method.countryCode || "").toUpperCase();
+        return methodCountryCode === "ALL" || methodCountryCode === countryCode;
+      }));
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

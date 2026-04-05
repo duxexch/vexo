@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -64,9 +64,23 @@ interface PaymentMethod {
   id: string;
   type: string;
   name: string;
+  displayLabel?: string | null;
+  countryCode?: string | null;
+  countryPaymentMethodId?: string | null;
   accountNumber: string;
   holderName: string;
   isVerified: boolean;
+  isActive: boolean;
+}
+
+interface CountryPaymentMethodOption {
+  id: string;
+  countryCode: string;
+  name: string;
+  type: "bank_transfer" | "e_wallet" | "crypto" | "card";
+  minAmount: string;
+  maxAmount: string;
+  isAvailable: boolean;
   isActive: boolean;
 }
 
@@ -338,10 +352,11 @@ export default function P2PSettingsPage() {
   const { toast } = useToast();
 
   const [showAddPayment, setShowAddPayment] = useState(false);
+  const [selectedPaymentCountry, setSelectedPaymentCountry] = useState("ALL");
   const [p2pUsernameDraft, setP2PUsernameDraft] = useState("");
   const [newPayment, setNewPayment] = useState({
-    type: "bank_transfer",
-    name: "",
+    countryPaymentMethodId: "",
+    displayLabel: "",
     accountNumber: "",
     bankName: "",
     holderName: "",
@@ -355,6 +370,10 @@ export default function P2PSettingsPage() {
     queryKey: ['/api/p2p/payment-methods'],
   });
 
+  const { data: paymentCatalog = [] } = useQuery<CountryPaymentMethodOption[]>({
+    queryKey: ['/api/payment-methods'],
+  });
+
   const { data: badges } = useQuery<P2PBadge[]>({
     queryKey: ['/api/p2p/badges'],
   });
@@ -362,6 +381,51 @@ export default function P2PSettingsPage() {
   useEffect(() => {
     setP2PUsernameDraft(settings?.p2pUsername || "");
   }, [settings?.p2pUsername]);
+
+  const paymentCountryOptions = useMemo(() => {
+    const defaultCountries = ["ALL", "EG", "SA", "AE", "US", "GB", "EU"];
+    const countryCodes = new Set(defaultCountries);
+
+    for (const method of paymentCatalog) {
+      const normalizedCountry = String(method.countryCode || "").trim().toUpperCase();
+      if (normalizedCountry) {
+        countryCodes.add(normalizedCountry);
+      }
+    }
+
+    return Array.from(countryCodes).sort((left, right) => {
+      if (left === "ALL") return -1;
+      if (right === "ALL") return 1;
+      return left.localeCompare(right);
+    });
+  }, [paymentCatalog]);
+
+  const availableCatalogMethods = useMemo(() => {
+    const normalizedCountry = selectedPaymentCountry.toUpperCase();
+    return paymentCatalog.filter((method) => {
+      const methodCountryCode = String(method.countryCode || "").toUpperCase();
+      if (normalizedCountry === "ALL") {
+        return true;
+      }
+
+      return methodCountryCode === normalizedCountry || methodCountryCode === "ALL";
+    });
+  }, [paymentCatalog, selectedPaymentCountry]);
+
+  const selectedCatalogMethod = useMemo(() => {
+    return availableCatalogMethods.find((method) => method.id === newPayment.countryPaymentMethodId) || null;
+  }, [availableCatalogMethods, newPayment.countryPaymentMethodId]);
+
+  useEffect(() => {
+    if (!newPayment.countryPaymentMethodId) {
+      return;
+    }
+
+    const stillAvailable = availableCatalogMethods.some((method) => method.id === newPayment.countryPaymentMethodId);
+    if (!stillAvailable) {
+      setNewPayment((previous) => ({ ...previous, countryPaymentMethodId: "", displayLabel: "" }));
+    }
+  }, [availableCatalogMethods, newPayment.countryPaymentMethodId]);
 
   const updateSettingsMutation = useMutation({
     mutationFn: (data: Partial<P2PSettings>) =>
@@ -382,7 +446,8 @@ export default function P2PSettingsPage() {
       toast({ title: t('common.success'), description: t('p2p.settings.paymentAdded') });
       queryClient.invalidateQueries({ queryKey: ['/api/p2p/payment-methods'] });
       setShowAddPayment(false);
-      setNewPayment({ type: "bank_transfer", name: "", accountNumber: "", bankName: "", holderName: "" });
+      setSelectedPaymentCountry("ALL");
+      setNewPayment({ countryPaymentMethodId: "", displayLabel: "", accountNumber: "", bankName: "", holderName: "" });
     },
     onError: (err: Error) => {
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
@@ -712,11 +777,17 @@ export default function P2PSettingsPage() {
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <p className="font-medium">{method.name}</p>
+                              <p className="font-medium">{method.displayLabel?.trim() || method.name}</p>
+                              {method.countryCode ? (
+                                <Badge variant="outline" className="text-[10px]">{method.countryCode}</Badge>
+                              ) : null}
                               {method.isVerified && (
                                 <CheckCircle className="h-4 w-4 text-green-500" />
                               )}
                             </div>
+                            {method.displayLabel?.trim() && method.displayLabel.trim() !== method.name ? (
+                              <p className="text-xs text-muted-foreground">{method.name}</p>
+                            ) : null}
                             <p className="text-sm text-muted-foreground">{method.accountNumber}</p>
                           </div>
                         </div>
@@ -788,31 +859,62 @@ export default function P2PSettingsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>{t('p2p.settings.paymentType')}</Label>
-              <Select value={newPayment.type} onValueChange={(v) => setNewPayment(p => ({ ...p, type: v }))}>
-                <SelectTrigger className="mt-2" data-testid="select-payment-type">
+              <Label>{language === 'ar' ? 'الدولة' : 'Country'}</Label>
+              <Select value={selectedPaymentCountry} onValueChange={setSelectedPaymentCountry}>
+                <SelectTrigger className="mt-2" data-testid="select-payment-country">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {PAYMENT_TYPES.map(type => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {language === 'ar' ? type.labelAr : type.label}
+                  {paymentCountryOptions.map((countryCode) => (
+                    <SelectItem key={countryCode} value={countryCode}>
+                      {countryCode}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            <div>
+              <Label>{t('p2p.paymentMethod')}</Label>
+              <Select
+                value={newPayment.countryPaymentMethodId}
+                onValueChange={(value) => {
+                  const nextMethod = availableCatalogMethods.find((method) => method.id === value);
+                  setNewPayment((previous) => ({
+                    ...previous,
+                    countryPaymentMethodId: value,
+                    displayLabel: nextMethod?.name || "",
+                  }));
+                }}
+              >
+                <SelectTrigger className="mt-2" data-testid="select-payment-catalog-method">
+                  <SelectValue placeholder={t('p2p.paymentMethod')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableCatalogMethods.map((method) => {
+                    const typeInfo = PAYMENT_TYPES.find((type) => type.value === method.type);
+                    return (
+                      <SelectItem key={method.id} value={method.id}>
+                        {method.name} {typeInfo ? `(${language === 'ar' ? typeInfo.labelAr : typeInfo.label})` : ''}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div>
               <Label>{t('p2p.settings.paymentName')}</Label>
               <Input
                 className="mt-2"
-                value={newPayment.name}
-                onChange={(e) => setNewPayment(p => ({ ...p, name: e.target.value }))}
+                value={newPayment.displayLabel}
+                onChange={(e) => setNewPayment((p) => ({ ...p, displayLabel: e.target.value }))}
                 placeholder={t('p2p.settings.paymentNamePlaceholder')}
-                data-testid="input-payment-name"
+                data-testid="input-payment-display-label"
               />
             </div>
-            {newPayment.type === 'bank_transfer' && (
+
+            {selectedCatalogMethod?.type === 'bank_transfer' && (
               <div>
                 <Label>{t('p2p.settings.bankName')}</Label>
                 <Input
@@ -824,6 +926,19 @@ export default function P2PSettingsPage() {
                 />
               </div>
             )}
+
+            {selectedCatalogMethod ? (
+              <div className="rounded-md border border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground">
+                <div>
+                  {language === 'ar' ? 'الحدود' : 'Limits'}: {selectedCatalogMethod.minAmount} - {selectedCatalogMethod.maxAmount}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+                {language === 'ar' ? 'اختر وسيلة دفع من القائمة أولاً.' : 'Select a payment method first.'}
+              </div>
+            )}
+
             <div>
               <Label>{t('p2p.settings.accountNumber')}</Label>
               <Input
@@ -846,10 +961,20 @@ export default function P2PSettingsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddPayment(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowAddPayment(false);
+                setSelectedPaymentCountry("ALL");
+                setNewPayment({ countryPaymentMethodId: "", displayLabel: "", accountNumber: "", bankName: "", holderName: "" });
+              }}
+            >
               {t('common.cancel')}
             </Button>
-            <Button onClick={() => addPaymentMutation.mutate(newPayment)} disabled={addPaymentMutation.isPending}>
+            <Button
+              onClick={() => addPaymentMutation.mutate(newPayment)}
+              disabled={addPaymentMutation.isPending || !newPayment.countryPaymentMethodId || !newPayment.accountNumber.trim()}
+            >
               <Save className="h-4 w-4 me-2" />
               {t('common.save')}
             </Button>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -76,11 +76,28 @@ interface PlayGiftPolicy {
   projectOnly: boolean;
 }
 
+interface DepositFxCurrency {
+  code: string;
+  name: string;
+  symbol: string;
+  exchangeRate: string | null;
+  isActive: boolean;
+  isOperational: boolean;
+}
+
+interface DepositFxCurrenciesResponse {
+  currencies: DepositFxCurrency[];
+  operationalCurrencies: string[];
+  missingRateCurrencies: string[];
+  balanceCurrency: string;
+}
+
 export default function AdminCurrencyPage() {
   const { toast } = useToast();
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [selectedConversionId, setSelectedConversionId] = useState<string | null>(null);
+  const [depositRateDrafts, setDepositRateDrafts] = useState<Record<string, string>>({});
 
   const { data: settings, isLoading: settingsLoading } = useQuery<CurrencySettings>({
     queryKey: ["/api/admin/project-currency/settings"],
@@ -125,6 +142,30 @@ export default function AdminCurrencyPage() {
       return res.json();
     },
   });
+
+  const { data: depositFxCurrencies, isLoading: depositFxLoading } = useQuery<DepositFxCurrenciesResponse>({
+    queryKey: ["/api/admin/project-currency/deposit-fx-currencies"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/project-currency/deposit-fx-currencies", {
+        headers: { "x-admin-token": adminToken() },
+      });
+      if (!res.ok) throw new Error("Failed to fetch deposit FX currencies");
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (!depositFxCurrencies?.currencies) {
+      return;
+    }
+
+    const nextDrafts: Record<string, string> = {};
+    for (const currency of depositFxCurrencies.currencies) {
+      nextDrafts[currency.code] = currency.exchangeRate ? String(currency.exchangeRate) : "";
+    }
+
+    setDepositRateDrafts(nextDrafts);
+  }, [depositFxCurrencies]);
 
   const updateSettingsMutation = useMutation({
     mutationFn: async (data: Partial<CurrencySettings>) => {
@@ -227,8 +268,57 @@ export default function AdminCurrencyPage() {
     },
   });
 
+  const updateDepositFxCurrencyMutation = useMutation({
+    mutationFn: async (payload: { code: string; exchangeRate?: string; isActive?: boolean }) => {
+      const requestBody: Record<string, unknown> = {};
+
+      if (payload.exchangeRate !== undefined) {
+        requestBody.exchangeRate = payload.exchangeRate;
+      }
+
+      if (payload.isActive !== undefined) {
+        requestBody.isActive = payload.isActive;
+      }
+
+      const res = await fetch(`/api/admin/project-currency/deposit-fx-currencies/${payload.code}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": adminToken(),
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Failed to update deposit FX currency" }));
+        throw new Error(data.error || "Failed to update deposit FX currency");
+      }
+
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/deposit-fx-currencies"] });
+      toast({ title: "Deposit FX currency updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update deposit FX currency", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleSettingChange = (key: keyof CurrencySettings, value: string | number | boolean | null) => {
     updateSettingsMutation.mutate({ [key]: value });
+  };
+
+  const handleDepositRateBlur = (currencyCode: string) => {
+    const draftRate = depositRateDrafts[currencyCode];
+    if (!draftRate) {
+      return;
+    }
+
+    updateDepositFxCurrencyMutation.mutate({
+      code: currencyCode,
+      exchangeRate: draftRate,
+    });
   };
 
   const pendingConversions = conversions?.filter(c => c.status === "pending") || [];
@@ -261,6 +351,7 @@ export default function AdminCurrencyPage() {
             queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/conversions"] });
             queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/stats"] });
             queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/play-gift-policy"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/deposit-fx-currencies"] });
           }}
           data-testid="button-refresh-currency"
         >
@@ -595,6 +686,83 @@ export default function AdminCurrencyPage() {
                     data-testid="switch-allow-earned"
                   />
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Deposit FX Currencies</CardTitle>
+                <CardDescription>
+                  Manage exchange rates used when converting deposit currencies into USD platform balance.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {depositFxLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : depositFxCurrencies?.currencies?.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Code</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Rate (1 USD = X)</TableHead>
+                        <TableHead>Active</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {depositFxCurrencies.currencies.map((currency) => (
+                        <TableRow key={currency.code} data-testid={`row-deposit-fx-${currency.code}`}>
+                          <TableCell className="font-semibold">{currency.code}</TableCell>
+                          <TableCell>{currency.name}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                step="0.000001"
+                                value={depositRateDrafts[currency.code] ?? ""}
+                                onChange={(event) => {
+                                  const nextValue = event.target.value;
+                                  setDepositRateDrafts((prev) => ({
+                                    ...prev,
+                                    [currency.code]: nextValue,
+                                  }));
+                                }}
+                                onBlur={() => handleDepositRateBlur(currency.code)}
+                                disabled={updateDepositFxCurrencyMutation.isPending}
+                                data-testid={`input-deposit-fx-rate-${currency.code}`}
+                                className="w-40"
+                              />
+                              <span className="text-xs text-muted-foreground">{currency.code}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Switch
+                              checked={currency.isActive}
+                              onCheckedChange={(checked) => {
+                                updateDepositFxCurrencyMutation.mutate({
+                                  code: currency.code,
+                                  isActive: checked,
+                                });
+                              }}
+                              disabled={updateDepositFxCurrencyMutation.isPending}
+                              data-testid={`switch-deposit-fx-active-${currency.code}`}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={currency.isOperational ? "default" : "destructive"}>
+                              {currency.isOperational ? "Operational" : "Unavailable"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-sm text-muted-foreground">No deposit currencies configured.</div>
+                )}
               </CardContent>
             </Card>
           </div>

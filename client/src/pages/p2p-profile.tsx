@@ -9,8 +9,9 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
-import { 
+import {
   User,
   ShieldCheck,
   BadgeCheck,
@@ -48,6 +49,21 @@ interface TraderProfile {
   isOnline: boolean;
   lastSeenAt: string;
   memberSince: string;
+  account?: {
+    accountId: string | null;
+    emailVerified: boolean;
+    phoneVerified: boolean;
+    idVerificationStatus: string;
+  } | null;
+  settings?: {
+    canTradeP2P: boolean;
+    canCreateOffers: boolean;
+    monthlyTradeLimit: string | null;
+    autoReplyEnabled: boolean;
+    notifyOnTrade: boolean;
+    notifyOnDispute: boolean;
+    notifyOnMessage: boolean;
+  } | null;
   metrics: {
     totalTrades: number;
     completedTrades: number;
@@ -84,6 +100,7 @@ interface TraderProfile {
     id: string;
     type: string;
     name: string;
+    displayLabel?: string | null;
     holderName: string;
     isVerified: boolean;
   }>;
@@ -133,6 +150,10 @@ export default function P2PProfilePage() {
 
   const { data: profile, isLoading } = useQuery<TraderProfile>({
     queryKey: ['/api/p2p/profile', userId],
+    queryFn: async () => {
+      const response = await apiRequest('GET', `/api/p2p/profile/${encodeURIComponent(userId)}`);
+      return response.json();
+    },
   });
 
   if (isLoading) {
@@ -158,6 +179,11 @@ export default function P2PProfilePage() {
       </div>
     );
   }
+
+  const totalRatings = profile.metrics.positiveRatings + profile.metrics.negativeRatings;
+  const positiveRate = totalRatings > 0
+    ? (profile.metrics.positiveRatings / totalRatings) * 100
+    : 0;
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
@@ -206,8 +232,8 @@ export default function P2PProfilePage() {
             {profile.badges.map(badge => {
               const Icon = BADGE_ICONS[badge.icon] || Shield;
               return (
-                <Badge 
-                  key={badge.slug} 
+                <Badge
+                  key={badge.slug}
                   style={{ backgroundColor: `${badge.color}20`, color: badge.color }}
                   className="px-3 py-1"
                   data-testid={`badge-${badge.slug}`}
@@ -259,6 +285,61 @@ export default function P2PProfilePage() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-4">
+          {isOwnProfile && profile.account && profile.settings && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">{t('p2p.settings.title')}</CardTitle>
+                <CardDescription>{t('p2p.settings.description')}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t('auth.accountId')}</span>
+                  <span className="font-medium">{profile.account.accountId || t('common.none')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t('p2p.settings.idVerification')}</span>
+                  <span className="font-medium">{profile.account.idVerificationStatus || t('common.none')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t('auth.email')}</span>
+                  <span className="font-medium">{profile.account.emailVerified ? t('common.yes') : t('common.no')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t('auth.phone')}</span>
+                  <span className="font-medium">{profile.account.phoneVerified ? t('common.yes') : t('common.no')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t('p2p.trade')}</span>
+                  <span className="font-medium">{profile.settings.canTradeP2P ? t('common.yes') : t('common.no')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t('p2p.createOffer')}</span>
+                  <span className="font-medium">{profile.settings.canCreateOffers ? t('common.yes') : t('common.no')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t('p2p.settings.tradeLimits')}</span>
+                  <span className="font-medium">{profile.settings.monthlyTradeLimit || t('common.none')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t('p2p.settings.autoReply')}</span>
+                  <span className="font-medium">{profile.settings.autoReplyEnabled ? t('common.yes') : t('common.no')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t('p2p.settings.tradeNotifications')}</span>
+                  <span className="font-medium">{profile.settings.notifyOnTrade ? t('common.yes') : t('common.no')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t('p2p.settings.disputeNotifications')}</span>
+                  <span className="font-medium">{profile.settings.notifyOnDispute ? t('common.yes') : t('common.no')}</span>
+                </div>
+                <div className="flex items-center justify-between md:col-span-2">
+                  <span className="text-muted-foreground">{t('p2p.settings.messageNotifications')}</span>
+                  <span className="font-medium">{profile.settings.notifyOnMessage ? t('common.yes') : t('common.no')}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid md:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
@@ -368,12 +449,12 @@ export default function P2PProfilePage() {
                   </div>
                 </div>
                 <div className="flex-1">
-                  <Progress 
-                    value={(profile.metrics.positiveRatings / (profile.metrics.positiveRatings + profile.metrics.negativeRatings)) * 100} 
+                  <Progress
+                    value={positiveRate}
                     className="h-3"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    {((profile.metrics.positiveRatings / (profile.metrics.positiveRatings + profile.metrics.negativeRatings)) * 100).toFixed(1)}% {t('p2p.profile.positiveRate')}
+                    {positiveRate.toFixed(1)}% {t('p2p.profile.positiveRate')}
                   </p>
                 </div>
               </div>
@@ -429,7 +510,10 @@ export default function P2PProfilePage() {
                           <Icon className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                          <p className="font-medium">{method.name}</p>
+                          <p className="font-medium">{method.displayLabel?.trim() || method.name}</p>
+                          {method.displayLabel?.trim() && method.displayLabel.trim() !== method.name ? (
+                            <p className="text-xs text-muted-foreground">{method.name}</p>
+                          ) : null}
                           <p className="text-sm text-muted-foreground">{method.holderName}</p>
                         </div>
                       </div>

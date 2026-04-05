@@ -4,13 +4,41 @@ import { authMiddleware, sensitiveRateLimiter, type AuthRequest } from "./middle
 import { emitSystemAlert } from "../lib/admin-alerts";
 import { sendNotification } from "../websocket";
 import { db } from "../db";
-import { users } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { p2pSettings, users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { getErrorMessage } from "./helpers";
 import { sanitizePlainText } from "../lib/input-security";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../lib/payment-security";
+import { normalizeCurrencyCode, resolveP2PCurrencyControls } from "../lib/p2p-currency-controls";
+import { convertDepositAmountToUsd, getDepositFxSnapshot } from "../lib/deposit-fx";
 
 export function registerTransactionUserRoutes(app: Express): void {
+  app.get("/api/transactions/deposit-config", authMiddleware, async (_req: AuthRequest, res: Response) => {
+    try {
+      const [settings] = await db
+        .select({
+          depositEnabledCurrencies: p2pSettings.depositEnabledCurrencies,
+          p2pBuyCurrencies: p2pSettings.p2pBuyCurrencies,
+          p2pSellCurrencies: p2pSettings.p2pSellCurrencies,
+        })
+        .from(p2pSettings)
+        .limit(1);
+
+      const currencyControls = resolveP2PCurrencyControls(settings);
+      const fxSnapshot = await getDepositFxSnapshot(currencyControls.depositEnabledCurrencies);
+
+      res.json({
+        allowedDepositCurrencies: fxSnapshot.operationalCurrencies,
+        defaultDepositCurrency: fxSnapshot.operationalCurrencies[0] || "USD",
+        disabledDepositCurrencies: fxSnapshot.missingRateCurrencies,
+        balanceCurrency: "USD",
+        usdRateByCurrency: fxSnapshot.usdRateByCurrency,
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
   app.get("/api/transactions", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const { type, status, page, pageSize } = req.query;
@@ -32,10 +60,38 @@ export function registerTransactionUserRoutes(app: Express): void {
     sensitiveRateLimiter,
     async (req: AuthRequest, res: Response) => {
       try {
-        const { amount, paymentMethod, paymentReference, walletNumber } = req.body;
+        const { amount, paymentMethod, paymentReference, walletNumber, currency } = req.body;
         const user = await storage.getUser(req.user!.id);
         if (!user) {
           return res.status(404).json({ error: "User not found" });
+        }
+
+        const requestedCurrency = currency === undefined ? "USD" : currency;
+        const normalizedDepositCurrency = normalizeCurrencyCode(requestedCurrency);
+        if (!normalizedDepositCurrency) {
+          return res.status(400).json({ error: "Invalid deposit currency" });
+        }
+
+        const [settings] = await db
+          .select({
+            depositEnabledCurrencies: p2pSettings.depositEnabledCurrencies,
+            p2pBuyCurrencies: p2pSettings.p2pBuyCurrencies,
+            p2pSellCurrencies: p2pSettings.p2pSellCurrencies,
+          })
+          .from(p2pSettings)
+          .limit(1);
+
+        const currencyControls = resolveP2PCurrencyControls(settings);
+        const fxSnapshot = await getDepositFxSnapshot(currencyControls.depositEnabledCurrencies);
+
+        if (fxSnapshot.operationalCurrencies.length === 0) {
+          return res.status(403).json({ error: "Deposits are currently disabled for all currencies" });
+        }
+
+        if (!fxSnapshot.operationalCurrencies.includes(normalizedDepositCurrency)) {
+          return res.status(400).json({
+            error: `Deposit currency must be one of: ${fxSnapshot.operationalCurrencies.join(", ")}`,
+          });
         }
 
         if (!amount || typeof amount !== 'string' && typeof amount !== 'number') {
@@ -45,6 +101,16 @@ export function registerTransactionUserRoutes(app: Express): void {
         const totalAmount = parseFloat(String(amount));
         if (isNaN(totalAmount) || totalAmount <= 0 || totalAmount > 1000000) {
           return res.status(400).json({ error: "Amount must be between 0.01 and 1,000,000" });
+        }
+
+        const conversionQuote = convertDepositAmountToUsd(totalAmount, normalizedDepositCurrency, fxSnapshot.usdRateByCurrency);
+        if (!conversionQuote) {
+          return res.status(400).json({ error: "Exchange rate for this deposit currency is unavailable" });
+        }
+
+        const creditedAmountUsd = conversionQuote.creditedAmountUsd;
+        if (!Number.isFinite(creditedAmountUsd) || creditedAmountUsd <= 0 || creditedAmountUsd > 1000000) {
+          return res.status(400).json({ error: "Converted amount must be between 0.01 and 1,000,000 USD" });
         }
 
         if (!paymentReference || typeof paymentReference !== 'string') {
@@ -59,11 +125,11 @@ export function registerTransactionUserRoutes(app: Express): void {
           userId: user.id,
           type: "deposit",
           status: "pending",
-          amount: totalAmount.toFixed(2),
+          amount: creditedAmountUsd.toFixed(2),
           balanceBefore: user.balance,
-          balanceAfter: (parseFloat(user.balance) + totalAmount).toFixed(2),
+          balanceAfter: (parseFloat(user.balance) + creditedAmountUsd).toFixed(2),
           referenceId: String(paymentReference).slice(0, 200),
-          description: `${safePaymentMethod}${safeWalletNumber ? ` | Sender: ${safeWalletNumber}` : ''}`,
+          description: `${safePaymentMethod}${safeWalletNumber ? ` | Sender: ${safeWalletNumber}` : ''} | Deposit: ${totalAmount.toFixed(2)} ${normalizedDepositCurrency} | FX: 1 USD = ${conversionQuote.usdToDepositRate.toFixed(6)} ${normalizedDepositCurrency} | Credit: ${creditedAmountUsd.toFixed(2)} USD`,
         });
 
         await storage.createAuditLog({
@@ -71,15 +137,23 @@ export function registerTransactionUserRoutes(app: Express): void {
           action: "deposit",
           entityType: "transaction",
           entityId: transaction.id,
-          details: JSON.stringify({ amount: totalAmount, paymentMethod, paymentReference }),
+          details: JSON.stringify({
+            requestedAmount: totalAmount,
+            requestedCurrency: normalizedDepositCurrency,
+            creditedAmountUsd,
+            usdToDepositRate: conversionQuote.usdToDepositRate,
+            depositToUsdRate: conversionQuote.depositToUsdRate,
+            paymentMethod,
+            paymentReference,
+          }),
         });
 
         // Emit admin alert for new deposit
         emitSystemAlert({
           title: 'New Deposit Request',
           titleAr: 'طلب إيداع جديد',
-          message: `User ${user.username} requested a deposit of $${totalAmount.toFixed(2)} via ${safePaymentMethod || 'unknown'}`,
-          messageAr: `طلب المستخدم ${user.username} إيداع بقيمة $${totalAmount.toFixed(2)}`,
+          message: `User ${user.username} requested a deposit of ${totalAmount.toFixed(2)} ${normalizedDepositCurrency} (~${creditedAmountUsd.toFixed(2)} USD) via ${safePaymentMethod || 'unknown'}`,
+          messageAr: `طلب المستخدم ${user.username} إيداع بقيمة ${totalAmount.toFixed(2)} ${normalizedDepositCurrency} (حوالي ${creditedAmountUsd.toFixed(2)} USD)`,
           severity: 'info',
           deepLink: '/admin/users',
           entityType: 'transaction',
@@ -92,10 +166,17 @@ export function registerTransactionUserRoutes(app: Express): void {
           priority: 'normal',
           title: 'Deposit Request Submitted',
           titleAr: 'تم إرسال طلب الإيداع',
-          message: `Your deposit request of $${totalAmount.toFixed(2)} has been submitted and is pending review.`,
-          messageAr: `تم إرسال طلب الإيداع بقيمة $${totalAmount.toFixed(2)} وهو قيد المراجعة.`,
+          message: `Your deposit request of ${totalAmount.toFixed(2)} ${normalizedDepositCurrency} (~${creditedAmountUsd.toFixed(2)} USD) has been submitted and is pending review.`,
+          messageAr: `تم إرسال طلب الإيداع بقيمة ${totalAmount.toFixed(2)} ${normalizedDepositCurrency} (حوالي ${creditedAmountUsd.toFixed(2)} USD) وهو قيد المراجعة.`,
           link: '/transactions',
-          metadata: JSON.stringify({ transactionId: transaction.id, type: 'deposit', amount: totalAmount }),
+          metadata: JSON.stringify({
+            transactionId: transaction.id,
+            type: 'deposit',
+            requestedAmount: totalAmount,
+            requestedCurrency: normalizedDepositCurrency,
+            creditedAmountUsd,
+            usdToDepositRate: conversionQuote.usdToDepositRate,
+          }),
         }).catch(() => { });
 
         res.status(201).json(transaction);

@@ -16,6 +16,56 @@ import { registerP2pSettingsRoutes } from "./settings";
 import { registerP2pAnalyticsRoutes } from "./analytics";
 import { getP2PUsernameMap } from "../../lib/p2p-username";
 
+type P2PVerificationLevel = "none" | "email" | "phone" | "kyc_basic" | "kyc_full";
+
+const p2pVerificationRank: Record<P2PVerificationLevel, number> = {
+  none: 0,
+  email: 1,
+  phone: 2,
+  kyc_basic: 3,
+  kyc_full: 4,
+};
+
+function normalizeP2PVerificationLevel(raw: unknown): P2PVerificationLevel {
+  if (raw === "none" || raw === "email" || raw === "phone" || raw === "kyc_basic" || raw === "kyc_full") {
+    return raw;
+  }
+
+  return "none";
+}
+
+function inferP2PVerificationLevelFromUser(user: {
+  phoneVerified?: boolean | null;
+  emailVerified?: boolean | null;
+  idVerificationStatus?: string | null;
+}): P2PVerificationLevel {
+  if (user.idVerificationStatus === "approved") {
+    return "kyc_basic";
+  }
+
+  if (user.phoneVerified) {
+    return "phone";
+  }
+
+  if (user.emailVerified) {
+    return "email";
+  }
+
+  return "none";
+}
+
+function isVerificationBypassed(profileLevelRaw: unknown, user: {
+  phoneVerified?: boolean | null;
+  emailVerified?: boolean | null;
+  idVerificationStatus?: string | null;
+}): boolean {
+  const profileLevel = normalizeP2PVerificationLevel(profileLevelRaw);
+  const accountLevel = inferP2PVerificationLevelFromUser(user);
+
+  return p2pVerificationRank[profileLevel] >= p2pVerificationRank.phone
+    && p2pVerificationRank[accountLevel] < p2pVerificationRank.phone;
+}
+
 export function registerAdminP2pRoutes(app: Express) {
 
   const notifyWithLog = async (
@@ -238,6 +288,11 @@ export function registerAdminP2pRoutes(app: Express) {
 
       res.json(userRows.map((row) => ({
         ...row,
+        verificationBypassed: isVerificationBypassed(row.profileVerificationLevel, {
+          phoneVerified: row.phoneVerified,
+          emailVerified: row.emailVerified,
+          idVerificationStatus: row.idVerificationStatus,
+        }),
         canCreateOffers: Boolean(row.canCreateOffers),
         canTradeP2P: Boolean(row.canTradeP2P),
         monthlyTradeLimit: row.monthlyTradeLimit !== null && row.monthlyTradeLimit !== undefined
@@ -258,14 +313,16 @@ export function registerAdminP2pRoutes(app: Express) {
       const hasCanCreateOffers = typeof req.body?.canCreateOffers === "boolean";
       const hasCanTradeP2P = typeof req.body?.canTradeP2P === "boolean";
       const hasMonthlyTradeLimit = Object.prototype.hasOwnProperty.call(req.body ?? {}, "monthlyTradeLimit");
+      const hasBypassVerification = typeof req.body?.bypassVerification === "boolean";
 
-      if (!hasCanCreateOffers && !hasCanTradeP2P && !hasMonthlyTradeLimit) {
+      if (!hasCanCreateOffers && !hasCanTradeP2P && !hasMonthlyTradeLimit && !hasBypassVerification) {
         return res.status(400).json({ error: "At least one permission field is required" });
       }
 
       let canCreateOffers = hasCanCreateOffers ? Boolean(req.body.canCreateOffers) : undefined;
       let canTradeP2P = hasCanTradeP2P ? Boolean(req.body.canTradeP2P) : undefined;
       const reason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 500) : "";
+      const bypassVerification = hasBypassVerification ? Boolean(req.body.bypassVerification) : undefined;
 
       // Publishing ads requires trading permission too.
       if (canCreateOffers === true && canTradeP2P === undefined) {
@@ -302,6 +359,7 @@ export function registerAdminP2pRoutes(app: Express) {
       const [existingProfile] = await db
         .select({
           id: p2pTraderProfiles.id,
+          verificationLevel: p2pTraderProfiles.verificationLevel,
           canCreateOffers: p2pTraderProfiles.canCreateOffers,
           canTradeP2P: p2pTraderProfiles.canTradeP2P,
           monthlyTradeLimit: p2pTraderProfiles.monthlyTradeLimit,
@@ -323,14 +381,37 @@ export function registerAdminP2pRoutes(app: Express) {
         effectiveCanCreateOffers = false;
       }
 
+      const inferredVerificationLevel = inferP2PVerificationLevelFromUser({
+        phoneVerified: targetUser.phoneVerified,
+        emailVerified: targetUser.emailVerified,
+        idVerificationStatus: targetUser.idVerificationStatus,
+      });
+
+      const existingVerificationLevel = normalizeP2PVerificationLevel(existingProfile?.verificationLevel);
+
+      let effectiveVerificationLevel: P2PVerificationLevel;
+      if (bypassVerification === true) {
+        effectiveVerificationLevel = p2pVerificationRank[existingVerificationLevel] >= p2pVerificationRank.phone
+          ? existingVerificationLevel
+          : "phone";
+      } else if (bypassVerification === false) {
+        effectiveVerificationLevel = inferredVerificationLevel;
+      } else if (existingProfile) {
+        effectiveVerificationLevel = existingVerificationLevel;
+      } else {
+        effectiveVerificationLevel = inferredVerificationLevel;
+      }
+
       let updatedProfile;
       if (existingProfile) {
         const profileUpdateValues: {
+          verificationLevel: P2PVerificationLevel;
           canCreateOffers: boolean;
           canTradeP2P: boolean;
           monthlyTradeLimit?: string | null;
           updatedAt: Date;
         } = {
+          verificationLevel: effectiveVerificationLevel,
           canCreateOffers: effectiveCanCreateOffers,
           canTradeP2P: effectiveCanTradeP2P,
           updatedAt: new Date(),
@@ -346,19 +427,11 @@ export function registerAdminP2pRoutes(app: Express) {
           .where(eq(p2pTraderProfiles.userId, userId))
           .returning();
       } else {
-        const inferredVerificationLevel = targetUser.idVerificationStatus === "approved"
-          ? "kyc_basic"
-          : targetUser.phoneVerified
-            ? "phone"
-            : targetUser.emailVerified
-              ? "email"
-              : "none";
-
         [updatedProfile] = await db
           .insert(p2pTraderProfiles)
           .values({
             userId,
-            verificationLevel: inferredVerificationLevel,
+            verificationLevel: effectiveVerificationLevel,
             canCreateOffers: effectiveCanCreateOffers,
             canTradeP2P: effectiveCanTradeP2P,
             monthlyTradeLimit: monthlyTradeLimit ?? null,
@@ -373,11 +446,13 @@ export function registerAdminP2pRoutes(app: Express) {
         updatedProfile.id,
         {
           previousValue: JSON.stringify({
+            verificationLevel: existingProfile?.verificationLevel ?? inferredVerificationLevel,
             canCreateOffers: existingProfile?.canCreateOffers ?? false,
             canTradeP2P: existingProfile?.canTradeP2P ?? false,
             monthlyTradeLimit: existingProfile?.monthlyTradeLimit ?? null,
           }),
           newValue: JSON.stringify({
+            verificationLevel: updatedProfile.verificationLevel,
             canCreateOffers: updatedProfile.canCreateOffers,
             canTradeP2P: updatedProfile.canTradeP2P,
             monthlyTradeLimit: updatedProfile.monthlyTradeLimit,
@@ -385,6 +460,12 @@ export function registerAdminP2pRoutes(app: Express) {
           reason,
           metadata: JSON.stringify({
             userId,
+            verificationLevel: updatedProfile.verificationLevel,
+            verificationBypassed: isVerificationBypassed(updatedProfile.verificationLevel, {
+              phoneVerified: targetUser.phoneVerified,
+              emailVerified: targetUser.emailVerified,
+              idVerificationStatus: targetUser.idVerificationStatus,
+            }),
             canCreateOffers: updatedProfile.canCreateOffers,
             canTradeP2P: updatedProfile.canTradeP2P,
             monthlyTradeLimit: updatedProfile.monthlyTradeLimit,
@@ -395,8 +476,18 @@ export function registerAdminP2pRoutes(app: Express) {
 
       const previousCanCreateOffers = existingProfile?.canCreateOffers ?? false;
       const previousCanTradeP2P = existingProfile?.canTradeP2P ?? false;
+      const previousBypassVerification = isVerificationBypassed(existingProfile?.verificationLevel, {
+        phoneVerified: targetUser.phoneVerified,
+        emailVerified: targetUser.emailVerified,
+        idVerificationStatus: targetUser.idVerificationStatus,
+      });
       const currentCanCreateOffers = Boolean(updatedProfile.canCreateOffers);
       const currentCanTradeP2P = Boolean(updatedProfile.canTradeP2P);
+      const currentBypassVerification = isVerificationBypassed(updatedProfile.verificationLevel, {
+        phoneVerified: targetUser.phoneVerified,
+        emailVerified: targetUser.emailVerified,
+        idVerificationStatus: targetUser.idVerificationStatus,
+      });
 
       if (!previousCanCreateOffers && currentCanCreateOffers) {
         await notifyWithLog(userId, {
@@ -463,9 +554,35 @@ export function registerAdminP2pRoutes(app: Express) {
         }, "trade-limit:update");
       }
 
+      if (!previousBypassVerification && currentBypassVerification) {
+        await notifyWithLog(userId, {
+          type: "warning",
+          priority: "high",
+          title: "P2P Verification Override Enabled",
+          titleAr: "تم تفعيل تجاوز توثيق P2P",
+          message: "An administrator enabled a verification override for your P2P permissions.",
+          messageAr: "قامت الإدارة بتفعيل تجاوز التوثيق لصلاحيات P2P الخاصة بك.",
+          link: "/p2p",
+          metadata: JSON.stringify({ action: "verification_override_enabled" }),
+        }, "verification-override:grant");
+      } else if (previousBypassVerification && !currentBypassVerification) {
+        await notifyWithLog(userId, {
+          type: "system",
+          priority: "normal",
+          title: "P2P Verification Override Removed",
+          titleAr: "تم إلغاء تجاوز توثيق P2P",
+          message: "Your P2P verification override has been removed and account verification rules now apply.",
+          messageAr: "تم إلغاء تجاوز توثيق P2P وأصبحت قواعد التوثيق المعتادة مطبقة.",
+          link: "/p2p",
+          metadata: JSON.stringify({ action: "verification_override_removed" }),
+        }, "verification-override:revoke");
+      }
+
       res.json({
         success: true,
         userId,
+        verificationLevel: updatedProfile.verificationLevel,
+        verificationBypassed: currentBypassVerification,
         canCreateOffers: updatedProfile.canCreateOffers,
         canTradeP2P: updatedProfile.canTradeP2P,
         monthlyTradeLimit: updatedProfile.monthlyTradeLimit,

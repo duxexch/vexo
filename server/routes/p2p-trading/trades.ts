@@ -14,6 +14,7 @@ import {
   hasRequiredP2PVerification,
   MIN_P2P_VERIFICATION_LEVEL,
 } from "./helpers";
+import { isCurrencyAllowedForOfferType, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../../lib/payment-security";
 import { getP2PUsernameMap } from "../../lib/p2p-username";
 
@@ -116,6 +117,7 @@ export function registerTradeRoutes(app: Express) {
         const requestedPaymentMethod = paymentMethod.trim();
 
         const [settings] = await db.select().from(p2pSettings).limit(1);
+        const currencyControls = resolveP2PCurrencyControls(settings);
         if (settings) {
           if (!settings.isEnabled) {
             return res.status(403).json({ error: "P2P trading is currently disabled" });
@@ -146,6 +148,11 @@ export function registerTradeRoutes(app: Express) {
           return res.status(400).json({ error: "Offer is no longer active" });
         }
 
+        const offerCurrencyCode = String(offer.cryptoCurrency ?? offer.fiatCurrency ?? "").toUpperCase();
+        if (!isCurrencyAllowedForOfferType(offer.type, offerCurrencyCode, currencyControls)) {
+          return res.status(400).json({ error: "Offer currency is currently disabled by admin settings" });
+        }
+
         const offerOwner = await storage.getUser(offer.userId);
         if (!offerOwner) {
           return res.status(404).json({ error: "Offer owner not found" });
@@ -169,9 +176,17 @@ export function registerTradeRoutes(app: Express) {
           return res.status(400).json({ error: "Cannot trade with your own offer" });
         }
 
+        const activeCatalogMethodNames = new Set(
+          (await storage.listCountryPaymentMethods())
+            .filter((method) => method.isActive && method.isAvailable)
+            .map((method) => method.name.trim().toLowerCase())
+            .filter((methodName) => methodName.length > 0),
+        );
+
         const offerPaymentMethods = (offer.paymentMethods || [])
           .map((method) => method.trim())
-          .filter((method) => method.length > 0);
+          .filter((method) => method.length > 0)
+          .filter((method) => activeCatalogMethodNames.has(method.toLowerCase()));
 
         if (offerPaymentMethods.length === 0) {
           return res.status(400).json({ error: "Offer has no available payment methods" });

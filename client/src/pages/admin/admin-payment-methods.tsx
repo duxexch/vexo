@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -19,14 +19,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  CreditCard, 
-  Building2, 
-  Wallet, 
+import {
+  CreditCard,
+  Building2,
+  Wallet,
   Bitcoin,
-  Plus, 
-  Edit2, 
-  Trash2, 
+  Plus,
+  Edit2,
+  Trash2,
   ToggleLeft,
   ToggleRight,
   Image,
@@ -75,6 +75,24 @@ export default function AdminPaymentMethodsPage() {
     queryKey: ["/api/admin/payment-methods"],
   });
 
+  const countryCodeOptions = useMemo(() => {
+    const defaults = ["ALL", "EG", "SA", "AE", "US", "GB", "EU", "QA", "KW", "OM", "BH"];
+    const codes = new Set(defaults);
+
+    for (const method of paymentMethods || []) {
+      const normalizedCode = String(method.countryCode || "").trim().toUpperCase();
+      if (normalizedCode) {
+        codes.add(normalizedCode);
+      }
+    }
+
+    return Array.from(codes).sort((left, right) => {
+      if (left === "ALL") return -1;
+      if (right === "ALL") return 1;
+      return left.localeCompare(right);
+    });
+  }, [paymentMethods]);
+
   const form = useForm<PaymentMethodForm>({
     resolver: zodResolver(paymentMethodSchema),
     defaultValues: {
@@ -92,7 +110,7 @@ export default function AdminPaymentMethodsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: PaymentMethodForm) => 
+    mutationFn: (data: PaymentMethodForm) =>
       apiRequest("POST", "/api/admin/payment-methods", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-methods"] });
@@ -107,7 +125,7 @@ export default function AdminPaymentMethodsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, ...data }: { id: string } & Partial<PaymentMethodForm>) => 
+    mutationFn: ({ id, ...data }: { id: string } & Partial<PaymentMethodForm>) =>
       apiRequest("PATCH", `/api/admin/payment-methods/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-methods"] });
@@ -123,7 +141,7 @@ export default function AdminPaymentMethodsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => 
+    mutationFn: (id: string) =>
       apiRequest("DELETE", `/api/admin/payment-methods/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-methods"] });
@@ -136,7 +154,7 @@ export default function AdminPaymentMethodsPage() {
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => 
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
       apiRequest("PATCH", `/api/admin/payment-methods/${id}`, { isActive }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-methods"] });
@@ -268,16 +286,16 @@ export default function AdminPaymentMethodsPage() {
                       <TableCell>{method.sortOrder}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="icon"
                             onClick={() => openEditDialog(method)}
                             data-testid={`button-edit-${method.id}`}
                           >
                             <Edit2 className="h-4 w-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="icon"
                             onClick={() => setDeleteMethodId(method.id)}
                             data-testid={`button-delete-${method.id}`}
@@ -314,6 +332,32 @@ export default function AdminPaymentMethodsPage() {
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="countryCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Country</FormLabel>
+                    <Select onValueChange={(value) => field.onChange(value.toUpperCase())} value={String(field.value || "ALL").toUpperCase()}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-country-code">
+                          <SelectValue placeholder="Select country" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {countryCodeOptions.map((countryCode) => (
+                          <SelectItem key={countryCode} value={countryCode}>
+                            {countryCode}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Use ALL for global availability</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="name"
@@ -381,21 +425,7 @@ export default function AdminPaymentMethodsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="countryCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Country</FormLabel>
-                      <FormControl>
-                        <Input placeholder="ALL or EG" {...field} data-testid="input-country" />
-                      </FormControl>
-                      <FormDescription>Use ALL for global</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="grid grid-cols-1 gap-4">
                 <FormField
                   control={form.control}
                   name="sortOrder"
@@ -403,12 +433,12 @@ export default function AdminPaymentMethodsPage() {
                     <FormItem>
                       <FormLabel>Sort Order</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          placeholder="0" 
+                        <Input
+                          type="number"
+                          placeholder="0"
                           {...field}
                           onChange={e => field.onChange(parseInt(e.target.value) || 0)}
-                          data-testid="input-sort-order" 
+                          data-testid="input-sort-order"
                         />
                       </FormControl>
                       <FormMessage />
@@ -453,11 +483,11 @@ export default function AdminPaymentMethodsPage() {
                   <FormItem>
                     <FormLabel>Instructions</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="Instructions for the user..." 
-                        {...field} 
+                      <Textarea
+                        placeholder="Instructions for the user..."
+                        {...field}
                         className="min-h-[80px]"
-                        data-testid="input-instructions" 
+                        data-testid="input-instructions"
                       />
                     </FormControl>
                     <FormMessage />
@@ -489,8 +519,8 @@ export default function AdminPaymentMethodsPage() {
                 <Button type="button" variant="outline" onClick={() => setShowDialog(false)}>
                   Cancel
                 </Button>
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   disabled={createMutation.isPending || updateMutation.isPending}
                   data-testid="button-submit-method"
                 >

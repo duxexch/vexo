@@ -127,6 +127,7 @@ interface P2PAdPermissionUser {
   emailVerified: boolean;
   idVerificationStatus?: string | null;
   profileVerificationLevel?: string | null;
+  verificationBypassed?: boolean;
   canCreateOffers: boolean;
   canTradeP2P: boolean;
   monthlyTradeLimit: number | null;
@@ -149,12 +150,19 @@ interface P2PSettings {
   paymentTimeoutMinutes: number;
   autoExpireEnabled: boolean;
   isEnabled: boolean;
+  p2pBuyCurrencies: string[];
+  p2pSellCurrencies: string[];
+  depositEnabledCurrencies: string[];
   updatedAt: string;
 }
 
 function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+  const defaultCurrencyCodes = ["USD", "USDT", "EUR", "GBP", "SAR", "AED", "EGP"];
   const [testAmount, setTestAmount] = useState("");
   const [calculatedFee, setCalculatedFee] = useState<{ fee: string; breakdown?: Record<string, unknown> } | null>(null);
+  const [buyCurrenciesDraft, setBuyCurrenciesDraft] = useState(defaultCurrencyCodes.join(", "));
+  const [sellCurrenciesDraft, setSellCurrenciesDraft] = useState(defaultCurrencyCodes.join(", "));
+  const [depositCurrenciesDraft, setDepositCurrenciesDraft] = useState(defaultCurrencyCodes.join(", "));
 
   const { data: settings, isLoading } = useQuery<P2PSettings>({
     queryKey: ["/api/admin/p2p/settings"],
@@ -194,8 +202,35 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
     },
   });
 
-  const handleUpdateSetting = (key: keyof P2PSettings, value: string | number | boolean | null) => {
+  useEffect(() => {
+    if (!settings) return;
+
+    const normalizeList = (list?: string[]) =>
+      (Array.isArray(list) ? list : defaultCurrencyCodes).join(", ");
+
+    setBuyCurrenciesDraft(normalizeList(settings.p2pBuyCurrencies));
+    setSellCurrenciesDraft(normalizeList(settings.p2pSellCurrencies));
+    setDepositCurrenciesDraft(normalizeList(settings.depositEnabledCurrencies));
+  }, [settings]);
+
+  const handleUpdateSetting = (key: keyof P2PSettings, value: string | number | boolean | string[] | null) => {
     updateSettingsMutation.mutate({ [key]: value });
+  };
+
+  const parseCurrencyList = (raw: string): string[] => {
+    const splitValues = raw
+      .split(/[\s,]+/)
+      .map((value) => value.trim().toUpperCase())
+      .filter((value) => value.length > 0);
+
+    return Array.from(new Set(splitValues));
+  };
+
+  const saveCurrencyList = (
+    key: "p2pBuyCurrencies" | "p2pSellCurrencies" | "depositEnabledCurrencies",
+    draftValue: string,
+  ) => {
+    handleUpdateSetting(key, parseCurrencyList(draftValue));
   };
 
   if (isLoading) {
@@ -488,6 +523,76 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5" />
+            Currency Governance
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label>Allowed Currencies For Buy Ads</Label>
+            <Textarea
+              value={buyCurrenciesDraft}
+              onChange={(event) => setBuyCurrenciesDraft(event.target.value)}
+              placeholder="USD, EUR, SAR"
+              data-testid="textarea-p2p-buy-currencies"
+            />
+            <p className="text-xs text-muted-foreground">Comma or space separated currency codes.</p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => saveCurrencyList("p2pBuyCurrencies", buyCurrenciesDraft)}
+              disabled={updateSettingsMutation.isPending}
+              data-testid="button-save-buy-currencies"
+            >
+              Save Buy Currencies
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Allowed Currencies For Sell Ads</Label>
+            <Textarea
+              value={sellCurrenciesDraft}
+              onChange={(event) => setSellCurrenciesDraft(event.target.value)}
+              placeholder="USD, EUR, SAR"
+              data-testid="textarea-p2p-sell-currencies"
+            />
+            <p className="text-xs text-muted-foreground">Comma or space separated currency codes.</p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => saveCurrencyList("p2pSellCurrencies", sellCurrenciesDraft)}
+              disabled={updateSettingsMutation.isPending}
+              data-testid="button-save-sell-currencies"
+            >
+              Save Sell Currencies
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Allowed Currencies For Deposit</Label>
+            <Textarea
+              value={depositCurrenciesDraft}
+              onChange={(event) => setDepositCurrenciesDraft(event.target.value)}
+              placeholder="USD, EUR, SAR"
+              data-testid="textarea-deposit-currencies"
+            />
+            <p className="text-xs text-muted-foreground">Comma or space separated currency codes.</p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => saveCurrencyList("depositEnabledCurrencies", depositCurrenciesDraft)}
+              disabled={updateSettingsMutation.isPending}
+              data-testid="button-save-deposit-currencies"
+            >
+              Save Deposit Currencies
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -665,18 +770,20 @@ export default function AdminP2PPage() {
       userId,
       canCreateOffers,
       canTradeP2P,
+      bypassVerification,
       monthlyTradeLimit,
       reason,
     }: {
       userId: string;
       canCreateOffers?: boolean;
       canTradeP2P?: boolean;
+      bypassVerification?: boolean;
       monthlyTradeLimit?: string | null;
       reason?: string;
     }) => {
       return adminFetch(`/api/admin/p2p/ad-permissions/${userId}`, {
         method: "PATCH",
-        body: JSON.stringify({ canCreateOffers, canTradeP2P, monthlyTradeLimit, reason }),
+        body: JSON.stringify({ canCreateOffers, canTradeP2P, bypassVerification, monthlyTradeLimit, reason }),
       });
     },
     onSuccess: () => {
@@ -1229,6 +1336,11 @@ export default function AdminP2PPage() {
                             <Badge variant={permissionUser.canCreateOffers ? "default" : "secondary"}>
                               {permissionUser.canCreateOffers ? "Ad Posting Enabled" : "Ad Posting Disabled"}
                             </Badge>
+                            {permissionUser.verificationBypassed && (
+                              <Badge variant="outline" className="border-amber-500/40 text-amber-600">
+                                Verification Override
+                              </Badge>
+                            )}
                             {permissionUser.p2pBanned && (
                               <Badge variant="destructive">P2P Banned</Badge>
                             )}
@@ -1236,6 +1348,8 @@ export default function AdminP2PPage() {
 
                           <div className="text-sm text-muted-foreground flex flex-wrap gap-3">
                             <span>Verification: {permissionUser.profileVerificationLevel || permissionUser.idVerificationStatus || "none"}</span>
+                            <span>Email verified: {permissionUser.emailVerified ? "Yes" : "No"}</span>
+                            <span>Phone verified: {permissionUser.phoneVerified ? "Yes" : "No"}</span>
                             <span>Active payment methods: {permissionUser.activePaymentMethodCount}</span>
                             <span>Active offers: {permissionUser.activeOfferCount}</span>
                             <span>
@@ -1251,6 +1365,36 @@ export default function AdminP2PPage() {
 
                         <div className="flex flex-col gap-2 w-full sm:w-auto">
                           <div className="flex gap-2">
+                            <Button
+                              variant={permissionUser.verificationBypassed ? "outline" : "default"}
+                              disabled={isUpdatingUser}
+                              onClick={() => {
+                                if (permissionUser.verificationBypassed) {
+                                  updateAdPermissionMutation.mutate({
+                                    userId: permissionUser.userId,
+                                    bypassVerification: false,
+                                    reason: "P2P verification override removed by admin",
+                                  });
+                                  return;
+                                }
+
+                                updateAdPermissionMutation.mutate({
+                                  userId: permissionUser.userId,
+                                  canTradeP2P: true,
+                                  canCreateOffers: true,
+                                  bypassVerification: true,
+                                  reason: "Full P2P permission granted by admin",
+                                });
+                              }}
+                              data-testid={`button-toggle-verification-override-${permissionUser.userId}`}
+                            >
+                              {isUpdatingUser
+                                ? "Updating..."
+                                : permissionUser.verificationBypassed
+                                  ? "Remove Full P2P Override"
+                                  : "Grant Full P2P"}
+                            </Button>
+
                             <Button
                               variant={permissionUser.canTradeP2P ? "destructive" : "default"}
                               disabled={isUpdatingUser}

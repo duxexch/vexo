@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -31,7 +31,6 @@ import { Wallet, Plus, ArrowUpRight, ArrowDownRight, Star, Filter, RefreshCw, Tr
 import { EmptyState } from "@/components/EmptyState";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
-import { WORLD_CURRENCIES_WITH_ALL as WORLD_CURRENCIES } from "@/lib/currencies";
 interface P2POffer {
   id: string;
   userId: string;
@@ -91,6 +90,7 @@ interface OfferPaymentMethodOption {
   id: string;
   type: string;
   name: string;
+  displayLabel?: string | null;
   isVerified: boolean;
 }
 
@@ -99,6 +99,9 @@ interface OfferEligibility {
   reasons: string[];
   paymentMethods: OfferPaymentMethodOption[];
   allowedCurrencies: string[];
+  allowedBuyCurrencies?: string[];
+  allowedSellCurrencies?: string[];
+  depositEnabledCurrencies?: string[];
   allowedPaymentTimeLimits: number[];
   checks: {
     notBanned: boolean;
@@ -240,8 +243,37 @@ function normalizeSafeEvidenceUrl(rawUrl: string): string | null {
   }
 }
 
+function formatNumericValue(
+  rawValue: string | number,
+  locale: string,
+  maxFractionDigits = 8,
+  minFractionDigits = 0,
+): string {
+  const parsedValue = typeof rawValue === "number" ? rawValue : Number(rawValue);
+  if (!Number.isFinite(parsedValue)) {
+    return "0";
+  }
+
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: minFractionDigits,
+    maximumFractionDigits: maxFractionDigits,
+  }).format(parsedValue);
+}
+
+function formatFixedFiat(rawValue: string | number, locale: string): string {
+  return `$${formatNumericValue(rawValue, locale, 2, 2)}`;
+}
+
+function formatAssetAmount(rawAmount: string | number, currencyCode: string, locale: string): string {
+  return `${formatNumericValue(rawAmount, locale, 8, 0)} ${String(currencyCode || "").toUpperCase()}`;
+}
+
+function formatFiatRange(minValue: string | number, maxValue: string | number, locale: string): string {
+  return `${formatFixedFiat(minValue, locale)} - ${formatFixedFiat(maxValue, locale)}`;
+}
+
 function MarketplaceTab() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { toast } = useToast();
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [currencyFilter, setCurrencyFilter] = useState<string>("all");
@@ -253,6 +285,11 @@ function MarketplaceTab() {
   const [selectedOffer, setSelectedOffer] = useState<P2POffer | null>(null);
   const [tradeAmount, setTradeAmount] = useState("");
   const [tradePaymentMethod, setTradePaymentMethod] = useState("");
+  const numberLocale = language === "ar" ? "ar-SA" : "en-US";
+
+  const { data: offerEligibility } = useQuery<OfferEligibility>({
+    queryKey: ["/api/p2p/offer-eligibility"],
+  });
 
   const { data: offers, isLoading, refetch } = useQuery<P2POffer[]>({
     queryKey: ["/api/p2p/offers", { type: typeFilter, currency: currencyFilter, payment: paymentFilter }],
@@ -262,14 +299,31 @@ function MarketplaceTab() {
     return Array.from(new Set((offers || []).flatMap((offer) => offer.paymentMethods || []))).sort((a, b) => a.localeCompare(b));
   }, [offers]);
 
-  const quickAssetTabs = useMemo(() => {
-    const baseAssets = ["USDT", "BTC", "BUSD", "BNB", "ETH", "DAI"];
+  const marketplaceCurrencies = useMemo(() => {
+    const configured = (offerEligibility?.allowedCurrencies || [])
+      .map((currency) => String(currency || "").toUpperCase())
+      .filter((currency) => currency.length > 0);
+
     const offerAssets = (offers || [])
       .map((offer) => String(offer.currency || "").toUpperCase())
       .filter((asset) => asset.length > 0);
 
-    return Array.from(new Set([...baseAssets, ...offerAssets])).slice(0, 8);
-  }, [offers]);
+    return Array.from(new Set([...configured, ...offerAssets]));
+  }, [offerEligibility?.allowedCurrencies, offers]);
+
+  const quickAssetTabs = useMemo(() => {
+    return marketplaceCurrencies.slice(0, 8);
+  }, [marketplaceCurrencies]);
+
+  useEffect(() => {
+    if (currencyFilter === "all") {
+      return;
+    }
+
+    if (!marketplaceCurrencies.includes(currencyFilter)) {
+      setCurrencyFilter("all");
+    }
+  }, [currencyFilter, marketplaceCurrencies]);
 
   const filteredOffers = useMemo(() => {
     const numericAmountFilter = parseFloat(amountFilter);
@@ -365,7 +419,7 @@ function MarketplaceTab() {
     if (parsedAmount < minLimit || parsedAmount > maxLimit) {
       toast({
         title: t('common.error'),
-        description: `${t('p2p.limit')}: ${selectedOffer.minLimit} - ${selectedOffer.maxLimit}`,
+        description: `${t('p2p.limit')}: ${formatFiatRange(selectedOffer.minLimit, selectedOffer.maxLimit, numberLocale)}`,
         variant: "destructive",
       });
       return;
@@ -425,23 +479,24 @@ function MarketplaceTab() {
                 <CommandList>
                   <CommandEmpty>{t('p2p.noCurrencyFound')}</CommandEmpty>
                   <CommandGroup>
-                    {WORLD_CURRENCIES.map((currency) => (
+                    {["all", ...marketplaceCurrencies].map((currencyCode) => (
                       <CommandItem
-                        key={currency.code}
-                        value={`${currency.code} ${currency.name}`}
+                        key={currencyCode}
+                        value={currencyCode}
                         onSelect={() => {
-                          setCurrencyFilter(currency.code);
+                          setCurrencyFilter(currencyCode);
                           setCurrencyOpen(false);
                         }}
                       >
                         <Check
                           className={cn(
                             "me-2 h-4 w-4",
-                            currencyFilter === currency.code ? "opacity-100" : "opacity-0"
+                            currencyFilter === currencyCode ? "opacity-100" : "opacity-0"
                           )}
                         />
-                        <span className="font-medium">{currency.code}</span>
-                        <span className="ms-2 text-muted-foreground text-xs truncate">{currency.name}</span>
+                        <span className="font-medium">
+                          {currencyCode === "all" ? t('p2p.all') : currencyCode}
+                        </span>
                       </CommandItem>
                     ))}
                   </CommandGroup>
@@ -510,40 +565,44 @@ function MarketplaceTab() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="flex flex-nowrap items-stretch gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Input
               value={amountFilter}
               onChange={(event) => setAmountFilter(event.target.value)}
               type="number"
               placeholder={t('common.amount')}
-              className="border-slate-700 bg-slate-900 text-slate-100"
+              className="min-w-[130px] shrink-0 border-slate-700 bg-slate-900 text-slate-100"
               data-testid="input-amount-filter"
             />
 
-            <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-payment-filter">
-                <SelectValue placeholder={t('p2p.paymentMethod')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('p2p.all')}</SelectItem>
-                {paymentOptions.map((method) => (
-                  <SelectItem key={method} value={method}>{method}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="min-w-[130px] shrink-0">
+              <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-payment-filter">
+                  <SelectValue placeholder={t('p2p.paymentMethod')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                  {paymentOptions.map((method) => (
+                    <SelectItem key={method} value={method}>{method}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select value={priceSort} onValueChange={(value) => setPriceSort(value as "none" | "asc" | "desc")}>
-              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-price-sort">
-                <SelectValue placeholder={t('p2p.price')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">{t('p2p.price')}</SelectItem>
-                <SelectItem value="asc">{`${t('p2p.price')} ↑`}</SelectItem>
-                <SelectItem value="desc">{`${t('p2p.price')} ↓`}</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="min-w-[130px] shrink-0">
+              <Select value={priceSort} onValueChange={(value) => setPriceSort(value as "none" | "asc" | "desc")}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-price-sort">
+                  <SelectValue placeholder={t('p2p.price')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t('p2p.price')}</SelectItem>
+                  <SelectItem value="asc">{`${t('p2p.price')} ↑`}</SelectItem>
+                  <SelectItem value="desc">{`${t('p2p.price')} ↓`}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-            <div className="flex items-center justify-between rounded-md border border-slate-700 bg-slate-900 px-3 py-2">
+            <div className="flex min-w-[110px] shrink-0 items-center justify-between rounded-md border border-slate-700 bg-slate-900 px-3 py-2">
               <div className="flex items-center gap-2 text-slate-300">
                 <Shield className="h-4 w-4 text-[#f0c73f]" />
                 <Star className="h-4 w-4 text-[#f0c73f]" />
@@ -557,7 +616,7 @@ function MarketplaceTab() {
 
             <Button
               variant="outline"
-              className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+              className="min-w-[110px] shrink-0 border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
               onClick={() => refetch()}
               data-testid="button-refresh-offers"
             >
@@ -595,9 +654,9 @@ function MarketplaceTab() {
 
                       <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
                         <Star className="h-3.5 w-3.5 fill-[#f0c73f] text-[#f0c73f]" />
-                        <span>{offer.rating.toFixed(2)}</span>
+                        <span className="tabular-nums">{formatNumericValue(offer.rating, numberLocale, 2, 2)}</span>
                         <span>•</span>
-                        <span>{offer.completedTrades} {t('p2p.trades')}</span>
+                        <span>{formatNumericValue(offer.completedTrades, numberLocale, 0, 0)} {t('p2p.trades')}</span>
                         {offer.paymentTimeLimit ? (
                           <>
                             <span>•</span>
@@ -621,19 +680,21 @@ function MarketplaceTab() {
                   <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                     <div className="rounded-md bg-slate-900 p-2">
                       <p className="text-xs text-slate-400">{t('p2p.price')}</p>
-                      <p className="mt-1 text-lg font-bold text-slate-100" data-testid={`text-price-${offer.id}`}>${offer.price}</p>
+                      <p className="mt-1 text-lg font-bold tabular-nums text-slate-100" data-testid={`text-price-${offer.id}`}>
+                        {formatFixedFiat(offer.price, numberLocale)}
+                      </p>
                     </div>
 
                     <div className="rounded-md bg-slate-900 p-2">
                       <p className="text-xs text-slate-400">{t('common.amount')}</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-100" data-testid={`text-amount-${offer.id}`}>
-                        {offer.amount} {offer.currency}
+                      <p className="mt-1 text-sm font-semibold tabular-nums text-slate-100" data-testid={`text-amount-${offer.id}`}>
+                        {formatAssetAmount(offer.amount, offer.currency, numberLocale)}
                       </p>
                     </div>
                   </div>
 
-                  <p className="mt-2 text-xs text-slate-400">
-                    {t('p2p.limit')}: ${offer.minLimit} - ${offer.maxLimit}
+                  <p className="mt-2 text-xs tabular-nums text-slate-400">
+                    {t('p2p.limit')}: {formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}
                   </p>
 
                   <div className="mt-3 flex flex-wrap gap-1.5">
@@ -674,9 +735,9 @@ function MarketplaceTab() {
                         <span className="font-medium truncate text-slate-100" data-testid={`text-trader-${offer.id}`}>{offer.username}</span>
                         <div className="mt-1 flex items-center gap-1 text-xs text-slate-400">
                           <Star className="h-3 w-3 shrink-0 fill-[#f0c73f] text-[#f0c73f]" />
-                          <span>{offer.rating.toFixed(2)}</span>
+                          <span className="tabular-nums">{formatNumericValue(offer.rating, numberLocale, 2, 2)}</span>
                           <span>•</span>
-                          <span>{offer.completedTrades} {t('p2p.trades')}</span>
+                          <span>{formatNumericValue(offer.completedTrades, numberLocale, 0, 0)} {t('p2p.trades')}</span>
                         </div>
                       </div>
                     </TableCell>
@@ -686,11 +747,13 @@ function MarketplaceTab() {
                       </Badge>
                     </TableCell>
                     <TableCell data-testid={`text-amount-${offer.id}`} className="text-slate-100 break-words">
-                      <span>{offer.amount} {offer.currency}</span>
+                      <span className="tabular-nums">{formatAssetAmount(offer.amount, offer.currency, numberLocale)}</span>
                     </TableCell>
-                    <TableCell data-testid={`text-price-${offer.id}`} className="text-slate-100 font-semibold">${offer.price}</TableCell>
+                    <TableCell data-testid={`text-price-${offer.id}`} className="text-slate-100 font-semibold tabular-nums">
+                      {formatFixedFiat(offer.price, numberLocale)}
+                    </TableCell>
                     <TableCell className="text-slate-300 break-words">
-                      <span>${offer.minLimit} - ${offer.maxLimit}</span>
+                      <span className="tabular-nums">{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}</span>
                     </TableCell>
                     <TableCell className="max-w-0">
                       <div className="flex flex-wrap gap-1">
@@ -751,10 +814,10 @@ function MarketplaceTab() {
                   </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {selectedOffer.amount} {selectedOffer.currency} @ ${selectedOffer.price}
+                  {formatAssetAmount(selectedOffer.amount, selectedOffer.currency, numberLocale)} @ {formatFixedFiat(selectedOffer.price, numberLocale)}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {t('p2p.limit')}: {selectedOffer.minLimit} - {selectedOffer.maxLimit}
+                  {t('p2p.limit')}: {formatFiatRange(selectedOffer.minLimit, selectedOffer.maxLimit, numberLocale)}
                 </p>
               </div>
 
@@ -844,6 +907,29 @@ function MyOffersTab() {
     },
   });
 
+  const selectedOfferType = form.watch("type");
+
+  const availableOfferCurrencies = useMemo(() => {
+    const fallbackCurrencies = offerEligibility?.allowedCurrencies || ["USD", "USDT", "EUR", "GBP", "SAR", "AED", "EGP"];
+    const buyCurrencies = offerEligibility?.allowedBuyCurrencies || fallbackCurrencies;
+    const sellCurrencies = offerEligibility?.allowedSellCurrencies || fallbackCurrencies;
+
+    return selectedOfferType === "buy"
+      ? buyCurrencies
+      : sellCurrencies;
+  }, [offerEligibility?.allowedBuyCurrencies, offerEligibility?.allowedCurrencies, offerEligibility?.allowedSellCurrencies, selectedOfferType]);
+
+  useEffect(() => {
+    if (availableOfferCurrencies.length === 0) {
+      return;
+    }
+
+    const currentCurrency = form.getValues("currency");
+    if (!availableOfferCurrencies.includes(currentCurrency)) {
+      form.setValue("currency", availableOfferCurrencies[0]);
+    }
+  }, [availableOfferCurrencies, form]);
+
   const createOfferMutation = useMutation({
     mutationFn: async (data: CreateOfferForm) => {
       const res = await apiRequest("POST", "/api/p2p/offers", {
@@ -891,6 +977,24 @@ function MyOffersTab() {
   });
 
   const onSubmit = (data: CreateOfferForm) => {
+    if (availableOfferCurrencies.length === 0) {
+      toast({
+        title: t('common.error'),
+        description: t('p2p.noCurrencyFound'),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!availableOfferCurrencies.includes(data.currency)) {
+      toast({
+        title: t('common.error'),
+        description: t('p2p.noCurrencyFound'),
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!offerEligibility?.canCreateOffer) {
       toast({
         title: t('common.error'),
@@ -1020,7 +1124,7 @@ function MyOffersTab() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>{t('p2p.type')}</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select value={field.value} onValueChange={field.onChange}>
                           <FormControl>
                             <SelectTrigger data-testid="select-offer-type">
                               <SelectValue placeholder={t('p2p.selectType')} />
@@ -1055,14 +1159,14 @@ function MyOffersTab() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>{t('p2p.currency')}</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select value={field.value} onValueChange={field.onChange}>
                             <FormControl>
                               <SelectTrigger data-testid="select-offer-currency">
                                 <SelectValue />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {(offerEligibility?.allowedCurrencies || ["USD", "USDT", "EUR", "GBP", "SAR", "AED", "EGP"]).map((supportedCurrency) => (
+                              {availableOfferCurrencies.map((supportedCurrency) => (
                                 <SelectItem key={supportedCurrency} value={supportedCurrency}>{supportedCurrency}</SelectItem>
                               ))}
                             </SelectContent>
@@ -1164,8 +1268,12 @@ function MyOffersTab() {
                                     }}
                                   />
                                   <div className="min-w-0">
-                                    <p className="text-sm font-medium truncate">{method.name}</p>
-                                    <p className="text-xs text-muted-foreground">{method.type}</p>
+                                    <p className="text-sm font-medium truncate">{method.displayLabel?.trim() || method.name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {method.displayLabel?.trim() && method.displayLabel.trim() !== method.name
+                                        ? `${method.name} - ${method.type}`
+                                        : method.type}
+                                    </p>
                                   </div>
                                 </div>
                                 {method.isVerified && <Badge variant="outline">{t('common.verified')}</Badge>}
@@ -1213,7 +1321,7 @@ function MyOffersTab() {
                     </Button>
                     <Button
                       type="submit"
-                      disabled={createOfferMutation.isPending || !offerEligibility?.canCreateOffer}
+                      disabled={createOfferMutation.isPending || !offerEligibility?.canCreateOffer || availableOfferCurrencies.length === 0}
                       data-testid="button-submit-offer"
                     >
                       {createOfferMutation.isPending ? t('common.loading') : t('common.submit')}
