@@ -11,15 +11,30 @@ import { sendNotification } from "../../websocket";
 import { storage } from "../../storage";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage } from "./helpers";
+import { ensureP2PUsername } from "../../lib/p2p-username";
 
 /** POST /api/p2p/disputes/:id/respond — Respondent actions: accept, contest, escalate */
 export function registerRespondRoutes(app: Express) {
+
+  const notifyWithLog = async (
+    recipientId: string,
+    payload: Parameters<typeof sendNotification>[1],
+    context: string,
+  ) => {
+    await sendNotification(recipientId, payload).catch((error: unknown) => {
+      console.warn(`[P2P Disputes] Notification failure (${context})`, {
+        recipientId,
+        error: getErrorMessage(error),
+      });
+    });
+  };
 
   app.post("/api/p2p/disputes/:id/respond", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.id;
       const disputeId = req.params.id;
       const { action, details } = req.body;
+      const respondentP2PUsername = await ensureP2PUsername(userId, req.user!.username);
 
       if (!action || !["accept", "contest", "escalate"].includes(action)) {
         return res.status(400).json({ error: "action must be one of: accept, contest, escalate" });
@@ -85,23 +100,23 @@ export function registerRespondRoutes(app: Express) {
           disputeId,
           userId,
           action: "dispute_resolved",
-          description: `${req.user!.username} accepted the dispute. Resolved in favour of initiator.`,
-          descriptionAr: `قبل ${req.user!.username} النزاع. تم الحل لصالح مقدم النزاع.`,
+          description: `${respondentP2PUsername} accepted the dispute. Resolved in favour of initiator.`,
+          descriptionAr: `قبل ${respondentP2PUsername} النزاع. تم الحل لصالح مقدم النزاع.`,
           ipAddress,
           userAgent,
         });
 
         // Notify initiator that respondent accepted
-        await sendNotification(dispute.initiatorId, {
+        await notifyWithLog(dispute.initiatorId, {
           type: 'success',
           priority: 'high',
           title: 'Dispute Resolved ✅',
           titleAr: 'تم حل النزاع ✅',
-          message: `${req.user!.username} accepted your dispute. It has been resolved in your favor.`,
-          messageAr: `قبل ${req.user!.username} نزاعك. تم حله لصالحك.`,
+          message: `${respondentP2PUsername} accepted your dispute. It has been resolved in your favor.`,
+          messageAr: `قبل ${respondentP2PUsername} نزاعك. تم حله لصالحك.`,
           link: '/p2p/disputes',
           metadata: JSON.stringify({ disputeId, action: 'dispute_accepted' }),
-        }).catch(() => { });
+        }, "respond:accept:initiator");
 
         return res.json({ success: true, action: "accepted", newStatus: "resolved" });
 
@@ -129,23 +144,23 @@ export function registerRespondRoutes(app: Express) {
           disputeId,
           userId,
           action: "dispute_message",
-          description: `${req.user!.username} contested the dispute. Escalated to support review.`,
-          descriptionAr: `اعترض ${req.user!.username} على النزاع. تم تصعيده لمراجعة الدعم.`,
+          description: `${respondentP2PUsername} contested the dispute. Escalated to support review.`,
+          descriptionAr: `اعترض ${respondentP2PUsername} على النزاع. تم تصعيده لمراجعة الدعم.`,
           ipAddress,
           userAgent,
         });
 
         // Notify initiator that respondent contested
-        await sendNotification(dispute.initiatorId, {
+        await notifyWithLog(dispute.initiatorId, {
           type: 'warning',
           priority: 'high',
           title: 'Dispute Contested',
           titleAr: 'تم الاعتراض على النزاع',
-          message: `${req.user!.username} contested your dispute #${disputeId.slice(0, 8)}. It has been escalated to support review.`,
-          messageAr: `اعترض ${req.user!.username} على نزاعك #${disputeId.slice(0, 8)}. تم تصعيده لمراجعة الدعم.`,
+          message: `${respondentP2PUsername} contested your dispute #${disputeId.slice(0, 8)}. It has been escalated to support review.`,
+          messageAr: `اعترض ${respondentP2PUsername} على نزاعك #${disputeId.slice(0, 8)}. تم تصعيده لمراجعة الدعم.`,
           link: '/p2p/disputes',
           metadata: JSON.stringify({ disputeId, action: 'dispute_contested' }),
-        }).catch(() => { });
+        }, "respond:contest:initiator");
 
         return res.json({ success: true, action: "contested", newStatus: "investigating" });
 
@@ -164,23 +179,23 @@ export function registerRespondRoutes(app: Express) {
           disputeId,
           userId,
           action: "dispute_message",
-          description: `${req.user!.username} escalated the dispute to support.`,
-          descriptionAr: `صعّد ${req.user!.username} النزاع إلى الدعم.`,
+          description: `${respondentP2PUsername} escalated the dispute to support.`,
+          descriptionAr: `صعّد ${respondentP2PUsername} النزاع إلى الدعم.`,
           ipAddress,
           userAgent,
         });
 
         // Notify initiator that respondent escalated
-        await sendNotification(dispute.initiatorId, {
+        await notifyWithLog(dispute.initiatorId, {
           type: 'warning',
           priority: 'high',
           title: 'Dispute Escalated',
           titleAr: 'تم تصعيد النزاع',
-          message: `${req.user!.username} escalated the dispute #${disputeId.slice(0, 8)} to admin support.`,
-          messageAr: `صعّد ${req.user!.username} النزاع #${disputeId.slice(0, 8)} إلى دعم الإدارة.`,
+          message: `${respondentP2PUsername} escalated the dispute #${disputeId.slice(0, 8)} to admin support.`,
+          messageAr: `صعّد ${respondentP2PUsername} النزاع #${disputeId.slice(0, 8)} إلى دعم الإدارة.`,
           link: '/p2p/disputes',
           metadata: JSON.stringify({ disputeId, action: 'dispute_escalated' }),
-        }).catch(() => { });
+        }, "respond:escalate:initiator");
 
         return res.json({ success: true, action: "escalated", newStatus: "investigating" });
       }

@@ -14,6 +14,11 @@ import {
 } from "@shared/schema";
 import { and, asc, desc, eq, or } from "drizzle-orm";
 import { sanitizePlainText } from "../lib/input-security";
+import {
+    ensureP2PUsername,
+    getP2PUsernameSettings,
+    updateP2PUsernameOnce,
+} from "../lib/p2p-username";
 
 function toNumber(value: string | number | null | undefined, fallback = 0): number {
     if (value === null || value === undefined) return fallback;
@@ -47,6 +52,8 @@ export function registerP2PProfileRoutes(app: Express): void {
                 .from(p2pTraderMetrics)
                 .where(eq(p2pTraderMetrics.userId, userId))
                 .limit(1);
+
+            const p2pUsernameSettings = await getP2PUsernameSettings(userId);
 
             const badges = await db
                 .select({
@@ -108,11 +115,14 @@ export function registerP2PProfileRoutes(app: Express): void {
 
             const derivedDisplayName = profile?.displayName
                 || `${user.firstName || ""} ${user.lastName || ""}`.trim()
-                || user.username;
+                || p2pUsernameSettings.p2pUsername;
 
             res.json({
                 id: userId,
                 username: user.username,
+                p2pUsername: p2pUsernameSettings.p2pUsername,
+                p2pUsernameChangeCount: p2pUsernameSettings.p2pUsernameChangeCount,
+                canChangeP2PUsername: p2pUsernameSettings.canChangeP2PUsername,
                 displayName: derivedDisplayName,
                 bio: profile?.bio || "",
                 region: profile?.region || "",
@@ -194,8 +204,12 @@ export function registerP2PProfileRoutes(app: Express): void {
                 .limit(1);
 
             const [globalSettings] = await db.select().from(p2pSettings).limit(1);
+            const p2pUsernameSettings = await getP2PUsernameSettings(req.user!.id);
 
             res.json({
+                p2pUsername: p2pUsernameSettings.p2pUsername,
+                p2pUsernameChangeCount: p2pUsernameSettings.p2pUsernameChangeCount,
+                canChangeP2PUsername: p2pUsernameSettings.canChangeP2PUsername,
                 autoReplyEnabled: profile?.autoReplyEnabled || false,
                 autoReplyMessage: profile?.autoReplyMessage || "",
                 notifyOnTrade: profile?.notifyOnTrade ?? true,
@@ -221,6 +235,18 @@ export function registerP2PProfileRoutes(app: Express): void {
             const autoReplyMessage = req.body?.autoReplyMessage
                 ? sanitizePlainText(req.body.autoReplyMessage, { maxLength: 500 })
                 : null;
+
+            const requestedP2PUsername = typeof req.body?.p2pUsername === "string"
+                ? req.body.p2pUsername
+                : undefined;
+
+            let p2pUsernameSettings;
+            if (requestedP2PUsername !== undefined) {
+                p2pUsernameSettings = await updateP2PUsernameOnce(req.user!.id, requestedP2PUsername);
+            } else {
+                await ensureP2PUsername(req.user!.id, req.user!.username);
+                p2pUsernameSettings = await getP2PUsernameSettings(req.user!.id);
+            }
 
             const preferredCurrencies = Array.isArray(req.body?.preferredCurrencies)
                 ? req.body.preferredCurrencies.map((c: unknown) => sanitizePlainText(String(c), { maxLength: 10 }).toUpperCase())
@@ -256,7 +282,13 @@ export function registerP2PProfileRoutes(app: Express): void {
                     .returning();
             }
 
-            res.json({ success: true, settings: updated });
+            res.json({
+                success: true,
+                settings: updated,
+                p2pUsername: p2pUsernameSettings.p2pUsername,
+                p2pUsernameChangeCount: p2pUsernameSettings.p2pUsernameChangeCount,
+                canChangeP2PUsername: p2pUsernameSettings.canChangeP2PUsername,
+            });
         } catch (error: unknown) {
             res.status(500).json({ error: getErrorMessage(error) });
         }

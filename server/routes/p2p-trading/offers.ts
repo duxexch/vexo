@@ -1,7 +1,42 @@
 import type { Express, Response } from "express";
 import { storage } from "../../storage";
+import { db } from "../../db";
+import { p2pSettings, p2pTraderPaymentMethods, p2pTraderProfiles } from "@shared/schema";
 import { authMiddleware, AuthRequest } from "../middleware";
-import { getErrorMessage } from "./helpers";
+import { sanitizePlainText } from "../../lib/input-security";
+import { ensureP2PUsername, getP2PUsernameMap } from "../../lib/p2p-username";
+import { and, eq } from "drizzle-orm";
+import {
+  getErrorMessage,
+  getEffectiveP2PVerificationLevel,
+  getP2PVerificationErrorMessage,
+  getUserCurrentMonthP2PTradeVolume,
+  hasRequiredP2PVerification,
+  MIN_P2P_VERIFICATION_LEVEL,
+} from "./helpers";
+
+const ALLOWED_P2P_CURRENCIES = ["USD", "USDT", "EUR", "GBP", "SAR", "AED", "EGP"] as const;
+const ALLOWED_PAYMENT_TIME_LIMITS = new Set([15, 30, 45, 60]);
+
+interface OfferOwnedPaymentMethod {
+  id: string;
+  type: string;
+  name: string;
+  isVerified: boolean;
+}
+
+function normalizePaymentSelector(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
+function mapOwnedPaymentMethodsForClient(methods: OfferOwnedPaymentMethod[]) {
+  return methods.map((method) => ({
+    id: method.id,
+    type: method.type,
+    name: method.name,
+    isVerified: method.isVerified,
+  }));
+}
 
 function mapOfferForClient(offer: Record<string, unknown>, username: string) {
   const availableAmount = String(offer.availableAmount ?? offer.amount ?? '0');
@@ -16,6 +51,9 @@ function mapOfferForClient(offer: Record<string, unknown>, username: string) {
     minLimit: String(offer.minLimit ?? '0'),
     maxLimit: String(offer.maxLimit ?? '0'),
     paymentMethods: (offer.paymentMethods as string[] | null) || [],
+    paymentTimeLimit: Number(offer.paymentTimeLimit ?? 15),
+    terms: offer.terms ? String(offer.terms) : null,
+    autoReply: offer.autoReply ? String(offer.autoReply) : null,
     rating: 5,
     completedTrades: Number(offer.completedTrades || 0),
     status: offer.status,
@@ -25,6 +63,104 @@ function mapOfferForClient(offer: Record<string, unknown>, username: string) {
 
 /** GET /api/p2p/offers, POST /api/p2p/offers, GET /api/p2p/my-offers, DELETE /api/p2p/offers/:id */
 export function registerOfferRoutes(app: Express) {
+
+  app.get("/api/p2p/offer-eligibility", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const user = await storage.getUser(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const verificationLevel = await getEffectiveP2PVerificationLevel(user);
+
+      const [profileRows, paymentMethods, p2pSettingsRows] = await Promise.all([
+        db.select({
+          canCreateOffers: p2pTraderProfiles.canCreateOffers,
+          canTradeP2P: p2pTraderProfiles.canTradeP2P,
+          monthlyTradeLimit: p2pTraderProfiles.monthlyTradeLimit,
+        })
+          .from(p2pTraderProfiles)
+          .where(eq(p2pTraderProfiles.userId, req.user!.id))
+          .limit(1),
+        db.select({
+          id: p2pTraderPaymentMethods.id,
+          type: p2pTraderPaymentMethods.type,
+          name: p2pTraderPaymentMethods.name,
+          isVerified: p2pTraderPaymentMethods.isVerified,
+        })
+          .from(p2pTraderPaymentMethods)
+          .where(and(
+            eq(p2pTraderPaymentMethods.userId, req.user!.id),
+            eq(p2pTraderPaymentMethods.isActive, true),
+          )),
+        db.select({ isEnabled: p2pSettings.isEnabled })
+          .from(p2pSettings)
+          .limit(1),
+      ]);
+
+      const profile = profileRows[0];
+      const globalSettings = p2pSettingsRows[0];
+      const monthlyUsed = await getUserCurrentMonthP2PTradeVolume(req.user!.id);
+      const monthlyLimit = profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
+        ? Number(profile.monthlyTradeLimit)
+        : null;
+      const monthlyLimitAvailable = monthlyLimit === null || monthlyUsed < monthlyLimit;
+
+      const checks = {
+        notBanned: !user.p2pBanned,
+        verificationPassed: hasRequiredP2PVerification(verificationLevel, MIN_P2P_VERIFICATION_LEVEL),
+        tradingPermissionGranted: Boolean(profile?.canTradeP2P),
+        adPermissionGranted: Boolean(profile?.canCreateOffers),
+        monthlyLimitAvailable,
+        hasActivePaymentMethods: paymentMethods.length > 0,
+        p2pEnabled: globalSettings?.isEnabled ?? true,
+      };
+
+      const reasons: string[] = [];
+      if (!checks.p2pEnabled) {
+        reasons.push("P2P trading is currently disabled.");
+      }
+      if (!checks.notBanned) {
+        reasons.push(user.p2pBanReason || "Your P2P access is currently restricted.");
+      }
+      if (!checks.verificationPassed) {
+        reasons.push(getP2PVerificationErrorMessage(MIN_P2P_VERIFICATION_LEVEL));
+      }
+      if (!checks.tradingPermissionGranted) {
+        reasons.push("Your account is not approved for P2P trading. Contact support or an administrator.");
+      }
+      if (!checks.adPermissionGranted) {
+        reasons.push("Your account is not approved to publish P2P ads. Contact support or an administrator.");
+      }
+      if (!checks.monthlyLimitAvailable) {
+        reasons.push(`Monthly P2P trading limit reached. Limit: ${monthlyLimit?.toFixed(2)}, used: ${monthlyUsed.toFixed(2)}.`);
+      }
+      if (!checks.hasActivePaymentMethods) {
+        reasons.push("Add at least one active payment method in your P2P settings before posting ads.");
+      }
+
+      res.json({
+        canCreateOffer: checks.notBanned
+          && checks.verificationPassed
+          && checks.tradingPermissionGranted
+          && checks.adPermissionGranted
+          && checks.monthlyLimitAvailable
+          && checks.hasActivePaymentMethods
+          && checks.p2pEnabled,
+        requiredVerificationLevel: MIN_P2P_VERIFICATION_LEVEL,
+        currentVerificationLevel: verificationLevel,
+        checks,
+        reasons,
+        monthlyTradeLimit: monthlyLimit,
+        monthlyTradeUsed: monthlyUsed,
+        paymentMethods: mapOwnedPaymentMethodsForClient(paymentMethods),
+        allowedCurrencies: ALLOWED_P2P_CURRENCIES,
+        allowedPaymentTimeLimits: Array.from(ALLOWED_PAYMENT_TIME_LIMITS),
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
 
   app.get("/api/p2p/offers", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -36,8 +172,11 @@ export function registerOfferRoutes(app: Express) {
         payment: payment ? String(payment) : undefined,
       });
 
-      const users = await Promise.all(offers.map((offer) => storage.getUser(offer.userId)));
-      const mapped = offers.map((offer, index) => mapOfferForClient(offer as unknown as Record<string, unknown>, users[index]?.username || 'Unknown'));
+      const usernamesByUserId = await getP2PUsernameMap(offers.map((offer) => offer.userId));
+      const mapped = offers.map((offer) => mapOfferForClient(
+        offer as unknown as Record<string, unknown>,
+        usernamesByUserId.get(offer.userId) || "trader_user",
+      ));
       res.json(mapped);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -46,7 +185,97 @@ export function registerOfferRoutes(app: Express) {
 
   app.post("/api/p2p/offers", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const { type, amount, price, currency, minLimit, maxLimit, paymentMethods } = req.body;
+      const {
+        type,
+        amount,
+        price,
+        currency,
+        minLimit,
+        maxLimit,
+        paymentMethods,
+        paymentMethodIds,
+        paymentTimeLimit,
+        terms,
+        autoReply,
+      } = req.body;
+
+      const user = await storage.getUser(req.user!.id);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const [globalSettings] = await db.select().from(p2pSettings).limit(1);
+      if (globalSettings && !globalSettings.isEnabled) {
+        return res.status(403).json({ error: "P2P trading is currently disabled" });
+      }
+
+      if (user.p2pBanned) {
+        return res.status(403).json({
+          error: user.p2pBanReason || "Your P2P access is currently restricted",
+        });
+      }
+
+      const verificationLevel = await getEffectiveP2PVerificationLevel(user);
+      if (!hasRequiredP2PVerification(verificationLevel, MIN_P2P_VERIFICATION_LEVEL)) {
+        return res.status(403).json({
+          error: getP2PVerificationErrorMessage(MIN_P2P_VERIFICATION_LEVEL),
+        });
+      }
+
+      const [profile] = await db
+        .select({
+          canCreateOffers: p2pTraderProfiles.canCreateOffers,
+          canTradeP2P: p2pTraderProfiles.canTradeP2P,
+          monthlyTradeLimit: p2pTraderProfiles.monthlyTradeLimit,
+        })
+        .from(p2pTraderProfiles)
+        .where(eq(p2pTraderProfiles.userId, req.user!.id))
+        .limit(1);
+
+      if (!profile?.canTradeP2P) {
+        return res.status(403).json({
+          error: "Your account is not approved for P2P trading. Contact support or an administrator.",
+        });
+      }
+
+      if (!profile?.canCreateOffers) {
+        return res.status(403).json({
+          error: "Your account is not authorized to publish P2P offers. Contact support or an administrator.",
+        });
+      }
+
+      const monthlyLimit = profile.monthlyTradeLimit !== null && profile.monthlyTradeLimit !== undefined
+        ? Number(profile.monthlyTradeLimit)
+        : null;
+
+      if (monthlyLimit !== null) {
+        const monthlyUsed = await getUserCurrentMonthP2PTradeVolume(req.user!.id);
+        if (monthlyUsed >= monthlyLimit) {
+          return res.status(403).json({
+            error: `Monthly P2P trading limit reached. Limit: ${monthlyLimit.toFixed(2)}, used: ${monthlyUsed.toFixed(2)}.`,
+          });
+        }
+      }
+
+      const ownedPaymentMethods = await db
+        .select({
+          id: p2pTraderPaymentMethods.id,
+          type: p2pTraderPaymentMethods.type,
+          name: p2pTraderPaymentMethods.name,
+          isVerified: p2pTraderPaymentMethods.isVerified,
+        })
+        .from(p2pTraderPaymentMethods)
+        .where(and(
+          eq(p2pTraderPaymentMethods.userId, req.user!.id),
+          eq(p2pTraderPaymentMethods.isActive, true),
+        ));
+
+      if (ownedPaymentMethods.length === 0) {
+        return res.status(400).json({
+          error: "Add at least one active payment method before creating an offer",
+        });
+      }
 
       // Validate type
       if (!type || !['buy', 'sell'].includes(type)) {
@@ -75,33 +304,99 @@ export function registerOfferRoutes(app: Express) {
         return res.status(400).json({ error: "Max limit cannot exceed total amount" });
       }
 
+      if (globalSettings) {
+        const minTradeAmount = parseFloat(globalSettings.minTradeAmount);
+        const maxTradeAmount = parseFloat(globalSettings.maxTradeAmount);
+        if (parsedMinLimit < minTradeAmount || parsedMaxLimit > maxTradeAmount) {
+          return res.status(400).json({ error: `Trade limits must be between ${minTradeAmount} and ${maxTradeAmount}` });
+        }
+      }
+
       // Validate currency
-      const allowedCurrencies = ['USD', 'USDT', 'EUR', 'GBP', 'SAR', 'AED', 'EGP'];
-      if (!currency || !allowedCurrencies.includes(String(currency).toUpperCase())) {
-        return res.status(400).json({ error: `Currency must be one of: ${allowedCurrencies.join(', ')}` });
+      const normalizedCurrency = String(currency || '').toUpperCase();
+      if (!normalizedCurrency || !ALLOWED_P2P_CURRENCIES.includes(normalizedCurrency as (typeof ALLOWED_P2P_CURRENCIES)[number])) {
+        return res.status(400).json({ error: `Currency must be one of: ${ALLOWED_P2P_CURRENCIES.join(', ')}` });
       }
 
-      // Validate payment methods
-      if (!paymentMethods || (Array.isArray(paymentMethods) && paymentMethods.length === 0)) {
-        return res.status(400).json({ error: "At least one payment method is required" });
+      const requestedPaymentMethodIds = Array.isArray(paymentMethodIds)
+        ? paymentMethodIds.filter((methodId: unknown): methodId is string => typeof methodId === "string" && methodId.trim().length > 0)
+        : [];
+
+      const legacyPaymentMethodSelectors = Array.isArray(paymentMethods)
+        ? paymentMethods.filter((value: unknown): value is string => typeof value === "string" && value.trim().length > 0)
+        : (typeof paymentMethods === "string" && paymentMethods.trim().length > 0 ? [paymentMethods] : []);
+
+      const methodsById = new Map(ownedPaymentMethods.map((method) => [method.id, method]));
+      const methodsByName = new Map(ownedPaymentMethods.map((method) => [normalizePaymentSelector(method.name), method]));
+      const methodsByType = new Map(ownedPaymentMethods.map((method) => [normalizePaymentSelector(method.type), method]));
+
+      const selectedMethodsMap = new Map<string, OfferOwnedPaymentMethod>();
+
+      if (requestedPaymentMethodIds.length > 0) {
+        const invalidIds: string[] = [];
+        for (const methodId of requestedPaymentMethodIds) {
+          const method = methodsById.get(methodId);
+          if (!method) {
+            invalidIds.push(methodId);
+            continue;
+          }
+          selectedMethodsMap.set(method.id, method);
+        }
+
+        if (invalidIds.length > 0) {
+          return res.status(400).json({ error: "One or more selected payment methods are invalid or inactive" });
+        }
+      } else {
+        for (const selector of legacyPaymentMethodSelectors) {
+          const normalizedSelector = normalizePaymentSelector(selector);
+          const method = methodsByName.get(normalizedSelector) || methodsByType.get(normalizedSelector);
+          if (!method) {
+            continue;
+          }
+          selectedMethodsMap.set(method.id, method);
+        }
       }
 
-      const user = await storage.getUser(req.user!.id);
+      const selectedMethods = Array.from(selectedMethodsMap.values());
+      if (selectedMethods.length === 0) {
+        return res.status(400).json({ error: "Select at least one of your active payment methods" });
+      }
+
+      if (selectedMethods.length > 5) {
+        return res.status(400).json({ error: "A maximum of 5 payment methods is allowed per offer" });
+      }
+
+      const parsedPaymentTimeLimit = Number(paymentTimeLimit ?? 15);
+      if (!Number.isInteger(parsedPaymentTimeLimit) || !ALLOWED_PAYMENT_TIME_LIMITS.has(parsedPaymentTimeLimit)) {
+        return res.status(400).json({ error: `Payment time limit must be one of: ${Array.from(ALLOWED_PAYMENT_TIME_LIMITS).join(', ')}` });
+      }
+
+      const safeTerms = typeof terms === "string"
+        ? sanitizePlainText(terms, { maxLength: 1200 })
+        : null;
+
+      const safeAutoReply = typeof autoReply === "string"
+        ? sanitizePlainText(autoReply, { maxLength: 500 })
+        : null;
 
       const created = await storage.createP2POffer({
         userId: req.user!.id,
         type,
         status: 'active',
-        cryptoCurrency: String(currency).toUpperCase(),
-        fiatCurrency: 'USD',
+        cryptoCurrency: normalizedCurrency,
+        fiatCurrency: normalizedCurrency,
         price: parsedPrice.toFixed(2),
         availableAmount: parsedAmount.toFixed(8),
         minLimit: parsedMinLimit.toFixed(2),
         maxLimit: parsedMaxLimit.toFixed(2),
-        paymentMethods: Array.isArray(paymentMethods) ? paymentMethods : [paymentMethods],
+        paymentMethods: selectedMethods.map((method) => method.name),
+        paymentTimeLimit: parsedPaymentTimeLimit,
+        terms: safeTerms || null,
+        autoReply: safeAutoReply || null,
       });
 
-      res.status(201).json(mapOfferForClient(created as unknown as Record<string, unknown>, user?.username || 'Unknown'));
+      const ownerP2PUsername = await ensureP2PUsername(req.user!.id, user?.username);
+      res.status(201).json(mapOfferForClient(created as unknown as Record<string, unknown>, ownerP2PUsername));
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -110,7 +405,7 @@ export function registerOfferRoutes(app: Express) {
   app.get("/api/p2p/my-offers", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const myOffers = await storage.getUserP2POffers(req.user!.id);
-      const username = req.user!.username || (await storage.getUser(req.user!.id))?.username || 'Unknown';
+      const username = await ensureP2PUsername(req.user!.id, req.user!.username);
       res.json(myOffers.map((offer) => mapOfferForClient(offer as unknown as Record<string, unknown>, username)));
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

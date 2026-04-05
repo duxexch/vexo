@@ -26,8 +26,12 @@ import {
   AlertTriangle,
   Clock,
   CheckCircle,
+  ExternalLink,
+  FileText,
   XCircle,
   MessageSquare,
+  ShieldCheck,
+  ShieldX,
   User,
   DollarSign,
   Eye,
@@ -51,12 +55,44 @@ async function adminFetch(url: string, options?: RequestInit) {
   return res.json();
 }
 
+interface AdminDisputeEvidence {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  evidenceType: string;
+  description?: string | null;
+  isVerified: boolean;
+  verifiedBy?: string | null;
+  verifiedByName?: string | null;
+  verifiedAt?: string | null;
+  createdAt: string;
+}
+
+interface AdminDisputeDetails {
+  dispute: Record<string, unknown> & {
+    id: string;
+    status: string;
+    reason?: string;
+    description?: string;
+    initiatorId?: string;
+    initiatorName?: string;
+    respondentId?: string;
+    respondentName?: string;
+    createdAt: string;
+    resolution?: string;
+  };
+  messages: Array<Record<string, unknown>>;
+  evidence: AdminDisputeEvidence[];
+  logs: Array<Record<string, unknown>>;
+}
+
 export default function AdminDisputesPage() {
   const { toast } = useToast();
   const [selectedDispute, setSelectedDispute] = useState<any>(null);
   const [resolution, setResolution] = useState("");
   const [resolutionType, setResolutionType] = useState<string>("");
   const [winnerId, setWinnerId] = useState<string>("");
+  const selectedDisputeId = selectedDispute?.id as string | undefined;
 
   // Alert-based highlighting: track which disputes have unread alerts
   const { data: unreadData } = useUnreadAlertEntities("/admin/disputes");
@@ -66,6 +102,34 @@ export default function AdminDisputesPage() {
   const { data: disputes, isLoading } = useQuery({
     queryKey: ["/api/admin/p2p/disputes"],
     queryFn: () => adminFetch("/api/admin/p2p/disputes"),
+  });
+
+  const { data: disputeDetails, isLoading: disputeDetailsLoading } = useQuery<AdminDisputeDetails>({
+    queryKey: ["/api/admin/p2p/disputes", selectedDisputeId, "details"],
+    queryFn: () => adminFetch(`/api/admin/p2p/disputes/${selectedDisputeId}/details`),
+    enabled: Boolean(selectedDisputeId),
+  });
+
+  const verifyEvidenceMutation = useMutation({
+    mutationFn: async ({ disputeId, evidenceId, isVerified }: { disputeId: string; evidenceId: string; isVerified: boolean }) => {
+      return adminFetch(`/api/admin/p2p/disputes/${disputeId}/evidence/${evidenceId}/verify`, {
+        method: "POST",
+        body: JSON.stringify({ isVerified }),
+      });
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/disputes", variables.disputeId, "details"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/disputes"] });
+      toast({
+        title: variables.isVerified ? "Evidence Verified" : "Evidence Marked Unverified",
+        description: variables.isVerified
+          ? "The selected evidence is now verified."
+          : "The selected evidence is now marked as unverified.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to update evidence verification", variant: "destructive" });
+    },
   });
 
   const resolveMutation = useMutation({
@@ -131,11 +195,12 @@ export default function AdminDisputesPage() {
   };
 
   const handleResolve = () => {
-    if (!selectedDispute || !resolution || !resolutionType) return;
+    const activeDispute = disputeDetails?.dispute ?? selectedDispute;
+    if (!activeDispute || !resolution || !resolutionType) return;
     if (resolutionType === "resolved" && !winnerId) return;
 
     resolveMutation.mutate({
-      id: selectedDispute.id,
+      id: activeDispute.id,
       status: resolutionType,
       resolution,
       winnerId: resolutionType === "resolved" ? winnerId : undefined,
@@ -297,27 +362,102 @@ export default function AdminDisputesPage() {
             <DialogTitle>Dispute Details</DialogTitle>
           </DialogHeader>
 
-          {selectedDispute && (
+          {(disputeDetails?.dispute || selectedDispute) && (
             <div className="space-y-4">
+              {(() => {
+                const activeDispute = disputeDetails?.dispute ?? selectedDispute;
+                if (!activeDispute) return null;
+                return (
+                  <>
               <div className="p-4 bg-muted rounded-lg space-y-2">
                 <div className="flex items-center gap-2">
-                  <Badge variant={getStatusColor(selectedDispute.status)}>
-                    {selectedDispute.status}
+                  <Badge variant={getStatusColor(activeDispute.status)}>
+                    {activeDispute.status}
                   </Badge>
-                  <Badge variant={getPriorityColor(selectedDispute.status === "open" ? "high" : selectedDispute.status === "investigating" ? "medium" : "low")}>
-                    {selectedDispute.status === "open" ? "high" : selectedDispute.status === "investigating" ? "medium" : "low"}
+                  <Badge variant={getPriorityColor(activeDispute.status === "open" ? "high" : activeDispute.status === "investigating" ? "medium" : "low")}>
+                    {activeDispute.status === "open" ? "high" : activeDispute.status === "investigating" ? "medium" : "low"}
                   </Badge>
                 </div>
-                <h3 className="font-semibold">{selectedDispute.reason || "P2P Dispute"}</h3>
-                <p className="text-sm">{selectedDispute.description}</p>
+                <h3 className="font-semibold">{activeDispute.reason || "P2P Dispute"}</h3>
+                <p className="text-sm">{activeDispute.description}</p>
                 <div className="flex gap-4 text-sm text-muted-foreground">
-                  <span>Initiator: {selectedDispute.initiatorName || selectedDispute.initiatorId}</span>
-                  <span>Respondent: {selectedDispute.respondentName || selectedDispute.respondentId}</span>
-                  <span>Created: {new Date(selectedDispute.createdAt).toLocaleString()}</span>
+                  <span>Initiator: {activeDispute.initiatorName || activeDispute.initiatorId}</span>
+                  <span>Respondent: {activeDispute.respondentName || activeDispute.respondentId}</span>
+                  <span>Created: {new Date(activeDispute.createdAt).toLocaleString()}</span>
                 </div>
               </div>
 
-              {selectedDispute.status !== "resolved" && selectedDispute.status !== "closed" && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Evidence ({disputeDetails?.evidence?.length || 0})
+                </Label>
+
+                {disputeDetailsLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading evidence...</p>
+                ) : !disputeDetails?.evidence || disputeDetails.evidence.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No evidence uploaded for this dispute.</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {disputeDetails.evidence.map((ev) => (
+                      <div key={ev.id} className="rounded-md border p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{ev.fileName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {ev.evidenceType} • {new Date(ev.createdAt).toLocaleString()}
+                            </p>
+                            {ev.verifiedAt && (
+                              <p className="text-xs text-muted-foreground">
+                                Verified by {ev.verifiedByName || ev.verifiedBy || "admin"} at {new Date(ev.verifiedAt).toLocaleString()}
+                              </p>
+                            )}
+                          </div>
+                          <Badge variant={ev.isVerified ? "default" : "outline"}>
+                            {ev.isVerified ? "verified" : "unverified"}
+                          </Badge>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button asChild variant="outline" size="sm">
+                            <a href={ev.fileUrl} target="_blank" rel="noreferrer">
+                              <ExternalLink className="h-4 w-4 me-1" />
+                              Open
+                            </a>
+                          </Button>
+
+                          {activeDispute.status !== "resolved" && activeDispute.status !== "closed" && (
+                            <Button
+                              size="sm"
+                              variant={ev.isVerified ? "outline" : "default"}
+                              disabled={verifyEvidenceMutation.isPending}
+                              onClick={() => verifyEvidenceMutation.mutate({
+                                disputeId: activeDispute.id,
+                                evidenceId: ev.id,
+                                isVerified: !ev.isVerified,
+                              })}
+                            >
+                              {ev.isVerified ? (
+                                <>
+                                  <ShieldX className="h-4 w-4 me-1" />
+                                  Mark Unverified
+                                </>
+                              ) : (
+                                <>
+                                  <ShieldCheck className="h-4 w-4 me-1" />
+                                  Verify Evidence
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {activeDispute.status !== "resolved" && activeDispute.status !== "closed" && (
                 <>
                   <div className="space-y-2">
                     <Label>Resolution Type</Label>
@@ -341,11 +481,11 @@ export default function AdminDisputesPage() {
                           <SelectValue placeholder="Select winner" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={selectedDispute.initiatorId}>
-                            {selectedDispute.initiatorName || selectedDispute.initiatorId} (initiator)
+                          <SelectItem value={activeDispute.initiatorId}>
+                            {activeDispute.initiatorName || activeDispute.initiatorId} (initiator)
                           </SelectItem>
-                          <SelectItem value={selectedDispute.respondentId}>
-                            {selectedDispute.respondentName || selectedDispute.respondentId} (respondent)
+                          <SelectItem value={activeDispute.respondentId}>
+                            {activeDispute.respondentName || activeDispute.respondentId} (respondent)
                           </SelectItem>
                         </SelectContent>
                       </Select>
@@ -365,12 +505,15 @@ export default function AdminDisputesPage() {
                 </>
               )}
 
-              {selectedDispute.resolution && (
+              {activeDispute.resolution && (
                 <div className="p-4 bg-green-500/10 rounded-lg">
                   <p className="text-sm font-medium text-green-500">Resolution</p>
-                  <p className="text-sm mt-1">{selectedDispute.resolution}</p>
+                  <p className="text-sm mt-1">{activeDispute.resolution}</p>
                 </div>
               )}
+                  </>
+                );
+              })()}
             </div>
           )}
 

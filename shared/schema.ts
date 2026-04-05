@@ -1409,10 +1409,15 @@ export const p2pTraderProfiles = pgTable("p2p_trader_profiles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id).unique(),
   displayName: text("display_name"),
+  p2pUsername: text("p2p_username"),
+  p2pUsernameChangeCount: integer("p2p_username_change_count").notNull().default(0),
   bio: text("bio"),
   region: text("region"),
   preferredCurrencies: text("preferred_currencies").array(),
   verificationLevel: p2pVerificationLevelEnum("verification_level").notNull().default("none"),
+  canCreateOffers: boolean("can_create_offers").notNull().default(false),
+  canTradeP2P: boolean("can_trade_p2p").notNull().default(false),
+  monthlyTradeLimit: decimal("monthly_trade_limit", { precision: 15, scale: 2 }),
   isOnline: boolean("is_online").notNull().default(false),
   lastSeenAt: timestamp("last_seen_at"),
   autoReplyEnabled: boolean("auto_reply_enabled").notNull().default(false),
@@ -1425,6 +1430,7 @@ export const p2pTraderProfiles = pgTable("p2p_trader_profiles", {
 }, (table) => [
   index("idx_p2p_trader_profiles_user_id").on(table.userId),
   index("idx_p2p_trader_profiles_verification").on(table.verificationLevel),
+  uniqueIndex("uq_p2p_trader_profiles_p2p_username").on(table.p2pUsername),
 ]);
 
 export const p2pTraderMetrics = pgTable("p2p_trader_metrics", {

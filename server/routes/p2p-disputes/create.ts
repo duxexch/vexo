@@ -4,22 +4,49 @@ import {
   p2pDisputes,
   p2pTransactionLogs,
   p2pTrades,
-  users,
 } from "@shared/schema";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import { emitDisputeAlert } from "../../lib/admin-alerts";
 import { sendNotification } from "../../websocket";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage, formatDispute } from "./helpers";
 import { sanitizePlainText } from "../../lib/input-security";
+import { ensureP2PUsername, getP2PUsernameMap } from "../../lib/p2p-username";
+
+const MAX_ACTIVE_DISPUTES_PER_USER = 10;
 
 /** POST /api/p2p/disputes — Create a new dispute on a trade */
 export function registerCreateRoutes(app: Express) {
+
+  const notifyWithLog = async (
+    recipientId: string,
+    payload: Parameters<typeof sendNotification>[1],
+    context: string,
+  ) => {
+    await sendNotification(recipientId, payload).catch((error: unknown) => {
+      console.warn(`[P2P Disputes] Notification failure (${context})`, {
+        recipientId,
+        error: getErrorMessage(error),
+      });
+    });
+  };
+
+  const emitDisputeAlertWithLog = async (
+    payload: Parameters<typeof emitDisputeAlert>[0],
+    context: string,
+  ) => {
+    await emitDisputeAlert(payload).catch((error: unknown) => {
+      console.warn(`[P2P Disputes] Admin alert emission failure (${context})`, {
+        error: getErrorMessage(error),
+      });
+    });
+  };
 
   app.post("/api/p2p/disputes", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.id;
       const { tradeId, reason, description } = req.body;
+      const initiatorP2PUsername = await ensureP2PUsername(userId, req.user!.username);
 
       if (!tradeId || !reason) {
         return res.status(400).json({ error: "tradeId and reason are required" });
@@ -68,6 +95,30 @@ export function registerCreateRoutes(app: Express) {
         return res.status(409).json({ error: "An active dispute already exists for this trade" });
       }
 
+      // 3.1 Guardrail: cap active disputes per user to reduce abuse/spam load
+      const [activeDisputesCountRow] = await db
+        .select({ count: sql<string>`count(*)` })
+        .from(p2pDisputes)
+        .where(
+          and(
+            or(
+              eq(p2pDisputes.initiatorId, userId),
+              eq(p2pDisputes.respondentId, userId),
+            ),
+            or(
+              eq(p2pDisputes.status, "open"),
+              eq(p2pDisputes.status, "investigating"),
+            )
+          )
+        );
+
+      const activeDisputesCount = Number(activeDisputesCountRow?.count || 0);
+      if (activeDisputesCount >= MAX_ACTIVE_DISPUTES_PER_USER) {
+        return res.status(429).json({
+          error: `Too many active disputes. Please resolve existing disputes before opening new ones (max ${MAX_ACTIVE_DISPUTES_PER_USER}).`,
+        });
+      }
+
       // 4. Determine respondent (the other party)
       const respondentId = trade.buyerId === userId ? trade.sellerId : trade.buyerId;
 
@@ -99,48 +150,43 @@ export function registerCreateRoutes(app: Express) {
         disputeId: dispute.id,
         userId,
         action: "dispute_opened",
-        description: `Dispute opened by ${req.user!.username}. Reason: ${reason}`,
-        descriptionAr: `تم فتح نزاع بواسطة ${req.user!.username}. السبب: ${reason}`,
+        description: `Dispute opened by ${initiatorP2PUsername}. Reason: ${reason}`,
+        descriptionAr: `تم فتح نزاع بواسطة ${initiatorP2PUsername}. السبب: ${reason}`,
         ipAddress,
         userAgent,
       });
 
       // 8. Emit admin alert for new dispute
-      emitDisputeAlert({
+      await emitDisputeAlertWithLog({
         disputeId: dispute.id,
         tradeId,
         isNew: true,
         severity: 'warning',
-        message: `New dispute opened by ${req.user!.username} on trade #${tradeId.slice(0, 8)}. Reason: ${reason}`,
-        messageAr: `تم فتح نزاع جديد بواسطة ${req.user!.username} على الصفقة #${tradeId.slice(0, 8)}. السبب: ${reason}`,
-      }).catch(() => { });
+        message: `New dispute opened by ${initiatorP2PUsername} on trade #${tradeId.slice(0, 8)}. Reason: ${reason}`,
+        messageAr: `تم فتح نزاع جديد بواسطة ${initiatorP2PUsername} على الصفقة #${tradeId.slice(0, 8)}. السبب: ${reason}`,
+      }, "create-dispute");
 
       // Notify respondent about new dispute
-      await sendNotification(respondentId, {
+      await notifyWithLog(respondentId, {
         type: 'warning',
         priority: 'urgent',
         title: 'Dispute Opened Against You ⚠️',
         titleAr: 'تم فتح نزاع ضدك ⚠️',
-        message: `${req.user!.username} opened a dispute on trade #${tradeId.slice(0, 8)}. Reason: ${safeReason}`,
-        messageAr: `قام ${req.user!.username} بفتح نزاع على الصفقة #${tradeId.slice(0, 8)}. السبب: ${safeReason}`,
+        message: `${initiatorP2PUsername} opened a dispute on trade #${tradeId.slice(0, 8)}. Reason: ${safeReason}`,
+        messageAr: `قام ${initiatorP2PUsername} بفتح نزاع على الصفقة #${tradeId.slice(0, 8)}. السبب: ${safeReason}`,
         link: '/p2p/disputes',
         metadata: JSON.stringify({ disputeId: dispute.id, tradeId, action: 'dispute_opened' }),
-      }).catch(() => { });
+      }, "create-dispute:respondent");
 
-      // 9. Get respondent name for response
-      const [respondentUser] = await db
-        .select({ username: users.username })
-        .from(users)
-        .where(eq(users.id, respondentId))
-        .limit(1);
+      const usernamesByUserId = await getP2PUsernameMap([userId, respondentId]);
 
       res.status(201).json(formatDispute({
         dispute_id: dispute.id,
         trade_id: dispute.tradeId,
         initiator_id: dispute.initiatorId,
-        initiator_name: req.user!.username,
+        initiator_name: usernamesByUserId.get(userId) || initiatorP2PUsername,
         respondent_id: dispute.respondentId,
-        respondent_name: respondentUser?.username ?? "Unknown",
+        respondent_name: usernamesByUserId.get(respondentId) ?? "trader_user",
         dispute_status: dispute.status,
         reason: dispute.reason,
         description: dispute.description,

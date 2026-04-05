@@ -6,8 +6,15 @@ import {
 import { db } from "../../db";
 import { eq } from "drizzle-orm";
 
+type TradeSettlementResult = {
+  success: boolean;
+  trade?: P2PTrade;
+  error?: string;
+  transitioned?: boolean;
+};
+
 // ATOMIC P2P trade completion with escrow release
-export async function completeP2PTradeAtomic(tradeId: string, completedByUserId: string): Promise<{ success: boolean; trade?: P2PTrade; error?: string }> {
+export async function completeP2PTradeAtomic(tradeId: string, completedByUserId: string): Promise<TradeSettlementResult> {
   return await db.transaction(async (tx) => {
     // 1. Lock and verify trade
     const [trade] = await tx
@@ -20,13 +27,13 @@ export async function completeP2PTradeAtomic(tradeId: string, completedByUserId:
       return { success: false, error: 'Trade not found' };
     }
 
-    // Idempotency: already completed - return success
-    if (trade.status === 'completed') {
-      return { success: true, trade };
-    }
-
     if (trade.sellerId !== completedByUserId) {
       return { success: false, error: 'Only the seller can complete the trade' };
+    }
+
+    // Idempotency: already completed - return success
+    if (trade.status === 'completed') {
+      return { success: true, trade, transitioned: false };
     }
 
     if (trade.status !== 'confirmed') {
@@ -73,12 +80,12 @@ export async function completeP2PTradeAtomic(tradeId: string, completedByUserId:
       processedAt: new Date()
     });
 
-    return { success: true, trade: updatedTrade };
+    return { success: true, trade: updatedTrade, transitioned: true };
   });
 }
 
 // ATOMIC P2P trade cancellation with escrow refund and offer restoration
-export async function cancelP2PTradeAtomic(tradeId: string, cancelledByUserId: string, reason?: string): Promise<{ success: boolean; trade?: P2PTrade; error?: string }> {
+export async function cancelP2PTradeAtomic(tradeId: string, cancelledByUserId: string, reason?: string): Promise<TradeSettlementResult> {
   return await db.transaction(async (tx) => {
     // 1. Lock and verify trade
     const [trade] = await tx
@@ -91,17 +98,33 @@ export async function cancelP2PTradeAtomic(tradeId: string, cancelledByUserId: s
       return { success: false, error: 'Trade not found' };
     }
 
-    // Idempotency: already cancelled - return success
-    if (trade.status === 'cancelled') {
-      return { success: true, trade };
-    }
-
     if (trade.buyerId !== cancelledByUserId && trade.sellerId !== cancelledByUserId) {
       return { success: false, error: 'Not authorized to cancel this trade' };
     }
 
+    // Idempotency: already cancelled - return success
+    if (trade.status === 'cancelled') {
+      return { success: true, trade, transitioned: false };
+    }
+
     if (trade.status === 'completed') {
       return { success: false, error: 'Cannot cancel a completed trade' };
+    }
+
+    if (trade.status === 'confirmed') {
+      return { success: false, error: 'Confirmed trades cannot be cancelled' };
+    }
+
+    if (trade.status === 'disputed') {
+      return { success: false, error: 'Disputed trades must be resolved through dispute flow' };
+    }
+
+    if (trade.buyerId === cancelledByUserId && trade.status !== 'pending') {
+      return { success: false, error: 'Buyer can only cancel pending trades' };
+    }
+
+    if (trade.sellerId === cancelledByUserId && trade.status !== 'pending' && trade.status !== 'paid') {
+      return { success: false, error: 'Seller can only cancel pending or paid trades' };
     }
 
     const escrowAmount = parseFloat(trade.escrowAmount);
@@ -170,7 +193,7 @@ export async function cancelP2PTradeAtomic(tradeId: string, cancelledByUserId: s
       .where(eq(p2pTrades.id, tradeId))
       .returning();
 
-    return { success: true, trade: updatedTrade };
+    return { success: true, trade: updatedTrade, transitioned: true };
   });
 }
 

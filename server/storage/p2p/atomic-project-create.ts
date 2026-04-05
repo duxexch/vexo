@@ -1,10 +1,10 @@
 import {
-  p2pTrades, p2pOffers,
+  p2pTrades, p2pOffers, p2pTraderProfiles,
   projectCurrencyWallets, projectCurrencyLedger,
   type P2PTrade,
 } from "@shared/schema";
 import { db } from "../../db";
-import { eq } from "drizzle-orm";
+import { and, eq, gte, lt, ne, or, sql } from "drizzle-orm";
 
 // ==================== ATOMIC P2P TRADE CREATION (PROJECT CURRENCY) ====================
 
@@ -20,8 +20,13 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
   expiresAt: Date;
 }): Promise<{ success: boolean; trade?: P2PTrade; error?: string }> {
   const tradeAmount = parseFloat(params.amount);
+  const tradeFiatAmount = parseFloat(params.fiatAmount);
   if (isNaN(tradeAmount) || tradeAmount <= 0) {
     return { success: false, error: 'Invalid amount' };
+  }
+
+  if (isNaN(tradeFiatAmount) || tradeFiatAmount <= 0) {
+    return { success: false, error: 'Invalid fiat amount' };
   }
 
   return await db.transaction(async (tx) => {
@@ -45,7 +50,54 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
       return { success: false, error: `Insufficient available amount. Maximum: ${availableAmount}` };
     }
 
-    // 2. Lock seller's PROJECT CURRENCY wallet and debit escrow
+    // 2. Lock participant profiles and enforce trading permission + monthly limit atomically.
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+    const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+    const participantIds = Array.from(new Set([params.buyerId, params.sellerId])).sort((a, b) => a.localeCompare(b));
+
+    for (const participantId of participantIds) {
+      const [profile] = await tx
+        .select({
+          canTradeP2P: p2pTraderProfiles.canTradeP2P,
+          monthlyTradeLimit: p2pTraderProfiles.monthlyTradeLimit,
+        })
+        .from(p2pTraderProfiles)
+        .where(eq(p2pTraderProfiles.userId, participantId))
+        .limit(1)
+        .for('update');
+
+      const participantRole = participantId === params.buyerId ? 'Buyer' : 'Seller';
+
+      if (!profile?.canTradeP2P) {
+        return { success: false, error: `${participantRole} is not approved for P2P trading` };
+      }
+
+      const monthlyLimit = profile.monthlyTradeLimit !== null && profile.monthlyTradeLimit !== undefined
+        ? Number(profile.monthlyTradeLimit)
+        : null;
+
+      if (monthlyLimit !== null) {
+        const [usageRow] = await tx
+          .select({
+            total: sql<string>`coalesce(sum(cast(${p2pTrades.fiatAmount} as numeric)), 0)`,
+          })
+          .from(p2pTrades)
+          .where(and(
+            or(eq(p2pTrades.buyerId, participantId), eq(p2pTrades.sellerId, participantId)),
+            ne(p2pTrades.status, 'cancelled'),
+            gte(p2pTrades.createdAt, monthStart),
+            lt(p2pTrades.createdAt, nextMonthStart),
+          ));
+
+        const monthlyUsed = Number(usageRow?.total || 0);
+        if ((monthlyUsed + tradeFiatAmount) > monthlyLimit) {
+          return { success: false, error: `${participantRole} monthly trading limit exceeded` };
+        }
+      }
+    }
+
+    // 3. Lock seller's PROJECT CURRENCY wallet and debit escrow
     const [sellerWallet] = await tx
       .select()
       .from(projectCurrencyWallets)
@@ -82,7 +134,7 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
       purchasedBalance -= remaining;
     }
 
-    // 3. Debit seller's project currency (escrow hold)
+    // 4. Debit seller's project currency (escrow hold)
     await tx.update(projectCurrencyWallets)
       .set({ 
         earnedBalance: earnedBalance.toFixed(8),
@@ -91,7 +143,7 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
       })
       .where(eq(projectCurrencyWallets.userId, params.sellerId));
 
-    // 4. Update offer availability
+    // 5. Update offer availability
     const newAvailable = (availableAmount - tradeAmount).toFixed(8);
     await tx.update(p2pOffers)
       .set({
@@ -101,7 +153,7 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
       })
       .where(eq(p2pOffers.id, params.offerId));
 
-    // 5. Create the trade record with currencyType='project' - track escrow split for accurate refunds
+    // 6. Create the trade record with currencyType='project' - track escrow split for accurate refunds
     const [trade] = await tx.insert(p2pTrades).values({
       offerId: params.offerId,
       buyerId: params.buyerId,
@@ -119,7 +171,7 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
       expiresAt: params.expiresAt,
     }).returning();
 
-    // 6. Create ledger entries for audit - separate entries for earned and purchased
+    // 7. Create ledger entries for audit - separate entries for earned and purchased
     if (earnedDeducted > 0) {
       await tx.insert(projectCurrencyLedger).values({
         walletId: sellerWallet.id,

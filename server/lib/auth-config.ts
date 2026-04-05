@@ -22,7 +22,8 @@ const userSecretFromEnv = process.env.JWT_USER_SECRET || process.env.SESSION_SEC
 const fallbackUserSecret = 'dev-user-secret-do-not-use-in-production';
 
 // Admin JWT Configuration (completely separate from user)
-const adminSecretFromEnv = process.env.JWT_ADMIN_SECRET;
+// Support legacy ADMIN_JWT_SECRET for backward compatibility with existing scripts.
+const adminSecretFromEnv = process.env.JWT_ADMIN_SECRET || process.env.ADMIN_JWT_SECRET;
 const fallbackAdminSecret = 'dev-admin-secret-do-not-use-in-production';
 
 // Production validation - enforce strong secrets

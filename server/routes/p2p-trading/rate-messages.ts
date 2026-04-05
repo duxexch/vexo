@@ -4,9 +4,23 @@ import { authMiddleware, AuthRequest } from "../middleware";
 import { sendNotification } from "../../websocket";
 import { getErrorMessage } from "./helpers";
 import { sanitizePlainText } from "../../lib/input-security";
+import { ensureP2PUsername, getP2PUsernameMap } from "../../lib/p2p-username";
 
 /** POST rate, GET/POST messages — Rating and messaging */
 export function registerRateMessageRoutes(app: Express) {
+
+  const notifyWithLog = async (
+    recipientId: string,
+    payload: Parameters<typeof sendNotification>[1],
+    context: string,
+  ) => {
+    await sendNotification(recipientId, payload).catch((error: unknown) => {
+      console.warn(`[P2P Trading] Notification failure (${context})`, {
+        recipientId,
+        error: getErrorMessage(error),
+      });
+    });
+  };
 
   app.post("/api/p2p/trades/:id/rate", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -68,17 +82,18 @@ export function registerRateMessageRoutes(app: Express) {
 
       // Notify rated user about their rating
       const rater = await storage.getUser(req.user!.id);
+      const raterP2PUsername = await ensureP2PUsername(req.user!.id, rater?.username || req.user!.username);
       const stars = '⭐'.repeat(rating);
-      await sendNotification(ratedUserId, {
+      await notifyWithLog(ratedUserId, {
         type: 'system',
         priority: 'normal',
         title: `New Rating: ${stars}`,
         titleAr: `تقييم جديد: ${stars}`,
-        message: `${rater?.username || 'A trader'} rated you ${rating}/5 on trade #${trade.id.slice(0, 8)}.${comment ? ' "' + comment + '"' : ''}`,
-        messageAr: `قام ${rater?.username || 'متداول'} بتقييمك ${rating}/5 على الصفقة #${trade.id.slice(0, 8)}.${comment ? ' "' + comment + '"' : ''}`,
+        message: `${raterP2PUsername} rated you ${rating}/5 on trade #${trade.id.slice(0, 8)}.${comment ? ' "' + comment + '"' : ''}`,
+        messageAr: `قام ${raterP2PUsername} بتقييمك ${rating}/5 على الصفقة #${trade.id.slice(0, 8)}.${comment ? ' "' + comment + '"' : ''}`,
         link: '/p2p/profile',
         metadata: JSON.stringify({ tradeId: trade.id, rating }),
-      }).catch(() => { });
+      }, "trade-rate:rated-user");
 
       res.status(201).json(newRating);
     } catch (error: unknown) {
@@ -99,13 +114,27 @@ export function registerRateMessageRoutes(app: Express) {
 
       const messages = await storage.getP2PTradeMessages(req.params.id);
 
-      const messagesWithSender = await Promise.all(messages.map(async (msg) => {
-        const sender = await storage.getUser(msg.senderId);
+      const senderIds = Array.from(new Set(messages.map((msg) => msg.senderId)));
+      const [senderUsernames, senderRecords] = await Promise.all([
+        getP2PUsernameMap(senderIds),
+        Promise.all(senderIds.map((senderId) => storage.getUser(senderId))),
+      ]);
+
+      const senderRecordMap = new Map(senderRecords.filter(Boolean).map((sender) => [sender!.id, sender!]));
+
+      const messagesWithSender = messages.map((msg) => {
+        const sender = senderRecordMap.get(msg.senderId);
         return {
           ...msg,
-          sender: sender ? { id: sender.id, username: sender.username, nickname: sender.nickname } : null,
+          sender: sender
+            ? {
+              id: sender.id,
+              username: senderUsernames.get(sender.id) || sender.username,
+              nickname: sender.nickname,
+            }
+            : null,
         };
-      }));
+      });
 
       res.json(messagesWithSender);
     } catch (error: unknown) {
@@ -149,10 +178,11 @@ export function registerRateMessageRoutes(app: Express) {
       });
 
       const sender = await storage.getUser(req.user!.id);
+      const senderP2PUsername = await ensureP2PUsername(req.user!.id, sender?.username || req.user!.username);
 
       res.status(201).json({
         ...newMessage,
-        sender: sender ? { id: sender.id, username: sender.username, nickname: sender.nickname } : null,
+        sender: sender ? { id: sender.id, username: senderP2PUsername, nickname: sender.nickname } : null,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

@@ -12,6 +12,7 @@ import { eq, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage, formatDispute } from "./helpers";
+import { getP2PUsernameMap } from "../../lib/p2p-username";
 
 /** GET /api/p2p/disputes/:id — Get dispute details + messages + evidence + logs */
 export function registerDetailsRoutes(app: Express) {
@@ -79,6 +80,7 @@ export function registerDetailsRoutes(app: Express) {
 
       // 4. Get evidence with uploader names
       const uploader = alias(users, "uploader");
+      const verifier = alias(users, "verifier");
       const evidence = await db
         .select({
           id: p2pDisputeEvidence.id,
@@ -92,10 +94,14 @@ export function registerDetailsRoutes(app: Express) {
           description: p2pDisputeEvidence.description,
           evidenceType: p2pDisputeEvidence.evidenceType,
           isVerified: p2pDisputeEvidence.isVerified,
+          verifiedBy: p2pDisputeEvidence.verifiedBy,
+          verifiedByName: verifier.username,
+          verifiedAt: p2pDisputeEvidence.verifiedAt,
           createdAt: p2pDisputeEvidence.createdAt,
         })
         .from(p2pDisputeEvidence)
         .innerJoin(uploader, eq(p2pDisputeEvidence.uploaderId, uploader.id))
+        .leftJoin(verifier, eq(p2pDisputeEvidence.verifiedBy, verifier.id))
         .where(eq(p2pDisputeEvidence.disputeId, disputeId))
         .orderBy(p2pDisputeEvidence.createdAt);
 
@@ -120,10 +126,39 @@ export function registerDetailsRoutes(app: Express) {
         )
         .orderBy(p2pTransactionLogs.createdAt);
 
+      const usernamesByUserId = await getP2PUsernameMap([
+        String(row.initiator_id),
+        String(row.respondent_id),
+        ...messages.map((message) => String(message.senderId)),
+        ...evidence.map((item) => String(item.uploaderId)),
+        ...evidence
+          .map((item) => item.verifiedBy)
+          .filter((value): value is string => typeof value === "string" && value.length > 0),
+      ]);
+
+      const formattedDispute = formatDispute({
+        ...row,
+        initiator_name: usernamesByUserId.get(String(row.initiator_id)) || row.initiator_name,
+        respondent_name: usernamesByUserId.get(String(row.respondent_id)) || row.respondent_name,
+      });
+
+      const messagesWithP2PUsernames = messages.map((message) => ({
+        ...message,
+        senderName: usernamesByUserId.get(String(message.senderId)) || message.senderName,
+      }));
+
+      const evidenceWithP2PUsernames = evidence.map((item) => ({
+        ...item,
+        uploaderName: usernamesByUserId.get(String(item.uploaderId)) || item.uploaderName,
+        verifiedByName: item.verifiedBy
+          ? (usernamesByUserId.get(String(item.verifiedBy)) || item.verifiedByName)
+          : item.verifiedByName,
+      }));
+
       res.json({
-        dispute: formatDispute(row),
-        messages,
-        evidence,
+        dispute: formattedDispute,
+        messages: messagesWithP2PUsernames,
+        evidence: evidenceWithP2PUsernames,
         logs,
       });
     } catch (error: unknown) {

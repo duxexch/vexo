@@ -5,7 +5,7 @@ import {
   p2pTransactionLogs,
   p2pTrades,
 } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { sendNotification } from "../../websocket";
 import { storage } from "../../storage";
 import { authMiddleware, AuthRequest } from "../middleware";
@@ -13,6 +13,19 @@ import { getErrorMessage } from "./helpers";
 
 /** POST /api/p2p/disputes/:id/resolve + GET /api/p2p/trades/:tradeId/logs */
 export function registerResolveRoutes(app: Express) {
+
+  const notifyWithLog = async (
+    recipientId: string,
+    payload: Parameters<typeof sendNotification>[1],
+    context: string,
+  ) => {
+    await sendNotification(recipientId, payload).catch((error: unknown) => {
+      console.warn(`[P2P Disputes] Notification failure (${context})`, {
+        recipientId,
+        error: getErrorMessage(error),
+      });
+    });
+  };
 
   // ==================== POST /api/p2p/disputes/:id/resolve ====================
   // Admin-only: resolve a dispute
@@ -29,91 +42,116 @@ export function registerResolveRoutes(app: Express) {
         return res.status(403).json({ error: "Only admins can resolve disputes" });
       }
 
-      const [dispute] = await db
-        .select()
-        .from(p2pDisputes)
-        .where(eq(p2pDisputes.id, disputeId))
-        .limit(1);
+      const resolutionMessage = resolution || `Resolved by admin. Action: ${action}`;
 
-      if (!dispute) {
-        return res.status(404).json({ error: "Dispute not found" });
-      }
+      const outcome = await db.transaction(async (tx) => {
+        const [dispute] = await tx
+          .select()
+          .from(p2pDisputes)
+          .where(eq(p2pDisputes.id, disputeId))
+          .limit(1)
+          .for("update");
 
-      if (dispute.status === "resolved" || dispute.status === "closed") {
-        return res.status(400).json({ error: "Dispute is already resolved" });
-      }
+        if (!dispute) {
+          return { success: false as const, statusCode: 404, error: "Dispute not found" };
+        }
 
-      if (!winnerUserId || (winnerUserId !== dispute.initiatorId && winnerUserId !== dispute.respondentId)) {
-        return res.status(400).json({ error: "winnerUserId must be dispute initiator or respondent" });
-      }
+        if (dispute.status === "resolved" || dispute.status === "closed") {
+          return { success: false as const, statusCode: 400, error: "Dispute is already resolved" };
+        }
 
-      const [trade] = await db
-        .select({ id: p2pTrades.id, currencyType: p2pTrades.currencyType })
-        .from(p2pTrades)
-        .where(eq(p2pTrades.id, dispute.tradeId))
-        .limit(1);
+        if (!winnerUserId || (winnerUserId !== dispute.initiatorId && winnerUserId !== dispute.respondentId)) {
+          return { success: false as const, statusCode: 400, error: "winnerUserId must be dispute initiator or respondent" };
+        }
 
-      if (!trade) {
-        return res.status(404).json({ error: "Related trade not found" });
-      }
+        const [trade] = await tx
+          .select({ id: p2pTrades.id, currencyType: p2pTrades.currencyType })
+          .from(p2pTrades)
+          .where(eq(p2pTrades.id, dispute.tradeId))
+          .limit(1);
 
-      const settlementResult = trade.currencyType === 'project'
-        ? await storage.resolveP2PDisputedTradeProjectCurrencyAtomic(dispute.tradeId, winnerUserId, resolution || action)
-        : await storage.resolveP2PDisputedTradeAtomic(dispute.tradeId, winnerUserId, resolution || action);
+        if (!trade) {
+          return { success: false as const, statusCode: 404, error: "Related trade not found" };
+        }
 
-      if (!settlementResult.success) {
-        return res.status(400).json({ error: settlementResult.error || "Failed to settle disputed trade" });
-      }
+        const settlementResult = trade.currencyType === 'project'
+          ? await storage.resolveP2PDisputedTradeProjectCurrencyAtomic(dispute.tradeId, winnerUserId, resolutionMessage)
+          : await storage.resolveP2PDisputedTradeAtomic(dispute.tradeId, winnerUserId, resolutionMessage);
 
-      // Update the dispute
-      await db
-        .update(p2pDisputes)
-        .set({
-          status: "resolved",
-          resolution: resolution || `Resolved by admin. Action: ${action}`,
-          resolvedBy: userId,
-          winnerUserId,
-          resolvedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(p2pDisputes.id, disputeId));
+        if (!settlementResult.success) {
+          return { success: false as const, statusCode: 400, error: settlementResult.error || "Failed to settle disputed trade" };
+        }
 
-      // Log it
-      await db.insert(p2pTransactionLogs).values({
-        tradeId: dispute.tradeId,
-        disputeId,
-        userId,
-        action: "dispute_resolved",
-        description: `Dispute resolved by admin ${req.user!.username}: ${resolution || action}`,
-        descriptionAr: `تم حل النزاع بواسطة المشرف ${req.user!.username}: ${resolution || action}`,
-        ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
-        userAgent: req.headers["user-agent"] || "",
+        const [updatedDispute] = await tx
+          .update(p2pDisputes)
+          .set({
+            status: "resolved",
+            resolution: resolutionMessage,
+            resolvedBy: userId,
+            winnerUserId,
+            resolvedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(p2pDisputes.id, disputeId),
+              or(eq(p2pDisputes.status, "open"), eq(p2pDisputes.status, "investigating")),
+            )
+          )
+          .returning({ id: p2pDisputes.id });
+
+        if (!updatedDispute) {
+          return { success: false as const, statusCode: 409, error: "Dispute was updated by another moderator. Please refresh." };
+        }
+
+        await tx.insert(p2pTransactionLogs).values({
+          tradeId: dispute.tradeId,
+          disputeId,
+          userId,
+          action: "dispute_resolved",
+          description: `Dispute resolved by admin ${req.user!.username}: ${resolutionMessage}`,
+          descriptionAr: `تم حل النزاع بواسطة المشرف ${req.user!.username}: ${resolutionMessage}`,
+          ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
+          userAgent: req.headers["user-agent"] || "",
+        });
+
+        return {
+          success: true as const,
+          dispute,
+          resolutionMessage,
+        };
       });
 
-      // Notify both parties about admin resolution
-      const resolutionMsg = resolution || action;
-      await sendNotification(dispute.initiatorId, {
-        type: 'system',
-        priority: 'high',
-        title: 'Dispute Resolved by Admin',
-        titleAr: 'تم حل النزاع بواسطة الإدارة',
-        message: `Dispute #${disputeId.slice(0, 8)} has been resolved. ${resolutionMsg}`,
-        messageAr: `تم حل النزاع #${disputeId.slice(0, 8)}. ${resolutionMsg}`,
-        link: '/p2p/disputes',
-        metadata: JSON.stringify({ disputeId, action: 'dispute_admin_resolved', winnerId: winnerUserId }),
-      }).catch(() => { });
-      await sendNotification(dispute.respondentId, {
-        type: 'system',
-        priority: 'high',
-        title: 'Dispute Resolved by Admin',
-        titleAr: 'تم حل النزاع بواسطة الإدارة',
-        message: `Dispute #${disputeId.slice(0, 8)} has been resolved. ${resolutionMsg}`,
-        messageAr: `تم حل النزاع #${disputeId.slice(0, 8)}. ${resolutionMsg}`,
-        link: '/p2p/disputes',
-        metadata: JSON.stringify({ disputeId, action: 'dispute_admin_resolved', winnerId: winnerUserId }),
-      }).catch(() => { });
+      if (!outcome.success) {
+        return res.status(outcome.statusCode).json({ error: outcome.error });
+      }
 
-      res.json({ success: true, resolution, action });
+      const dispute = outcome.dispute;
+      const resolvedMessage = outcome.resolutionMessage;
+
+      // Notify both parties about admin resolution
+      await notifyWithLog(dispute.initiatorId, {
+        type: 'system',
+        priority: 'high',
+        title: 'Dispute Resolved by Admin',
+        titleAr: 'تم حل النزاع بواسطة الإدارة',
+        message: `Dispute #${disputeId.slice(0, 8)} has been resolved. ${resolvedMessage}`,
+        messageAr: `تم حل النزاع #${disputeId.slice(0, 8)}. ${resolvedMessage}`,
+        link: '/p2p/disputes',
+        metadata: JSON.stringify({ disputeId, action: 'dispute_admin_resolved', winnerId: winnerUserId }),
+      }, "resolve:initiator");
+      await notifyWithLog(dispute.respondentId, {
+        type: 'system',
+        priority: 'high',
+        title: 'Dispute Resolved by Admin',
+        titleAr: 'تم حل النزاع بواسطة الإدارة',
+        message: `Dispute #${disputeId.slice(0, 8)} has been resolved. ${resolvedMessage}`,
+        messageAr: `تم حل النزاع #${disputeId.slice(0, 8)}. ${resolvedMessage}`,
+        link: '/p2p/disputes',
+        metadata: JSON.stringify({ disputeId, action: 'dispute_admin_resolved', winnerId: winnerUserId }),
+      }, "resolve:respondent");
+
+      res.json({ success: true, resolution: resolvedMessage, action });
     } catch (error: unknown) {
       console.error("[P2P Disputes] POST /disputes/:id/resolve error:", error);
       res.status(500).json({ error: getErrorMessage(error) });

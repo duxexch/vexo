@@ -5,23 +5,63 @@ import { p2pSettings } from "@shared/schema";
 import { authMiddleware, AuthRequest, sensitiveRateLimiter } from "../middleware";
 import { emitSystemAlert } from "../../lib/admin-alerts";
 import { sendNotification } from "../../websocket";
-import { getErrorMessage, calculateP2PFee } from "./helpers";
+import {
+  checkUserP2PTradingPermission,
+  getErrorMessage,
+  calculateP2PFee,
+  getEffectiveP2PVerificationLevel,
+  getP2PVerificationErrorMessage,
+  hasRequiredP2PVerification,
+  MIN_P2P_VERIFICATION_LEVEL,
+} from "./helpers";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../../lib/payment-security";
+import { getP2PUsernameMap } from "../../lib/p2p-username";
 
 /** GET /api/p2p/my-trades, POST /api/p2p/trades, GET /api/p2p/trades/:id */
 export function registerTradeRoutes(app: Express) {
 
+  const notifyWithLog = async (
+    recipientId: string,
+    payload: Parameters<typeof sendNotification>[1],
+    context: string,
+  ) => {
+    await sendNotification(recipientId, payload).catch((error: unknown) => {
+      console.warn(`[P2P Trading] Notification failure (${context})`, {
+        recipientId,
+        error: getErrorMessage(error),
+      });
+    });
+  };
+
+  const emitSystemAlertWithLog = async (
+    payload: Parameters<typeof emitSystemAlert>[0],
+    context: string,
+  ) => {
+    await emitSystemAlert(payload).catch((error: unknown) => {
+      console.warn(`[P2P Trading] System alert emission failure (${context})`, {
+        error: getErrorMessage(error),
+      });
+    });
+  };
+
   app.get("/api/p2p/my-trades", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const myTrades = await storage.getUserP2PTrades(req.user!.id);
-      const enriched = await Promise.all(myTrades.map(async (trade) => {
+      const counterpartyIds = myTrades.map((trade) =>
+        trade.buyerId === req.user!.id ? trade.sellerId : trade.buyerId,
+      );
+      const usernamesByUserId = await getP2PUsernameMap(counterpartyIds);
+
+      const enriched = myTrades.map((trade) => {
         const counterpartyId = trade.buyerId === req.user!.id ? trade.sellerId : trade.buyerId;
-        const counterparty = await storage.getUser(counterpartyId);
         return {
           ...trade,
-          counterpartyUsername: counterparty?.username || "Unknown",
+          counterpartyUsername: usernamesByUserId.get(counterpartyId) || "trader_user",
+          totalPrice: trade.fiatAmount,
+          isBuyer: trade.buyerId === req.user!.id,
+          isSeller: trade.sellerId === req.user!.id,
         };
-      }));
+      });
       res.json(enriched);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -37,6 +77,29 @@ export function registerTradeRoutes(app: Express) {
     async (req: AuthRequest, res: Response) => {
       try {
         const { offerId, amount, paymentMethod, currencyType = 'usd' } = req.body;
+        const requestingUser = await storage.getUser(req.user!.id);
+
+        if (!requestingUser) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        if (requestingUser.p2pBanned) {
+          return res.status(403).json({
+            error: requestingUser.p2pBanReason || "Your P2P access is currently restricted",
+          });
+        }
+
+        const requesterVerificationLevel = await getEffectiveP2PVerificationLevel(requestingUser);
+        if (!hasRequiredP2PVerification(requesterVerificationLevel, MIN_P2P_VERIFICATION_LEVEL)) {
+          return res.status(403).json({
+            error: getP2PVerificationErrorMessage(MIN_P2P_VERIFICATION_LEVEL),
+          });
+        }
+
+        const requesterTradingPermission = await checkUserP2PTradingPermission(req.user!.id);
+        if (!requesterTradingPermission.allowed) {
+          return res.status(403).json({ error: requesterTradingPermission.reason });
+        }
 
         if (!offerId || typeof offerId !== 'string') {
           return res.status(400).json({ error: "Valid offer ID is required" });
@@ -46,9 +109,11 @@ export function registerTradeRoutes(app: Express) {
           return res.status(400).json({ error: "Valid positive amount is required" });
         }
 
-        if (!paymentMethod || typeof paymentMethod !== 'string') {
+        if (!paymentMethod || typeof paymentMethod !== 'string' || paymentMethod.trim().length === 0) {
           return res.status(400).json({ error: "Payment method is required" });
         }
+
+        const requestedPaymentMethod = paymentMethod.trim();
 
         const [settings] = await db.select().from(p2pSettings).limit(1);
         if (settings) {
@@ -81,8 +146,43 @@ export function registerTradeRoutes(app: Express) {
           return res.status(400).json({ error: "Offer is no longer active" });
         }
 
+        const offerOwner = await storage.getUser(offer.userId);
+        if (!offerOwner) {
+          return res.status(404).json({ error: "Offer owner not found" });
+        }
+
+        if (offerOwner.p2pBanned) {
+          return res.status(400).json({ error: "Offer is no longer available" });
+        }
+
+        const ownerVerificationLevel = await getEffectiveP2PVerificationLevel(offerOwner);
+        if (!hasRequiredP2PVerification(ownerVerificationLevel, MIN_P2P_VERIFICATION_LEVEL)) {
+          return res.status(400).json({ error: "Offer is no longer available" });
+        }
+
+        const ownerTradingPermission = await checkUserP2PTradingPermission(offer.userId);
+        if (!ownerTradingPermission.allowed) {
+          return res.status(400).json({ error: "Offer is no longer available" });
+        }
+
         if (offer.userId === req.user!.id) {
           return res.status(400).json({ error: "Cannot trade with your own offer" });
+        }
+
+        const offerPaymentMethods = (offer.paymentMethods || [])
+          .map((method) => method.trim())
+          .filter((method) => method.length > 0);
+
+        if (offerPaymentMethods.length === 0) {
+          return res.status(400).json({ error: "Offer has no available payment methods" });
+        }
+
+        const matchedPaymentMethod = offerPaymentMethods.find(
+          (method) => method.toLowerCase() === requestedPaymentMethod.toLowerCase(),
+        );
+
+        if (!matchedPaymentMethod) {
+          return res.status(400).json({ error: "Selected payment method is not supported by this offer" });
         }
 
         const tradeAmount = parseFloat(amount);
@@ -97,6 +197,16 @@ export function registerTradeRoutes(app: Express) {
         const fiatAmount = tradeAmount * price;
         const platformFee = await calculateP2PFee(tradeAmount);
 
+        const requesterLimitCheck = await checkUserP2PTradingPermission(req.user!.id, fiatAmount);
+        if (!requesterLimitCheck.allowed) {
+          return res.status(403).json({ error: requesterLimitCheck.reason });
+        }
+
+        const ownerLimitCheck = await checkUserP2PTradingPermission(offer.userId, fiatAmount);
+        if (!ownerLimitCheck.allowed) {
+          return res.status(400).json({ error: "Offer is no longer available" });
+        }
+
         const isBuyer = offer.type === "sell";
         const buyerId = isBuyer ? req.user!.id : offer.userId;
         const sellerId = isBuyer ? offer.userId : req.user!.id;
@@ -110,7 +220,7 @@ export function registerTradeRoutes(app: Express) {
             amount: amount.toString(),
             fiatAmount: fiatAmount.toFixed(2),
             price: offer.price,
-            paymentMethod,
+            paymentMethod: matchedPaymentMethod,
             platformFee: platformFee.toFixed(8),
             expiresAt: new Date(Date.now() + (offer.paymentTimeLimit * 60 * 1000)),
           });
@@ -122,7 +232,7 @@ export function registerTradeRoutes(app: Express) {
             amount: amount.toString(),
             fiatAmount: fiatAmount.toFixed(2),
             price: offer.price,
-            paymentMethod,
+            paymentMethod: matchedPaymentMethod,
             platformFee: platformFee.toFixed(8),
             expiresAt: new Date(Date.now() + (offer.paymentTimeLimit * 60 * 1000)),
           });
@@ -137,33 +247,43 @@ export function registerTradeRoutes(app: Express) {
         await storage.createP2PTradeMessage({
           tradeId: trade.id,
           senderId: req.user!.id,
-          message: "Trade started",
+          message: `Trade started via ${matchedPaymentMethod}. Payment window: ${offer.paymentTimeLimit} minutes.`,
           isSystemMessage: true,
         });
 
+        if (offer.autoReply && offer.autoReply.trim().length > 0) {
+          await storage.createP2PTradeMessage({
+            tradeId: trade.id,
+            senderId: offer.userId,
+            message: offer.autoReply.trim(),
+            isPrewritten: true,
+            isSystemMessage: false,
+          });
+        }
+
         // Notify the offer owner that someone started a trade on their offer
-        sendNotification(offer.userId, {
+        await notifyWithLog(offer.userId, {
           type: 'p2p',
           priority: 'high',
           title: `New Trade on Your Offer`,
           titleAr: `صفقة جديدة على عرضك`,
-          message: `Someone initiated a $${tradeAmount} trade on your ${offer.type} offer via ${paymentMethod}.`,
-          messageAr: `شخص بدأ صفقة بقيمة $${tradeAmount} على عرض ${offer.type === 'sell' ? 'البيع' : 'الشراء'} الخاص بك عبر ${paymentMethod}.`,
+          message: `Someone initiated a $${tradeAmount} trade on your ${offer.type} offer via ${matchedPaymentMethod}.`,
+          messageAr: `شخص بدأ صفقة بقيمة $${tradeAmount} على عرض ${offer.type === 'sell' ? 'البيع' : 'الشراء'} الخاص بك عبر ${matchedPaymentMethod}.`,
           link: `/p2p/trade/${trade.id}`,
           metadata: JSON.stringify({ tradeId: trade.id, offerId: offer.id, amount: tradeAmount }),
-        }).catch(() => { });
+        }, "trade-create:offer-owner");
 
         // Emit admin alert for new P2P trade
-        emitSystemAlert({
+        await emitSystemAlertWithLog({
           title: 'New P2P Trade',
           titleAr: 'صفقة P2P جديدة',
-          message: `New P2P trade #${trade.id.slice(0, 8)} created - Amount: $${tradeAmount} via ${paymentMethod}`,
+          message: `New P2P trade #${trade.id.slice(0, 8)} created - Amount: $${tradeAmount} via ${matchedPaymentMethod}`,
           messageAr: `صفقة P2P جديدة #${trade.id.slice(0, 8)} - المبلغ: $${tradeAmount}`,
           severity: 'info',
           deepLink: '/admin/p2p',
           entityType: 'p2p_trade',
           entityId: trade.id,
-        }).catch(() => { });
+        }, "trade-create");
 
         res.status(201).json(trade);
       } catch (error: unknown) {
@@ -183,13 +303,24 @@ export function registerTradeRoutes(app: Express) {
         return res.status(403).json({ error: "Not authorized to view this trade" });
       }
 
-      const buyer = await storage.getUser(trade.buyerId);
-      const seller = await storage.getUser(trade.sellerId);
+      const [buyer, seller, usernamesByUserId] = await Promise.all([
+        storage.getUser(trade.buyerId),
+        storage.getUser(trade.sellerId),
+        getP2PUsernameMap([trade.buyerId, trade.sellerId]),
+      ]);
+
+      const buyerP2PUsername = usernamesByUserId.get(trade.buyerId) || buyer?.username || "trader_user";
+      const sellerP2PUsername = usernamesByUserId.get(trade.sellerId) || seller?.username || "trader_user";
+      const isBuyer = trade.buyerId === req.user!.id;
 
       res.json({
         ...trade,
-        buyer: buyer ? { id: buyer.id, username: buyer.username, nickname: buyer.nickname } : null,
-        seller: seller ? { id: seller.id, username: seller.username, nickname: seller.nickname } : null,
+        totalPrice: trade.fiatAmount,
+        isBuyer,
+        isSeller: trade.sellerId === req.user!.id,
+        counterpartyUsername: isBuyer ? sellerP2PUsername : buyerP2PUsername,
+        buyer: buyer ? { id: buyer.id, username: buyerP2PUsername, nickname: buyer.nickname } : null,
+        seller: seller ? { id: seller.id, username: sellerP2PUsername, nickname: seller.nickname } : null,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

@@ -6,8 +6,15 @@ import {
 import { db } from "../../db";
 import { eq } from "drizzle-orm";
 
+type ProjectTradeSettlementResult = {
+  success: boolean;
+  trade?: P2PTrade;
+  error?: string;
+  transitioned?: boolean;
+};
+
 // ATOMIC P2P trade completion with PROJECT CURRENCY escrow release
-export async function completeP2PTradeProjectCurrencyAtomic(tradeId: string, completedByUserId: string): Promise<{ success: boolean; trade?: P2PTrade; error?: string }> {
+export async function completeP2PTradeProjectCurrencyAtomic(tradeId: string, completedByUserId: string): Promise<ProjectTradeSettlementResult> {
   return await db.transaction(async (tx) => {
     // 1. Lock and verify trade
     const [trade] = await tx
@@ -20,13 +27,13 @@ export async function completeP2PTradeProjectCurrencyAtomic(tradeId: string, com
       return { success: false, error: 'Trade not found' };
     }
 
-    // Idempotency: already completed - return success
-    if (trade.status === 'completed') {
-      return { success: true, trade };
-    }
-
     if (trade.sellerId !== completedByUserId) {
       return { success: false, error: 'Only the seller can complete the trade' };
+    }
+
+    // Idempotency: already completed - return success
+    if (trade.status === 'completed') {
+      return { success: true, trade, transitioned: false };
     }
 
     if (trade.status !== 'confirmed') {
@@ -77,6 +84,6 @@ export async function completeP2PTradeProjectCurrencyAtomic(tradeId: string, com
       metadata: JSON.stringify({ balanceType: 'earned' })
     });
 
-    return { success: true, trade: updatedTrade };
+    return { success: true, trade: updatedTrade, transitioned: true };
   });
 }

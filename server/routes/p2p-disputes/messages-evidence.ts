@@ -13,9 +13,23 @@ import { sendNotification } from "../../websocket";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage } from "./helpers";
 import { sanitizeNullablePlainText, sanitizePlainText } from "../../lib/input-security";
+import { ensureP2PUsername } from "../../lib/p2p-username";
 
 /** POST /api/p2p/disputes/:id/messages + POST /api/p2p/disputes/:id/evidence */
 export function registerMessagesEvidenceRoutes(app: Express) {
+
+  const notifyWithLog = async (
+    recipientId: string,
+    payload: Parameters<typeof sendNotification>[1],
+    context: string,
+  ) => {
+    await sendNotification(recipientId, payload).catch((error: unknown) => {
+      console.warn(`[P2P Disputes] Notification failure (${context})`, {
+        recipientId,
+        error: getErrorMessage(error),
+      });
+    });
+  };
 
   const allowedEvidenceTypes = new Set(['screenshot', 'video', 'document', 'other']);
   const maxEvidenceSizeBytes = 10 * 1024 * 1024;
@@ -63,6 +77,7 @@ export function registerMessagesEvidenceRoutes(app: Express) {
       const userId = req.user!.id;
       const disputeId = req.params.id;
       const { message, isPrewritten, prewrittenTemplateId } = req.body;
+      const senderP2PUsername = await ensureP2PUsername(userId, req.user!.username);
 
       if (!message || !message.trim()) {
         return res.status(400).json({ error: "Message is required" });
@@ -114,28 +129,28 @@ export function registerMessagesEvidenceRoutes(app: Express) {
         disputeId,
         userId,
         action: "dispute_message",
-        description: `Message sent by ${req.user!.username}`,
-        descriptionAr: `تم إرسال رسالة بواسطة ${req.user!.username}`,
+        description: `Message sent by ${senderP2PUsername}`,
+        descriptionAr: `تم إرسال رسالة بواسطة ${senderP2PUsername}`,
         ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
         userAgent: req.headers["user-agent"] || "",
       });
 
       // Notify the other party about new dispute message
       const recipientId = dispute.initiatorId === userId ? dispute.respondentId : dispute.initiatorId;
-      await sendNotification(recipientId, {
+      await notifyWithLog(recipientId, {
         type: 'p2p',
         priority: 'normal',
         title: 'New Dispute Message',
         titleAr: 'رسالة جديدة في النزاع',
-        message: `${req.user!.username} sent a message in dispute #${disputeId.slice(0, 8)}.`,
-        messageAr: `أرسل ${req.user!.username} رسالة في النزاع #${disputeId.slice(0, 8)}.`,
+        message: `${senderP2PUsername} sent a message in dispute #${disputeId.slice(0, 8)}.`,
+        messageAr: `أرسل ${senderP2PUsername} رسالة في النزاع #${disputeId.slice(0, 8)}.`,
         link: '/p2p/disputes',
         metadata: JSON.stringify({ disputeId, action: 'dispute_message' }),
-      }).catch(() => { });
+      }, "dispute-message");
 
       res.status(201).json({
         ...newMessage,
-        senderName: req.user!.username,
+        senderName: senderP2PUsername,
       });
     } catch (error: unknown) {
       console.error("[P2P Disputes] POST /disputes/:id/messages error:", error);
@@ -151,6 +166,7 @@ export function registerMessagesEvidenceRoutes(app: Express) {
       const userId = req.user!.id;
       const disputeId = req.params.id;
       const { fileName, fileUrl, fileType, fileSize, description, evidenceType } = req.body;
+      const uploaderP2PUsername = await ensureP2PUsername(userId, req.user!.username);
 
       if (!fileName || !fileUrl || !fileType || !evidenceType) {
         return res.status(400).json({ error: "fileName, fileUrl, fileType, and evidenceType are required" });
@@ -241,15 +257,15 @@ export function registerMessagesEvidenceRoutes(app: Express) {
         disputeId,
         userId,
         action: "evidence_uploaded",
-        description: `Evidence uploaded by ${req.user!.username}: ${fileName} (${evidenceType})`,
-        descriptionAr: `تم رفع إثبات بواسطة ${req.user!.username}: ${fileName} (${evidenceType})`,
+        description: `Evidence uploaded by ${uploaderP2PUsername}: ${fileName} (${evidenceType})`,
+        descriptionAr: `تم رفع إثبات بواسطة ${uploaderP2PUsername}: ${fileName} (${evidenceType})`,
         ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
         userAgent: req.headers["user-agent"] || "",
       });
 
       res.status(201).json({
         ...evidence,
-        uploaderName: req.user!.username,
+        uploaderName: uploaderP2PUsername,
       });
     } catch (error: unknown) {
       console.error("[P2P Disputes] POST /disputes/:id/evidence error:", error);

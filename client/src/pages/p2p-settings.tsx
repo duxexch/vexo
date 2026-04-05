@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Link } from "wouter";
-import { 
+import {
   Settings,
   Bell,
   MessageSquare,
@@ -41,6 +41,9 @@ import {
 } from "lucide-react";
 
 interface P2PSettings {
+  p2pUsername: string;
+  p2pUsernameChangeCount: number;
+  canChangeP2PUsername: boolean;
   autoReplyEnabled: boolean;
   autoReplyMessage: string;
   notifyOnTrade: boolean;
@@ -84,7 +87,7 @@ const PAYMENT_TYPES = [
   { value: "crypto", label: "Crypto", labelAr: "عملة رقمية", icon: CreditCard },
 ];
 
-const CURRENCIES = ["EGP", "USD", "EUR", "SAR", "AED", "KWD"];
+const CURRENCIES = ["USD", "USDT", "EUR", "GBP", "SAR", "AED", "EGP"];
 
 interface IdVerificationData {
   idVerificationStatus: string | null;
@@ -108,7 +111,7 @@ function IdVerificationSection({ language }: { language: string }) {
     mutationFn: (data: { frontImage: string; backImage: string }) =>
       apiRequest('POST', '/api/user/id-verification', data),
     onSuccess: () => {
-      toast({ 
+      toast({
         title: language === 'ar' ? 'تم الإرسال' : 'Submitted',
         description: language === 'ar' ? 'تم إرسال طلب التوثيق بنجاح' : 'ID verification request submitted successfully'
       });
@@ -192,7 +195,7 @@ function IdVerificationSection({ language }: { language: string }) {
           {language === 'ar' ? 'التحقق من الهوية' : 'ID Verification'}
         </CardTitle>
         <CardDescription>
-          {language === 'ar' 
+          {language === 'ar'
             ? 'قم بتوثيق هويتك لزيادة مصداقيتك في التداولات P2P'
             : 'Verify your identity to increase your credibility in P2P trades'}
         </CardDescription>
@@ -333,8 +336,9 @@ function IdVerificationSection({ language }: { language: string }) {
 export default function P2PSettingsPage() {
   const { t, language } = useI18n();
   const { toast } = useToast();
-  
+
   const [showAddPayment, setShowAddPayment] = useState(false);
+  const [p2pUsernameDraft, setP2PUsernameDraft] = useState("");
   const [newPayment, setNewPayment] = useState({
     type: "bank_transfer",
     name: "",
@@ -354,6 +358,10 @@ export default function P2PSettingsPage() {
   const { data: badges } = useQuery<P2PBadge[]>({
     queryKey: ['/api/p2p/badges'],
   });
+
+  useEffect(() => {
+    setP2PUsernameDraft(settings?.p2pUsername || "");
+  }, [settings?.p2pUsername]);
 
   const updateSettingsMutation = useMutation({
     mutationFn: (data: Partial<P2PSettings>) =>
@@ -393,9 +401,18 @@ export default function P2PSettingsPage() {
     }
   });
 
-  const handleToggle = (key: keyof P2PSettings, value: boolean) => {
+  const handleToggle = (key: "autoReplyEnabled" | "notifyOnTrade" | "notifyOnDispute" | "notifyOnMessage", value: boolean) => {
     updateSettingsMutation.mutate({ [key]: value });
   };
+
+  const normalizedUsernameDraft = p2pUsernameDraft.trim().toLowerCase();
+  const p2pUsernamePattern = /^[a-z0-9_]{4,24}$/;
+  const isP2PUsernameDraftValid = p2pUsernamePattern.test(normalizedUsernameDraft);
+  const isP2PUsernameChanged = normalizedUsernameDraft !== (settings?.p2pUsername || "");
+  const canSaveP2PUsername = Boolean(settings?.canChangeP2PUsername)
+    && isP2PUsernameDraftValid
+    && isP2PUsernameChanged
+    && !updateSettingsMutation.isPending;
 
   if (loadingSettings) {
     return (
@@ -454,6 +471,61 @@ export default function P2PSettingsPage() {
         </TabsContent>
 
         <TabsContent value="general" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>{language === 'ar' ? 'اسم مستخدم P2P' : 'P2P Username'}</CardTitle>
+              <CardDescription>
+                {language === 'ar'
+                  ? 'يتم إنشاؤه تلقائياً ويظهر في الإعلانات والتعاملات. يمكن تغييره مرة واحدة فقط.'
+                  : 'Auto-generated and shown in P2P ads and transactions. You can change it once only.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="p2p-username-input">{language === 'ar' ? 'اسم المستخدم' : 'Username'}</Label>
+                <Input
+                  id="p2p-username-input"
+                  value={p2pUsernameDraft}
+                  onChange={(event) => setP2PUsernameDraft(event.target.value)}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder={language === 'ar' ? 'مثال: trader_1024' : 'e.g. trader_1024'}
+                  data-testid="input-p2p-username"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {language === 'ar'
+                    ? 'مسموح فقط بالحروف الإنجليزية الصغيرة والأرقام و _. الطول من 4 إلى 24 حرفاً.'
+                    : 'Use lowercase letters, numbers, and underscore only. Length must be 4-24 characters.'}
+                </p>
+                {!isP2PUsernameDraftValid && normalizedUsernameDraft.length > 0 && (
+                  <p className="text-xs text-destructive">
+                    {language === 'ar'
+                      ? 'صيغة اسم المستخدم غير صحيحة.'
+                      : 'Invalid username format.'}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Badge variant={settings?.canChangeP2PUsername ? "outline" : "secondary"}>
+                  {settings?.canChangeP2PUsername
+                    ? (language === 'ar' ? 'متاح تغيير واحد' : 'One change available')
+                    : (language === 'ar' ? 'تم استهلاك التغيير' : 'Change already used')}
+                </Badge>
+
+                <Button
+                  variant="outline"
+                  onClick={() => updateSettingsMutation.mutate({ p2pUsername: normalizedUsernameDraft } as Partial<P2PSettings>)}
+                  disabled={!canSaveP2PUsername}
+                  data-testid="button-save-p2p-username"
+                >
+                  {t('common.save')}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>{t('p2p.settings.autoReply')}</CardTitle>

@@ -1,5 +1,14 @@
 import { storage } from "../storage";
-import { challengeChatMessages, challengeGameSessions, challenges, notifications, p2pSettings, p2pTrades } from "@shared/schema";
+import {
+  challengeChatMessages,
+  challengeGameSessions,
+  challenges,
+  notifications,
+  p2pDisputes,
+  p2pSettings,
+  p2pTrades,
+  p2pTransactionLogs,
+} from "@shared/schema";
 import { db } from "../db";
 import { eq, and, or, sql, lt } from "drizzle-orm";
 import { broadcastSystemEvent, challengeGameRooms } from "../websocket";
@@ -222,6 +231,46 @@ function selectBalootTimeoutAutoMove(
   return validMoves[0] ?? null;
 }
 
+function pickRandomMove(validMoves: MoveData[]): MoveData | null {
+  if (validMoves.length === 0) {
+    return null;
+  }
+
+  const index = Math.floor(Math.random() * validMoves.length);
+  return validMoves[index] ?? validMoves[0] ?? null;
+}
+
+function selectTarneebTimeoutAutoMove(validMoves: MoveData[]): MoveData | null {
+  if (validMoves.length === 0) {
+    return null;
+  }
+
+  // Keep timeout behavior human-like: random legal card if the turn is a card play.
+  const playCardMoves = validMoves.filter((move) => move.type === "playCard");
+  if (playCardMoves.length > 0) {
+    return pickRandomMove(playCardMoves);
+  }
+
+  const setTrumpMoves = validMoves.filter((move) => move.type === "setTrump");
+  if (setTrumpMoves.length > 0) {
+    return pickRandomMove(setTrumpMoves);
+  }
+
+  const passLikeBid = validMoves.find((move) => move.type === "bid" && (move.bid === null || move.bid === undefined));
+  if (passLikeBid) {
+    return passLikeBid.bid === undefined
+      ? ({ ...passLikeBid, bid: null } as unknown as MoveData)
+      : passLikeBid;
+  }
+
+  const bidMoves = validMoves.filter((move) => move.type === "bid" && typeof move.bid === "number");
+  if (bidMoves.length > 0) {
+    return pickRandomMove(bidMoves);
+  }
+
+  return pickRandomMove(validMoves);
+}
+
 export function startSchedulers(): void {
   // ==================== SCHEDULED CONFIG CHANGES SCHEDULER ====================
   const SCHEDULER_INTERVAL = 5 * 60 * 1000; // 5 minutes (was 30s — too frequent)
@@ -361,6 +410,95 @@ export function startSchedulers(): void {
 
   setInterval(processExpiredTrades, P2P_EXPIRY_INTERVAL);
   logger.info(`[P2P Scheduler] Started expired trades processor (interval: ${P2P_EXPIRY_INTERVAL / 1000}s)`);
+
+  // ==================== P2P DISPUTE ESCALATION SCHEDULER ====================
+  // Auto-escalate stale open disputes after peer-negotiation window.
+  const P2P_DISPUTE_ESCALATION_INTERVAL = 5 * 60 * 1000; // 5 minutes
+  const P2P_PEER_NEGOTIATION_TIMEOUT_MINUTES = 10;
+
+  async function processStaleOpenDisputes() {
+    try {
+      const cutoff = new Date(Date.now() - (P2P_PEER_NEGOTIATION_TIMEOUT_MINUTES * 60 * 1000));
+
+      const staleOpenDisputes = await db.select({
+        id: p2pDisputes.id,
+        tradeId: p2pDisputes.tradeId,
+        initiatorId: p2pDisputes.initiatorId,
+        respondentId: p2pDisputes.respondentId,
+      })
+        .from(p2pDisputes)
+        .where(and(
+          eq(p2pDisputes.status, "open"),
+          lt(p2pDisputes.createdAt, cutoff),
+        ))
+        .limit(50);
+
+      for (const dispute of staleOpenDisputes) {
+        try {
+          const [escalated] = await db.update(p2pDisputes)
+            .set({
+              status: "investigating",
+              updatedAt: new Date(),
+            })
+            .where(and(
+              eq(p2pDisputes.id, dispute.id),
+              eq(p2pDisputes.status, "open"),
+            ))
+            .returning({ id: p2pDisputes.id });
+
+          if (!escalated) {
+            continue;
+          }
+
+          await db.insert(p2pTransactionLogs).values({
+            tradeId: dispute.tradeId,
+            disputeId: dispute.id,
+            action: "dispute_message",
+            description: "Dispute auto-escalated to support review after peer negotiation timeout.",
+            descriptionAr: "تم تصعيد النزاع تلقائياً لمراجعة الدعم بعد انتهاء مهلة التفاوض.",
+          });
+
+          await storage.createNotification({
+            userId: dispute.initiatorId,
+            type: 'p2p',
+            title: 'Dispute Escalated to Support',
+            titleAr: 'تم تصعيد النزاع للدعم',
+            message: `Dispute #${dispute.id.slice(0, 8)} was auto-escalated after no response during peer negotiation.`,
+            messageAr: `تم تصعيد النزاع #${dispute.id.slice(0, 8)} تلقائياً بعد عدم الاستجابة خلال التفاوض.`,
+            metadata: JSON.stringify({ disputeId: dispute.id, tradeId: dispute.tradeId, action: 'auto_escalated' }),
+            link: '/p2p/disputes',
+          });
+
+          await storage.createNotification({
+            userId: dispute.respondentId,
+            type: 'p2p',
+            title: 'Dispute Escalated to Support',
+            titleAr: 'تم تصعيد النزاع للدعم',
+            message: `Dispute #${dispute.id.slice(0, 8)} was auto-escalated after peer negotiation timeout.`,
+            messageAr: `تم تصعيد النزاع #${dispute.id.slice(0, 8)} تلقائياً بعد انتهاء مهلة التفاوض.`,
+            metadata: JSON.stringify({ disputeId: dispute.id, tradeId: dispute.tradeId, action: 'auto_escalated' }),
+            link: '/p2p/disputes',
+          });
+
+          logger.info(`[P2P Dispute Scheduler] Auto-escalated stale dispute ${dispute.id}`);
+        } catch (disputeError) {
+          logger.error(
+            `[P2P Dispute Scheduler] Error processing dispute ${dispute.id}`,
+            disputeError instanceof Error ? disputeError : new Error(String(disputeError)),
+          );
+        }
+      }
+
+      if (staleOpenDisputes.length > 0) {
+        logger.info(`[P2P Dispute Scheduler] Processed ${staleOpenDisputes.length} stale open disputes`);
+      }
+    } catch (error) {
+      logger.error('[P2P Dispute Scheduler] Error processing stale disputes', error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  setInterval(processStaleOpenDisputes, P2P_DISPUTE_ESCALATION_INTERVAL);
+  logger.info(`[P2P Dispute Scheduler] Started stale open disputes escalator (interval: ${P2P_DISPUTE_ESCALATION_INTERVAL / 1000}s, timeout=${P2P_PEER_NEGOTIATION_TIMEOUT_MINUTES}m)`);
 
   // ==================== NOTIFICATION CLEANUP SCHEDULER ====================
   // Delete read notifications older than 30 days, unread older than 90 days
@@ -1197,4 +1335,334 @@ export function startSchedulers(): void {
   setTimeout(processChallengeBalootTimeouts, 13000);
   setInterval(processChallengeBalootTimeouts, BALOOT_TIMEOUT_WATCHDOG_INTERVAL);
   logger.info(`[Baloot Timeout Watchdog] Started (interval: ${BALOOT_TIMEOUT_WATCHDOG_INTERVAL}ms, turn=${BALOOT_TURN_TIMEOUT_MS}ms)`);
+
+  // ==================== TARNEEB TIMEOUT AUTO-MOVE WATCHDOG ====================
+  // Server-authoritative 30s per-turn timeout for challenge tarneeb sessions.
+  const TARNEEB_TURN_TIMEOUT_MS = 30_000;
+  const TARNEEB_TIMEOUT_WATCHDOG_INTERVAL = 1000;
+
+  async function processChallengeTarneebTimeouts() {
+    const tarneebEngine = getGameEngine("tarneeb");
+    if (!tarneebEngine) {
+      return;
+    }
+
+    try {
+      const activeRows = await db.select({
+        challengeId: challengeGameSessions.challengeId,
+      })
+        .from(challengeGameSessions)
+        .innerJoin(challenges, eq(challengeGameSessions.challengeId, challenges.id))
+        .where(and(
+          eq(challengeGameSessions.status, "playing"),
+          eq(challenges.status, "active"),
+          eq(challengeGameSessions.gameType, "tarneeb"),
+          sql`${challengeGameSessions.currentTurn} IS NOT NULL`
+        ))
+        .limit(80);
+
+      for (const row of activeRows) {
+        try {
+          const outcome = await db.transaction(async (tx) => {
+            const [session] = await tx.select()
+              .from(challengeGameSessions)
+              .where(eq(challengeGameSessions.challengeId, row.challengeId))
+              .orderBy(sql`${challengeGameSessions.createdAt} DESC`)
+              .limit(1)
+              .for("update");
+
+            if (!session || session.status !== "playing" || !session.currentTurn || String(session.gameType || "").toLowerCase() !== "tarneeb") {
+              return null;
+            }
+
+            const [challenge] = await tx.select()
+              .from(challenges)
+              .where(eq(challenges.id, row.challengeId))
+              .limit(1)
+              .for("update");
+
+            if (!challenge || challenge.status !== "active") {
+              return null;
+            }
+
+            const playerIds = [
+              challenge.player1Id,
+              challenge.player2Id,
+              challenge.player3Id,
+              challenge.player4Id,
+            ].filter(Boolean) as string[];
+
+            const timedOutPlayerId = session.currentTurn;
+
+            const nowMs = Date.now();
+            const turnStartedAt = session.lastMoveAt ?? session.updatedAt ?? session.createdAt ?? new Date(nowMs);
+            const elapsedMs = Math.max(0, nowMs - new Date(turnStartedAt).getTime());
+            if (elapsedMs < TARNEEB_TURN_TIMEOUT_MS) {
+              return null;
+            }
+
+            const normalizedState = normalizeChallengeGameState(session.gameState);
+            if (!normalizedState) {
+              logger.warn(`[Tarneeb Timeout Watchdog] Skipped challenge ${row.challengeId} due to invalid game state`);
+              return null;
+            }
+
+            const validMoves = tarneebEngine.getValidMoves(normalizedState, timedOutPlayerId);
+            if (validMoves.length === 0) {
+              logger.warn(`[Tarneeb Timeout Watchdog] No valid moves for current turn ${timedOutPlayerId} in challenge ${row.challengeId}`);
+              return null;
+            }
+
+            const timeoutMove = selectTarneebTimeoutAutoMove(validMoves);
+            if (!timeoutMove) {
+              logger.warn(`[Tarneeb Timeout Watchdog] No valid timeout move for challenge ${row.challengeId}`);
+              return null;
+            }
+
+            const validation = tarneebEngine.validateMove(normalizedState, timedOutPlayerId, timeoutMove);
+            if (!validation.valid) {
+              logger.warn(`[Tarneeb Timeout Watchdog] Invalid timeout move for challenge ${row.challengeId}: ${validation.error || "unknown"}`);
+              return null;
+            }
+
+            const applyResult = tarneebEngine.applyMove(normalizedState, timedOutPlayerId, timeoutMove);
+            if (!applyResult.success) {
+              logger.warn(`[Tarneeb Timeout Watchdog] Failed applying timeout move for challenge ${row.challengeId}: ${applyResult.error || "unknown"}`);
+              return null;
+            }
+
+            const gameStatus = tarneebEngine.getGameStatus(applyResult.newState);
+            const isGameOver = Boolean(gameStatus.isOver);
+            const isDraw = Boolean(gameStatus.isDraw);
+            const parsedNewState = JSON.parse(applyResult.newState) as Record<string, unknown>;
+
+            let winnerId: string | null = typeof gameStatus.winner === "string" ? gameStatus.winner : null;
+            const winningTeam = typeof gameStatus.winningTeam === "number" ? gameStatus.winningTeam : undefined;
+
+            if (!winnerId && typeof winningTeam === "number") {
+              const stateTeams = parsedNewState.teams as { team0?: unknown; team1?: unknown } | undefined;
+              const winningTeamPlayers = winningTeam === 0 ? stateTeams?.team0 : stateTeams?.team1;
+              if (Array.isArray(winningTeamPlayers)) {
+                winnerId = (winningTeamPlayers.find((id): id is string => typeof id === "string") ?? null);
+              }
+
+              if (!winnerId) {
+                const fallbackWinners = winningTeam === 0
+                  ? [challenge.player1Id, challenge.player3Id]
+                  : [challenge.player2Id, challenge.player4Id];
+                winnerId = (fallbackWinners.find(Boolean) as string | undefined) ?? null;
+              }
+            }
+
+            let nextTurn: string | null = null;
+            if (!isGameOver) {
+              const stateTurn = typeof parsedNewState.currentPlayer === "string"
+                ? parsedNewState.currentPlayer
+                : (typeof parsedNewState.currentTurn === "string" ? parsedNewState.currentTurn : null);
+
+              if (stateTurn) {
+                nextTurn = stateTurn;
+              } else {
+                const currentIndex = playerIds.indexOf(timedOutPlayerId);
+                nextTurn = currentIndex >= 0 ? playerIds[(currentIndex + 1) % playerIds.length] : null;
+              }
+            }
+
+            const winReason = isGameOver
+              ? (isDraw ? "draw" : (gameStatus.reason || "timeout_auto_move"))
+              : null;
+
+            const [updatedSession] = await tx.update(challengeGameSessions)
+              .set({
+                gameState: applyResult.newState,
+                currentTurn: isGameOver ? null : nextTurn,
+                totalMoves: (session.totalMoves || 0) + 1,
+                lastMoveAt: new Date(),
+                updatedAt: new Date(),
+                status: isGameOver ? "finished" : "playing",
+                winnerId: isGameOver ? winnerId : null,
+                winReason,
+              })
+              .where(eq(challengeGameSessions.id, session.id))
+              .returning();
+
+            return {
+              challenge,
+              updatedSession,
+              newState: applyResult.newState,
+              events: applyResult.events,
+              timeoutMove,
+              timedOutPlayerId,
+              isGameOver,
+              isDraw,
+              winnerId,
+              winningTeam,
+              winReason,
+            };
+          });
+
+          if (!outcome) {
+            continue;
+          }
+
+          const seq = typeof outcome.updatedSession.totalMoves === "number" ? outcome.updatedSession.totalMoves : 0;
+          const room = challengeGameRooms.get(row.challengeId);
+
+          if (room) {
+            room.currentState = {
+              challengeId: row.challengeId,
+              gameType: "tarneeb",
+              gameState: outcome.newState,
+              currentTurn: outcome.updatedSession.currentTurn || "",
+              totalMoves: seq,
+              status: outcome.updatedSession.status,
+              spectatorCount: room.spectators.size,
+            };
+
+            const timeoutMessage = JSON.stringify({
+              type: "turn_timeout",
+              payload: {
+                timedOutPlayer: outcome.timedOutPlayerId,
+                autoAction: "auto_move",
+                moveType: outcome.timeoutMove.type,
+                turnTimeLimitMs: TARNEEB_TURN_TIMEOUT_MS,
+              },
+              seq,
+            });
+
+            [...room.players.values(), ...room.spectators.values()].forEach((socket) => {
+              if (socket.readyState === WebSocket.OPEN) {
+                socket.send(timeoutMessage);
+              }
+            });
+
+            for (const [playerId, socket] of room.players) {
+              if (socket.readyState !== WebSocket.OPEN) {
+                continue;
+              }
+
+              const playerView = tarneebEngine.getPlayerView(outcome.newState, playerId);
+              socket.send(JSON.stringify({
+                type: "game_move",
+                session: { ...outcome.updatedSession, gameState: undefined },
+                view: playerView,
+                events: outcome.events,
+                move: outcome.timeoutMove,
+                playerId: outcome.timedOutPlayerId,
+                seq,
+                timeoutAuto: true,
+              }));
+            }
+
+            const spectatorView = tarneebEngine.getPlayerView(outcome.newState, "spectator");
+            for (const [, socket] of room.spectators) {
+              if (socket.readyState !== WebSocket.OPEN) {
+                continue;
+              }
+
+              socket.send(JSON.stringify({
+                type: "game_move",
+                session: { ...outcome.updatedSession, gameState: undefined },
+                view: spectatorView,
+                events: outcome.events,
+                move: outcome.timeoutMove,
+                playerId: outcome.timedOutPlayerId,
+                seq,
+                timeoutAuto: true,
+              }));
+            }
+          }
+
+          if (outcome.isGameOver) {
+            let payoutSettled = true;
+
+            if (outcome.isDraw) {
+              const drawSettlement = await settleDrawPayout(
+                row.challengeId,
+                outcome.challenge.player1Id,
+                outcome.challenge.player2Id || "",
+                "tarneeb",
+                undefined,
+                [outcome.challenge.player3Id, outcome.challenge.player4Id].filter(Boolean) as string[],
+              );
+
+              if (!drawSettlement.success) {
+                payoutSettled = false;
+                logger.error(`[Tarneeb Timeout Watchdog] Draw payout failed for challenge ${row.challengeId}: ${drawSettlement.error}`);
+              }
+            } else if (outcome.winnerId) {
+              const allPlayerIds = [
+                outcome.challenge.player1Id,
+                outcome.challenge.player2Id,
+                outcome.challenge.player3Id,
+                outcome.challenge.player4Id,
+              ].filter(Boolean) as string[];
+
+              const loserId = outcome.winningTeam !== undefined
+                ? (outcome.winningTeam === 0
+                  ? ([outcome.challenge.player2Id, outcome.challenge.player4Id].filter(Boolean) as string[])[0]
+                  : ([outcome.challenge.player1Id, outcome.challenge.player3Id].filter(Boolean) as string[])[0])
+                : allPlayerIds.find((id) => id !== outcome.winnerId);
+
+              if (loserId) {
+                const payoutResult = await settleChallengePayout(
+                  row.challengeId,
+                  outcome.winnerId,
+                  loserId,
+                  "tarneeb",
+                );
+
+                if (!payoutResult.success) {
+                  payoutSettled = false;
+                  logger.error(`[Tarneeb Timeout Watchdog] Winner payout failed for challenge ${row.challengeId}: ${payoutResult.error}`);
+                }
+              }
+            }
+
+            if (payoutSettled) {
+              await db.update(challenges)
+                .set({
+                  status: "completed",
+                  winnerId: outcome.winnerId,
+                  endedAt: new Date(),
+                })
+                .where(eq(challenges.id, row.challengeId));
+            }
+
+            await db.delete(challengeChatMessages)
+              .where(eq(challengeChatMessages.sessionId, outcome.updatedSession.id));
+
+            if (room) {
+              const endedMessage = JSON.stringify({
+                type: "game_ended",
+                winnerId: outcome.winnerId,
+                isDraw: outcome.isDraw,
+                reason: outcome.winReason || (outcome.isDraw ? "draw" : "timeout_auto_move"),
+                seq,
+              });
+
+              [...room.players.values(), ...room.spectators.values()].forEach((socket) => {
+                if (socket.readyState === WebSocket.OPEN) {
+                  socket.send(endedMessage);
+                }
+              });
+            }
+          }
+
+          logger.info(`[Tarneeb Timeout Watchdog] Applied timeout auto-move for challenge ${row.challengeId}`);
+        } catch (perChallengeError) {
+          logger.error(
+            `[Tarneeb Timeout Watchdog] Failed processing challenge ${row.challengeId}`,
+            perChallengeError instanceof Error ? perChallengeError : new Error(String(perChallengeError)),
+          );
+        }
+      }
+    } catch (error) {
+      logger.error("[Tarneeb Timeout Watchdog] Error", error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  setTimeout(processChallengeTarneebTimeouts, 14000);
+  setInterval(processChallengeTarneebTimeouts, TARNEEB_TIMEOUT_WATCHDOG_INTERVAL);
+  logger.info(`[Tarneeb Timeout Watchdog] Started (interval: ${TARNEEB_TIMEOUT_WATCHDOG_INTERVAL}ms, turn=${TARNEEB_TURN_TIMEOUT_MS}ms)`);
 }

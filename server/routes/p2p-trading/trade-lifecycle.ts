@@ -4,14 +4,39 @@ import { authMiddleware, AuthRequest } from "../middleware";
 import { sendNotification } from "../../websocket";
 import { getErrorMessage } from "./helpers";
 
+function calculateCompletionRate(totalTrades: number, completedTrades: number): string {
+  if (totalTrades <= 0) {
+    return "0.00";
+  }
+
+  return ((completedTrades / totalTrades) * 100).toFixed(2);
+}
+
 /** POST complete, cancel — Trade resolution actions */
 export function registerTradeLifecycleRoutes(app: Express) {
+
+  const notifyWithLog = async (
+    recipientId: string,
+    payload: Parameters<typeof sendNotification>[1],
+    context: string,
+  ) => {
+    await sendNotification(recipientId, payload).catch((error: unknown) => {
+      console.warn(`[P2P Trading] Notification failure (${context})`, {
+        recipientId,
+        error: getErrorMessage(error),
+      });
+    });
+  };
 
   app.post("/api/p2p/trades/:id/complete", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const existingTrade = await storage.getP2PTrade(req.params.id);
       if (!existingTrade) {
         return res.status(404).json({ error: "Trade not found" });
+      }
+
+      if (existingTrade.buyerId !== req.user!.id && existingTrade.sellerId !== req.user!.id) {
+        return res.status(403).json({ error: "Not authorized to access this trade" });
       }
       
       let result;
@@ -28,6 +53,10 @@ export function registerTradeLifecycleRoutes(app: Express) {
       }
       
       const trade = result.trade!;
+
+      if (result.transitioned === false) {
+        return res.json(trade);
+      }
       
       await storage.createP2PTradeMessage({
         tradeId: trade.id,
@@ -37,23 +66,29 @@ export function registerTradeLifecycleRoutes(app: Express) {
       });
       
       const metrics = await storage.getP2PTraderMetrics(trade.buyerId);
+      const buyerTotalTrades = (metrics?.totalTrades || 0) + 1;
+      const buyerCompletedTrades = (metrics?.completedTrades || 0) + 1;
       await storage.updateP2PTraderMetrics(trade.buyerId, {
-        totalTrades: (metrics?.totalTrades || 0) + 1,
-        completedTrades: (metrics?.completedTrades || 0) + 1,
+        totalTrades: buyerTotalTrades,
+        completedTrades: buyerCompletedTrades,
+        completionRate: calculateCompletionRate(buyerTotalTrades, buyerCompletedTrades),
         totalBuyTrades: (metrics?.totalBuyTrades || 0) + 1,
         lastTradeAt: new Date(),
       });
       
       const sellerMetrics = await storage.getP2PTraderMetrics(trade.sellerId);
+      const sellerTotalTrades = (sellerMetrics?.totalTrades || 0) + 1;
+      const sellerCompletedTrades = (sellerMetrics?.completedTrades || 0) + 1;
       await storage.updateP2PTraderMetrics(trade.sellerId, {
-        totalTrades: (sellerMetrics?.totalTrades || 0) + 1,
-        completedTrades: (sellerMetrics?.completedTrades || 0) + 1,
+        totalTrades: sellerTotalTrades,
+        completedTrades: sellerCompletedTrades,
+        completionRate: calculateCompletionRate(sellerTotalTrades, sellerCompletedTrades),
         totalSellTrades: (sellerMetrics?.totalSellTrades || 0) + 1,
         lastTradeAt: new Date(),
       });
 
       // Notify both parties about trade completion
-      await sendNotification(trade.buyerId, {
+      await notifyWithLog(trade.buyerId, {
         type: 'success',
         priority: 'high',
         title: 'Trade Completed! ✅',
@@ -62,8 +97,8 @@ export function registerTradeLifecycleRoutes(app: Express) {
         messageAr: `اكتملت الصفقة #${trade.id.slice(0,8)}. تم تحويل الأموال إلى حسابك.`,
         link: '/p2p',
         metadata: JSON.stringify({ tradeId: trade.id, action: 'completed' }),
-      }).catch(() => {});
-      await sendNotification(trade.sellerId, {
+      }, "trade-complete:buyer");
+      await notifyWithLog(trade.sellerId, {
         type: 'success',
         priority: 'high',
         title: 'Trade Completed! ✅',
@@ -72,7 +107,7 @@ export function registerTradeLifecycleRoutes(app: Express) {
         messageAr: `اكتملت الصفقة #${trade.id.slice(0,8)}. تم تحويل الأموال.`,
         link: '/p2p',
         metadata: JSON.stringify({ tradeId: trade.id, action: 'completed' }),
-      }).catch(() => {});
+      }, "trade-complete:seller");
       
       res.json(trade);
     } catch (error: unknown) {
@@ -87,6 +122,10 @@ export function registerTradeLifecycleRoutes(app: Express) {
       const existingTrade = await storage.getP2PTrade(req.params.id);
       if (!existingTrade) {
         return res.status(404).json({ error: "Trade not found" });
+      }
+
+      if (existingTrade.buyerId !== req.user!.id && existingTrade.sellerId !== req.user!.id) {
+        return res.status(403).json({ error: "Not authorized to access this trade" });
       }
       
       let result;
@@ -103,6 +142,10 @@ export function registerTradeLifecycleRoutes(app: Express) {
       }
       
       const trade = result.trade!;
+
+      if (result.transitioned === false) {
+        return res.json(trade);
+      }
       
       await storage.createP2PTradeMessage({
         tradeId: trade.id,
@@ -112,21 +155,29 @@ export function registerTradeLifecycleRoutes(app: Express) {
       });
       
       const buyerMetrics = await storage.getP2PTraderMetrics(trade.buyerId);
+      const buyerTotalTrades = (buyerMetrics?.totalTrades || 0) + 1;
+      const buyerCompletedTrades = buyerMetrics?.completedTrades || 0;
       await storage.updateP2PTraderMetrics(trade.buyerId, {
-        totalTrades: (buyerMetrics?.totalTrades || 0) + 1,
+        totalTrades: buyerTotalTrades,
         cancelledTrades: (buyerMetrics?.cancelledTrades || 0) + 1,
+        completionRate: calculateCompletionRate(buyerTotalTrades, buyerCompletedTrades),
+        lastTradeAt: new Date(),
       });
       
       const sellerMetrics = await storage.getP2PTraderMetrics(trade.sellerId);
+      const sellerTotalTrades = (sellerMetrics?.totalTrades || 0) + 1;
+      const sellerCompletedTrades = sellerMetrics?.completedTrades || 0;
       await storage.updateP2PTraderMetrics(trade.sellerId, {
-        totalTrades: (sellerMetrics?.totalTrades || 0) + 1,
+        totalTrades: sellerTotalTrades,
         cancelledTrades: (sellerMetrics?.cancelledTrades || 0) + 1,
+        completionRate: calculateCompletionRate(sellerTotalTrades, sellerCompletedTrades),
+        lastTradeAt: new Date(),
       });
 
       // Notify counterparty about cancellation
       const cancelledByUser = await storage.getUser(req.user!.id);
       const counterpartyId = trade.buyerId === req.user!.id ? trade.sellerId : trade.buyerId;
-      await sendNotification(counterpartyId, {
+      await notifyWithLog(counterpartyId, {
         type: 'warning',
         priority: 'high',
         title: 'Trade Cancelled',
@@ -135,7 +186,7 @@ export function registerTradeLifecycleRoutes(app: Express) {
         messageAr: `تم إلغاء الصفقة #${trade.id.slice(0,8)} بواسطة ${cancelledByUser?.username || 'الطرف الآخر'}.${reason ? ' السبب: ' + reason : ''}`,
         link: '/p2p',
         metadata: JSON.stringify({ tradeId: trade.id, action: 'cancelled' }),
-      }).catch(() => {});
+      }, "trade-cancel:counterparty");
       
       res.json(trade);
     } catch (error: unknown) {

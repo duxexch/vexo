@@ -18,6 +18,7 @@ export {
 } from './crud';
 
 export { createP2PTradeAtomic } from './trade-create-atomic';
+export { markP2PTradePaidAtomic, confirmP2PTradePaymentAtomic } from './trade-payment-atomic';
 export { completeP2PTradeAtomic, cancelP2PTradeAtomic, resolveP2PDisputedTradeAtomic } from './trade-settle-atomic';
 
 export { createP2PTradeProjectCurrencyAtomic } from './atomic-project-create';
