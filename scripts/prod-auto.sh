@@ -14,6 +14,7 @@ cd "$PROJECT_ROOT"
 
 COMPOSE_FILE="docker-compose.prod.yml"
 ENV_TEMPLATE_FILE=".env.production"
+ENV_FALLBACK_FILE=".env.example"
 ENV_FILE=".env.production.local"
 TRAEFIK_CONTAINER="traefik-mebu-traefik-1"
 DOMAIN="vixo.click"
@@ -142,6 +143,90 @@ read_env() {
   value="$(grep -E "^${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- || true)"
   value="${value%$'\r'}"
   printf '%s' "$value"
+}
+
+generate_secret_hex() {
+  local bytes="${1:-32}"
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex "$bytes"
+  else
+    head -c "$bytes" /dev/urandom | od -An -tx1 | tr -d ' \n'
+  fi
+}
+
+is_placeholder_value() {
+  local value="$1"
+  [[ "$value" =~ your_|_here|changeme|replace_me|example.com|yourdomain.com|xxxxxxxx ]]
+}
+
+ensure_env_file_exists() {
+  if [[ -f "$ENV_FILE" ]]; then
+    return 0
+  fi
+
+  local selected_template=""
+  if [[ -f "$ENV_TEMPLATE_FILE" ]]; then
+    selected_template="$ENV_TEMPLATE_FILE"
+  elif [[ -f "$ENV_FALLBACK_FILE" ]]; then
+    selected_template="$ENV_FALLBACK_FILE"
+  else
+    log_error "Missing env file ($ENV_FILE) and templates ($ENV_TEMPLATE_FILE, $ENV_FALLBACK_FILE)"
+    exit 1
+  fi
+
+  cp "$selected_template" "$ENV_FILE"
+  log_success "Created $ENV_FILE from $selected_template"
+
+  if [[ "$selected_template" == "$ENV_FALLBACK_FILE" ]]; then
+    log_warn "Using fallback template .env.example; generating secure defaults for required secrets"
+    upsert_env POSTGRES_PASSWORD "$(generate_secret_hex 24)"
+    upsert_env REDIS_PASSWORD "$(generate_secret_hex 24)"
+    upsert_env MINIO_ROOT_PASSWORD "$(generate_secret_hex 24)"
+    upsert_env SESSION_SECRET "$(generate_secret_hex 48)"
+    upsert_env JWT_SIGNING_KEY "$(generate_secret_hex 48)"
+    upsert_env ADMIN_JWT_SECRET "$(generate_secret_hex 48)"
+    upsert_env ADMIN_BOOTSTRAP_PASSWORD "$(generate_secret_hex 12)"
+    upsert_env ADMIN_BOOTSTRAP_EMAIL "admin@$DOMAIN"
+    upsert_env ADMIN_RECOVERY_EMAIL "admin@$DOMAIN"
+    log_success "Secure defaults generated in $ENV_FILE (review/edit if needed)"
+  fi
+}
+
+validate_required_env() {
+  local required_keys=(
+    POSTGRES_USER
+    POSTGRES_PASSWORD
+    REDIS_PASSWORD
+    MINIO_ROOT_USER
+    MINIO_ROOT_PASSWORD
+    SESSION_SECRET
+    JWT_SIGNING_KEY
+    ADMIN_JWT_SECRET
+  )
+
+  local key
+  for key in "${required_keys[@]}"; do
+    local value
+    value="$(read_env "$key")"
+    if [[ -z "$value" ]]; then
+      log_error "Missing required env key: $key"
+      exit 1
+    fi
+    if is_placeholder_value "$value"; then
+      log_error "Env key $key still contains a placeholder value; update $ENV_FILE and retry"
+      exit 1
+    fi
+  done
+
+  local session_secret jwt_signing_key admin_jwt_secret
+  session_secret="$(read_env SESSION_SECRET)"
+  jwt_signing_key="$(read_env JWT_SIGNING_KEY)"
+  admin_jwt_secret="$(read_env ADMIN_JWT_SECRET)"
+
+  if (( ${#session_secret} < 32 || ${#jwt_signing_key} < 32 || ${#admin_jwt_secret} < 32 )); then
+    log_error "SESSION_SECRET, JWT_SIGNING_KEY, and ADMIN_JWT_SECRET must be at least 32 chars"
+    exit 1
+  fi
 }
 
 wait_for_container_health() {
@@ -301,15 +386,8 @@ if [[ ! -f "$COMPOSE_FILE" ]]; then
   exit 1
 fi
 
-if [[ ! -f "$ENV_FILE" ]]; then
-  if [[ -f "$ENV_TEMPLATE_FILE" ]]; then
-    cp "$ENV_TEMPLATE_FILE" "$ENV_FILE"
-    log_success "Created $ENV_FILE from $ENV_TEMPLATE_FILE"
-  else
-    log_error "Missing env file ($ENV_FILE) and template ($ENV_TEMPLATE_FILE)"
-    exit 1
-  fi
-fi
+ensure_env_file_exists
+validate_required_env
 
 print_header
 
