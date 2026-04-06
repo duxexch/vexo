@@ -1,4 +1,5 @@
 import type { Express, Response } from "express";
+import crypto from "crypto";
 import { storage } from "../../storage";
 import { db } from "../../db";
 import { eq, and, or, sql, gte, ilike } from "drizzle-orm";
@@ -88,7 +89,7 @@ async function ensureSam9BotUser(): Promise<{ id: string; username: string }> {
     return existingById;
   }
 
-  const password = `sam9-bot-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const password = `sam9-bot-${Date.now()}-${crypto.randomBytes(16).toString("hex")}`;
 
   const [created] = await db.insert(users).values({
     id: SAM9_BOT_USER_ID,
