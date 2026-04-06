@@ -1,0 +1,408 @@
+#!/usr/bin/env bash
+
+# VEX Platform - Automated Production Bootstrap & Deploy
+# - First-run server prep
+# - Automatic Traefik network wiring
+# - Persistent host tuning for Redis
+# - Idempotent production deployment with health checks
+
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
+
+COMPOSE_FILE="docker-compose.prod.yml"
+ENV_TEMPLATE_FILE=".env.production"
+ENV_FILE=".env.production.local"
+TRAEFIK_CONTAINER="traefik-mebu-traefik-1"
+DOMAIN="vixo.click"
+TRAEFIK_NETWORK_OVERRIDE=""
+PULL_LATEST="false"
+NO_BUILD="false"
+SKIP_SYSCTL="false"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() {
+  echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_warn() {
+  echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_success() {
+  echo -e "${GREEN}[OK]${NC} $1"
+}
+
+log_error() {
+  echo -e "${RED}[ERROR]${NC} $1"
+}
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/prod-auto.sh [options]
+
+Options:
+  --domain <domain>           Public domain (default: vixo.click)
+  --network <name>            External Traefik network name override
+  --traefik-container <name>  Traefik container used for auto-detect
+  --env-file <path>           Env file path (default: .env.production.local)
+  --compose-file <path>       Compose file path (default: docker-compose.prod.yml)
+  --pull-latest               Pull latest code from origin/main before deploy
+  --no-build                  Skip --build for app service
+  --skip-sysctl               Skip host sysctl persistence setup
+  -h, --help                  Show this help
+
+Examples:
+  ./scripts/prod-auto.sh
+  ./scripts/prod-auto.sh --domain vixo.click --network vex-traefik
+  ./scripts/prod-auto.sh --pull-latest
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --domain)
+      DOMAIN="$2"
+      shift 2
+      ;;
+    --network)
+      TRAEFIK_NETWORK_OVERRIDE="$2"
+      shift 2
+      ;;
+    --traefik-container)
+      TRAEFIK_CONTAINER="$2"
+      shift 2
+      ;;
+    --env-file)
+      ENV_FILE="$2"
+      shift 2
+      ;;
+    --compose-file)
+      COMPOSE_FILE="$2"
+      shift 2
+      ;;
+    --pull-latest)
+      PULL_LATEST="true"
+      shift
+      ;;
+    --no-build)
+      NO_BUILD="true"
+      shift
+      ;;
+    --skip-sysctl)
+      SKIP_SYSCTL="true"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      log_error "Unknown option: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    log_error "Required command not found: $1"
+    exit 1
+  fi
+}
+
+escape_sed_replacement() {
+  printf '%s' "$1" | sed 's/[&|]/\\&/g'
+}
+
+upsert_env() {
+  local key="$1"
+  local value="$2"
+  local escaped
+  escaped="$(escape_sed_replacement "$value")"
+
+  if grep -Eq "^${key}=" "$ENV_FILE"; then
+    sed -i "s|^${key}=.*|${key}=${escaped}|" "$ENV_FILE"
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+  fi
+}
+
+read_env() {
+  local key="$1"
+  local value
+  value="$(grep -E "^${key}=" "$ENV_FILE" | tail -n 1 | cut -d= -f2- || true)"
+  value="${value%$'\r'}"
+  printf '%s' "$value"
+}
+
+wait_for_container_health() {
+  local container="$1"
+  local timeout_seconds="$2"
+  local waited=0
+
+  while (( waited < timeout_seconds )); do
+    local status
+    status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || true)"
+
+    if [[ "$status" == "healthy" || "$status" == "running" ]]; then
+      return 0
+    fi
+
+    sleep 2
+    waited=$((waited + 2))
+  done
+
+  return 1
+}
+
+wait_for_http_code_200() {
+  local url="$1"
+  local timeout_seconds="$2"
+  local host_header="${3:-}"
+  local waited=0
+
+  while (( waited < timeout_seconds )); do
+    local code
+
+    if [[ -n "$host_header" ]]; then
+      code="$(curl -k -s -o /dev/null -w '%{http_code}' "$url" -H "Host: $host_header" || true)"
+    else
+      code="$(curl -s -o /dev/null -w '%{http_code}' "$url" || true)"
+    fi
+
+    if [[ "$code" == "200" ]]; then
+      return 0
+    fi
+
+    sleep 2
+    waited=$((waited + 2))
+  done
+
+  return 1
+}
+
+detect_traefik_network() {
+  if [[ -n "$TRAEFIK_NETWORK_OVERRIDE" ]]; then
+    printf '%s' "$TRAEFIK_NETWORK_OVERRIDE"
+    return 0
+  fi
+
+  if docker container inspect "$TRAEFIK_CONTAINER" >/dev/null 2>&1; then
+    local detected
+    detected="$(docker inspect "$TRAEFIK_CONTAINER" --format '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n 1 | tr -d '[:space:]')"
+    if [[ -n "$detected" ]]; then
+      printf '%s' "$detected"
+      return 0
+    fi
+  fi
+
+  printf '%s' "vex-traefik"
+}
+
+ensure_host_sysctl() {
+  if [[ "$SKIP_SYSCTL" == "true" ]]; then
+    log_warn "Skipping sysctl setup (--skip-sysctl)"
+    return 0
+  fi
+
+  local sudo_cmd=""
+  if [[ "$(id -u)" -ne 0 ]]; then
+    if command -v sudo >/dev/null 2>&1; then
+      sudo_cmd="sudo"
+    else
+      log_warn "Not running as root and sudo not available; skipping persistent sysctl setup"
+      return 0
+    fi
+  fi
+
+  local sysctl_file="/etc/sysctl.d/99-vex-production.conf"
+  cat <<EOF | ${sudo_cmd} tee "$sysctl_file" >/dev/null
+vm.overcommit_memory=1
+EOF
+
+  ${sudo_cmd} sysctl -p "$sysctl_file" >/dev/null || true
+  log_success "Persistent host tuning applied: vm.overcommit_memory=1"
+}
+
+ensure_network() {
+  local network_name="$1"
+  if docker network inspect "$network_name" >/dev/null 2>&1; then
+    log_success "Docker network exists: $network_name"
+  else
+    docker network create "$network_name" >/dev/null
+    log_success "Docker network created: $network_name"
+  fi
+}
+
+ensure_runtime_dirs() {
+  mkdir -p logs uploads backups
+  chown -R 1001:1001 logs uploads >/dev/null 2>&1 || true
+  chmod -R 755 logs uploads >/dev/null 2>&1 || true
+  log_success "Runtime directories prepared (logs/uploads/backups)"
+}
+
+sync_database_role_password() {
+  local db_user="$1"
+  local db_name="$2"
+  local db_password="$3"
+
+  if [[ -z "$db_user" || -z "$db_name" || -z "$db_password" ]]; then
+    log_warn "Skipping DB role password sync: missing POSTGRES_USER/POSTGRES_DB/POSTGRES_PASSWORD"
+    return 0
+  fi
+
+  if [[ ! "$db_user" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    log_warn "Skipping DB role password sync: unsupported POSTGRES_USER format"
+    return 0
+  fi
+
+  local escaped_password
+  escaped_password="${db_password//\'/\'\'}"
+
+  docker exec -u postgres vex-db psql -U "$db_user" -d "$db_name" -v ON_ERROR_STOP=1 \
+    -c "ALTER ROLE \"$db_user\" WITH PASSWORD '$escaped_password';" >/dev/null
+
+  log_success "Database role password synchronized for $db_user"
+}
+
+container_has_network() {
+  local container="$1"
+  local network_name="$2"
+  docker inspect "$container" --format '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | grep -Fxq "$network_name"
+}
+
+print_header() {
+  echo "========================================"
+  echo "  VEX Production Auto Bootstrap"
+  echo "  $(date '+%Y-%m-%d %H:%M:%S UTC')"
+  echo "========================================"
+}
+
+require_command docker
+require_command git
+require_command curl
+
+if ! docker compose version >/dev/null 2>&1; then
+  log_error "docker compose v2 is required"
+  exit 1
+fi
+
+if [[ ! -f "$COMPOSE_FILE" ]]; then
+  log_error "Compose file not found: $COMPOSE_FILE"
+  exit 1
+fi
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  if [[ -f "$ENV_TEMPLATE_FILE" ]]; then
+    cp "$ENV_TEMPLATE_FILE" "$ENV_FILE"
+    log_success "Created $ENV_FILE from $ENV_TEMPLATE_FILE"
+  else
+    log_error "Missing env file ($ENV_FILE) and template ($ENV_TEMPLATE_FILE)"
+    exit 1
+  fi
+fi
+
+print_header
+
+if [[ "$PULL_LATEST" == "true" ]]; then
+  log_info "Pulling latest code from origin/main"
+  git fetch origin main
+  git pull --ff-only origin main
+fi
+
+TRAEFIK_NETWORK="$(detect_traefik_network)"
+log_info "Using Traefik network: $TRAEFIK_NETWORK"
+
+upsert_env NODE_ENV production
+upsert_env APP_URL "https://$DOMAIN"
+upsert_env TRAEFIK_EXTERNAL_NETWORK "$TRAEFIK_NETWORK"
+upsert_env ALLOW_FORCE_MIGRATIONS false
+
+ensure_host_sysctl
+ensure_network "$TRAEFIK_NETWORK"
+ensure_runtime_dirs
+
+compose_cmd=(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
+
+log_info "Starting dependency services"
+"${compose_cmd[@]}" up -d db redis minio ai-agent
+
+if ! wait_for_container_health vex-db 180; then
+  log_error "Database container did not become healthy in time"
+  docker logs --tail 80 vex-db || true
+  exit 1
+fi
+
+DB_USER="$(read_env POSTGRES_USER)"
+DB_NAME="$(read_env POSTGRES_DB)"
+DB_PASSWORD="$(read_env POSTGRES_PASSWORD)"
+
+sync_database_role_password "$DB_USER" "${DB_NAME:-vex_db}" "$DB_PASSWORD"
+
+log_info "Deploying application service"
+if [[ "$NO_BUILD" == "true" ]]; then
+  "${compose_cmd[@]}" up -d app
+else
+  "${compose_cmd[@]}" up -d --build app
+fi
+
+if ! wait_for_container_health vex-app 180; then
+  if docker logs --tail 300 vex-app 2>&1 | grep -q "password authentication failed for user \"${DB_USER}\""; then
+    log_warn "Detected database credential mismatch. Re-syncing role password and recreating app once..."
+    sync_database_role_password "$DB_USER" "${DB_NAME:-vex_db}" "$DB_PASSWORD"
+    "${compose_cmd[@]}" up -d --force-recreate --no-deps app
+  fi
+
+  if ! wait_for_container_health vex-app 180; then
+    log_error "Application container did not become healthy in time"
+    docker logs --tail 120 vex-app || true
+    exit 1
+  fi
+fi
+
+if ! container_has_network vex-app "$TRAEFIK_NETWORK"; then
+  log_error "vex-app is not attached to Traefik network: $TRAEFIK_NETWORK"
+  exit 1
+fi
+
+if docker container inspect "$TRAEFIK_CONTAINER" >/dev/null 2>&1; then
+  if ! container_has_network "$TRAEFIK_CONTAINER" "$TRAEFIK_NETWORK"; then
+    log_error "$TRAEFIK_CONTAINER is not attached to network: $TRAEFIK_NETWORK"
+    exit 1
+  fi
+fi
+
+if ! wait_for_http_code_200 "http://127.0.0.1:3001/api/health" 120; then
+  log_error "Local app health endpoint did not return 200"
+  docker logs --tail 120 vex-app || true
+  exit 1
+fi
+
+if docker container inspect "$TRAEFIK_CONTAINER" >/dev/null 2>&1; then
+  if ! wait_for_http_code_200 "https://127.0.0.1/api/health" 120 "$DOMAIN"; then
+    log_error "Traefik route check failed for domain: $DOMAIN"
+    exit 1
+  fi
+fi
+
+log_success "Production deployment is healthy and Traefik wiring is valid"
+echo ""
+echo "Runbook summary:"
+echo "- Env file: $ENV_FILE"
+echo "- Compose file: $COMPOSE_FILE"
+echo "- Traefik network: $TRAEFIK_NETWORK"
+echo "- Domain: $DOMAIN"
+echo ""
+echo "Useful commands:"
+echo "  docker compose -f $COMPOSE_FILE --env-file $ENV_FILE ps"
+echo "  docker logs -f vex-app"
+echo "  curl -k -I https://127.0.0.1 -H \"Host: $DOMAIN\""

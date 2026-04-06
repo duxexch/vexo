@@ -520,7 +520,35 @@ npm run check
 
 ## Production Deployment
 
-### Option 1: Docker (Recommended)
+### Option 1: Automated Docker Production (Recommended)
+
+Use the built-in production automation scripts for first-run setup and safe updates.
+
+#### First Run (auto setup + deploy + verification)
+
+```bash
+# From project root on VPS
+bash ./scripts/prod-auto.sh --domain vixo.click
+```
+
+What this does automatically:
+
+- Creates `.env.production.local` from `.env.production` if missing
+- Detects and/or creates the shared Traefik network
+- Persists required server tuning (`vm.overcommit_memory=1`) for Redis
+- Prepares runtime directories and permissions (`logs`, `uploads`)
+- Starts required services and validates container health
+- Verifies app routing through Traefik for production domain
+
+#### Updates (backup + pull + redeploy + verification)
+
+```bash
+bash ./scripts/prod-update.sh --domain vixo.click
+```
+
+`prod-update.sh` performs a DB backup (when possible), pulls `origin/main`, and re-runs the same production safety checks before completing.
+
+### Option 2: Docker (Manual)
 
 ```bash
 # Build production image
@@ -535,7 +563,7 @@ docker run -d \
   vex:latest
 ```
 
-### Option 2: Node.js Direct
+### Option 3: Node.js Direct
 
 1. **Build the application**
 
@@ -557,7 +585,7 @@ export SESSION_SECRET=...
 npm start
 ```
 
-### Option 3: PM2 Process Manager
+### Option 4: PM2 Process Manager
 
 ```bash
 # Install PM2 globally
