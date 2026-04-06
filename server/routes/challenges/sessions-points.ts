@@ -11,6 +11,7 @@ import {
   isChallengeParticipant,
   getErrorMessage,
 } from "./helpers";
+import { getBadgeEntitlementForUser } from "../../lib/user-badge-entitlements";
 
 export function registerSessionsPointsRoutes(app: Express) {
   // ==================== CHALLENGE GAME SESSIONS ====================
@@ -253,6 +254,18 @@ export function registerSessionsPointsRoutes(app: Express) {
   app.get("/api/challenge-config/:gameType", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const config = await storage.getChallengeSettings(req.params.gameType);
+      const badgeEntitlements = await getBadgeEntitlementForUser(req.user!.id);
+      const configuredMaxStake = Number(config.maxStake);
+      const effectiveMaxStake = Number.isFinite(configuredMaxStake)
+        ? (configuredMaxStake > 0 && badgeEntitlements.maxChallengeMaxAmount !== null
+          ? Math.max(configuredMaxStake, badgeEntitlements.maxChallengeMaxAmount)
+          : configuredMaxStake)
+        : Number(config.maxStake);
+
+      const effectiveMaxStakeValue = Number.isFinite(effectiveMaxStake)
+        ? effectiveMaxStake.toFixed(2)
+        : config.maxStake;
+
       res.json({
         gameType: config.gameType,
         isEnabled: config.isEnabled,
@@ -262,7 +275,8 @@ export function registerSessionsPointsRoutes(app: Express) {
         surrenderLoserRefundPercent: config.surrenderLoserRefundPercent,
         withdrawPenaltyPercent: config.withdrawPenaltyPercent,
         minStake: config.minStake,
-        maxStake: config.maxStake,
+        maxStake: effectiveMaxStakeValue,
+        baseMaxStake: config.maxStake,
         allowDraw: config.allowDraw,
         allowSpectators: config.allowSpectators,
         turnTimeoutSeconds: config.turnTimeoutSeconds,

@@ -7,6 +7,7 @@ import { sanitizePlainText } from "../../lib/input-security";
 import { ensureP2PUsername, getP2PUsernameMap } from "../../lib/p2p-username";
 import { isCurrencyAllowedForOfferType, normalizeCurrencyCode, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
 import { and, eq, inArray } from "drizzle-orm";
+import { getBadgeEntitlementForUser, resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
 import {
   getErrorMessage,
   getEffectiveP2PVerificationLevel,
@@ -113,17 +114,25 @@ export function registerOfferRoutes(app: Express) {
       const profile = profileRows[0];
       const globalSettings = p2pSettingsRows[0];
       const currencyControls = resolveP2PCurrencyControls(globalSettings);
+      const badgeEntitlements = await getBadgeEntitlementForUser(req.user!.id);
       const monthlyUsed = await getUserCurrentMonthP2PTradeVolume(req.user!.id);
-      const monthlyLimit = profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
+      const baseMonthlyLimit = profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
         ? Number(profile.monthlyTradeLimit)
         : null;
+      const monthlyLimit = resolveEffectiveP2PMonthlyLimit(
+        baseMonthlyLimit,
+        badgeEntitlements.maxP2PMonthlyLimit,
+        Boolean(profile),
+      );
       const monthlyLimitAvailable = monthlyLimit === null || monthlyUsed < monthlyLimit;
+      const canTradeP2P = Boolean(profile?.canTradeP2P) || badgeEntitlements.grantsP2pPrivileges;
+      const canCreateOffers = Boolean(profile?.canCreateOffers) || badgeEntitlements.grantsP2pPrivileges;
 
       const checks = {
         notBanned: !user.p2pBanned,
         verificationPassed: hasRequiredP2PVerification(verificationLevel, MIN_P2P_VERIFICATION_LEVEL),
-        tradingPermissionGranted: Boolean(profile?.canTradeP2P),
-        adPermissionGranted: Boolean(profile?.canCreateOffers),
+        tradingPermissionGranted: canTradeP2P,
+        adPermissionGranted: canCreateOffers,
         monthlyLimitAvailable,
         hasActivePaymentMethods: paymentMethods.length > 0,
         p2pEnabled: globalSettings?.isEnabled ?? true,
@@ -336,21 +345,30 @@ export function registerOfferRoutes(app: Express) {
         .where(eq(p2pTraderProfiles.userId, req.user!.id))
         .limit(1);
 
-      if (!profile?.canTradeP2P) {
+      const badgeEntitlements = await getBadgeEntitlementForUser(req.user!.id);
+      const canTradeP2P = Boolean(profile?.canTradeP2P) || badgeEntitlements.grantsP2pPrivileges;
+      const canCreateOffers = Boolean(profile?.canCreateOffers) || badgeEntitlements.grantsP2pPrivileges;
+
+      if (!canTradeP2P) {
         return res.status(403).json({
           error: "Your account is not approved for P2P trading. Contact support or an administrator.",
         });
       }
 
-      if (!profile?.canCreateOffers) {
+      if (!canCreateOffers) {
         return res.status(403).json({
           error: "Your account is not authorized to publish P2P offers. Contact support or an administrator.",
         });
       }
 
-      const monthlyLimit = profile.monthlyTradeLimit !== null && profile.monthlyTradeLimit !== undefined
+      const baseMonthlyLimit = profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
         ? Number(profile.monthlyTradeLimit)
         : null;
+      const monthlyLimit = resolveEffectiveP2PMonthlyLimit(
+        baseMonthlyLimit,
+        badgeEntitlements.maxP2PMonthlyLimit,
+        Boolean(profile),
+      );
 
       if (monthlyLimit !== null) {
         const monthlyUsed = await getUserCurrentMonthP2PTradeVolume(req.user!.id);

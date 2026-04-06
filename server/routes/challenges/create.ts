@@ -17,6 +17,7 @@ import { broadcastChallengeUpdate, broadcastNotification } from "../../websocket
 import { sendNotification } from "../../websocket";
 import { getErrorMessage } from "./helpers";
 import { getGameEngine } from "../../game-engines";
+import { getBadgeEntitlementForUser } from "../../lib/user-badge-entitlements";
 
 const SAM9_BOT_USER_ID = "bot-sam9";
 const SAM9_BOT_USERNAME = "bot_sam9_challenge_ai";
@@ -360,11 +361,16 @@ export function registerCreateRoute(app: Express) {
       // SECURITY: Enforce min/max stake limits from admin settings
       const minStake = parseFloat(challengeConfig.minStake);
       const maxStake = parseFloat(challengeConfig.maxStake);
+      const badgeEntitlements = await getBadgeEntitlementForUser(userId);
+      const badgeMaxStake = badgeEntitlements.maxChallengeMaxAmount;
+      const effectiveMaxStake = badgeMaxStake !== null
+        ? Math.max(maxStake, badgeMaxStake)
+        : maxStake;
       if (!isSam9FriendlyFixedFee && minStake > 0 && parsedBetAmount < minStake) {
         return res.status(400).json({ error: `Minimum stake is ${formatChallengeAmount(minStake, effectiveCurrencyType)}` });
       }
-      if (!isSam9FriendlyFixedFee && maxStake > 0 && parsedBetAmount > maxStake) {
-        return res.status(400).json({ error: `Maximum stake is ${formatChallengeAmount(maxStake, effectiveCurrencyType)}` });
+      if (!isSam9FriendlyFixedFee && effectiveMaxStake > 0 && parsedBetAmount > effectiveMaxStake) {
+        return res.status(400).json({ error: `Maximum stake is ${formatChallengeAmount(effectiveMaxStake, effectiveCurrencyType)}` });
       }
 
       // SECURITY: Limit concurrent active challenges to prevent balance drain exploit

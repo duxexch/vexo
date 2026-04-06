@@ -15,6 +15,7 @@ import { registerDisputeActionRoutes } from "./dispute-actions";
 import { registerP2pSettingsRoutes } from "./settings";
 import { registerP2pAnalyticsRoutes } from "./analytics";
 import { getP2PUsernameMap } from "../../lib/p2p-username";
+import { getBadgeEntitlementsForUsers, resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
 
 type P2PVerificationLevel = "none" | "email" | "phone" | "kyc_basic" | "kyc_full";
 
@@ -223,6 +224,8 @@ export function registerAdminP2pRoutes(app: Express) {
         return res.json([]);
       }
 
+      const badgeEntitlementsMap = await getBadgeEntitlementsForUsers(userIds);
+
       const now = new Date();
       const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
       const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
@@ -286,22 +289,35 @@ export function registerAdminP2pRoutes(app: Express) {
         monthlyVolumeMap.set(row.userId, (monthlyVolumeMap.get(row.userId) || 0) + Number(row.total || 0));
       }
 
-      res.json(userRows.map((row) => ({
-        ...row,
-        verificationBypassed: isVerificationBypassed(row.profileVerificationLevel, {
-          phoneVerified: row.phoneVerified,
-          emailVerified: row.emailVerified,
-          idVerificationStatus: row.idVerificationStatus,
-        }),
-        canCreateOffers: Boolean(row.canCreateOffers),
-        canTradeP2P: Boolean(row.canTradeP2P),
-        monthlyTradeLimit: row.monthlyTradeLimit !== null && row.monthlyTradeLimit !== undefined
+      res.json(userRows.map((row) => {
+        const badgeEntitlements = badgeEntitlementsMap.get(row.userId);
+        const hasProfile = row.canTradeP2P !== null && row.canTradeP2P !== undefined;
+        const baseMonthlyTradeLimit = row.monthlyTradeLimit !== null && row.monthlyTradeLimit !== undefined
           ? Number(row.monthlyTradeLimit)
-          : null,
-        monthlyTradedAmount: monthlyVolumeMap.get(row.userId) || 0,
-        activePaymentMethodCount: paymentCountMap.get(row.userId) || 0,
-        activeOfferCount: activeOfferCountMap.get(row.userId) || 0,
-      })));
+          : null;
+        const effectiveMonthlyTradeLimit = resolveEffectiveP2PMonthlyLimit(
+          baseMonthlyTradeLimit,
+          badgeEntitlements?.maxP2PMonthlyLimit ?? null,
+          hasProfile,
+        );
+        const effectiveCanTradeP2P = Boolean(row.canTradeP2P) || Boolean(badgeEntitlements?.grantsP2pPrivileges);
+        const effectiveCanCreateOffers = Boolean(row.canCreateOffers) || Boolean(badgeEntitlements?.grantsP2pPrivileges);
+
+        return {
+          ...row,
+          verificationBypassed: isVerificationBypassed(row.profileVerificationLevel, {
+            phoneVerified: row.phoneVerified,
+            emailVerified: row.emailVerified,
+            idVerificationStatus: row.idVerificationStatus,
+          }),
+          canCreateOffers: effectiveCanCreateOffers,
+          canTradeP2P: effectiveCanTradeP2P,
+          monthlyTradeLimit: effectiveMonthlyTradeLimit,
+          monthlyTradedAmount: monthlyVolumeMap.get(row.userId) || 0,
+          activePaymentMethodCount: paymentCountMap.get(row.userId) || 0,
+          activeOfferCount: activeOfferCountMap.get(row.userId) || 0,
+        };
+      }));
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

@@ -23,7 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Shield, Settings2, Loader2, Monitor, Smartphone, Globe, Trash2, LogOut, CheckCircle, KeyRound, Camera, Users, ImageIcon, Volume2, VolumeX } from "lucide-react";
+import { User, Shield, Settings2, Loader2, Monitor, Smartphone, Globe, Trash2, LogOut, CheckCircle, KeyRound, Camera, Users, ImageIcon, Volume2, VolumeX, ShieldCheck, Mail, Copy } from "lucide-react";
 import { BlockedMutedSettings } from "@/components/BlockedMutedSettings";
 import { useSoundEffects } from "@/hooks/use-sound-effects";
 import { format } from "date-fns";
@@ -72,6 +72,28 @@ interface UserSession {
   lastActiveAt: string;
   isCurrent: boolean;
   createdAt: string;
+}
+
+interface TwoFactorStatus {
+  enabled: boolean;
+  verifiedAt: string | null;
+  backupCodesRemaining: number;
+}
+
+interface TwoFactorSetupResponse {
+  secret: string;
+  otpauthUri: string;
+}
+
+interface TwoFactorVerifySetupResponse {
+  success: boolean;
+  backupCodes: string[];
+}
+
+interface TwoFactorSendBackupResponse {
+  success: boolean;
+  sentTo: string;
+  backupCodesRemaining: number;
 }
 
 function ProfileSection() {
@@ -963,9 +985,136 @@ function PrivacySection() {
 }
 
 function SecuritySection() {
+  const { user } = useAuth();
   const { t } = useI18n();
   const { toast } = useToast();
   const headers = useAuthHeaders();
+
+  const [twoFactorSetupData, setTwoFactorSetupData] = useState<TwoFactorSetupResponse | null>(null);
+  const [twoFactorSetupCode, setTwoFactorSetupCode] = useState("");
+  const [newBackupCodes, setNewBackupCodes] = useState<string[]>([]);
+  const [disableTwoFactorPassword, setDisableTwoFactorPassword] = useState("");
+  const [gmailBackupPassword, setGmailBackupPassword] = useState("");
+
+  const normalizedEmail = (user?.email || "").trim().toLowerCase();
+  const hasLinkedGmail = normalizedEmail.endsWith("@gmail.com") || normalizedEmail.endsWith("@googlemail.com");
+
+  const { data: twoFactorStatus, isLoading: twoFactorStatusLoading } = useQuery<TwoFactorStatus>({
+    queryKey: ["/api/auth/2fa/status"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/2fa/status", {
+        method: "GET",
+        headers,
+      });
+      if (!res.ok) throw new Error("Failed to load 2FA status");
+      return res.json();
+    },
+  });
+
+  const startTwoFactorSetupMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/auth/2fa/setup", {
+        method: "POST",
+        headers,
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: "Failed to start 2FA setup" }));
+        throw new Error(error.error || "Failed to start 2FA setup");
+      }
+      return res.json() as Promise<TwoFactorSetupResponse>;
+    },
+    onSuccess: (data) => {
+      setTwoFactorSetupData(data);
+      setTwoFactorSetupCode("");
+      setNewBackupCodes([]);
+      toast({ title: t("common.success"), description: t("settings.twoFactorSetupReady") });
+    },
+    onError: (error: Error) => {
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const verifyTwoFactorSetupMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/auth/2fa/verify-setup", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ code: twoFactorSetupCode }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: "Failed to verify 2FA setup" }));
+        throw new Error(error.error || "Failed to verify 2FA setup");
+      }
+      return res.json() as Promise<TwoFactorVerifySetupResponse>;
+    },
+    onSuccess: (data) => {
+      setTwoFactorSetupData(null);
+      setTwoFactorSetupCode("");
+      setNewBackupCodes(data.backupCodes || []);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/2fa/status"] });
+      toast({ title: t("common.success"), description: t("settings.twoFactorEnabledSuccess") });
+    },
+    onError: (error: Error) => {
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const disableTwoFactorMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/auth/2fa/disable", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ password: disableTwoFactorPassword }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: "Failed to disable 2FA" }));
+        throw new Error(error.error || "Failed to disable 2FA");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setDisableTwoFactorPassword("");
+      setNewBackupCodes([]);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/2fa/status"] });
+      toast({ title: t("common.success"), description: t("settings.twoFactorDisabledSuccess") });
+    },
+    onError: (error: Error) => {
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const sendGmailBackupMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/auth/2fa/send-backup-to-gmail", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ password: gmailBackupPassword }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: "Failed to send backup codes" }));
+        throw new Error(error.error || "Failed to send backup codes");
+      }
+      return res.json() as Promise<TwoFactorSendBackupResponse>;
+    },
+    onSuccess: (data) => {
+      setGmailBackupPassword("");
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/2fa/status"] });
+      toast({ title: t("common.success"), description: `${t("settings.gmailBackupSent")} ${data.sentTo}` });
+    },
+    onError: (error: Error) => {
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const copyBackupCodes = async () => {
+    if (!newBackupCodes.length || !navigator?.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(newBackupCodes.join("\n"));
+      toast({ title: t("common.success"), description: t("settings.backupCodesCopied") });
+    } catch {
+      toast({ title: t("common.error"), description: t("settings.backupCodesCopyFailed"), variant: "destructive" });
+    }
+  };
 
   // Load withdrawal password state from user preferences
   const { data: secPrefs } = useQuery<{ withdrawalPasswordEnabled?: boolean }>({
@@ -1156,6 +1305,202 @@ function SecuritySection() {
               </Button>
             </form>
           </Form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5" />
+            {t("settings.twoFactorAuth")}
+          </CardTitle>
+          <CardDescription>{t("settings.twoFactorAuthDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {twoFactorStatusLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : (
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border p-3 bg-muted/40">
+                <div className="flex items-center gap-2">
+                  <Badge variant={twoFactorStatus?.enabled ? "default" : "secondary"}>
+                    {twoFactorStatus?.enabled ? t("settings.twoFactorEnabled") : t("settings.twoFactorDisabled")}
+                  </Badge>
+                  {twoFactorStatus?.verifiedAt && (
+                    <span className="text-xs text-muted-foreground">
+                      {t("settings.twoFactorVerifiedAt")} {format(new Date(twoFactorStatus.verifiedAt), "PPp")}
+                    </span>
+                  )}
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {t("settings.twoFactorBackupRemaining")}: {twoFactorStatus?.backupCodesRemaining ?? 0}
+                </span>
+              </div>
+
+              {!twoFactorStatus?.enabled && !twoFactorSetupData && (
+                <Button
+                  onClick={() => startTwoFactorSetupMutation.mutate()}
+                  disabled={startTwoFactorSetupMutation.isPending}
+                  data-testid="button-two-factor-start-setup"
+                >
+                  {startTwoFactorSetupMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                  {t("settings.twoFactorSetupStart")}
+                </Button>
+              )}
+
+              {!twoFactorStatus?.enabled && twoFactorSetupData && (
+                <div className="space-y-4 rounded-lg border p-4">
+                  <p className="text-sm text-muted-foreground">{t("settings.twoFactorSetupStep1")}</p>
+
+                  <div className="space-y-2">
+                    <Label>{t("settings.twoFactorSecret")}</Label>
+                    <Input
+                      value={twoFactorSetupData.secret}
+                      readOnly
+                      data-testid="input-two-factor-secret"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>{t("settings.twoFactorSetupUri")}</Label>
+                    <Input
+                      value={twoFactorSetupData.otpauthUri}
+                      readOnly
+                      data-testid="input-two-factor-uri"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="two-factor-setup-code">{t("settings.twoFactorCode")}</Label>
+                    <Input
+                      id="two-factor-setup-code"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={twoFactorSetupCode}
+                      onChange={(e) => setTwoFactorSetupCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder={t("settings.otpPlaceholder")}
+                      data-testid="input-two-factor-setup-code"
+                    />
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      onClick={() => verifyTwoFactorSetupMutation.mutate()}
+                      disabled={verifyTwoFactorSetupMutation.isPending || twoFactorSetupCode.length !== 6}
+                      data-testid="button-two-factor-verify-setup"
+                    >
+                      {verifyTwoFactorSetupMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                      {t("settings.twoFactorVerifyAndEnable")}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setTwoFactorSetupData(null);
+                        setTwoFactorSetupCode("");
+                      }}
+                      data-testid="button-two-factor-cancel-setup"
+                    >
+                      {t("common.cancel")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {newBackupCodes.length > 0 && (
+                <div className="space-y-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4" data-testid="two-factor-backup-codes">
+                  <div>
+                    <p className="font-medium">{t("settings.twoFactorBackupCodes")}</p>
+                    <p className="text-sm text-muted-foreground">{t("settings.twoFactorBackupCodesDescription")}</p>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {newBackupCodes.map((code) => (
+                      <Badge key={code} variant="secondary" className="justify-center py-1 text-xs tracking-wide">
+                        {code}
+                      </Badge>
+                    ))}
+                  </div>
+                  <Button variant="outline" onClick={copyBackupCodes} data-testid="button-copy-backup-codes">
+                    <Copy className="me-2 h-4 w-4" />
+                    {t("settings.copyBackupCodes")}
+                  </Button>
+                </div>
+              )}
+
+              {twoFactorStatus?.enabled && (
+                <>
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <p className="font-medium">{t("settings.gmailBackup")}</p>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{t("settings.gmailBackupDescription")}</p>
+
+                    <div className="space-y-2">
+                      <Label>{t("settings.gmailBackupAddress")}</Label>
+                      <Input
+                        value={user?.email || ""}
+                        readOnly
+                        placeholder={t("settings.gmailBackupMissing")}
+                        data-testid="input-gmail-backup-address"
+                      />
+                    </div>
+
+                    {!hasLinkedGmail && (
+                      <p className="text-sm text-destructive" data-testid="text-gmail-required-warning">
+                        {t("settings.gmailBackupRequired")}
+                      </p>
+                    )}
+
+                    <div className="space-y-2">
+                      <Label htmlFor="gmail-backup-password">{t("settings.gmailBackupPassword")}</Label>
+                      <Input
+                        id="gmail-backup-password"
+                        type="password"
+                        value={gmailBackupPassword}
+                        onChange={(e) => setGmailBackupPassword(e.target.value)}
+                        placeholder={t("settings.currentPassword")}
+                        data-testid="input-gmail-backup-password"
+                      />
+                    </div>
+
+                    <Button
+                      onClick={() => sendGmailBackupMutation.mutate()}
+                      disabled={sendGmailBackupMutation.isPending || !hasLinkedGmail || !gmailBackupPassword}
+                      data-testid="button-send-gmail-backup"
+                    >
+                      {sendGmailBackupMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                      {t("settings.gmailBackupSend")}
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border p-4">
+                    <p className="font-medium">{t("settings.twoFactorDisable")}</p>
+                    <p className="text-sm text-muted-foreground">{t("settings.twoFactorDisableDescription")}</p>
+                    <div className="space-y-2">
+                      <Label htmlFor="disable-two-factor-password">{t("settings.twoFactorDisablePassword")}</Label>
+                      <Input
+                        id="disable-two-factor-password"
+                        type="password"
+                        value={disableTwoFactorPassword}
+                        onChange={(e) => setDisableTwoFactorPassword(e.target.value)}
+                        placeholder={t("settings.currentPassword")}
+                        data-testid="input-disable-two-factor-password"
+                      />
+                    </div>
+                    <Button
+                      variant="destructive"
+                      onClick={() => disableTwoFactorMutation.mutate()}
+                      disabled={disableTwoFactorMutation.isPending || !disableTwoFactorPassword}
+                      data-testid="button-disable-two-factor"
+                    >
+                      {disableTwoFactorMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                      {t("settings.twoFactorDisableConfirm")}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
 

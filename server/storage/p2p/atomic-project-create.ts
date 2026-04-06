@@ -1,10 +1,11 @@
 import {
-  p2pTrades, p2pOffers, p2pTraderProfiles,
+  p2pTrades, p2pOffers, p2pTraderProfiles, badgeCatalog, userBadges,
   projectCurrencyWallets, projectCurrencyLedger,
   type P2PTrade,
 } from "@shared/schema";
 import { db } from "../../db";
 import { and, eq, gte, lt, ne, or, sql } from "drizzle-orm";
+import { resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
 
 // ==================== ATOMIC P2P TRADE CREATION (PROJECT CURRENCY) ====================
 
@@ -67,15 +68,32 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
         .limit(1)
         .for('update');
 
+      const [badgeEntitlements] = await tx
+        .select({
+          grantsP2pPrivileges: sql<boolean>`coalesce(bool_or(${badgeCatalog.grantsP2pPrivileges}), false)`,
+          maxP2PMonthlyLimit: sql<string | null>`max(${badgeCatalog.p2pMonthlyLimit})`,
+        })
+        .from(userBadges)
+        .innerJoin(badgeCatalog, eq(userBadges.badgeId, badgeCatalog.id))
+        .where(and(
+          eq(userBadges.userId, participantId),
+          eq(badgeCatalog.isActive, true),
+        ));
+
       const participantRole = participantId === params.buyerId ? 'Buyer' : 'Seller';
 
-      if (!profile?.canTradeP2P) {
-        return { success: false, error: `${participantRole} is not approved for P2P trading` };
-      }
-
-      const monthlyLimit = profile.monthlyTradeLimit !== null && profile.monthlyTradeLimit !== undefined
+      const canTradeP2P = Boolean(profile?.canTradeP2P) || Boolean(badgeEntitlements?.grantsP2pPrivileges);
+      const baseMonthlyLimit = profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
         ? Number(profile.monthlyTradeLimit)
         : null;
+      const badgeMonthlyLimit = badgeEntitlements?.maxP2PMonthlyLimit !== null && badgeEntitlements?.maxP2PMonthlyLimit !== undefined
+        ? Number(badgeEntitlements.maxP2PMonthlyLimit)
+        : null;
+      const monthlyLimit = resolveEffectiveP2PMonthlyLimit(baseMonthlyLimit, badgeMonthlyLimit, Boolean(profile));
+
+      if (!canTradeP2P) {
+        return { success: false, error: `${participantRole} is not approved for P2P trading` };
+      }
 
       if (monthlyLimit !== null) {
         const [usageRow] = await tx
@@ -121,7 +139,7 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
     let remaining = tradeAmount;
     let earnedDeducted = 0;
     let purchasedDeducted = 0;
-    
+
     if (earnedBalance >= remaining) {
       earnedDeducted = remaining;
       earnedBalance -= remaining;
@@ -136,10 +154,10 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
 
     // 4. Debit seller's project currency (escrow hold)
     await tx.update(projectCurrencyWallets)
-      .set({ 
+      .set({
         earnedBalance: earnedBalance.toFixed(8),
         purchasedBalance: purchasedBalance.toFixed(8),
-        updatedAt: new Date() 
+        updatedAt: new Date()
       })
       .where(eq(projectCurrencyWallets.userId, params.sellerId));
 
@@ -185,7 +203,7 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
         metadata: JSON.stringify({ balanceType: 'earned' })
       });
     }
-    
+
     if (purchasedDeducted > 0) {
       await tx.insert(projectCurrencyLedger).values({
         walletId: sellerWallet.id,

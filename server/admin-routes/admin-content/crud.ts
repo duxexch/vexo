@@ -1,9 +1,10 @@
 import type { Express, Response } from "express";
-import { managedLanguages, insertManagedLanguageSchema, badgeCatalog, insertBadgeCatalogSchema, broadcastNotifications, insertBroadcastNotificationSchema, users } from "@shared/schema";
+import { managedLanguages, insertManagedLanguageSchema, badgeCatalog, insertBadgeCatalogSchema, broadcastNotifications, insertBroadcastNotificationSchema, userBadges, users } from "@shared/schema";
 import { sendNotification } from "../../websocket";
 import { db } from "../../db";
-import { eq, desc } from "drizzle-orm";
+import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
+import { getBadgeEntitlementForUser, getBadgeEntitlementsForUsers } from "../../lib/user-badge-entitlements";
 
 export function registerContentCrudRoutes(app: Express) {
 
@@ -48,7 +49,7 @@ export function registerContentCrudRoutes(app: Express) {
       }
 
       const [updated] = await db.update(managedLanguages)
-        .set({ 
+        .set({
           name: name ?? existing.name,
           nativeName: nativeName ?? existing.nativeName,
           direction: direction ?? existing.direction,
@@ -127,6 +128,7 @@ export function registerContentCrudRoutes(app: Express) {
     try {
       const { id } = req.params;
       const updates = req.body;
+      const hasField = (key: string): boolean => Object.prototype.hasOwnProperty.call(updates ?? {}, key);
 
       const [existing] = await db.select().from(badgeCatalog).where(eq(badgeCatalog.id, id));
       if (!existing) {
@@ -136,14 +138,19 @@ export function registerContentCrudRoutes(app: Express) {
       const [updated] = await db.update(badgeCatalog)
         .set({
           name: updates.name ?? existing.name,
-          nameAr: updates.nameAr ?? existing.nameAr,
-          description: updates.description ?? existing.description,
-          descriptionAr: updates.descriptionAr ?? existing.descriptionAr,
-          iconUrl: updates.iconUrl ?? existing.iconUrl,
-          iconName: updates.iconName ?? existing.iconName,
-          color: updates.color ?? existing.color,
-          category: updates.category ?? existing.category,
-          requirement: updates.requirement ?? existing.requirement,
+          nameAr: hasField("nameAr") ? updates.nameAr : existing.nameAr,
+          description: hasField("description") ? updates.description : existing.description,
+          descriptionAr: hasField("descriptionAr") ? updates.descriptionAr : existing.descriptionAr,
+          iconUrl: hasField("iconUrl") ? updates.iconUrl : existing.iconUrl,
+          iconName: hasField("iconName") ? updates.iconName : existing.iconName,
+          color: hasField("color") ? updates.color : existing.color,
+          category: hasField("category") ? updates.category : existing.category,
+          requirement: hasField("requirement") ? updates.requirement : existing.requirement,
+          level: updates.level ?? existing.level,
+          p2pMonthlyLimit: hasField("p2pMonthlyLimit") ? updates.p2pMonthlyLimit : existing.p2pMonthlyLimit,
+          challengeMaxAmount: hasField("challengeMaxAmount") ? updates.challengeMaxAmount : existing.challengeMaxAmount,
+          grantsP2pPrivileges: updates.grantsP2pPrivileges ?? existing.grantsP2pPrivileges,
+          showOnProfile: updates.showOnProfile ?? existing.showOnProfile,
           points: updates.points ?? existing.points,
           isActive: updates.isActive ?? existing.isActive,
           sortOrder: updates.sortOrder ?? existing.sortOrder
@@ -179,6 +186,171 @@ export function registerContentCrudRoutes(app: Express) {
       }, req);
 
       res.json({ success: true });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/admin/badges/users", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      const requestedLimit = Number(req.query.limit);
+      const limit = Number.isFinite(requestedLimit)
+        ? Math.min(Math.max(Math.floor(requestedLimit), 1), 100)
+        : 30;
+
+      const baseCondition = eq(users.role, "player");
+      const whereCondition = q
+        ? and(
+          baseCondition,
+          or(
+            ilike(users.username, `%${q}%`),
+            ilike(users.nickname, `%${q}%`),
+            ilike(users.accountId, `%${q}%`),
+          ),
+        )
+        : baseCondition;
+
+      const rows = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          nickname: users.nickname,
+          accountId: users.accountId,
+          profilePicture: users.profilePicture,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .where(whereCondition)
+        .orderBy(desc(users.createdAt))
+        .limit(limit);
+
+      const entitlementsMap = await getBadgeEntitlementsForUsers(rows.map((row) => row.id));
+
+      res.json(rows.map((row) => {
+        const entitlements = entitlementsMap.get(row.id);
+        return {
+          ...row,
+          badgeCount: entitlements?.badgeCount ?? 0,
+          topBadge: entitlements?.topBadge ?? null,
+        };
+      }));
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/admin/badges/users/:userId/assigned", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const { userId } = req.params;
+
+      const assignedBadges = await db
+        .select({
+          badgeId: badgeCatalog.id,
+          name: badgeCatalog.name,
+          nameAr: badgeCatalog.nameAr,
+          iconUrl: badgeCatalog.iconUrl,
+          iconName: badgeCatalog.iconName,
+          color: badgeCatalog.color,
+          category: badgeCatalog.category,
+          level: badgeCatalog.level,
+          points: badgeCatalog.points,
+          earnedAt: userBadges.earnedAt,
+        })
+        .from(userBadges)
+        .innerJoin(badgeCatalog, eq(userBadges.badgeId, badgeCatalog.id))
+        .where(eq(userBadges.userId, userId))
+        .orderBy(desc(badgeCatalog.level), desc(userBadges.earnedAt));
+
+      const entitlements = await getBadgeEntitlementForUser(userId);
+
+      res.json({
+        userId,
+        assignedBadges,
+        entitlements,
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/admin/badges/assign", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const userId = typeof req.body?.userId === "string" ? req.body.userId.trim() : "";
+      const badgeId = typeof req.body?.badgeId === "string" ? req.body.badgeId.trim() : "";
+      const replaceExisting = req.body?.replaceExisting !== false;
+
+      if (!userId || !badgeId) {
+        return res.status(400).json({ error: "userId and badgeId are required" });
+      }
+
+      const [targetUser] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const [targetBadge] = await db
+        .select({ id: badgeCatalog.id, name: badgeCatalog.name })
+        .from(badgeCatalog)
+        .where(eq(badgeCatalog.id, badgeId))
+        .limit(1);
+
+      if (!targetBadge) {
+        return res.status(404).json({ error: "Badge not found" });
+      }
+
+      if (replaceExisting) {
+        await db.delete(userBadges).where(eq(userBadges.userId, userId));
+      }
+
+      await db
+        .insert(userBadges)
+        .values({ userId, badgeId })
+        .onConflictDoNothing();
+
+      const entitlements = await getBadgeEntitlementForUser(userId);
+
+      await logAdminAction(req.admin!.id, "settings_change", "user_badges", userId, {
+        newValue: JSON.stringify({ userId, badgeId, replaceExisting, topBadge: entitlements.topBadge }),
+      }, req);
+
+      res.json({
+        success: true,
+        userId,
+        badgeId,
+        entitlements,
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/admin/badges/users/:userId/:badgeId", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const { userId, badgeId } = req.params;
+
+      await db.delete(userBadges).where(and(
+        eq(userBadges.userId, userId),
+        eq(userBadges.badgeId, badgeId),
+      ));
+
+      const entitlements = await getBadgeEntitlementForUser(userId);
+
+      await logAdminAction(req.admin!.id, "settings_change", "user_badges", userId, {
+        newValue: JSON.stringify({ userId, badgeId, action: "removed", topBadge: entitlements.topBadge }),
+      }, req);
+
+      res.json({
+        success: true,
+        userId,
+        badgeId,
+        entitlements,
+      });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

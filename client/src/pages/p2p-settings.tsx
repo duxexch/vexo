@@ -507,26 +507,41 @@ export default function P2PSettingsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="verification">
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="verification">
-            <IdCard className="h-4 w-4 me-1" />
+      <Tabs defaultValue="verification" className="space-y-4">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 rounded-xl bg-muted/50 p-2 sm:grid-cols-3 lg:grid-cols-5">
+          <TabsTrigger
+            value="verification"
+            className="h-auto min-h-[48px] w-full gap-2 whitespace-normal rounded-lg border border-transparent px-2 py-2 text-center text-xs leading-tight sm:text-sm data-[state=active]:border-primary/30 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+          >
+            <IdCard className="h-4 w-4 shrink-0" />
             {language === 'ar' ? 'التوثيق' : 'Verification'}
           </TabsTrigger>
-          <TabsTrigger value="general">
-            <Settings className="h-4 w-4 me-1" />
+          <TabsTrigger
+            value="general"
+            className="h-auto min-h-[48px] w-full gap-2 whitespace-normal rounded-lg border border-transparent px-2 py-2 text-center text-xs leading-tight sm:text-sm data-[state=active]:border-primary/30 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+          >
+            <Settings className="h-4 w-4 shrink-0" />
             {t('p2p.settings.general')}
           </TabsTrigger>
-          <TabsTrigger value="notifications">
-            <Bell className="h-4 w-4 me-1" />
+          <TabsTrigger
+            value="notifications"
+            className="h-auto min-h-[48px] w-full gap-2 whitespace-normal rounded-lg border border-transparent px-2 py-2 text-center text-xs leading-tight sm:text-sm data-[state=active]:border-primary/30 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+          >
+            <Bell className="h-4 w-4 shrink-0" />
             {t('p2p.settings.notifications')}
           </TabsTrigger>
-          <TabsTrigger value="payment">
-            <CreditCard className="h-4 w-4 me-1" />
+          <TabsTrigger
+            value="payment"
+            className="h-auto min-h-[48px] w-full gap-2 whitespace-normal rounded-lg border border-transparent px-2 py-2 text-center text-xs leading-tight sm:text-sm data-[state=active]:border-primary/30 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+          >
+            <CreditCard className="h-4 w-4 shrink-0" />
             {t('p2p.settings.paymentMethods')}
           </TabsTrigger>
-          <TabsTrigger value="badges">
-            <Award className="h-4 w-4 me-1" />
+          <TabsTrigger
+            value="badges"
+            className="h-auto min-h-[48px] w-full gap-2 whitespace-normal rounded-lg border border-transparent px-2 py-2 text-center text-xs leading-tight sm:text-sm data-[state=active]:border-primary/30 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+          >
+            <Award className="h-4 w-4 shrink-0" />
             {t('p2p.settings.badges')}
           </TabsTrigger>
         </TabsList>

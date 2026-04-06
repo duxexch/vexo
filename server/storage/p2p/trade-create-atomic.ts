@@ -1,10 +1,11 @@
 import {
   users, transactions,
-  p2pTrades, p2pOffers, p2pTraderProfiles,
+  p2pTrades, p2pOffers, p2pTraderProfiles, badgeCatalog, userBadges,
   type P2PTrade,
 } from "@shared/schema";
 import { db } from "../../db";
 import { and, eq, gte, lt, ne, or, sql } from "drizzle-orm";
+import { resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
 
 // ==================== ATOMIC P2P TRADE CREATION (BASE CURRENCY) ====================
 
@@ -67,15 +68,32 @@ export async function createP2PTradeAtomic(params: {
         .limit(1)
         .for('update');
 
+      const [badgeEntitlements] = await tx
+        .select({
+          grantsP2pPrivileges: sql<boolean>`coalesce(bool_or(${badgeCatalog.grantsP2pPrivileges}), false)`,
+          maxP2PMonthlyLimit: sql<string | null>`max(${badgeCatalog.p2pMonthlyLimit})`,
+        })
+        .from(userBadges)
+        .innerJoin(badgeCatalog, eq(userBadges.badgeId, badgeCatalog.id))
+        .where(and(
+          eq(userBadges.userId, participantId),
+          eq(badgeCatalog.isActive, true),
+        ));
+
       const participantRole = participantId === params.buyerId ? 'Buyer' : 'Seller';
 
-      if (!profile?.canTradeP2P) {
-        return { success: false, error: `${participantRole} is not approved for P2P trading` };
-      }
-
-      const monthlyLimit = profile.monthlyTradeLimit !== null && profile.monthlyTradeLimit !== undefined
+      const canTradeP2P = Boolean(profile?.canTradeP2P) || Boolean(badgeEntitlements?.grantsP2pPrivileges);
+      const baseMonthlyLimit = profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
         ? Number(profile.monthlyTradeLimit)
         : null;
+      const badgeMonthlyLimit = badgeEntitlements?.maxP2PMonthlyLimit !== null && badgeEntitlements?.maxP2PMonthlyLimit !== undefined
+        ? Number(badgeEntitlements.maxP2PMonthlyLimit)
+        : null;
+      const monthlyLimit = resolveEffectiveP2PMonthlyLimit(baseMonthlyLimit, badgeMonthlyLimit, Boolean(profile));
+
+      if (!canTradeP2P) {
+        return { success: false, error: `${participantRole} is not approved for P2P trading` };
+      }
 
       if (monthlyLimit !== null) {
         const [usageRow] = await tx

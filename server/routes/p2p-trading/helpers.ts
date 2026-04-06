@@ -1,6 +1,7 @@
 import { db } from "../../db";
 import { p2pSettings, p2pTraderProfiles, p2pTrades, type User } from "@shared/schema";
 import { and, eq, gte, lt, ne, or, sql } from "drizzle-orm";
+import { getBadgeEntitlementForUser, resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
 
 export type P2PVerificationLevel = "none" | "email" | "phone" | "kyc_basic" | "kyc_full";
 
@@ -159,21 +160,29 @@ export async function checkUserP2PTradingPermission(
     .where(eq(p2pTraderProfiles.userId, userId))
     .limit(1);
 
-  if (!profile?.canTradeP2P) {
+  const badgeEntitlements = await getBadgeEntitlementForUser(userId);
+  const hasProfile = Boolean(profile);
+  const baseMonthlyLimit = profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
+    ? Number(profile.monthlyTradeLimit)
+    : null;
+  const effectiveMonthlyLimit = resolveEffectiveP2PMonthlyLimit(
+    baseMonthlyLimit,
+    badgeEntitlements.maxP2PMonthlyLimit,
+    hasProfile,
+  );
+  const canTradeP2P = Boolean(profile?.canTradeP2P) || badgeEntitlements.grantsP2pPrivileges;
+
+  if (!canTradeP2P) {
     return {
       allowed: false,
       reason: "Your account is not approved for P2P trading. Contact support or an administrator.",
-      monthlyLimit: profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
-        ? Number(profile.monthlyTradeLimit)
-        : null,
+      monthlyLimit: effectiveMonthlyLimit,
       monthlyUsed: 0,
     };
   }
 
   const monthlyUsed = await getUserCurrentMonthP2PTradeVolume(userId);
-  const monthlyLimit = profile.monthlyTradeLimit !== null && profile.monthlyTradeLimit !== undefined
-    ? Number(profile.monthlyTradeLimit)
-    : null;
+  const monthlyLimit = effectiveMonthlyLimit;
 
   if (monthlyLimit !== null && (monthlyUsed + Math.max(requestedFiatAmount, 0)) > monthlyLimit) {
     return {

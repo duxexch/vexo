@@ -16,6 +16,29 @@ import type { AuthRequest } from "../routes/middleware";
 const PAYMENT_TOKEN_TTL_MS = Math.max(30_000, Number(process.env.PAYMENT_TOKEN_TTL_MS || 120_000));
 const PAYMENT_IP_WINDOW_HOURS = Math.max(1, Number(process.env.PAYMENT_IP_WINDOW_HOURS || 24));
 const PAYMENT_IP_DISTINCT_USERS_THRESHOLD = Math.max(2, Number(process.env.PAYMENT_IP_DISTINCT_USERS_THRESHOLD || 2));
+const PAYMENT_IP_MIN_OPERATIONS_FOR_AUTO_BLOCK = Math.max(1, Number(process.env.PAYMENT_IP_MIN_OPERATIONS_FOR_AUTO_BLOCK || 3));
+const PAYMENT_IP_RISK_SCORE_BLOCK_THRESHOLD = Math.min(100, Math.max(10, Number(process.env.PAYMENT_IP_RISK_SCORE_BLOCK_THRESHOLD || 80)));
+const PAYMENT_IP_AUTO_BLOCK_ENABLED = process.env.PAYMENT_IP_AUTO_BLOCK_ENABLED !== "false";
+const PAYMENT_IP_IGNORE_PRIVATE_RANGES = process.env.PAYMENT_IP_IGNORE_PRIVATE_RANGES === "true";
+
+export type PaymentIpRiskLevel = "low" | "medium" | "high" | "critical";
+export type PaymentIpRecommendedAction = "allow" | "monitor" | "review" | "block" | "blocked";
+
+interface PaymentIpRiskMetrics {
+    distinctUsers: number;
+    operationsCount: number;
+    operationTypesCount: number;
+    tokenFailures: number;
+    pendingTokens: number;
+    isBlocked?: boolean;
+}
+
+interface PaymentIpRiskAssessment {
+    score: number;
+    level: PaymentIpRiskLevel;
+    reasons: string[];
+    recommendedAction: PaymentIpRecommendedAction;
+}
 
 function now(): Date {
     return new Date();
@@ -30,6 +53,150 @@ export function normalizeIpAddress(rawIp?: string | null): string {
         return "127.0.0.1";
     }
     return baseValue;
+}
+
+function toIsoOrNull(value: string | Date | null | undefined): string | null {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function isPrivateOrLocalIp(ipAddress: string): boolean {
+    if (!ipAddress || ipAddress === "unknown" || ipAddress === "localhost") return true;
+    if (ipAddress === "127.0.0.1" || ipAddress === "::1") return true;
+    if (ipAddress.startsWith("10.")) return true;
+    if (ipAddress.startsWith("192.168.")) return true;
+    if (ipAddress.startsWith("169.254.")) return true;
+
+    if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ipAddress)) {
+        return true;
+    }
+
+    return false;
+}
+
+function computePaymentIpRisk(metrics: PaymentIpRiskMetrics): PaymentIpRiskAssessment {
+    let score = 0;
+    const reasons: string[] = [];
+
+    if (metrics.distinctUsers >= 2) {
+        score += 22;
+        reasons.push(`shared by ${metrics.distinctUsers} accounts`);
+    }
+    if (metrics.distinctUsers >= 3) {
+        score += 18;
+    }
+    if (metrics.distinctUsers >= 5) {
+        score += 20;
+    }
+
+    if (metrics.operationsCount >= 8) {
+        score += 8;
+        reasons.push(`${metrics.operationsCount} payment operations in the analysis window`);
+    }
+    if (metrics.operationsCount >= 20) {
+        score += 12;
+    }
+    if (metrics.operationsCount >= 50) {
+        score += 15;
+    }
+
+    if (metrics.operationTypesCount >= 3) {
+        score += 10;
+        reasons.push(`high operation diversity (${metrics.operationTypesCount} operation types)`);
+    }
+
+    if (metrics.tokenFailures >= 2) {
+        score += 10;
+        reasons.push(`${metrics.tokenFailures} failed/cancelled/expired operation tokens`);
+    }
+    if (metrics.tokenFailures >= 5) {
+        score += 15;
+    }
+    if (metrics.tokenFailures >= 10) {
+        score += 20;
+    }
+
+    const operationsPerUser = metrics.distinctUsers > 0 ? metrics.operationsCount / metrics.distinctUsers : 0;
+    if (metrics.distinctUsers >= 2 && operationsPerUser >= 10) {
+        score += 8;
+        reasons.push(`high operations per account (${operationsPerUser.toFixed(1)})`);
+    }
+
+    if (metrics.pendingTokens >= 3) {
+        score += 6;
+    }
+
+    const boundedScore = Math.min(100, Math.max(0, score));
+    const level: PaymentIpRiskLevel = boundedScore >= 80
+        ? "critical"
+        : boundedScore >= 60
+            ? "high"
+            : boundedScore >= 35
+                ? "medium"
+                : "low";
+
+    const recommendedAction: PaymentIpRecommendedAction = metrics.isBlocked
+        ? "blocked"
+        : level === "critical"
+            ? "block"
+            : level === "high"
+                ? "review"
+                : level === "medium"
+                    ? "monitor"
+                    : "allow";
+
+    return {
+        score: boundedScore,
+        level,
+        reasons,
+        recommendedAction,
+    };
+}
+
+async function getIpAggregateMetrics(ipAddress: string, since: Date): Promise<{
+    distinctUsers: number;
+    operationsCount: number;
+    operationTypesCount: number;
+    tokenFailures: number;
+    pendingTokens: number;
+    firstSeenAt: string | null;
+    lastSeenAt: string | null;
+}> {
+    const [activity] = await db
+        .select({
+            distinctUsers: sql<number>`count(distinct ${paymentIpActivities.userId})::int`,
+            operationsCount: sql<number>`count(*)::int`,
+            operationTypesCount: sql<number>`count(distinct ${paymentIpActivities.operation})::int`,
+            firstSeenAt: sql<string | null>`min(${paymentIpActivities.createdAt})::text`,
+            lastSeenAt: sql<string | null>`max(${paymentIpActivities.createdAt})::text`,
+        })
+        .from(paymentIpActivities)
+        .where(and(
+            eq(paymentIpActivities.ipAddress, ipAddress),
+            gte(paymentIpActivities.createdAt, since),
+        ));
+
+    const [tokens] = await db
+        .select({
+            tokenFailures: sql<number>`count(*) filter (where ${paymentOperationTokens.status} in ('failed','cancelled','expired'))::int`,
+            pendingTokens: sql<number>`count(*) filter (where ${paymentOperationTokens.status} = 'pending')::int`,
+        })
+        .from(paymentOperationTokens)
+        .where(and(
+            eq(paymentOperationTokens.ipAddress, ipAddress),
+            gte(paymentOperationTokens.createdAt, since),
+        ));
+
+    return {
+        distinctUsers: Number(activity?.distinctUsers || 0),
+        operationsCount: Number(activity?.operationsCount || 0),
+        operationTypesCount: Number(activity?.operationTypesCount || 0),
+        tokenFailures: Number(tokens?.tokenFailures || 0),
+        pendingTokens: Number(tokens?.pendingTokens || 0),
+        firstSeenAt: toIsoOrNull(activity?.firstSeenAt),
+        lastSeenAt: toIsoOrNull(activity?.lastSeenAt),
+    };
 }
 
 function getOperationTokenHeader(req: AuthRequest): string | null {
@@ -60,6 +227,14 @@ export async function getPaymentIpBlock(ipAddress: string) {
 }
 
 async function autoBlockIpIfNeeded(ipAddress: string, triggerUserId: string): Promise<{ blocked: boolean; reason?: string }> {
+    if (!PAYMENT_IP_AUTO_BLOCK_ENABLED) {
+        return { blocked: false };
+    }
+
+    if (PAYMENT_IP_IGNORE_PRIVATE_RANGES && isPrivateOrLocalIp(ipAddress)) {
+        return { blocked: false };
+    }
+
     const defaultWindowStart = new Date(Date.now() - PAYMENT_IP_WINDOW_HOURS * 60 * 60 * 1000);
 
     const [ipHistory] = await db
@@ -72,18 +247,21 @@ async function autoBlockIpIfNeeded(ipAddress: string, triggerUserId: string): Pr
         ? new Date(Math.max(defaultWindowStart.getTime(), new Date(ipHistory.unblockedAt).getTime()))
         : defaultWindowStart;
 
-    const [usage] = await db
-        .select({
-            distinctUsers: sql<number>`count(distinct ${paymentIpActivities.userId})::int`,
-        })
-        .from(paymentIpActivities)
-        .where(and(
-            eq(paymentIpActivities.ipAddress, ipAddress),
-            gte(paymentIpActivities.createdAt, thresholdWindowStart),
-        ));
+    const metrics = await getIpAggregateMetrics(ipAddress, thresholdWindowStart);
+    const risk = computePaymentIpRisk({
+        distinctUsers: metrics.distinctUsers,
+        operationsCount: metrics.operationsCount,
+        operationTypesCount: metrics.operationTypesCount,
+        tokenFailures: metrics.tokenFailures,
+        pendingTokens: metrics.pendingTokens,
+        isBlocked: false,
+    });
 
-    const distinctUsers = Number(usage?.distinctUsers || 0);
-    if (distinctUsers < PAYMENT_IP_DISTINCT_USERS_THRESHOLD) {
+    const meetsDistinctAndVolumeRule = metrics.distinctUsers >= PAYMENT_IP_DISTINCT_USERS_THRESHOLD
+        && metrics.operationsCount >= PAYMENT_IP_MIN_OPERATIONS_FOR_AUTO_BLOCK;
+    const meetsRiskScoreRule = risk.score >= PAYMENT_IP_RISK_SCORE_BLOCK_THRESHOLD;
+
+    if (!meetsDistinctAndVolumeRule && !meetsRiskScoreRule) {
         return { blocked: false };
     }
 
@@ -92,7 +270,9 @@ async function autoBlockIpIfNeeded(ipAddress: string, triggerUserId: string): Pr
         return { blocked: true, reason: existingBlock.blockReason };
     }
 
-    const reason = `IP used by ${distinctUsers} different accounts in payment operations within ${PAYMENT_IP_WINDOW_HOURS}h`;
+    const reason = risk.reasons.length > 0
+        ? `Risk score ${risk.score}/100 (${risk.level}) for payment operations: ${risk.reasons.join("; ")}`
+        : `Risk score ${risk.score}/100 (${risk.level}) for payment operations`;
 
     await db.insert(paymentIpBlocks).values({
         ipAddress,
@@ -101,9 +281,18 @@ async function autoBlockIpIfNeeded(ipAddress: string, triggerUserId: string): Pr
         autoBlocked: true,
         blockedBy: null,
         metadata: JSON.stringify({
-            distinctUsers,
+            distinctUsers: metrics.distinctUsers,
+            operationsCount: metrics.operationsCount,
+            operationTypesCount: metrics.operationTypesCount,
+            tokenFailures: metrics.tokenFailures,
+            pendingTokens: metrics.pendingTokens,
             windowHours: PAYMENT_IP_WINDOW_HOURS,
-            threshold: PAYMENT_IP_DISTINCT_USERS_THRESHOLD,
+            distinctUsersThreshold: PAYMENT_IP_DISTINCT_USERS_THRESHOLD,
+            minOperationsThreshold: PAYMENT_IP_MIN_OPERATIONS_FOR_AUTO_BLOCK,
+            riskScoreThreshold: PAYMENT_IP_RISK_SCORE_BLOCK_THRESHOLD,
+            riskScore: risk.score,
+            riskLevel: risk.level,
+            riskReasons: risk.reasons,
             triggerUserId,
         }),
     }).onConflictDoUpdate({
@@ -116,9 +305,18 @@ async function autoBlockIpIfNeeded(ipAddress: string, triggerUserId: string): Pr
             unblockedBy: null,
             unblockedAt: null,
             metadata: JSON.stringify({
-                distinctUsers,
+                distinctUsers: metrics.distinctUsers,
+                operationsCount: metrics.operationsCount,
+                operationTypesCount: metrics.operationTypesCount,
+                tokenFailures: metrics.tokenFailures,
+                pendingTokens: metrics.pendingTokens,
                 windowHours: PAYMENT_IP_WINDOW_HOURS,
-                threshold: PAYMENT_IP_DISTINCT_USERS_THRESHOLD,
+                distinctUsersThreshold: PAYMENT_IP_DISTINCT_USERS_THRESHOLD,
+                minOperationsThreshold: PAYMENT_IP_MIN_OPERATIONS_FOR_AUTO_BLOCK,
+                riskScoreThreshold: PAYMENT_IP_RISK_SCORE_BLOCK_THRESHOLD,
+                riskScore: risk.score,
+                riskLevel: risk.level,
+                riskReasons: risk.reasons,
                 triggerUserId,
             }),
             updatedAt: now(),
@@ -128,8 +326,8 @@ async function autoBlockIpIfNeeded(ipAddress: string, triggerUserId: string): Pr
     await emitSystemAlert({
         title: "Payment IP Auto-Blocked",
         titleAr: "تم حظر IP تلقائيًا لعمليات الدفع",
-        message: `IP ${ipAddress} was auto-blocked after multi-account payment activity (${distinctUsers} accounts).`,
-        messageAr: `تم حظر العنوان ${ipAddress} تلقائيًا بعد نشاط دفع متعدد الحسابات (${distinctUsers} حسابات).`,
+        message: `IP ${ipAddress} was auto-blocked (risk ${risk.score}/100, ${risk.level}) after payment risk analysis.`,
+        messageAr: `تم حظر العنوان ${ipAddress} تلقائيًا (مستوى الخطورة ${risk.score}/100، ${risk.level}) بعد تحليل مخاطر الدفع.`,
         severity: "urgent",
         deepLink: "/admin/payment-security",
         entityType: "payment_ip_block",
@@ -447,7 +645,9 @@ export async function listPaymentIpUsage(limit = 200, windowHours = 24) {
             ipAddress: paymentIpActivities.ipAddress,
             distinctUsers: sql<number>`count(distinct ${paymentIpActivities.userId})::int`,
             operationsCount: sql<number>`count(*)::int`,
-            lastSeenAt: sql<string>`max(${paymentIpActivities.createdAt})::text`,
+            operationTypesCount: sql<number>`count(distinct ${paymentIpActivities.operation})::int`,
+            firstSeenAt: sql<string | null>`min(${paymentIpActivities.createdAt})::text`,
+            lastSeenAt: sql<string | null>`max(${paymentIpActivities.createdAt})::text`,
         })
         .from(paymentIpActivities)
         .where(gte(paymentIpActivities.createdAt, since))
@@ -455,15 +655,302 @@ export async function listPaymentIpUsage(limit = 200, windowHours = 24) {
         .orderBy(desc(sql`max(${paymentIpActivities.createdAt})`))
         .limit(limit);
 
-    const blocked = await db
-        .select({ ipAddress: paymentIpBlocks.ipAddress })
+    const tokenRows = await db
+        .select({
+            ipAddress: paymentOperationTokens.ipAddress,
+            tokenFailures: sql<number>`count(*) filter (where ${paymentOperationTokens.status} in ('failed','cancelled','expired'))::int`,
+            pendingTokens: sql<number>`count(*) filter (where ${paymentOperationTokens.status} = 'pending')::int`,
+        })
+        .from(paymentOperationTokens)
+        .where(and(
+            sql`${paymentOperationTokens.ipAddress} is not null`,
+            gte(paymentOperationTokens.createdAt, since),
+        ))
+        .groupBy(paymentOperationTokens.ipAddress);
+
+    const tokenMap = new Map(tokenRows.map((row) => [row.ipAddress || "", {
+        tokenFailures: Number(row.tokenFailures || 0),
+        pendingTokens: Number(row.pendingTokens || 0),
+    }]));
+
+    const blockedRows = await db
+        .select({
+            ipAddress: paymentIpBlocks.ipAddress,
+            blockReason: paymentIpBlocks.blockReason,
+            autoBlocked: paymentIpBlocks.autoBlocked,
+            blockedAt: paymentIpBlocks.blockedAt,
+        })
         .from(paymentIpBlocks)
         .where(eq(paymentIpBlocks.isActive, true));
 
-    const blockedSet = new Set(blocked.map((row) => row.ipAddress));
+    const blockedMap = new Map(blockedRows.map((row) => [row.ipAddress, row]));
 
-    return usageRows.map((row) => ({
-        ...row,
-        isBlocked: blockedSet.has(row.ipAddress),
-    }));
+    return usageRows.map((row) => {
+        const tokenStats = tokenMap.get(row.ipAddress) || { tokenFailures: 0, pendingTokens: 0 };
+        const blocked = blockedMap.get(row.ipAddress);
+        const risk = computePaymentIpRisk({
+            distinctUsers: Number(row.distinctUsers || 0),
+            operationsCount: Number(row.operationsCount || 0),
+            operationTypesCount: Number(row.operationTypesCount || 0),
+            tokenFailures: tokenStats.tokenFailures,
+            pendingTokens: tokenStats.pendingTokens,
+            isBlocked: Boolean(blocked),
+        });
+
+        return {
+            ipAddress: row.ipAddress,
+            distinctUsers: Number(row.distinctUsers || 0),
+            operationsCount: Number(row.operationsCount || 0),
+            operationTypesCount: Number(row.operationTypesCount || 0),
+            tokenFailures: tokenStats.tokenFailures,
+            pendingTokens: tokenStats.pendingTokens,
+            firstSeenAt: toIsoOrNull(row.firstSeenAt),
+            lastSeenAt: toIsoOrNull(row.lastSeenAt),
+            isBlocked: Boolean(blocked),
+            blockedReason: blocked?.blockReason || null,
+            blockedAt: toIsoOrNull(blocked?.blockedAt),
+            autoBlocked: blocked?.autoBlocked ?? null,
+            riskScore: risk.score,
+            riskLevel: risk.level,
+            riskReasons: risk.reasons,
+            recommendedAction: risk.recommendedAction,
+        };
+    });
+}
+
+export async function getPaymentSecurityOverview(windowHours = 72) {
+    const normalizedWindowHours = Math.max(1, windowHours);
+    const since = new Date(Date.now() - normalizedWindowHours * 60 * 60 * 1000);
+
+    const [activeBlockStats] = await db
+        .select({
+            activeBlocks: sql<number>`count(*)::int`,
+            autoBlocks: sql<number>`count(*) filter (where ${paymentIpBlocks.autoBlocked} = true)::int`,
+            manualBlocks: sql<number>`count(*) filter (where ${paymentIpBlocks.autoBlocked} = false)::int`,
+        })
+        .from(paymentIpBlocks)
+        .where(eq(paymentIpBlocks.isActive, true));
+
+    const [activityStats] = await db
+        .select({
+            uniqueIps: sql<number>`count(distinct ${paymentIpActivities.ipAddress})::int`,
+            uniqueAccounts: sql<number>`count(distinct ${paymentIpActivities.userId})::int`,
+            operationsCount: sql<number>`count(*)::int`,
+            lastActivityAt: sql<string | null>`max(${paymentIpActivities.createdAt})::text`,
+        })
+        .from(paymentIpActivities)
+        .where(gte(paymentIpActivities.createdAt, since));
+
+    const usageRows = await listPaymentIpUsage(1000, normalizedWindowHours);
+    const mediumRiskIps = usageRows.filter((row) => row.riskScore >= 35).length;
+    const highRiskIps = usageRows.filter((row) => row.riskScore >= 60).length;
+    const criticalRiskIps = usageRows.filter((row) => row.riskScore >= 80).length;
+
+    return {
+        windowHours: normalizedWindowHours,
+        activeBlocks: Number(activeBlockStats?.activeBlocks || 0),
+        autoBlocks: Number(activeBlockStats?.autoBlocks || 0),
+        manualBlocks: Number(activeBlockStats?.manualBlocks || 0),
+        uniqueIps: Number(activityStats?.uniqueIps || 0),
+        uniqueAccounts: Number(activityStats?.uniqueAccounts || 0),
+        operationsCount: Number(activityStats?.operationsCount || 0),
+        lastActivityAt: toIsoOrNull(activityStats?.lastActivityAt),
+        mediumRiskIps,
+        highRiskIps,
+        criticalRiskIps,
+    };
+}
+
+export async function getPaymentIpDetails(ipAddress: string, windowHours = 72, recentLimit = 100) {
+    const safeIp = normalizeIpAddress(ipAddress);
+    const normalizedWindowHours = Math.max(1, windowHours);
+    const since = new Date(Date.now() - normalizedWindowHours * 60 * 60 * 1000);
+    const boundedRecentLimit = Math.min(200, Math.max(10, recentLimit));
+
+    const [activeBlock] = await db
+        .select({
+            isActive: paymentIpBlocks.isActive,
+            blockReason: paymentIpBlocks.blockReason,
+            autoBlocked: paymentIpBlocks.autoBlocked,
+            blockedAt: paymentIpBlocks.blockedAt,
+            unblockedAt: paymentIpBlocks.unblockedAt,
+            metadata: paymentIpBlocks.metadata,
+        })
+        .from(paymentIpBlocks)
+        .where(and(
+            eq(paymentIpBlocks.ipAddress, safeIp),
+            eq(paymentIpBlocks.isActive, true),
+        ))
+        .limit(1);
+
+    const metrics = await getIpAggregateMetrics(safeIp, since);
+    const risk = computePaymentIpRisk({
+        distinctUsers: metrics.distinctUsers,
+        operationsCount: metrics.operationsCount,
+        operationTypesCount: metrics.operationTypesCount,
+        tokenFailures: metrics.tokenFailures,
+        pendingTokens: metrics.pendingTokens,
+        isBlocked: Boolean(activeBlock),
+    });
+
+    const operationsByType = await db
+        .select({
+            operation: paymentIpActivities.operation,
+            count: sql<number>`count(*)::int`,
+        })
+        .from(paymentIpActivities)
+        .where(and(
+            eq(paymentIpActivities.ipAddress, safeIp),
+            gte(paymentIpActivities.createdAt, since),
+        ))
+        .groupBy(paymentIpActivities.operation)
+        .orderBy(desc(sql`count(*)`));
+
+    const usersByActivity = await db
+        .select({
+            userId: users.id,
+            username: users.username,
+            nickname: users.nickname,
+            accountId: users.accountId,
+            operationsCount: sql<number>`count(*)::int`,
+            lastSeenAt: sql<string | null>`max(${paymentIpActivities.createdAt})::text`,
+        })
+        .from(paymentIpActivities)
+        .innerJoin(users, eq(paymentIpActivities.userId, users.id))
+        .where(and(
+            eq(paymentIpActivities.ipAddress, safeIp),
+            gte(paymentIpActivities.createdAt, since),
+        ))
+        .groupBy(users.id, users.username, users.nickname, users.accountId)
+        .orderBy(desc(sql`count(*)`), desc(sql`max(${paymentIpActivities.createdAt})`))
+        .limit(50);
+
+    const recentActivities = await db
+        .select({
+            createdAt: paymentIpActivities.createdAt,
+            operation: paymentIpActivities.operation,
+            requestPath: paymentIpActivities.requestPath,
+            operationToken: paymentIpActivities.operationToken,
+            userId: users.id,
+            username: users.username,
+            nickname: users.nickname,
+            accountId: users.accountId,
+        })
+        .from(paymentIpActivities)
+        .innerJoin(users, eq(paymentIpActivities.userId, users.id))
+        .where(and(
+            eq(paymentIpActivities.ipAddress, safeIp),
+            gte(paymentIpActivities.createdAt, since),
+        ))
+        .orderBy(desc(paymentIpActivities.createdAt))
+        .limit(boundedRecentLimit);
+
+    const tokenStatusBreakdownRows = await db
+        .select({
+            status: paymentOperationTokens.status,
+            count: sql<number>`count(*)::int`,
+        })
+        .from(paymentOperationTokens)
+        .where(and(
+            eq(paymentOperationTokens.ipAddress, safeIp),
+            gte(paymentOperationTokens.createdAt, since),
+        ))
+        .groupBy(paymentOperationTokens.status)
+        .orderBy(desc(sql`count(*)`));
+
+    const recentTokenEvents = await db
+        .select({
+            token: paymentOperationTokens.token,
+            operation: paymentOperationTokens.operation,
+            status: paymentOperationTokens.status,
+            failureReason: paymentOperationTokens.failureReason,
+            createdAt: paymentOperationTokens.createdAt,
+            finalizedAt: paymentOperationTokens.finalizedAt,
+            userId: users.id,
+            username: users.username,
+            nickname: users.nickname,
+            accountId: users.accountId,
+        })
+        .from(paymentOperationTokens)
+        .innerJoin(users, eq(paymentOperationTokens.userId, users.id))
+        .where(and(
+            eq(paymentOperationTokens.ipAddress, safeIp),
+            gte(paymentOperationTokens.createdAt, since),
+        ))
+        .orderBy(desc(paymentOperationTokens.createdAt))
+        .limit(Math.min(100, boundedRecentLimit));
+
+    const tokenStatusMap = new Map<string, number>();
+    for (const row of tokenStatusBreakdownRows) {
+        tokenStatusMap.set(row.status, Number(row.count || 0));
+    }
+
+    return {
+        ipAddress: safeIp,
+        windowHours: normalizedWindowHours,
+        metrics: {
+            distinctUsers: metrics.distinctUsers,
+            operationsCount: metrics.operationsCount,
+            operationTypesCount: metrics.operationTypesCount,
+            tokenFailures: metrics.tokenFailures,
+            pendingTokens: metrics.pendingTokens,
+            firstSeenAt: metrics.firstSeenAt,
+            lastSeenAt: metrics.lastSeenAt,
+            riskScore: risk.score,
+            riskLevel: risk.level,
+            riskReasons: risk.reasons,
+            recommendedAction: risk.recommendedAction,
+        },
+        block: activeBlock
+            ? {
+                isActive: true,
+                blockReason: activeBlock.blockReason,
+                autoBlocked: activeBlock.autoBlocked,
+                blockedAt: toIsoOrNull(activeBlock.blockedAt),
+                unblockedAt: toIsoOrNull(activeBlock.unblockedAt),
+                metadata: activeBlock.metadata,
+            }
+            : null,
+        operationsByType: operationsByType.map((row) => ({
+            operation: row.operation,
+            count: Number(row.count || 0),
+        })),
+        usersByActivity: usersByActivity.map((row) => ({
+            userId: row.userId,
+            username: row.username,
+            nickname: row.nickname,
+            accountId: row.accountId,
+            operationsCount: Number(row.operationsCount || 0),
+            lastSeenAt: toIsoOrNull(row.lastSeenAt),
+        })),
+        recentActivities: recentActivities.map((row) => ({
+            createdAt: toIsoOrNull(row.createdAt),
+            operation: row.operation,
+            requestPath: row.requestPath,
+            operationToken: row.operationToken,
+            userId: row.userId,
+            username: row.username,
+            nickname: row.nickname,
+            accountId: row.accountId,
+        })),
+        tokenStatusSummary: {
+            pending: tokenStatusMap.get("pending") || 0,
+            completed: tokenStatusMap.get("completed") || 0,
+            failed: tokenStatusMap.get("failed") || 0,
+            cancelled: tokenStatusMap.get("cancelled") || 0,
+            expired: tokenStatusMap.get("expired") || 0,
+        },
+        recentTokenEvents: recentTokenEvents.map((row) => ({
+            token: row.token,
+            operation: row.operation,
+            status: row.status,
+            failureReason: row.failureReason,
+            createdAt: toIsoOrNull(row.createdAt),
+            finalizedAt: toIsoOrNull(row.finalizedAt),
+            userId: row.userId,
+            username: row.username,
+            nickname: row.nickname,
+            accountId: row.accountId,
+        })),
+    };
 }

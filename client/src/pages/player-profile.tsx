@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type ComponentType } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { BackButton } from "@/components/BackButton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import * as LucideIcons from "lucide-react";
 import {
   Trophy,
   Target,
@@ -40,6 +41,17 @@ import {
   UserPlus,
   MessageCircle
 } from "lucide-react";
+
+interface TrustBadgeSummary {
+  id: string;
+  name: string;
+  nameAr: string | null;
+  iconUrl: string | null;
+  iconName: string | null;
+  color: string | null;
+  level: number;
+  points: number;
+}
 
 interface GameStats {
   game: string;
@@ -67,6 +79,7 @@ interface PlayerStats {
   winRate: number;
   gameStats: GameStats[];
   createdAt: string;
+  trustBadge?: TrustBadgeSummary | null;
 }
 
 interface MatchHistoryItem {
@@ -125,6 +138,21 @@ function buildGameConfig(apiGames: MultiplayerGameFromAPI[]): Record<string, { n
     };
   }
   return config;
+}
+
+function isImagePath(value?: string | null): value is string {
+  if (!value) return false;
+  const normalized = value.trim();
+  if (!normalized) return false;
+  return normalized.startsWith("/") || /^https?:\/\//i.test(normalized);
+}
+
+function DynamicBadgeIcon({ name, className }: { name: string; className?: string }) {
+  const IconComponent = (LucideIcons as unknown as Record<string, ComponentType<{ className?: string }>>)[name];
+  if (IconComponent) {
+    return <IconComponent className={className} />;
+  }
+  return <Award className={className} />;
 }
 
 const VIP_COLORS = [
@@ -289,6 +317,26 @@ export default function PlayerProfilePage() {
             <div className="flex-1 pt-2">
               <div className="flex items-center gap-3 flex-wrap">
                 <h2 className="text-2xl font-bold">{stats.nickname || stats.username}</h2>
+                {stats.trustBadge && (
+                  <Badge
+                    className="border-transparent text-white"
+                    style={{ backgroundColor: stats.trustBadge.color || "#0ea5e9" }}
+                    data-testid="badge-profile-trust"
+                  >
+                    {isImagePath(stats.trustBadge.iconUrl) ? (
+                      <img
+                        src={stats.trustBadge.iconUrl}
+                        alt={language === "ar" && stats.trustBadge.nameAr ? stats.trustBadge.nameAr : stats.trustBadge.name}
+                        className="me-1 h-3.5 w-3.5 rounded-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <DynamicBadgeIcon name={stats.trustBadge.iconName || "ShieldCheck"} className="me-1 h-3.5 w-3.5" />
+                    )}
+                    {language === "ar" && stats.trustBadge.nameAr ? stats.trustBadge.nameAr : stats.trustBadge.name}
+                    <span className="ms-1 opacity-90">L{stats.trustBadge.level}</span>
+                  </Badge>
+                )}
                 {stats.vipLevel > 0 && (
                   <Badge className="bg-gradient-to-r from-amber-500 to-amber-600">
                     <Star className="w-3 h-3 me-1" /> VIP {stats.vipLevel}
@@ -498,7 +546,7 @@ export default function PlayerProfilePage() {
                           data-testid={`row-match-${match.id}`}
                         >
                           <div className={`p-2 rounded-lg ${match.result === 'win' ? 'bg-green-500/20' :
-                              match.result === 'loss' ? 'bg-red-500/20' : 'bg-gray-500/20'
+                            match.result === 'loss' ? 'bg-red-500/20' : 'bg-gray-500/20'
                             }`}>
                             <Icon className={`w-5 h-5 ${config.color}`} />
                           </div>

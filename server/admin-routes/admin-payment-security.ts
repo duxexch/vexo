@@ -1,6 +1,8 @@
 import type { Express, Response } from "express";
 import {
     blockPaymentIpManually,
+    getPaymentIpDetails,
+    getPaymentSecurityOverview,
     listBlockedPaymentIps,
     listPaymentIpUsage,
     normalizeIpAddress,
@@ -19,8 +21,44 @@ export function registerAdminPaymentSecurityRoutes(app: Express) {
         try {
             const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 200));
             const activeOnly = req.query.activeOnly !== "false";
+            const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
+
             const blockedIps = await listBlockedPaymentIps(limit, activeOnly);
-            return res.json(blockedIps);
+            const filtered = q
+                ? blockedIps.filter((row) => (
+                    row.ipAddress.toLowerCase().includes(q)
+                    || row.blockReason.toLowerCase().includes(q)
+                ))
+                : blockedIps;
+
+            return res.json(filtered);
+        } catch (error: unknown) {
+            return res.status(500).json({ error: getErrorMessage(error) });
+        }
+    });
+
+    app.get("/api/admin/payment-security/overview", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+        try {
+            const windowHours = Math.min(24 * 90, Math.max(1, Number(req.query.windowHours) || 72));
+            const overview = await getPaymentSecurityOverview(windowHours);
+            return res.json(overview);
+        } catch (error: unknown) {
+            return res.status(500).json({ error: getErrorMessage(error) });
+        }
+    });
+
+    app.get("/api/admin/payment-security/ip/:ip/details", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+        try {
+            const windowHours = Math.min(24 * 90, Math.max(1, Number(req.query.windowHours) || 72));
+            const recentLimit = Math.min(200, Math.max(10, Number(req.query.recentLimit) || 60));
+            const ipAddress = normalizeIpAddress(decodeURIComponent(req.params.ip || ""));
+
+            if (!ipAddress || ipAddress === "unknown") {
+                return res.status(400).json({ error: "Valid IP is required" });
+            }
+
+            const details = await getPaymentIpDetails(ipAddress, windowHours, recentLimit);
+            return res.json(details);
         } catch (error: unknown) {
             return res.status(500).json({ error: getErrorMessage(error) });
         }
@@ -30,8 +68,18 @@ export function registerAdminPaymentSecurityRoutes(app: Express) {
         try {
             const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 200));
             const windowHours = Math.min(24 * 90, Math.max(1, Number(req.query.windowHours) || 24));
+            const minRiskScore = Math.min(100, Math.max(0, Number(req.query.minRiskScore) || 0));
+            const flaggedOnly = req.query.flaggedOnly === "true";
+            const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
+
             const usage = await listPaymentIpUsage(limit, windowHours);
-            return res.json(usage);
+
+            const filtered = usage
+                .filter((row) => row.riskScore >= minRiskScore)
+                .filter((row) => !flaggedOnly || row.riskScore >= 35 || row.isBlocked)
+                .filter((row) => !q || row.ipAddress.toLowerCase().includes(q));
+
+            return res.json(filtered);
         } catch (error: unknown) {
             return res.status(500).json({ error: getErrorMessage(error) });
         }

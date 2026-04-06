@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ChangeEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -34,15 +34,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
-  Plus, 
-  Pencil, 
-  Trash2, 
-  Gamepad2, 
-  Power, 
-  Crown, 
-  Shuffle, 
-  Target, 
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Gamepad2,
+  Power,
+  Crown,
+  Shuffle,
+  Target,
   Gem,
   TrendingUp,
   Dices,
@@ -61,6 +61,7 @@ import {
   Settings2,
   Filter,
   Search,
+  Upload,
   MoreVertical,
   Check,
   X
@@ -184,6 +185,8 @@ interface MultiplayerGame {
   nameAr: string;
   descriptionEn: string | null;
   descriptionAr: string | null;
+  iconUrl?: string | null;
+  imageUrl?: string | null;
   iconName: string;
   colorClass: string;
   gradientClass: string | null;
@@ -243,6 +246,7 @@ interface UnifiedGame {
   id: string;
   _type: "multiplayer" | "single";
   _original: MultiplayerGame | SinglePlayerGame;
+  iconUrl: string | null;
   name: string;
   nameAr: string;
   key: string;
@@ -260,11 +264,36 @@ interface UnifiedGame {
   playCount: number;
 }
 
+function isCustomImagePath(value?: string | null): value is string {
+  if (!value) return false;
+  const normalized = value.trim();
+  if (!normalized) return false;
+  return normalized.startsWith("/") || /^https?:\/\//i.test(normalized);
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      if (!result.startsWith("data:")) {
+        reject(new Error("Invalid file data"));
+        return;
+      }
+      resolve(result);
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
 function toUnifiedGame(mp: MultiplayerGame): UnifiedGame {
+  const iconUrl = mp.iconUrl || mp.imageUrl || (isCustomImagePath(mp.iconName) ? mp.iconName : null);
   return {
     id: mp.id,
     _type: "multiplayer",
     _original: mp,
+    iconUrl,
     name: mp.nameEn,
     nameAr: mp.nameAr,
     key: mp.key,
@@ -277,7 +306,7 @@ function toUnifiedGame(mp: MultiplayerGame): UnifiedGame {
     displayLocations: mp.displayLocations || [],
     freePlayLimit: mp.freePlayLimit || 0,
     freePlayPeriod: mp.freePlayPeriod,
-    iconName: mp.iconName || "Gamepad2",
+    iconName: isCustomImagePath(mp.iconName) ? "Gamepad2" : (mp.iconName || "Gamepad2"),
     colorClass: mp.colorClass || "bg-primary/20 text-primary",
     playCount: mp.totalGamesPlayed || 0,
   };
@@ -288,6 +317,7 @@ function toUnifiedGameFromSingle(g: SinglePlayerGame): UnifiedGame {
     id: g.id,
     _type: "single",
     _original: g,
+    iconUrl: g.imageUrl || g.thumbnailUrl || null,
     name: g.name,
     nameAr: g.name, // single-player games don't have Arabic names
     key: g.name.toLowerCase().replace(/\s+/g, "_"),
@@ -332,11 +362,11 @@ function getIconComponent(iconName: string) {
 }
 
 // Horizontal toggle buttons for display locations (multi-select)
-function DisplayLocationsField({ 
-  form, 
-  language 
-}: { 
-  form: ReturnType<typeof useForm<GameFormData>>; 
+function DisplayLocationsField({
+  form,
+  language
+}: {
+  form: ReturnType<typeof useForm<GameFormData>>;
   language: string;
 }) {
   // Use useWatch hook for proper reactivity without infinite loops
@@ -348,14 +378,14 @@ function DisplayLocationsField({
   const currentValue = Array.isArray(displayLocations) ? displayLocations : [];
 
   return (
-    <ToggleGroup 
-      type="multiple" 
+    <ToggleGroup
+      type="multiple"
       variant="outline"
       value={currentValue}
       onValueChange={(value) => {
-        form.setValue("displayLocations", value, { 
-          shouldValidate: true, 
-          shouldDirty: true 
+        form.setValue("displayLocations", value, {
+          shouldValidate: true,
+          shouldDirty: true
         });
       }}
       className="flex-wrap justify-start gap-2"
@@ -377,12 +407,12 @@ function DisplayLocationsField({
   );
 }
 
-function GameForm({ 
-  game, 
+function GameForm({
+  game,
   gameType = "multiplayer",
-  onSuccess, 
-  onCancel 
-}: { 
+  onSuccess,
+  onCancel
+}: {
   game?: MultiplayerGame | null;
   gameType?: "multiplayer" | "single";
   onSuccess: () => void;
@@ -430,17 +460,17 @@ function GameForm({
         }),
       }),
     onSuccess: () => {
-      toast({ 
+      toast({
         title: language === "ar" ? "تم إنشاء اللعبة بنجاح" : "Game created successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
       onSuccess();
     },
     onError: (error: Error) => {
-      toast({ 
-        title: language === "ar" ? "فشل إنشاء اللعبة" : "Failed to create game", 
-        description: error.message, 
-        variant: "destructive" 
+      toast({
+        title: language === "ar" ? "فشل إنشاء اللعبة" : "Failed to create game",
+        description: error.message,
+        variant: "destructive"
       });
     },
   });
@@ -479,7 +509,7 @@ function GameForm({
       });
     },
     onSuccess: () => {
-      toast({ 
+      toast({
         title: language === "ar" ? "تم تحديث اللعبة بنجاح" : "Game updated successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
@@ -487,10 +517,10 @@ function GameForm({
       onSuccess();
     },
     onError: (error: Error) => {
-      toast({ 
-        title: language === "ar" ? "فشل تحديث اللعبة" : "Failed to update game", 
-        description: error.message, 
-        variant: "destructive" 
+      toast({
+        title: language === "ar" ? "فشل تحديث اللعبة" : "Failed to update game",
+        description: error.message,
+        variant: "destructive"
       });
     },
   });
@@ -628,7 +658,7 @@ function GameForm({
             <DollarSign className="h-4 w-4" />
             {language === "ar" ? "التسعير" : "Pricing"}
           </h4>
-          
+
           <div className="grid grid-cols-3 gap-4">
             <FormField
               control={form.control}
@@ -700,7 +730,7 @@ function GameForm({
             <Gift className="h-4 w-4" />
             {language === "ar" ? "اللعب المجاني" : "Free Play"}
           </h4>
-          
+
           <div className="grid grid-cols-2 gap-4">
             <FormField
               control={form.control}
@@ -749,7 +779,7 @@ function GameForm({
             <Eye className="h-4 w-4" />
             {language === "ar" ? "أماكن العرض" : "Display Locations"}
           </h4>
-          
+
           <DisplayLocationsField form={form} language={language} />
         </div>
 
@@ -824,10 +854,10 @@ function GameForm({
             {language === "ar" ? "إلغاء" : "Cancel"}
           </Button>
           <Button type="submit" disabled={isPending} data-testid="button-submit">
-            {isPending 
-              ? (language === "ar" ? "جاري الحفظ..." : "Saving...") 
-              : isEditing 
-                ? (language === "ar" ? "تحديث" : "Update") 
+            {isPending
+              ? (language === "ar" ? "جاري الحفظ..." : "Saving...")
+              : isEditing
+                ? (language === "ar" ? "تحديث" : "Update")
                 : (language === "ar" ? "إنشاء" : "Create")
             }
           </Button>
@@ -848,6 +878,8 @@ export default function AdminUnifiedGames() {
   const [editingGame, setEditingGame] = useState<MultiplayerGame | null>(null);
   const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
   const [deleteMode, setDeleteMode] = useState<"permanent" | "remove_from_section">("permanent");
+  const [iconUploadTarget, setIconUploadTarget] = useState<UnifiedGame | null>(null);
+  const iconFileInputRef = useRef<HTMLInputElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   // Fetch multiplayer games
@@ -878,7 +910,7 @@ export default function AdminUnifiedGames() {
       return adminFetch(endpoint, { method: "DELETE" });
     },
     onSuccess: () => {
-      toast({ 
+      toast({
         title: language === "ar" ? "تم حذف اللعبة بنجاح" : "Game deleted successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
@@ -886,10 +918,10 @@ export default function AdminUnifiedGames() {
       setDeleteGameId(null);
     },
     onError: (error: Error) => {
-      toast({ 
-        title: language === "ar" ? "فشل حذف اللعبة" : "Failed to delete game", 
-        description: error.message, 
-        variant: "destructive" 
+      toast({
+        title: language === "ar" ? "فشل حذف اللعبة" : "Failed to delete game",
+        description: error.message,
+        variant: "destructive"
       });
     },
   });
@@ -899,23 +931,23 @@ export default function AdminUnifiedGames() {
       const endpoint = gameType === "multiplayer"
         ? `/api/admin/multiplayer-games/${id}`
         : `/api/admin/games/${id}`;
-      return adminFetch(endpoint, { 
-        method: "PATCH", 
-        body: JSON.stringify({ status }) 
+      return adminFetch(endpoint, {
+        method: "PATCH",
+        body: JSON.stringify({ status })
       });
     },
     onSuccess: () => {
-      toast({ 
+      toast({
         title: language === "ar" ? "تم تحديث الحالة" : "Status updated",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
     },
     onError: (error: Error) => {
-      toast({ 
-        title: language === "ar" ? "فشل تحديث الحالة" : "Failed to update status", 
-        description: error.message, 
-        variant: "destructive" 
+      toast({
+        title: language === "ar" ? "فشل تحديث الحالة" : "Failed to update status",
+        description: error.message,
+        variant: "destructive"
       });
     },
   });
@@ -928,34 +960,113 @@ export default function AdminUnifiedGames() {
       const body = gameType === "multiplayer"
         ? { displayLocations }
         : { sections: displayLocations };
-      return adminFetch(endpoint, { 
-        method: "PATCH", 
-        body: JSON.stringify(body) 
+      return adminFetch(endpoint, {
+        method: "PATCH",
+        body: JSON.stringify(body)
       });
     },
     onSuccess: () => {
-      toast({ 
+      toast({
         title: language === "ar" ? "تم تحديث أماكن العرض" : "Display locations updated",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
     },
     onError: (error: Error) => {
-      toast({ 
-        title: language === "ar" ? "فشل تحديث أماكن العرض" : "Failed to update display locations", 
-        description: error.message, 
-        variant: "destructive" 
+      toast({
+        title: language === "ar" ? "فشل تحديث أماكن العرض" : "Failed to update display locations",
+        description: error.message,
+        variant: "destructive"
       });
+    },
+  });
+
+  const uploadIconMutation = useMutation({
+    mutationFn: async ({ game, file }: { game: UnifiedGame; file: File }) => {
+      const fileData = await fileToDataUrl(file);
+
+      const uploadResult = await adminFetch("/api/upload", {
+        method: "POST",
+        body: JSON.stringify({
+          fileData,
+          fileName: file.name,
+        }),
+      }) as { url?: string };
+
+      const uploadedUrl = typeof uploadResult?.url === "string" ? uploadResult.url : "";
+      if (!uploadedUrl) {
+        throw new Error(language === "ar" ? "فشل رفع الملف" : "Failed to upload file");
+      }
+
+      const endpoint = game._type === "multiplayer"
+        ? `/api/admin/multiplayer-games/${game.id}`
+        : `/api/admin/games/${game.id}`;
+
+      const payload = game._type === "multiplayer"
+        ? { iconName: uploadedUrl }
+        : { imageUrl: uploadedUrl, thumbnailUrl: uploadedUrl };
+
+      await adminFetch(endpoint, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+
+      return uploadedUrl;
+    },
+    onSuccess: () => {
+      toast({
+        title: language === "ar" ? "تم رفع الأيقونة بنجاح" : "Icon uploaded successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: language === "ar" ? "فشل رفع الأيقونة" : "Failed to upload icon",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setIconUploadTarget(null);
     },
   });
 
   const toggleDisplayLocation = (game: UnifiedGame, location: string) => {
     const currentLocations = Array.isArray(game.displayLocations) ? game.displayLocations : [];
     const isInLocation = currentLocations.includes(location);
-    const newLocations = isInLocation 
+    const newLocations = isInLocation
       ? currentLocations.filter(l => l !== location)
       : [...currentLocations, location];
     updateDisplayLocationsMutation.mutate({ id: game.id, displayLocations: newLocations, gameType: game._type });
+  };
+
+  const handleRequestIconUpload = (game: UnifiedGame) => {
+    if (uploadIconMutation.isPending) return;
+    setIconUploadTarget(game);
+    iconFileInputRef.current?.click();
+  };
+
+  const handleIconFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file || !iconUploadTarget) {
+      setIconUploadTarget(null);
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: language === "ar" ? "ملف غير صالح" : "Invalid file",
+        description: language === "ar" ? "الرجاء اختيار صورة فقط" : "Please choose an image file",
+        variant: "destructive",
+      });
+      setIconUploadTarget(null);
+      return;
+    }
+
+    uploadIconMutation.mutate({ game: iconUploadTarget, file });
   };
 
   useEffect(() => {
@@ -965,18 +1076,18 @@ export default function AdminUnifiedGames() {
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
     let reconnectAttempts = 0;
     const MAX_RECONNECT_ATTEMPTS = 5;
-    
+
     const connectWs = () => {
       if (!isMounted) return;
       if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return;
-      
+
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
-      
+
       ws.onopen = () => {
         reconnectAttempts = 0;
       };
-      
+
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
@@ -984,9 +1095,9 @@ export default function AdminUnifiedGames() {
             queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
             queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
           }
-        } catch {}
+        } catch { }
       };
-      
+
       ws.onclose = () => {
         wsRef.current = null;
         if (isMounted) {
@@ -996,9 +1107,9 @@ export default function AdminUnifiedGames() {
         }
       };
     };
-    
+
     connectWs();
-    
+
     return () => {
       isMounted = false;
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
@@ -1009,9 +1120,9 @@ export default function AdminUnifiedGames() {
   const filteredGames = allGames.filter((game) => {
     const matchesCategory = activeCategory === "all" || game.category === activeCategory;
     const matchesStatus = statusFilter === "all" || game.status === statusFilter;
-    const matchesDisplayLocation = displayLocationFilter === "all" || 
+    const matchesDisplayLocation = displayLocationFilter === "all" ||
       (Array.isArray(game.displayLocations) && game.displayLocations.includes(displayLocationFilter));
-    const matchesSearch = searchQuery === "" || 
+    const matchesSearch = searchQuery === "" ||
       game.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       game.nameAr.includes(searchQuery) ||
       game.key.toLowerCase().includes(searchQuery.toLowerCase());
@@ -1040,7 +1151,7 @@ export default function AdminUnifiedGames() {
   const getDisplayLocationCounts = () => {
     const counts: Record<string, number> = { all: allGames.length };
     DISPLAY_LOCATIONS.forEach((loc) => {
-      counts[loc.key] = allGames.filter((g) => 
+      counts[loc.key] = allGames.filter((g) =>
         Array.isArray(g.displayLocations) && g.displayLocations.includes(loc.key)
       ).length;
     });
@@ -1129,6 +1240,15 @@ export default function AdminUnifiedGames() {
           {language === "ar" ? "إضافة لعبة" : "Add Game"}
         </Button>
       </div>
+
+      <input
+        ref={iconFileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleIconFileChange}
+        className="hidden"
+        data-testid="input-upload-game-icon"
+      />
 
       {/* Display Location Filter Tabs */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -1230,7 +1350,7 @@ export default function AdminUnifiedGames() {
         {/* Results count - shows when filters reduce results */}
         {filteredGames.length !== allGames.length && (
           <span className="text-sm text-muted-foreground">
-            {language === "ar" 
+            {language === "ar"
               ? `${filteredGames.length} نتيجة`
               : `${filteredGames.length} results`
             }
@@ -1243,18 +1363,18 @@ export default function AdminUnifiedGames() {
           <CardContent className="p-12 text-center">
             <Gamepad2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <p className="text-muted-foreground mb-2">
-              {displayLocationFilter !== "all" 
-                ? (language === "ar" 
-                    ? `لا توجد ألعاب في قسم "${DISPLAY_LOCATIONS.find(l => l.key === displayLocationFilter)?.labelAr}"`
-                    : `No games in "${DISPLAY_LOCATIONS.find(l => l.key === displayLocationFilter)?.labelEn}" section`)
-                : (language === "ar" 
-                    ? "لا توجد ألعاب تطابق الفلاتر المحددة"
-                    : "No games match the selected filters")
+              {displayLocationFilter !== "all"
+                ? (language === "ar"
+                  ? `لا توجد ألعاب في قسم "${DISPLAY_LOCATIONS.find(l => l.key === displayLocationFilter)?.labelAr}"`
+                  : `No games in "${DISPLAY_LOCATIONS.find(l => l.key === displayLocationFilter)?.labelEn}" section`)
+                : (language === "ar"
+                  ? "لا توجد ألعاب تطابق الفلاتر المحددة"
+                  : "No games match the selected filters")
               }
             </p>
             {displayLocationFilter !== "all" && (
               <p className="text-muted-foreground text-sm mb-4">
-                {language === "ar" 
+                {language === "ar"
                   ? "يمكنك إضافة ألعاب لهذا القسم من قسم 'جميع الألعاب'"
                   : "You can add games to this section from 'All Games'"}
               </p>
@@ -1292,12 +1412,22 @@ export default function AdminUnifiedGames() {
               {filteredGames.map((game) => {
                 const IconComp = getIconComponent(game.iconName);
                 const categoryInfo = GAME_CATEGORIES.find((c) => c.key === game.category);
+                const hasCustomIcon = isCustomImagePath(game.iconUrl);
                 return (
                   <TableRow key={`${game._type}-${game.id}`} data-testid={`row-game-${game.id}`}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${game.colorClass}`}>
-                          <IconComp className="h-5 w-5" />
+                        <div className={`p-2 rounded-lg ${hasCustomIcon ? "bg-muted/60 border border-border" : game.colorClass}`}>
+                          {hasCustomIcon ? (
+                            <img
+                              src={String(game.iconUrl)}
+                              alt={language === "ar" ? `أيقونة ${game.nameAr}` : `${game.name} icon`}
+                              className="h-5 w-5 rounded object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <IconComp className="h-5 w-5" />
+                          )}
                         </div>
                         <div>
                           <p className="font-medium">{language === "ar" ? game.nameAr : game.name}</p>
@@ -1316,8 +1446,8 @@ export default function AdminUnifiedGames() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Select 
-                        value={game.status} 
+                      <Select
+                        value={game.status}
                         onValueChange={(value) => toggleStatusMutation.mutate({ id: game.id, status: value, gameType: game._type })}
                       >
                         <SelectTrigger className={`w-32 ${STATUS_COLORS[game.status as keyof typeof STATUS_COLORS] || ""}`} data-testid={`select-status-${game.id}`}>
@@ -1387,6 +1517,16 @@ export default function AdminUnifiedGames() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          onClick={() => handleRequestIconUpload(game)}
+                          disabled={uploadIconMutation.isPending}
+                          title={language === "ar" ? "رفع أيقونة من الجهاز" : "Upload icon from device"}
+                          data-testid={`button-upload-icon-${game.id}`}
+                        >
+                          <Upload className={`h-4 w-4 ${uploadIconMutation.isPending && iconUploadTarget?.id === game.id ? "animate-pulse" : ""}`} />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
                           onClick={() => handleEdit(game)}
                           data-testid={`button-edit-${game.id}`}
                         >
@@ -1432,7 +1572,7 @@ export default function AdminUnifiedGames() {
                                 data-testid={`menu-remove-from-section-${game.id}`}
                               >
                                 <X className="h-4 w-4 me-2" />
-                                {language === "ar" 
+                                {language === "ar"
                                   ? `إزالة من ${DISPLAY_LOCATIONS.find(l => l.key === displayLocationFilter)?.labelAr || "هذا القسم"}`
                                   : `Remove from ${DISPLAY_LOCATIONS.find(l => l.key === displayLocationFilter)?.labelEn || "this section"}`
                                 }
@@ -1465,13 +1605,13 @@ export default function AdminUnifiedGames() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {editingGame 
+              {editingGame
                 ? (language === "ar" ? "تعديل اللعبة" : "Edit Game")
                 : (language === "ar" ? "إضافة لعبة جديدة" : "Add New Game")
               }
             </DialogTitle>
             <DialogDescription>
-              {language === "ar" 
+              {language === "ar"
                 ? "قم بتعبئة تفاصيل اللعبة أدناه"
                 : "Fill in the game details below"
               }
@@ -1489,7 +1629,7 @@ export default function AdminUnifiedGames() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteGameId} onOpenChange={(open) => { 
+      <AlertDialog open={!!deleteGameId} onOpenChange={(open) => {
         if (!open) {
           setDeleteGameId(null);
           setDeleteMode("permanent");
@@ -1498,21 +1638,21 @@ export default function AdminUnifiedGames() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {deleteMode === "remove_from_section" 
+              {deleteMode === "remove_from_section"
                 ? (language === "ar" ? "إزالة من القسم؟" : "Remove from section?")
                 : (language === "ar" ? "حذف نهائي؟" : "Delete permanently?")
               }
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteMode === "remove_from_section" 
-                ? (language === "ar" 
-                    ? `سيتم إزالة هذه اللعبة من "${DISPLAY_LOCATIONS.find(l => l.key === displayLocationFilter)?.labelAr || "هذا القسم"}". يمكنك إضافتها مرة أخرى لاحقاً.`
-                    : `This game will be removed from "${DISPLAY_LOCATIONS.find(l => l.key === displayLocationFilter)?.labelEn || "this section"}". You can add it back later.`
-                  )
-                : (language === "ar" 
-                    ? "سيتم حذف هذه اللعبة نهائياً. لا يمكن التراجع عن هذا الإجراء."
-                    : "This game will be permanently deleted. This action cannot be undone."
-                  )
+              {deleteMode === "remove_from_section"
+                ? (language === "ar"
+                  ? `سيتم إزالة هذه اللعبة من "${DISPLAY_LOCATIONS.find(l => l.key === displayLocationFilter)?.labelAr || "هذا القسم"}". يمكنك إضافتها مرة أخرى لاحقاً.`
+                  : `This game will be removed from "${DISPLAY_LOCATIONS.find(l => l.key === displayLocationFilter)?.labelEn || "this section"}". You can add it back later.`
+                )
+                : (language === "ar"
+                  ? "سيتم حذف هذه اللعبة نهائياً. لا يمكن التراجع عن هذا الإجراء."
+                  : "This game will be permanently deleted. This action cannot be undone."
+                )
               }
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -20,6 +20,7 @@ import {
     getP2PUsernameSettings,
     updateP2PUsernameOnce,
 } from "../lib/p2p-username";
+import { getBadgeEntitlementForUser, resolveEffectiveP2PMonthlyLimit } from "../lib/user-badge-entitlements";
 
 function toNumber(value: string | number | null | undefined, fallback = 0): number {
     if (value === null || value === undefined) return fallback;
@@ -87,6 +88,17 @@ export function registerP2PProfileRoutes(app: Express): void {
                 .where(or(eq(p2pTrades.buyerId, userId), eq(p2pTrades.sellerId, userId)));
 
             const p2pUsernameSettings = await getP2PUsernameSettings(userId);
+            const badgeEntitlements = await getBadgeEntitlementForUser(userId);
+            const baseMonthlyLimit = profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
+                ? Number(profile.monthlyTradeLimit)
+                : null;
+            const effectiveMonthlyTradeLimit = resolveEffectiveP2PMonthlyLimit(
+                baseMonthlyLimit,
+                badgeEntitlements.maxP2PMonthlyLimit,
+                Boolean(profile),
+            );
+            const canTradeP2P = Boolean(profile?.canTradeP2P) || badgeEntitlements.grantsP2pPrivileges;
+            const canCreateOffers = Boolean(profile?.canCreateOffers) || badgeEntitlements.grantsP2pPrivileges;
 
             const badges = await db
                 .select({
@@ -213,10 +225,10 @@ export function registerP2PProfileRoutes(app: Express): void {
                     : null,
                 settings: includePrivateProfileContext
                     ? {
-                        canTradeP2P: Boolean(profile?.canTradeP2P),
-                        canCreateOffers: Boolean(profile?.canCreateOffers),
-                        monthlyTradeLimit: profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
-                            ? String(profile.monthlyTradeLimit)
+                        canTradeP2P,
+                        canCreateOffers,
+                        monthlyTradeLimit: effectiveMonthlyTradeLimit !== null
+                            ? effectiveMonthlyTradeLimit.toFixed(2)
                             : null,
                         autoReplyEnabled: profile?.autoReplyEnabled ?? false,
                         notifyOnTrade: profile?.notifyOnTrade ?? true,
@@ -224,6 +236,7 @@ export function registerP2PProfileRoutes(app: Express): void {
                         notifyOnMessage: profile?.notifyOnMessage ?? true,
                     }
                     : null,
+                trustBadge: badgeEntitlements.topBadge,
                 metrics: {
                     totalTrades,
                     completedTrades,
