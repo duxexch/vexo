@@ -63,9 +63,17 @@ export async function getUserFollowers(userId: string): Promise<UserRelationship
     .orderBy(desc(userRelationships.createdAt));
 }
 
-export async function searchUsers(query: string, excludeUserId: string): Promise<User[]> {
-  const searchTerm = query.trim();
+interface SearchUsersOptions {
+  limit?: number;
+}
+
+export async function searchUsers(query: string, excludeUserId: string, options: SearchUsersOptions = {}): Promise<User[]> {
+  const normalizedQuery = query.trim().replace(/^@+/, "").replace(/[\\%_]/g, "");
+  const searchTerm = normalizedQuery;
   if (!searchTerm) return [];
+
+  const requestedLimit = Number.isFinite(options.limit) ? Number(options.limit) : 50;
+  const limit = Math.max(10, Math.min(100, requestedLimit));
 
   const searchQuery = `%${searchTerm}%`;
   return db.select().from(users)
@@ -74,11 +82,12 @@ export async function searchUsers(query: string, excludeUserId: string): Promise
       eq(users.status, "active"),
       or(
         ilike(users.username, searchQuery),
-        ilike(users.accountId, searchQuery)
+        ilike(users.accountId, searchQuery),
+        ilike(users.nickname, searchQuery)
       )
     ))
-    .orderBy(users.username)
-    .limit(50);
+    .orderBy(asc(users.username))
+    .limit(limit);
 }
 
 // ==================== SOCIAL PLATFORMS ====================

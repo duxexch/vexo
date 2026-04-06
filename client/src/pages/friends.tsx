@@ -26,11 +26,15 @@ import type { User } from "@shared/schema";
 
 type UserWithFollowStatus = Omit<User, "password"> & {
   isFollowing?: boolean;
+  isFollower?: boolean;
+  isFriend?: boolean;
   isBlocked?: boolean;
   isOnline?: boolean;
   level?: number;
   avatarUrl?: string;
 };
+
+type SearchFilter = "all" | "friends" | "following" | "followers" | "blocked";
 
 /* ═══════════════ User Card ═══════════════ */
 function UserCard({
@@ -355,11 +359,23 @@ export default function FriendsPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"friends" | "following" | "followers" | "blocked">("friends");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchFilter, setSearchFilter] = useState<SearchFilter>("all");
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const trimmedSearchQuery = searchQuery.trim();
+
+  const searchFilterOptions: Array<{ key: SearchFilter; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+    { key: "all", label: t("common.all"), icon: Globe },
+    { key: "friends", label: t("friends.friends"), icon: Users },
+    { key: "following", label: t("friends.following"), icon: UserPlus },
+    { key: "followers", label: t("friends.followers"), icon: UserCheck },
+    { key: "blocked", label: t("friends.blocked"), icon: Ban },
+  ];
+
+  const activeSearchFilterLabel =
+    searchFilterOptions.find((filterOption) => filterOption.key === searchFilter)?.label || t("common.all");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -387,12 +403,17 @@ export default function FriendsPage() {
 
   // Global search — searches ALL users, not just friends
   const { data: searchResults = [], isLoading: searchLoading } = useQuery<UserWithFollowStatus[]>({
-    queryKey: ["/api/users/search", debouncedSearchQuery],
+    queryKey: ["/api/users/search", debouncedSearchQuery, searchFilter],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/users/search?q=${encodeURIComponent(debouncedSearchQuery)}`);
+      const params = new URLSearchParams({
+        q: debouncedSearchQuery,
+        filter: searchFilter,
+      });
+
+      const res = await apiRequest("GET", `/api/users/search?${params.toString()}`);
       return res.json();
     },
-    enabled: debouncedSearchQuery.length >= 2,
+    enabled: isSearchActive && debouncedSearchQuery.length >= 2,
   });
 
   const invalidateSocialQueries = () => {
@@ -469,7 +490,9 @@ export default function FriendsPage() {
       }
       return (
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground px-1">{t("friends.searchResults")} ({searchResults.length})</p>
+          <p className="text-xs text-muted-foreground px-1">
+            {t("friends.searchResults")} ({searchResults.length}) · {t("common.filter")}: {activeSearchFilterLabel}
+          </p>
           {searchResults.map((user) => (
             <UserCard key={user.id} user={user} actionType="search" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
           ))}
@@ -575,6 +598,7 @@ export default function FriendsPage() {
               className="absolute end-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground transition-colors"
               onClick={() => {
                 setSearchQuery("");
+                setSearchFilter("all");
                 setIsSearchActive(false);
                 searchInputRef.current?.blur();
               }}
@@ -583,6 +607,37 @@ export default function FriendsPage() {
             </button>
           )}
         </div>
+
+        {/* Search Filters */}
+        {isSearchActive && (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" data-testid="friends-search-filters">
+            <span className="text-[11px] text-muted-foreground/70 whitespace-nowrap px-1">{t("common.filter")}</span>
+            {searchFilterOptions.map((filterOption) => {
+              const Icon = filterOption.icon;
+              const active = searchFilter === filterOption.key;
+
+              return (
+                <button
+                  key={filterOption.key}
+                  type="button"
+                  onClick={() => setSearchFilter(filterOption.key)}
+                  data-testid={`friends-search-filter-${filterOption.key}`}
+                  className={`
+                    inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap
+                    border transition-all duration-200
+                    ${active
+                      ? "bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20"
+                      : "bg-card/50 text-muted-foreground border-border/40 hover:border-primary/40 hover:text-foreground"
+                    }
+                  `}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{filterOption.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Tab Navigation — hidden when search is active */}
         {!isSearchActive && (
