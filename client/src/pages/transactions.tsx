@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useAuth, useAuthHeaders } from "@/lib/auth";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
@@ -22,9 +23,12 @@ export default function TransactionsPage() {
   const headers = useAuthHeaders();
   const { toast } = useToast();
   const { t, dir } = useI18n();
+  const [, setLocation] = useLocation();
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [amount, setAmount] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawMethodId, setWithdrawMethodId] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [walletNumber, setWalletNumber] = useState("");
@@ -48,6 +52,17 @@ export default function TransactionsPage() {
       return res.json();
     },
   });
+
+  const { data: withdrawalPaymentMethods = [] } = useQuery<CountryPaymentMethod[]>({
+    queryKey: ["/api/payment-methods", "withdrawal"],
+    queryFn: async () => {
+      const res = await fetch("/api/payment-methods?purpose=withdrawal", { headers });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const hasWithdrawalMethods = withdrawalPaymentMethods.length > 0;
 
   const { data: pendingTx } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions/pending"],
@@ -75,13 +90,14 @@ export default function TransactionsPage() {
   });
 
   const withdrawMutation = useMutation({
-    mutationFn: async (data: { amount: string }) => {
+    mutationFn: async (data: { amount: string; paymentMethodId: string }) => {
       return apiRequestWithPaymentToken("POST", "/api/transactions/withdraw", data, "withdraw");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       setWithdrawOpen(false);
-      setAmount("");
+      setWithdrawAmount("");
+      setWithdrawMethodId("");
       toast({ title: t('transactions.success'), description: t('transactions.withdrawSuccess') });
     },
     onError: (error: Error) => {
@@ -113,6 +129,7 @@ export default function TransactionsPage() {
   };
 
   const selectedMethod = paymentMethods?.find(m => m.id === paymentMethod);
+  const selectedWithdrawalMethod = withdrawalPaymentMethods.find((m) => m.id === withdrawMethodId);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -314,9 +331,18 @@ export default function TransactionsPage() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
+          <Dialog
+            open={withdrawOpen}
+            onOpenChange={(open) => {
+              setWithdrawOpen(open);
+              if (!open) {
+                setWithdrawAmount("");
+                setWithdrawMethodId("");
+              }
+            }}
+          >
             <DialogTrigger asChild>
-              <Button variant="outline" data-testid="button-withdraw">
+              <Button variant="outline" data-testid="button-withdraw" disabled={!hasWithdrawalMethods}>
                 <ArrowUpCircle className="me-2 h-4 w-4" /> {t('transactions.withdraw')}
               </Button>
             </DialogTrigger>
@@ -329,12 +355,46 @@ export default function TransactionsPage() {
               </DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-2">
+                  <Label>{t('transactions.selectMethod')}</Label>
+                  <Select value={withdrawMethodId} onValueChange={setWithdrawMethodId}>
+                    <SelectTrigger data-testid="select-withdraw-method">
+                      <SelectValue placeholder={t('transactions.chooseMethod')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {withdrawalPaymentMethods.map((method) => (
+                        <SelectItem key={method.id} value={method.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{method.name}</span>
+                            <Badge variant="outline" className="text-xs">{method.type}</Badge>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedWithdrawalMethod && (
+                  <Card className="bg-muted/50">
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{t('transactions.minAmount')}</span>
+                        <span className="font-medium">${selectedWithdrawalMethod.minAmount}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{t('transactions.maxAmount')}</span>
+                        <span className="font-medium">${selectedWithdrawalMethod.maxAmount}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <div className="space-y-2">
                   <Label>{t('transactions.amount')} ($)</Label>
                   <Input
                     type="number"
                     data-testid="input-withdraw-amount"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
                     placeholder={t('transactions.enterAmount')}
                     min="20"
                     step="0.01"
@@ -347,8 +407,8 @@ export default function TransactionsPage() {
                 <Button
                   className="w-full"
                   data-testid="button-submit-withdraw"
-                  onClick={() => withdrawMutation.mutate({ amount })}
-                  disabled={withdrawMutation.isPending || !amount || parseFloat(amount) > parseFloat(user?.balance || "0")}
+                  onClick={() => withdrawMutation.mutate({ amount: withdrawAmount, paymentMethodId: withdrawMethodId })}
+                  disabled={withdrawMutation.isPending || !withdrawAmount || !withdrawMethodId || parseFloat(withdrawAmount) > parseFloat(user?.balance || "0")}
                 >
                   {withdrawMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                   {t('transactions.submitRequest')}
@@ -356,6 +416,12 @@ export default function TransactionsPage() {
               </div>
             </DialogContent>
           </Dialog>
+
+          {!hasWithdrawalMethods && (
+            <Button variant="secondary" data-testid="button-go-p2p" onClick={() => setLocation('/p2p')}>
+              {t('nav.p2p')}
+            </Button>
+          )}
         </div>
       </div>
 

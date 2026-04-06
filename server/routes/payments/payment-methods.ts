@@ -9,11 +9,24 @@ export function registerPaymentMethodRoutes(app: Express): void {
   app.get("/api/payment-methods", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const methods = await storage.listCountryPaymentMethods();
+      const purpose = typeof req.query?.purpose === "string"
+        ? req.query.purpose.trim().toLowerCase()
+        : "";
       const countryCode = typeof req.query?.country === "string"
         ? req.query.country.trim().toUpperCase()
         : "";
 
-      const activeMethods = methods.filter((method) => method.isActive && method.isAvailable);
+      const activeMethods = methods.filter((method) => {
+        if (!method.isActive || !method.isAvailable) {
+          return false;
+        }
+
+        if (purpose === "withdrawal") {
+          return method.isWithdrawalEnabled;
+        }
+
+        return true;
+      });
       if (!countryCode) {
         return res.json(activeMethods);
       }

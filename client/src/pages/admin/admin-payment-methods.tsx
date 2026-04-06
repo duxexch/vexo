@@ -46,6 +46,7 @@ const paymentMethodSchema = z.object({
   instructions: z.string().optional(),
   sortOrder: z.number().int().min(0),
   isActive: z.boolean(),
+  isWithdrawalEnabled: z.boolean(),
 });
 
 type PaymentMethodForm = z.infer<typeof paymentMethodSchema>;
@@ -106,6 +107,7 @@ export default function AdminPaymentMethodsPage() {
       instructions: "",
       sortOrder: 0,
       isActive: true,
+      isWithdrawalEnabled: false,
     },
   });
 
@@ -154,8 +156,13 @@ export default function AdminPaymentMethodsPage() {
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
-      apiRequest("PATCH", `/api/admin/payment-methods/${id}`, { isActive }),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<Pick<PaymentMethodForm, "isActive" | "isWithdrawalEnabled">>;
+    }) => apiRequest("PATCH", `/api/admin/payment-methods/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-methods"] });
       queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
@@ -178,6 +185,7 @@ export default function AdminPaymentMethodsPage() {
       instructions: method.instructions || "",
       sortOrder: method.sortOrder,
       isActive: method.isActive,
+      isWithdrawalEnabled: method.isWithdrawalEnabled,
     });
     setShowDialog(true);
   };
@@ -195,6 +203,7 @@ export default function AdminPaymentMethodsPage() {
       instructions: "",
       sortOrder: (paymentMethods?.length || 0) + 1,
       isActive: true,
+      isWithdrawalEnabled: false,
     });
     setShowDialog(true);
   };
@@ -224,7 +233,7 @@ export default function AdminPaymentMethodsPage() {
             <CreditCard className="h-7 w-7 text-primary" />
             Payment Methods
           </h1>
-          <p className="text-muted-foreground">Manage deposit payment methods for users</p>
+          <p className="text-muted-foreground">Manage payment methods for deposits and withdrawals</p>
         </div>
         <Button onClick={openCreateDialog} data-testid="button-add-payment-method">
           <Plus className="h-4 w-4 me-2" />
@@ -235,7 +244,7 @@ export default function AdminPaymentMethodsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Active Payment Methods</CardTitle>
-          <CardDescription>Configure which payment methods are available for deposits</CardDescription>
+          <CardDescription>Configure method availability and which ones users can select in withdrawal requests</CardDescription>
         </CardHeader>
         <CardContent>
           {paymentMethods && paymentMethods.length > 0 ? (
@@ -247,6 +256,7 @@ export default function AdminPaymentMethodsPage() {
                   <TableHead>Type</TableHead>
                   <TableHead>Limits</TableHead>
                   <TableHead>Country</TableHead>
+                  <TableHead>Withdrawals</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Order</TableHead>
                   <TableHead>Actions</TableHead>
@@ -278,8 +288,15 @@ export default function AdminPaymentMethodsPage() {
                       </TableCell>
                       <TableCell>
                         <Switch
+                          checked={method.isWithdrawalEnabled}
+                          onCheckedChange={(checked) => toggleMutation.mutate({ id: method.id, data: { isWithdrawalEnabled: checked } })}
+                          data-testid={`switch-withdrawal-enabled-${method.id}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Switch
                           checked={method.isActive}
-                          onCheckedChange={(checked) => toggleMutation.mutate({ id: method.id, isActive: checked })}
+                          onCheckedChange={(checked) => toggleMutation.mutate({ id: method.id, data: { isActive: checked } })}
                           data-testid={`switch-toggle-${method.id}`}
                         />
                       </TableCell>
@@ -327,7 +344,7 @@ export default function AdminPaymentMethodsPage() {
           <DialogHeader>
             <DialogTitle>{editingMethod ? "Edit Payment Method" : "Add Payment Method"}</DialogTitle>
             <DialogDescription>
-              Configure a payment method that will be shown to users during deposits
+              Configure a payment method for deposit and withdrawal flows
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -509,6 +526,26 @@ export default function AdminPaymentMethodsPage() {
                         checked={field.value}
                         onCheckedChange={field.onChange}
                         data-testid="switch-is-active"
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="isWithdrawalEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                    <div>
+                      <FormLabel>Enable for withdrawals</FormLabel>
+                      <FormDescription>Allow users to pick this method when creating a withdrawal request</FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="switch-is-withdrawal-enabled"
                       />
                     </FormControl>
                   </FormItem>

@@ -1048,11 +1048,13 @@ export const countryPaymentMethods = pgTable("country_payment_methods", {
   maxAmount: decimal("max_amount", { precision: 15, scale: 2 }).notNull().default("10000.00"),
   isAvailable: boolean("is_available").notNull().default(true),
   isActive: boolean("is_active").notNull().default(true),
+  isWithdrawalEnabled: boolean("is_withdrawal_enabled").notNull().default(false),
   processingTime: text("processing_time"),
   instructions: text("instructions"),
   sortOrder: integer("sort_order").notNull().default(0),
 }, (table) => [
   index("idx_country_payment_methods_country").on(table.countryCode),
+  index("idx_country_payment_methods_withdrawal_enabled").on(table.isWithdrawalEnabled),
 ]);
 
 // ==================== FEATURE FLAGS (Section Control) ====================
@@ -2113,12 +2115,18 @@ export const badgeCatalog = pgTable("badge_catalog", {
   color: text("color"),
   category: text("category"),
   requirement: text("requirement"),
+  level: integer("level").notNull().default(1),
+  p2pMonthlyLimit: decimal("p2p_monthly_limit", { precision: 15, scale: 2 }),
+  challengeMaxAmount: decimal("challenge_max_amount", { precision: 15, scale: 2 }),
+  grantsP2pPrivileges: boolean("grants_p2p_privileges").notNull().default(false),
+  showOnProfile: boolean("show_on_profile").notNull().default(true),
   points: integer("points").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_badge_catalog_category").on(table.category),
+  index("idx_badge_catalog_level").on(table.level),
   index("idx_badge_catalog_is_active").on(table.isActive),
 ]);
 

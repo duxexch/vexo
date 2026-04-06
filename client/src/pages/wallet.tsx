@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,7 @@ import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { ProjectCurrencyAmount, ProjectCurrencySymbol } from "@/components/ProjectCurrencySymbol";
 import { useBalance } from "@/hooks/useBalance";
 import { playSound } from "@/hooks/use-sound-effects";
-import type { Transaction, ProjectCurrencyConversion } from "@shared/schema";
+import type { Transaction, ProjectCurrencyConversion, CountryPaymentMethod } from "@shared/schema";
 
 interface WalletStats {
   totalDeposited: string;
@@ -82,6 +83,7 @@ export default function WalletPage() {
   const { t, language } = useI18n();
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   const tOr = (key: string, fallback: string): string => {
     const translated = t(key);
@@ -94,7 +96,8 @@ export default function WalletPage() {
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [convertAmount, setConvertAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("");
+  const [depositPaymentMethod, setDepositPaymentMethod] = useState("");
+  const [withdrawPaymentMethod, setWithdrawPaymentMethod] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [walletNumber, setWalletNumber] = useState("");
   const [depositCurrency, setDepositCurrency] = useState("USD");
@@ -153,6 +156,23 @@ export default function WalletPage() {
     queryKey: ['/api/transactions/deposit-config'],
     ...financialQueryOptions,
   });
+
+  const { data: withdrawalPaymentMethods = [] } = useQuery<CountryPaymentMethod[]>({
+    queryKey: ['/api/payment-methods', 'withdrawal'],
+    queryFn: async () => {
+      const res = await fetch('/api/payment-methods?purpose=withdrawal', {
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        return [];
+      }
+      return res.json();
+    },
+    ...financialQueryOptions,
+  });
+
+  const hasWithdrawalMethods = withdrawalPaymentMethods.length > 0;
 
   useEffect(() => {
     if (!depositConfig) return;
@@ -240,6 +260,7 @@ export default function WalletPage() {
       refreshUser?.();
       setShowDeposit(false);
       setDepositAmount("");
+      setDepositPaymentMethod("");
       setPaymentReference("");
       setWalletNumber("");
     },
@@ -249,7 +270,7 @@ export default function WalletPage() {
   });
 
   const withdrawMutation = useMutation({
-    mutationFn: (data: { amount: number; paymentMethod: string }) =>
+    mutationFn: (data: { amount: number; paymentMethodId: string }) =>
       apiRequestWithPaymentToken('POST', '/api/transactions/withdraw', data, 'withdraw'),
     onSuccess: () => {
       playSound('success');
@@ -258,6 +279,7 @@ export default function WalletPage() {
       refreshUser?.();
       setShowWithdraw(false);
       setWithdrawAmount("");
+      setWithdrawPaymentMethod("");
     },
     onError: (err: Error) => {
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
@@ -295,6 +317,21 @@ export default function WalletPage() {
     { id: 'crypto', name: t('wallet.crypto'), icon: Bitcoin },
   ];
 
+  const getMethodIcon = (type: string) => {
+    switch (type) {
+      case 'bank_transfer':
+        return Building2;
+      case 'card':
+        return CreditCard;
+      case 'e_wallet':
+        return Smartphone;
+      case 'crypto':
+        return Bitcoin;
+      default:
+        return CreditCard;
+    }
+  };
+
   return (
     <div className="p-3 sm:p-6 space-y-4 sm:space-y-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
@@ -321,10 +358,26 @@ export default function WalletPage() {
                 <ArrowDownToLine className="h-4 w-4 me-2" />
                 {t('wallet.deposit')}
               </Button>
-              <Button variant="outline" onClick={() => setShowWithdraw(true)} className="flex-1 sm:flex-none min-h-[44px]" data-testid="button-withdraw">
+              <Button
+                variant="outline"
+                onClick={() => setShowWithdraw(true)}
+                className="flex-1 sm:flex-none min-h-[44px]"
+                data-testid="button-withdraw"
+                disabled={!hasWithdrawalMethods}
+              >
                 <ArrowUpFromLine className="h-4 w-4 me-2" />
                 {t('wallet.withdraw')}
               </Button>
+              {!hasWithdrawalMethods && (
+                <Button
+                  variant="secondary"
+                  onClick={() => setLocation('/p2p')}
+                  className="flex-1 sm:flex-none min-h-[44px]"
+                  data-testid="button-go-p2p"
+                >
+                  {tOr('nav.p2p', 'P2P')}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -585,9 +638,9 @@ export default function WalletPage() {
                   return (
                     <Button
                       key={method.id}
-                      variant={paymentMethod === method.id ? "default" : "outline"}
+                      variant={depositPaymentMethod === method.id ? "default" : "outline"}
                       className="h-auto py-3 flex-col"
-                      onClick={() => setPaymentMethod(method.id)}
+                      onClick={() => setDepositPaymentMethod(method.id)}
                       data-testid={`button-method-${method.id}`}
                     >
                       <Icon className="h-5 w-5 mb-1" />
@@ -621,12 +674,12 @@ export default function WalletPage() {
             <Button
               onClick={() => depositMutation.mutate({
                 amount: parseFloat(depositAmount),
-                paymentMethod,
+                paymentMethod: depositPaymentMethod,
                 paymentReference,
                 walletNumber: walletNumber || undefined,
                 currency: depositCurrency,
               })}
-              disabled={!depositAmount || !paymentMethod || !paymentReference || !depositCurrency || depositMutation.isPending}
+              disabled={!depositAmount || !depositPaymentMethod || !paymentReference || !depositCurrency || depositMutation.isPending}
               data-testid="button-confirm-deposit"
             >
               {depositMutation.isPending && <RefreshCw className="h-4 w-4 me-2 animate-spin" />}
@@ -685,14 +738,14 @@ export default function WalletPage() {
             <div>
               <Label>{t('wallet.paymentMethod')}</Label>
               <div className="grid grid-cols-2 gap-2 mt-2">
-                {paymentMethods.map(method => {
-                  const Icon = method.icon;
+                {withdrawalPaymentMethods.map(method => {
+                  const Icon = getMethodIcon(method.type);
                   return (
                     <Button
                       key={method.id}
-                      variant={paymentMethod === method.id ? "default" : "outline"}
+                      variant={withdrawPaymentMethod === method.id ? "default" : "outline"}
                       className="h-auto py-3 flex-col"
-                      onClick={() => setPaymentMethod(method.id)}
+                      onClick={() => setWithdrawPaymentMethod(method.id)}
                     >
                       <Icon className="h-5 w-5 mb-1" />
                       <span className="text-xs">{method.name}</span>
@@ -705,8 +758,8 @@ export default function WalletPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowWithdraw(false)}>{t('common.cancel')}</Button>
             <Button
-              onClick={() => withdrawMutation.mutate({ amount: parseFloat(withdrawAmount), paymentMethod })}
-              disabled={!withdrawAmount || !paymentMethod || withdrawMutation.isPending || parseFloat(withdrawAmount) > parseFloat(user?.balance || "0")}
+              onClick={() => withdrawMutation.mutate({ amount: parseFloat(withdrawAmount), paymentMethodId: withdrawPaymentMethod })}
+              disabled={!withdrawAmount || !withdrawPaymentMethod || withdrawMutation.isPending || parseFloat(withdrawAmount) > parseFloat(user?.balance || "0")}
               data-testid="button-confirm-withdraw"
             >
               {withdrawMutation.isPending && <RefreshCw className="h-4 w-4 me-2 animate-spin" />}

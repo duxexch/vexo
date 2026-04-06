@@ -194,7 +194,7 @@ export function registerTransactionUserRoutes(app: Express): void {
     sensitiveRateLimiter,
     async (req: AuthRequest, res: Response) => {
       try {
-        const { amount } = req.body;
+        const { amount, paymentMethodId, paymentMethod } = req.body;
 
         // CRITICAL: Validate amount is positive number
         if (!amount || (typeof amount !== 'string' && typeof amount !== 'number')) {
@@ -204,6 +204,37 @@ export function registerTransactionUserRoutes(app: Express): void {
         const withdrawAmount = parseFloat(String(amount));
         if (isNaN(withdrawAmount) || withdrawAmount <= 0 || withdrawAmount > 1000000) {
           return res.status(400).json({ error: "Amount must be between 0.01 and 1,000,000" });
+        }
+
+        const withdrawalMethods = (await storage.listCountryPaymentMethods()).filter(
+          (method) => method.isActive && method.isAvailable && method.isWithdrawalEnabled,
+        );
+
+        if (withdrawalMethods.length === 0) {
+          return res.status(403).json({ error: "Withdrawals are currently unavailable. Please use P2P." });
+        }
+
+        const requestedMethodId = typeof paymentMethodId === "string" ? paymentMethodId.trim() : "";
+        const requestedMethodValue = typeof paymentMethod === "string" ? paymentMethod.trim() : "";
+
+        let selectedMethod = withdrawalMethods.find((method) => {
+          if (requestedMethodId) {
+            return method.id === requestedMethodId;
+          }
+
+          if (!requestedMethodValue) {
+            return false;
+          }
+
+          return method.id === requestedMethodValue || method.name.toLowerCase() === requestedMethodValue.toLowerCase();
+        });
+
+        if (!selectedMethod && !requestedMethodId && !requestedMethodValue && withdrawalMethods.length === 1) {
+          selectedMethod = withdrawalMethods[0];
+        }
+
+        if (!selectedMethod) {
+          return res.status(400).json({ error: "Valid withdrawal payment method is required" });
         }
 
         // SECURITY: Atomic withdrawal with FOR UPDATE lock to prevent concurrent double-withdrawal
@@ -237,7 +268,7 @@ export function registerTransactionUserRoutes(app: Express): void {
           amount: withdrawAmount.toFixed(2),
           balanceBefore: result.user.balance,
           balanceAfter: result.newBalance,
-          description: "Withdrawal request",
+          description: `Withdrawal request via ${selectedMethod.name}`,
         });
 
         await storage.createAuditLog({
@@ -245,7 +276,7 @@ export function registerTransactionUserRoutes(app: Express): void {
           action: "withdrawal",
           entityType: "transaction",
           entityId: transaction.id,
-          details: JSON.stringify({ amount }),
+          details: JSON.stringify({ amount, paymentMethodId: selectedMethod.id, paymentMethod: selectedMethod.name }),
         });
 
         // Emit admin alert for new withdrawal
@@ -275,7 +306,7 @@ export function registerTransactionUserRoutes(app: Express): void {
         res.status(201).json(transaction);
       } catch (error: unknown) {
         const statusCode = (error as any)?.statusCode;
-        if (statusCode === 400 || statusCode === 404) {
+        if (statusCode === 400 || statusCode === 403 || statusCode === 404) {
           return res.status(statusCode).json({ error: getErrorMessage(error) });
         }
         res.status(500).json({ error: getErrorMessage(error) });
