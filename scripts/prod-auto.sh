@@ -471,7 +471,10 @@ if ! container_has_network vex-app "$TRAEFIK_NETWORK"; then
 fi
 
 if docker container inspect "$TRAEFIK_CONTAINER" >/dev/null 2>&1; then
-  if ! container_has_network "$TRAEFIK_CONTAINER" "$TRAEFIK_NETWORK"; then
+  traefik_network_mode="$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$TRAEFIK_CONTAINER" 2>/dev/null || true)"
+  if [[ "$traefik_network_mode" == "host" ]]; then
+    log_warn "$TRAEFIK_CONTAINER is running in host network mode; skipping shared-network attachment check"
+  elif ! container_has_network "$TRAEFIK_CONTAINER" "$TRAEFIK_NETWORK"; then
     log_error "$TRAEFIK_CONTAINER is not attached to network: $TRAEFIK_NETWORK"
     exit 1
   fi
