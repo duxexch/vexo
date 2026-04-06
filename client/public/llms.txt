@@ -1,0 +1,33 @@
+# VEX
+
+VEX is a gaming and P2P trading platform focused on competitive online games, secure peer-to-peer transactions, user safety, and guided onboarding.
+
+Primary site: https://vixo.click/
+Sitemap: https://vixo.click/sitemap.xml
+
+## Recommended pages for AI retrieval
+- https://vixo.click/
+- https://vixo.click/games
+- https://vixo.click/challenges
+- https://vixo.click/p2p
+- https://vixo.click/guides/index.html
+- https://vixo.click/guides/vex-platform-overview.html
+- https://vixo.click/guides/vex-p2p-trading-security.html
+- https://vixo.click/guides/vex-games-challenges-guide.html
+- https://vixo.click/guides/vex-account-wallet-verification.html
+
+## Content focus keywords
+- VEX platform
+- online multiplayer games
+- domino chess backgammon tarneeb baloot
+- secure P2P trading
+- escrow workflow
+- digital wallet and payments
+- account verification and trust
+- gaming challenges and fair play
+
+## Crawl guidance
+- Prefer canonical URLs under https://vixo.click/
+- Prioritize guides pages for long-form explanations and procedural steps
+- Avoid authenticated/private surfaces and API endpoints
+- Use sitemap and guide pages as the source of high-signal educational content

@@ -4,8 +4,20 @@ import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import { parseStringQueryParam } from "../../lib/input-security";
 import { getBlockedUserIds } from "../../lib/user-blocking";
+import { Country, State } from "country-state-city";
 
 type SocialSearchFilter = "all" | "friends" | "following" | "followers" | "blocked";
+
+type GeoCountryOption = {
+  code: string;
+  name: string;
+};
+
+type GeoRegionOption = {
+  code: string;
+  name: string;
+  countryCode: string;
+};
 
 const ALLOWED_SOCIAL_SEARCH_FILTERS: ReadonlySet<SocialSearchFilter> = new Set([
   "all",
@@ -23,18 +35,76 @@ function parseSocialSearchFilter(rawFilter: unknown): SocialSearchFilter {
   return "all";
 }
 
+function parseOptionalQueryParam(rawValue: unknown, maxLength: number): string | undefined {
+  const normalized = parseStringQueryParam(rawValue, maxLength).trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+const GEO_COUNTRIES: GeoCountryOption[] = Country.getAllCountries()
+  .map((country) => ({
+    code: String(country.isoCode || "").toUpperCase(),
+    name: String(country.name || ""),
+  }))
+  .filter((country) => country.code.length > 0 && country.name.length > 0)
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+function getGeoRegions(countryCode: string): GeoRegionOption[] {
+  const normalizedCountryCode = String(countryCode || "").trim().toUpperCase();
+  if (!normalizedCountryCode) return [];
+
+  return State.getStatesOfCountry(normalizedCountryCode)
+    .map((region) => ({
+      code: String(region.isoCode || "").toUpperCase(),
+      name: String(region.name || ""),
+      countryCode: normalizedCountryCode,
+    }))
+    .filter((region) => region.code.length > 0 && region.name.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function registerSocialSearchRoutes(app: Express): void {
+
+  app.get("/api/users/search/meta/countries", authMiddleware, async (_req: AuthRequest, res: Response) => {
+    try {
+      res.json(GEO_COUNTRIES);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/users/search/meta/regions", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const countryCode = parseOptionalQueryParam(req.query.countryCode, 8)?.toUpperCase() || "";
+      if (!countryCode) {
+        return res.json([]);
+      }
+
+      res.json(getGeoRegions(countryCode));
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
 
   app.get("/api/users/search", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const query = parseStringQueryParam(req.query.q, 80);
       const filter = parseSocialSearchFilter(req.query.filter);
+      const language = parseOptionalQueryParam(req.query.language, 16)?.toLowerCase();
+      const countryCode = parseOptionalQueryParam(req.query.countryCode, 8)?.toUpperCase();
+      const regionCode = parseOptionalQueryParam(req.query.regionCode, 24)?.toUpperCase();
+      const city = parseOptionalQueryParam(req.query.city, 120);
 
       if (query.length < 2) {
         return res.json([]);
       }
 
-      const searchResults = await storage.searchUsers(query, req.user!.id, { limit: 80 });
+      const searchResults = await storage.searchUsers(query, req.user!.id, {
+        limit: 80,
+        language,
+        countryCode,
+        regionCode,
+        city,
+      });
       const [following, followers, blockedIds] = await Promise.all([
         storage.getUserFollowing(req.user!.id),
         storage.getUserFollowers(req.user!.id),

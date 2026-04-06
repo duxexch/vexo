@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>دليل تداول P2P الآمن في VEX | العروض والضمان والنزاعات</title>
+    <meta name="description"
+        content="تعلم تداول P2P الآمن على VEX خطوة بخطوة: إنشاء عرض، قبول صفقة، التحقق من الدفع، الإفراج من الضمان، وآلية التعامل مع النزاعات." />
+    <meta name="keywords"
+        content="P2P trading, secure escrow, dispute process, VEX P2P, تداول آمن, ضمان الصفقات, حل النزاعات" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://vixo.click/guides/vex-p2p-trading-security.html" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="VEX Secure P2P Trading Guide" />
+    <meta property="og:description"
+        content="Full P2P trading safety workflow: offers, escrow protection, payment checks, release logic, and dispute handling." />
+    <meta property="og:url" content="https://vixo.click/guides/vex-p2p-trading-security.html" />
+    <style>
+        :root {
+            --bg: #06141e;
+            --panel: #0e2433;
+            --line: #2e566f;
+            --txt: #e8f2f8;
+            --muted: #b2cdda;
+            --brand: #ffd24c;
+            --ok: #15c48d;
+            --warn: #ff9e4d;
+            --danger: #ff5f73
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            background: radial-gradient(circle at 100% 0%, #15405a 0%, var(--bg) 44%), var(--bg);
+            color: var(--txt);
+            line-height: 1.75
+        }
+
+        .wrap {
+            width: min(980px, 92vw);
+            margin: 0 auto;
+            padding: 26px 0 56px
+        }
+
+        .panel {
+            background: linear-gradient(180deg, #123449, var(--panel));
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 12px
+        }
+
+        h1,
+        h2,
+        h3 {
+            line-height: 1.35;
+            margin: 0 0 10px
+        }
+
+        h1 {
+            font-size: clamp(1.58rem, 2.7vw, 2.2rem)
+        }
+
+        h2 {
+            font-size: clamp(1.18rem, 2.1vw, 1.45rem);
+            margin-top: 12px
+        }
+
+        p {
+            margin: 0 0 10px;
+            color: var(--muted)
+        }
+
+        .steps {
+            counter-reset: step;
+            display: grid;
+            gap: 10px
+        }
+
+        .step {
+            border: 1px solid #366682;
+            background: #112c3f;
+            border-radius: 12px;
+            padding: 12px 14px
+        }
+
+        .step h3::before {
+            counter-increment: step;
+            content: counter(step) ". ";
+            color: var(--brand)
+        }
+
+        .tips {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 10px;
+            margin-top: 10px
+        }
+
+        .tip {
+            border: 1px solid #305e7f;
+            border-radius: 12px;
+            padding: 12px;
+            background: #10283a
+        }
+
+        .ok {
+            color: #94efd4
+        }
+
+        .warn {
+            color: #ffd6a8
+        }
+
+        .danger {
+            color: #ffbec7
+        }
+
+        ul {
+            margin: 0 0 12px;
+            padding-inline-start: 18px;
+            color: var(--muted)
+        }
+
+        .cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: var(--brand);
+            color: #3f2b00;
+            text-decoration: none;
+            font-weight: 800
+        }
+
+        .faq {
+            margin-top: 12px;
+            border-top: 1px dashed #3b6f8f;
+            padding-top: 12px
+        }
+    </style>
+    <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"HowTo",
+    "name":"Secure P2P Trading on VEX",
+    "description":"Step-by-step process for safe P2P transactions with escrow and disputes.",
+    "inLanguage":["ar","en"],
+    "step":[
+      {"@type":"HowToStep","name":"Create or choose an offer"},
+      {"@type":"HowToStep","name":"Verify terms and risk signals"},
+      {"@type":"HowToStep","name":"Confirm payment only with valid evidence"},
+      {"@type":"HowToStep","name":"Release escrow when conditions are met"},
+      {"@type":"HowToStep","name":"Open dispute when mismatch is detected"}
+    ]
+  }
+  </script>
+</head>
+
+<body>
+    <main class="wrap">
+        <section class="panel">
+            <h1>دليل تداول P2P الآمن على VEX</h1>
+            <p>
+                الهدف من هذا الدليل هو مساعدتك على تنفيذ صفقة P2P آمنة ومنظمة، وتقليل الأخطاء التي قد تؤدي لتأخير
+                التسوية أو فتح نزاع.
+                اتبع الخطوات كما هي، ولا تتجاوز متطلبات التحقق قبل أي تأكيد نهائي.
+            </p>
+        </section>
+
+        <section class="panel">
+            <h2>الخطوات الأساسية للصفقة (Offer to Release)</h2>
+            <div class="steps">
+                <article class="step">
+                    <h3>اختيار عرض موثوق أو إنشاء عرض واضح</h3>
+                    <p>تأكد من طريقة الدفع، العملة، حدود الصفقة، وقت التنفيذ، ومتطلبات كل طرف قبل بدء العملية.</p>
+                </article>
+                <article class="step">
+                    <h3>مراجعة الشروط ومؤشرات المخاطر</h3>
+                    <p>اقرأ وصف العرض بالكامل. افحص التقييمات، سجل الالتزام، وأي شروط إضافية مرتبطة بالتسوية.</p>
+                </article>
+                <article class="step">
+                    <h3>تنفيذ الدفع عبر القنوات المحددة فقط</h3>
+                    <p>لا تغير مسار الدفع خارج الشروط الأصلية. احتفظ بإثبات واضح وقابل للتحقق.</p>
+                </article>
+                <article class="step">
+                    <h3>تأكيد الدفع والتحقق قبل الإفراج</h3>
+                    <p>الطرف المستلم يتحقق من وصول الدفع الصحيح. لا يتم الإفراج من الضمان إلا بعد تحقق كامل للشروط.</p>
+                </article>
+                <article class="step">
+                    <h3>التعامل مع النزاع بطريقة موثقة</h3>
+                    <p>عند وجود تعارض، استخدم مسار النزاع الرسمي وقدّم أدلة منظمة بزمن وتفاصيل دقيقة لتسريع القرار.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>قواعد الأمان العملية</h2>
+            <div class="tips">
+                <article class="tip">
+                    <h3 class="ok">افعل (Do)</h3>
+                    <ul>
+                        <li>طابق اسم الحساب وبيانات التحويل مع شروط العرض.</li>
+                        <li>احتفظ بسجل زمني للرسائل والإثباتات.</li>
+                        <li>راجع المبلغ والعملة قبل أي تأكيد.</li>
+                    </ul>
+                </article>
+                <article class="tip">
+                    <h3 class="warn">انتبه (Caution)</h3>
+                    <ul>
+                        <li>التسرع في الإفراج قبل تحقق كامل من الدفع.</li>
+                        <li>الاعتماد على لقطات غير واضحة أو غير كاملة.</li>
+                        <li>تغيير شروط الاتفاق أثناء الصفقة بدون توثيق.</li>
+                    </ul>
+                </article>
+                <article class="tip">
+                    <h3 class="danger">لا تفعل (Avoid)</h3>
+                    <ul>
+                        <li>لا تنقل الصفقة إلى قنوات غير رسمية.</li>
+                        <li>لا تكشف بيانات حساسة غير مطلوبة.</li>
+                        <li>لا تؤكد الاستلام إذا كانت البيانات متناقضة.</li>
+                    </ul>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel faq">
+            <h2>FAQ - أسئلة متكررة</h2>
+            <h3>متى أفتح نزاعًا؟</h3>
+            <p>عند وجود اختلاف في المبلغ، عدم وصول الدفع، أو تعارض واضح بين الإثباتات والشروط المتفق عليها.</p>
+            <h3>ما أهم سبب لتأخير الإفراج؟</h3>
+            <p>عدم اكتمال إثبات الدفع أو وجود تضارب في تفاصيل العملية (الوقت، الحساب، العملة، أو قيمة التحويل).</p>
+            <h3>كيف أحسن معدل نجاحي في الصفقات؟</h3>
+            <p>التزم بالشروط، وثّق كل خطوة، وتجنب أي تواصل خارج المسار الرسمي للمنصة.</p>
+            <p>
+                روابط مرتبطة:
+                <a href="/guides/vex-platform-overview.html">دليل المنصة</a> •
+                <a href="/guides/vex-account-wallet-verification.html">دليل الحساب والمحفظة</a> •
+                <a href="/guides/index.html">مركز الأدلة</a>
+            </p>
+            <a class="cta" href="https://vixo.click/p2p">الانتقال إلى سوق P2P</a>
+        </section>
+    </main>
+</body>
+
+</html>

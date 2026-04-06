@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>دليل منصة VEX الكامل | الألعاب، التحديات، تداول P2P، والمحفظة</title>
+    <meta name="description"
+        content="شرح شامل لمنصة VEX: كيف تبدأ، ما الخدمات الأساسية، كيف تنتقل بين الألعاب والتحديات وتداول P2P، وكيف تبني تجربة آمنة ومربحة على المدى الطويل." />
+    <meta name="keywords"
+        content="VEX platform, VEX guide, منصة VEX, ألعاب وتحديات, تداول P2P, محفظة رقمية, onboarding, user journey" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://vixo.click/guides/vex-platform-overview.html" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="VEX Platform Overview: Full User Journey" />
+    <meta property="og:description"
+        content="Understand how VEX works end-to-end across gaming, challenges, secure P2P trading, and wallet operations." />
+    <meta property="og:url" content="https://vixo.click/guides/vex-platform-overview.html" />
+    <style>
+        :root {
+            --bg: #081122;
+            --panel: #0f1b32;
+            --line: #27426f;
+            --txt: #e7eefc;
+            --muted: #adc0de;
+            --brand: #f4c239;
+            --accent: #16c39a
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            background: radial-gradient(circle at 20% 0%, #1d3766 0%, var(--bg) 42%), var(--bg);
+            color: var(--txt);
+            line-height: 1.75
+        }
+
+        .wrap {
+            width: min(980px, 92vw);
+            margin: 0 auto;
+            padding: 28px 0 56px
+        }
+
+        .hero,
+        .panel {
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: linear-gradient(180deg, #122446, var(--panel));
+            padding: 20px
+        }
+
+        .hero {
+            margin-bottom: 14px;
+            border-color: #496aa0
+        }
+
+        h1,
+        h2,
+        h3 {
+            line-height: 1.35;
+            margin: 0 0 10px
+        }
+
+        h1 {
+            font-size: clamp(1.6rem, 2.8vw, 2.3rem)
+        }
+
+        h2 {
+            font-size: clamp(1.2rem, 2.3vw, 1.55rem);
+            margin-top: 14px
+        }
+
+        p {
+            margin: 0 0 12px;
+            color: var(--muted)
+        }
+
+        ul {
+            margin: 0 0 12px;
+            padding-inline-start: 18px;
+            color: var(--muted)
+        }
+
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0 0
+        }
+
+        .chip {
+            background: #1b2f54;
+            border: 1px solid #33568b;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: .82rem
+        }
+
+        .grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            margin-top: 12px
+        }
+
+        .item {
+            padding: 14px;
+            border: 1px solid #36588f;
+            border-radius: 12px;
+            background: #132647
+        }
+
+        .tag {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #173a32;
+            color: #b3f2e1;
+            border: 1px solid #1f8066;
+            font-size: .76rem
+        }
+
+        a {
+            color: #b9d8ff
+        }
+
+        .cta {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            text-decoration: none;
+            background: var(--brand);
+            color: #3d2a00;
+            font-weight: 800;
+            padding: 10px 14px;
+            border-radius: 10px
+        }
+
+        footer {
+            margin-top: 20px;
+            padding-top: 12px;
+            border-top: 1px solid #315385;
+            color: #9cb4d8;
+            font-size: .9rem
+        }
+    </style>
+    <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "دليل منصة VEX الكامل",
+    "inLanguage": ["ar", "en"],
+    "mainEntityOfPage": "https://vixo.click/guides/vex-platform-overview.html",
+    "keywords": ["VEX platform", "gaming", "P2P trading", "wallet", "challenges"],
+    "publisher": {"@type":"Organization","name":"VEX","url":"https://vixo.click"},
+    "about": ["Online Multiplayer Games", "P2P Marketplace", "Digital Wallet", "User Security"]
+  }
+  </script>
+</head>
+
+<body>
+    <main class="wrap">
+        <section class="hero">
+            <h1>دليل منصة VEX الكامل: من التسجيل إلى الاستخدام الاحترافي</h1>
+            <p>
+                منصة VEX تجمع بين عالم الألعاب التنافسية وعالم التداول المباشر بين المستخدمين (P2P) في بيئة واحدة.
+                الفكرة الأساسية هي تقديم تجربة متكاملة: تلعب، تتحدى، تدير رصيدك، وتنفذ عمليات تداول آمنة ضمن إطار تشغيلي
+                واضح.
+            </p>
+            <div class="chips">
+                <span class="chip">Multiplayer Gaming</span>
+                <span class="chip">Challenge System</span>
+                <span class="chip">Secure P2P</span>
+                <span class="chip">Wallet & Payments</span>
+                <span class="chip">User Trust & Safety</span>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>1) ما الذي يميز VEX؟</h2>
+            <ul>
+                <li>تجربة متعددة الخدمات داخل حساب واحد بدون تشتت بين منصات مختلفة.</li>
+                <li>تنوع كبير في الألعاب التنافسية مع آليات تحدي ومتابعة حية للمباريات.</li>
+                <li>تداول P2P قائم على الضمان لتقليل المخاطر وحماية الطرفين.</li>
+                <li>إدارة رصيد ومحفظة تساعدك على تتبع التحويلات والمدفوعات بوضوح.</li>
+            </ul>
+
+            <h2>2) رحلة المستخدم خطوة بخطوة (User Journey)</h2>
+            <div class="grid">
+                <article class="item">
+                    <h3>الخطوة الأولى: إعداد الحساب</h3>
+                    <p>أنشئ حسابك، اضبط اللغة والعملة والموقع، ثم فعّل إعدادات الأمان الأساسية لتقليل أي مخاطرة لاحقًا.
+                    </p>
+                    <span class="tag">Onboarding</span>
+                </article>
+                <article class="item">
+                    <h3>الخطوة الثانية: اختيار المسار</h3>
+                    <p>يمكنك البدء باللعب التنافسي، أو بالدخول إلى سوق P2P، أو دمج المسارين حسب هدفك داخل المنصة.</p>
+                    <span class="tag">Service Discovery</span>
+                </article>
+                <article class="item">
+                    <h3>الخطوة الثالثة: التعلم والتطوير</h3>
+                    <p>تابع الأدلة المتخصصة لكل خدمة: آليات اللعب، إدارة التحدي، التعامل مع الدفع، وسياسات الحل الآمن
+                        للنزاعات.</p>
+                    <span class="tag">Learning Loop</span>
+                </article>
+            </div>
+
+            <h2>3) أفضل الممارسات لنتائج أفضل</h2>
+            <ul>
+                <li>استخدم اسم حساب واضح وملفًا موثوقًا لرفع قبولك في الصفقات والتحديات.</li>
+                <li>لا تنقل التعاملات الحساسة خارج قنوات المنصة الرسمية.</li>
+                <li>راجع شروط كل عملية قبل التأكيد النهائي، خاصة في P2P والإفراج عن الضمان.</li>
+                <li>تعامل مع مؤشرات المخاطر مبكرًا بدل الانتظار حتى تتصاعد المشكلة.</li>
+            </ul>
+
+            <h2>4) متى تنتقل للدلائل المتخصصة؟</h2>
+            <p>
+                عندما تحتاج تفاصيل عملية دقيقة: انتقل إلى دليل تداول P2P إذا كنت تنفذ صفقات،
+                وإلى دليل الألعاب إذا كان تركيزك الأداء والتحديات، وإلى دليل الحساب والمحفظة إذا أردت رفع الثقة وتنظيم
+                المدفوعات.
+            </p>
+            <p>
+                روابط مفيدة:
+                <a href="/guides/vex-p2p-trading-security.html">دليل P2P الآمن</a> •
+                <a href="/guides/vex-games-challenges-guide.html">دليل الألعاب والتحديات</a> •
+                <a href="/guides/vex-account-wallet-verification.html">دليل الحساب والمحفظة</a>
+            </p>
+
+            <a class="cta" href="/guides/index.html">العودة لمركز الأدلة</a>
+            <a class="cta" href="https://vixo.click/"
+                style="margin-inline-start:8px;background:var(--accent);color:#053427">فتح المنصة</a>
+        </section>
+
+        <footer>
+            Updated: 2026-04-06 • VEX Platform Overview Guide
+        </footer>
+    </main>
+</body>
+
+</html>

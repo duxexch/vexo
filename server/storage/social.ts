@@ -1,5 +1,5 @@
 import {
-  users, userRelationships, socialPlatforms,
+  users, userRelationships, socialPlatforms, userPreferences,
   type User, type UserRelationship, type InsertUserRelationship,
   type SocialPlatform, type InsertSocialPlatform,
 } from "@shared/schema";
@@ -65,6 +65,10 @@ export async function getUserFollowers(userId: string): Promise<UserRelationship
 
 interface SearchUsersOptions {
   limit?: number;
+  language?: string;
+  countryCode?: string;
+  regionCode?: string;
+  city?: string;
 }
 
 export async function searchUsers(query: string, excludeUserId: string, options: SearchUsersOptions = {}): Promise<User[]> {
@@ -72,22 +76,54 @@ export async function searchUsers(query: string, excludeUserId: string, options:
   const searchTerm = normalizedQuery;
   if (!searchTerm) return [];
 
+  const normalizedLanguage = String(options.language || "").trim().toLowerCase();
+  const normalizedCountryCode = String(options.countryCode || "").trim().toUpperCase();
+  const normalizedRegionCode = String(options.regionCode || "").trim().toUpperCase();
+  const normalizedCity = String(options.city || "").trim().replace(/[\\%_]/g, "");
+
   const requestedLimit = Number.isFinite(options.limit) ? Number(options.limit) : 50;
   const limit = Math.max(10, Math.min(100, requestedLimit));
 
   const searchQuery = `%${searchTerm}%`;
-  return db.select().from(users)
-    .where(and(
-      ne(users.id, excludeUserId),
-      eq(users.status, "active"),
-      or(
-        ilike(users.username, searchQuery),
-        ilike(users.accountId, searchQuery),
-        ilike(users.nickname, searchQuery)
-      )
-    ))
+
+  const whereConditions = [
+    ne(users.id, excludeUserId),
+    eq(users.status, "active"),
+    or(
+      ilike(users.username, searchQuery),
+      ilike(users.accountId, searchQuery),
+      ilike(users.nickname, searchQuery),
+      ilike(users.firstName, searchQuery),
+      ilike(users.lastName, searchQuery),
+      ilike(users.email, searchQuery),
+      ilike(users.phone, searchQuery)
+    ),
+  ];
+
+  if (normalizedLanguage) {
+    whereConditions.push(eq(userPreferences.language, normalizedLanguage));
+  }
+
+  if (normalizedCountryCode) {
+    whereConditions.push(eq(userPreferences.countryCode, normalizedCountryCode));
+  }
+
+  if (normalizedRegionCode) {
+    whereConditions.push(eq(userPreferences.regionCode, normalizedRegionCode));
+  }
+
+  if (normalizedCity) {
+    whereConditions.push(ilike(userPreferences.city, `%${normalizedCity}%`));
+  }
+
+  const rows = await db.select({ user: users })
+    .from(users)
+    .leftJoin(userPreferences, eq(userPreferences.userId, users.id))
+    .where(and(...whereConditions))
     .orderBy(asc(users.username))
     .limit(limit);
+
+  return rows.map((row) => row.user);
 }
 
 // ==================== SOCIAL PLATFORMS ====================

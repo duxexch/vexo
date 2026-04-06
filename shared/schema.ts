@@ -1669,6 +1669,11 @@ export const userPreferences = pgTable("user_preferences", {
   userId: varchar("user_id").notNull().references(() => users.id).unique(),
   language: text("language").notNull().default("en"),
   currency: text("currency").notNull().default("USD"),
+  countryCode: text("country_code"),
+  regionCode: text("region_code"),
+  regionName: text("region_name"),
+  city: text("city"),
+  addressLine: text("address_line"),
   timezone: text("timezone").default("UTC"),
   notifyAnnouncements: boolean("notify_announcements").notNull().default(true),
   notifyTransactions: boolean("notify_transactions").notNull().default(true),
@@ -1681,6 +1686,9 @@ export const userPreferences = pgTable("user_preferences", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_user_preferences_user_id").on(table.userId),
+  index("idx_user_preferences_language").on(table.language),
+  index("idx_user_preferences_country_code").on(table.countryCode),
+  index("idx_user_preferences_region_code").on(table.regionCode),
 ]);
 
 // ==================== CHALLENGER FOLLOWS ====================

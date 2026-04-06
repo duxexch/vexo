@@ -49,13 +49,29 @@ const passwordSchema = z.object({
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 interface UserPreferences {
-  language: "en" | "ar";
+  language: string;
   currency: string;
+  countryCode?: string | null;
+  regionCode?: string | null;
+  regionName?: string | null;
+  city?: string | null;
+  addressLine?: string | null;
   notifyAnnouncements: boolean;
   notifyTransactions: boolean;
   notifyPromotions: boolean;
   notifyP2P: boolean;
 }
+
+type GeoCountryOption = {
+  code: string;
+  name: string;
+};
+
+type GeoRegionOption = {
+  code: string;
+  name: string;
+  countryCode: string;
+};
 
 interface LoginHistoryEntry {
   id: string;
@@ -742,9 +758,36 @@ function PreferencesSection() {
   const { toast } = useToast();
   const headers = useAuthHeaders();
   const { WORLD_CURRENCIES, formatCurrencyLabel } = useCurrencies();
+  const [cityDraft, setCityDraft] = useState("");
+  const [addressLineDraft, setAddressLineDraft] = useState("");
 
   const { data: preferences, isLoading } = useQuery<UserPreferences>({
     queryKey: ["/api/user/preferences"],
+  });
+
+  const selectedCountryCode = String(preferences?.countryCode || "").trim().toUpperCase();
+  const selectedRegionCode = selectedCountryCode
+    ? String(preferences?.regionCode || "").trim().toUpperCase() || "__all__"
+    : "__all__";
+
+  const { data: countries = [] } = useQuery<GeoCountryOption[]>({
+    queryKey: ["/api/users/search/meta/countries"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/users/search/meta/countries");
+      return res.json();
+    },
+    staleTime: 1000 * 60 * 60,
+  });
+
+  const { data: regions = [] } = useQuery<GeoRegionOption[]>({
+    queryKey: ["/api/users/search/meta/regions", selectedCountryCode],
+    queryFn: async () => {
+      const params = new URLSearchParams({ countryCode: selectedCountryCode });
+      const res = await apiRequest("GET", `/api/users/search/meta/regions?${params.toString()}`);
+      return res.json();
+    },
+    enabled: selectedCountryCode.length > 0,
+    staleTime: 1000 * 60 * 10,
   });
 
   const updatePreferencesMutation = useMutation({
@@ -777,6 +820,45 @@ function PreferencesSection() {
 
   const handleNotificationToggle = (key: keyof UserPreferences, value: boolean) => {
     updatePreferencesMutation.mutate({ [key]: value });
+  };
+
+  useEffect(() => {
+    setCityDraft(String(preferences?.city || ""));
+    setAddressLineDraft(String(preferences?.addressLine || ""));
+  }, [preferences?.city, preferences?.addressLine]);
+
+  const handleLocationCountryChange = (value: string) => {
+    const countryCode = value === "__all__" ? null : value;
+    updatePreferencesMutation.mutate({
+      countryCode,
+      regionCode: null,
+      regionName: null,
+    });
+  };
+
+  const handleLocationRegionChange = (value: string) => {
+    if (value === "__all__") {
+      updatePreferencesMutation.mutate({
+        regionCode: null,
+        regionName: null,
+      });
+      return;
+    }
+
+    const region = regions.find((item) => item.code === value);
+    updatePreferencesMutation.mutate({
+      regionCode: value,
+      regionName: region?.name || value,
+    });
+  };
+
+  const persistLocationText = (key: "city" | "addressLine", value: string) => {
+    const normalized = value.trim();
+    const currentValue = String(preferences?.[key] || "").trim();
+    if (normalized === currentValue) {
+      return;
+    }
+    updatePreferencesMutation.mutate({ [key]: normalized.length > 0 ? normalized : null });
   };
 
   if (isLoading) {
@@ -830,6 +912,80 @@ function PreferencesSection() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-4 rounded-lg border p-4">
+          <div className="space-y-1">
+            <Label className="text-base font-semibold">{t("settings.location")}</Label>
+            <p className="text-sm text-muted-foreground">{t("settings.locationDescription")}</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{t("settings.locationCountry")}</Label>
+              <Select
+                value={selectedCountryCode || "__all__"}
+                onValueChange={handleLocationCountryChange}
+              >
+                <SelectTrigger data-testid="select-location-country">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[320px]">
+                  <SelectItem value="__all__">{t("common.all")}</SelectItem>
+                  {countries.map((country) => (
+                    <SelectItem key={country.code} value={country.code}>
+                      {country.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t("settings.locationRegion")}</Label>
+              <Select
+                value={selectedRegionCode}
+                onValueChange={handleLocationRegionChange}
+                disabled={!selectedCountryCode}
+              >
+                <SelectTrigger data-testid="select-location-region">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[320px]">
+                  <SelectItem value="__all__">{t("common.all")}</SelectItem>
+                  {regions.map((region) => (
+                    <SelectItem key={region.code} value={region.code}>
+                      {region.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{t("settings.locationCity")}</Label>
+              <Input
+                value={cityDraft}
+                onChange={(e) => setCityDraft(e.target.value)}
+                onBlur={() => persistLocationText("city", cityDraft)}
+                data-testid="input-location-city"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t("settings.locationAddressLine")}</Label>
+              <Input
+                value={addressLineDraft}
+                onChange={(e) => setAddressLineDraft(e.target.value)}
+                onBlur={() => persistLocationText("addressLine", addressLineDraft)}
+                data-testid="input-location-address"
+              />
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">{t("settings.locationHint")}</p>
         </div>
 
         <SoundSettingsSection />

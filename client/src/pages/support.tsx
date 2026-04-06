@@ -3,20 +3,24 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n";
-import { 
-  Headset, 
-  MessageCircle, 
-  Phone, 
-  Mail, 
+import {
+  Headset,
+  MessageCircle,
+  Phone,
+  Mail,
   ExternalLink,
-  Send
+  Send,
+  BookOpen,
+  ShieldCheck,
+  Wallet,
+  Swords
 } from "lucide-react";
-import { 
-  SiWhatsapp, 
-  SiTelegram, 
-  SiFacebook, 
-  SiInstagram, 
-  SiDiscord 
+import {
+  SiWhatsapp,
+  SiTelegram,
+  SiFacebook,
+  SiInstagram,
+  SiDiscord
 } from "react-icons/si";
 import { FaTwitter } from "react-icons/fa";
 
@@ -28,6 +32,24 @@ interface SupportContact {
   icon: string | null;
   isActive: boolean;
   displayOrder: number;
+}
+
+interface SupportGuideLink {
+  id: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  titleKey: string;
+  descKey: string;
+  utmContent: string;
+}
+
+function appendGuideUtm(url: string, content: string): string {
+  const u = new URL(url);
+  u.searchParams.set("utm_source", "support_page");
+  u.searchParams.set("utm_medium", "guide_card");
+  u.searchParams.set("utm_campaign", "help_center_aso_eso");
+  u.searchParams.set("utm_content", content);
+  return u.toString();
 }
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -80,6 +102,41 @@ function getContactLink(type: string, value: string): string {
 export default function SupportPage() {
   const { t, dir } = useI18n();
 
+  const guideLinks: SupportGuideLink[] = [
+    {
+      id: "platform",
+      href: "https://vixo.click/guides/vex-platform-overview.html",
+      icon: BookOpen,
+      titleKey: "support.guidePlatformTitle",
+      descKey: "support.guidePlatformDesc",
+      utmContent: "platform_overview",
+    },
+    {
+      id: "p2p",
+      href: "https://vixo.click/guides/vex-p2p-trading-security.html",
+      icon: ShieldCheck,
+      titleKey: "support.guideP2PTitle",
+      descKey: "support.guideP2PDesc",
+      utmContent: "p2p_security",
+    },
+    {
+      id: "games",
+      href: "https://vixo.click/guides/vex-games-challenges-guide.html",
+      icon: Swords,
+      titleKey: "support.guideGamesTitle",
+      descKey: "support.guideGamesDesc",
+      utmContent: "games_challenges",
+    },
+    {
+      id: "account",
+      href: "https://vixo.click/guides/vex-account-wallet-verification.html",
+      icon: Wallet,
+      titleKey: "support.guideAccountTitle",
+      descKey: "support.guideAccountDesc",
+      utmContent: "account_wallet",
+    },
+  ];
+
   const { data: contacts, isLoading } = useQuery<SupportContact[]>({
     queryKey: ["/api/support/contacts"],
   });
@@ -130,8 +187,8 @@ export default function SupportPage() {
               const link = getContactLink(contact.type, contact.value);
 
               return (
-                <Card 
-                  key={contact.id} 
+                <Card
+                  key={contact.id}
                   className="group hover-elevate transition-all"
                   data-testid={`card-contact-${contact.id}`}
                 >
@@ -152,9 +209,9 @@ export default function SupportPage() {
                           className={`w-full ${bgColor} text-white`}
                           data-testid={`button-contact-${contact.id}`}
                         >
-                          <a 
-                            href={link} 
-                            target="_blank" 
+                          <a
+                            href={link}
+                            target="_blank"
                             rel="noopener noreferrer"
                           >
                             <Send className="h-4 w-4 me-2" />
@@ -187,6 +244,47 @@ export default function SupportPage() {
             <Badge variant="secondary">{t('support.fastResponse')}</Badge>
             <Badge variant="secondary">{t('support.multiLang')}</Badge>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5" />
+            {t('support.guidesTitle')}
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">{t('support.guidesDesc')}</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {guideLinks.map((guide) => {
+            const GuideIcon = guide.icon;
+            const guideUrl = appendGuideUtm(guide.href, guide.utmContent);
+            return (
+              <a
+                key={guide.id}
+                href={guideUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-lg border border-border/60 bg-card/50 p-4 transition-colors hover:border-primary/40 hover:bg-card"
+                data-testid={`support-guide-${guide.id}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="rounded-full bg-primary/10 p-2 text-primary">
+                    <GuideIcon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold leading-tight">{t(guide.titleKey)}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{t(guide.descKey)}</p>
+                    <div className="mt-2 inline-flex items-center text-xs font-medium text-primary">
+                      {t('support.openGuide')}
+                      <ExternalLink className="ms-1 h-3 w-3" />
+                    </div>
+                  </div>
+                </div>
+              </a>
+            );
+          })}
+          <p className="text-xs text-muted-foreground">{t('support.guidesFooter')}</p>
         </CardContent>
       </Card>
     </div>

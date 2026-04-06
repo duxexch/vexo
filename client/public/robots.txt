@@ -65,9 +65,77 @@ Disallow: /transactions
 Disallow: /chat
 Crawl-delay: 3
 
+# AI crawlers and LLM agents
+User-agent: GPTBot
+Allow: /guides/
+Allow: /llms.txt
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /settings
+Disallow: /wallet
+Disallow: /transactions
+Disallow: /chat
+Disallow: /support
+Disallow: /profile
+
+User-agent: ChatGPT-User
+Allow: /guides/
+Allow: /llms.txt
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /settings
+Disallow: /wallet
+Disallow: /transactions
+Disallow: /chat
+Disallow: /support
+Disallow: /profile
+
+User-agent: ClaudeBot
+Allow: /guides/
+Allow: /llms.txt
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /settings
+Disallow: /wallet
+Disallow: /transactions
+Disallow: /chat
+Disallow: /support
+Disallow: /profile
+
+User-agent: PerplexityBot
+Allow: /guides/
+Allow: /llms.txt
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /settings
+Disallow: /wallet
+Disallow: /transactions
+Disallow: /chat
+Disallow: /support
+Disallow: /profile
+
+User-agent: CCBot
+Allow: /guides/
+Allow: /llms.txt
+Disallow: /admin
+Disallow: /api/
+Disallow: /auth/
+Disallow: /settings
+Disallow: /wallet
+Disallow: /transactions
+Disallow: /chat
+Disallow: /support
+Disallow: /profile
+
 # All other bots
 User-agent: *
 Allow: /
+Allow: /guides/
+Allow: /llms.txt
 Disallow: /admin
 Disallow: /api/
 Disallow: /auth/

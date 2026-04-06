@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>دليل ألعاب وتحديات VEX | دومينو، شطرنج، طاولة، طرنيب، بلوت</title>
+    <meta name="description"
+        content="شرح شامل لآليات اللعب والتحديات في VEX: إعدادات المباراة، أنظمة الأدوار والمؤقت، تجربة المشاهدة، اللعب النزيه، وتحسين الأداء التنافسي." />
+    <meta name="keywords"
+        content="VEX games, domino, chess, backgammon, tarneeb, baloot, challenge mode, turn timer, spectator mode" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://vixo.click/guides/vex-games-challenges-guide.html" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="VEX Games & Challenges Guide" />
+    <meta property="og:description"
+        content="Learn challenge flow, game modes, timers, spectator interactions, and fair-play strategy on VEX." />
+    <style>
+        :root {
+            --bg: #0b111f;
+            --panel: #141d34;
+            --line: #384c79;
+            --txt: #e9efff;
+            --muted: #b2c2e6;
+            --brand: #f4c239;
+            --accent: #8be9ff
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            background: radial-gradient(circle at 75% 0%, #25386b 0%, var(--bg) 45%), var(--bg);
+            color: var(--txt);
+            line-height: 1.72
+        }
+
+        .wrap {
+            width: min(1000px, 92vw);
+            margin: 0 auto;
+            padding: 26px 0 56px
+        }
+
+        .panel {
+            background: linear-gradient(180deg, #19284a, var(--panel));
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 12px
+        }
+
+        h1,
+        h2,
+        h3 {
+            line-height: 1.35;
+            margin: 0 0 10px
+        }
+
+        h1 {
+            font-size: clamp(1.55rem, 2.8vw, 2.15rem)
+        }
+
+        h2 {
+            font-size: clamp(1.15rem, 2.1vw, 1.42rem);
+            margin-top: 12px
+        }
+
+        p {
+            margin: 0 0 10px;
+            color: var(--muted)
+        }
+
+        .games {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px
+        }
+
+        .g {
+            border: 1px solid #45639a;
+            background: #1b2d51;
+            border-radius: 12px;
+            padding: 12px
+        }
+
+        .timeline {
+            display: grid;
+            gap: 8px
+        }
+
+        .t {
+            border: 1px dashed #4d6faa;
+            background: #162945;
+            border-radius: 10px;
+            padding: 10px
+        }
+
+        ul {
+            margin: 0 0 10px;
+            padding-inline-start: 18px;
+            color: var(--muted)
+        }
+
+        .cta {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            text-decoration: none;
+            background: var(--brand);
+            color: #3f2b00;
+            font-weight: 800;
+            padding: 10px 14px;
+            border-radius: 10px
+        }
+
+        .k {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 8px
+        }
+
+        .k span {
+            background: #22345d;
+            border: 1px solid #385994;
+            border-radius: 999px;
+            padding: 3px 10px;
+            font-size: .8rem
+        }
+    </style>
+    <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"Article",
+    "headline":"VEX Games and Challenges Guide",
+    "mainEntityOfPage":"https://vixo.click/guides/vex-games-challenges-guide.html",
+    "keywords":["domino","chess","backgammon","tarneeb","baloot","challenge","spectator"],
+    "about":["Competitive Gaming","Turn-Based Gameplay","Real-time Spectating","Fair Play"]
+  }
+  </script>
+</head>
+
+<body>
+    <main class="wrap">
+        <section class="panel">
+            <h1>دليل الألعاب والتحديات في VEX</h1>
+            <p>
+                إذا كان هدفك تحسين نتائجك التنافسية داخل VEX، فهذا الدليل يمنحك الصورة الكاملة:
+                كيف تبدأ تحديًا، كيف تدير وقت الدور، كيف تتعامل مع ضغط القرار، ومتى تنتقل من اللعب الفردي إلى المواجهات
+                الأعلى تنافسًا.
+            </p>
+            <div class="k">
+                <span>Domino Strategy</span>
+                <span>Chess Tactics</span>
+                <span>Backgammon Decisions</span>
+                <span>Tarneeb Team Play</span>
+                <span>Baloot Competitive Flow</span>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>الألعاب المدعومة في VEX</h2>
+            <div class="games">
+                <article class="g">
+                    <h3>الدومينو (Domino)</h3>
+                    <p>يعتمد على قراءة الطاولة، إدارة القطع، وتقليل احتمالات الخصم مع الحفاظ على توازن المخاطرة.</p>
+                </article>
+                <article class="g">
+                    <h3>الشطرنج (Chess)</h3>
+                    <p>اللعب التكتيكي والتحكم بالمربعات الأساسية وإدارة الوقت عامل حاسم في المباريات القصيرة.</p>
+                </article>
+                <article class="g">
+                    <h3>الطاولة (Backgammon)</h3>
+                    <p>قرارات احتمالية سريعة، توزيع المخاطر، وفهم وضعية السباق مقابل الضرب والاحتواء.</p>
+                </article>
+                <article class="g">
+                    <h3>الطرنيب (Tarneeb)</h3>
+                    <p>تعتمد على قراءة الشريك، ضبط الإعلان، وإدارة الأوراق الحرجة عبر أدوار الفريق.</p>
+                </article>
+                <article class="g">
+                    <h3>البلوت (Baloot)</h3>
+                    <p>تناغم الفريق والتوقيت وقراءة اللعب المعاكس عناصر جوهرية لتحويل الجولات لصالحك.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>دورة التحدي: من البداية للنهاية</h2>
+            <div class="timeline">
+                <div class="t"><strong>1) اختيار اللعبة والإعدادات:</strong> حدد نمط اللعب وقواعد التحدي الأساسية بما
+                    يناسب مستوى المهارة.</div>
+                <div class="t"><strong>2) بدء المباراة:</strong> راقب مؤشرات الدور والمؤقت منذ اللحظة الأولى لتقليل
+                    القرارات المتأخرة.</div>
+                <div class="t"><strong>3) إدارة منتصف المباراة:</strong> في هذه المرحلة تظهر الأفضلية التكتيكية؛ حافظ
+                    على خطة واضحة بدل ردود الفعل العشوائية.</div>
+                <div class="t"><strong>4) حسم النهاية:</strong> ركّز على أقل عدد أخطاء ممكن، وتجنب المخاطرة غير الضرورية
+                    في اللحظات الحرجة.</div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>قواعد الأداء العالي (High Performance Rules)</h2>
+            <ul>
+                <li>راقب المؤقت دائمًا: أفضل القرارات تفقد قيمتها إذا جاءت متأخرة.</li>
+                <li>قسّم المباراة إلى مراحل: افتتاح - سيطرة - إغلاق، ولا تلعب كل المراحل بنفس العقلية.</li>
+                <li>في الألعاب الجماعية، تواصل التكتيك أهم من اللعب الفردي المبالغ فيه.</li>
+                <li>احترم مبادئ اللعب النزيه لتجنب المخالفات والحفاظ على سجل تنافسي قوي.</li>
+            </ul>
+            <p>
+                صفحات مرتبطة:
+                <a href="/guides/vex-platform-overview.html">دليل المنصة</a> •
+                <a href="/guides/vex-account-wallet-verification.html">دليل الحساب والمحفظة</a> •
+                <a href="/guides/index.html">مركز الأدلة</a>
+            </p>
+            <a class="cta" href="https://vixo.click/games">ابدأ اللعب الآن</a>
+        </section>
+    </main>
+</body>
+
+</html>

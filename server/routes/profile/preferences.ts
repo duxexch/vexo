@@ -15,11 +15,23 @@ const supportedLanguages = [
 const preferencesUpdateSchema = z.object({
   language: z.enum(supportedLanguages).optional(),
   currency: z.enum(["USD", "EUR", "GBP", "AED", "SAR"]).optional(),
+  countryCode: z.string().max(8).optional().nullable(),
+  regionCode: z.string().max(24).optional().nullable(),
+  regionName: z.string().max(120).optional().nullable(),
+  city: z.string().max(120).optional().nullable(),
+  addressLine: z.string().max(255).optional().nullable(),
   notifyAnnouncements: z.boolean().optional(),
   notifyTransactions: z.boolean().optional(),
   notifyPromotions: z.boolean().optional(),
   notifyP2P: z.boolean().optional(),
 });
+
+function normalizeOptionalText(value: string | null | undefined, maxLength: number): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const normalized = sanitizePlainText(value, { maxLength }).trim();
+  return normalized.length > 0 ? normalized : null;
+}
 
 const profileUpdateSchema = z.object({
   firstName: z.string().max(50).optional().nullable(),
@@ -49,7 +61,22 @@ export function registerPreferencesRoutes(app: Express): void {
   app.patch("/api/user/preferences", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const validated = preferencesUpdateSchema.parse(req.body);
-      const prefs = await storage.createOrUpdateUserPreferences(req.user!.id, validated);
+      const normalized = {
+        ...validated,
+        countryCode: (() => {
+          const value = normalizeOptionalText(validated.countryCode, 8);
+          return typeof value === "string" ? value.replace(/[^A-Za-z0-9_-]/g, "").toUpperCase() || null : value;
+        })(),
+        regionCode: (() => {
+          const value = normalizeOptionalText(validated.regionCode, 24);
+          return typeof value === "string" ? value.replace(/[^A-Za-z0-9_-]/g, "").toUpperCase() || null : value;
+        })(),
+        regionName: normalizeOptionalText(validated.regionName, 120),
+        city: normalizeOptionalText(validated.city, 120),
+        addressLine: normalizeOptionalText(validated.addressLine, 255),
+      };
+
+      const prefs = await storage.createOrUpdateUserPreferences(req.user!.id, normalized);
       res.json(prefs);
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
