@@ -11,21 +11,20 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { 
-  Gift, 
-  Play, 
-  Users, 
-  Calendar, 
-  Video, 
-  Copy, 
-  Check, 
-  Coins, 
+import {
+  Gift,
+  Play,
+  Users,
+  Calendar,
+  Video,
+  Copy,
+  Check,
+  Coins,
   Star,
   Clock,
   Share2,
   Link2,
   TrendingUp,
-  DollarSign,
   Gamepad2
 } from "lucide-react";
 
@@ -60,6 +59,8 @@ export default function FreePage() {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedReference, setCopiedReference] = useState(false);
+  const [lastRewardReference, setLastRewardReference] = useState("");
   const [showShareDialog, setShowShareDialog] = useState(false);
 
   const referralCode = user?.accountId || user?.username || "";
@@ -69,14 +70,22 @@ export default function FreePage() {
     queryKey: ['/api/free/rewards'],
   });
 
+  const formatCoins = (amount: number): string => `${amount.toFixed(2)} ${isAr ? 'عملة' : 'coins'}`;
+
   const claimDailyMutation = useMutation({
     mutationFn: () => apiRequest('POST', '/api/free/claim-daily'),
     onSuccess: async (res: Response) => {
       const data = typeof res?.json === 'function' ? await res.json() : res;
       const amount = data?.amount || 0;
+      const referenceId = typeof data?.referenceId === 'string' ? data.referenceId : '';
+      if (referenceId) {
+        setLastRewardReference(referenceId);
+      }
       toast({
         title: isAr ? 'تم المطالبة بنجاح!' : 'Claimed!',
-        description: isAr ? `حصلت على $${amount.toFixed(2)}` : `You received $${amount.toFixed(2)}` 
+        description: isAr
+          ? `حصلت على ${formatCoins(Number(amount))}${referenceId ? ` - المرجع: ${referenceId}` : ''}`
+          : `You received ${formatCoins(Number(amount))}${referenceId ? ` - Ref: ${referenceId}` : ''}`
       });
       queryClient.invalidateQueries({ queryKey: ['/api/free/rewards'] });
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
@@ -91,9 +100,15 @@ export default function FreePage() {
     onSuccess: async (res: Response) => {
       const data = typeof res?.json === 'function' ? await res.json() : res;
       const amount = data?.amount || 0;
+      const referenceId = typeof data?.referenceId === 'string' ? data.referenceId : '';
+      if (referenceId) {
+        setLastRewardReference(referenceId);
+      }
       toast({
         title: isAr ? 'تمت المشاهدة!' : 'Ad Watched!',
-        description: isAr ? `حصلت على $${amount.toFixed(2)}` : `You earned $${amount.toFixed(2)}` 
+        description: isAr
+          ? `حصلت على ${formatCoins(Number(amount))}${referenceId ? ` - المرجع: ${referenceId}` : ''}`
+          : `You earned ${formatCoins(Number(amount))}${referenceId ? ` - Ref: ${referenceId}` : ''}`
       });
       queryClient.invalidateQueries({ queryKey: ['/api/free/rewards'] });
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
@@ -117,11 +132,22 @@ export default function FreePage() {
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
+  const copyReference = () => {
+    if (!lastRewardReference) return;
+    navigator.clipboard.writeText(lastRewardReference);
+    setCopiedReference(true);
+    toast({
+      title: isAr ? 'تم النسخ' : 'Copied!',
+      description: isAr ? 'تم نسخ مرجع العملية' : 'Operation reference copied',
+    });
+    setTimeout(() => setCopiedReference(false), 2000);
+  };
+
   const shareReferral = async () => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: isAr ? 'انضم إلى VEX واحصل على رصيد مجاني!' : 'Join VEX and Get Free Balance!',
+          title: isAr ? 'انضم إلى VEX واحصل على عملة مشروع مجانية!' : 'Join VEX and Get Free Project Coins!',
           text: isAr ? `انضم عبر رابط الإحالة الخاص بي: ${referralCode}` : `Join using my referral: ${referralCode}`,
           url: referralLink,
         });
@@ -161,7 +187,7 @@ export default function FreePage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold">{isAr ? 'المكافآت المجانية' : 'Free Rewards'}</h1>
-          <p className="text-muted-foreground text-sm">{isAr ? 'اكسب رصيد مجاني يومياً' : 'Earn free balance daily'}</p>
+          <p className="text-muted-foreground text-sm">{isAr ? 'اكسب عملة المشروع يومياً' : 'Earn project coins daily'}</p>
         </div>
       </div>
 
@@ -169,8 +195,8 @@ export default function FreePage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardContent className="p-4 text-center">
-            <DollarSign className="w-8 h-8 mx-auto mb-2 text-green-500" />
-            <p className="text-2xl font-bold text-green-500">${totalEarnings}</p>
+            <Coins className="w-8 h-8 mx-auto mb-2 text-green-500" />
+            <p className="text-2xl font-bold text-green-500">{totalEarnings}</p>
             <p className="text-xs text-muted-foreground">{isAr ? 'إجمالي الأرباح' : 'Total Earned'}</p>
           </CardContent>
         </Card>
@@ -196,6 +222,21 @@ export default function FreePage() {
           </CardContent>
         </Card>
       </div>
+
+      {lastRewardReference && (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-sm text-muted-foreground">{isAr ? 'مرجع آخر عملية مكافأة' : 'Latest reward operation reference'}</p>
+              <p className="font-mono text-sm sm:text-base break-all">{lastRewardReference}</p>
+            </div>
+            <Button variant="outline" onClick={copyReference}>
+              {copiedReference ? <Check className="w-4 h-4 me-2" /> : <Copy className="w-4 h-4 me-2" />}
+              {isAr ? 'نسخ المرجع' : 'Copy Reference'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="daily" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
@@ -234,13 +275,13 @@ export default function FreePage() {
                     <Coins className="w-6 h-6 text-primary" />
                   </div>
                   <div>
-                    <p className="font-bold text-lg">${rewards.dailyBonus.amount.toFixed(2)}</p>
+                    <p className="font-bold text-lg">{rewards.dailyBonus.amount.toFixed(2)}</p>
                     <p className="text-xs text-muted-foreground">
                       {isAr ? `اليوم ${rewards.dailyBonus.nextDay} من 7` : `Day ${rewards.dailyBonus.nextDay} of 7`}
                     </p>
                   </div>
                 </div>
-                <Button 
+                <Button
                   onClick={() => claimDailyMutation.mutate()}
                   disabled={rewards.dailyBonus.claimed || claimDailyMutation.isPending}
                 >
@@ -249,8 +290,8 @@ export default function FreePage() {
                   ) : (
                     <Gift className="w-4 h-4 me-2" />
                   )}
-                  {rewards.dailyBonus.claimed 
-                    ? (isAr ? 'تم المطالبة' : 'Claimed') 
+                  {rewards.dailyBonus.claimed
+                    ? (isAr ? 'تم المطالبة' : 'Claimed')
                     : (isAr ? 'اطلب المكافأة' : 'Claim')}
                 </Button>
               </div>
@@ -263,7 +304,7 @@ export default function FreePage() {
                 </div>
                 <Progress value={((rewards.dailyBonus.streak % 7) / 7) * 100} />
                 <p className="text-xs text-muted-foreground">
-                  {isAr ? 'أكمل 7 أيام متتالية للحصول على مكافأة $5.00' : 'Complete 7 days for $5.00 bonus'}
+                  {isAr ? 'أكمل 7 أيام متتالية للحصول على مكافأة 5.00 من عملة المشروع' : 'Complete 7 days for a 5.00 coins bonus'}
                 </p>
               </div>
 
@@ -274,12 +315,11 @@ export default function FreePage() {
                   const isCurrent = dayNum === rewards.dailyBonus.nextDay;
                   const isPast = dayNum < rewards.dailyBonus.nextDay;
                   return (
-                    <div key={dayNum} className={`text-center p-2 rounded-lg border text-xs ${
-                      isCurrent ? 'border-primary bg-primary/10 font-bold' : 
-                      isPast ? 'bg-muted text-muted-foreground' : 'border-dashed'
-                    }`}>
+                    <div key={dayNum} className={`text-center p-2 rounded-lg border text-xs ${isCurrent ? 'border-primary bg-primary/10 font-bold' :
+                        isPast ? 'bg-muted text-muted-foreground' : 'border-dashed'
+                      }`}>
                       <p className="font-medium">{isAr ? `ي${dayNum}` : `D${dayNum}`}</p>
-                      <p className="text-primary">${amount}</p>
+                      <p className="text-primary">{amount}</p>
                       {isPast && <Check className="w-3 h-3 mx-auto text-green-500" />}
                     </div>
                   );
@@ -288,7 +328,9 @@ export default function FreePage() {
 
               <div className="text-center text-sm text-muted-foreground mt-2">
                 <TrendingUp className="w-4 h-4 inline me-1" />
-                {isAr ? `إجمالي أرباح المكافأة اليومية: $${rewards.totalDailyEarnings.toFixed(2)}` : `Total daily earnings: $${rewards.totalDailyEarnings.toFixed(2)}`}
+                {isAr
+                  ? `إجمالي أرباح المكافأة اليومية: ${formatCoins(rewards.totalDailyEarnings)}`
+                  : `Total daily earnings: ${formatCoins(rewards.totalDailyEarnings)}`}
               </div>
             </CardContent>
           </Card>
@@ -311,11 +353,11 @@ export default function FreePage() {
                     <Coins className="w-6 h-6 text-orange-500" />
                   </div>
                   <div>
-                    <p className="font-bold text-lg">${rewards.adReward.toFixed(2)}</p>
+                    <p className="font-bold text-lg">{rewards.adReward.toFixed(2)}</p>
                     <p className="text-xs text-muted-foreground">{isAr ? 'لكل إعلان' : 'per ad'}</p>
                   </div>
                 </div>
-                <Button 
+                <Button
                   onClick={() => watchAdMutation.mutate()}
                   disabled={rewards.adsWatched >= rewards.maxAdsPerDay || watchAdMutation.isPending}
                   variant="outline"
@@ -325,8 +367,8 @@ export default function FreePage() {
                   ) : (
                     <Play className="w-4 h-4 me-2" />
                   )}
-                  {rewards.adsWatched >= rewards.maxAdsPerDay 
-                    ? (isAr ? 'الحد اليومي' : 'Daily Limit') 
+                  {rewards.adsWatched >= rewards.maxAdsPerDay
+                    ? (isAr ? 'الحد اليومي' : 'Daily Limit')
                     : (isAr ? 'شاهد إعلان' : 'Watch Ad')}
                 </Button>
               </div>
@@ -341,12 +383,14 @@ export default function FreePage() {
 
               <div className="p-3 bg-orange-500/10 rounded-lg border border-orange-500/20 text-sm">
                 <p className="font-medium text-orange-500">
-                  {isAr ? `الربح المحتمل اليوم: $${(rewards.maxAdsPerDay * rewards.adReward).toFixed(2)}` 
-                    : `Today's potential: $${(rewards.maxAdsPerDay * rewards.adReward).toFixed(2)}`}
+                  {isAr
+                    ? `الربح المحتمل اليوم: ${formatCoins(rewards.maxAdsPerDay * rewards.adReward)}`
+                    : `Today's potential: ${formatCoins(rewards.maxAdsPerDay * rewards.adReward)}`}
                 </p>
                 <p className="text-muted-foreground mt-1">
-                  {isAr ? `إجمالي أرباح الإعلانات: $${rewards.totalAdEarnings.toFixed(2)}` 
-                    : `Total ad earnings: $${rewards.totalAdEarnings.toFixed(2)}`}
+                  {isAr
+                    ? `إجمالي أرباح الإعلانات: ${formatCoins(rewards.totalAdEarnings)}`
+                    : `Total ad earnings: ${formatCoins(rewards.totalAdEarnings)}`}
                 </p>
               </div>
             </CardContent>
@@ -368,9 +412,9 @@ export default function FreePage() {
               <div className="p-4 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground mb-2">{isAr ? 'كود الإحالة' : 'Referral Code'}</p>
                 <div className="flex items-center gap-2">
-                  <Input 
-                    value={referralCode} 
-                    readOnly 
+                  <Input
+                    value={referralCode}
+                    readOnly
                     className="font-mono font-bold text-lg"
                   />
                   <Button variant="outline" size="icon" onClick={copyCode}>
@@ -383,9 +427,9 @@ export default function FreePage() {
               <div className="p-4 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground mb-2">{isAr ? 'رابط الإحالة' : 'Referral Link'}</p>
                 <div className="flex items-center gap-2">
-                  <Input 
-                    value={referralLink} 
-                    readOnly 
+                  <Input
+                    value={referralLink}
+                    readOnly
                     className="font-mono text-sm"
                     dir="ltr"
                   />
@@ -401,7 +445,7 @@ export default function FreePage() {
               {/* Reward Info */}
               <div className="flex items-center justify-between p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
                 <div>
-                  <p className="font-bold text-blue-500 text-lg">${rewards.referralReward.toFixed(2)}</p>
+                  <p className="font-bold text-blue-500 text-lg">{rewards.referralReward.toFixed(2)}</p>
                   <p className="text-xs text-muted-foreground">{isAr ? 'لكل إحالة ناجحة' : 'per referral'}</p>
                 </div>
                 <div className="text-end">
@@ -410,7 +454,9 @@ export default function FreePage() {
                     {rewards.referrals} {isAr ? 'إحالة' : 'referred'}
                   </Badge>
                   <p className="text-xs text-muted-foreground">
-                    {isAr ? `الأرباح: $${rewards.totalReferralEarnings.toFixed(2)}` : `Earned: $${rewards.totalReferralEarnings.toFixed(2)}`}
+                    {isAr
+                      ? `الأرباح: ${formatCoins(rewards.totalReferralEarnings)}`
+                      : `Earned: ${formatCoins(rewards.totalReferralEarnings)}`}
                   </p>
                 </div>
               </div>

@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   TrendingUp,
   Search,
+  Copy,
   Settings,
   Palette,
   Shield,
@@ -40,6 +41,15 @@ async function adminFetch(url: string) {
 
 export default function AdminDashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
+
+  const copyText = async (value: string) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // Clipboard support can be unavailable in some contexts.
+    }
+  };
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/admin/stats"],
@@ -172,16 +182,46 @@ export default function AdminDashboardPage() {
                   <div>
                     <h4 className="font-medium mb-2">Transactions</h4>
                     <div className="space-y-2">
-                      {searchResults.transactions.map((tx: { id: string; type?: string; amount?: string | number; status?: string }) => (
+                      {searchResults.transactions.map((tx: { id: string; type?: string; amount?: string | number; status?: string; referenceId?: string | null }) => (
                         <div key={tx.id} className="flex items-center justify-between p-2 rounded bg-muted/50">
-                          <span>{tx.type} - ${tx.amount}</span>
+                          <div>
+                            <span>{tx.type} - ${tx.amount}</span>
+                            <p className="text-xs text-muted-foreground">Ref: {tx.referenceId || tx.id}</p>
+                          </div>
                           <Badge>{tx.status}</Badge>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-                {(!searchResults.users?.length && !searchResults.transactions?.length) && (
+                {searchResults.currencyLedger?.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-2">Project Currency Ledger</h4>
+                    <div className="space-y-2">
+                      {searchResults.currencyLedger.map((entry: { id: string; type?: string; amount?: string | number; referenceId?: string | null; referenceType?: string | null; description?: string | null }) => (
+                        <div key={entry.id} className="flex items-center justify-between gap-3 p-2 rounded bg-muted/50">
+                          <div className="min-w-0">
+                            <p className="font-medium">{entry.type} - {entry.amount}</p>
+                            <p className="text-xs text-muted-foreground truncate">{entry.description || entry.referenceType || "Ledger entry"}</p>
+                            <p className="text-xs text-muted-foreground">Ref: {entry.referenceId || entry.id}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{entry.referenceType || "ledger"}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => copyText(entry.referenceId || entry.id)}
+                              aria-label="Copy ledger reference"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(!searchResults.users?.length && !searchResults.transactions?.length && !searchResults.currencyLedger?.length) && (
                   <p className="text-muted-foreground">No results found</p>
                 )}
               </div>
@@ -300,9 +340,9 @@ export default function AdminDashboardPage() {
                   </span>
                   <span className="font-semibold text-red-500">${(stats.totalWithdrawals || 0).toLocaleString()}</span>
                 </div>
-                <Progress 
-                  value={stats.totalDeposits > 0 ? Math.min(100, ((stats.totalWithdrawals || 0) / stats.totalDeposits) * 100) : 0} 
-                  className="h-2 [&>div]:bg-red-500" 
+                <Progress
+                  value={stats.totalDeposits > 0 ? Math.min(100, ((stats.totalWithdrawals || 0) / stats.totalDeposits) * 100) : 0}
+                  className="h-2 [&>div]:bg-red-500"
                 />
               </div>
               <div className="space-y-2">

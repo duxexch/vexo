@@ -4,11 +4,13 @@ import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
 import { eq, and, or, sql, desc, gte } from "drizzle-orm";
 import {
-  users, gameplaySettings,
+  gameplaySettings,
   dailyRewards, adWatchLog,
+  projectCurrencyWallets, projectCurrencyLedger,
 } from "@shared/schema";
 import { sendNotification } from "../../websocket";
 import { logger } from "../../lib/logger";
+import { createRewardReference } from "../../lib/reward-reference";
 
 export function registerRewardClaimRoutes(app: Express): void {
 
@@ -55,8 +57,9 @@ export function registerRewardClaimRoutes(app: Express): void {
 
       const REWARD_SCHEDULE = ["0.50", "0.75", "1.00", "1.50", "2.00", "3.00", "5.00"];
       const rewardAmount = REWARD_SCHEDULE[currentDay - 1] || "0.50";
+      const rewardReferenceId = createRewardReference("daily");
 
-      // Insert reward and update balance atomically
+      // Insert reward and credit project-currency wallet atomically.
       await db.transaction(async (tx) => {
         await tx.insert(dailyRewards).values({
           userId,
@@ -64,9 +67,48 @@ export function registerRewardClaimRoutes(app: Express): void {
           amount: rewardAmount,
           streakCount: currentStreak,
         });
-        await tx.update(users)
-          .set({ balance: sql`${users.balance} + ${rewardAmount}` })
-          .where(eq(users.id, userId));
+
+        await tx.execute(sql`
+          INSERT INTO project_currency_wallets (user_id)
+          VALUES (${userId})
+          ON CONFLICT (user_id) DO NOTHING
+        `);
+
+        const [wallet] = await tx.select()
+          .from(projectCurrencyWallets)
+          .where(eq(projectCurrencyWallets.userId, userId))
+          .for("update");
+
+        if (!wallet) {
+          throw new Error("Project currency wallet not found");
+        }
+
+        const rewardValue = parseFloat(rewardAmount);
+        const balanceBefore = parseFloat(wallet.totalBalance || "0");
+        const earnedBefore = parseFloat(wallet.earnedBalance || "0");
+        const totalEarnedBefore = parseFloat(wallet.totalEarned || "0");
+        const balanceAfter = (balanceBefore + rewardValue).toFixed(2);
+
+        await tx.update(projectCurrencyWallets)
+          .set({
+            earnedBalance: (earnedBefore + rewardValue).toFixed(2),
+            totalBalance: balanceAfter,
+            totalEarned: (totalEarnedBefore + rewardValue).toFixed(2),
+            updatedAt: new Date(),
+          })
+          .where(eq(projectCurrencyWallets.id, wallet.id));
+
+        await tx.insert(projectCurrencyLedger).values({
+          userId,
+          walletId: wallet.id,
+          type: "bonus",
+          amount: rewardValue.toFixed(2),
+          balanceBefore: balanceBefore.toFixed(2),
+          balanceAfter,
+          referenceId: rewardReferenceId,
+          referenceType: "daily_reward",
+          description: `Free page daily reward day ${currentDay}`,
+        });
       });
 
       res.json({
@@ -74,20 +116,21 @@ export function registerRewardClaimRoutes(app: Express): void {
         amount: parseFloat(rewardAmount),
         day: currentDay,
         streakCount: currentStreak,
-        message: `Claimed $${rewardAmount} for day ${currentDay}!`,
+        referenceId: rewardReferenceId,
+        message: `Claimed ${rewardAmount} project coins for day ${currentDay}!`,
       });
 
       // Notify user about daily bonus (async, non-blocking)
       sendNotification(userId, {
         type: 'promotion',
         priority: 'normal',
-        title: `Daily Bonus: Day ${currentDay}! 💰`,
-        titleAr: `المكافأة اليومية: اليوم ${currentDay}! 💰`,
-        message: `You claimed $${rewardAmount}! Streak: ${currentStreak} day${currentStreak > 1 ? 's' : ''}.`,
-        messageAr: `حصلت على $${rewardAmount}! السلسلة: ${currentStreak} يوم.`,
+        title: `Daily Bonus: Day ${currentDay}!`,
+        titleAr: `المكافأة اليومية: اليوم ${currentDay}!`,
+        message: `You claimed ${rewardAmount} project coins. Ref: ${rewardReferenceId}`,
+        messageAr: `حصلت على ${rewardAmount} من عملة المشروع. المرجع: ${rewardReferenceId}`,
         link: '/free',
-        metadata: JSON.stringify({ day: currentDay, streak: currentStreak, amount: rewardAmount }),
-      }).catch(() => {});
+        metadata: JSON.stringify({ day: currentDay, streak: currentStreak, amount: rewardAmount, referenceId: rewardReferenceId }),
+      }).catch(() => { });
     } catch (error: unknown) {
       logger.error('Error claiming daily bonus', error instanceof Error ? error : new Error(String(error)));
       res.status(500).json({ error: getErrorMessage(error) });
@@ -118,6 +161,7 @@ export function registerRewardClaimRoutes(app: Express): void {
       for (const r of settingsRows) { cfg[r.key] = r.value; }
       const maxAds = parseInt(cfg['max_ads_per_day'] || '10');
       const rewardAmt = cfg['ad_reward_amount'] || '0.10';
+      const rewardReferenceId = createRewardReference("ad");
 
       // Count today's watches
       const [todayCount] = await db.select({ count: sql<number>`count(*)` })
@@ -128,15 +172,54 @@ export function registerRewardClaimRoutes(app: Express): void {
         return res.status(400).json({ error: "Daily ad watch limit reached" });
       }
 
-      // Record ad watch and update balance atomically
+      // Record ad watch and credit project-currency wallet atomically.
       await db.transaction(async (tx) => {
         await tx.insert(adWatchLog).values({
           userId,
           rewardAmount: rewardAmt,
         });
-        await tx.update(users)
-          .set({ balance: sql`${users.balance} + ${rewardAmt}` })
-          .where(eq(users.id, userId));
+
+        await tx.execute(sql`
+          INSERT INTO project_currency_wallets (user_id)
+          VALUES (${userId})
+          ON CONFLICT (user_id) DO NOTHING
+        `);
+
+        const [wallet] = await tx.select()
+          .from(projectCurrencyWallets)
+          .where(eq(projectCurrencyWallets.userId, userId))
+          .for("update");
+
+        if (!wallet) {
+          throw new Error("Project currency wallet not found");
+        }
+
+        const rewardValue = parseFloat(rewardAmt);
+        const balanceBefore = parseFloat(wallet.totalBalance || "0");
+        const earnedBefore = parseFloat(wallet.earnedBalance || "0");
+        const totalEarnedBefore = parseFloat(wallet.totalEarned || "0");
+        const balanceAfter = (balanceBefore + rewardValue).toFixed(2);
+
+        await tx.update(projectCurrencyWallets)
+          .set({
+            earnedBalance: (earnedBefore + rewardValue).toFixed(2),
+            totalBalance: balanceAfter,
+            totalEarned: (totalEarnedBefore + rewardValue).toFixed(2),
+            updatedAt: new Date(),
+          })
+          .where(eq(projectCurrencyWallets.id, wallet.id));
+
+        await tx.insert(projectCurrencyLedger).values({
+          userId,
+          walletId: wallet.id,
+          type: "bonus",
+          amount: rewardValue.toFixed(2),
+          balanceBefore: balanceBefore.toFixed(2),
+          balanceAfter,
+          referenceId: rewardReferenceId,
+          referenceType: "ad_reward",
+          description: "Ad watch reward",
+        });
       });
 
       res.json({
@@ -144,19 +227,20 @@ export function registerRewardClaimRoutes(app: Express): void {
         amount: parseFloat(rewardAmt),
         adsWatched: Number(todayCount?.count || 0) + 1,
         maxAdsPerDay: maxAds,
+        referenceId: rewardReferenceId,
       });
 
       // Notify user about ad reward (async, non-blocking)
       sendNotification(userId, {
         type: 'promotion',
         priority: 'low',
-        title: 'Ad Reward Earned! 💵',
-        titleAr: 'مكافأة إعلانية! 💵',
-        message: `You earned $${rewardAmt} from watching an ad.`,
-        messageAr: `حصلت على $${rewardAmt} من مشاهدة إعلان.`,
+        title: 'Ad Reward Earned!',
+        titleAr: 'مكافأة إعلانية!',
+        message: `You earned ${rewardAmt} project coins. Ref: ${rewardReferenceId}`,
+        messageAr: `حصلت على ${rewardAmt} من عملة المشروع. المرجع: ${rewardReferenceId}`,
         link: '/free',
-        metadata: JSON.stringify({ type: 'ad_reward', amount: rewardAmt }),
-      }).catch(() => {});
+        metadata: JSON.stringify({ type: 'ad_reward', amount: rewardAmt, referenceId: rewardReferenceId }),
+      }).catch(() => { });
     } catch (error: unknown) {
       logger.error('Error watching ad', error instanceof Error ? error : new Error(String(error)));
       res.status(500).json({ error: getErrorMessage(error) });

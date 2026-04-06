@@ -4,7 +4,7 @@ import { useI18n } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Gift, Flame, Check, Lock, Star, Coins, Calendar, Trophy } from "lucide-react";
+import { Gift, Flame, Check, Lock, Star, Coins, Calendar, Trophy, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { playSound } from "@/hooks/use-sound-effects";
 import { useState } from "react";
@@ -35,6 +35,8 @@ export default function DailyRewardsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [claimAnimation, setClaimAnimation] = useState(false);
+  const [lastReferenceId, setLastReferenceId] = useState("");
+  const [copiedReference, setCopiedReference] = useState(false);
 
   const { data: status, isLoading } = useQuery<DailyRewardStatus>({
     queryKey: ["/api/daily-rewards/status"],
@@ -61,9 +63,16 @@ export default function DailyRewardsPage() {
       playSound('reward');
       setClaimAnimation(true);
       setTimeout(() => setClaimAnimation(false), 2000);
+      const referenceId = typeof data?.referenceId === "string" ? data.referenceId : "";
+      const amount = Number(data?.amount || 0);
+      if (referenceId) {
+        setLastReferenceId(referenceId);
+      }
       toast({
         title: t('dailyRewards.claimed'),
-        description: t('dailyRewards.claimedDesc', { amount: data.amount, day: String(data.day) }),
+        description: language === 'ar'
+          ? `حصلت على ${amount.toFixed(2)} من عملة المشروع${referenceId ? ` - المرجع: ${referenceId}` : ''}`
+          : `You received ${amount.toFixed(2)} project coins${referenceId ? ` - Ref: ${referenceId}` : ''}`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/daily-rewards/status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
@@ -76,6 +85,21 @@ export default function DailyRewardsPage() {
       });
     },
   });
+
+  const copyReference = async () => {
+    if (!lastReferenceId) return;
+    try {
+      await navigator.clipboard.writeText(lastReferenceId);
+      setCopiedReference(true);
+      toast({
+        title: language === 'ar' ? 'تم النسخ' : 'Copied!',
+        description: language === 'ar' ? 'تم نسخ مرجع العملية' : 'Operation reference copied',
+      });
+      setTimeout(() => setCopiedReference(false), 2000);
+    } catch {
+      // Clipboard can fail in restricted browser contexts.
+    }
+  };
 
   const getDayIcon = (dayIndex: number, currentDay: number, claimedToday: boolean, streak: number) => {
     // Days already claimed in current streak
@@ -141,11 +165,28 @@ export default function DailyRewardsPage() {
           </Badge>
           <Badge variant="outline" className="flex items-center gap-1.5 py-1.5 px-3">
             <Coins className="h-4 w-4 text-primary" />
-            <span className="font-semibold">${totalEarned.toFixed(2)}</span>
+            <span className="font-semibold">{totalEarned.toFixed(2)}</span>
             <span className="text-muted-foreground text-xs">{t('dailyRewards.total')}</span>
           </Badge>
         </div>
       </div>
+
+      {lastReferenceId && (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                {language === 'ar' ? 'مرجع آخر مطالبة مكافأة' : 'Latest reward claim reference'}
+              </p>
+              <p className="font-mono text-sm sm:text-base break-all">{lastReferenceId}</p>
+            </div>
+            <Button variant="outline" onClick={copyReference}>
+              {copiedReference ? <Check className="h-4 w-4 me-2" /> : <Copy className="h-4 w-4 me-2" />}
+              {language === 'ar' ? 'نسخ المرجع' : 'Copy Reference'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Reward Calendar */}
       <Card>
@@ -166,8 +207,8 @@ export default function DailyRewardsPage() {
                   key={idx}
                   className={`
                     relative flex flex-col items-center gap-1 sm:gap-2 p-2 sm:p-3 rounded-xl border-2 transition-all
-                    ${dayStatus === 'claimed' 
-                      ? 'border-primary/50 bg-primary/5' 
+                    ${dayStatus === 'claimed'
+                      ? 'border-primary/50 bg-primary/5'
                       : dayStatus === 'available'
                         ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/20'
                         : 'border-muted bg-muted/30 opacity-60'}
@@ -196,7 +237,7 @@ export default function DailyRewardsPage() {
                     text-xs sm:text-sm font-bold
                     ${dayStatus === 'claimed' ? 'text-primary' : dayStatus === 'available' ? 'text-amber-500' : 'text-muted-foreground'}
                   `}>
-                    ${reward.amount}
+                    {reward.amount}
                   </span>
 
                   {/* Claimed checkmark */}
@@ -236,7 +277,9 @@ export default function DailyRewardsPage() {
               </div>
               <div className="text-center">
                 <p className="font-semibold text-lg">
-                  {t('dailyRewards.todayReward', { day: String(nextDay), amount: status?.nextRewardAmount || '0.50' })}
+                  {language === 'ar'
+                    ? `مكافأة اليوم ${nextDay}: ${status?.nextRewardAmount || '0.50'} من عملة المشروع`
+                    : `Day ${nextDay} reward: ${status?.nextRewardAmount || '0.50'} project coins`}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
                   {t('dailyRewards.tapToClaim')}
@@ -269,7 +312,7 @@ export default function DailyRewardsPage() {
             <li>{t('dailyRewards.tip2')}</li>
             <li>{t('dailyRewards.tip3')}</li>
             <li>{t('dailyRewards.tip4')}</li>
-            <li>{t('dailyRewards.tip5')}</li>
+            <li>{language === 'ar' ? 'تُضاف المكافآت مباشرة إلى محفظة عملة المشروع' : 'Rewards are credited directly to your project-currency wallet'}</li>
           </ul>
         </CardContent>
       </Card>

@@ -1,9 +1,10 @@
 import type { Express, Response } from "express";
 import { db } from "../db";
-import { dailyRewards, users } from "../../shared/schema";
+import { dailyRewards, projectCurrencyLedger, projectCurrencyWallets } from "../../shared/schema";
 import { eq, desc, and, gte, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { sendNotification } from "../websocket";
+import { createRewardReference } from "../lib/reward-reference";
 import type { AuthRequest } from "./middleware";
 import { authMiddleware } from "./middleware";
 
@@ -162,8 +163,9 @@ export function registerDailyRewardRoutes(app: Express) {
 
       const reward = REWARD_SCHEDULE[currentDay - 1];
       const rewardAmount = reward.amount;
+      const rewardReferenceId = createRewardReference("daily");
 
-      // Insert reward record and update user balance in transaction
+      // Insert reward record and credit project-currency wallet atomically.
       await db.transaction(async (tx) => {
         await tx.insert(dailyRewards).values({
           userId,
@@ -172,12 +174,47 @@ export function registerDailyRewardRoutes(app: Express) {
           streakCount: currentStreak,
         });
 
-        await tx
-          .update(users)
+        await tx.execute(sql`
+          INSERT INTO project_currency_wallets (user_id)
+          VALUES (${userId})
+          ON CONFLICT (user_id) DO NOTHING
+        `);
+
+        const [wallet] = await tx.select()
+          .from(projectCurrencyWallets)
+          .where(eq(projectCurrencyWallets.userId, userId))
+          .for("update");
+
+        if (!wallet) {
+          throw new Error("Project currency wallet not found");
+        }
+
+        const rewardValue = parseFloat(rewardAmount);
+        const balanceBefore = parseFloat(wallet.totalBalance || "0");
+        const earnedBefore = parseFloat(wallet.earnedBalance || "0");
+        const totalEarnedBefore = parseFloat(wallet.totalEarned || "0");
+        const balanceAfter = (balanceBefore + rewardValue).toFixed(2);
+
+        await tx.update(projectCurrencyWallets)
           .set({
-            balance: sql`${users.balance} + ${rewardAmount}`,
+            earnedBalance: (earnedBefore + rewardValue).toFixed(2),
+            totalBalance: balanceAfter,
+            totalEarned: (totalEarnedBefore + rewardValue).toFixed(2),
+            updatedAt: new Date(),
           })
-          .where(eq(users.id, userId));
+          .where(eq(projectCurrencyWallets.id, wallet.id));
+
+        await tx.insert(projectCurrencyLedger).values({
+          userId,
+          walletId: wallet.id,
+          type: "bonus",
+          amount: rewardValue.toFixed(2),
+          balanceBefore: balanceBefore.toFixed(2),
+          balanceAfter,
+          referenceId: rewardReferenceId,
+          referenceType: "daily_reward",
+          description: `Daily reward day ${currentDay}`,
+        });
       });
 
       res.json({
@@ -185,7 +222,8 @@ export function registerDailyRewardRoutes(app: Express) {
         day: currentDay,
         amount: rewardAmount,
         streakCount: currentStreak,
-        message: `Claimed $${rewardAmount} for day ${currentDay}!`,
+        referenceId: rewardReferenceId,
+        message: `Claimed ${rewardAmount} project coins for day ${currentDay}!`,
       });
 
       // Send notification for daily reward claim (non-blocking, after response)
@@ -194,10 +232,17 @@ export function registerDailyRewardRoutes(app: Express) {
         priority: 'low',
         title: `Daily Reward — Day ${currentDay}`,
         titleAr: `المكافأة اليومية — اليوم ${currentDay}`,
-        message: `You claimed $${rewardAmount}! Streak: ${currentStreak} day${currentStreak > 1 ? 's' : ''}.`,
-        messageAr: `حصلت على $${rewardAmount}! السلسلة: ${currentStreak} يوم${currentStreak > 1 ? '' : ''}.`,
+        message: `You claimed ${rewardAmount} project coins. Ref: ${rewardReferenceId}`,
+        messageAr: `حصلت على ${rewardAmount} من عملة المشروع. المرجع: ${rewardReferenceId}`,
         link: '/daily-rewards',
-      }).catch(() => {});
+        metadata: JSON.stringify({
+          type: 'daily_reward',
+          amount: rewardAmount,
+          day: currentDay,
+          streakCount: currentStreak,
+          referenceId: rewardReferenceId,
+        }),
+      }).catch(() => { });
     } catch (error) {
       logger.error('Error claiming daily reward', error instanceof Error ? error : new Error(String(error)));
       res.status(500).json({ error: "Internal server error" });

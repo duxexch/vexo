@@ -1,5 +1,5 @@
 import type { Express, Response } from "express";
-import { users, transactions, complaints, adminAuditLogs, type AdminAuditAction } from "@shared/schema";
+import { users, transactions, complaints, adminAuditLogs, projectCurrencyLedger, type AdminAuditAction } from "@shared/schema";
 import { db } from "../db";
 import { eq, desc, and, sql, like, or, gte, count } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, getErrorMessage } from "./helpers";
@@ -62,14 +62,14 @@ export function registerAdminDashboardRoutes(app: Express) {
       const query = parseStringQueryParam(q, 120);
 
       if (!query || query.length < 2) {
-        return res.json({ users: [], transactions: [], complaints: [] });
+        return res.json({ users: [], transactions: [], complaints: [], currencyLedger: [] });
       }
 
       // Escape SQL LIKE wildcards to prevent enumeration attacks
       const escaped = escapeSqlLikePattern(query);
       const searchPattern = `%${escaped}%`;
 
-      const [usersResult, transactionsResult, complaintsResult] = await Promise.all([
+      const [usersResult, transactionsResult, complaintsResult, currencyLedgerResult] = await Promise.all([
         type === "all" || type === "users" ?
           db.select().from(users)
             .where(or(
@@ -94,13 +94,22 @@ export function registerAdminDashboardRoutes(app: Express) {
               like(complaints.description, searchPattern),
               like(complaints.ticketNumber, searchPattern)
             ))
+            .limit(10) : Promise.resolve([]),
+        type === "all" || type === "transactions" || type === "currency" ?
+          db.select().from(projectCurrencyLedger)
+            .where(or(
+              like(projectCurrencyLedger.referenceId || "", searchPattern),
+              like(projectCurrencyLedger.referenceType || "", searchPattern),
+              like(projectCurrencyLedger.description || "", searchPattern)
+            ))
             .limit(10) : Promise.resolve([])
       ]);
 
       res.json({
         users: toSafeUsers(usersResult),
         transactions: transactionsResult,
-        complaints: complaintsResult
+        complaints: complaintsResult,
+        currencyLedger: currencyLedgerResult,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

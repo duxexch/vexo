@@ -16,6 +16,7 @@ import {
   setAuthCookie,
   createSession,
 } from "./helpers";
+import { createRewardReference } from "../../lib/reward-reference";
 
 export function registerOneClickRoutes(app: Express) {
   // One-click registration - generates account ID and password automatically
@@ -66,6 +67,7 @@ export function registerOneClickRoutes(app: Express) {
             const rewardAmount = rewardSetting ? parseFloat(rewardSetting.value) : 5;
             const isEnabled = enabledSetting ? enabledSetting.value === "true" : true;
             if (isEnabled && rewardAmount > 0) {
+              const referralReferenceId = createRewardReference("referral");
               // SECURITY: Atomic referral reward with transaction
               await db.transaction(async (tx) => {
                 await tx.insert(referralRewardsLog).values({
@@ -109,7 +111,7 @@ export function registerOneClickRoutes(app: Express) {
                   amount: rewardAmount.toFixed(2),
                   balanceBefore: balanceBefore.toFixed(2),
                   balanceAfter,
-                  referenceId: user.id,
+                  referenceId: referralReferenceId,
                   referenceType: 'referral_reward',
                   description: `Referral reward for inviting account ${accountId}`,
                 });

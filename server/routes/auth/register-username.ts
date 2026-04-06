@@ -18,6 +18,7 @@ import {
   validatePasswordStrength,
 } from "./helpers";
 import { isSafeEmailAddress, sanitizePlainText } from "../../lib/input-security";
+import { createRewardReference } from "../../lib/reward-reference";
 
 export function registerUsernameRegistrationRoutes(app: Express) {
   app.post("/api/auth/register", registrationRateLimiter, async (req: Request, res: Response) => {
@@ -110,6 +111,7 @@ export function registerUsernameRegistrationRoutes(app: Express) {
           const isEnabled = !enabledSetting || enabledSetting.value !== 'false';
 
           if (isEnabled && parseFloat(rewardAmount) > 0) {
+            const referralReferenceId = createRewardReference("referral");
             await db.transaction(async (tx) => {
               await tx.insert(referralRewardsLog).values({
                 referrerId: referredBy!,
@@ -153,7 +155,7 @@ export function registerUsernameRegistrationRoutes(app: Express) {
                 amount: rewardValue.toFixed(2),
                 balanceBefore: balanceBefore.toFixed(2),
                 balanceAfter,
-                referenceId: user.id,
+                referenceId: referralReferenceId,
                 referenceType: 'referral_reward',
                 description: `Referral reward for inviting ${username.trim()}`,
               });
@@ -168,7 +170,7 @@ export function registerUsernameRegistrationRoutes(app: Express) {
               message: `You earned ${rewardAmount} project coins because your referral "${username.trim()}" joined!`,
               messageAr: `حصلت على ${rewardAmount} من عملات المشروع لأن المُحال "${username.trim()}" انضم!`,
               link: '/wallet',
-              metadata: JSON.stringify({ action: 'referral_bonus', amount: rewardAmount, referredUsername: username.trim() }),
+              metadata: JSON.stringify({ action: 'referral_bonus', amount: rewardAmount, referredUsername: username.trim(), referenceId: referralReferenceId }),
             }).catch(() => { });
           }
         } catch (rewardError) {
