@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Gift, Upload, Plus, Image as ImageIcon } from "lucide-react";
+import DOMPurify from "dompurify";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,10 +42,24 @@ interface GiftFormState {
 
 const CATEGORY_OPTIONS = ["general", "love", "celebration", "gaming"];
 const ANIMATION_OPTIONS = ["float", "burst", "rain", "spin"];
+const LOCAL_ICON_PATH_PATTERN = /^\/[a-zA-Z0-9/_%.\-]+$/;
 
-function isImagePath(value: string | null | undefined): boolean {
-    if (!value) return false;
-    return value.startsWith("/") || value.startsWith("http://") || value.startsWith("https://");
+function toSafeIconPath(value: string | null | undefined): string | null {
+    if (!value) return null;
+    const normalized = value.trim();
+    if (!normalized) return null;
+    return LOCAL_ICON_PATH_PATTERN.test(normalized) ? normalized : null;
+}
+
+function sanitizeErrorMessage(error: unknown): string {
+    const raw = error instanceof Error
+        ? error.message
+        : String(error || "Unexpected error");
+
+    return DOMPurify.sanitize(raw, {
+        ALLOWED_TAGS: [],
+        ALLOWED_ATTR: [],
+    });
 }
 
 async function fileToBase64(file: File): Promise<string> {
@@ -91,7 +106,7 @@ export default function AdminGiftsPage() {
             toast({ title: "Success", description: "Gift icon uploaded successfully" });
         },
         onError: (error: Error) => {
-            toast({ title: "Error", description: error.message, variant: "destructive" });
+            toast({ title: "Error", description: sanitizeErrorMessage(error), variant: "destructive" });
         },
     });
 
@@ -124,7 +139,7 @@ export default function AdminGiftsPage() {
             });
         },
         onError: (error: Error) => {
-            toast({ title: "Error", description: error.message, variant: "destructive" });
+            toast({ title: "Error", description: sanitizeErrorMessage(error), variant: "destructive" });
         },
     });
 
@@ -161,6 +176,8 @@ export default function AdminGiftsPage() {
 
         createGiftMutation.mutate(form);
     };
+
+    const previewIconPath = toSafeIconPath(form.iconUrl);
 
     return (
         <div className="p-6 space-y-6">
@@ -272,9 +289,9 @@ export default function AdminGiftsPage() {
                             onChange={(e) => setForm((prev) => ({ ...prev, iconUrl: e.target.value }))}
                             placeholder="Uploaded icon URL"
                         />
-                        {isImagePath(form.iconUrl) && (
+                        {previewIconPath && (
                             <div className="inline-flex items-center gap-2 rounded-lg border p-2 bg-muted/30">
-                                <img src={form.iconUrl} alt="Gift icon preview" className="h-10 w-10 rounded object-cover" />
+                                <img src={previewIconPath} alt="Gift icon preview" className="h-10 w-10 rounded object-cover" />
                                 <span className="text-sm text-muted-foreground">Icon preview</span>
                             </div>
                         )}
@@ -315,27 +332,30 @@ export default function AdminGiftsPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {gifts.map((gift) => (
-                                        <TableRow key={gift.id}>
-                                            <TableCell>
-                                                {isImagePath(gift.iconUrl || "") ? (
-                                                    <img src={gift.iconUrl || ""} alt={gift.name} className="h-9 w-9 rounded object-cover border" />
-                                                ) : (
-                                                    <Badge variant="secondary">{gift.iconUrl || "gift"}</Badge>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="font-medium">{gift.name}</TableCell>
-                                            <TableCell>{gift.nameAr || "-"}</TableCell>
-                                            <TableCell>${Number(gift.price || 0).toFixed(2)}</TableCell>
-                                            <TableCell>{gift.category || "general"}</TableCell>
-                                            <TableCell>{gift.animationType || "float"}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={gift.isActive ? "default" : "outline"}>
-                                                    {gift.isActive ? "Active" : "Inactive"}
-                                                </Badge>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
+                                    {gifts.map((gift) => {
+                                        const safeIconPath = toSafeIconPath(gift.iconUrl || "");
+                                        return (
+                                            <TableRow key={gift.id}>
+                                                <TableCell>
+                                                    {safeIconPath ? (
+                                                        <img src={safeIconPath} alt={gift.name} className="h-9 w-9 rounded object-cover border" />
+                                                    ) : (
+                                                        <Badge variant="secondary">gift</Badge>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="font-medium">{gift.name}</TableCell>
+                                                <TableCell>{gift.nameAr || "-"}</TableCell>
+                                                <TableCell>${Number(gift.price || 0).toFixed(2)}</TableCell>
+                                                <TableCell>{gift.category || "general"}</TableCell>
+                                                <TableCell>{gift.animationType || "float"}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={gift.isActive ? "default" : "outline"}>
+                                                        {gift.isActive ? "Active" : "Inactive"}
+                                                    </Badge>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
                                 </TableBody>
                             </Table>
                         </div>

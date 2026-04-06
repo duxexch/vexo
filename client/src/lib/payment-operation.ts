@@ -8,16 +8,24 @@ export type PaymentOperationType =
     | "p2p_trade_pay"
     | "p2p_trade_confirm";
 
-function randomSegment(): string {
-    return Math.random().toString(36).slice(2, 12);
+function randomBytesHex(byteLength: number): string {
+    const cryptoApi = globalThis.crypto;
+    if (!cryptoApi || typeof cryptoApi.getRandomValues !== "function") {
+        throw new Error("Secure random generator is unavailable in this environment.");
+    }
+
+    const bytes = new Uint8Array(byteLength);
+    cryptoApi.getRandomValues(bytes);
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 export function createPaymentOperationToken(): string {
-    const uuidPart = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID().replace(/-/g, "")
-        : `${Date.now().toString(36)}${randomSegment()}${randomSegment()}`;
+    const cryptoApi = globalThis.crypto;
+    const uuidPart = cryptoApi && typeof cryptoApi.randomUUID === "function"
+        ? cryptoApi.randomUUID().replace(/-/g, "")
+        : "";
 
-    const token = `${uuidPart}${randomSegment()}`.slice(0, 64);
+    const token = `${uuidPart}${randomBytesHex(32)}`.slice(0, 64);
     return token;
 }
 

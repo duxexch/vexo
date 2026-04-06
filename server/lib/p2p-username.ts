@@ -7,12 +7,71 @@ const P2P_USERNAME_MIN_LENGTH = 4;
 const P2P_USERNAME_MAX_LENGTH = 24;
 const P2P_USERNAME_PATTERN = /^[a-z0-9_]+$/;
 
+function isAsciiAlphaNumericCode(code: number): boolean {
+    return (code >= 48 && code <= 57)
+        || (code >= 65 && code <= 90)
+        || (code >= 97 && code <= 122);
+}
+
+function normalizeAsciiCodeToLower(code: number): number {
+    if (code >= 65 && code <= 90) {
+        return code + 32;
+    }
+
+    return code;
+}
+
+function isP2PUsernameCharCode(code: number): boolean {
+    return isAsciiAlphaNumericCode(code) || code === 95;
+}
+
+function compactAlphaNumericLower(rawValue: string): string {
+    const input = String(rawValue || "");
+    let output = "";
+
+    for (let index = 0; index < input.length; index += 1) {
+        const normalizedCode = normalizeAsciiCodeToLower(input.charCodeAt(index));
+        if (isAsciiAlphaNumericCode(normalizedCode)) {
+            output += String.fromCharCode(normalizedCode);
+        }
+    }
+
+    return output;
+}
+
 function normalizeP2PUsernameCore(rawValue: string): string {
-    const normalized = String(rawValue || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9_]+/g, "_")
-        .replace(/_+/g, "_")
-        .replace(/^_+|_+$/g, "");
+    const input = String(rawValue || "");
+    let normalized = "";
+    let previousWasUnderscore = false;
+
+    for (let index = 0; index < input.length; index += 1) {
+        const normalizedCode = normalizeAsciiCodeToLower(input.charCodeAt(index));
+
+        if (isP2PUsernameCharCode(normalizedCode)) {
+            if (normalizedCode === 95) {
+                if (normalized.length === 0 || previousWasUnderscore) {
+                    continue;
+                }
+
+                normalized += "_";
+                previousWasUnderscore = true;
+                continue;
+            }
+
+            normalized += String.fromCharCode(normalizedCode);
+            previousWasUnderscore = false;
+            continue;
+        }
+
+        if (normalized.length > 0 && !previousWasUnderscore) {
+            normalized += "_";
+            previousWasUnderscore = true;
+        }
+    }
+
+    if (normalized.endsWith("_")) {
+        normalized = normalized.slice(0, -1);
+    }
 
     return normalized;
 }
@@ -30,8 +89,8 @@ function ensureP2PUsernameLength(value: string): string {
 }
 
 function buildDefaultP2PUsernameBase(userId: string, fallback?: string): string {
-    const compactUserId = String(userId || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
-    const compactFallback = String(fallback || "").replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    const compactUserId = compactAlphaNumericLower(userId);
+    const compactFallback = compactAlphaNumericLower(fallback || "");
     const suffix = compactUserId.slice(-8) || compactFallback.slice(0, 8) || "user";
     const base = normalizeP2PUsernameCore(`trader_${suffix}`);
     return ensureP2PUsernameLength(base || "trader_user");
