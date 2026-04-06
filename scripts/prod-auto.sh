@@ -276,18 +276,30 @@ wait_for_http_code_200() {
 }
 
 detect_traefik_network() {
+  is_reserved_network() {
+    local name="$1"
+    [[ "$name" == "host" || "$name" == "bridge" || "$name" == "none" || -z "$name" ]]
+  }
+
   if [[ -n "$TRAEFIK_NETWORK_OVERRIDE" ]]; then
+    if is_reserved_network "$TRAEFIK_NETWORK_OVERRIDE"; then
+      log_error "Invalid Traefik network override: $TRAEFIK_NETWORK_OVERRIDE"
+      log_error "Use a user-defined Docker network (not host/bridge/none)."
+      exit 1
+    fi
     printf '%s' "$TRAEFIK_NETWORK_OVERRIDE"
     return 0
   fi
 
   if docker container inspect "$TRAEFIK_CONTAINER" >/dev/null 2>&1; then
-    local detected
-    detected="$(docker inspect "$TRAEFIK_CONTAINER" --format '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | head -n 1 | tr -d '[:space:]')"
-    if [[ -n "$detected" ]]; then
-      printf '%s' "$detected"
-      return 0
-    fi
+    local candidate
+    while IFS= read -r candidate; do
+      candidate="$(printf '%s' "$candidate" | tr -d '[:space:]')"
+      if [[ -n "$candidate" ]] && ! is_reserved_network "$candidate"; then
+        printf '%s' "$candidate"
+        return 0
+      fi
+    done < <(docker inspect "$TRAEFIK_CONTAINER" --format '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}')
   fi
 
   printf '%s' "vex-traefik"
@@ -320,6 +332,12 @@ EOF
 
 ensure_network() {
   local network_name="$1"
+  if [[ "$network_name" == "host" || "$network_name" == "bridge" || "$network_name" == "none" || -z "$network_name" ]]; then
+    log_error "Invalid external Traefik network: $network_name"
+    log_error "Set TRAEFIK_EXTERNAL_NETWORK to a user-defined network (example: vex-traefik)."
+    exit 1
+  fi
+
   if docker network inspect "$network_name" >/dev/null 2>&1; then
     log_success "Docker network exists: $network_name"
   else
