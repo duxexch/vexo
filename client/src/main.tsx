@@ -1,6 +1,26 @@
+import { App as CapacitorApp } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
+import { Capacitor } from "@capacitor/core";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+
+const UPDATE_POLL_INTERVAL_MS = 60_000;
+const UPDATE_BANNER_ID = "app-update-banner";
+
+interface ReleaseInfo {
+  webVersion: string;
+  releasedAt: string;
+  nativeLatestVersion: string | null;
+  nativeUpdateUrlAndroid: string | null;
+  nativeUpdateUrlIos: string | null;
+  forceNativeUpdate: boolean;
+}
+
+let swRegistration: ServiceWorkerRegistration | null = null;
+let initialWebVersion: string | null = null;
+let announcedWebVersion: string | null = null;
+let announcedNativeVersion: string | null = null;
 
 function enforceCanonicalHost(): boolean {
   const canonicalHostMap: Record<string, string> = {
@@ -26,10 +46,11 @@ if (!isRedirectingToCanonicalHost && 'serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      swRegistration = registration;
       console.log('[SW] registered:', registration.scope);
 
       // Check for updates every 60 seconds
-      setInterval(() => registration.update(), 60_000);
+      setInterval(() => registration.update(), UPDATE_POLL_INTERVAL_MS);
 
       // Register periodic background sync if supported
       if ('periodicSync' in registration) {
@@ -54,7 +75,7 @@ if (!isRedirectingToCanonicalHost && 'serviceWorker' in navigator) {
         newSW.addEventListener('statechange', () => {
           if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
             // New content available — show update banner
-            showUpdateBanner(registration);
+            showUpdateBanner(() => activateLatestWebUpdate());
           }
         });
       });
@@ -80,12 +101,48 @@ if (!isRedirectingToCanonicalHost && 'serviceWorker' in navigator) {
   });
 }
 
-function showUpdateBanner(registration: ServiceWorkerRegistration) {
+async function startReleaseMonitoring(): Promise<void> {
+  if (isRedirectingToCanonicalHost) {
+    return;
+  }
+
+  const firstRelease = await fetchReleaseInfo();
+  if (firstRelease) {
+    initialWebVersion = firstRelease.webVersion;
+    await maybePromptNativeUpdate(firstRelease);
+  }
+
+  setInterval(async () => {
+    const latestRelease = await fetchReleaseInfo();
+    if (!latestRelease) {
+      return;
+    }
+
+    if (!initialWebVersion) {
+      initialWebVersion = latestRelease.webVersion;
+    }
+
+    if (
+      initialWebVersion &&
+      latestRelease.webVersion !== initialWebVersion &&
+      announcedWebVersion !== latestRelease.webVersion
+    ) {
+      announcedWebVersion = latestRelease.webVersion;
+      showUpdateBanner(() => activateLatestWebUpdate());
+    }
+
+    await maybePromptNativeUpdate(latestRelease);
+  }, UPDATE_POLL_INTERVAL_MS);
+}
+
+function showUpdateBanner(onAction: () => void | Promise<void>) {
   // Avoid duplicates
-  if (document.getElementById('sw-update-banner')) return;
+  if (document.getElementById(UPDATE_BANNER_ID)) {
+    return;
+  }
 
   const banner = document.createElement('div');
-  banner.id = 'sw-update-banner';
+  banner.id = UPDATE_BANNER_ID;
   banner.dir = 'auto';
   banner.setAttribute('role', 'alert');
   banner.setAttribute('aria-live', 'polite');
@@ -125,12 +182,138 @@ function showUpdateBanner(registration: ServiceWorkerRegistration) {
     whiteSpace: 'nowrap',
   });
   btn.onclick = () => {
-    registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
+    void onAction();
     banner.remove();
   };
 
   banner.append(text, btn);
   document.body.appendChild(banner);
+}
+
+function activateLatestWebUpdate() {
+  if (swRegistration?.waiting) {
+    swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    return;
+  }
+
+  window.location.reload();
+}
+
+function compareSemver(currentVersion: string, targetVersion: string): number {
+  const toParts = (value: string): number[] =>
+    value
+      .split(/[^0-9]+/)
+      .filter(Boolean)
+      .map((part) => Number(part));
+
+  const currentParts = toParts(currentVersion);
+  const targetParts = toParts(targetVersion);
+  const maxLength = Math.max(currentParts.length, targetParts.length);
+
+  for (let i = 0; i < maxLength; i += 1) {
+    const currentPart = currentParts[i] ?? 0;
+    const targetPart = targetParts[i] ?? 0;
+    if (currentPart > targetPart) {
+      return 1;
+    }
+    if (currentPart < targetPart) {
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+function readReleaseInfo(payload: unknown): ReleaseInfo | null {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const release = (payload as { release?: unknown }).release;
+  if (!release || typeof release !== 'object') {
+    return null;
+  }
+
+  const releaseData = release as Partial<ReleaseInfo>;
+  if (!releaseData.webVersion) {
+    return null;
+  }
+
+  return {
+    webVersion: String(releaseData.webVersion),
+    releasedAt: String(releaseData.releasedAt ?? ''),
+    nativeLatestVersion: releaseData.nativeLatestVersion ? String(releaseData.nativeLatestVersion) : null,
+    nativeUpdateUrlAndroid: releaseData.nativeUpdateUrlAndroid
+      ? String(releaseData.nativeUpdateUrlAndroid)
+      : null,
+    nativeUpdateUrlIos: releaseData.nativeUpdateUrlIos ? String(releaseData.nativeUpdateUrlIos) : null,
+    forceNativeUpdate: releaseData.forceNativeUpdate === true,
+  };
+}
+
+async function fetchReleaseInfo(): Promise<ReleaseInfo | null> {
+  try {
+    const response = await fetch('/api/release', {
+      cache: 'no-store',
+      headers: {
+        Pragma: 'no-cache',
+      },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json();
+    return readReleaseInfo(payload);
+  } catch {
+    return null;
+  }
+}
+
+async function openNativeUpdateUrl(url: string): Promise<void> {
+  if (Capacitor.isNativePlatform()) {
+    await Browser.open({ url });
+    return;
+  }
+
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+async function maybePromptNativeUpdate(release: ReleaseInfo): Promise<void> {
+  if (!Capacitor.isNativePlatform() || !release.nativeLatestVersion) {
+    return;
+  }
+
+  const platform = Capacitor.getPlatform();
+  if (platform !== 'android' && platform !== 'ios') {
+    return;
+  }
+
+  const updateUrl = platform === 'android' ? release.nativeUpdateUrlAndroid : release.nativeUpdateUrlIos;
+  if (!updateUrl) {
+    return;
+  }
+
+  if (announcedNativeVersion === release.nativeLatestVersion) {
+    return;
+  }
+
+  try {
+    const info = await CapacitorApp.getInfo();
+    if (compareSemver(info.version, release.nativeLatestVersion) >= 0) {
+      return;
+    }
+
+    announcedNativeVersion = release.nativeLatestVersion;
+    showUpdateBanner(() => openNativeUpdateUrl(updateUrl));
+  } catch {
+    // Ignore native version lookup errors and keep app usable.
+  }
+}
+
+if (!isRedirectingToCanonicalHost) {
+  void startReleaseMonitoring();
 }
 
 if (!isRedirectingToCanonicalHost) {

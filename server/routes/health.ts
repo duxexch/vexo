@@ -9,7 +9,42 @@ import { minioHealthCheck } from "../lib/minio-client";
 import { adminTokenMiddleware } from "./middleware";
 import { getErrorMessage } from "./helpers";
 
+const PROCESS_BOOT_AT = new Date().toISOString();
+
+interface ReleaseInfo {
+  webVersion: string;
+  releasedAt: string;
+  nativeLatestVersion: string | null;
+  nativeUpdateUrlAndroid: string | null;
+  nativeUpdateUrlIos: string | null;
+  forceNativeUpdate: boolean;
+}
+
+function readReleaseInfo(): ReleaseInfo {
+  const webVersion =
+    process.env.APP_RELEASE_VERSION ||
+    process.env.RELEASE_VERSION ||
+    process.env.npm_package_version ||
+    "dev";
+
+  return {
+    webVersion,
+    releasedAt: process.env.APP_RELEASED_AT || process.env.BUILD_TIMESTAMP || PROCESS_BOOT_AT,
+    nativeLatestVersion: process.env.APP_NATIVE_LATEST_VERSION || null,
+    nativeUpdateUrlAndroid: process.env.APP_UPDATE_URL_ANDROID || null,
+    nativeUpdateUrlIos: process.env.APP_UPDATE_URL_IOS || null,
+    forceNativeUpdate: process.env.APP_FORCE_UPDATE === "true",
+  };
+}
+
 export function registerHealthRoutes(app: Express): void {
+  app.get("/api/release", (_req: Request, res: Response) => {
+    res.json({
+      release: readReleaseInfo(),
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   app.get("/api/health", async (_req: Request, res: Response) => {
     try {
       const dbStart = Date.now();
@@ -31,6 +66,7 @@ export function registerHealthRoutes(app: Express): void {
         },
         redis: { status: redisOk ? "connected" : "unavailable" },
         minio: { status: minioOk ? "connected" : "unavailable" },
+        release: readReleaseInfo(),
         uptime: process.uptime(),
       });
     } catch (error: unknown) {
@@ -74,6 +110,7 @@ export function registerHealthRoutes(app: Express): void {
         },
         redis: { status: redisOk ? "connected" : "unavailable" },
         minio: { status: minioOk ? "connected" : "unavailable" },
+        release: readReleaseInfo(),
         memory: {
           heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
           heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
