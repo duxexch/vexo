@@ -53,10 +53,17 @@ export function registerChatMessagingRoutes(app: Express): void {
       }
 
       // Check if chat is enabled (support both key names)
-      const chatEnabledSetting = await db.select().from(chatSettings).where(
+      const chatEnabledSettings = await db.select({
+        key: chatSettings.key,
+        value: chatSettings.value,
+      }).from(chatSettings).where(
         or(eq(chatSettings.key, "chat_enabled"), eq(chatSettings.key, "isEnabled"))
-      ).limit(1);
-      if (chatEnabledSetting.length > 0 && chatEnabledSetting[0].value === "false") {
+      );
+
+      const canonicalSetting = chatEnabledSettings.find((item) => item.key === "chat_enabled")
+        || chatEnabledSettings.find((item) => item.key === "isEnabled");
+
+      if (canonicalSetting && canonicalSetting.value === "false") {
         return res.status(403).json({ error: "Chat is currently disabled" });
       }
 

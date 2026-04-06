@@ -20,16 +20,19 @@ export function registerListingRoutes(app: Express) {
   app.get("/api/challenges/available", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const dbChallenges = await storage.getAvailableChallenges(req.user!.id);
-      
+
       // Batch fetch all participants in one query
       const playerIds = dbChallenges.flatMap(c => [c.player1Id, c.player2Id, c.player3Id, c.player4Id].filter(Boolean) as string[]);
       const usersMap = await storage.getUsersByIds(playerIds);
-      
+
       const enrichedChallenges = dbChallenges.map(c => {
         const player1 = usersMap.get(c.player1Id);
         const player2 = c.player2Id ? usersMap.get(c.player2Id) : null;
         const player3 = c.player3Id ? usersMap.get(c.player3Id) : null;
         const player4 = c.player4Id ? usersMap.get(c.player4Id) : null;
+        const player2DisplayName = c.opponentType === 'sam9'
+          ? 'SAM9'
+          : (player2?.nickname || player2?.username || 'Unknown');
         const rating = computeRating(player1 || {});
         const result: Record<string, unknown> = {
           id: c.id,
@@ -48,7 +51,7 @@ export function registerListingRoutes(app: Express) {
 
         if (player2) {
           result.player2Id = c.player2Id;
-          result.player2Name = player2.nickname || player2.username || "Unknown";
+          result.player2Name = player2DisplayName;
           result.player2Rating = computeRating(player2);
           result.player2Score = c.player2Score || 0;
         }
@@ -77,15 +80,19 @@ export function registerListingRoutes(app: Express) {
     try {
       const dbChallenges = await storage.getActiveChallenges();
       const sliced = dbChallenges.slice(0, 10);
-      
+
       // Batch fetch all player IDs in one query
       const allPlayerIds = sliced.flatMap(c => [c.player1Id, c.player2Id, c.player3Id, c.player4Id].filter(Boolean) as string[]);
       const usersMap = await storage.getUsersByIds(allPlayerIds);
-      
+
       const enrichedChallenges = sliced.map(c => {
         const player1 = usersMap.get(c.player1Id);
         const p1Rating = computeRating(player1 || {});
-        
+        const player2 = c.player2Id ? usersMap.get(c.player2Id) : null;
+        const player2DisplayName = c.opponentType === 'sam9'
+          ? 'SAM9'
+          : (player2?.nickname || player2?.username || 'Unknown');
+
         const result: Record<string, unknown> = {
           id: c.id,
           gameType: c.gameType,
@@ -102,13 +109,12 @@ export function registerListingRoutes(app: Express) {
           createdAt: c.createdAt?.toISOString() || new Date().toISOString(),
           startedAt: c.startedAt?.toISOString() || new Date().toISOString(),
         };
-        
+
         if (c.player2Id) {
-          const player2 = usersMap.get(c.player2Id);
           if (player2) {
             const p2Rating = computeRating(player2);
             result.player2Id = c.player2Id;
-            result.player2Name = player2.nickname || player2.username || "Unknown";
+            result.player2Name = player2DisplayName;
             result.player2Rating = p2Rating;
             result.player2Score = c.player2Score || 0;
           }
@@ -135,7 +141,7 @@ export function registerListingRoutes(app: Express) {
             result.player4Score = c.player4Score || 0;
           }
         }
-        
+
         return result;
       });
       res.json(enrichedChallenges);
@@ -155,25 +161,28 @@ export function registerListingRoutes(app: Express) {
         ))
         .orderBy(desc(challengesTable.createdAt))
         .limit(20);
-      
+
       // Batch fetch all player IDs in one query
       const allPlayerIds = myChallenges.flatMap(c => [c.player1Id, c.player2Id, c.player3Id, c.player4Id].filter(Boolean) as string[]);
       const usersMap = await storage.getUsersByIds(allPlayerIds);
-      
+
       const enriched = myChallenges.map(c => {
         const player1 = usersMap.get(c.player1Id);
         const player2 = c.player2Id ? usersMap.get(c.player2Id) : null;
         const player3 = c.player3Id ? usersMap.get(c.player3Id) : null;
         const player4 = c.player4Id ? usersMap.get(c.player4Id) : null;
+        const player2DisplayName = c.opponentType === 'sam9'
+          ? 'SAM9'
+          : (player2?.nickname || player2?.username);
         return {
           ...c,
           player1Name: player1?.nickname || player1?.username,
-          player2Name: player2?.nickname || player2?.username,
+          player2Name: player2DisplayName,
           player3Name: player3?.nickname || player3?.username,
           player4Name: player4?.nickname || player4?.username,
         };
       });
-      
+
       res.json(enriched);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

@@ -16,6 +16,50 @@ export function registerAdminChatMediaRoutes(app: Express) {
     return Boolean(existingUser);
   };
 
+  const normalizePrice = (rawPrice: unknown): number | null => {
+    const parsed = typeof rawPrice === "number" ? rawPrice : Number(rawPrice);
+    if (!Number.isFinite(parsed) || parsed < 0) return null;
+    return Number(parsed.toFixed(2));
+  };
+
+  const saveMediaPrice = async (price: number, adminId: string) => {
+    await db.insert(systemConfig).values({
+      key: "chat_media_price",
+      value: String(price),
+      updatedBy: adminId,
+    }).onConflictDoUpdate({
+      target: systemConfig.key,
+      set: { value: String(price), updatedAt: new Date(), updatedBy: adminId },
+    });
+  };
+
+  const setMediaPermission = async (userId: string, enabled: boolean, adminId: string) => {
+    const [existing] = await db.select().from(chatMediaPermissions)
+      .where(eq(chatMediaPermissions.userId, userId));
+
+    if (existing) {
+      await db.update(chatMediaPermissions).set({
+        mediaEnabled: enabled,
+        grantedBy: enabled ? "admin" : existing.grantedBy,
+        grantedAt: enabled ? new Date() : existing.grantedAt,
+        revokedAt: enabled ? null : new Date(),
+        revokedBy: enabled ? null : adminId,
+      }).where(eq(chatMediaPermissions.userId, userId));
+      return;
+    }
+
+    if (!enabled) {
+      return;
+    }
+
+    await db.insert(chatMediaPermissions).values({
+      userId,
+      mediaEnabled: true,
+      grantedBy: "admin",
+      pricePaid: "0",
+    });
+  };
+
   const getMediaStatsPayload = async () => {
     const [totalEnabled] = await db.select({ count: count() }).from(chatMediaPermissions)
       .where(eq(chatMediaPermissions.mediaEnabled, true));
@@ -68,56 +112,31 @@ export function registerAdminChatMediaRoutes(app: Express) {
     }
   });
 
-  // Update media pricing
-  app.put("/api/admin/chat-media/pricing", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+  const updateMediaPricing = async (req: AdminRequest, res: Response) => {
     try {
-      const { price } = req.body;
-      if (typeof price !== 'number' || price < 0) {
+      const normalizedPrice = normalizePrice(req.body?.price);
+      if (normalizedPrice === null) {
         return res.status(400).json({ error: "Invalid price" });
       }
 
-      await db.insert(systemConfig).values({
-        key: "chat_media_price",
-        value: String(price),
-        updatedBy: req.admin!.id,
-      }).onConflictDoUpdate({
-        target: systemConfig.key,
-        set: { value: String(price), updatedAt: new Date(), updatedBy: req.admin!.id },
-      });
+      await saveMediaPrice(normalizedPrice, req.admin!.id);
 
-      res.json({ success: true, price });
+      res.json({ success: true, price: normalizedPrice });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
-  });
+  };
+
+  // Update media pricing
+  app.put("/api/admin/chat-media/pricing", adminAuthMiddleware, updateMediaPricing);
 
   // Compatibility alias used by current admin chat page
-  app.put("/api/admin/chat/media/pricing", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
-    try {
-      const { price } = req.body;
-      if (typeof price !== 'number' || price < 0) {
-        return res.status(400).json({ error: "Invalid price" });
-      }
-
-      await db.insert(systemConfig).values({
-        key: "chat_media_price",
-        value: String(price),
-        updatedBy: req.admin!.id,
-      }).onConflictDoUpdate({
-        target: systemConfig.key,
-        set: { value: String(price), updatedAt: new Date(), updatedBy: req.admin!.id },
-      });
-
-      res.json({ success: true, price });
-    } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
-    }
-  });
+  app.put("/api/admin/chat/media/pricing", adminAuthMiddleware, updateMediaPricing);
 
   // List users with media permissions
   app.get("/api/admin/chat-media/users", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
-      const { search, status } = req.query;
+      const { search } = req.query;
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
       const offset = parseInt(req.query.offset as string) || 0;
 
@@ -136,33 +155,14 @@ export function registerAdminChatMediaRoutes(app: Express) {
     }
   });
 
-  // Grant media permission to user (free)
-  app.post("/api/admin/chat-media/grant/:userId", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+  const grantMediaPermission = async (req: AdminRequest, res: Response) => {
     try {
       const userId = resolveTargetUserId(req);
       if (!await assertUserExists(userId)) {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const [existing] = await db.select().from(chatMediaPermissions)
-        .where(eq(chatMediaPermissions.userId, userId));
-
-      if (existing) {
-        await db.update(chatMediaPermissions).set({
-          mediaEnabled: true,
-          grantedBy: "admin",
-          grantedAt: new Date(),
-          revokedAt: null,
-          revokedBy: null,
-        }).where(eq(chatMediaPermissions.userId, userId));
-      } else {
-        await db.insert(chatMediaPermissions).values({
-          userId,
-          mediaEnabled: true,
-          grantedBy: "admin",
-          pricePaid: "0",
-        });
-      }
+      await setMediaPermission(userId, true, req.admin!.id);
 
       await logAdminAction(req.admin!.id, "update", "chat_media_permission", userId, { metadata: "grant_media" }, req);
 
@@ -170,84 +170,35 @@ export function registerAdminChatMediaRoutes(app: Express) {
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
-  });
+  };
+
+  // Grant media permission to user (free)
+  app.post("/api/admin/chat-media/grant/:userId", adminAuthMiddleware, grantMediaPermission);
 
   // Compatibility alias used by current admin chat page (body: { userId })
-  app.post("/api/admin/chat/media/grant", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+  app.post("/api/admin/chat/media/grant", adminAuthMiddleware, grantMediaPermission);
+
+  const revokeMediaPermission = async (req: AdminRequest, res: Response) => {
     try {
       const userId = resolveTargetUserId(req);
       if (!await assertUserExists(userId)) {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const [existing] = await db.select().from(chatMediaPermissions)
-        .where(eq(chatMediaPermissions.userId, userId));
+      await setMediaPermission(userId, false, req.admin!.id);
 
-      if (existing) {
-        await db.update(chatMediaPermissions).set({
-          mediaEnabled: true,
-          grantedBy: "admin",
-          grantedAt: new Date(),
-          revokedAt: null,
-          revokedBy: null,
-        }).where(eq(chatMediaPermissions.userId, userId));
-      } else {
-        await db.insert(chatMediaPermissions).values({
-          userId,
-          mediaEnabled: true,
-          grantedBy: "admin",
-          pricePaid: "0",
-        });
-      }
+      await logAdminAction(req.admin!.id, "update", "chat_media_permission", userId, { metadata: "revoke_media" }, req);
 
-      await logAdminAction(req.admin!.id, "update", "chat_media_permission", userId, { metadata: "grant_media" }, req);
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
-  });
+  };
 
   // Revoke media permission from user
-  app.post("/api/admin/chat-media/revoke/:userId", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
-    try {
-      const userId = resolveTargetUserId(req);
-      if (!await assertUserExists(userId)) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      await db.update(chatMediaPermissions).set({
-        mediaEnabled: false,
-        revokedAt: new Date(),
-        revokedBy: req.admin!.id,
-      }).where(eq(chatMediaPermissions.userId, userId));
-
-      await logAdminAction(req.admin!.id, "update", "chat_media_permission", userId, { metadata: "revoke_media" }, req);
-
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
-    }
-  });
+  app.post("/api/admin/chat-media/revoke/:userId", adminAuthMiddleware, revokeMediaPermission);
 
   // Compatibility alias used by current admin chat page (body: { userId })
-  app.post("/api/admin/chat/media/revoke", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
-    try {
-      const userId = resolveTargetUserId(req);
-      if (!await assertUserExists(userId)) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      await db.update(chatMediaPermissions).set({
-        mediaEnabled: false,
-        revokedAt: new Date(),
-        revokedBy: req.admin!.id,
-      }).where(eq(chatMediaPermissions.userId, userId));
-
-      await logAdminAction(req.admin!.id, "update", "chat_media_permission", userId, { metadata: "revoke_media" }, req);
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
-    }
-  });
+  app.post("/api/admin/chat/media/revoke", adminAuthMiddleware, revokeMediaPermission);
 
 }

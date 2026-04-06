@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { 
-  Plus, Trash2, Edit, GripVertical, TrendingUp, Dices, CircleDot, 
-  Star, Trophy, Gamepad2, Target, Zap, Crown, Coins 
+import {
+  Plus, Trash2, Edit, GripVertical, TrendingUp, Dices, CircleDot,
+  Star, Trophy, Gamepad2, Target, Zap, Crown, Coins, RefreshCw
 } from "lucide-react";
 import type { GameSection } from "@shared/schema";
 
@@ -133,6 +133,39 @@ export default function AdminGameSectionsPage() {
     },
   });
 
+  const initializeSectionsMutation = useMutation({
+    mutationFn: () =>
+      adminFetch("/api/admin/game-sections/initialize", {
+        method: "POST",
+      }),
+    onSuccess: (result: { inserted?: number; skippedExisting?: number; discovered?: number }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/game-sections"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/game-sections"] });
+
+      const inserted = Number(result?.inserted ?? 0);
+      const skipped = Number(result?.skippedExisting ?? 0);
+      const discovered = Number(result?.discovered ?? 0);
+
+      if (inserted > 0) {
+        toast({
+          title: "Sections initialized",
+          description: `Added ${inserted} section${inserted === 1 ? "" : "s"}${skipped > 0 ? `, skipped ${skipped} existing.` : "."}`,
+        });
+        return;
+      }
+
+      toast({
+        title: "No new sections",
+        description: discovered > 0
+          ? `All ${discovered} discovered section${discovered === 1 ? "" : "s"} already exist.`
+          : "No game categories were found to initialize.",
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to initialize sections", variant: "destructive" });
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       key: "",
@@ -173,12 +206,12 @@ export default function AdminGameSectionsPage() {
       toast({ title: error, variant: "destructive" });
       return;
     }
-    
+
     const sanitizedData = {
       ...formData,
       sortOrder: formData.sortOrder || 0,
     };
-    
+
     if (editingSection) {
       updateMutation.mutate({ id: editingSection.id, data: sanitizedData });
     } else {
@@ -205,139 +238,151 @@ export default function AdminGameSectionsPage() {
           <h1 className="text-3xl font-bold">Game Sections</h1>
           <p className="text-muted-foreground">Customize game category names and appearance</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) {
-            setEditingSection(null);
-            resetForm();
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-section">
-              <Plus className="h-4 w-4 me-2" />
-              Add Section
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{editingSection ? "Edit Section" : "Add Section"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Key (unique identifier)</Label>
-                <Input
-                  value={formData.key}
-                  onChange={(e) => setFormData({ ...formData, key: e.target.value })}
-                  placeholder="e.g., crash, slots, dice"
-                  disabled={!!editingSection}
-                  data-testid="input-section-key"
-                />
-              </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => initializeSectionsMutation.mutate()}
+            disabled={initializeSectionsMutation.isPending}
+            data-testid="button-init-sections"
+          >
+            <RefreshCw className={`h-4 w-4 me-2 ${initializeSectionsMutation.isPending ? "animate-spin" : ""}`} />
+            {initializeSectionsMutation.isPending ? "Initializing..." : "Initialize Sections"}
+          </Button>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Name (English)</Label>
-                  <Input
-                    value={formData.nameEn}
-                    onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
-                    placeholder="Crash Games"
-                    data-testid="input-section-name-en"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Name (Arabic)</Label>
-                  <Input
-                    value={formData.nameAr}
-                    onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
-                    placeholder="ألعاب الانهيار"
-                    dir="rtl"
-                    data-testid="input-section-name-ar"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Icon</Label>
-                  <Select
-                    value={formData.icon}
-                    onValueChange={(value) => setFormData({ ...formData, icon: value })}
-                  >
-                    <SelectTrigger data-testid="select-section-icon">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {iconOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          <div className="flex items-center gap-2">
-                            <option.Icon className="h-4 w-4" />
-                            <span>{option.label}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Icon Color</Label>
-                  <Select
-                    value={formData.iconColor}
-                    onValueChange={(value) => setFormData({ ...formData, iconColor: value })}
-                  >
-                    <SelectTrigger data-testid="select-section-color">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {colorOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          <div className="flex items-center gap-2">
-                            <div className={`h-3 w-3 rounded-full ${option.value.replace('text-', 'bg-')}`} />
-                            <span>{option.label}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Sort Order</Label>
-                <Input
-                  type="number"
-                  value={formData.sortOrder}
-                  onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) })}
-                  data-testid="input-section-sort"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={formData.isActive}
-                  onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
-                  data-testid="switch-section-active"
-                />
-                <Label>Active</Label>
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={handleSubmit}
-                disabled={createMutation.isPending || updateMutation.isPending}
-                data-testid="button-save-section"
-              >
-                {editingSection ? "Update Section" : "Create Section"}
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              setEditingSection(null);
+              resetForm();
+            }
+          }}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-section">
+                <Plus className="h-4 w-4 me-2" />
+                Add Section
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>{editingSection ? "Edit Section" : "Add Section"}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Key (unique identifier)</Label>
+                  <Input
+                    value={formData.key}
+                    onChange={(e) => setFormData({ ...formData, key: e.target.value })}
+                    placeholder="e.g., crash, slots, dice"
+                    disabled={!!editingSection}
+                    data-testid="input-section-key"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Name (English)</Label>
+                    <Input
+                      value={formData.nameEn}
+                      onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
+                      placeholder="Crash Games"
+                      data-testid="input-section-name-en"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Name (Arabic)</Label>
+                    <Input
+                      value={formData.nameAr}
+                      onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
+                      placeholder="ألعاب الانهيار"
+                      dir="rtl"
+                      data-testid="input-section-name-ar"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Icon</Label>
+                    <Select
+                      value={formData.icon}
+                      onValueChange={(value) => setFormData({ ...formData, icon: value })}
+                    >
+                      <SelectTrigger data-testid="select-section-icon">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {iconOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex items-center gap-2">
+                              <option.Icon className="h-4 w-4" />
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Icon Color</Label>
+                    <Select
+                      value={formData.iconColor}
+                      onValueChange={(value) => setFormData({ ...formData, iconColor: value })}
+                    >
+                      <SelectTrigger data-testid="select-section-color">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {colorOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            <div className="flex items-center gap-2">
+                              <div className={`h-3 w-3 rounded-full ${option.value.replace('text-', 'bg-')}`} />
+                              <span>{option.label}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Sort Order</Label>
+                  <Input
+                    type="number"
+                    value={formData.sortOrder}
+                    onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) })}
+                    data-testid="input-section-sort"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={formData.isActive}
+                    onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+                    data-testid="switch-section-active"
+                  />
+                  <Label>Active</Label>
+                </div>
+
+                <Button
+                  className="w-full"
+                  onClick={handleSubmit}
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                  data-testid="button-save-section"
+                >
+                  {editingSection ? "Update Section" : "Create Section"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-4">
         {sections.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-muted-foreground">
-              No sections configured. Click "Add Section" to create one.
+              No sections configured. Click "Initialize Sections" to import existing categories, or "Add Section" to create one manually.
             </CardContent>
           </Card>
         ) : (

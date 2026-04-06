@@ -21,13 +21,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Wallet, Plus, ArrowUpRight, ArrowDownRight, Star, Filter, RefreshCw, Trash2, Edit2, Check, ChevronsUpDown, AlertTriangle, MessageSquare, Upload, FileCheck, Camera, Video, Ban, Clock, ChevronRight, Send, Paperclip, Eye, Shield, Scale, History, User, Settings } from "lucide-react";
+import { Wallet, Plus, ArrowUpRight, ArrowDownRight, Star, Filter, RefreshCw, Trash2, Edit2, Check, AlertTriangle, MessageSquare, Upload, FileCheck, Camera, Video, Ban, Clock, ChevronRight, Send, Paperclip, Eye, Shield, Scale, History, User, Settings } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
@@ -35,6 +33,7 @@ interface P2POffer {
   id: string;
   userId: string;
   username: string;
+  country?: string | null;
   type: "buy" | "sell";
   amount: string;
   price: string;
@@ -276,12 +275,12 @@ function MarketplaceTab() {
   const { t, language } = useI18n();
   const { toast } = useToast();
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [countryFilter, setCountryFilter] = useState<string>("all");
   const [currencyFilter, setCurrencyFilter] = useState<string>("all");
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
   const [priceSort, setPriceSort] = useState<"none" | "asc" | "desc">("none");
   const [amountFilter, setAmountFilter] = useState("");
   const [showTopRatedOnly, setShowTopRatedOnly] = useState(false);
-  const [currencyOpen, setCurrencyOpen] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<P2POffer | null>(null);
   const [tradeAmount, setTradeAmount] = useState("");
   const [tradePaymentMethod, setTradePaymentMethod] = useState("");
@@ -292,46 +291,100 @@ function MarketplaceTab() {
   });
 
   const { data: offers, isLoading, refetch } = useQuery<P2POffer[]>({
-    queryKey: ["/api/p2p/offers", { type: typeFilter, currency: currencyFilter, payment: paymentFilter }],
+    queryKey: ["/api/p2p/offers"],
   });
 
-  const paymentOptions = useMemo(() => {
-    return Array.from(new Set((offers || []).flatMap((offer) => offer.paymentMethods || []))).sort((a, b) => a.localeCompare(b));
-  }, [offers]);
+  const offersByType = useMemo(() => {
+    return (offers || []).filter((offer) => (typeFilter === "all" ? true : offer.type === typeFilter));
+  }, [offers, typeFilter]);
 
-  const marketplaceCurrencies = useMemo(() => {
+  const countryOptions = useMemo(() => {
+    const mapByNormalized = new Map<string, string>();
+
+    for (const offer of offersByType) {
+      const countryLabel = String(offer.country || "").trim();
+      if (!countryLabel) continue;
+
+      const normalized = countryLabel.toLowerCase();
+      if (!mapByNormalized.has(normalized)) {
+        mapByNormalized.set(normalized, countryLabel);
+      }
+    }
+
+    return Array.from(mapByNormalized.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [offersByType]);
+
+  const offersByTypeAndCountry = useMemo(() => {
+    if (countryFilter === "all") {
+      return offersByType;
+    }
+
+    return offersByType.filter((offer) => String(offer.country || "").trim().toLowerCase() === countryFilter);
+  }, [offersByType, countryFilter]);
+
+  const currencyOptions = useMemo(() => {
     const configured = (offerEligibility?.allowedCurrencies || [])
-      .map((currency) => String(currency || "").toUpperCase())
+      .map((currency) => String(currency || "").toUpperCase().trim())
       .filter((currency) => currency.length > 0);
 
-    const offerAssets = (offers || [])
-      .map((offer) => String(offer.currency || "").toUpperCase())
-      .filter((asset) => asset.length > 0);
+    const fromOffers = offersByTypeAndCountry
+      .map((offer) => String(offer.currency || "").toUpperCase().trim())
+      .filter((currency) => currency.length > 0);
 
-    return Array.from(new Set([...configured, ...offerAssets]));
-  }, [offerEligibility?.allowedCurrencies, offers]);
+    return Array.from(new Set([...fromOffers, ...configured])).sort((a, b) => a.localeCompare(b));
+  }, [offerEligibility?.allowedCurrencies, offersByTypeAndCountry]);
 
-  const quickAssetTabs = useMemo(() => {
-    return marketplaceCurrencies.slice(0, 8);
-  }, [marketplaceCurrencies]);
+  const offersByTypeCountryAndCurrency = useMemo(() => {
+    if (currencyFilter === "all") {
+      return offersByTypeAndCountry;
+    }
+
+    return offersByTypeAndCountry.filter((offer) => String(offer.currency || "").toUpperCase() === currencyFilter);
+  }, [offersByTypeAndCountry, currencyFilter]);
+
+  const paymentOptions = useMemo(() => {
+    return Array.from(new Set(
+      offersByTypeCountryAndCurrency.flatMap((offer) => (offer.paymentMethods || []).map((method) => method.trim()).filter((method) => method.length > 0))
+    )).sort((a, b) => a.localeCompare(b));
+  }, [offersByTypeCountryAndCurrency]);
+
+  useEffect(() => {
+    if (countryFilter === "all") {
+      return;
+    }
+
+    if (!countryOptions.some((option) => option.value === countryFilter)) {
+      setCountryFilter("all");
+    }
+  }, [countryFilter, countryOptions]);
 
   useEffect(() => {
     if (currencyFilter === "all") {
       return;
     }
 
-    if (!marketplaceCurrencies.includes(currencyFilter)) {
+    if (!currencyOptions.includes(currencyFilter)) {
       setCurrencyFilter("all");
     }
-  }, [currencyFilter, marketplaceCurrencies]);
+  }, [currencyFilter, currencyOptions]);
+
+  useEffect(() => {
+    if (paymentFilter === "all") {
+      return;
+    }
+
+    if (!paymentOptions.includes(paymentFilter)) {
+      setPaymentFilter("all");
+    }
+  }, [paymentFilter, paymentOptions]);
 
   const filteredOffers = useMemo(() => {
     const numericAmountFilter = parseFloat(amountFilter);
     const shouldFilterByAmount = Number.isFinite(numericAmountFilter) && numericAmountFilter > 0;
 
-    let next = (offers || []).filter((offer) => {
-      if (typeFilter !== "all" && offer.type !== typeFilter) return false;
-      if (currencyFilter !== "all" && offer.currency !== currencyFilter) return false;
+    let next = offersByTypeCountryAndCurrency.filter((offer) => {
       if (paymentFilter !== "all" && !offer.paymentMethods.includes(paymentFilter)) return false;
       if (showTopRatedOnly && offer.rating < 4.8) return false;
 
@@ -356,7 +409,7 @@ function MarketplaceTab() {
     }
 
     return next;
-  }, [offers, typeFilter, currencyFilter, paymentFilter, amountFilter, showTopRatedOnly, priceSort]);
+  }, [offersByTypeCountryAndCurrency, paymentFilter, amountFilter, showTopRatedOnly, priceSort]);
 
   const createTradeMutation = useMutation({
     mutationFn: async (payload: { offerId: string; amount: string; paymentMethod: string }) => {
@@ -460,122 +513,55 @@ function MarketplaceTab() {
             <span className="text-sm font-semibold sm:text-base">{t('p2p.marketplace')}</span>
           </div>
 
-          <Popover open={currencyOpen} onOpenChange={setCurrencyOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                role="combobox"
-                aria-expanded={currencyOpen}
-                className="h-8 justify-between rounded-full bg-white/85 px-3 text-xs font-semibold text-slate-900 hover:bg-white sm:text-sm"
-                data-testid="select-currency-filter"
-              >
-                {currencyFilter === "all" ? t('p2p.all') : currencyFilter}
-                <ChevronsUpDown className="ms-2 h-3 w-3 shrink-0 opacity-70" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 p-0" align="end">
-              <Command>
-                <CommandInput placeholder={t('p2p.searchCurrency')} />
-                <CommandList>
-                  <CommandEmpty>{t('p2p.noCurrencyFound')}</CommandEmpty>
-                  <CommandGroup>
-                    {["all", ...marketplaceCurrencies].map((currencyCode) => (
-                      <CommandItem
-                        key={currencyCode}
-                        value={currencyCode}
-                        onSelect={() => {
-                          setCurrencyFilter(currencyCode);
-                          setCurrencyOpen(false);
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "me-2 h-4 w-4",
-                            currencyFilter === currencyCode ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        <span className="font-medium">
-                          {currencyCode === "all" ? t('p2p.all') : currencyCode}
-                        </span>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+          <Badge className="bg-white/85 text-slate-900 hover:bg-white/85">
+            {t('p2p.filters')}
+          </Badge>
         </div>
 
         <div className="space-y-3 p-3 sm:p-4">
-          <div className="grid grid-cols-3 rounded-lg border border-slate-700 bg-slate-900 p-1" data-testid="select-type-filter">
-            {(["all", "buy", "sell"] as const).map((value) => {
-              const isActive = typeFilter === value;
-              const label = value === "all" ? t('p2p.all') : value === "buy" ? t('p2p.buy') : t('p2p.sell');
-
-              return (
-                <Button
-                  key={value}
-                  type="button"
-                  variant="ghost"
-                  className={cn(
-                    "h-9 rounded-md text-sm font-semibold",
-                    isActive
-                      ? "bg-[#f0c73f] text-slate-900 hover:bg-[#f5ce56]"
-                      : "text-slate-300 hover:bg-slate-800 hover:text-slate-100"
-                  )}
-                  onClick={() => setTypeFilter(value)}
-                  data-testid={`button-type-filter-${value}`}
-                >
-                  {label}
-                </Button>
-              );
-            })}
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              className={cn(
-                "h-8 shrink-0 rounded-md border px-3 text-xs",
-                currencyFilter === "all"
-                  ? "border-[#f0c73f] bg-[#f0c73f]/15 text-[#f0c73f]"
-                  : "border-slate-700 text-slate-300 hover:bg-slate-800"
-              )}
-              onClick={() => setCurrencyFilter("all")}
-            >
-              {t('p2p.all')}
-            </Button>
-
-            {quickAssetTabs.map((asset) => (
-              <Button
-                key={asset}
-                type="button"
-                variant="ghost"
-                className={cn(
-                  "h-8 shrink-0 rounded-md border px-3 text-xs",
-                  currencyFilter === asset
-                    ? "border-[#f0c73f] bg-[#f0c73f]/15 text-[#f0c73f]"
-                    : "border-slate-700 text-slate-300 hover:bg-slate-800"
-                )}
-                onClick={() => setCurrencyFilter(asset)}
-              >
-                {asset}
-              </Button>
-            ))}
-          </div>
-
           <div className="flex flex-nowrap items-stretch gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <Input
-              value={amountFilter}
-              onChange={(event) => setAmountFilter(event.target.value)}
-              type="number"
-              placeholder={t('common.amount')}
-              className="min-w-[130px] shrink-0 border-slate-700 bg-slate-900 text-slate-100"
-              data-testid="input-amount-filter"
-            />
+            <div className="min-w-[130px] shrink-0">
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-type-filter">
+                  <SelectValue placeholder={t('p2p.type')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                  <SelectItem value="buy">{t('p2p.buy')}</SelectItem>
+                  <SelectItem value="sell">{t('p2p.sell')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="min-w-[150px] shrink-0">
+              <Select value={countryFilter} onValueChange={setCountryFilter}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-country-filter">
+                  <SelectValue placeholder={t('p2p.country')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                  {countryOptions.map((countryOption) => (
+                    <SelectItem key={countryOption.value} value={countryOption.value}>{countryOption.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <div className="min-w-[130px] shrink-0">
+              <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-currency-filter">
+                  <SelectValue placeholder={t('p2p.currency')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                  {currencyOptions.map((currencyCode) => (
+                    <SelectItem key={currencyCode} value={currencyCode}>{currencyCode}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="min-w-[170px] shrink-0">
               <Select value={paymentFilter} onValueChange={setPaymentFilter}>
                 <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-payment-filter">
                   <SelectValue placeholder={t('p2p.paymentMethod')} />
@@ -588,6 +574,17 @@ function MarketplaceTab() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="flex flex-nowrap items-stretch gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <Input
+              value={amountFilter}
+              onChange={(event) => setAmountFilter(event.target.value)}
+              type="number"
+              placeholder={t('common.amount')}
+              className="min-w-[130px] shrink-0 border-slate-700 bg-slate-900 text-slate-100"
+              data-testid="input-amount-filter"
+            />
 
             <div className="min-w-[130px] shrink-0">
               <Select value={priceSort} onValueChange={(value) => setPriceSort(value as "none" | "asc" | "desc")}>

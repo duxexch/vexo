@@ -1,8 +1,109 @@
 import type { Express, Response } from "express";
 import { storage } from "../../storage";
+import { db } from "../../db";
+import { gameplaySettings } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 
+const SAM9_SOLO_MODE_KEY = "sam9_solo_mode";
+const SAM9_SOLO_FIXED_FEE_KEY = "sam9_solo_fixed_fee";
+
+type Sam9SoloMode = "competitive" | "friendly_fixed_fee";
+
+function normalizeSam9SoloMode(value: unknown): Sam9SoloMode {
+  return value === "friendly_fixed_fee" ? "friendly_fixed_fee" : "competitive";
+}
+
+function normalizeSam9FixedFee(value: unknown): string {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error("SAM9 fixed fee must be a non-negative number");
+  }
+  return parsed.toFixed(2);
+}
+
 export function registerChallengeSettingsRoutes(app: Express) {
+
+  app.get("/api/admin/challenge-settings/sam9-solo", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
+    try {
+      const [modeRow] = await db.select().from(gameplaySettings).where(eq(gameplaySettings.key, SAM9_SOLO_MODE_KEY)).limit(1);
+      const [fixedFeeRow] = await db.select().from(gameplaySettings).where(eq(gameplaySettings.key, SAM9_SOLO_FIXED_FEE_KEY)).limit(1);
+
+      const mode = normalizeSam9SoloMode(modeRow?.value);
+      const fixedFee = normalizeSam9FixedFee(fixedFeeRow?.value ?? "0");
+
+      res.json({
+        mode,
+        fixedFee,
+        updatedAt: fixedFeeRow?.updatedAt || modeRow?.updatedAt || null,
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/admin/challenge-settings/sam9-solo", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const mode = normalizeSam9SoloMode(req.body?.mode);
+      const fixedFee = normalizeSam9FixedFee(req.body?.fixedFee ?? "0");
+
+      const [existingModeRow] = await db.select().from(gameplaySettings).where(eq(gameplaySettings.key, SAM9_SOLO_MODE_KEY)).limit(1);
+      const [existingFeeRow] = await db.select().from(gameplaySettings).where(eq(gameplaySettings.key, SAM9_SOLO_FIXED_FEE_KEY)).limit(1);
+
+      if (existingModeRow) {
+        await db.update(gameplaySettings)
+          .set({
+            value: mode,
+            updatedBy: req.admin!.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(gameplaySettings.key, SAM9_SOLO_MODE_KEY));
+      } else {
+        await db.insert(gameplaySettings).values({
+          key: SAM9_SOLO_MODE_KEY,
+          value: mode,
+          description: "SAM9 solo mode: competitive or friendly_fixed_fee",
+          descriptionAr: "نمط اللعب الفردي مع SAM9: تنافسي أو ودي برسوم ثابتة",
+          updatedBy: req.admin!.id,
+        });
+      }
+
+      if (existingFeeRow) {
+        await db.update(gameplaySettings)
+          .set({
+            value: fixedFee,
+            updatedBy: req.admin!.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(gameplaySettings.key, SAM9_SOLO_FIXED_FEE_KEY));
+      } else {
+        await db.insert(gameplaySettings).values({
+          key: SAM9_SOLO_FIXED_FEE_KEY,
+          value: fixedFee,
+          description: "SAM9 solo fixed fee charged at challenge creation when mode=friendly_fixed_fee",
+          descriptionAr: "رسوم SAM9 الثابتة التي تخصم عند إنشاء التحدي في الوضع الودي",
+          updatedBy: req.admin!.id,
+        });
+      }
+
+      await logAdminAction(req.admin!.id, "settings_change", "sam9_solo_mode", "sam9_solo", {
+        previousValue: JSON.stringify({
+          mode: normalizeSam9SoloMode(existingModeRow?.value),
+          fixedFee: existingFeeRow?.value || "0",
+        }),
+        newValue: JSON.stringify({ mode, fixedFee }),
+        reason: "Updated SAM9 solo challenge mode",
+      }, req);
+
+      res.json({ success: true, mode, fixedFee });
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      if (message.includes("non-negative number")) {
+        return res.status(400).json({ error: message });
+      }
+      res.status(500).json({ error: message });
+    }
+  });
 
   app.get("/api/admin/challenge-settings", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {

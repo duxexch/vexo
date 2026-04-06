@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,12 +65,18 @@ interface ChallengeSettings {
   updatedAt: string;
 }
 
-function EditSettingsDialog({ 
-  settings, 
-  open, 
-  onOpenChange 
-}: { 
-  settings: ChallengeSettings; 
+interface Sam9SoloSettings {
+  mode: "competitive" | "friendly_fixed_fee";
+  fixedFee: string;
+  updatedAt?: string | null;
+}
+
+function EditSettingsDialog({
+  settings,
+  open,
+  onOpenChange
+}: {
+  settings: ChallengeSettings;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -385,6 +391,8 @@ function EditSettingsDialog({
 export default function AdminChallengeSettingsPage() {
   const { toast } = useToast();
   const [editingSettings, setEditingSettings] = useState<ChallengeSettings | null>(null);
+  const [sam9Mode, setSam9Mode] = useState<"competitive" | "friendly_fixed_fee">("competitive");
+  const [sam9FixedFee, setSam9FixedFee] = useState("0.00");
 
   const { data: settingsList, isLoading } = useQuery<ChallengeSettings[]>({
     queryKey: ["/api/admin/challenge-settings"],
@@ -397,6 +405,52 @@ export default function AdminChallengeSettingsPage() {
     },
   });
 
+  const { data: sam9Settings, isLoading: sam9Loading } = useQuery<Sam9SoloSettings>({
+    queryKey: ["/api/admin/challenge-settings/sam9-solo"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/challenge-settings/sam9-solo", {
+        headers: { "x-admin-token": adminToken() },
+      });
+      if (!res.ok) throw new Error("Failed to fetch SAM9 settings");
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (!sam9Settings) return;
+    setSam9Mode(sam9Settings.mode);
+    setSam9FixedFee(sam9Settings.fixedFee);
+  }, [sam9Settings]);
+
+  const saveSam9SettingsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/challenge-settings/sam9-solo", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": adminToken(),
+        },
+        body: JSON.stringify({
+          mode: sam9Mode,
+          fixedFee: sam9FixedFee,
+        }),
+      });
+
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload?.error || "Failed to update SAM9 settings");
+      }
+      return payload;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/challenge-settings/sam9-solo"] });
+      toast({ title: "تم الحفظ", description: "تم تحديث إعدادات اللعب الفردي SAM9 بنجاح" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+    },
+  });
+
   const gameTypeNames: Record<string, string> = {
     chess: "شطرنج ♟",
     backgammon: "طاولة 🎲",
@@ -406,7 +460,7 @@ export default function AdminChallengeSettingsPage() {
   };
 
   const defaultGameTypes = ["chess", "backgammon", "domino", "tarneeb", "baloot"];
-  
+
   // Ensure all game types appear (auto-create on first fetch)
   const initMutation = useMutation({
     mutationFn: async (gameType: string) => {
@@ -502,6 +556,61 @@ export default function AdminChallengeSettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">إعدادات اللعب الفردي مع SAM9</CardTitle>
+          <CardDescription>
+            اختر بين وضع تنافسي عادي أو وضع ودي برسوم ثابتة تخصم مرة واحدة عند إنشاء التحدي.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Button
+              type="button"
+              variant={sam9Mode === "competitive" ? "default" : "outline"}
+              onClick={() => setSam9Mode("competitive")}
+              disabled={sam9Loading || saveSam9SettingsMutation.isPending}
+            >
+              وضع تنافسي
+            </Button>
+            <Button
+              type="button"
+              variant={sam9Mode === "friendly_fixed_fee" ? "default" : "outline"}
+              onClick={() => setSam9Mode("friendly_fixed_fee")}
+              disabled={sam9Loading || saveSam9SettingsMutation.isPending}
+            >
+              وضع ودي برسوم ثابتة
+            </Button>
+          </div>
+
+          <div className="space-y-1.5 max-w-sm">
+            <Label className="text-sm">الرسوم الثابتة (تطبق في الوضع الودي فقط)</Label>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={sam9FixedFee}
+              onChange={(e) => setSam9FixedFee(e.target.value)}
+              disabled={sam9Loading || saveSam9SettingsMutation.isPending || sam9Mode !== "friendly_fixed_fee"}
+            />
+            <p className="text-xs text-muted-foreground">
+              في الوضع الودي: يخصم هذا المبلغ من المستخدم عند إنشاء التحدي، بدون خصومات/أرباح إضافية عند النهاية.
+            </p>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              onClick={() => saveSam9SettingsMutation.mutate()}
+              disabled={sam9Loading || saveSam9SettingsMutation.isPending}
+            >
+              {saveSam9SettingsMutation.isPending && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
+              حفظ إعدادات SAM9
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Settings Table */}
       <Card>

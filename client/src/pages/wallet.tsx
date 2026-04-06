@@ -421,13 +421,13 @@ export default function WalletPage() {
                   </div>
                 </div>
                 <Button
-                  className="w-full h-12 rounded-xl font-semibold gap-2 shadow-md bg-primary hover:bg-primary/90"
+                  className="w-full min-w-0 min-h-[48px] h-auto rounded-xl px-3 py-2 font-semibold gap-2 shadow-md bg-primary hover:bg-primary/90 whitespace-normal break-words overflow-hidden"
                   size="lg"
                   onClick={() => setShowConvert(true)}
                   data-testid="button-convert-to-vxc"
                 >
-                  <ArrowRightLeft className="h-5 w-5" />
-                  {language === 'ar' ? 'تحويل الرصيد' : 'Convert Balance'}
+                  <ArrowRightLeft className="h-5 w-5 shrink-0" />
+                  <span className="min-w-0 text-center leading-tight">{tOr('wallet.convertNow', 'Convert Balance')}</span>
                 </Button>
               </div>
             </div>

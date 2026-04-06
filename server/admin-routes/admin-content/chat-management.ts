@@ -5,11 +5,53 @@ import { eq, sql, gte, count } from "drizzle-orm";
 import { getBannedWordsList, addCustomBannedWord, removeBannedWord } from "../../lib/word-filter";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 
+const CHAT_SETTING_ALIAS: Record<string, string> = {
+  isEnabled: "chat_enabled",
+};
+
+type ChatSettingRule =
+  | { type: "boolean" }
+  | { type: "int"; min: number; max: number };
+
+const CHAT_SETTING_RULES: Record<string, ChatSettingRule> = {
+  chat_enabled: { type: "boolean" },
+  max_message_length: { type: "int", min: 1, max: 10000 },
+  chat_rate_limit: { type: "int", min: 1, max: 100 },
+};
+
+function normalizeChatSettingKey(key: string): string | null {
+  const canonical = CHAT_SETTING_ALIAS[key] || key;
+  return canonical in CHAT_SETTING_RULES ? canonical : null;
+}
+
+function normalizeChatSettingValue(key: string, value: unknown): string | null {
+  const rule = CHAT_SETTING_RULES[key];
+  if (!rule) return null;
+
+  if (rule.type === "boolean") {
+    if (typeof value === "boolean") {
+      return value ? "true" : "false";
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true" || normalized === "1") return "true";
+      if (normalized === "false" || normalized === "0") return "false";
+    }
+    return null;
+  }
+
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(parsed) || parsed < rule.min || parsed > rule.max) {
+    return null;
+  }
+  return String(parsed);
+}
+
 export function registerChatManagementRoutes(app: Express) {
 
   // ==================== CHAT SETTINGS ====================
 
-  app.get("/api/admin/chat-settings", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+  app.get("/api/admin/chat-settings", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
     try {
       const settings = await db.select().from(chatSettings).orderBy(chatSettings.key);
       res.json(settings);
@@ -20,33 +62,43 @@ export function registerChatManagementRoutes(app: Express) {
 
   app.put("/api/admin/chat-settings/:key", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
-      const { key } = req.params;
+      const { key: rawKey } = req.params;
       const { value } = req.body;
+      const key = normalizeChatSettingKey(rawKey);
+
+      if (!key) {
+        return res.status(400).json({ error: "Unsupported chat setting key" });
+      }
+
+      const normalizedValue = normalizeChatSettingValue(key, value);
+      if (normalizedValue === null) {
+        return res.status(400).json({ error: "Invalid setting value" });
+      }
 
       const [existing] = await db.select().from(chatSettings).where(eq(chatSettings.key, key));
 
       if (!existing) {
         const [created] = await db.insert(chatSettings).values({
           key,
-          value,
+          value: normalizedValue,
           updatedBy: req.admin!.id
         }).returning();
 
         await logAdminAction(req.admin!.id, "settings_change", "chat_setting", created.id, {
-          newValue: value
+          newValue: normalizedValue
         }, req);
 
         return res.json(created);
       }
 
       const [updated] = await db.update(chatSettings)
-        .set({ value, updatedBy: req.admin!.id, updatedAt: new Date() })
+        .set({ value: normalizedValue, updatedBy: req.admin!.id, updatedAt: new Date() })
         .where(eq(chatSettings.key, key))
         .returning();
 
       await logAdminAction(req.admin!.id, "settings_change", "chat_setting", updated.id, {
         previousValue: existing.value || "",
-        newValue: value
+        newValue: normalizedValue
       }, req);
 
       res.json(updated);
@@ -81,7 +133,7 @@ export function registerChatManagementRoutes(app: Express) {
         totalGameMessages: totalGame.count,
         todayPrivateMessages: todayPrivate.count,
         todayGameMessages: todayGame.count,
-        activeChattersLast24h: (activeChatters.rows[0] as Record<string, unknown>)?.count || 0,
+        activeChattersLast24h: Number((activeChatters.rows[0] as Record<string, unknown>)?.count || 0),
         bannedWordsCount: getBannedWordsList().length,
         privacyNote: "Private messages are end-to-end encrypted. Admin cannot read message content.",
       });

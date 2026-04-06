@@ -8,13 +8,17 @@ export function registerSocialListRoutes(app: Express): void {
 
   app.get("/api/users/friends", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const following = await storage.getUserFollowing(req.user!.id);
-      const followers = await storage.getUserFollowers(req.user!.id);
+      const [following, followers, blockedIds] = await Promise.all([
+        storage.getUserFollowing(req.user!.id),
+        storage.getUserFollowers(req.user!.id),
+        getBlockedUserIds(req.user!.id),
+      ]);
+      const blockedSet = new Set(blockedIds);
 
       const followingIds = new Set(following.map(r => r.targetUserId));
       const followerIds = new Set(followers.map(r => r.userId));
 
-      const mutualIds = [...followingIds].filter(id => followerIds.has(id));
+      const mutualIds = [...followingIds].filter(id => followerIds.has(id) && !blockedSet.has(id));
 
       // Batch fetch all users in one query instead of N+1
       const usersMap = await storage.getUsersByIds(mutualIds);
@@ -31,10 +35,14 @@ export function registerSocialListRoutes(app: Express): void {
 
   app.get("/api/users/following", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const following = await storage.getUserFollowing(req.user!.id);
+      const [following, blockedIds] = await Promise.all([
+        storage.getUserFollowing(req.user!.id),
+        getBlockedUserIds(req.user!.id),
+      ]);
+      const blockedSet = new Set(blockedIds);
 
       // Batch fetch all users in one query
-      const ids = following.map(rel => rel.targetUserId);
+      const ids = following.map(rel => rel.targetUserId).filter(id => !blockedSet.has(id));
       const usersMap = await storage.getUsersByIds(ids);
       const users = ids
         .map(id => usersMap.get(id))
@@ -49,10 +57,14 @@ export function registerSocialListRoutes(app: Express): void {
 
   app.get("/api/users/followers", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const followers = await storage.getUserFollowers(req.user!.id);
+      const [followers, blockedIds] = await Promise.all([
+        storage.getUserFollowers(req.user!.id),
+        getBlockedUserIds(req.user!.id),
+      ]);
+      const blockedSet = new Set(blockedIds);
 
       // Batch fetch all users in one query
-      const ids = followers.map(rel => rel.userId);
+      const ids = followers.map(rel => rel.userId).filter(id => !blockedSet.has(id));
       const usersMap = await storage.getUsersByIds(ids);
       const users = ids
         .map(id => usersMap.get(id))

@@ -16,6 +16,50 @@ export function registerAdminChatAutoDeleteRoutes(app: Express) {
     return Boolean(existingUser);
   };
 
+  const normalizePrice = (rawPrice: unknown): number | null => {
+    const parsed = typeof rawPrice === "number" ? rawPrice : Number(rawPrice);
+    if (!Number.isFinite(parsed) || parsed < 0) return null;
+    return Number(parsed.toFixed(2));
+  };
+
+  const saveAutoDeletePrice = async (price: number, adminId: string) => {
+    await db.insert(systemConfig).values({
+      key: "chat_auto_delete_price",
+      value: String(price),
+      updatedBy: adminId,
+    }).onConflictDoUpdate({
+      target: systemConfig.key,
+      set: { value: String(price), updatedAt: new Date(), updatedBy: adminId },
+    });
+  };
+
+  const setAutoDeletePermission = async (userId: string, enabled: boolean, adminId: string) => {
+    const [existing] = await db.select().from(chatAutoDeletePermissions)
+      .where(eq(chatAutoDeletePermissions.userId, userId));
+
+    if (existing) {
+      await db.update(chatAutoDeletePermissions).set({
+        autoDeleteEnabled: enabled,
+        grantedBy: enabled ? "admin" : existing.grantedBy,
+        grantedAt: enabled ? new Date() : existing.grantedAt,
+        revokedAt: enabled ? null : new Date(),
+        revokedBy: enabled ? null : adminId,
+      }).where(eq(chatAutoDeletePermissions.userId, userId));
+      return;
+    }
+
+    if (!enabled) {
+      return;
+    }
+
+    await db.insert(chatAutoDeletePermissions).values({
+      userId,
+      autoDeleteEnabled: true,
+      grantedBy: "admin",
+      pricePaid: "0",
+    });
+  };
+
   const getAutoDeleteStatsPayload = async () => {
     const [totalEnabled] = await db.select({ count: count() }).from(chatAutoDeletePermissions)
       .where(eq(chatAutoDeletePermissions.autoDeleteEnabled, true));
@@ -67,164 +111,71 @@ export function registerAdminChatAutoDeleteRoutes(app: Express) {
     }
   });
 
-  // Update auto-delete pricing
-  app.put("/api/admin/chat-auto-delete/pricing", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+  const updateAutoDeletePricing = async (req: AdminRequest, res: Response) => {
     try {
-      const { price } = req.body;
-      if (typeof price !== 'number' || price < 0) {
+      const normalizedPrice = normalizePrice(req.body?.price);
+      if (normalizedPrice === null) {
         return res.status(400).json({ error: "Invalid price" });
       }
 
-      await db.insert(systemConfig).values({
-        key: "chat_auto_delete_price",
-        value: String(price),
-        updatedBy: req.admin!.id,
-      }).onConflictDoUpdate({
-        target: systemConfig.key,
-        set: { value: String(price), updatedAt: new Date(), updatedBy: req.admin!.id },
-      });
+      await saveAutoDeletePrice(normalizedPrice, req.admin!.id);
 
-      res.json({ success: true, price });
+      res.json({ success: true, price: normalizedPrice });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
-  });
+  };
+
+  // Update auto-delete pricing
+  app.put("/api/admin/chat-auto-delete/pricing", adminAuthMiddleware, updateAutoDeletePricing);
 
   // Compatibility alias used by current admin chat page
-  app.put("/api/admin/chat/auto-delete/pricing", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+  app.put("/api/admin/chat/auto-delete/pricing", adminAuthMiddleware, updateAutoDeletePricing);
+
+  const grantAutoDeletePermission = async (req: AdminRequest, res: Response) => {
     try {
-      const { price } = req.body;
-      if (typeof price !== 'number' || price < 0) {
-        return res.status(400).json({ error: "Invalid price" });
+      const userId = resolveTargetUserId(req);
+      if (!await assertUserExists(userId)) {
+        return res.status(404).json({ error: "User not found" });
       }
 
-      await db.insert(systemConfig).values({
-        key: "chat_auto_delete_price",
-        value: String(price),
-        updatedBy: req.admin!.id,
-      }).onConflictDoUpdate({
-        target: systemConfig.key,
-        set: { value: String(price), updatedAt: new Date(), updatedBy: req.admin!.id },
-      });
+      await setAutoDeletePermission(userId, true, req.admin!.id);
 
-      res.json({ success: true, price });
+      await logAdminAction(req.admin!.id, "update", "chat_auto_delete_permission", userId, { metadata: "grant_auto_delete" }, req);
+
+      res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
-  });
+  };
 
   // Grant auto-delete permission (admin)
-  app.post("/api/admin/chat-auto-delete/grant/:userId", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
-    try {
-      const userId = resolveTargetUserId(req);
-      if (!await assertUserExists(userId)) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      const [existing] = await db.select().from(chatAutoDeletePermissions)
-        .where(eq(chatAutoDeletePermissions.userId, userId));
-
-      if (existing) {
-        await db.update(chatAutoDeletePermissions).set({
-          autoDeleteEnabled: true,
-          grantedBy: "admin",
-          grantedAt: new Date(),
-          revokedAt: null,
-          revokedBy: null,
-        }).where(eq(chatAutoDeletePermissions.userId, userId));
-      } else {
-        await db.insert(chatAutoDeletePermissions).values({
-          userId,
-          autoDeleteEnabled: true,
-          grantedBy: "admin",
-          pricePaid: "0",
-        });
-      }
-
-      await logAdminAction(req.admin!.id, "update", "chat_auto_delete_permission", userId, { metadata: "grant_auto_delete" }, req);
-
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
-    }
-  });
+  app.post("/api/admin/chat-auto-delete/grant/:userId", adminAuthMiddleware, grantAutoDeletePermission);
 
   // Compatibility alias used by current admin chat page (body: { userId })
-  app.post("/api/admin/chat/auto-delete/grant", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+  app.post("/api/admin/chat/auto-delete/grant", adminAuthMiddleware, grantAutoDeletePermission);
+
+  const revokeAutoDeletePermission = async (req: AdminRequest, res: Response) => {
     try {
       const userId = resolveTargetUserId(req);
       if (!await assertUserExists(userId)) {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const [existing] = await db.select().from(chatAutoDeletePermissions)
-        .where(eq(chatAutoDeletePermissions.userId, userId));
+      await setAutoDeletePermission(userId, false, req.admin!.id);
 
-      if (existing) {
-        await db.update(chatAutoDeletePermissions).set({
-          autoDeleteEnabled: true,
-          grantedBy: "admin",
-          grantedAt: new Date(),
-          revokedAt: null,
-          revokedBy: null,
-        }).where(eq(chatAutoDeletePermissions.userId, userId));
-      } else {
-        await db.insert(chatAutoDeletePermissions).values({
-          userId,
-          autoDeleteEnabled: true,
-          grantedBy: "admin",
-          pricePaid: "0",
-        });
-      }
+      await logAdminAction(req.admin!.id, "update", "chat_auto_delete_permission", userId, { metadata: "revoke_auto_delete" }, req);
 
-      await logAdminAction(req.admin!.id, "update", "chat_auto_delete_permission", userId, { metadata: "grant_auto_delete" }, req);
       res.json({ success: true });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
-  });
+  };
 
   // Revoke auto-delete permission (admin)
-  app.post("/api/admin/chat-auto-delete/revoke/:userId", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
-    try {
-      const userId = resolveTargetUserId(req);
-      if (!await assertUserExists(userId)) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      await db.update(chatAutoDeletePermissions).set({
-        autoDeleteEnabled: false,
-        revokedAt: new Date(),
-        revokedBy: req.admin!.id,
-      }).where(eq(chatAutoDeletePermissions.userId, userId));
-
-      await logAdminAction(req.admin!.id, "update", "chat_auto_delete_permission", userId, { metadata: "revoke_auto_delete" }, req);
-
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
-    }
-  });
+  app.post("/api/admin/chat-auto-delete/revoke/:userId", adminAuthMiddleware, revokeAutoDeletePermission);
 
   // Compatibility alias used by current admin chat page (body: { userId })
-  app.post("/api/admin/chat/auto-delete/revoke", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
-    try {
-      const userId = resolveTargetUserId(req);
-      if (!await assertUserExists(userId)) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      await db.update(chatAutoDeletePermissions).set({
-        autoDeleteEnabled: false,
-        revokedAt: new Date(),
-        revokedBy: req.admin!.id,
-      }).where(eq(chatAutoDeletePermissions.userId, userId));
-
-      await logAdminAction(req.admin!.id, "update", "chat_auto_delete_permission", userId, { metadata: "revoke_auto_delete" }, req);
-      res.json({ success: true });
-    } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
-    }
-  });
+  app.post("/api/admin/chat/auto-delete/revoke", adminAuthMiddleware, revokeAutoDeletePermission);
 
 }

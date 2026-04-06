@@ -32,7 +32,6 @@ export class BalootEngine implements GameEngine {
     }
 
     let ids = [...playerIds];
-    let botPlayers: string[] = [];
 
     if (ids.length === 2) {
       // 2 humans → 2 bots: [human1, human2, bot1, bot2]
@@ -40,7 +39,6 @@ export class BalootEngine implements GameEngine {
       const bot1 = `bot-${ids[0].slice(-4)}-1`;
       const bot2 = `bot-${ids[1].slice(-4)}-2`;
       ids = [ids[0], ids[1], bot1, bot2];
-      botPlayers = [bot1, bot2];
     }
 
     if (ids.length !== 4) {
@@ -50,6 +48,8 @@ export class BalootEngine implements GameEngine {
     if (new Set(ids).size !== ids.length) {
       throw new Error('Baloot final player list contains duplicates');
     }
+
+    const botPlayers = ids.filter((id) => id.startsWith('bot-'));
 
     const state = createNewGame(ids, targetPoints, 3);
     state.botPlayers = botPlayers.length > 0 ? botPlayers : undefined;
@@ -723,7 +723,7 @@ export class BalootEngine implements GameEngine {
               const highestTrumpInTrick = getHighestTrumpStrength(state.currentTrick, state.trumpSuit);
               if (highestTrumpInTrick > 0) {
                 const playedTrumpStrength = BALOOT_HOKM_VALUES[cardRank] || 0;
-                const canOvertake = hand.some(c => 
+                const canOvertake = hand.some(c =>
                   c.suit === state.trumpSuit && (BALOOT_HOKM_VALUES[c.rank] || 0) > highestTrumpInTrick
                 );
                 if (canOvertake && playedTrumpStrength <= highestTrumpInTrick) {
@@ -1044,8 +1044,8 @@ export class BalootEngine implements GameEngine {
         state.totalPoints.team0 >= state.targetPoints && state.totalPoints.team1 >= state.targetPoints
           ? (state.teams.team0.includes(state.choosingPlayer) ? 0 : 1) // tie-break: chooser's team wins
           : state.totalPoints.team0 >= state.targetPoints ? 0
-          : state.totalPoints.team1 >= state.targetPoints ? 1
-          : undefined
+            : state.totalPoints.team1 >= state.targetPoints ? 1
+              : undefined
       );
       return {
         isOver: state.phase === 'finished',

@@ -204,8 +204,6 @@ export default function AdminChatPage() {
   const { toast } = useToast();
   const { t } = useI18n();
   const queryClient = useQueryClient();
-  const [searchUserId, setSearchUserId] = useState("");
-  const [searchText, setSearchText] = useState("");
   const [newBannedWord, setNewBannedWord] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -302,21 +300,6 @@ export default function AdminChatPage() {
     queryKey: ["admin-chat-settings"],
     queryFn: () => adminFetch("/api/admin/chat-settings"),
   });
-
-  // Messages search
-  const { data: messagesData, refetch: refetchMessages } = useQuery({
-    queryKey: ["admin-chat-messages", searchUserId, searchText],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (searchUserId) params.set("userId", searchUserId);
-      if (searchText) params.set("search", searchText);
-      params.set("limit", "50");
-      return adminFetch(`/api/admin/chat/messages?${params}`);
-    },
-    enabled: false,
-  });
-  void messagesData;
-  void refetchMessages;
 
   // Banned words
   const { data: bannedWordsData } = useQuery({
@@ -527,34 +510,6 @@ export default function AdminChatPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-chat-settings"] });
       toast({ title: "تم تحديث الإعداد" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
-    },
-  });
-
-  // Delete message
-  const deleteMessageMutation = useMutation({
-    mutationFn: (messageId: string) =>
-      adminFetch(`/api/admin/chat/messages/${messageId}`, { method: "DELETE" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-chat-messages"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-chat-stats"] });
-      toast({ title: "تم حذف الرسالة" });
-    },
-    onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
-    },
-  });
-
-  // Delete all user messages
-  const deleteUserMessagesMutation = useMutation({
-    mutationFn: (userId: string) =>
-      adminFetch(`/api/admin/chat/user/${userId}/messages`, { method: "DELETE" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-chat-messages"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-chat-stats"] });
-      toast({ title: "تم حذف جميع رسائل المستخدم" });
     },
     onError: (err: Error) => {
       toast({ title: "خطأ", description: err.message, variant: "destructive" });
@@ -1531,10 +1486,10 @@ export default function AdminChatPage() {
                           >
                             <div
                               className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${msg.senderType === "admin"
-                                  ? "bg-primary text-primary-foreground rounded-ee-sm"
-                                  : msg.senderType === "system"
-                                    ? "bg-muted text-muted-foreground rounded-es-sm italic text-xs"
-                                    : "bg-card border border-border text-card-foreground rounded-es-sm"
+                                ? "bg-primary text-primary-foreground rounded-ee-sm"
+                                : msg.senderType === "system"
+                                  ? "bg-muted text-muted-foreground rounded-es-sm italic text-xs"
+                                  : "bg-card border border-border text-card-foreground rounded-es-sm"
                                 }`}
                             >
                               {msg.senderType === "system" && (
@@ -1926,7 +1881,6 @@ export default function AdminChatPage() {
                 <AdminFeatureSection
                   featureType="media"
                   toast={toast}
-                  queryClient={queryClient}
                 />
               </CardContent>
             </Card>
@@ -1943,7 +1897,6 @@ export default function AdminChatPage() {
                 <AdminFeatureSection
                   featureType="auto-delete"
                   toast={toast}
-                  queryClient={queryClient}
                 />
               </CardContent>
             </Card>
@@ -1971,7 +1924,7 @@ export default function AdminChatPage() {
               <CardDescription>التحكم في إرسال الوسائط (صور، فيديو، ملفات) في دردشة الدعم الفني</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <AdminSupportMediaSection toast={toast} queryClient={queryClient} />
+              <AdminSupportMediaSection toast={toast} />
             </CardContent>
           </Card>
 
@@ -2068,49 +2021,14 @@ export default function AdminChatPage() {
 
               <Separator />
 
-              <div className="space-y-2 p-4 border border-destructive/20 rounded-lg bg-destructive/5">
-                <Label className="text-destructive">إجراءات خطيرة</Label>
-                <p className="text-sm text-muted-foreground mb-3">
-                  هذه الإجراءات لا يمكن التراجع عنها
+              <div className="space-y-2 p-4 border border-emerald-500/20 rounded-lg bg-emerald-500/5">
+                <Label className="text-emerald-700 dark:text-emerald-400">خصوصية الرسائل الخاصة</Label>
+                <p className="text-sm text-muted-foreground">
+                  بسبب التشفير الطرفي الكامل (E2EE)، لا يمكن للنظام حذف أو قراءة الرسائل الخاصة من لوحة الإدارة.
                 </p>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="أدخل معرف المستخدم لحذف رسائله..."
-                    className="flex-1"
-                    id="delete-user-id-input"
-                  />
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm" className="gap-1.5">
-                        <Trash2 className="h-4 w-4" />
-                        حذف كل رسائل المستخدم
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>حذف جميع الرسائل؟</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          سيتم حذف جميع رسائل هذا المستخدم نهائياً (المرسلة والمستقبلة).
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => {
-                            const input = document.getElementById("delete-user-id-input") as HTMLInputElement;
-                            if (input?.value?.trim()) {
-                              deleteUserMessagesMutation.mutate(input.value.trim());
-                              input.value = "";
-                            }
-                          }}
-                          className="bg-destructive text-destructive-foreground"
-                        >
-                          حذف نهائياً
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  للمراجعة الإدارية استخدم فقط أدوات مراقبة محادثات P2P والتحديات المتاحة في أقسامها المخصصة.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -2121,7 +2039,7 @@ export default function AdminChatPage() {
 }
 
 // Admin Feature Management Sub-Component
-function AdminFeatureSection({ featureType, toast, queryClient }: { featureType: "media" | "auto-delete"; toast: ToastFn; queryClient: ReturnType<typeof useQueryClient> }) {
+function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "auto-delete"; toast: ToastFn }) {
   const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(false);
   const [price, setPrice] = useState("");
@@ -2132,14 +2050,15 @@ function AdminFeatureSection({ featureType, toast, queryClient }: { featureType:
   });
 
   const handleGrant = async () => {
-    if (!userId) return;
+    const trimmedUserId = userId.trim();
+    if (!trimmedUserId) return;
     setLoading(true);
     try {
       await adminFetch(`/api/admin/chat/${featureType}/grant`, {
         method: "POST",
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ userId: trimmedUserId }),
       });
-      toast({ title: `تم منح الميزة للمستخدم ${userId}` });
+      toast({ title: `تم منح الميزة للمستخدم ${trimmedUserId}` });
       setUserId("");
       refetch();
     } catch (err: unknown) {
@@ -2162,11 +2081,16 @@ function AdminFeatureSection({ featureType, toast, queryClient }: { featureType:
   };
 
   const handleUpdatePrice = async () => {
-    if (!price) return;
+    const parsedPrice = Number(price);
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      toast({ title: "خطأ", description: "السعر غير صالح", variant: "destructive" });
+      return;
+    }
+
     try {
       await adminFetch(`/api/admin/chat/${featureType}/pricing`, {
         method: "PUT",
-        body: JSON.stringify({ price: parseInt(price) }),
+        body: JSON.stringify({ price: Number(parsedPrice.toFixed(2)) }),
       });
       toast({ title: "تم تحديث السعر" });
       setPrice("");
@@ -2199,7 +2123,7 @@ function AdminFeatureSection({ featureType, toast, queryClient }: { featureType:
           onChange={(e) => setPrice(e.target.value)}
           className="flex-1"
         />
-        <Button size="sm" onClick={handleUpdatePrice} disabled={!price}>
+        <Button size="sm" onClick={handleUpdatePrice} disabled={!price.trim()}>
           تحديث
         </Button>
       </div>
@@ -2214,7 +2138,7 @@ function AdminFeatureSection({ featureType, toast, queryClient }: { featureType:
           onChange={(e) => setUserId(e.target.value)}
           className="flex-1"
         />
-        <Button size="sm" onClick={handleGrant} disabled={loading || !userId}>
+        <Button size="sm" onClick={handleGrant} disabled={loading || !userId.trim()}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "منح"}
         </Button>
       </div>
@@ -2247,14 +2171,15 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
   const [loading, setLoading] = useState(false);
 
   const handleReset = async () => {
-    if (!userId) return;
+    const trimmedUserId = userId.trim();
+    if (!trimmedUserId) return;
     setLoading(true);
     try {
       await adminFetch(`/api/admin/chat/pin/reset`, {
         method: "POST",
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ userId: trimmedUserId }),
       });
-      toast({ title: `تم إعادة تعيين PIN للمستخدم ${userId}` });
+      toast({ title: `تم إعادة تعيين PIN للمستخدم ${trimmedUserId}` });
       setUserId("");
     } catch (err: unknown) {
       toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
@@ -2276,7 +2201,7 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
         />
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button size="sm" variant="destructive" disabled={loading || !userId}>
+            <Button size="sm" variant="destructive" disabled={loading || !userId.trim()}>
               إعادة تعيين
             </Button>
           </AlertDialogTrigger>
@@ -2308,7 +2233,7 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
 }
 
 // Admin Support Media Settings Sub-Component
-function AdminSupportMediaSection({ toast, queryClient }: { toast: ToastFn; queryClient: ReturnType<typeof useQueryClient> }) {
+function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
   const [blockUserId, setBlockUserId] = useState("");
   const [loading, setLoading] = useState(false);
 

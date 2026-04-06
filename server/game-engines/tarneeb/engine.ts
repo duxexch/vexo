@@ -50,7 +50,6 @@ export class TarneebEngine implements GameEngine {
    */
   initializeWithPlayers(playerIds: string[], targetScore: number = 31): string {
     let ids = [...playerIds];
-    let botPlayers: string[] = [];
 
     if (ids.length === 2) {
       // 2 humans → generate 2 bot partners
@@ -59,12 +58,13 @@ export class TarneebEngine implements GameEngine {
       const bot1 = `bot-${ids[0].slice(-4)}-1`;
       const bot2 = `bot-${ids[1].slice(-4)}-2`;
       ids = [ids[0], ids[1], bot1, bot2];
-      botPlayers = [bot1, bot2];
     }
 
     if (ids.length !== 4) {
       throw new Error('Tarneeb requires exactly 4 players (or 2 humans + auto bots)');
     }
+
+    const botPlayers = ids.filter((id) => id.startsWith('bot-'));
 
     // dealerIndex=3 → first bidder = ids[0] = human1 (matches session currentTurn)
     const state = this.createNewGame(ids, targetScore, 3);
@@ -159,7 +159,7 @@ export class TarneebEngine implements GameEngine {
         if (p === 12) { tricks += 1.5; score += 5; }      // Ace
         else if (p === 11) { tricks += 0.8; score += 3; }  // King
         else if (p === 10) { tricks += 0.4; score += 2; }  // Queen
-        else if (p === 9)  { tricks += 0.15; score += 1; } // Jack
+        else if (p === 9) { tricks += 0.15; score += 1; } // Jack
       }
 
       // A-K sequence bonus: controlling the suit
@@ -660,7 +660,7 @@ export class TarneebEngine implements GameEngine {
               if (tenaceLeads.length > 0) return tenaceLeads[0].move;
             }
           }
-          
+
           // Priority 3: Lead from depleted suits to force opponents to waste trump
           const suitRemaining = finalPool.map(c => ({ ...c, remaining: remainingInSuit(c.card.suit) }));
           const lowRemaining = suitRemaining.filter(c => c.remaining <= 3);
@@ -668,7 +668,7 @@ export class TarneebEngine implements GameEngine {
             lowRemaining.sort((a, b) => a.remaining - b.remaining);
             return lowRemaining[0].move;
           }
-          
+
           // Lead from longest suit to establish winners
           const suitLens: Record<string, number> = {};
           for (const c of hand) suitLens[c.suit] = (suitLens[c.suit] || 0) + 1;
@@ -685,7 +685,7 @@ export class TarneebEngine implements GameEngine {
             return this.cardPower(a.card.rank) - this.cardPower(b.card.rank);
           });
           if (byLength.length > 0) return byLength[0].move;
-          
+
           return finalPool[0].move;
         }
         // ── F8: Trump promotion — lead mid-trump to force out opponent's A/K ──
@@ -1441,16 +1441,18 @@ export class TarneebEngine implements GameEngine {
             state.totalScores.team0 += state.roundScores.team0;
             state.totalScores.team1 += state.roundScores.team1;
 
-            events.push({ type: 'score', data: {
-              action: 'roundEnd',
-              roundScores: state.roundScores,
-              totalScores: state.totalScores,
-              biddingTeam,
-              bidValue,
-              biddingTeamTricks,
-              made: biddingTeamTricks >= bidValue,
-              isKaboot,
-            } });
+            events.push({
+              type: 'score', data: {
+                action: 'roundEnd',
+                roundScores: state.roundScores,
+                totalScores: state.totalScores,
+                biddingTeam,
+                bidValue,
+                biddingTeamTricks,
+                made: biddingTeamTricks >= bidValue,
+                isKaboot,
+              }
+            });
 
             if (state.totalScores.team0 >= state.targetScore || state.totalScores.team1 >= state.targetScore) {
               state.phase = 'finished';
@@ -1508,7 +1510,7 @@ export class TarneebEngine implements GameEngine {
       } else {
         // Fallback for states that didn't persist winningTeam
         winningTeam = state.totalScores.team0 >= state.targetScore ? 0 :
-                     state.totalScores.team1 >= state.targetScore ? 1 : undefined;
+          state.totalScores.team1 >= state.targetScore ? 1 : undefined;
       }
 
       // For team games, winner = first HUMAN player of winning team

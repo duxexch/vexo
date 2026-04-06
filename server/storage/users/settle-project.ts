@@ -3,7 +3,7 @@ import {
   projectCurrencyWallets, projectCurrencyLedger,
 } from "@shared/schema";
 import { db } from "../../db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 
 // ==================== PROJECT CURRENCY GAME PAYOUTS ====================
 
@@ -119,7 +119,10 @@ export async function settleProjectCurrencyGamePayout(
         winnerId: winnerId,
         endedAt: new Date()
       })
-      .where(eq(liveGameSessions.id, sessionId));
+      .where(or(
+        eq(liveGameSessions.id, sessionId),
+        eq(liveGameSessions.challengeId, sessionId)
+      ));
 
     return { success: true };
   });

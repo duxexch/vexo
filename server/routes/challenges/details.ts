@@ -67,14 +67,17 @@ export function registerDetailsRoutes(app: Express) {
         const p2Total = p2Won + p2Lost;
         const p2WinRate = p2Total > 0 ? Math.round((p2Won / p2Total) * 100) : 50;
         const p2Rank = p2WinRate >= 80 ? "diamond" : p2WinRate >= 60 ? "gold" : p2WinRate >= 40 ? "silver" : "bronze";
+        const player2DisplayName = dbChallenge.opponentType === 'sam9'
+          ? 'SAM9'
+          : (player2?.nickname || player2?.username || "Unknown");
 
         result.player2Id = dbChallenge.player2Id;
-        result.player2Name = player2?.nickname || player2?.username || "Unknown";
+        result.player2Name = player2DisplayName;
         result.player2Rating = { wins: p2Won, losses: p2Lost, winRate: p2WinRate, rank: p2Rank };
         result.player2Score = dbChallenge.player2Score || 0;
         result.player2 = {
           id: dbChallenge.player2Id,
-          username: player2?.nickname || player2?.username || "Unknown",
+          username: player2DisplayName,
           avatarUrl: player2?.profilePicture,
           vipLevel: player2?.vipLevel || 0,
         };

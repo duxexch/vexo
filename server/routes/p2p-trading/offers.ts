@@ -6,7 +6,7 @@ import { authMiddleware, AuthRequest } from "../middleware";
 import { sanitizePlainText } from "../../lib/input-security";
 import { ensureP2PUsername, getP2PUsernameMap } from "../../lib/p2p-username";
 import { isCurrencyAllowedForOfferType, normalizeCurrencyCode, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   getErrorMessage,
   getEffectiveP2PVerificationLevel,
@@ -40,12 +40,13 @@ function mapOwnedPaymentMethodsForClient(methods: OfferOwnedPaymentMethod[]) {
   }));
 }
 
-function mapOfferForClient(offer: Record<string, unknown>, username: string) {
+function mapOfferForClient(offer: Record<string, unknown>, username: string, country?: string | null) {
   const availableAmount = String(offer.availableAmount ?? offer.amount ?? '0');
   return {
     id: String(offer.id),
     userId: String(offer.userId),
     username,
+    country: country ?? null,
     type: offer.type,
     amount: availableAmount,
     price: String(offer.price ?? '0'),
@@ -184,7 +185,7 @@ export function registerOfferRoutes(app: Express) {
 
   app.get("/api/p2p/offers", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const { type, currency, payment } = req.query;
+      const { type, currency, payment, country } = req.query;
 
       const [settings] = await db.select({
         p2pBuyCurrencies: p2pSettings.p2pBuyCurrencies,
@@ -230,10 +231,55 @@ export function registerOfferRoutes(app: Express) {
       });
 
       const usernamesByUserId = await getP2PUsernameMap(visibleOffers.map((offer) => offer.userId));
-      const mapped = visibleOffers.map((offer) => mapOfferForClient(
-        offer as unknown as Record<string, unknown>,
-        usernamesByUserId.get(offer.userId) || "trader_user",
+      const uniqueOfferUserIds = Array.from(new Set(
+        visibleOffers
+          .map((offer) => String(offer.userId || ""))
+          .filter((userId) => userId.length > 0),
       ));
+
+      const userCountryRows = uniqueOfferUserIds.length > 0
+        ? await db.select({
+          userId: p2pTraderPaymentMethods.userId,
+          countryCode: p2pTraderPaymentMethods.countryCode,
+          catalogCountryCode: countryPaymentMethods.countryCode,
+        })
+          .from(p2pTraderPaymentMethods)
+          .leftJoin(countryPaymentMethods, eq(p2pTraderPaymentMethods.countryPaymentMethodId, countryPaymentMethods.id))
+          .where(and(
+            inArray(p2pTraderPaymentMethods.userId, uniqueOfferUserIds),
+            eq(p2pTraderPaymentMethods.isActive, true),
+          ))
+        : [];
+
+      const countryByUserId = new Map<string, string>();
+      for (const row of userCountryRows) {
+        const userId = String(row.userId || "").trim();
+        if (!userId || countryByUserId.has(userId)) {
+          continue;
+        }
+
+        const normalizedCountry = String(row.countryCode || row.catalogCountryCode || "").trim().toUpperCase();
+        if (normalizedCountry) {
+          countryByUserId.set(userId, normalizedCountry);
+        }
+      }
+
+      const normalizedCountryFilter = typeof country === "string" ? country.trim().toLowerCase() : "";
+
+      const mapped = visibleOffers
+        .map((offer) => mapOfferForClient(
+          offer as unknown as Record<string, unknown>,
+          usernamesByUserId.get(offer.userId) || "trader_user",
+          countryByUserId.get(String(offer.userId)) || null,
+        ))
+        .filter((offer) => {
+          if (!normalizedCountryFilter || normalizedCountryFilter === "all") {
+            return true;
+          }
+
+          return String(offer.country || "").trim().toLowerCase() === normalizedCountryFilter;
+        });
+
       res.json(mapped);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -480,7 +526,20 @@ export function registerOfferRoutes(app: Express) {
     try {
       const myOffers = await storage.getUserP2POffers(req.user!.id);
       const username = await ensureP2PUsername(req.user!.id, req.user!.username);
-      res.json(myOffers.map((offer) => mapOfferForClient(offer as unknown as Record<string, unknown>, username)));
+      const [ownCountryMethod] = await db.select({
+        countryCode: p2pTraderPaymentMethods.countryCode,
+        catalogCountryCode: countryPaymentMethods.countryCode,
+      })
+        .from(p2pTraderPaymentMethods)
+        .leftJoin(countryPaymentMethods, eq(p2pTraderPaymentMethods.countryPaymentMethodId, countryPaymentMethods.id))
+        .where(and(
+          eq(p2pTraderPaymentMethods.userId, req.user!.id),
+          eq(p2pTraderPaymentMethods.isActive, true),
+        ))
+        .limit(1);
+
+      const userCountry = String(ownCountryMethod?.countryCode || ownCountryMethod?.catalogCountryCode || "").trim().toUpperCase() || null;
+      res.json(myOffers.map((offer) => mapOfferForClient(offer as unknown as Record<string, unknown>, username, userCountry)));
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

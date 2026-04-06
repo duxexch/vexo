@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
@@ -140,22 +140,42 @@ function UserCard({
         )}
 
         {actionType === "follower" && (
-          <Button
-            size="sm"
-            className="h-8 rounded-full text-xs bg-primary hover:bg-primary/90"
-            onClick={() => onAction(user.id, "follow")}
-            disabled={isLoading}
-            data-testid={`button-followback-${user.id}`}
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>
-                <UserPlus className="w-3.5 h-3.5 me-1" />
-                {t("friends.followBack")}
-              </>
-            )}
-          </Button>
+          user.isFollowing ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 rounded-full text-xs hover:bg-red-500/10 hover:text-red-500"
+              onClick={() => onAction(user.id, "unfollow")}
+              disabled={isLoading}
+              data-testid={`button-follower-unfollow-${user.id}`}
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <UserMinus className="w-3.5 h-3.5 me-1" />
+                  {t("friends.unfollow")}
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              className="h-8 rounded-full text-xs bg-primary hover:bg-primary/90"
+              onClick={() => onAction(user.id, "follow")}
+              disabled={isLoading}
+              data-testid={`button-followback-${user.id}`}
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <UserPlus className="w-3.5 h-3.5 me-1" />
+                  {t("friends.followBack")}
+                </>
+              )}
+            </Button>
+          )
         )}
 
         {actionType === "blocked" && (
@@ -337,7 +357,17 @@ export default function FriendsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const trimmedSearchQuery = searchQuery.trim();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(trimmedSearchQuery);
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [trimmedSearchQuery]);
 
   const { data: friends = [], isLoading: friendsLoading } = useQuery<UserWithFollowStatus[]>({
     queryKey: ["/api/users/friends"],
@@ -357,12 +387,12 @@ export default function FriendsPage() {
 
   // Global search — searches ALL users, not just friends
   const { data: searchResults = [], isLoading: searchLoading } = useQuery<UserWithFollowStatus[]>({
-    queryKey: ["/api/users/search", searchQuery],
+    queryKey: ["/api/users/search", debouncedSearchQuery],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/users/search?q=${encodeURIComponent(searchQuery)}`);
+      const res = await apiRequest("GET", `/api/users/search?q=${encodeURIComponent(debouncedSearchQuery)}`);
       return res.json();
     },
-    enabled: searchQuery.length >= 2,
+    enabled: debouncedSearchQuery.length >= 2,
   });
 
   const invalidateSocialQueries = () => {
@@ -424,11 +454,14 @@ export default function FriendsPage() {
   };
 
   const followingIds = new Set(following.map((u) => u.id));
-  const followBackCandidates = followers.filter((user) => !followingIds.has(user.id));
+  const followerUsers = followers.map((user) => ({
+    ...user,
+    isFollowing: followingIds.has(user.id),
+  }));
 
   // Determine active content
   const renderContent = () => {
-    if (isSearchActive && searchQuery.length >= 2) {
+    if (isSearchActive && debouncedSearchQuery.length >= 2) {
       // Show search results
       if (searchLoading) return <CardSkeleton />;
       if (searchResults.length === 0) {
@@ -444,11 +477,11 @@ export default function FriendsPage() {
       );
     }
 
-    if (isSearchActive && searchQuery.length > 0 && searchQuery.length < 2) {
+    if (isSearchActive && trimmedSearchQuery.length > 0 && trimmedSearchQuery.length < 2) {
       return <EmptySection icon={Search} message={t("friends.typeToSearch")} sub="" />;
     }
 
-    if (isSearchActive && searchQuery.length === 0) {
+    if (isSearchActive && trimmedSearchQuery.length === 0) {
       return <EmptySection icon={Globe} message={t("friends.searchAllUsers")} sub={t("friends.searchPlaceholder")} />;
     }
 
@@ -477,10 +510,10 @@ export default function FriendsPage() {
 
       case "followers":
         if (followersLoading) return <CardSkeleton />;
-        if (followBackCandidates.length === 0) return <EmptySection icon={Users} message={t("friends.noFollowers")} sub={t("friends.noFollowersDesc")} />;
+        if (followerUsers.length === 0) return <EmptySection icon={Users} message={t("friends.noFollowers")} sub={t("friends.noFollowersDesc")} />;
         return (
           <div className="space-y-2">
-            {followBackCandidates.map((user) => (
+            {followerUsers.map((user) => (
               <UserCard key={user.id} user={user} actionType="follower" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
             ))}
           </div>

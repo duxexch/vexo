@@ -1,7 +1,7 @@
 import type { Express, Response } from "express";
 import { chatMediaPermissions, chatAutoDeletePermissions, users } from "@shared/schema";
 import { db } from "../db";
-import { eq, or, like, sql } from "drizzle-orm";
+import { eq, or, ilike, inArray } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "./helpers";
 
 export function registerAdminChatPinRoutes(app: Express) {
@@ -65,34 +65,48 @@ export function registerAdminChatPinRoutes(app: Express) {
         return res.json({ users: [] });
       }
 
-      const searchTerm = `%${String(search).toLowerCase()}%`;
+      const searchTerm = `%${String(search).trim()}%`;
       const result = await db.select({
         id: users.id,
         username: users.username,
         accountId: users.accountId,
         profilePicture: users.profilePicture,
+        chatPinEnabled: users.chatPinEnabled,
       }).from(users)
         .where(or(
-          like(sql`LOWER(${users.username})`, searchTerm),
-          like(sql`LOWER(${users.accountId})`, searchTerm)
+          ilike(users.username, searchTerm),
+          ilike(users.accountId, searchTerm)
         ))
         .limit(20);
 
-      // Get media & auto-delete status for each user
-      const enriched = await Promise.all(result.map(async (u) => {
-        const [media] = await db.select({ mediaEnabled: chatMediaPermissions.mediaEnabled })
-          .from(chatMediaPermissions).where(eq(chatMediaPermissions.userId, u.id));
-        const [autoDel] = await db.select({ autoDeleteEnabled: chatAutoDeletePermissions.autoDeleteEnabled })
-          .from(chatAutoDeletePermissions).where(eq(chatAutoDeletePermissions.userId, u.id));
-        const [pinStatus] = await db.select({ chatPinEnabled: users.chatPinEnabled })
-          .from(users).where(eq(users.id, u.id));
+      if (result.length === 0) {
+        return res.json({ users: [] });
+      }
 
-        return {
-          ...u,
-          mediaEnabled: media?.mediaEnabled || false,
-          autoDeleteEnabled: autoDel?.autoDeleteEnabled || false,
-          pinEnabled: pinStatus?.chatPinEnabled || false,
-        };
+      const userIds = result.map((u) => u.id);
+      const [mediaRows, autoDeleteRows] = await Promise.all([
+        db.select({
+          userId: chatMediaPermissions.userId,
+          mediaEnabled: chatMediaPermissions.mediaEnabled,
+        })
+          .from(chatMediaPermissions)
+          .where(inArray(chatMediaPermissions.userId, userIds)),
+        db.select({
+          userId: chatAutoDeletePermissions.userId,
+          autoDeleteEnabled: chatAutoDeletePermissions.autoDeleteEnabled,
+        })
+          .from(chatAutoDeletePermissions)
+          .where(inArray(chatAutoDeletePermissions.userId, userIds)),
+      ]);
+
+      const mediaMap = new Map(mediaRows.map((row) => [row.userId, row.mediaEnabled]));
+      const autoDeleteMap = new Map(autoDeleteRows.map((row) => [row.userId, row.autoDeleteEnabled]));
+
+      const enriched = result.map((u) => ({
+        ...u,
+        mediaEnabled: Boolean(mediaMap.get(u.id)),
+        autoDeleteEnabled: Boolean(autoDeleteMap.get(u.id)),
+        pinEnabled: Boolean(u.chatPinEnabled),
       }));
 
       res.json({ users: enriched });

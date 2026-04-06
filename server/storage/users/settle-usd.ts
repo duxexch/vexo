@@ -2,7 +2,7 @@ import {
   users, transactions, liveGameSessions,
 } from "@shared/schema";
 import { db } from "../../db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 
 // ==================== USD GAME PAYOUTS ====================
 
@@ -136,7 +136,10 @@ export async function settleGamePayout(
         winnerId: winnerId,
         endedAt: new Date()
       })
-      .where(eq(liveGameSessions.id, sessionId));
+      .where(or(
+        eq(liveGameSessions.id, sessionId),
+        eq(liveGameSessions.challengeId, sessionId)
+      ));
 
     return { success: true };
   });

@@ -19,7 +19,6 @@ import {
   Check,
   CheckCheck,
   Loader2,
-  Trash2,
   Filter,
   Inbox,
   Search,
@@ -126,26 +125,6 @@ export default function NotificationsPage() {
     },
   });
 
-  const deleteNotificationMutation = useMutation({
-    mutationFn: async (notificationId: string) => {
-      await apiRequest("DELETE", `/api/notifications/${notificationId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
-    },
-  });
-
-  const clearAllMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("DELETE", "/api/notifications");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
-    },
-  });
-
   // Auto-mark all notifications as read when page is opened
   const hasAutoMarked = useRef(false);
   useEffect(() => {
@@ -238,18 +217,6 @@ export default function NotificationsPage() {
               {isAr ? "قراءة الكل" : "Mark All Read"}
             </Button>
           )}
-          {notifications.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => clearAllMutation.mutate()}
-              disabled={clearAllMutation.isPending}
-              className="text-destructive hover:text-destructive"
-            >
-              <Trash2 className="h-4 w-4 me-2" />
-              {isAr ? "مسح الكل" : "Clear All"}
-            </Button>
-          )}
         </div>
       </div>
 
@@ -328,7 +295,7 @@ export default function NotificationsPage() {
                     <Card
                       key={notification.id}
                       className={cn(
-                        "transition-all duration-300 cursor-pointer hover-elevate group",
+                        "transition-all duration-300 cursor-pointer hover-elevate",
                         !notification.isRead && "border-primary/40 bg-primary/8 shadow-sm shadow-primary/10 ring-1 ring-primary/20"
                       )}
                       onClick={() => {
@@ -358,16 +325,6 @@ export default function NotificationsPage() {
                               {!notification.isRead && (
                                 <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-2" />
                               )}
-                              <button
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 shrink-0"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteNotificationMutation.mutate(notification.id);
-                                }}
-                                title={isAr ? "حذف" : "Delete"}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                              </button>
                             </div>
                             <div className="flex items-center gap-2 mt-2">
                               <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", typeColor)}>

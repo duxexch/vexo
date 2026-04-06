@@ -13,9 +13,9 @@ export function registerLeaderboardRoutes(app: Express): void {
       const sortBy = (req.query.sortBy as string) || 'wins';
       const gameType = req.query.gameType as string;
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
-      
+
       const cacheKey = `leaderboard:${sortBy}:${gameType || 'all'}:${limit}`;
-      
+
       const rankedLeaderboard = await cacheGet(cacheKey, 60, async () => {
         let orderByColumn;
         let selectFields: Record<string, unknown> = {
@@ -24,7 +24,7 @@ export function registerLeaderboardRoutes(app: Express): void {
           gamesPlayed: users.gamesPlayed, gamesWon: users.gamesWon, gamesLost: users.gamesLost,
           totalEarnings: users.totalEarnings, currentWinStreak: users.currentWinStreak, longestWinStreak: users.longestWinStreak,
         };
-        
+
         if (gameType) {
           switch (gameType) {
             case 'chess':
@@ -52,17 +52,17 @@ export function registerLeaderboardRoutes(app: Express): void {
             case 'wins': default: orderByColumn = users.gamesWon;
           }
         }
-        
+
         const leaderboard = await db.select(selectFields as Record<string, typeof users.id>)
           .from(users).where(sql`${users.gamesPlayed} > 0`).orderBy(desc(orderByColumn)).limit(limit);
-        
+
         return leaderboard.map((player, index) => ({
           rank: index + 1,
           ...player,
           winRate: Number(player.gamesPlayed) > 0 ? Math.round((Number(player.gamesWon) / Number(player.gamesPlayed)) * 100) : 0,
         }));
       });
-      
+
       res.json(rankedLeaderboard);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -73,13 +73,21 @@ export function registerLeaderboardRoutes(app: Express): void {
     try {
       const userId = req.user!.id;
       const sortBy = (req.query.sortBy as string) || 'wins';
-      
+
       const [user] = await db.select({
-        gamesWon: users.gamesWon, totalEarnings: users.totalEarnings, longestWinStreak: users.longestWinStreak,
+        gamesPlayed: users.gamesPlayed,
+        gamesWon: users.gamesWon,
+        totalEarnings: users.totalEarnings,
+        longestWinStreak: users.longestWinStreak,
       }).from(users).where(eq(users.id, userId));
-      
+
       if (!user) return res.status(404).json({ error: "User not found" });
-      
+
+      // A user with no completed games should not appear as ranked #1.
+      if ((user.gamesPlayed || 0) <= 0) {
+        return res.json({ rank: 0, sortBy });
+      }
+
       let rankQuery;
       switch (sortBy) {
         case 'earnings':
@@ -89,11 +97,11 @@ export function registerLeaderboardRoutes(app: Express): void {
         case 'wins': default:
           rankQuery = sql`SELECT COUNT(*) + 1 as rank FROM users WHERE games_won > ${user.gamesWon} AND games_played > 0`;
       }
-      
+
       const rankResults = await db.execute(rankQuery);
       const rows = Array.isArray(rankResults) ? rankResults : (rankResults as { rows?: Record<string, unknown>[] }).rows || [];
       const firstRow = rows[0];
-      
+
       res.json({ rank: firstRow ? Number(firstRow.rank) || 1 : 1, sortBy });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

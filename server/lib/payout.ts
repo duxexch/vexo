@@ -4,8 +4,8 @@
  */
 import { db } from '../db';
 import { storage } from '../storage';
-import { challenges, users, transactions, projectCurrencyLedger, projectCurrencyWallets } from '@shared/schema';
-import { and, eq } from 'drizzle-orm';
+import { challenges, users, transactions, projectCurrencyLedger, projectCurrencyWallets, liveGameSessions } from '@shared/schema';
+import { and, eq, or } from 'drizzle-orm';
 import { settleSpectatorSupports } from './support-settler';
 import { refundPendingSupports } from './support-settler';
 import { logger } from './logger';
@@ -462,6 +462,18 @@ export async function settleDrawPayout(
     } else {
       await updateDrawStatsForPlayers(allPlayerIds, gameType);
     }
+
+    // Keep live sessions in sync so profile match history reflects completed draws.
+    await db.update(liveGameSessions)
+      .set({
+        status: 'completed',
+        winnerId: null,
+        endedAt: new Date(),
+      })
+      .where(or(
+        eq(liveGameSessions.id, settlementReferenceId),
+        eq(liveGameSessions.challengeId, challengeId),
+      ));
 
     // Refund spectator supports (matched + pending)
     try {

@@ -141,6 +141,12 @@ interface ProjectCurrencySettings {
   isActive: boolean;
 }
 
+interface Sam9SoloConfig {
+  mode: 'competitive' | 'friendly_fixed_fee';
+  fixedFee: number | string;
+  supportedGames: string[];
+}
+
 type CurrencyType = 'project' | 'usd';
 
 type ChessSystemKey =
@@ -199,7 +205,7 @@ export default function ChallengesPage() {
   const [showGiftShop, setShowGiftShop] = useState(false);
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [betAmount, setBetAmount] = useState("");
-  const [opponentType, setOpponentType] = useState<'random' | 'friend'>('random');
+  const [opponentType, setOpponentType] = useState<'random' | 'friend' | 'sam9'>('random');
   const [friendAccountId, setFriendAccountId] = useState("");
   const [visibility, setVisibility] = useState<'public' | 'private'>('public');
   const [requiredPlayers, setRequiredPlayers] = useState<2 | 4>(2);
@@ -214,17 +220,53 @@ export default function ChallengesPage() {
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
 
   const multiPlayerGames = ['domino', 'tarneeb', 'baloot'];
+  const sam9SupportedGames = ['domino', 'backgammon', 'tarneeb', 'baloot'];
   const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
   const [gameFilter, setGameFilter] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [pendingGameFilter, setPendingGameFilter] = useState<string[]>([]);
+  const canUseSam9Opponent = Boolean(selectedGame && sam9SupportedGames.includes(selectedGame));
+
+  const { data: sam9SoloConfig } = useQuery<Sam9SoloConfig>({
+    queryKey: ['/api/challenges/sam9-solo-config'],
+    enabled: showCreateDialog && !!user,
+    queryFn: async () => {
+      const res = await fetch('/api/challenges/sam9-solo-config', { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load SAM9 solo config');
+      return res.json();
+    },
+  });
+
+  const sam9SoloMode = sam9SoloConfig?.mode || 'competitive';
+  const sam9FixedFeeAmountRaw = Number(sam9SoloConfig?.fixedFee || 0);
+  const sam9FixedFeeAmount = Number.isFinite(sam9FixedFeeAmountRaw) ? Math.max(0, sam9FixedFeeAmountRaw) : 0;
+  const isSam9FriendlyFixedFee = opponentType === 'sam9' && sam9SoloMode === 'friendly_fixed_fee';
 
   useEffect(() => {
     if (!showCreateDialog || user) return;
     setShowCreateDialog(false);
     setLocation('/auth');
   }, [showCreateDialog, user, setLocation]);
+
+  useEffect(() => {
+    if (opponentType !== 'sam9') return;
+    if (canUseSam9Opponent) return;
+    setOpponentType('random');
+  }, [opponentType, canUseSam9Opponent]);
+
+  useEffect(() => {
+    if (opponentType !== 'sam9') return;
+    if (requiredPlayers === 2) return;
+    setRequiredPlayers(2);
+  }, [opponentType, requiredPlayers]);
+
+  useEffect(() => {
+    if (!isSam9FriendlyFixedFee) return;
+    const fixedFeeText = sam9FixedFeeAmount.toFixed(2);
+    if (betAmount === fixedFeeText) return;
+    setBetAmount(fixedFeeText);
+  }, [isSam9FriendlyFixedFee, sam9FixedFeeAmount, betAmount]);
 
   const { data: myChallenges, isLoading: loadingMy, isError: isErrorMy, error: errorMy, refetch: refetchMy } = useQuery<Challenge[]>({
     queryKey: ['/api/challenges/my'],
@@ -415,10 +457,16 @@ export default function ChallengesPage() {
       currencyType?: CurrencyType;
     }) =>
       apiRequest('POST', '/api/challenges', data),
-    onSuccess: () => {
+    onSuccess: async (res: Response, variables) => {
       playSound('success');
       toast({ title: t('common.success'), description: t('challenges.created') });
       refreshChallengeQueries();
+      if (variables?.opponentType === 'sam9') {
+        const payload = await res.json().catch(() => ({} as { id?: string }));
+        if (payload?.id) {
+          setLocation(`/challenge/${payload.id}/play`);
+        }
+      }
       setShowCreateDialog(false);
       resetForm();
     },
@@ -581,7 +629,7 @@ export default function ChallengesPage() {
       return;
     }
 
-    if (!selectedGame || !betAmount) {
+    if (!selectedGame || (!betAmount && !isSam9FriendlyFixedFee)) {
       toast({ title: t('common.error'), description: t('challenges.fillAll'), variant: "destructive" });
       return;
     }
@@ -591,7 +639,7 @@ export default function ChallengesPage() {
     }
     // Validate challenge amount against game limits
     const selectedGameData = challengeGames.find(g => g.name.toLowerCase() === selectedGame.toLowerCase() || g.id === selectedGame);
-    if (selectedGameData) {
+    if (selectedGameData && !isSam9FriendlyFixedFee) {
       const min = parseFloat(selectedGameData.minBet);
       const max = parseFloat(selectedGameData.maxBet);
       const bet = parseFloat(betAmount);
@@ -607,25 +655,27 @@ export default function ChallengesPage() {
       }
     }
 
-    if (needProjectCurrency && numericBetAmount > 0 && projectShortage > 0) {
-      openFundingAssistance(projectShortage, numericBetAmount);
+    if (needProjectCurrency && effectiveBetAmount > 0 && projectShortage > 0) {
+      openFundingAssistance(projectShortage, effectiveBetAmount);
       return;
     }
 
-    if (!needProjectCurrency && numericBetAmount > Number(user?.balance || 0)) {
+    if (!needProjectCurrency && effectiveBetAmount > Number(user?.balance || 0)) {
       setFundingShortageProject(0);
-      setFundingUsdNeeded(Math.max(0, numericBetAmount - Number(user?.balance || 0)));
+      setFundingUsdNeeded(Math.max(0, effectiveBetAmount - Number(user?.balance || 0)));
       setShowDepositDialog(true);
       return;
     }
 
     createChallengeMutation.mutate({
       gameType: selectedGame,
-      betAmount: parseFloat(betAmount),
+      betAmount: effectiveBetAmount,
       opponentType,
       friendAccountId: opponentType === 'friend' ? friendAccountId : undefined,
       visibility,
-      requiredPlayers: multiPlayerGames.includes(selectedGame) ? requiredPlayers : 2,
+      requiredPlayers: opponentType === 'sam9'
+        ? 2
+        : (multiPlayerGames.includes(selectedGame) ? requiredPlayers : 2),
       chessSystem: selectedGame === 'chess' ? chessSystem : undefined,
       dominoTargetScore: selectedGame === 'domino' ? dominoTargetScore : undefined,
       currencyType: currencyPolicy?.projectOnly ? 'project' : currencyType,
@@ -633,9 +683,10 @@ export default function ChallengesPage() {
   };
 
   const numericBetAmount = Number(betAmount || 0);
+  const effectiveBetAmount = isSam9FriendlyFixedFee ? sam9FixedFeeAmount : numericBetAmount;
   const projectBalance = Number(projectWallet?.totalBalance || 0);
   const needProjectCurrency = (currencyPolicy?.projectOnly ?? true) || currencyType === 'project';
-  const projectShortage = Math.max(0, numericBetAmount - projectBalance);
+  const projectShortage = Math.max(0, effectiveBetAmount - projectBalance);
   const minConvertAmount = Number(projectCurrencySettings?.minConversionAmount || 1);
   const maxConvertAmount = Number(projectCurrencySettings?.maxConversionAmount || 10000);
   const quickConvertAmountValue = Number(quickConvertAmount || 0);
@@ -1301,6 +1352,7 @@ export default function ChallengesPage() {
                     onChange={(e) => setBetAmount(e.target.value)}
                     placeholder="10.00"
                     className="ps-10"
+                    disabled={isSam9FriendlyFixedFee}
                     data-testid="input-stake-amount"
                   />
                 </div>
@@ -1337,7 +1389,7 @@ export default function ChallengesPage() {
                 )}
               </div>
 
-              {needProjectCurrency && numericBetAmount > 0 && projectShortage > 0 && (
+              {needProjectCurrency && effectiveBetAmount > 0 && projectShortage > 0 && (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-2">
                   <p className="text-sm font-medium">
                     {language === 'ar' ? 'الرصيد غير كافٍ بعملة المشروع' : 'Insufficient project currency balance'}
@@ -1421,6 +1473,7 @@ export default function ChallengesPage() {
                       <Button
                         variant={requiredPlayers === 4 ? "default" : "outline"}
                         onClick={() => setRequiredPlayers(4)}
+                        disabled={opponentType === 'sam9'}
                         data-testid="button-players-4"
                       >
                         <Users className="h-4 w-4 me-2" />
@@ -1495,7 +1548,7 @@ export default function ChallengesPage() {
 
                 <div>
                   <Label>{t('challenges.opponentType')}</Label>
-                  <RadioGroup value={opponentType} onValueChange={(v) => setOpponentType(v as 'random' | 'friend')} className="mt-2">
+                  <RadioGroup value={opponentType} onValueChange={(v) => setOpponentType(v as 'random' | 'friend' | 'sam9')} className="mt-2">
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="random" id="random" />
                       <Label htmlFor="random" className="flex items-center gap-2">
@@ -1508,6 +1561,13 @@ export default function ChallengesPage() {
                       <Label htmlFor="friend" className="flex items-center gap-2">
                         <Users className="h-4 w-4" />
                         {t('challenges.inviteFriend')}
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="sam9" id="sam9" disabled={!canUseSam9Opponent} />
+                      <Label htmlFor="sam9" className={`flex items-center gap-2 ${!canUseSam9Opponent ? 'text-muted-foreground' : ''}`}>
+                        <Star className="h-4 w-4" />
+                        SAM9
                       </Label>
                     </div>
                   </RadioGroup>

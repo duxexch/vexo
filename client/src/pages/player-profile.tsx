@@ -142,7 +142,7 @@ export default function PlayerProfilePage() {
   const { toast } = useToast();
   const [, params] = useRoute('/player/:userId');
   const [, navigate] = useLocation();
-  
+
   const userId = params?.userId || user?.id;
   const isOwnProfile = userId === user?.id;
 
@@ -265,10 +265,10 @@ export default function PlayerProfilePage() {
       </div>
 
       <Card className="overflow-hidden">
-        <div 
+        <div
           className="h-48 relative"
           style={{
-            background: stats.coverPhoto 
+            background: stats.coverPhoto
               ? `url(${stats.coverPhoto}) center/cover no-repeat`
               : `linear-gradient(to right, ${VIP_COLORS[Math.min(stats.vipLevel, VIP_COLORS.length - 1)].replace('from-', '').replace(' to-', ', ')})`
           }}
@@ -285,7 +285,7 @@ export default function PlayerProfilePage() {
                 {stats.nickname?.[0] || stats.username[0]}
               </AvatarFallback>
             </Avatar>
-            
+
             <div className="flex-1 pt-2">
               <div className="flex items-center gap-3 flex-wrap">
                 <h2 className="text-2xl font-bold">{stats.nickname || stats.username}</h2>
@@ -294,7 +294,7 @@ export default function PlayerProfilePage() {
                     <Star className="w-3 h-3 me-1" /> VIP {stats.vipLevel}
                   </Badge>
                 )}
-                {rankData && (
+                {rankData && rankData.rank > 0 && (
                   <Badge variant="outline" className="border-primary text-primary">
                     <Medal className="w-3 h-3 me-1" /> #{rankData.rank}
                   </Badge>
@@ -308,7 +308,7 @@ export default function PlayerProfilePage() {
 
             {!isOwnProfile && user && (
               <div className="flex gap-2 flex-wrap">
-                <Button 
+                <Button
                   className="bg-gradient-to-r from-primary to-primary/80"
                   onClick={() => navigate(`/challenges?opponent=${userId}`)}
                   data-testid="button-challenge-player"
@@ -316,8 +316,8 @@ export default function PlayerProfilePage() {
                   <Swords className="w-4 h-4 me-2" />
                   {language === 'ar' ? 'تحدّي' : 'Challenge'}
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => navigate(`/chat?user=${userId}`)}
                   data-testid="button-message-player"
                 >
@@ -434,7 +434,7 @@ export default function PlayerProfilePage() {
               {stats.gameStats.map((game) => {
                 const config = GAME_CONFIG[game.game] || GAME_CONFIG.chess;
                 const Icon = config.icon;
-                
+
                 return (
                   <div key={game.game} className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -454,7 +454,7 @@ export default function PlayerProfilePage() {
                   </div>
                 );
               })}
-              
+
               {stats.gameStats.every(g => g.played === 0) && (
                 <div className="text-center py-8 text-muted-foreground">
                   <Gamepad2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -490,28 +490,27 @@ export default function PlayerProfilePage() {
                     {matches.map((match) => {
                       const config = GAME_CONFIG[match.gameType] || GAME_CONFIG.chess;
                       const Icon = config.icon;
-                      
+
                       return (
                         <div
                           key={match.id}
                           className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 hover-elevate"
                           data-testid={`row-match-${match.id}`}
                         >
-                          <div className={`p-2 rounded-lg ${
-                            match.result === 'win' ? 'bg-green-500/20' : 
-                            match.result === 'loss' ? 'bg-red-500/20' : 'bg-gray-500/20'
-                          }`}>
+                          <div className={`p-2 rounded-lg ${match.result === 'win' ? 'bg-green-500/20' :
+                              match.result === 'loss' ? 'bg-red-500/20' : 'bg-gray-500/20'
+                            }`}>
                             <Icon className={`w-5 h-5 ${config.color}`} />
                           </div>
-                          
+
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">
                                 {language === 'ar' ? config.nameAr : config.name}
                               </span>
                               <Badge className={
-                                match.result === 'win' ? 'bg-green-500' : 
-                                match.result === 'loss' ? 'bg-red-500' : 'bg-gray-500'
+                                match.result === 'win' ? 'bg-green-500' :
+                                  match.result === 'loss' ? 'bg-red-500' : 'bg-gray-500'
                               }>
                                 {t(`profile.${match.result}`)}
                               </Badge>
@@ -521,7 +520,7 @@ export default function PlayerProfilePage() {
                               {match.endedAt && ` • ${formatDate(match.endedAt)}`}
                             </div>
                           </div>
-                          
+
                           <ChevronRight className="w-5 h-5 text-muted-foreground" />
                         </div>
                       );

@@ -60,12 +60,7 @@ export function registerNotificationRoutes(app: Express): void {
 
   app.delete("/api/notifications/:id", authMiddleware, notificationRateLimiter, async (req: AuthRequest, res: Response) => {
     try {
-      if (!isValidUUID(req.params.id)) {
-        return res.status(400).json({ error: "Invalid notification ID format" });
-      }
-      const deleted = await storage.deleteNotification(req.params.id, req.user!.id);
-      if (!deleted) return res.status(404).json({ error: "Notification not found" });
-      res.json({ success: true });
+      return res.status(403).json({ error: "Notification deletion is disabled" });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -73,8 +68,7 @@ export function registerNotificationRoutes(app: Express): void {
 
   app.delete("/api/notifications", authMiddleware, notificationRateLimiter, async (req: AuthRequest, res: Response) => {
     try {
-      await storage.clearAllNotifications(req.user!.id);
-      res.json({ success: true });
+      return res.status(403).json({ error: "Notification deletion is disabled" });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -141,12 +135,12 @@ export function registerNotificationRoutes(app: Express): void {
     try {
       const announcements = await storage.getPublishedAnnouncements();
       const viewedIds = await storage.getViewedAnnouncementIds(req.user!.id);
-      
+
       const withViewStatus = announcements.map(a => ({
         ...a,
         isViewed: viewedIds.includes(a.id),
       }));
-      
+
       res.json(withViewStatus);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -212,7 +206,7 @@ export function registerNotificationRoutes(app: Express): void {
         status: "published",
         publishedAt: new Date(),
       });
-      
+
       if (!announcement) {
         return res.status(404).json({ error: "Announcement not found" });
       }
@@ -226,7 +220,7 @@ export function registerNotificationRoutes(app: Express): void {
           const batchSize = 50;
           for (let i = 0; i < allUsers.length; i += batchSize) {
             const batch = allUsers.slice(i, i + batchSize);
-            await Promise.all(batch.map(user => 
+            await Promise.all(batch.map(user =>
               storage.createNotification({
                 userId: user.id,
                 type: "announcement",

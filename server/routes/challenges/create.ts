@@ -1,12 +1,174 @@
 import type { Express, Response } from "express";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { eq, and, or, sql, gte } from "drizzle-orm";
-import { users, projectCurrencyWallets, challenges as challengesTable, gameplaySettings, gameMatches } from "@shared/schema";
+import { eq, and, or, sql, gte, ilike } from "drizzle-orm";
+import {
+  users,
+  projectCurrencyWallets,
+  challenges as challengesTable,
+  gameplaySettings,
+  gameMatches,
+  games,
+  challengeGameSessions,
+  liveGameSessions,
+} from "@shared/schema";
 import { authMiddleware, AuthRequest, sensitiveRateLimiter } from "../middleware";
 import { broadcastChallengeUpdate, broadcastNotification } from "../../websocket";
 import { sendNotification } from "../../websocket";
 import { getErrorMessage } from "./helpers";
+import { getGameEngine } from "../../game-engines";
+
+const SAM9_BOT_USER_ID = "bot-sam9";
+const SAM9_BOT_USERNAME = "bot_sam9_challenge_ai";
+const SAM9_MIN_BANKROLL = 1_000_000;
+const SAM9_SUPPORTED_GAME_TYPES = new Set(["domino", "backgammon", "tarneeb", "baloot"]);
+const SAM9_SOLO_MODE_KEY = "sam9_solo_mode";
+const SAM9_SOLO_FIXED_FEE_KEY = "sam9_solo_fixed_fee";
+
+type Sam9SoloMode = "competitive" | "friendly_fixed_fee";
+
+interface Sam9SoloSettings {
+  mode: Sam9SoloMode;
+  fixedFee: number;
+}
+
+function normalizeSam9SoloMode(value: unknown): Sam9SoloMode {
+  return value === "friendly_fixed_fee" ? "friendly_fixed_fee" : "competitive";
+}
+
+function normalizeSam9FixedFee(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+  return Number(parsed.toFixed(2));
+}
+
+async function getSam9SoloSettings(): Promise<Sam9SoloSettings> {
+  const [modeSetting] = await db.select({ value: gameplaySettings.value })
+    .from(gameplaySettings)
+    .where(eq(gameplaySettings.key, SAM9_SOLO_MODE_KEY))
+    .limit(1);
+
+  const [fixedFeeSetting] = await db.select({ value: gameplaySettings.value })
+    .from(gameplaySettings)
+    .where(eq(gameplaySettings.key, SAM9_SOLO_FIXED_FEE_KEY))
+    .limit(1);
+
+  return {
+    mode: normalizeSam9SoloMode(modeSetting?.value),
+    fixedFee: normalizeSam9FixedFee(fixedFeeSetting?.value),
+  };
+}
+
+type ChallengeSessionSeed = Pick<
+  typeof challengesTable.$inferSelect,
+  "gameType" | "timeLimit" | "dominoTargetScore" | "player1Id" | "player2Id" | "player3Id" | "player4Id"
+>;
+
+async function ensureSam9BotUser(): Promise<{ id: string; username: string }> {
+  const [existingById] = await db
+    .select({ id: users.id, username: users.username })
+    .from(users)
+    .where(eq(users.id, SAM9_BOT_USER_ID))
+    .limit(1);
+
+  if (existingById) {
+    await db.insert(projectCurrencyWallets).values({
+      userId: existingById.id,
+      purchasedBalance: SAM9_MIN_BANKROLL.toFixed(2),
+      earnedBalance: "0.00",
+      totalBalance: SAM9_MIN_BANKROLL.toFixed(2),
+      totalConverted: "0.00",
+      totalSpent: "0.00",
+      totalEarned: "0.00",
+      lockedBalance: "0.00",
+    }).onConflictDoNothing();
+    return existingById;
+  }
+
+  const password = `sam9-bot-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  const [created] = await db.insert(users).values({
+    id: SAM9_BOT_USER_ID,
+    username: SAM9_BOT_USERNAME,
+    accountId: "SAM9-GAME-BOT",
+    password,
+    role: "player",
+    status: "active",
+    balance: SAM9_MIN_BANKROLL.toFixed(2),
+  }).returning({
+    id: users.id,
+    username: users.username,
+  });
+
+  if (!created) {
+    throw new Error("Failed to create SAM9 bot account");
+  }
+
+  await db.insert(projectCurrencyWallets).values({
+    userId: created.id,
+    purchasedBalance: SAM9_MIN_BANKROLL.toFixed(2),
+    earnedBalance: "0.00",
+    totalBalance: SAM9_MIN_BANKROLL.toFixed(2),
+    totalConverted: "0.00",
+    totalSpent: "0.00",
+    totalEarned: "0.00",
+    lockedBalance: "0.00",
+  }).onConflictDoNothing();
+
+  return created;
+}
+
+function buildInitialChallengeState(challenge: ChallengeSessionSeed): { gameState: string; currentTurn: string } {
+  const gameType = challenge.gameType.toLowerCase();
+  const engine = getGameEngine(gameType);
+  const playerIds = [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id]
+    .filter(Boolean) as string[];
+
+  let gameState = JSON.stringify({ initialized: true, gameType });
+
+  if (engine && playerIds.length >= 2) {
+    try {
+      if (gameType === "tarneeb") {
+        gameState = engine.initializeWithPlayers(playerIds, 31);
+      } else if (gameType === "baloot") {
+        gameState = engine.initializeWithPlayers(playerIds, 152);
+      } else if (gameType === "domino") {
+        const targetScore = challenge.dominoTargetScore === 201 ? 201 : 101;
+        gameState = engine.initializeWithPlayers(playerIds, targetScore);
+      } else if (gameType === "chess") {
+        const incrementMs = challenge.timeLimit === 180 ? 2000 : challenge.timeLimit === 900 ? 10000 : 0;
+        gameState = engine.initializeWithPlayers(playerIds[0], playerIds[1], {
+          timeMs: Math.max(60, challenge.timeLimit || 300) * 1000,
+          incrementMs,
+        });
+      } else {
+        gameState = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
+      }
+    } catch {
+      gameState = engine.createInitialState();
+    }
+  }
+
+  let currentTurn = challenge.player1Id;
+  try {
+    const parsed = JSON.parse(gameState) as { currentPlayer?: string; currentTurn?: string };
+    if (parsed.currentPlayer) {
+      currentTurn = parsed.currentPlayer;
+    } else if (parsed.currentTurn === "white") {
+      currentTurn = challenge.player1Id;
+    } else if (parsed.currentTurn === "black") {
+      currentTurn = challenge.player2Id || challenge.player1Id;
+    } else if (parsed.currentTurn) {
+      currentTurn = parsed.currentTurn;
+    }
+  } catch {
+    // Keep fallback currentTurn
+  }
+
+  return { gameState, currentTurn };
+}
 
 function normalizeChallengeCurrencyType(currencyType: unknown): "project" | "usd" {
   return currencyType === "project" ? "project" : "usd";
@@ -22,6 +184,18 @@ function formatChallengeAmount(amount: number, currencyType: unknown): string {
 }
 
 export function registerCreateRoute(app: Express) {
+  app.get("/api/challenges/sam9-solo-config", authMiddleware, async (_req: AuthRequest, res: Response) => {
+    try {
+      const settings = await getSam9SoloSettings();
+      res.json({
+        ...settings,
+        supportedGames: Array.from(SAM9_SUPPORTED_GAME_TYPES),
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
   app.post("/api/challenges", sensitiveRateLimiter, authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const {
@@ -35,6 +209,11 @@ export function registerCreateRoute(app: Express) {
         chessSystem,
         dominoTargetScore,
       } = req.body;
+      const normalizedGameType = String(gameType || "").toLowerCase();
+      const normalizedOpponentType = String(opponentType || "random").toLowerCase();
+      const isSam9Challenge = normalizedOpponentType === "sam9";
+      const sam9SoloSettings = isSam9Challenge ? await getSam9SoloSettings() : null;
+      const isSam9FriendlyFixedFee = Boolean(isSam9Challenge && sam9SoloSettings?.mode === "friendly_fixed_fee");
 
       const [currencyModeSetting] = await db.select({ value: gameplaySettings.value })
         .from(gameplaySettings)
@@ -72,9 +251,15 @@ export function registerCreateRoute(app: Express) {
       }
 
       // SECURITY: Validate opponentType whitelist
-      const VALID_OPPONENT_TYPES = ['anyone', 'friend', 'random'];
-      if (opponentType && !VALID_OPPONENT_TYPES.includes(opponentType)) {
+      const VALID_OPPONENT_TYPES = ['anyone', 'friend', 'random', 'sam9'];
+      if (normalizedOpponentType && !VALID_OPPONENT_TYPES.includes(normalizedOpponentType)) {
         return res.status(400).json({ error: "Invalid opponent type" });
+      }
+
+      if (isSam9Challenge && !SAM9_SUPPORTED_GAME_TYPES.has(normalizedGameType)) {
+        return res.status(400).json({
+          error: "SAM9 solo mode is currently available for Domino, Backgammon, Tarneeb, and Baloot only",
+        });
       }
 
       // Validate required players (2 or 4)
@@ -82,28 +267,43 @@ export function registerCreateRoute(app: Express) {
       if (numPlayers !== 2 && numPlayers !== 4) {
         return res.status(400).json({ error: "Required players must be 2 or 4" });
       }
+      const effectiveRequiredPlayers = isSam9Challenge ? 2 : numPlayers;
       const parsedBetAmount = parseFloat(String(betAmount || 0));
+      const stakeChargeAmount = isSam9FriendlyFixedFee
+        ? normalizeSam9FixedFee(sam9SoloSettings?.fixedFee)
+        : parsedBetAmount;
+      const persistedBetAmount = isSam9FriendlyFixedFee ? 0 : parsedBetAmount;
+      const shouldDeductSam9CounterStake = isSam9Challenge && !isSam9FriendlyFixedFee;
 
       // Validate amount is positive
-      if (isNaN(parsedBetAmount) || !isFinite(parsedBetAmount) || parsedBetAmount <= 0) {
+      if (isNaN(stakeChargeAmount) || !isFinite(stakeChargeAmount) || stakeChargeAmount < 0) {
         return res.status(400).json({ error: "Invalid challenge amount" });
       }
 
       // SECURITY: Validate betAmount is a reasonable precision (max 2 decimal places for USD)
-      if (effectiveCurrencyType === 'usd' && parsedBetAmount < 0.01) {
+      if (effectiveCurrencyType === 'usd' && stakeChargeAmount > 0 && stakeChargeAmount < 0.01) {
         return res.status(400).json({ error: "Minimum bet amount is $0.01" });
       }
 
       // VALIDATION: Verify game exists and is active in database (Single Source of Truth)
-      const validation = await storage.validateGameConfig(gameType, String(betAmount || 0));
-      if (!validation.valid) {
-        return res.status(400).json({ error: validation.error });
+      let gameConfig;
+      if (isSam9FriendlyFixedFee) {
+        gameConfig = await storage.getMultiplayerGameByKey(normalizedGameType);
+        if (!gameConfig) {
+          return res.status(400).json({ error: `Game '${normalizedGameType}' does not exist` });
+        }
+        if (!gameConfig.isActive) {
+          return res.status(400).json({ error: `Game '${normalizedGameType}' is currently inactive` });
+        }
+      } else {
+        const validation = await storage.validateGameConfig(gameType, String(parsedBetAmount));
+        if (!validation.valid) {
+          return res.status(400).json({ error: validation.error });
+        }
+        gameConfig = validation.game!;
       }
-
-      const gameConfig = validation.game!;
       let timeLimit = gameConfig.defaultTimeLimit || 300;
 
-      const normalizedGameType = String(gameType || '').toLowerCase();
       let parsedDominoTargetScore: number | null = null;
 
       if (normalizedGameType === 'domino') {
@@ -131,14 +331,14 @@ export function registerCreateRoute(app: Express) {
       }
       const userId = req.user!.id;
 
-      if (opponentType === 'friend' && !friendAccountId) {
+      if (normalizedOpponentType === 'friend' && !friendAccountId) {
         return res.status(400).json({ error: 'friendAccountId is required for friend challenges' });
       }
 
-      const challengeVisibility = opponentType === 'friend' ? 'private' : visibility;
+      const challengeVisibility = normalizedOpponentType === 'friend' ? 'private' : visibility;
 
       // SECURITY: Prevent self-friend challenge
-      if (opponentType === 'friend' && friendAccountId) {
+      if (normalizedOpponentType === 'friend' && friendAccountId) {
         if (friendAccountId === userId) {
           return res.status(400).json({ error: "You cannot challenge yourself" });
         }
@@ -160,10 +360,10 @@ export function registerCreateRoute(app: Express) {
       // SECURITY: Enforce min/max stake limits from admin settings
       const minStake = parseFloat(challengeConfig.minStake);
       const maxStake = parseFloat(challengeConfig.maxStake);
-      if (minStake > 0 && parsedBetAmount < minStake) {
+      if (!isSam9FriendlyFixedFee && minStake > 0 && parsedBetAmount < minStake) {
         return res.status(400).json({ error: `Minimum stake is ${formatChallengeAmount(minStake, effectiveCurrencyType)}` });
       }
-      if (maxStake > 0 && parsedBetAmount > maxStake) {
+      if (!isSam9FriendlyFixedFee && maxStake > 0 && parsedBetAmount > maxStake) {
         return res.status(400).json({ error: `Maximum stake is ${formatChallengeAmount(maxStake, effectiveCurrencyType)}` });
       }
 
@@ -198,7 +398,9 @@ export function registerCreateRoute(app: Express) {
       }
 
       // Use transaction to check balance and deduct + create challenge atomically
-      const [dbChallenge] = await db.transaction(async (tx) => {
+      const sam9BotUser = isSam9Challenge ? await ensureSam9BotUser() : null;
+
+      const { challenge: dbChallenge, sessionId: sam9SessionId } = await db.transaction(async (tx) => {
         if (effectiveCurrencyType === 'project') {
           // Check if project currency is enabled for games
           const settings = await storage.getProjectCurrencySettings();
@@ -220,12 +422,12 @@ export function registerCreateRoute(app: Express) {
           let purchasedBalance = parseFloat(wallet.purchasedBalance);
           const totalBalance = earnedBalance + purchasedBalance;
 
-          if (totalBalance < parsedBetAmount) {
+          if (totalBalance < stakeChargeAmount) {
             throw new Error("Insufficient project currency balance to create this challenge");
           }
 
           // Deduct from earned first, then purchased
-          let remaining = parsedBetAmount;
+          let remaining = stakeChargeAmount;
           if (earnedBalance >= remaining) {
             earnedBalance -= remaining;
             remaining = 0;
@@ -244,6 +446,57 @@ export function registerCreateRoute(app: Express) {
               updatedAt: new Date()
             })
             .where(eq(projectCurrencyWallets.userId, userId));
+
+          if (shouldDeductSam9CounterStake && sam9BotUser) {
+            let [sam9Wallet] = await tx.select()
+              .from(projectCurrencyWallets)
+              .where(eq(projectCurrencyWallets.userId, sam9BotUser.id))
+              .for('update');
+
+            if (!sam9Wallet) {
+              const [createdWallet] = await tx.insert(projectCurrencyWallets).values({
+                userId: sam9BotUser.id,
+                purchasedBalance: SAM9_MIN_BANKROLL.toFixed(2),
+                earnedBalance: '0.00',
+                totalBalance: SAM9_MIN_BANKROLL.toFixed(2),
+                totalConverted: '0.00',
+                totalSpent: '0.00',
+                totalEarned: '0.00',
+                lockedBalance: '0.00',
+              }).returning();
+              sam9Wallet = createdWallet;
+            }
+
+            let sam9EarnedBalance = parseFloat(sam9Wallet.earnedBalance);
+            let sam9PurchasedBalance = parseFloat(sam9Wallet.purchasedBalance);
+            let sam9TotalBalance = sam9EarnedBalance + sam9PurchasedBalance;
+
+            if (sam9TotalBalance < stakeChargeAmount) {
+              sam9PurchasedBalance = SAM9_MIN_BANKROLL;
+              sam9EarnedBalance = 0;
+              sam9TotalBalance = sam9PurchasedBalance;
+            }
+
+            let sam9Remaining = stakeChargeAmount;
+            if (sam9EarnedBalance >= sam9Remaining) {
+              sam9EarnedBalance -= sam9Remaining;
+              sam9Remaining = 0;
+            } else {
+              sam9Remaining -= sam9EarnedBalance;
+              sam9EarnedBalance = 0;
+              sam9PurchasedBalance -= sam9Remaining;
+            }
+
+            const sam9NewTotal = (sam9EarnedBalance + sam9PurchasedBalance).toFixed(8);
+            await tx.update(projectCurrencyWallets)
+              .set({
+                earnedBalance: sam9EarnedBalance.toFixed(8),
+                purchasedBalance: sam9PurchasedBalance.toFixed(8),
+                totalBalance: sam9NewTotal,
+                updatedAt: new Date(),
+              })
+              .where(eq(projectCurrencyWallets.userId, sam9BotUser.id));
+          }
         } else {
           // Check and deduct USD balance
           const [userRecord] = await tx.select()
@@ -256,65 +509,147 @@ export function registerCreateRoute(app: Express) {
           }
 
           const currentBalance = parseFloat(userRecord.balance);
-          if (currentBalance < parsedBetAmount) {
+          if (currentBalance < stakeChargeAmount) {
             throw new Error('Insufficient balance to create this challenge');
           }
 
           // Deduct balance
           await tx.update(users)
-            .set({ balance: (currentBalance - parsedBetAmount).toString() })
+            .set({ balance: (currentBalance - stakeChargeAmount).toString() })
             .where(eq(users.id, userId));
+
+          if (shouldDeductSam9CounterStake && sam9BotUser) {
+            const [sam9Record] = await tx.select()
+              .from(users)
+              .where(eq(users.id, sam9BotUser.id))
+              .for('update');
+
+            if (!sam9Record) {
+              throw new Error('SAM9 bot account not found');
+            }
+
+            let sam9Balance = parseFloat(sam9Record.balance);
+            if (sam9Balance < stakeChargeAmount) {
+              sam9Balance = SAM9_MIN_BANKROLL;
+            }
+
+            await tx.update(users)
+              .set({ balance: (sam9Balance - stakeChargeAmount).toFixed(2) })
+              .where(eq(users.id, sam9BotUser.id));
+          }
         }
 
         // Insert challenge into database
-        return await tx.insert(challengesTable).values({
+        const [createdChallenge] = await tx.insert(challengesTable).values({
           gameType,
-          betAmount: parsedBetAmount.toFixed(2),
+          betAmount: persistedBetAmount.toFixed(2),
           currencyType: effectiveCurrencyType,
           visibility: challengeVisibility,
-          status: 'waiting',
+          status: isSam9Challenge ? 'active' : 'waiting',
           player1Id: userId,
-          player2Id: opponentType === 'friend' ? friendAccountId : null,
+          player2Id: normalizedOpponentType === 'friend'
+            ? friendAccountId
+            : (isSam9Challenge ? sam9BotUser?.id || null : null),
           player3Id: null,
           player4Id: null,
-          requiredPlayers: numPlayers,
-          currentPlayers: 1,
-          opponentType,
-          friendAccountId: opponentType === 'friend' ? friendAccountId : null,
+          requiredPlayers: effectiveRequiredPlayers,
+          currentPlayers: isSam9Challenge ? 2 : 1,
+          opponentType: normalizedOpponentType,
+          friendAccountId: normalizedOpponentType === 'friend' ? friendAccountId : null,
           dominoTargetScore: parsedDominoTargetScore,
           timeLimit,
+          startedAt: isSam9Challenge ? new Date() : null,
           player1Score: 0,
           player2Score: 0,
           player3Score: 0,
           player4Score: 0,
         }).returning();
+
+        let sessionId: string | null = null;
+
+        if (isSam9Challenge) {
+          const [gameRecord] = await tx.select().from(games).where(ilike(games.name, normalizedGameType)).limit(1);
+          let gameId: string;
+
+          if (!gameRecord) {
+            const gameTypeName = normalizedGameType.charAt(0).toUpperCase() + normalizedGameType.slice(1);
+            const [fallbackRecord] = await tx.select().from(games).where(eq(games.name, gameTypeName)).limit(1);
+            if (!fallbackRecord) {
+              throw new Error(`Game configuration not found: ${normalizedGameType}`);
+            }
+            gameId = fallbackRecord.id;
+          } else {
+            gameId = gameRecord.id;
+          }
+
+          const { gameState, currentTurn } = buildInitialChallengeState(createdChallenge);
+
+          const [liveSession] = await tx.insert(liveGameSessions).values({
+            challengeId: createdChallenge.id,
+            gameId,
+            gameType: createdChallenge.gameType,
+            player1Id: createdChallenge.player1Id,
+            player2Id: createdChallenge.player2Id,
+            player3Id: createdChallenge.player3Id,
+            player4Id: createdChallenge.player4Id,
+            currentTurn,
+            status: 'in_progress',
+            gameState,
+          }).returning();
+
+          sessionId = liveSession.id;
+
+          await tx.insert(challengeGameSessions).values({
+            challengeId: createdChallenge.id,
+            gameType: createdChallenge.gameType,
+            currentTurn,
+            player1TimeRemaining: createdChallenge.timeLimit || 300,
+            player2TimeRemaining: createdChallenge.timeLimit || 300,
+            gameState,
+            status: 'playing',
+          });
+        }
+
+        return { challenge: createdChallenge, sessionId };
       });
 
       // Get player details for response
       const player1 = await storage.getUser(req.user!.id);
+      const player2 = dbChallenge.player2Id ? await storage.getUser(dbChallenge.player2Id) : null;
       const gamesWon = player1?.gamesWon || 0;
       const gamesLost = player1?.gamesLost || 0;
       const totalGames = gamesWon + gamesLost;
       const winRate = totalGames > 0 ? Math.round((gamesWon / totalGames) * 100) : 50;
       const rank = winRate >= 80 ? "diamond" : winRate >= 60 ? "gold" : winRate >= 40 ? "silver" : "bronze";
 
+      const p2GamesWon = player2?.gamesWon || 0;
+      const p2GamesLost = player2?.gamesLost || 0;
+      const p2TotalGames = p2GamesWon + p2GamesLost;
+      const p2WinRate = p2TotalGames > 0 ? Math.round((p2GamesWon / p2TotalGames) * 100) : 50;
+      const p2Rank = p2WinRate >= 80 ? "diamond" : p2WinRate >= 60 ? "gold" : p2WinRate >= 40 ? "silver" : "bronze";
+
       const challenge = {
         ...dbChallenge,
+        sessionId: sam9SessionId,
         chessSystem: normalizedGameType === 'chess' ? (typeof chessSystem === 'string' && chessSystem ? chessSystem : 'rapid_10_0') : null,
         player1Name: req.user!.username,
         player1Rating: { wins: gamesWon, losses: gamesLost, winRate, rank },
-        player2Name: null,
-        player2Rating: null,
+        player2Name: normalizedOpponentType === 'sam9'
+          ? 'SAM9'
+          : (player2?.nickname || player2?.username || null),
+        player2Rating: player2
+          ? { wins: p2GamesWon, losses: p2GamesLost, winRate: p2WinRate, rank: p2Rank }
+          : null,
         spectatorCount: 0,
         totalBets: 0,
         houseFee: gameConfig.houseFee,
       };
 
       // Broadcast new challenge to all connected clients for real-time updates
-      broadcastChallengeUpdate('created', challenge);
+      broadcastChallengeUpdate(isSam9Challenge ? 'started' : 'created', challenge);
 
       // Notify targeted friend if this is a friend challenge
-      if (opponentType === 'friend' && friendAccountId) {
+      if (normalizedOpponentType === 'friend' && friendAccountId) {
         const gameName = gameType.charAt(0).toUpperCase() + gameType.slice(1);
         const formattedChallengeAmount = formatChallengeAmount(parsedBetAmount, effectiveCurrencyType);
         sendNotification(friendAccountId, {

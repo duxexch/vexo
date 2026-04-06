@@ -4,7 +4,7 @@ import {
   type SocialPlatform, type InsertSocialPlatform,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, desc, and, asc, or, like, ne } from "drizzle-orm";
+import { eq, desc, and, asc, or, ilike, ne } from "drizzle-orm";
 import { encryptPlatformSecrets, decryptPlatformSecrets } from "../lib/crypto-utils";
 
 // ==================== USER RELATIONSHIPS ====================
@@ -64,14 +64,17 @@ export async function getUserFollowers(userId: string): Promise<UserRelationship
 }
 
 export async function searchUsers(query: string, excludeUserId: string): Promise<User[]> {
-  const searchQuery = `%${query}%`;
+  const searchTerm = query.trim();
+  if (!searchTerm) return [];
+
+  const searchQuery = `%${searchTerm}%`;
   return db.select().from(users)
     .where(and(
       ne(users.id, excludeUserId),
       eq(users.status, "active"),
       or(
-        like(users.username, searchQuery),
-        like(users.accountId, searchQuery)
+        ilike(users.username, searchQuery),
+        ilike(users.accountId, searchQuery)
       )
     ))
     .orderBy(users.username)

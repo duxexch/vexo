@@ -37,10 +37,17 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
 
   // Check if chat is enabled — cached (was 1 DB query per message)
   const chatEnabled = await isChatEnabled(async () => {
-    const settings = await db.select().from(chatSettings).where(
+    const settings = await db.select({
+      key: chatSettings.key,
+      value: chatSettings.value,
+    }).from(chatSettings).where(
       or(eq(chatSettings.key, "chat_enabled"), eq(chatSettings.key, "isEnabled"))
-    ).limit(1);
-    return !(settings.length > 0 && settings[0].value === "false");
+    );
+
+    const canonical = settings.find((item) => item.key === "chat_enabled")
+      || settings.find((item) => item.key === "isEnabled");
+
+    return !canonical || canonical.value !== "false";
   });
   if (!chatEnabled) {
     ws.send(JSON.stringify({ type: "chat_error", error: "Chat is currently disabled" }));

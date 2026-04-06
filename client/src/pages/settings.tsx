@@ -79,7 +79,7 @@ function ProfileSection() {
   const { t } = useI18n();
   const { toast } = useToast();
   const headers = useAuthHeaders();
-  
+
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -127,18 +127,18 @@ function ProfileSection() {
   const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     if (file.size > 5 * 1024 * 1024) {
       toast({ title: t("common.error"), description: t("settings.fileTooLarge") || "File size must be less than 5MB", variant: "destructive" });
       return;
     }
-    
+
     setIsUploadingPicture(true);
     try {
       const base64 = await convertToBase64(file);
       const res = await fetch("/api/user/profile-picture", {
         method: "POST",
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
@@ -159,18 +159,18 @@ function ProfileSection() {
   const handleCoverPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     if (file.size > 10 * 1024 * 1024) {
       toast({ title: t("common.error"), description: t("settings.fileTooLarge") || "File size must be less than 10MB", variant: "destructive" });
       return;
     }
-    
+
     setIsUploadingCover(true);
     try {
       const base64 = await convertToBase64(file);
       const res = await fetch("/api/user/cover-photo", {
         method: "POST",
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
@@ -205,15 +205,15 @@ function ProfileSection() {
       </CardHeader>
       <CardContent>
         <div className="relative mb-16">
-          <div 
+          <div
             className="h-32 rounded-lg bg-gradient-to-r from-primary/20 to-primary/40 relative overflow-hidden cursor-pointer group"
             onClick={() => coverInputRef.current?.click()}
             data-testid="button-cover-photo"
           >
             {user?.coverPhoto ? (
-              <img 
-                src={user.coverPhoto} 
-                alt="Cover" 
+              <img
+                src={user.coverPhoto}
+                alt="Cover"
                 loading="lazy"
                 className="w-full h-full object-cover"
               />
@@ -241,7 +241,7 @@ function ProfileSection() {
               data-testid="input-cover-photo"
             />
           </div>
-          
+
           <div className="absolute -bottom-12 start-4">
             <div className="relative">
               <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
@@ -375,25 +375,63 @@ function VerificationSection() {
   const { t } = useI18n();
   const { toast } = useToast();
   const headers = useAuthHeaders();
-  
+  const OTP_RESEND_COOLDOWN_SECONDS = 5 * 60;
+
   const [verifyingType, setVerifyingType] = useState<"email" | "phone" | null>(null);
   const [otpCode, setOtpCode] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [devOtp, setDevOtp] = useState<string | null>(null);
-  
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  const [resendReadyAtByType, setResendReadyAtByType] = useState<Record<"email" | "phone", number>>({
+    email: 0,
+    phone: 0,
+  });
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowTs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  const getContactTypeLabel = (type: "email" | "phone") => {
+    return type === "email" ? t("settings.contactTypeEmail") : t("settings.contactTypePhone");
+  };
+
+  const setResendCooldown = (type: "email" | "phone", seconds: number) => {
+    const normalizedSeconds = Math.max(0, Math.floor(seconds));
+    setResendReadyAtByType((prev) => ({
+      ...prev,
+      [type]: Date.now() + normalizedSeconds * 1000,
+    }));
+  };
+
+  const getResendRemainingSeconds = (type: "email" | "phone") => {
+    return Math.max(0, Math.ceil((resendReadyAtByType[type] - nowTs) / 1000));
+  };
+
+  const formatCountdown = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const remainingSeconds = (seconds % 60).toString().padStart(2, "0");
+    return `${minutes}:${remainingSeconds}`;
+  };
+
   const handleSendOtp = async (type: "email" | "phone") => {
     const contactValue = type === "email" ? user?.email : user?.phone;
     if (!contactValue) {
-      toast({ 
-        title: t("common.error") || "Error", 
-        description: t('settings.addContactFirst').replace('{type}', type), 
-        variant: "destructive" 
+      toast({
+        title: t("common.error") || "Error",
+        description: t("settings.addContactFirst", { type: getContactTypeLabel(type) }),
+        variant: "destructive"
       });
       return;
     }
-    
+
     setIsSending(true);
     setVerifyingType(type);
     try {
@@ -402,31 +440,40 @@ function VerificationSection() {
         headers,
         body: JSON.stringify({ contactType: type, contactValue }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      
+      const data = await res.json().catch(() => null) as { error?: string; message?: string; devOtp?: string; resendAfter?: number; retryAfter?: number } | null;
+      if (!res.ok) {
+        const retryAfterSeconds = typeof data?.retryAfter === "number" ? data.retryAfter : 0;
+        if (retryAfterSeconds > 0) {
+          setShowOtpInput(true);
+          setResendCooldown(type, retryAfterSeconds);
+        }
+        throw new Error(data?.error || "Failed to send OTP");
+      }
+
       setShowOtpInput(true);
-      if (data.devOtp) setDevOtp(data.devOtp);
-      toast({ 
-        title: t("common.success") || "Success", 
-        description: data.message 
+      setResendCooldown(type, typeof data?.resendAfter === "number" ? data.resendAfter : OTP_RESEND_COOLDOWN_SECONDS);
+      if (data?.devOtp) {
+        setDevOtp(data.devOtp);
+      }
+      toast({
+        title: t("common.success") || "Success",
+        description: data?.message || t("settings.otpSent")
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      toast({ 
-        title: t("common.error") || "Error", 
-        description: message, 
-        variant: "destructive" 
+      toast({
+        title: t("common.error") || "Error",
+        description: message,
+        variant: "destructive"
       });
-      setVerifyingType(null);
     } finally {
       setIsSending(false);
     }
   };
-  
+
   const handleVerifyOtp = async () => {
     if (!verifyingType || !otpCode) return;
-    
+
     setIsVerifying(true);
     try {
       const res = await fetch("/api/auth/otp/verify", {
@@ -436,44 +483,49 @@ function VerificationSection() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      
-      toast({ 
-        title: t("common.success") || "Success", 
-        description: data.message 
+
+      toast({
+        title: t("common.success") || "Success",
+        description: data.message
       });
-      
+
       // Refresh user data in auth context and query cache
       await refreshUser();
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      
+
       // Reset state
       setShowOtpInput(false);
+      if (verifyingType) {
+        setResendCooldown(verifyingType, 0);
+      }
       setVerifyingType(null);
       setOtpCode("");
       setDevOtp(null);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      toast({ 
-        title: t("common.error") || "Error", 
-        description: message, 
-        variant: "destructive" 
+      toast({
+        title: t("common.error") || "Error",
+        description: message,
+        variant: "destructive"
       });
     } finally {
       setIsVerifying(false);
     }
   };
-  
+
   const handleCancel = () => {
     setShowOtpInput(false);
     setVerifyingType(null);
     setOtpCode("");
     setDevOtp(null);
   };
-  
+
+  const resendRemainingSeconds = verifyingType ? getResendRemainingSeconds(verifyingType) : 0;
+
   const hasUnverifiedContacts = (user?.email && !user?.emailVerified) || (user?.phone && !user?.phoneVerified);
-  
+
   if (!hasUnverifiedContacts) return null;
-  
+
   return (
     <Card>
       <CardHeader>
@@ -490,7 +542,9 @@ function VerificationSection() {
           <div className="space-y-4">
             <div className="p-4 bg-accent/10 rounded-md border border-accent/20">
               <p className="text-sm">
-                {t('settings.enterVerificationCode').replace('{type}', verifyingType || '')}
+                {t("settings.enterVerificationCode", {
+                  type: verifyingType ? getContactTypeLabel(verifyingType) : "",
+                })}
               </p>
               {devOtp && (
                 <p className="text-xs text-muted-foreground mt-2">
@@ -507,6 +561,24 @@ function VerificationSection() {
                 maxLength={6}
                 data-testid="input-otp-code"
               />
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2">
+              <p className="text-xs text-muted-foreground">
+                {resendRemainingSeconds > 0
+                  ? t("settings.resendCodeIn", { time: formatCountdown(resendRemainingSeconds) })
+                  : t("settings.resendCodeReady")}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => verifyingType && handleSendOtp(verifyingType)}
+                disabled={!verifyingType || isSending || resendRemainingSeconds > 0}
+                data-testid="button-resend-otp"
+              >
+                {isSending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                {t("settings.resendCode")}
+              </Button>
             </div>
             <div className="flex gap-2">
               <Button
@@ -815,16 +887,16 @@ function PrivacySection() {
     onSuccess: (data) => {
       updateUser(data);
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast({ 
+      toast({
         title: t('common.updated'),
-        description: t('settings.visibilityUpdated') 
+        description: t('settings.visibilityUpdated')
       });
     },
     onError: () => {
-      toast({ 
-        title: t('common.error'), 
+      toast({
+        title: t('common.error'),
         description: t('settings.updateFailed'),
-        variant: "destructive" 
+        variant: "destructive"
       });
     },
   });
@@ -1315,7 +1387,7 @@ export default function SettingsPage() {
   return (
     <div className="container max-w-4xl mx-auto p-3 sm:p-6">
       <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6" data-testid="text-settings-title">{t("nav.settings")}</h1>
-      
+
       <Tabs defaultValue="profile" className="space-y-4 sm:space-y-6">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="profile" data-testid="tab-profile">
