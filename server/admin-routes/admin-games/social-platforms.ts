@@ -2,7 +2,7 @@ import type { Express, Response } from "express";
 import { insertSocialPlatformSchema, type SocialPlatform } from "@shared/schema";
 import { storage } from "../../storage";
 import { maskPlatformSecrets, filterMaskedValues, SENSITIVE_FIELDS } from "../../lib/crypto-utils";
-import { evaluateSocialPlatformRuntime } from "../../lib/social-platform-runtime";
+import { evaluateSocialPlatformRuntime, type SocialPlatformRuntimeStatus } from "../../lib/social-platform-runtime";
 import { sensitiveRateLimiter } from "../../routes/middleware";
 import { z } from "zod";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
@@ -10,8 +10,139 @@ import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage
 const VALID_PLATFORM_NAME = /^[a-z][a-z0-9_]{1,30}$/;
 const VALID_URL = /^https?:\/\/.{3,500}$/;
 
+type RuntimeConfigSource = "admin-db" | "env-fallback" | "missing";
+
+type PlatformConfigMetadata = {
+  configSource: RuntimeConfigSource;
+  envFallback: {
+    configured: boolean;
+    fields: string[];
+    missing: string[];
+  };
+  callbackCompliance: {
+    expectedPath: string;
+    configuredUrl: string | null;
+    usesHttps: boolean;
+    pathMatches: boolean | null;
+  };
+  warnings: string[];
+};
+
 function hasFieldValue(value: unknown): boolean {
   return typeof value === "string" ? value.trim().length > 0 : Boolean(value);
+}
+
+function hasEnvValue(name: string): boolean {
+  const value = process.env[name];
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function resolveEnvFallbackFields(platformName: string): string[] {
+  switch (platformName) {
+    case "google":
+      return ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"];
+    case "facebook":
+      return ["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET"];
+    case "twitter":
+      return ["TWITTER_API_KEY", "TWITTER_API_SECRET"];
+    case "telegram":
+      return ["TELEGRAM_BOT_TOKEN"];
+    default:
+      return [];
+  }
+}
+
+function buildCallbackCompliance(platform: SocialPlatform): PlatformConfigMetadata["callbackCompliance"] {
+  const expectedPath = `/api/auth/social/${platform.name}/callback`;
+  const callbackUrl = typeof platform.callbackUrl === "string" ? platform.callbackUrl.trim() : "";
+
+  if (!callbackUrl) {
+    return {
+      expectedPath,
+      configuredUrl: null,
+      usesHttps: true,
+      pathMatches: null,
+    };
+  }
+
+  try {
+    const parsed = new URL(callbackUrl);
+    return {
+      expectedPath,
+      configuredUrl: parsed.toString(),
+      usesHttps: parsed.protocol === "https:",
+      pathMatches: parsed.pathname === expectedPath,
+    };
+  } catch {
+    return {
+      expectedPath,
+      configuredUrl: callbackUrl,
+      usesHttps: false,
+      pathMatches: false,
+    };
+  }
+}
+
+function buildPlatformConfigMetadata(platform: SocialPlatform, runtime: SocialPlatformRuntimeStatus): PlatformConfigMetadata {
+  const envFields = resolveEnvFallbackFields(platform.name);
+  const missingEnvFields = envFields.filter((field) => !hasEnvValue(field));
+  const envConfigured = envFields.length > 0 && missingEnvFields.length === 0;
+
+  let configSource: RuntimeConfigSource = "admin-db";
+  if (runtime.oauth.enabled) {
+    if (runtime.oauth.configured) {
+      configSource = "admin-db";
+    } else if (envConfigured) {
+      configSource = "env-fallback";
+    } else {
+      configSource = "missing";
+    }
+  }
+
+  const callbackCompliance = buildCallbackCompliance(platform);
+  const warnings: string[] = [];
+
+  if (runtime.oauth.enabled) {
+    if (runtime.oauth.configured && envConfigured) {
+      warnings.push("Both Admin panel and .env OAuth credentials are set. Admin panel values take precedence at runtime.");
+    }
+
+    if (!runtime.oauth.configured && envConfigured) {
+      warnings.push("OAuth credentials are currently resolved from .env fallback. Move them to Admin panel for centralized management.");
+    }
+
+    if (!hasFieldValue(platform.callbackUrl)) {
+      warnings.push("Callback URL is empty in Admin panel. Dynamic callback URL will be derived from current host.");
+    } else {
+      if (!callbackCompliance.usesHttps) {
+        warnings.push("Callback URL should use HTTPS in production.");
+      }
+      if (callbackCompliance.pathMatches === false) {
+        warnings.push(`Callback path should be ${callbackCompliance.expectedPath}.`);
+      }
+    }
+  }
+
+  if (runtime.otp.enabled) {
+    if (!hasFieldValue(platform.otpTemplate)) {
+      warnings.push("OTP template is empty. Define a template that includes the verification code placeholder.");
+    }
+
+    if (platform.otpExpiry < 60 || platform.otpExpiry > 600) {
+      warnings.push("OTP expiry should stay between 60 and 600 seconds.");
+    }
+  }
+
+  return {
+    configSource,
+    envFallback: {
+      configured: envConfigured,
+      fields: envFields,
+      missing: missingEnvFields,
+    },
+    callbackCompliance,
+    warnings,
+  };
 }
 
 function toSocialPlatformPreview(nextData: Partial<SocialPlatform>, current?: SocialPlatform): SocialPlatform {
@@ -46,9 +177,15 @@ function toSocialPlatformPreview(nextData: Partial<SocialPlatform>, current?: So
 }
 
 function serializePlatform(platform: SocialPlatform) {
+  const runtime = evaluateSocialPlatformRuntime(platform);
+  const metadata = buildPlatformConfigMetadata(platform, runtime);
+
   return {
     ...maskPlatformSecrets(platform),
-    runtime: evaluateSocialPlatformRuntime(platform),
+    runtime: {
+      ...runtime,
+      ...metadata,
+    },
   };
 }
 
@@ -245,6 +382,7 @@ export function registerSocialPlatformsRoutes(app: Express) {
       }
 
       const runtime = evaluateSocialPlatformRuntime(platform);
+      const metadata = buildPlatformConfigMetadata(platform, runtime);
       const checks: Array<{ name: string; status: "pass" | "fail" | "skip"; detail?: string }> = [];
 
       if (runtime.oauth.enabled) {
@@ -268,6 +406,42 @@ export function registerSocialPlatformsRoutes(app: Express) {
           status: hasFieldValue(platform.callbackUrl) ? "pass" : "skip",
           detail: hasFieldValue(platform.callbackUrl) ? String(platform.callbackUrl) : "Using dynamic default callback URL",
         });
+        checks.push({
+          name: "Callback HTTPS",
+          status: !hasFieldValue(platform.callbackUrl)
+            ? "skip"
+            : metadata.callbackCompliance.usesHttps
+              ? "pass"
+              : "fail",
+          detail: !hasFieldValue(platform.callbackUrl)
+            ? "Dynamic callback URL (host-derived)"
+            : metadata.callbackCompliance.usesHttps
+              ? "HTTPS"
+              : "Non-HTTPS callback URL",
+        });
+        checks.push({
+          name: "Callback Path",
+          status: !hasFieldValue(platform.callbackUrl)
+            ? "skip"
+            : metadata.callbackCompliance.pathMatches === true
+              ? "pass"
+              : "fail",
+          detail: !hasFieldValue(platform.callbackUrl)
+            ? `Expected ${metadata.callbackCompliance.expectedPath}`
+            : metadata.callbackCompliance.pathMatches === true
+              ? metadata.callbackCompliance.expectedPath
+              : `Expected ${metadata.callbackCompliance.expectedPath}`,
+        });
+
+        if (metadata.envFallback.fields.length > 0) {
+          checks.push({
+            name: "ENV Fallback",
+            status: metadata.envFallback.configured ? "pass" : "skip",
+            detail: metadata.envFallback.configured
+              ? "Configured in .env"
+              : `Missing ${metadata.envFallback.missing.join(", ")}`,
+          });
+        }
       }
 
       if (runtime.otp.enabled) {
@@ -285,16 +459,30 @@ export function registerSocialPlatformsRoutes(app: Express) {
             detail: hasFieldValue(value) ? "Configured" : "Missing",
           });
         }
+
+        checks.push({
+          name: "OTP Template",
+          status: hasFieldValue(platform.otpTemplate) ? "pass" : "fail",
+          detail: hasFieldValue(platform.otpTemplate) ? "Configured" : "Missing",
+        });
+        checks.push({
+          name: "OTP Expiry",
+          status: platform.otpExpiry >= 60 && platform.otpExpiry <= 600 ? "pass" : "fail",
+          detail: `${platform.otpExpiry}s (recommended 60-600s)`,
+        });
       }
 
-      const issues = [...runtime.oauth.issues, ...runtime.otp.issues];
+      const issues = [...runtime.oauth.issues, ...runtime.otp.issues, ...metadata.warnings];
 
       res.json({
         platform: platform.name,
         status: runtime.runtimeReady ? "ready" : "incomplete",
         issues,
         checks,
-        runtime,
+        runtime: {
+          ...runtime,
+          ...metadata,
+        },
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

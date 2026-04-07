@@ -93,7 +93,7 @@ services:
 
   # ==================== MinIO Object Storage ====================
   minio:
-    image: minio/minio:latest
+    image: ${MINIO_IMAGE:-minio/minio:latest}
     container_name: vex-minio
     hostname: vex-minio
     restart: unless-stopped

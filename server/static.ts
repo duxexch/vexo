@@ -145,6 +145,59 @@ export function serveStatic(app: Express) {
     }
   });
 
+  // SEO infrastructure files — serve explicitly with stable content types.
+  app.get("/robots.txt", publicStaticLimiter, (_req, res) => {
+    const robotsPath = path.join(distPath, "robots.txt");
+    if (fs.existsSync(robotsPath)) {
+      res.set({
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "public, max-age=1800",
+      });
+      res.sendFile(robotsPath);
+    } else {
+      res.status(404).type("text/plain").send("# robots.txt not found");
+    }
+  });
+
+  app.get("/sitemap.xml", publicStaticLimiter, (_req, res) => {
+    const sitemapPath = path.join(distPath, "sitemap.xml");
+    if (fs.existsSync(sitemapPath)) {
+      res.set({
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=900",
+      });
+      res.sendFile(sitemapPath);
+    } else {
+      res.status(404).type("text/plain").send("sitemap.xml not found");
+    }
+  });
+
+  app.get("/sitemap-index.xml", publicStaticLimiter, (_req, res) => {
+    const sitemapIndexPath = path.join(distPath, "sitemap-index.xml");
+    if (fs.existsSync(sitemapIndexPath)) {
+      res.set({
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=900",
+      });
+      res.sendFile(sitemapIndexPath);
+    } else {
+      res.status(404).type("text/plain").send("sitemap-index.xml not found");
+    }
+  });
+
+  app.get("/sitemap-core.xml", publicStaticLimiter, (_req, res) => {
+    const sitemapCorePath = path.join(distPath, "sitemap-core.xml");
+    if (fs.existsSync(sitemapCorePath)) {
+      res.set({
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=900",
+      });
+      res.sendFile(sitemapCorePath);
+    } else {
+      res.status(404).type("text/plain").send("sitemap-core.xml not found");
+    }
+  });
+
   // Downloads folder — APK, AAB with proper MIME types and Content-Disposition
   app.use("/downloads", express.static(path.join(distPath, "downloads"), {
     maxAge: "1h",

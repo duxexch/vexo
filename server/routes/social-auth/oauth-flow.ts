@@ -31,6 +31,18 @@ interface OAuthExchangeRecord {
   userAgent?: string;
 }
 
+function classifyUserAgent(userAgent?: string): "android" | "ios" | "windows" | "macos" | "linux" | "unknown" {
+  if (!userAgent) return "unknown";
+
+  const normalized = userAgent.toLowerCase();
+  if (normalized.includes("android")) return "android";
+  if (normalized.includes("iphone") || normalized.includes("ipad") || normalized.includes("ios")) return "ios";
+  if (normalized.includes("windows")) return "windows";
+  if (normalized.includes("mac os x") || normalized.includes("macintosh")) return "macos";
+  if (normalized.includes("linux")) return "linux";
+  return "unknown";
+}
+
 function logOAuthSecurityEvent(req: Request, platform: string, event: string, metadata?: Record<string, unknown>) {
   logger.warn(`[OAuth] ${event}`, {
     platform,
@@ -72,8 +84,16 @@ function consumeOAuthExchangeCode(code: string, userAgent?: string): OAuthExchan
     return null;
   }
 
-  if (record.userAgent && userAgent && record.userAgent !== userAgent) {
-    return null;
+  if (record.userAgent && userAgent) {
+    const exactMatch = record.userAgent === userAgent;
+    const sourceClass = classifyUserAgent(record.userAgent);
+    const targetClass = classifyUserAgent(userAgent);
+    const samePlatformClass = sourceClass !== "unknown" && sourceClass === targetClass;
+
+    // Allow native app flows where OAuth callback and exchange happen in different browser engines.
+    if (!exactMatch && !samePlatformClass) {
+      return null;
+    }
   }
 
   return record;

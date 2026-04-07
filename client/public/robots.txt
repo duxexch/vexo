@@ -156,6 +156,8 @@ Disallow: /profile
 Crawl-delay: 1
 
 # Sitemaps
+Sitemap: https://vixo.click/sitemap-index.xml
+Sitemap: https://vixo.click/sitemap-core.xml
 Sitemap: https://vixo.click/sitemap.xml
 
 # Host

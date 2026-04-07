@@ -37,6 +37,40 @@ VEX implementation notes:
 - Native builds use Capacitor Browser for social OAuth launch.
 - App URL callback is handled via Capacitor `appUrlOpen`.
 
+## Configuration Source Policy (Admin Panel vs .env)
+
+Use this precedence to avoid conflicts:
+
+1. Admin panel (`social_platforms` in DB) is the primary source of truth.
+2. `.env.production.local` is fallback/bootstrap only.
+3. If both are configured, Admin panel takes precedence.
+
+Recommended operation model:
+
+1. Configure provider credentials in Admin panel first.
+2. Keep related `.env.production.local` variables empty for the same provider.
+3. Use `.env.production.local` only when bootstrap/fallback is required.
+4. Restart backend services after editing `.env.production.local`.
+
+If you must use fallback variables in `.env.production.local`, add only the provider you need:
+
+- Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- Facebook: `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`
+- X/Twitter: `TWITTER_API_KEY`, `TWITTER_API_SECRET`
+- Telegram (OTP adapter): `TELEGRAM_BOT_TOKEN`
+
+Conflict warning:
+
+- Do not maintain different values for the same provider in both Admin and `.env.production.local`.
+- This creates operational ambiguity during rotation and incident response.
+
+## OTP Stability Policy
+
+- Enable OTP only after all required adapter fields are configured.
+- Keep OTP expiry between 60 and 600 seconds.
+- Ensure OTP template is set and includes a verification code placeholder.
+- Validate each enabled provider using runtime checks before production activation.
+
 ## Provider-Specific Setup Checklist
 
 ### Google

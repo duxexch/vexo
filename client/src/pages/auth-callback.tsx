@@ -30,12 +30,38 @@ export default function AuthCallbackPage() {
 
       if (code) {
         try {
-          const res = await fetch("/api/auth/social/exchange", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code }),
-            credentials: "include",
-          });
+          const exchangeCode = async () => {
+            let lastError: unknown;
+
+            for (let attempt = 1; attempt <= 3; attempt += 1) {
+              try {
+                const response = await fetch("/api/auth/social/exchange", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ code }),
+                  credentials: "include",
+                });
+
+                // Retry short-lived 5xx failures to make callback completion more reliable.
+                if (response.status >= 500 && attempt < 3) {
+                  await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+                  continue;
+                }
+
+                return response;
+              } catch (error) {
+                lastError = error;
+                if (attempt < 3) {
+                  await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+                  continue;
+                }
+              }
+            }
+
+            throw lastError || new Error("oauth_exchange_failed");
+          };
+
+          const res = await exchangeCode();
 
           if (!res.ok) {
             notifyOpener("vex_oauth_error", "oauth_exchange_failed");

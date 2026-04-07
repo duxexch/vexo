@@ -48,6 +48,7 @@ import {
   Trash2,
   Power,
   PowerOff,
+  AlertTriangle,
 } from "lucide-react";
 import { SiGoogle, SiFacebook, SiTelegram, SiWhatsapp, SiX, SiApple, SiDiscord, SiLinkedin, SiGithub, SiTiktok, SiInstagram } from "react-icons/si";
 
@@ -92,17 +93,17 @@ async function adminFetch(url: string, options?: RequestInit) {
     const details =
       (payload && typeof payload === "object" && "details" in payload && Array.isArray((payload as Record<string, unknown>).details)
         ? ((payload as Record<string, unknown>).details as unknown[])
-            .map((item) => (item && typeof item === "object" && "message" in item && typeof (item as Record<string, unknown>).message === "string"
-              ? (item as Record<string, unknown>).message as string
-              : ""))
-            .filter(Boolean)
-            .join("; ")
+          .map((item) => (item && typeof item === "object" && "message" in item && typeof (item as Record<string, unknown>).message === "string"
+            ? (item as Record<string, unknown>).message as string
+            : ""))
+          .filter(Boolean)
+          .join("; ")
         : payload && typeof payload === "object" && "issues" in payload && Array.isArray((payload as Record<string, unknown>).issues)
           ? ((payload as Record<string, unknown>).issues as unknown[])
-              .map((item) => (typeof item === "string" ? item : ""))
-              .filter(Boolean)
-              .join("; ")
-        : "");
+            .map((item) => (typeof item === "string" ? item : ""))
+            .filter(Boolean)
+            .join("; ")
+          : "");
 
     const message = details ? `${baseMessage}: ${details}` : baseMessage;
     throw new Error(message);
@@ -143,6 +144,19 @@ interface SocialPlatform {
   runtime?: {
     runtimeReady: boolean;
     oauthLoginEnabled: boolean;
+    configSource?: "admin-db" | "env-fallback" | "missing";
+    envFallback?: {
+      configured: boolean;
+      fields: string[];
+      missing: string[];
+    };
+    callbackCompliance?: {
+      expectedPath: string;
+      configuredUrl: string | null;
+      usesHttps: boolean;
+      pathMatches: boolean | null;
+    };
+    warnings?: string[];
     oauth: {
       enabled: boolean;
       ready: boolean;
@@ -159,6 +173,18 @@ interface SocialPlatform {
       requiredFields: string[];
     };
   };
+}
+
+interface PlatformVerificationResult {
+  platform: string;
+  status: "ready" | "incomplete";
+  issues: string[];
+  checks: Array<{
+    name: string;
+    status: "pass" | "fail" | "skip";
+    detail?: string;
+  }>;
+  runtime: SocialPlatform["runtime"];
 }
 
 const PLATFORM_ICONS: Record<string, any> = {
@@ -273,6 +299,19 @@ function resolvePlatformFields(platform: SocialPlatform): string[] {
   return Array.from(genericFields);
 }
 
+function resolveConfigSourceLabel(
+  source: "admin-db" | "env-fallback" | "missing" | undefined,
+  isArabic: boolean,
+) {
+  if (source === "env-fallback") {
+    return isArabic ? "ENV احتياطي" : "ENV Fallback";
+  }
+  if (source === "missing") {
+    return isArabic ? "غير مكتمل" : "Missing";
+  }
+  return isArabic ? "لوحة الأدمن" : "Admin Panel";
+}
+
 function PlatformCard({
   platform,
   isArabic,
@@ -293,6 +332,7 @@ function PlatformCard({
   const runtime = platform.runtime;
   const isFullyConfigured = runtime ? runtime.runtimeReady : false;
   const runtimeIssues = runtime ? [...runtime.oauth.issues, ...runtime.otp.issues] : [];
+  const runtimeWarnings = runtime?.warnings || [];
 
   return (
     <Card className="relative overflow-visible hover-elevate">
@@ -306,18 +346,26 @@ function PlatformCard({
               <CardTitle className="text-base flex items-center gap-2">
                 {isArabic ? platform.displayNameAr || platform.displayName : platform.displayName}
                 <Badge variant={platform.isEnabled ? "default" : "secondary"} className="text-xs">
-                  {platform.isEnabled 
-                    ? (isArabic ? "مفعّل" : "Enabled") 
+                  {platform.isEnabled
+                    ? (isArabic ? "مفعّل" : "Enabled")
                     : (isArabic ? "معطّل" : "Disabled")}
                 </Badge>
                 {platform.isEnabled && (
-                  <Badge 
-                    variant={isFullyConfigured ? "outline" : "destructive"} 
+                  <Badge
+                    variant={isFullyConfigured ? "outline" : "destructive"}
                     className={`text-xs ${isFullyConfigured ? 'border-green-500 text-green-600' : ''}`}
                   >
                     {isFullyConfigured
                       ? (isArabic ? "مُهيّأ" : "Configured")
                       : (isArabic ? "غير مُهيّأ" : "Not configured")}
+                  </Badge>
+                )}
+                {platform.isEnabled && runtime?.oauth.enabled && (
+                  <Badge
+                    variant="outline"
+                    className={`text-xs ${runtime?.configSource === "missing" ? "border-destructive text-destructive" : runtime?.configSource === "env-fallback" ? "border-amber-500 text-amber-600" : "border-blue-500 text-blue-600"}`}
+                  >
+                    {resolveConfigSourceLabel(runtime?.configSource, isArabic)}
                   </Badge>
                 )}
               </CardTitle>
@@ -350,6 +398,12 @@ function PlatformCard({
               {platform.isEnabled && runtimeIssues.length > 0 && (
                 <p className="text-xs text-destructive mt-1">
                   {runtimeIssues[0]}
+                </p>
+              )}
+              {platform.isEnabled && runtimeWarnings.length > 0 && (
+                <p className="text-xs text-amber-600 mt-1 flex items-start gap-1">
+                  <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                  <span>{runtimeWarnings[0]}</span>
                 </p>
               )}
             </div>
@@ -416,7 +470,10 @@ function PlatformSettingsDialog({
   onSave: (data: Partial<SocialPlatform>) => void;
   isSaving: boolean;
 }) {
+  const { toast } = useToast();
   const [formData, setFormData] = useState<Partial<SocialPlatform>>({});
+  const [verificationResult, setVerificationResult] = useState<PlatformVerificationResult | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   // Populate form data whenever platform or dialog open state changes
   useEffect(() => {
@@ -438,6 +495,7 @@ function PlatformSettingsDialog({
         otpExpiry: platform.otpExpiry,
         type: platform.type,
       });
+      setVerificationResult(null);
     }
   }, [platform, isOpen]);
 
@@ -445,6 +503,53 @@ function PlatformSettingsDialog({
 
   const platformConfig = PLATFORM_FIELDS[platform.name] || { label: platform.displayName, labelAr: platform.displayNameAr, fields: resolvePlatformFields(platform) };
   const fieldsToRender = platformConfig.fields.length > 0 ? platformConfig.fields : resolvePlatformFields(platform);
+  const callbackExpectedPath = `/api/auth/social/${platform.name}/callback`;
+
+  const saveSettings = () => {
+    const nextType = (formData.type || platform.type) as "oauth" | "otp" | "both";
+    const otpExpiry = Number(formData.otpExpiry ?? platform.otpExpiry ?? 300);
+
+    if ((nextType === "otp" || nextType === "both") && (otpExpiry < 60 || otpExpiry > 600)) {
+      toast({
+        title: isArabic ? "قيمة OTP غير صالحة" : "Invalid OTP value",
+        description: isArabic ? "مدة OTP يجب أن تكون بين 60 و 600 ثانية" : "OTP expiry must be between 60 and 600 seconds",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    onSave(formData);
+  };
+
+  const runVerification = async () => {
+    setIsVerifying(true);
+    try {
+      const result = await adminFetch(`/api/admin/social-platforms/${platform.id}/test`, {
+        method: "POST",
+      }) as PlatformVerificationResult;
+      setVerificationResult(result);
+
+      toast({
+        title: isArabic ? "تم تشغيل التحقق" : "Verification completed",
+        description:
+          result.status === "ready"
+            ? (isArabic ? "الإعدادات جاهزة للتشغيل" : "Configuration is production-ready")
+            : (isArabic ? "الإعدادات تحتاج تصحيح" : "Configuration still has issues"),
+        variant: result.status === "ready" ? "default" : "destructive",
+      });
+    } catch (error: unknown) {
+      toast({
+        title: isArabic ? "فشل التحقق" : "Verification failed",
+        description: getErrorMessage(error),
+        variant: "destructive",
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const verificationPassCount = verificationResult?.checks.filter((check) => check.status === "pass").length || 0;
+  const verificationTotalCount = verificationResult?.checks.length || 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -455,13 +560,89 @@ function PlatformSettingsDialog({
             {isArabic ? `إعدادات ${platform.displayNameAr || platform.displayName}` : `${platform.displayName} Settings`}
           </DialogTitle>
           <DialogDescription>
-            {isArabic 
-              ? "قم بتكوين إعدادات المصادقة والتكامل لهذه المنصة" 
+            {isArabic
+              ? "قم بتكوين إعدادات المصادقة والتكامل لهذه المنصة"
               : "Configure authentication and integration settings for this platform"}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="pt-4 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Shield className="w-4 h-4" />
+                {isArabic ? "مصدر الإعدادات + التوافق" : "Config Source + Compatibility"}
+              </div>
+
+              {platform.runtime?.oauth.enabled && (
+                <p className="text-xs text-muted-foreground">
+                  {platform.runtime.configSource === "env-fallback"
+                    ? (isArabic
+                      ? "المنصة تعتمد حاليا على ENV الاحتياطي. يفضّل نقل الإعدادات إلى لوحة الأدمن للتوحيد."
+                      : "This platform is currently using ENV fallback. Move credentials to Admin panel for centralized control.")
+                    : platform.runtime.configSource === "missing"
+                      ? (isArabic
+                        ? "إعدادات OAuth غير مكتملة حاليا في الأدمن وENV."
+                        : "OAuth configuration is incomplete in both Admin and ENV.")
+                      : (isArabic
+                        ? "المصدر الأساسي الحالي هو لوحة الأدمن (موصى به)."
+                        : "Current primary source is Admin panel (recommended).")}
+                </p>
+              )}
+
+              {platform.runtime?.envFallback?.fields && platform.runtime.envFallback.fields.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {isArabic ? "متغيرات ENV المرتبطة:" : "Related ENV variables:"} {platform.runtime.envFallback.fields.join(", ")}
+                </p>
+              )}
+
+              {(platform.runtime?.warnings || []).slice(0, 2).map((warning, index) => (
+                <div key={`${platform.id}-warning-${index}`} className="text-xs text-amber-700 flex items-start gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>{warning}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Accordion type="single" collapsible className="w-full border rounded-md px-3">
+            <AccordionItem value="oauth-flow">
+              <AccordionTrigger>
+                {isArabic ? "تدفق تسجيل الدخول (ويب + تطبيق)" : "Login Flow (Web + App)"}
+              </AccordionTrigger>
+              <AccordionContent className="space-y-1 text-xs text-muted-foreground">
+                <p>
+                  {isArabic
+                    ? "الويب: الضغط على أيقونة Google يفتح نافذة منبثقة OAuth ثم يتم التأكيد والعودة تلقائيا."
+                    : "Web: clicking Google icon opens OAuth popup, confirms login, then returns automatically."}
+                </p>
+                <p>
+                  {isArabic
+                    ? "التطبيق: يتم فتح متصفح النظام ثم العودة عبر /auth/callback لإكمال تسجيل الدخول بشكل آمن."
+                    : "App: system browser is used, then it returns via /auth/callback to complete secure sign-in."}
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="env-policy">
+              <AccordionTrigger>
+                {isArabic ? "سياسة Admin مقابل .env" : "Admin vs .env Policy"}
+              </AccordionTrigger>
+              <AccordionContent className="space-y-1 text-xs text-muted-foreground">
+                <p>
+                  {isArabic
+                    ? "الأولوية: إعدادات لوحة الأدمن هي المصدر الأساسي."
+                    : "Precedence: Admin panel settings are the primary source of truth."}
+                </p>
+                <p>
+                  {isArabic
+                    ? "استخدم ENV فقط كنسخة احتياطية/Bootstrap، وتجنب كتابة نفس بيانات المنصة في المكانين معا."
+                    : "Use ENV only as fallback/bootstrap and avoid duplicating provider credentials in both places."}
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+
           <div className="grid gap-4">
             <div className="flex items-center justify-between">
               <Label>{isArabic ? "نوع الاستخدام" : "Usage Type"}</Label>
@@ -503,6 +684,13 @@ function PlatformSettingsDialog({
                     data-testid={`input-${field}`}
                   />
                 )}
+                {field === "callbackUrl" && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {isArabic
+                      ? `المسار المتوقع: ${callbackExpectedPath}`
+                      : `Expected callback path: ${callbackExpectedPath}`}
+                  </p>
+                )}
               </div>
             ))}
 
@@ -535,16 +723,83 @@ function PlatformSettingsDialog({
                     data-testid="input-otp-expiry"
                   />
                 </div>
+
+                {platform.runtime?.otp.requiredFields && platform.runtime.otp.requiredFields.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {isArabic ? "الحقول المطلوبة للـ OTP:" : "Required OTP fields:"} {platform.runtime.otp.requiredFields.join(", ")}
+                  </p>
+                )}
               </>
             )}
           </div>
+
+          {verificationResult && (
+            <Card className="border-muted">
+              <CardContent className="pt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {verificationResult.status === "ready" ? (
+                      <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-destructive" />
+                    )}
+                    <span className="text-sm font-semibold">
+                      {verificationResult.status === "ready"
+                        ? (isArabic ? "تم التحقق: جاهز" : "Verification: Ready")
+                        : (isArabic ? "تم التحقق: يحتاج إصلاح" : "Verification: Needs fixes")}
+                    </span>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {verificationPassCount}/{verificationTotalCount} {isArabic ? "نجح" : "passed"}
+                  </Badge>
+                </div>
+
+                {verificationResult.issues.length > 0 && (
+                  <div className="space-y-1">
+                    {verificationResult.issues.slice(0, 4).map((issue, index) => (
+                      <p key={`issue-${index}`} className="text-xs text-destructive flex items-start gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                        <span>{issue}</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  {verificationResult.checks.map((check, index) => (
+                    <div key={`${check.name}-${index}`} className="rounded border px-2 py-1 flex items-start justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        {check.status === "pass" ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                        ) : check.status === "fail" ? (
+                          <XCircle className="w-3.5 h-3.5 text-destructive" />
+                        ) : (
+                          <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+                        )}
+                        <span className="font-medium">{check.name}</span>
+                      </div>
+                      <span className="text-muted-foreground text-end">{check.detail || "-"}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         <DialogFooter>
+          <Button variant="outline" onClick={runVerification} disabled={isVerifying || isSaving} data-testid="button-test-settings">
+            {isVerifying ? (
+              <Loader2 className="w-4 h-4 animate-spin me-2" />
+            ) : (
+              <Link2 className="w-4 h-4 me-2" />
+            )}
+            {isArabic ? "تحقق الآن" : "Verify now"}
+          </Button>
           <Button variant="outline" onClick={onClose} data-testid="button-cancel-settings">
             {isArabic ? "إلغاء" : "Cancel"}
           </Button>
-          <Button onClick={() => onSave(formData)} disabled={isSaving} data-testid="button-save-settings">
+          <Button onClick={saveSettings} disabled={isSaving} data-testid="button-save-settings">
             {isSaving ? (
               <Loader2 className="w-4 h-4 animate-spin me-2" />
             ) : (
@@ -712,8 +967,8 @@ export default function AdminSocialPlatformsPage() {
             {isArabic ? "منصات التواصل الاجتماعي" : "Social Platforms"}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {isArabic 
-              ? "إدارة منصات تسجيل الدخول وإرسال رموز التحقق OTP" 
+            {isArabic
+              ? "إدارة منصات تسجيل الدخول وإرسال رموز التحقق OTP"
               : "Manage login platforms and OTP verification providers"}
           </p>
         </div>
@@ -728,6 +983,54 @@ export default function AdminSocialPlatformsPage() {
         </div>
       </div>
 
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="w-4 h-4" />
+            {isArabic ? "دليل إعداد احترافي للويب + التطبيق" : "Professional Setup Guide for Web + App"}
+          </CardTitle>
+          <CardDescription>
+            {isArabic
+              ? "الويب يستخدم نافذة OAuth منبثقة، والتطبيق يستخدم متصفح النظام ثم العودة الآمنة عبر callback."
+              : "Web uses OAuth popup windows, while app uses system browser with secure callback return."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="admin-vs-env">
+              <AccordionTrigger>{isArabic ? "Admin مقابل .env" : "Admin vs .env"}</AccordionTrigger>
+              <AccordionContent className="space-y-1 text-xs text-muted-foreground">
+                <p>
+                  {isArabic
+                    ? "الأولوية دائما لإعدادات لوحة الأدمن."
+                    : "Admin panel values always take precedence at runtime."}
+                </p>
+                <p>
+                  {isArabic
+                    ? "استخدم .env فقط كحل احتياطي/Bootstrap وتجنب تكرار نفس مفاتيح OAuth في المكانين."
+                    : "Use .env only as fallback/bootstrap and avoid duplicating OAuth credentials in both places."}
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="otp-guidance">
+              <AccordionTrigger>{isArabic ? "استقرار OTP" : "OTP Stability"}</AccordionTrigger>
+              <AccordionContent className="space-y-1 text-xs text-muted-foreground">
+                <p>
+                  {isArabic
+                    ? "فعّل OTP فقط بعد إدخال الحقول المطلوبة لكل مزود، وتحقق أن مدة الصلاحية بين 60 و 600 ثانية."
+                    : "Enable OTP only after required provider fields are set and keep expiry between 60 and 600 seconds."}
+                </p>
+                <p>
+                  {isArabic
+                    ? "استخدم زر تحقق الآن داخل إعدادات المنصة لتأكيد الجاهزية قبل التفعيل."
+                    : "Use Verify now inside platform settings to confirm readiness before enabling."}
+                </p>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </CardContent>
+      </Card>
+
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -735,8 +1038,8 @@ export default function AdminSocialPlatformsPage() {
               {isArabic ? "إضافة منصة جديدة" : "Add New Platform"}
             </DialogTitle>
             <DialogDescription>
-              {isArabic 
-                ? "أدخل تفاصيل المنصة الجديدة" 
+              {isArabic
+                ? "أدخل تفاصيل المنصة الجديدة"
                 : "Enter the details for the new platform"}
             </DialogDescription>
           </DialogHeader>
@@ -818,8 +1121,8 @@ export default function AdminSocialPlatformsPage() {
             <Button variant="outline" onClick={() => setShowAddDialog(false)} data-testid="button-cancel-add">
               {isArabic ? "إلغاء" : "Cancel"}
             </Button>
-            <Button 
-              onClick={() => createMutation.mutate(newPlatform)} 
+            <Button
+              onClick={() => createMutation.mutate(newPlatform)}
               disabled={createMutation.isPending || !newPlatform.name || !newPlatform.displayName}
               data-testid="button-confirm-add"
             >
