@@ -163,6 +163,19 @@ interface InitializeBadgesResponse {
     totalDefaults: number;
 }
 
+const DEFAULT_TRUST_BADGE_NAMES = [
+    "Trusted Seed",
+    "Trusted Bronze",
+    "Trusted Silver",
+    "Trusted Gold",
+    "Elite Trader",
+    "Platinum Vault",
+    "Diamond Trust",
+    "Master Merchant",
+    "Grand Commander",
+    "Royal Legend",
+] as const;
+
 const optionalLimitField = z.preprocess((value) => {
     if (value === "" || value === null || value === undefined) {
         return null;
@@ -510,6 +523,9 @@ export default function AdminBadgesPage() {
     const watchedIconUrl = form.watch("iconUrl");
     const watchedIconName = form.watch("iconName") || "Award";
 
+    const existingBadgeNames = new Set((badges || []).map((badge) => badge.name.trim().toLowerCase()));
+    const hasAllDefaultTrustBadges = DEFAULT_TRUST_BADGE_NAMES.every((name) => existingBadgeNames.has(name.toLowerCase()));
+
     return (
         <div className="p-6 space-y-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -522,19 +538,21 @@ export default function AdminBadgesPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        onClick={() => initializeBadgesMutation.mutate()}
-                        disabled={initializeBadgesMutation.isPending}
-                        data-testid="button-initialize-badges"
-                    >
-                        {initializeBadgesMutation.isPending ? (
-                            <Loader2 className="me-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <Sparkles className="me-2 h-4 w-4" />
-                        )}
-                        {isArabic ? "تهيئة الشارات" : "Initialize Badges"}
-                    </Button>
+                    {!hasAllDefaultTrustBadges && (
+                        <Button
+                            variant="outline"
+                            onClick={() => initializeBadgesMutation.mutate()}
+                            disabled={initializeBadgesMutation.isPending}
+                            data-testid="button-initialize-badges"
+                        >
+                            {initializeBadgesMutation.isPending ? (
+                                <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <Sparkles className="me-2 h-4 w-4" />
+                            )}
+                            {isArabic ? "تهيئة الشارات" : "Initialize Badges"}
+                        </Button>
+                    )}
 
                     <Button onClick={openCreateDialog} data-testid="button-add-badge">
                         <Plus className="me-2 h-4 w-4" />

@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useI18n, languages as appLanguages } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -21,11 +19,7 @@ import {
   Loader2,
   X,
   UserCheck,
-  Globe,
   ShieldOff,
-  SlidersHorizontal,
-  Languages,
-  MapPin,
 } from "lucide-react";
 import type { User } from "@shared/schema";
 
@@ -37,19 +31,6 @@ type UserWithFollowStatus = Omit<User, "password"> & {
   isOnline?: boolean;
   level?: number;
   avatarUrl?: string;
-};
-
-type SearchFilter = "all" | "friends" | "following" | "followers" | "blocked";
-
-type GeoCountryOption = {
-  code: string;
-  name: string;
-};
-
-type GeoRegionOption = {
-  code: string;
-  name: string;
-  countryCode: string;
 };
 
 /* ═══════════════ User Card ═══════════════ */
@@ -375,70 +356,11 @@ export default function FriendsPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"friends" | "following" | "followers" | "blocked">("friends");
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchFilter, setSearchFilter] = useState<SearchFilter>("all");
-  const [countryCodeFilter, setCountryCodeFilter] = useState("");
-  const [regionCodeFilter, setRegionCodeFilter] = useState("");
-  const [languageFilter, setLanguageFilter] = useState("");
   const [isSearchActive, setIsSearchActive] = useState(false);
-  const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const trimmedSearchQuery = searchQuery.trim();
-
-  const searchFilterOptions: Array<{ key: SearchFilter; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-    { key: "all", label: t("common.all"), icon: Globe },
-    { key: "friends", label: t("friends.friends"), icon: Users },
-    { key: "following", label: t("friends.following"), icon: UserPlus },
-    { key: "followers", label: t("friends.followers"), icon: UserCheck },
-    { key: "blocked", label: t("friends.blocked"), icon: Ban },
-  ];
-
-  const activeSearchFilterLabel =
-    searchFilterOptions.find((filterOption) => filterOption.key === searchFilter)?.label || t("common.all");
-
-  const selectedCountryCode = countryCodeFilter.trim().toUpperCase();
-  const selectedRegionCode = regionCodeFilter.trim().toUpperCase();
-
-  const { data: countries = [] } = useQuery<GeoCountryOption[]>({
-    queryKey: ["/api/users/search/meta/countries"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/users/search/meta/countries");
-      return res.json();
-    },
-    staleTime: 1000 * 60 * 60,
-  });
-
-  const { data: regions = [] } = useQuery<GeoRegionOption[]>({
-    queryKey: ["/api/users/search/meta/regions", selectedCountryCode],
-    queryFn: async () => {
-      const params = new URLSearchParams({ countryCode: selectedCountryCode });
-      const res = await apiRequest("GET", `/api/users/search/meta/regions?${params.toString()}`);
-      return res.json();
-    },
-    enabled: selectedCountryCode.length > 0,
-    staleTime: 1000 * 60 * 10,
-  });
-
-  const hasActiveAdvancedFilters =
-    searchFilter !== "all" ||
-    selectedCountryCode.length > 0 ||
-    selectedRegionCode.length > 0 ||
-    languageFilter.trim().length > 0;
-
-  const languageOptions = appLanguages
-    .map((lang) => ({ code: lang.code, name: lang.nativeName || lang.name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  const selectedCountryName = countries.find((country) => country.code === selectedCountryCode)?.name || "";
-  const selectedRegionName = regions.find((region) => region.code === selectedRegionCode)?.name || "";
-  const selectedLanguageName = languageOptions.find((language) => language.code === languageFilter)?.name || "";
-  const activeSearchFilterSummary = [
-    activeSearchFilterLabel,
-    selectedCountryName,
-    selectedRegionName,
-    selectedLanguageName,
-  ].filter((value) => value.length > 0).join(" · ");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -464,38 +386,18 @@ export default function FriendsPage() {
     queryKey: ["/api/users/blocked"],
   });
 
-  // Global search — searches ALL users, not just friends
-  const { data: searchResults = [], isLoading: searchLoading } = useQuery<UserWithFollowStatus[]>({
-    queryKey: [
-      "/api/users/search",
-      debouncedSearchQuery,
-      searchFilter,
-      selectedCountryCode,
-      selectedRegionCode,
-      languageFilter,
-    ],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        q: debouncedSearchQuery,
-        filter: searchFilter,
-      });
+  const normalizedSearchQuery = debouncedSearchQuery.toLowerCase();
+  const filteredFriends = friends.filter((user) => {
+    if (!normalizedSearchQuery) return true;
+    const username = (user.username || "").toLowerCase();
+    const accountId = (user.accountId || "").toLowerCase();
+    const nickname = (user.nickname || "").toLowerCase();
 
-      if (selectedCountryCode) {
-        params.set("countryCode", selectedCountryCode);
-      }
-
-      if (selectedRegionCode) {
-        params.set("regionCode", selectedRegionCode);
-      }
-
-      if (languageFilter.trim()) {
-        params.set("language", languageFilter.trim().toLowerCase());
-      }
-
-      const res = await apiRequest("GET", `/api/users/search?${params.toString()}`);
-      return res.json();
-    },
-    enabled: isSearchActive && debouncedSearchQuery.length >= 2,
+    return (
+      username.includes(normalizedSearchQuery) ||
+      accountId.includes(normalizedSearchQuery) ||
+      nickname.includes(normalizedSearchQuery)
+    );
   });
 
   const invalidateSocialQueries = () => {
@@ -565,18 +467,17 @@ export default function FriendsPage() {
   // Determine active content
   const renderContent = () => {
     if (isSearchActive && debouncedSearchQuery.length >= 2) {
-      // Show search results
-      if (searchLoading) return <CardSkeleton />;
-      if (searchResults.length === 0) {
+      if (friendsLoading) return <CardSkeleton />;
+      if (filteredFriends.length === 0) {
         return <EmptySection icon={Search} message={t("friends.noResults")} sub={t("friends.noResultsDesc")} />;
       }
       return (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground px-1">
-            {t("friends.searchResults")} ({searchResults.length}) · {t("common.filter")}: {activeSearchFilterSummary}
+            {t("friends.searchResults")} ({filteredFriends.length})
           </p>
-          {searchResults.map((user) => (
-            <UserCard key={user.id} user={user} actionType="search" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
+          {filteredFriends.map((user) => (
+            <UserCard key={user.id} user={user} actionType="friend" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
           ))}
         </div>
       );
@@ -587,7 +488,7 @@ export default function FriendsPage() {
     }
 
     if (isSearchActive && trimmedSearchQuery.length === 0) {
-      return <EmptySection icon={Globe} message={t("friends.searchAllUsers")} sub={t("friends.searchPlaceholder")} />;
+      return <EmptySection icon={Search} message={t("friends.typeToSearch")} sub={t("friends.searchPlaceholder")} />;
     }
 
     switch (activeTab) {
@@ -660,167 +561,33 @@ export default function FriendsPage() {
         />
 
         {/* Global Search + Filter Trigger */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-            <Input
-              ref={searchInputRef}
-              placeholder={t("friends.searchPlaceholder")}
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                if (e.target.value.length > 0) setIsSearchActive(true);
+        <div className="relative">
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+          <Input
+            ref={searchInputRef}
+            placeholder={t("friends.searchPlaceholder")}
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              if (e.target.value.length > 0) setIsSearchActive(true);
+            }}
+            onFocus={() => setIsSearchActive(true)}
+            className="ps-10 pe-9 h-11 rounded-xl bg-muted/40 border-border/30 
+                       focus:bg-card focus:border-primary/30 transition-all"
+            data-testid="input-search-users"
+          />
+          {isSearchActive && (
+            <button
+              className="absolute end-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground transition-colors"
+              onClick={() => {
+                setSearchQuery("");
+                setIsSearchActive(false);
+                searchInputRef.current?.blur();
               }}
-              onFocus={() => setIsSearchActive(true)}
-              className="ps-10 pe-9 h-11 rounded-xl bg-muted/40 border-border/30 
-                         focus:bg-card focus:border-primary/30 transition-all"
-              data-testid="input-search-users"
-            />
-            {isSearchActive && (
-              <button
-                className="absolute end-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground transition-colors"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSearchFilter("all");
-                  setCountryCodeFilter("");
-                  setRegionCodeFilter("");
-                  setLanguageFilter("");
-                  setIsSearchActive(false);
-                  setIsFilterPopoverOpen(false);
-                  searchInputRef.current?.blur();
-                }}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant={hasActiveAdvancedFilters ? "default" : "outline"}
-                className="h-11 w-11 rounded-xl p-0 shrink-0 relative"
-                data-testid="button-search-filter"
-                onClick={() => setIsSearchActive(true)}
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-                {hasActiveAdvancedFilters && (
-                  <span className="absolute -top-1 -end-1 h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-[min(92vw,360px)] p-3 space-y-3" data-testid="friends-filter-popover">
-              <p className="text-xs text-muted-foreground">{t("common.filter")}</p>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Globe className="w-3.5 h-3.5" />
-                  <span>{t("friends.filterRelationship")}</span>
-                </div>
-                <Select value={searchFilter} onValueChange={(value) => setSearchFilter(value as SearchFilter)}>
-                  <SelectTrigger data-testid="friends-filter-relationship">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {searchFilterOptions.map((option) => (
-                      <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Globe className="w-3.5 h-3.5" />
-                  <span>{t("friends.filterCountry")}</span>
-                </div>
-                <Select
-                  value={selectedCountryCode || "__all__"}
-                  onValueChange={(value) => {
-                    const nextCountry = value === "__all__" ? "" : value;
-                    setCountryCodeFilter(nextCountry);
-                    setRegionCodeFilter("");
-                    setIsSearchActive(true);
-                  }}
-                >
-                  <SelectTrigger data-testid="friends-filter-country">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">{t("common.all")}</SelectItem>
-                    {countries.map((country) => (
-                      <SelectItem key={country.code} value={country.code}>{country.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <MapPin className="w-3.5 h-3.5" />
-                  <span>{t("friends.filterRegion")}</span>
-                </div>
-                <Select
-                  value={selectedRegionCode || "__all__"}
-                  onValueChange={(value) => {
-                    setRegionCodeFilter(value === "__all__" ? "" : value);
-                    setIsSearchActive(true);
-                  }}
-                  disabled={!selectedCountryCode}
-                >
-                  <SelectTrigger data-testid="friends-filter-region">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">{t("common.all")}</SelectItem>
-                    {regions.map((region) => (
-                      <SelectItem key={`${region.countryCode}-${region.code}`} value={region.code}>{region.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Languages className="w-3.5 h-3.5" />
-                  <span>{t("friends.filterLanguage")}</span>
-                </div>
-                <Select
-                  value={languageFilter || "__all__"}
-                  onValueChange={(value) => {
-                    setLanguageFilter(value === "__all__" ? "" : value);
-                    setIsSearchActive(true);
-                  }}
-                >
-                  <SelectTrigger data-testid="friends-filter-language">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">{t("common.all")}</SelectItem>
-                    {languageOptions.map((lang) => (
-                      <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  setSearchFilter("all");
-                  setCountryCodeFilter("");
-                  setRegionCodeFilter("");
-                  setLanguageFilter("");
-                }}
-                data-testid="friends-filter-reset"
-              >
-                {t("friends.clearFilters")}
-              </Button>
-            </PopoverContent>
-          </Popover>
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Tab Navigation — hidden when search is active */}
