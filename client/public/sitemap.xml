@@ -237,4 +237,64 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-account-wallet-verification.html" />
   </url>
 
+  <!-- ══════════ دليل الشطرنج / Chess Guide ══════════ -->
+  <url>
+    <loc>https://vixo.click/guides/vex-online-chess-arabic-guide.html</loc>
+    <lastmod>2026-04-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.74</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/vex-online-chess-arabic-guide.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-online-chess-arabic-guide.html" />
+  </url>
+
+  <!-- ══════════ دليل الطاولة / Backgammon Guide ══════════ -->
+  <url>
+    <loc>https://vixo.click/guides/vex-online-backgammon-zahr-guide.html</loc>
+    <lastmod>2026-04-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.74</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/vex-online-backgammon-zahr-guide.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-online-backgammon-zahr-guide.html" />
+  </url>
+
+  <!-- ══════════ دليل الدومينو / Domino Guide ══════════ -->
+  <url>
+    <loc>https://vixo.click/guides/vex-online-domino-strategy-guide.html</loc>
+    <lastmod>2026-04-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.74</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/vex-online-domino-strategy-guide.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-online-domino-strategy-guide.html" />
+  </url>
+
+  <!-- ══════════ دليل البلوت والطرنيب / Baloot Tarneeb Guide ══════════ -->
+  <url>
+    <loc>https://vixo.click/guides/vex-online-baloot-tarneeb-guide.html</loc>
+    <lastmod>2026-04-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.74</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/vex-online-baloot-tarneeb-guide.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-online-baloot-tarneeb-guide.html" />
+  </url>
+
+  <!-- ══════════ دليل وسائل الدفع / P2P Payments Guide ══════════ -->
+  <url>
+    <loc>https://vixo.click/guides/vex-p2p-payment-methods-currencies-guide.html</loc>
+    <lastmod>2026-04-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.73</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/vex-p2p-payment-methods-currencies-guide.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-p2p-payment-methods-currencies-guide.html" />
+  </url>
+
+  <!-- ══════════ دليل المكافآت والبطولات / Rewards Tournaments Guide ══════════ -->
+  <url>
+    <loc>https://vixo.click/guides/vex-earn-daily-rewards-tournaments-guide.html</loc>
+    <lastmod>2026-04-07</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.73</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/vex-earn-daily-rewards-tournaments-guide.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-earn-daily-rewards-tournaments-guide.html" />
+  </url>
+
 </urlset>

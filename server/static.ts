@@ -172,6 +172,28 @@ export function serveStatic(app: Express) {
     }
   });
 
+  // Favicon — serve a stable image response for search engines.
+  app.get("/favicon.ico", publicStaticLimiter, (_req, res) => {
+    const icoPath = path.join(distPath, "favicon.ico");
+    const pngFallbackPath = path.join(distPath, "icons", "vex-gaming-logo-96x96.png");
+
+    res.set({
+      "Cache-Control": "public, max-age=86400",
+    });
+
+    if (fs.existsSync(icoPath)) {
+      res.type("image/x-icon");
+      return res.sendFile(icoPath);
+    }
+
+    if (fs.existsSync(pngFallbackPath)) {
+      res.type("image/png");
+      return res.sendFile(pngFallbackPath);
+    }
+
+    return res.status(404).type("text/plain").send("favicon not found");
+  });
+
   // SEO infrastructure files — serve explicitly with stable content types.
   app.get("/robots.txt", publicStaticLimiter, (req, res) => {
     const robotsPath = path.join(distPath, "robots.txt");
