@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request } from "express";
 import rateLimit from "express-rate-limit";
 import escapeHtml from "escape-html";
 import fs from "fs";
@@ -26,6 +26,33 @@ const publicHtmlLimiter = rateLimit({
 
 function escapeHtmlAttribute(value: string): string {
   return escapeHtml(value);
+}
+
+function buildFallbackRobots(req: Request): string {
+  const appUrl = (process.env.APP_URL || "").trim().replace(/\/+$/, "");
+  const forwardedProto = typeof req.headers["x-forwarded-proto"] === "string"
+    ? req.headers["x-forwarded-proto"].split(",")[0].trim()
+    : "";
+  const protocol = appUrl
+    ? ""
+    : (forwardedProto || (req.secure ? "https" : "http"));
+  const host = req.get("host");
+  const baseUrl = appUrl || (host ? `${protocol}://${host}` : "https://vixo.click");
+
+  return [
+    "# VEX Platform - Robots.txt (fallback)",
+    "User-agent: *",
+    "Allow: /",
+    "Disallow: /admin",
+    "Disallow: /api/",
+    "Disallow: /auth/",
+    "",
+    `Sitemap: ${baseUrl}/sitemap-index.xml`,
+    `Sitemap: ${baseUrl}/sitemap-core.xml`,
+    `Sitemap: ${baseUrl}/sitemap.xml`,
+    "",
+    `Host: ${baseUrl}`,
+  ].join("\n");
 }
 
 // SEO page titles & descriptions for crawler-friendly rendering
@@ -146,7 +173,7 @@ export function serveStatic(app: Express) {
   });
 
   // SEO infrastructure files — serve explicitly with stable content types.
-  app.get("/robots.txt", publicStaticLimiter, (_req, res) => {
+  app.get("/robots.txt", publicStaticLimiter, (req, res) => {
     const robotsPath = path.join(distPath, "robots.txt");
     if (fs.existsSync(robotsPath)) {
       res.set({
@@ -155,7 +182,11 @@ export function serveStatic(app: Express) {
       });
       res.sendFile(robotsPath);
     } else {
-      res.status(404).type("text/plain").send("# robots.txt not found");
+      res.set({
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "public, max-age=300",
+      });
+      res.status(200).send(buildFallbackRobots(req));
     }
   });
 
