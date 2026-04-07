@@ -7,9 +7,23 @@ import { eq, sql } from "drizzle-orm";
 import { users, games } from "@shared/schema";
 import { getOnlineUsersCount, getActiveGameRoomsCount } from "../websocket";
 import { logger } from "../lib/logger";
+import { getWebPushPublicKey, isWebPushEnabled } from "../lib/web-push";
 import { z } from "zod";
 
 export function registerNotificationRoutes(app: Express): void {
+
+  const pushSubscriptionSchema = z.object({
+    endpoint: z.string().url().max(2048),
+    expirationTime: z.number().nullable().optional(),
+    keys: z.object({
+      p256dh: z.string().min(1).max(1024),
+      auth: z.string().min(1).max(1024),
+    }),
+  });
+
+  const pushUnsubscribeSchema = z.object({
+    endpoint: z.string().url().max(2048),
+  });
 
   // ==================== NOTIFICATIONS ====================
 
@@ -91,6 +105,48 @@ export function registerNotificationRoutes(app: Express): void {
       const marked = await storage.markSectionNotificationsAsRead(req.user!.id, section);
       // Invalidate caches
       res.json({ success: true, marked });
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/notifications/push/public-key", authMiddleware, notificationRateLimiter, async (_req: AuthRequest, res: Response) => {
+    try {
+      const vapidPublicKey = getWebPushPublicKey();
+      res.json({
+        enabled: isWebPushEnabled(),
+        vapidPublicKey,
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/notifications/push/subscribe", authMiddleware, notificationRateLimiter, async (req: AuthRequest, res: Response) => {
+    try {
+      const subscription = pushSubscriptionSchema.parse(req.body);
+      await storage.upsertWebPushSubscription(
+        req.user!.id,
+        subscription,
+        typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : null,
+      );
+      res.json({ success: true });
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/notifications/push/unsubscribe", authMiddleware, notificationRateLimiter, async (req: AuthRequest, res: Response) => {
+    try {
+      const { endpoint } = pushUnsubscribeSchema.parse(req.body);
+      await storage.deactivateWebPushSubscription(req.user!.id, endpoint);
+      res.json({ success: true });
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors });

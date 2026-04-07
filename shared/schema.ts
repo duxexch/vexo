@@ -1573,6 +1573,29 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   user: one(users, { fields: [notifications.userId], references: [users.id] }),
 }));
 
+export const webPushSubscriptions = pgTable("web_push_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  endpoint: text("endpoint").notNull(),
+  p256dhKey: text("p256dh_key").notNull(),
+  authKey: text("auth_key").notNull(),
+  expirationTime: timestamp("expiration_time"),
+  userAgent: text("user_agent"),
+  isActive: boolean("is_active").notNull().default(true),
+  lastUsedAt: timestamp("last_used_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_web_push_subscriptions_endpoint_unique").on(table.endpoint),
+  index("idx_web_push_subscriptions_user_id").on(table.userId),
+  index("idx_web_push_subscriptions_active").on(table.isActive),
+  index("idx_web_push_subscriptions_user_active").on(table.userId, table.isActive),
+]);
+
+export const webPushSubscriptionsRelations = relations(webPushSubscriptions, ({ one }) => ({
+  user: one(users, { fields: [webPushSubscriptions.userId], references: [users.id] }),
+}));
+
 // ==================== USER SESSIONS ====================
 
 export const userSessions = pgTable("user_sessions", {
@@ -2348,6 +2371,13 @@ export const insertChallengeGiftSchema = createInsertSchema(challengeGifts).omit
 export const insertChallengeSpectatorSchema = createInsertSchema(challengeSpectators).omit({ id: true, joinedAt: true });
 
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export const insertWebPushSubscriptionSchema = createInsertSchema(webPushSubscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastUsedAt: true,
+  isActive: true,
+});
 export const insertUserSessionSchema = createInsertSchema(userSessions).omit({ id: true, createdAt: true });
 export const insertLoginHistorySchema = createInsertSchema(loginHistory).omit({ id: true, createdAt: true });
 export const insertAnnouncementSchema = createInsertSchema(announcements).omit({ id: true, createdAt: true, updatedAt: true });
@@ -2506,6 +2536,9 @@ export type P2PDisputeRule = typeof p2pDisputeRules.$inferSelect;
 
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+export type InsertWebPushSubscription = z.infer<typeof insertWebPushSubscriptionSchema>;
+export type WebPushSubscription = typeof webPushSubscriptions.$inferSelect;
 
 export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
 export type UserSession = typeof userSessions.$inferSelect;

@@ -18,9 +18,9 @@
  */
 
 const CACHE_VERSION = 'v9';
-const STATIC_CACHE  = `vex-static-${CACHE_VERSION}`;
+const STATIC_CACHE = `vex-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `vex-dynamic-${CACHE_VERSION}`;
-const MAX_DYNAMIC   = 150;
+const MAX_DYNAMIC = 150;
 
 const PRECACHE = [
   '/',
@@ -32,14 +32,14 @@ const PRECACHE = [
 ];
 
 const ASSET_RE = /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot|webp|avif)$/i;
-const BYPASS   = ['/api/', '/ws', '/socket.io', 'chrome-extension://'];
+const BYPASS = ['/api/', '/ws', '/socket.io', 'chrome-extension://'];
 
 /* ───────── Install ───────── */
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((c) => c.addAll(PRECACHE))
-      // Don't call skipWaiting here — let the update banner control activation
+    // Don't call skipWaiting here — let the update banner control activation
   );
 });
 
@@ -50,7 +50,7 @@ self.addEventListener('activate', (event) => {
     const keys = await caches.keys();
     await Promise.all(
       keys.filter((k) => k !== STATIC_CACHE && k !== DYNAMIC_CACHE)
-          .map((k) => caches.delete(k))
+        .map((k) => caches.delete(k))
     );
     // Navigation Preload
     if (self.registration.navigationPreload) {
@@ -149,7 +149,7 @@ async function fetchAndPut(request, cacheName) {
 /* ── Trim cache to limit ── */
 async function trimCache(name, max) {
   const cache = await caches.open(name);
-  const keys  = await cache.keys();
+  const keys = await cache.keys();
   if (keys.length > max) {
     await Promise.all(keys.slice(0, keys.length - max).map((k) => cache.delete(k)));
   }
@@ -157,7 +157,14 @@ async function trimCache(name, max) {
 
 /* ───────── Push Notifications ───────── */
 self.addEventListener('push', (event) => {
-  const data = event.data ? event.data.json() : {};
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch {
+      data = { body: event.data.text() };
+    }
+  }
 
   // Map notification type to appropriate icon
   const TYPE_ICONS = {
@@ -184,7 +191,7 @@ self.addEventListener('push', (event) => {
   const priority = data.priority || 'normal';
 
   const opts = {
-    body: data.body || 'لديك إشعار جديد',
+    body: data.body || 'You have a new notification',
     icon: data.icon || TYPE_ICONS[notifType] || '/icons/vex-gaming-logo-192x192.png',
     badge: '/icons/vex-gaming-logo-96x96.png',
     vibrate: VIBRATE_PATTERNS[priority] || VIBRATE_PATTERNS.normal,
@@ -203,7 +210,7 @@ self.addEventListener('push', (event) => {
     silent: false,
     timestamp: Date.now(),
     dir: data.dir || 'auto',
-    lang: data.lang || 'ar',
+    lang: data.lang || 'en',
   };
   event.waitUntil(self.registration.showNotification(data.title || 'VEX', opts));
 });

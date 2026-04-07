@@ -15,6 +15,7 @@ interface EmailOptions {
 }
 
 type EmailProvider = 'console' | 'smtp' | 'sendgrid';
+let warnedConsoleProviderInProduction = false;
 
 async function sendEmailConsole(options: EmailOptions): Promise<boolean> {
   logger.debug(`[Email Console] To: ${options.to} | Subject: ${options.subject}`);
@@ -32,7 +33,7 @@ async function sendEmailSMTP(options: EmailOptions): Promise<boolean> {
       logger.error('nodemailer package not installed. Run: npm install nodemailer');
       return false;
     }
-    
+
     const createTransport = (nodemailer.default as Record<string, unknown>)?.createTransport || nodemailer.createTransport;
     const transporter = (createTransport as Function)({
       host: process.env.SMTP_HOST || 'localhost',
@@ -101,7 +102,12 @@ async function sendEmailSendGrid(options: EmailOptions): Promise<boolean> {
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   const provider = (process.env.EMAIL_PROVIDER || 'console') as EmailProvider;
-  
+
+  if (provider === 'console' && process.env.NODE_ENV === 'production' && !warnedConsoleProviderInProduction) {
+    warnedConsoleProviderInProduction = true;
+    logger.warn('EMAIL_PROVIDER=console in production. Emails are not delivered to real inboxes.');
+  }
+
   switch (provider) {
     case 'smtp':
       return sendEmailSMTP(options);

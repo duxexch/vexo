@@ -88,6 +88,32 @@ export function registerOtpRoutes(app: Express) {
         maxAttempts: 5,
       });
 
+      const clearCurrentOtp = async () => {
+        await db.delete(otpVerifications)
+          .where(and(
+            eq(otpVerifications.userId, userId),
+            eq(otpVerifications.contactType, contactType)
+          ));
+      };
+
+      const isProduction = process.env.NODE_ENV === "production";
+      const emailProvider = (process.env.EMAIL_PROVIDER || "console").toLowerCase();
+      const smsProvider = (process.env.SMS_PROVIDER || "console").toLowerCase();
+
+      if (contactType === "email" && isProduction && emailProvider === "console") {
+        await clearCurrentOtp();
+        return res.status(503).json({
+          error: "Email OTP provider is not configured in production. Set EMAIL_PROVIDER to smtp or sendgrid."
+        });
+      }
+
+      if (contactType === "phone" && isProduction && smsProvider === "console") {
+        await clearCurrentOtp();
+        return res.status(503).json({
+          error: "SMS OTP provider is not configured in production. Set SMS_PROVIDER to twilio or custom."
+        });
+      }
+
       // Log OTP only in explicit dev mode
       if (IS_DEV_MODE) {
         console.log(`[OTP] Code for ${contactType} ${contactValue}: ${otpCode}`);
@@ -95,17 +121,31 @@ export function registerOtpRoutes(app: Express) {
 
       // Deliver OTP via email or SMS
       if (contactType === "email") {
-        sendEmail({
+        const delivered = await sendEmail({
           to: contactValue,
           subject: "VEX - رمز التحقق",
           text: `رمز التحقق الخاص بك: ${otpCode}\nصالح لمدة ${otpExpiryMinutes} دقيقة`,
           html: buildOtpEmailHtml(otpCode, otpExpiryMinutes),
-        }).catch(err => console.error("OTP email delivery error:", err));
+        });
+
+        if (!delivered) {
+          await clearCurrentOtp();
+          return res.status(502).json({
+            error: "Failed to send OTP email. Please verify mail provider settings and try again."
+          });
+        }
       } else if (contactType === "phone") {
-        sendSms({
+        const delivered = await sendSms({
           to: contactValue,
           message: buildOtpSmsMessage(otpCode, otpExpiryMinutes),
-        }).catch(err => console.error("OTP SMS delivery error:", err));
+        });
+
+        if (!delivered) {
+          await clearCurrentOtp();
+          return res.status(502).json({
+            error: "Failed to send OTP SMS. Please verify SMS provider settings and try again."
+          });
+        }
       }
 
       // Mask the contact value for response

@@ -5,6 +5,13 @@ import type { AuthenticatedSocket } from "./shared";
 import { clients, adminClients, challengeGameRooms } from "./shared";
 import { publish } from "../lib/redis";
 import { eq } from "drizzle-orm";
+import { logger } from "../lib/logger";
+import {
+  deactivateWebPushSubscriptionByEndpoint,
+  getActiveWebPushSubscriptions,
+  touchWebPushSubscription,
+} from "../storage/notifications";
+import { isWebPushEnabled, sendWebPushNotification } from "../lib/web-push";
 
 // ==================== MESSAGE BATCHING SYSTEM ====================
 // Aggregates small messages into batched sends (flush every 50ms)
@@ -96,13 +103,13 @@ export async function sendNotification(userId: string, notification: {
     const lowerLink = safeLink.toLowerCase().replace(/[\s\t\r\n]/g, '');
     // Block dangerous protocols
     if (lowerLink.startsWith('javascript:') ||
-        lowerLink.startsWith('data:') ||
-        lowerLink.startsWith('vbscript:') ||
-        lowerLink.startsWith('blob:') ||
-        lowerLink.startsWith('ftp:') ||
-        lowerLink.startsWith('file:') ||
-        lowerLink.startsWith('ws:') ||
-        lowerLink.startsWith('wss:')) {
+      lowerLink.startsWith('data:') ||
+      lowerLink.startsWith('vbscript:') ||
+      lowerLink.startsWith('blob:') ||
+      lowerLink.startsWith('ftp:') ||
+      lowerLink.startsWith('file:') ||
+      lowerLink.startsWith('ws:') ||
+      lowerLink.startsWith('wss:')) {
       safeLink = undefined; // Strip dangerous links
     }
     // Block external URLs — only allow relative paths or same-origin https
@@ -135,6 +142,7 @@ export async function sendNotification(userId: string, notification: {
   }).returning();
 
   const userSockets = clients.get(userId);
+  const hasOnlineSocket = Boolean(userSockets && Array.from(userSockets).some((socket) => socket.readyState === WebSocket.OPEN));
   if (userSockets) {
     const message = JSON.stringify({ type: "new_notification", data: created });
     userSockets.forEach(socket => {
@@ -144,7 +152,57 @@ export async function sendNotification(userId: string, notification: {
     });
   }
 
+  if (!hasOnlineSocket) {
+    sendWebPushToUser(userId, created).catch((error) => {
+      logger.error("[WS Notification] Failed web push delivery", {
+        userId,
+        notificationId: created.id,
+        error,
+      });
+    });
+  }
+
   return created;
+}
+
+async function sendWebPushToUser(
+  userId: string,
+  notification: typeof notifications.$inferSelect,
+): Promise<void> {
+  if (!isWebPushEnabled()) {
+    return;
+  }
+
+  const subscriptions = await getActiveWebPushSubscriptions(userId);
+  if (!subscriptions.length) {
+    return;
+  }
+
+  const payload = JSON.stringify({
+    title: notification.title,
+    body: notification.message,
+    icon: "/icons/icon-192x192.png",
+    badge: "/icons/icon-72x72.png",
+    tag: `notification-${notification.id}`,
+    data: {
+      url: notification.link || "/notifications",
+      notificationId: notification.id,
+      type: notification.type,
+      createdAt: notification.createdAt,
+    },
+  });
+
+  await Promise.all(subscriptions.map(async (subscription) => {
+    const result = await sendWebPushNotification(subscription, payload);
+    if (result.sent) {
+      await touchWebPushSubscription(subscription.endpoint);
+      return;
+    }
+
+    if (result.deactivate) {
+      await deactivateWebPushSubscriptionByEndpoint(subscription.endpoint);
+    }
+  }));
 }
 
 export async function broadcastNotification(notification: {
@@ -171,7 +229,7 @@ export function broadcastSystemEvent(event: {
 }) {
   const message = JSON.stringify({ type: 'system_event', event });
   // Publish to Redis for cross-process delivery
-  publish('system:broadcast', { type: 'system_event', event }).catch(() => {});
+  publish('system:broadcast', { type: 'system_event', event }).catch(() => { });
   // Also deliver to local clients via batching
   for (const [, sockets] of clients) {
     for (const socket of sockets) {
@@ -241,7 +299,7 @@ export function broadcastChallengeUpdate(eventType: 'created' | 'joined' | 'star
   }
 
   // Publish to Redis for cross-process delivery
-  publish('system:challenges', payload).catch(() => {});
+  publish('system:challenges', payload).catch(() => { });
   // Deliver to local clients via batching
   for (const [, sockets] of clients) {
     for (const socket of sockets) {

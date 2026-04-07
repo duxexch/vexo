@@ -191,11 +191,27 @@ function serializePlatform(platform: SocialPlatform) {
 
 function assertEnableReadiness(platform: SocialPlatform, res: Response): boolean {
   const runtime = evaluateSocialPlatformRuntime(platform);
-  if (!platform.isEnabled || runtime.runtimeReady) {
+  if (!platform.isEnabled) {
     return true;
   }
 
-  const issues = [...runtime.oauth.issues, ...runtime.otp.issues];
+  // Enabling should always require OAuth readiness when OAuth mode is active.
+  const oauthBlocking = runtime.oauth.enabled && !runtime.oauth.ready;
+
+  // OTP readiness is a hard blocker only for OTP-only usage.
+  // In "both" mode, OAuth login can stay enabled while OTP remains optional/non-ready.
+  const otpOnlyMode = platform.type === "otp";
+  const otpBlocking = otpOnlyMode && runtime.otp.enabled && !runtime.otp.ready;
+
+  if (!oauthBlocking && !otpBlocking) {
+    return true;
+  }
+
+  const issues = [
+    ...(oauthBlocking ? runtime.oauth.issues : []),
+    ...(otpBlocking ? runtime.otp.issues : []),
+  ];
+
   res.status(400).json({
     error: "Platform cannot be enabled until runtime requirements are met",
     issues,

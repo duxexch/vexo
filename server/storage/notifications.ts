@@ -3,9 +3,28 @@ import {
   type Notification, type InsertNotification,
   type Announcement, type InsertAnnouncement,
   type AnnouncementStatus,
+  webPushSubscriptions,
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, desc, and, sql } from "drizzle-orm";
+
+export interface WebPushSubscriptionPayload {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  expirationTime?: number | null;
+}
+
+function parseExpirationTime(expirationTime?: number | null): Date | null {
+  if (!expirationTime || !Number.isFinite(expirationTime)) {
+    return null;
+  }
+
+  const parsed = new Date(expirationTime);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 // ==================== NOTIFICATIONS ====================
 
@@ -51,6 +70,81 @@ export async function deleteNotification(id: string, userId: string): Promise<bo
 
 export async function clearAllNotifications(userId: string): Promise<void> {
   await db.delete(notifications).where(eq(notifications.userId, userId));
+}
+
+export async function upsertWebPushSubscription(
+  userId: string,
+  subscription: WebPushSubscriptionPayload,
+  userAgent?: string | null,
+): Promise<void> {
+  const now = new Date();
+  const expirationTime = parseExpirationTime(subscription.expirationTime);
+
+  await db.insert(webPushSubscriptions).values({
+    userId,
+    endpoint: subscription.endpoint,
+    p256dhKey: subscription.keys.p256dh,
+    authKey: subscription.keys.auth,
+    expirationTime,
+    userAgent: userAgent ?? null,
+    isActive: true,
+    lastUsedAt: now,
+    updatedAt: now,
+  }).onConflictDoUpdate({
+    target: webPushSubscriptions.endpoint,
+    set: {
+      userId,
+      p256dhKey: subscription.keys.p256dh,
+      authKey: subscription.keys.auth,
+      expirationTime,
+      userAgent: userAgent ?? null,
+      isActive: true,
+      lastUsedAt: now,
+      updatedAt: now,
+    },
+  });
+}
+
+export async function getActiveWebPushSubscriptions(userId: string): Promise<Array<{
+  endpoint: string;
+  p256dhKey: string;
+  authKey: string;
+}>> {
+  return db.select({
+    endpoint: webPushSubscriptions.endpoint,
+    p256dhKey: webPushSubscriptions.p256dhKey,
+    authKey: webPushSubscriptions.authKey,
+  })
+    .from(webPushSubscriptions)
+    .where(and(
+      eq(webPushSubscriptions.userId, userId),
+      eq(webPushSubscriptions.isActive, true),
+      sql`(${webPushSubscriptions.expirationTime} IS NULL OR ${webPushSubscriptions.expirationTime} > now())`,
+    ));
+}
+
+export async function deactivateWebPushSubscription(userId: string, endpoint: string): Promise<boolean> {
+  const result = await db.update(webPushSubscriptions)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(
+      eq(webPushSubscriptions.userId, userId),
+      eq(webPushSubscriptions.endpoint, endpoint),
+      eq(webPushSubscriptions.isActive, true),
+    ));
+
+  return (result.rowCount || 0) > 0;
+}
+
+export async function deactivateWebPushSubscriptionByEndpoint(endpoint: string): Promise<void> {
+  await db.update(webPushSubscriptions)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(webPushSubscriptions.endpoint, endpoint));
+}
+
+export async function touchWebPushSubscription(endpoint: string): Promise<void> {
+  await db.update(webPushSubscriptions)
+    .set({ lastUsedAt: new Date(), updatedAt: new Date() })
+    .where(eq(webPushSubscriptions.endpoint, endpoint));
 }
 
 /**
@@ -252,7 +346,7 @@ export async function getPublishedAnnouncements(target?: string): Promise<Announ
       sql`(${announcements.expiresAt} IS NULL OR ${announcements.expiresAt} > ${now})`
     ))
     .orderBy(desc(announcements.isPinned), desc(announcements.publishedAt));
-  
+
   return query;
 }
 

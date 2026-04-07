@@ -16,7 +16,12 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { playSound } from "@/hooks/use-sound-effects";
-import { type AppNotification, navigateToSafeNotificationLink, normalizeSafeNotificationLink } from "@/lib/notifications";
+import {
+  type AppNotification,
+  navigateToSafeNotificationLink,
+  normalizeSafeNotificationLink,
+  syncPushSubscriptionWithServer,
+} from "@/lib/notifications";
 
 // Sound mapping by notification type — using new distinctive sounds
 const NOTIFICATION_SOUND_MAP: Record<string, Parameters<typeof playSound>[0]> = {
@@ -96,6 +101,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const languageRef = useRef(language);
   const userRef = useRef(user);
   const recentNotificationKeysRef = useRef<Map<string, number>>(new Map());
+  const pushSyncStartedRef = useRef(false);
 
   // Keep refs updated to avoid stale closures in WebSocket callbacks
   useEffect(() => { languageRef.current = language; }, [language]);
@@ -500,16 +506,23 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
   }, [token, user, connectWebSocket]);
 
-  // Request browser notification permission on mount
+  // Initialize browser permission + push subscription sync.
   useEffect(() => {
-    if (token && typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      // Delay permission request slightly so it doesn't block initial render
-      const timer = setTimeout(() => {
-        Notification.requestPermission().catch(() => { });
-      }, 3000);
-      return () => clearTimeout(timer);
+    if (!user || pushSyncStartedRef.current) {
+      return;
     }
-  }, [token]);
+
+    pushSyncStartedRef.current = true;
+    const timer = setTimeout(() => {
+      syncPushSubscriptionWithServer(token ?? undefined)
+        .catch(() => { })
+        .finally(() => {
+          pushSyncStartedRef.current = false;
+        });
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [token, user]);
 
   return (
     <NotificationContext.Provider value={{ isConnected, unreadCount, sectionCounts, markSectionRead }}>

@@ -502,7 +502,11 @@ function PlatformSettingsDialog({
   if (!platform) return null;
 
   const platformConfig = PLATFORM_FIELDS[platform.name] || { label: platform.displayName, labelAr: platform.displayNameAr, fields: resolvePlatformFields(platform) };
-  const fieldsToRender = platformConfig.fields.length > 0 ? platformConfig.fields : resolvePlatformFields(platform);
+  const baseFields = platformConfig.fields.length > 0 ? platformConfig.fields : resolvePlatformFields(platform);
+  const nextType = (formData.type || platform.type) as "oauth" | "otp" | "both";
+  const shouldRenderOtpSection = nextType === "otp" || nextType === "both";
+  const otpRequiredFields = shouldRenderOtpSection ? (platform.runtime?.otp.requiredFields || []) : [];
+  const fieldsToRender = Array.from(new Set([...baseFields, ...otpRequiredFields]));
   const callbackExpectedPath = `/api/auth/social/${platform.name}/callback`;
 
   const saveSettings = () => {
@@ -694,7 +698,7 @@ function PlatformSettingsDialog({
               </div>
             ))}
 
-            {(platform.type === "otp" || platform.type === "both" || formData.type === "otp" || formData.type === "both") && (
+            {shouldRenderOtpSection && (
               <>
                 <div className="flex items-center justify-between py-2">
                   <div>

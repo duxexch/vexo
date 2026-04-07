@@ -110,6 +110,73 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return permission === 'granted';
 }
 
+interface PushPublicKeyResponse {
+  enabled: boolean;
+  vapidPublicKey: string | null;
+}
+
+function buildNotificationApiHeaders(authToken?: string): HeadersInit {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+  return headers;
+}
+
+async function fetchPushPublicKey(authToken?: string): Promise<string | null> {
+  try {
+    const response = await fetch('/api/notifications/push/public-key', {
+      method: 'GET',
+      credentials: 'include',
+      headers: buildNotificationApiHeaders(authToken),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const result = await response.json() as PushPublicKeyResponse;
+    if (!result.enabled || !result.vapidPublicKey) {
+      return null;
+    }
+
+    return result.vapidPublicKey;
+  } catch {
+    return null;
+  }
+}
+
+async function sendPushSubscriptionToServer(subscription: PushSubscription, authToken?: string): Promise<boolean> {
+  const payload = subscription.toJSON();
+  if (!payload.endpoint || !payload.keys?.p256dh || !payload.keys?.auth) {
+    return false;
+  }
+
+  const response = await fetch('/api/notifications/push/subscribe', {
+    method: 'POST',
+    credentials: 'include',
+    headers: buildNotificationApiHeaders(authToken),
+    body: JSON.stringify(payload),
+  });
+
+  return response.ok;
+}
+
+async function sendPushUnsubscribeToServer(endpoint: string, authToken?: string): Promise<void> {
+  try {
+    await fetch('/api/notifications/push/unsubscribe', {
+      method: 'POST',
+      credentials: 'include',
+      headers: buildNotificationApiHeaders(authToken),
+      body: JSON.stringify({ endpoint }),
+    });
+  } catch {
+    // Ignore network failures during cleanup.
+  }
+}
+
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) {
     console.warn('Service Worker is not supported');
@@ -126,13 +193,19 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   }
 }
 
-export async function subscribeToPush(registration: ServiceWorkerRegistration): Promise<PushSubscription | null> {
+export async function subscribeToPush(
+  registration: ServiceWorkerRegistration,
+  vapidPublicKey: string,
+): Promise<PushSubscription | null> {
   try {
+    const existing = await registration.pushManager.getSubscription();
+    if (existing) {
+      return existing;
+    }
+
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(
-        import.meta.env.VITE_VAPID_PUBLIC_KEY || ''
-      ),
+      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
     });
     return subscription;
   } catch (error) {
@@ -204,14 +277,65 @@ export function showInAppNotification(
 }
 
 export async function initializeNotifications() {
-  const hasPermission = await requestNotificationPermission();
+  return syncPushSubscriptionWithServer();
+}
 
-  if (hasPermission) {
-    const registration = await registerServiceWorker();
-    if (registration) {
-      return registration;
-    }
+export async function syncPushSubscriptionWithServer(authToken?: string): Promise<ServiceWorkerRegistration | null> {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return null;
   }
 
-  return null;
+  const hasPermission = await requestNotificationPermission();
+  if (!hasPermission) {
+    return null;
+  }
+
+  const registration = await registerServiceWorker();
+  if (!registration) {
+    return null;
+  }
+
+  const vapidPublicKey = await fetchPushPublicKey(authToken);
+  if (!vapidPublicKey) {
+    return registration;
+  }
+
+  let subscription = await subscribeToPush(registration, vapidPublicKey);
+  if (!subscription) {
+    return registration;
+  }
+
+  let synced = await sendPushSubscriptionToServer(subscription, authToken);
+  if (synced) {
+    return registration;
+  }
+
+  try {
+    await subscription.unsubscribe();
+  } catch {
+    // Continue with creating a fresh subscription.
+  }
+
+  subscription = await subscribeToPush(registration, vapidPublicKey);
+  if (!subscription) {
+    return registration;
+  }
+
+  synced = await sendPushSubscriptionToServer(subscription, authToken);
+  return synced ? registration : null;
+}
+
+export async function unsubscribePushNotifications(authToken?: string): Promise<void> {
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    return;
+  }
+
+  await sendPushUnsubscribeToServer(subscription.endpoint, authToken);
+  await subscription.unsubscribe().catch(() => { });
 }

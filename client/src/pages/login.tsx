@@ -85,6 +85,8 @@ declare global {
   }
 }
 
+const OAUTH_EVENT_STORAGE_KEY = "vex_oauth_event";
+
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { login, loginByAccount, loginByPhone, loginByEmail, oneClickRegister, confirmOneClickLogin, register, refreshUser } = useAuth();
@@ -140,6 +142,7 @@ export default function LoginPage() {
   const socialLoginLockRef = useRef<{ platformName: string; startedAt: number } | null>(null);
   const socialLoginUnlockTimeoutRef = useRef<number | null>(null);
   const googleIdentityScriptLoaderRef = useRef<Promise<void> | null>(null);
+  const lastOAuthEventTsRef = useRef<number>(0);
   const [activeSocialLoginPlatform, setActiveSocialLoginPlatform] = useState<string | null>(null);
 
   // Terms & privacy agreement state
@@ -422,17 +425,33 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    const onMessage = async (event: MessageEvent) => {
-      if (event.origin !== window.location.origin || !event.data || typeof event.data !== "object") {
+    const isTrustedOAuthOrigin = (origin: string) => {
+      try {
+        const currentUrl = new URL(window.location.origin);
+        const sourceUrl = new URL(origin);
+        const normalizeHost = (host: string) => host.replace(/^www\./, "");
+
+        return sourceUrl.protocol === currentUrl.protocol && normalizeHost(sourceUrl.hostname) === normalizeHost(currentUrl.hostname);
+      } catch {
+        return false;
+      }
+    };
+
+    const handleOAuthSignal = async (payload: { type?: string; reason?: string; ts?: number }) => {
+      if (typeof payload.ts === "number" && payload.ts <= lastOAuthEventTsRef.current) {
         return;
       }
 
-      const payload = event.data as { type?: string; reason?: string };
+      if (typeof payload.ts === "number") {
+        lastOAuthEventTsRef.current = payload.ts;
+      }
+
       if (payload.type === "vex_oauth_success") {
         clearSocialLoginLock(false);
         await refreshUser();
         setIsLoading(false);
-        setLocation("/");
+        window.location.replace("/");
+        return;
       }
 
       if (payload.type === "vex_oauth_error") {
@@ -445,9 +464,36 @@ export default function LoginPage() {
       }
     };
 
+    const onMessage = async (event: MessageEvent) => {
+      if (!event.data || typeof event.data !== "object") {
+        return;
+      }
+
+      if (!isTrustedOAuthOrigin(event.origin)) {
+        return;
+      }
+
+      await handleOAuthSignal(event.data as { type?: string; reason?: string; ts?: number });
+    };
+
+    const onStorage = async (event: StorageEvent) => {
+      if (event.key !== OAUTH_EVENT_STORAGE_KEY || !event.newValue) {
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(event.newValue) as { type?: string; reason?: string; ts?: number };
+        await handleOAuthSignal(payload);
+      } catch {
+        // Ignore malformed storage payloads.
+      }
+    };
+
     window.addEventListener("message", onMessage);
+    window.addEventListener("storage", onStorage);
     return () => {
       window.removeEventListener("message", onMessage);
+      window.removeEventListener("storage", onStorage);
       if (socialLoginUnlockTimeoutRef.current) {
         window.clearTimeout(socialLoginUnlockTimeoutRef.current);
         socialLoginUnlockTimeoutRef.current = null;
