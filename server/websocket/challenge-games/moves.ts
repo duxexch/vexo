@@ -332,6 +332,13 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
         } else if (gameType === "domino") {
           const targetScore = challenge.dominoTargetScore === 201 ? 201 : 101;
           stateJson = engine.initializeWithPlayers(playerIds, targetScore);
+        } else if (gameType === "languageduel") {
+          stateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1], {
+            nativeLanguageCode: challenge.nativeLanguageCode || "ar",
+            targetLanguageCode: challenge.targetLanguageCode || "en",
+            mode: challenge.languageDuelMode || "mixed",
+            pointsToWin: challenge.languageDuelPointsToWin || 10,
+          });
         } else {
           stateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
         }

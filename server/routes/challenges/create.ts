@@ -65,8 +65,22 @@ async function getSam9SoloSettings(): Promise<Sam9SoloSettings> {
 
 type ChallengeSessionSeed = Pick<
   typeof challengesTable.$inferSelect,
-  "gameType" | "timeLimit" | "dominoTargetScore" | "player1Id" | "player2Id" | "player3Id" | "player4Id"
+  | "gameType"
+  | "timeLimit"
+  | "dominoTargetScore"
+  | "nativeLanguageCode"
+  | "targetLanguageCode"
+  | "languageDuelMode"
+  | "languageDuelPointsToWin"
+  | "player1Id"
+  | "player2Id"
+  | "player3Id"
+  | "player4Id"
 >;
+
+type LanguageDuelMode = "typed" | "spoken" | "mixed";
+
+const LANGUAGE_CODE_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/i;
 
 async function ensureSam9BotUser(): Promise<{ id: string; username: string }> {
   const [existingById] = await db
@@ -145,6 +159,13 @@ function buildInitialChallengeState(challenge: ChallengeSessionSeed): { gameStat
           timeMs: Math.max(60, challenge.timeLimit || 300) * 1000,
           incrementMs,
         });
+      } else if (gameType === "languageduel") {
+        gameState = engine.initializeWithPlayers(playerIds[0], playerIds[1], {
+          nativeLanguageCode: challenge.nativeLanguageCode || "ar",
+          targetLanguageCode: challenge.targetLanguageCode || "en",
+          mode: (challenge.languageDuelMode as LanguageDuelMode | null) || "mixed",
+          pointsToWin: challenge.languageDuelPointsToWin || 10,
+        });
       } else {
         gameState = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
       }
@@ -174,6 +195,23 @@ function buildInitialChallengeState(challenge: ChallengeSessionSeed): { gameStat
 
 function normalizeChallengeCurrencyType(currencyType: unknown): "project" | "usd" {
   return currencyType === "project" ? "project" : "usd";
+}
+
+function normalizeLanguageCodeInput(value: unknown, fallback: string): string {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+
+  if (!LANGUAGE_CODE_REGEX.test(normalized)) {
+    throw new Error("Invalid language code format");
+  }
+
+  return normalized;
+}
+
+function normalizeLanguageDuelMode(value: unknown): LanguageDuelMode {
+  return value === "typed" || value === "spoken" || value === "mixed" ? value : "mixed";
 }
 
 function formatChallengeAmount(amount: number, currencyType: unknown): string {
@@ -210,6 +248,10 @@ export function registerCreateRoute(app: Express) {
         requiredPlayers = 2,
         chessSystem,
         dominoTargetScore,
+        nativeLanguageCode,
+        targetLanguageCode,
+        languageDuelMode,
+        languageDuelPointsToWin,
       } = req.body;
       const normalizedGameType = String(gameType || "").toLowerCase();
       const normalizedOpponentType = String(opponentType || "random").toLowerCase();
@@ -298,7 +340,7 @@ export function registerCreateRoute(app: Express) {
           return res.status(400).json({ error: `Game '${normalizedGameType}' is currently inactive` });
         }
       } else {
-        const validation = await storage.validateGameConfig(gameType, String(parsedBetAmount));
+        const validation = await storage.validateGameConfig(normalizedGameType, String(parsedBetAmount));
         if (!validation.valid) {
           return res.status(400).json({ error: validation.error });
         }
@@ -331,6 +373,37 @@ export function registerCreateRoute(app: Express) {
       } else if (chessSystem) {
         return res.status(400).json({ error: 'chessSystem can only be used with chess challenges' });
       }
+
+      let parsedNativeLanguageCode: string | null = null;
+      let parsedTargetLanguageCode: string | null = null;
+      let parsedLanguageDuelMode: LanguageDuelMode | null = null;
+      let parsedLanguageDuelPointsToWin: number | null = null;
+
+      if (normalizedGameType === 'languageduel') {
+        try {
+          parsedNativeLanguageCode = normalizeLanguageCodeInput(nativeLanguageCode, 'ar');
+          parsedTargetLanguageCode = normalizeLanguageCodeInput(targetLanguageCode, 'en');
+        } catch {
+          return res.status(400).json({ error: 'Invalid language code format. Use BCP47-like values such as ar or en-US' });
+        }
+
+        parsedLanguageDuelMode = normalizeLanguageDuelMode(languageDuelMode);
+
+        const parsedPointsToWin = Number(languageDuelPointsToWin ?? 10);
+        if (!Number.isInteger(parsedPointsToWin) || parsedPointsToWin < 3 || parsedPointsToWin > 30) {
+          return res.status(400).json({ error: 'languageDuelPointsToWin must be an integer between 3 and 30' });
+        }
+
+        parsedLanguageDuelPointsToWin = parsedPointsToWin;
+        timeLimit = 30;
+      } else if (
+        nativeLanguageCode !== undefined
+        || targetLanguageCode !== undefined
+        || languageDuelMode !== undefined
+        || languageDuelPointsToWin !== undefined
+      ) {
+        return res.status(400).json({ error: 'Language duel options can only be used with languageduel challenges' });
+      }
       const userId = req.user!.id;
 
       if (normalizedOpponentType === 'friend' && !friendAccountId) {
@@ -352,7 +425,7 @@ export function registerCreateRoute(app: Express) {
       }
 
       // ==================== SECURITY: Challenge Settings Enforcement ====================
-      const challengeConfig = await storage.getChallengeSettings(gameType);
+      const challengeConfig = await storage.getChallengeSettings(normalizedGameType);
 
       // SECURITY: Check if this game type is enabled for challenges
       if (!challengeConfig.isEnabled) {
@@ -548,7 +621,7 @@ export function registerCreateRoute(app: Express) {
 
         // Insert challenge into database
         const [createdChallenge] = await tx.insert(challengesTable).values({
-          gameType,
+          gameType: normalizedGameType,
           betAmount: persistedBetAmount.toFixed(2),
           currencyType: effectiveCurrencyType,
           visibility: challengeVisibility,
@@ -564,6 +637,10 @@ export function registerCreateRoute(app: Express) {
           opponentType: normalizedOpponentType,
           friendAccountId: normalizedOpponentType === 'friend' ? friendAccountId : null,
           dominoTargetScore: parsedDominoTargetScore,
+          nativeLanguageCode: parsedNativeLanguageCode,
+          targetLanguageCode: parsedTargetLanguageCode,
+          languageDuelMode: parsedLanguageDuelMode,
+          languageDuelPointsToWin: parsedLanguageDuelPointsToWin,
           timeLimit,
           startedAt: isSam9Challenge ? new Date() : null,
           player1Score: 0,

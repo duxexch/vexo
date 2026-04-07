@@ -92,6 +92,13 @@ export function registerSessionsPointsRoutes(app: Express) {
             timeMs: Math.max(60, challenge.timeLimit || 300) * 1000,
             incrementMs,
           });
+        } else if (normalizedGameType === 'languageduel') {
+          initialStateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1], {
+            nativeLanguageCode: challenge.nativeLanguageCode || 'ar',
+            targetLanguageCode: challenge.targetLanguageCode || 'en',
+            mode: challenge.languageDuelMode || 'mixed',
+            pointsToWin: challenge.languageDuelPointsToWin || 10,
+          });
         } else {
           initialStateJson = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
         }

@@ -148,6 +148,7 @@ function EditSettingsDialog({
     domino: "دومينو",
     tarneeb: "طرنيب",
     baloot: "بلوت",
+    languageduel: "تحدي اللغات",
   };
 
   return (
@@ -457,9 +458,10 @@ export default function AdminChallengeSettingsPage() {
     domino: "دومينو 🁡",
     tarneeb: "طرنيب ♠",
     baloot: "بلوت ♦",
+    languageduel: "تحدي اللغات 🌍",
   };
 
-  const defaultGameTypes = ["chess", "backgammon", "domino", "tarneeb", "baloot"];
+  const defaultGameTypes = ["chess", "backgammon", "domino", "tarneeb", "baloot", "languageduel"];
 
   // Ensure all game types appear (auto-create on first fetch)
   const initMutation = useMutation({

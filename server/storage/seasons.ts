@@ -41,7 +41,7 @@ export async function updateSeason(id: string, data: Partial<InsertSeason>): Pro
 
 export async function getSeasonalStats(seasonId: string, limit: number = 100, gameType?: string): Promise<(SeasonalStats & { user: Pick<User, 'id' | 'username' | 'nickname' | 'profilePicture'> })[]> {
   let orderColumn = seasonalStats.gamesWon;
-  
+
   const results = await db.select({
     stats: seasonalStats,
     user: {
@@ -81,14 +81,14 @@ export async function getOrCreateSeasonalStats(userId: string, seasonId: string)
 }
 
 export async function updateSeasonalStatsForGame(
-  userId: string, 
-  seasonId: string, 
-  gameType: string, 
-  won: boolean, 
+  userId: string,
+  seasonId: string,
+  gameType: string,
+  won: boolean,
   isDraw: boolean,
   earnings: string = '0'
 ): Promise<void> {
-  const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot'];
+  const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot', 'languageduel'];
   const isValidGameType = validGameTypes.includes(gameType);
 
   await db.transaction(async (tx) => {

@@ -26,7 +26,7 @@ export async function settleGamePayout(
   const platformFee = totalPot * (platformFeePercent / 100);
   // Winner gets their original stake back + loser's stake - platform fee
   const winnerPayout = totalPot - platformFee;
-  const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot'];
+  const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot', 'languageduel'];
 
   return await db.transaction(async (tx) => {
     const [existingSettlement] = await tx.select({ id: transactions.id })

@@ -38,6 +38,7 @@ import TarneebBoard from "@/components/games/TarneebBoard";
 import type { TarneebState } from "@/components/games/TarneebBoard";
 import BalootBoard from "@/components/games/BalootBoard";
 import type { BalootState } from "@/components/games/BalootBoard";
+import LanguageDuelBoard from "@/components/games/LanguageDuelBoard";
 import { GameChat } from "@/components/games/GameChat";
 import { VoiceChat } from "@/components/games/VoiceChat";
 import { SpectatorPanel } from "@/components/games/SpectatorPanel";
@@ -87,7 +88,7 @@ interface Player {
 interface GameSession {
   id: string;
   challengeId: string;
-  gameType: "chess" | "domino" | "backgammon" | "tarneeb" | "baloot";
+  gameType: "chess" | "domino" | "backgammon" | "tarneeb" | "baloot" | "languageduel";
   currentTurn: string;
   player1TimeRemaining: number;
   player2TimeRemaining: number;
@@ -1316,6 +1317,10 @@ export default function ChallengeGamePage() {
     sendMove({ type: "choose", gameType, trumpSuit: suit });
   }, [sendMove]);
 
+  const sendLanguageDuelAnswer = useCallback((answerText: string, responseMs: number) => {
+    sendMove({ type: "submit_answer", answerText, responseMs });
+  }, [sendMove]);
+
   // Chess: draw offer
   const sendOfferDraw = useCallback(() => {
     if (!canPlayActions) {
@@ -1606,6 +1611,7 @@ export default function ChallengeGamePage() {
     backgammon: { icon: Dice5, nameAr: "الطاولة", nameEn: "Backgammon" },
     tarneeb: { icon: Spade, nameAr: "الطرنيب", nameEn: "Tarneeb" },
     baloot: { icon: Heart, nameAr: "البلوت", nameEn: "Baloot" },
+    languageduel: { icon: MessageCircle, nameAr: t('languageduel.title'), nameEn: t('languageduel.title') },
   };
   const gameInfo = GAME_INFO[challenge.gameType] || GAME_INFO.chess;
   const GameIcon = gameInfo.icon;
@@ -1882,6 +1888,14 @@ export default function ChallengeGamePage() {
                     playerNames={balootPlayerNames}
                     turnTimeLimitSeconds={30}
                     turnStartedAtMs={balootTurnStartedAtMs}
+                  />
+                )}
+                {challenge.gameType === "languageduel" && (
+                  <LanguageDuelBoard
+                    playerView={playerView}
+                    isSpectator={isSpectator}
+                    canPlay={canPlayActions}
+                    onSubmitAnswer={canPlayActions ? sendLanguageDuelAnswer : undefined}
                   />
                 )}
               </div>

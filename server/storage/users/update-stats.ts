@@ -21,13 +21,13 @@ export async function updateGameStats(
     return { success: false, error: 'No players to update' };
   }
 
-  const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot'];
+  const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot', 'languageduel'];
   const isValidGameType = validGameTypes.includes(gameType);
 
   return await db.transaction(async (tx) => {
     const sortedIds = [...playerIds].sort();
     const lockedUsers: Record<string, User> = {};
-    
+
     for (const id of sortedIds) {
       const [user] = await tx.select().from(users).where(eq(users.id, id)).for('update');
       if (user) lockedUsers[id] = user;
@@ -39,7 +39,7 @@ export async function updateGameStats(
 
       const isWinner = winnerId === playerId;
       const isLoser = winnerId && winnerId !== playerId && !isDraw;
-      
+
       const updates: Record<string, unknown> = {
         gamesPlayed: user.gamesPlayed + 1,
         updatedAt: new Date()
@@ -54,12 +54,12 @@ export async function updateGameStats(
         updates.gamesWon = user.gamesWon + 1;
         updates.currentWinStreak = user.currentWinStreak + 1;
         updates.longestWinStreak = Math.max(user.longestWinStreak, user.currentWinStreak + 1);
-        
+
         if (isValidGameType) {
           const wonField = `${gameType}Won`;
           updates[wonField] = (user as unknown as Record<string, number>)[wonField] + 1;
         }
-        
+
         if (winAmount && parseFloat(winAmount) > 0) {
           updates.totalEarnings = (parseFloat(user.totalEarnings) + parseFloat(winAmount)).toFixed(2);
         }

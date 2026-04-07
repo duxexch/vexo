@@ -1785,9 +1785,21 @@ const en: Record<string, string> = {
   'challenge.resign': 'Resign',
   'challenge.offerDraw': 'Offer Draw',
   'challenge.waitingResponse': 'Waiting for response...',
+  'challenges.languageDuel.invalidLanguageCode': 'Enter valid language codes such as ar or en-US',
+  'challenges.languageDuel.pointsToWinRange': 'Points to win must be between 3 and 30',
+  'challenges.languageDuel.mode': 'Mode',
   'challenge.drawOffer': 'Draw offer',
   'challenge.accept': 'Accept',
   'challenge.decline': 'Decline',
+  'languageduel.title': 'Language Duel',
+  'languageduel.mode': 'Mode',
+  'languageduel.mode.typed': 'Typed',
+  'languageduel.mode.spoken': 'Spoken',
+  'languageduel.mode.mixed': 'Mixed',
+  'languageduel.currentPrompt': 'Current prompt',
+  'languageduel.yourSubmission': 'Your submission',
+  'languageduel.accuracy': 'Accuracy',
+  'languageduel.opponentSubmissionAvailable': 'Opponent submission is available',
 };
 
 export default en;

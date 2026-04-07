@@ -36,7 +36,7 @@ export async function settleResignationPayout(
   const loserRefund = stake * (surrenderLoserRefundPercent / 100);
   // Winner gets the rest of the pot after commission and loser refund
   const winnerPayout = potAfterCommission - loserRefund;
-  const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot'];
+  const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot', 'languageduel'];
 
   // SECURITY: Ensure no negative payouts
   if (winnerPayout < 0 || loserRefund < 0) {

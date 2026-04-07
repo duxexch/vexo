@@ -35,12 +35,13 @@ export interface GameConfigItem {
 
 /** Icon + style mapping per game key */
 export const GAME_ICON_STYLES: Record<string, { icon: typeof Crown; color: string; gradient: string }> = {
-  chess:      { icon: Crown,   color: "bg-amber-500/20 text-amber-500 border-amber-500/30",   gradient: "from-amber-500/20 to-amber-600/10" },
-  domino:     { icon: Target,  color: "bg-blue-500/20 text-blue-500 border-blue-500/30",      gradient: "from-blue-500/20 to-blue-600/10" },
+  chess: { icon: Crown, color: "bg-amber-500/20 text-amber-500 border-amber-500/30", gradient: "from-amber-500/20 to-amber-600/10" },
+  domino: { icon: Target, color: "bg-blue-500/20 text-blue-500 border-blue-500/30", gradient: "from-blue-500/20 to-blue-600/10" },
   backgammon: { icon: Shuffle, color: "bg-emerald-500/20 text-emerald-500 border-emerald-500/30", gradient: "from-emerald-500/20 to-emerald-600/10" },
-  tarneeb:    { icon: Gem,     color: "bg-purple-500/20 text-purple-500 border-purple-500/30", gradient: "from-purple-500/20 to-purple-600/10" },
-  baloot:     { icon: Gem,     color: "bg-rose-500/20 text-rose-500 border-rose-500/30",       gradient: "from-rose-500/20 to-rose-600/10" },
-  snake:      { icon: Gamepad2, color: "bg-indigo-500/20 text-indigo-500 border-indigo-500/30", gradient: "from-indigo-500/20 to-indigo-600/10" },
+  tarneeb: { icon: Gem, color: "bg-purple-500/20 text-purple-500 border-purple-500/30", gradient: "from-purple-500/20 to-purple-600/10" },
+  baloot: { icon: Gem, color: "bg-rose-500/20 text-rose-500 border-rose-500/30", gradient: "from-rose-500/20 to-rose-600/10" },
+  languageduel: { icon: Target, color: "bg-cyan-500/20 text-cyan-500 border-cyan-500/30", gradient: "from-cyan-500/20 to-cyan-600/10" },
+  snake: { icon: Gamepad2, color: "bg-indigo-500/20 text-indigo-500 border-indigo-500/30", gradient: "from-indigo-500/20 to-indigo-600/10" },
 };
 
 export const DEFAULT_GAME_STYLE = {
@@ -56,17 +57,19 @@ export const GAME_ICONS_SIMPLE: Record<string, typeof Crown> = {
   backgammon: Dice5,
   tarneeb: Spade,
   baloot: Heart,
+  languageduel: Target,
   snake: Gamepad2,
 };
 
 /** Fallback game configs when API is unavailable */
 export const FALLBACK_GAME_CONFIG: Record<string, GameConfigItem> = {
-  chess:      { name: "Chess",      nameAr: "شطرنج", icon: Crown,   color: "bg-amber-500/20 text-amber-500 border-amber-500/30",   gradient: "from-amber-500/20 to-amber-600/10" },
-  domino:     { name: "Domino",     nameAr: "دومينو", icon: Target,  color: "bg-blue-500/20 text-blue-500 border-blue-500/30",      gradient: "from-blue-500/20 to-blue-600/10" },
-  backgammon: { name: "Backgammon", nameAr: "طاولة",  icon: Shuffle, color: "bg-emerald-500/20 text-emerald-500 border-emerald-500/30", gradient: "from-emerald-500/20 to-emerald-600/10" },
-  tarneeb:    { name: "Tarneeb",    nameAr: "طرنيب",  icon: Gem,     color: "bg-purple-500/20 text-purple-500 border-purple-500/30", gradient: "from-purple-500/20 to-purple-600/10" },
-  baloot:     { name: "Baloot",     nameAr: "بلوت",   icon: Gem,     color: "bg-rose-500/20 text-rose-500 border-rose-500/30",       gradient: "from-rose-500/20 to-rose-600/10" },
-  snake:      { name: "Snake Arena", nameAr: "أرينا الثعبان", icon: Gamepad2, color: "bg-indigo-500/20 text-indigo-500 border-indigo-500/30", gradient: "from-indigo-500/20 to-indigo-600/10" },
+  chess: { name: "Chess", nameAr: "شطرنج", icon: Crown, color: "bg-amber-500/20 text-amber-500 border-amber-500/30", gradient: "from-amber-500/20 to-amber-600/10" },
+  domino: { name: "Domino", nameAr: "دومينو", icon: Target, color: "bg-blue-500/20 text-blue-500 border-blue-500/30", gradient: "from-blue-500/20 to-blue-600/10" },
+  backgammon: { name: "Backgammon", nameAr: "طاولة", icon: Shuffle, color: "bg-emerald-500/20 text-emerald-500 border-emerald-500/30", gradient: "from-emerald-500/20 to-emerald-600/10" },
+  tarneeb: { name: "Tarneeb", nameAr: "طرنيب", icon: Gem, color: "bg-purple-500/20 text-purple-500 border-purple-500/30", gradient: "from-purple-500/20 to-purple-600/10" },
+  baloot: { name: "Baloot", nameAr: "بلوت", icon: Gem, color: "bg-rose-500/20 text-rose-500 border-rose-500/30", gradient: "from-rose-500/20 to-rose-600/10" },
+  languageduel: { name: "LanguageDuel", nameAr: "تحدي اللغات", icon: Target, color: "bg-cyan-500/20 text-cyan-500 border-cyan-500/30", gradient: "from-cyan-500/20 to-cyan-600/10" },
+  snake: { name: "Snake Arena", nameAr: "أرينا الثعبان", icon: Gamepad2, color: "bg-indigo-500/20 text-indigo-500 border-indigo-500/30", gradient: "from-indigo-500/20 to-indigo-600/10" },
 };
 
 /** Build game config from API data, falling back to hardcoded if empty */

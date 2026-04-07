@@ -201,7 +201,7 @@ async function settleHeadToHeadPayout(
 }
 
 async function updateDrawStatsForPlayers(playerIds: string[], gameType: string): Promise<void> {
-  const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot'];
+  const validGameTypes = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot', 'languageduel'];
   const isValidGameType = validGameTypes.includes(gameType);
   const uniquePlayerIds = Array.from(new Set(playerIds));
 

@@ -100,6 +100,25 @@ export async function seedMultiplayerGames() {
       maxPlayers: 4,
       sortOrder: 5,
     },
+    {
+      name: "LanguageDuel",
+      description: "Head-to-head language challenge: answer quickly and accurately to win points.",
+      category: "education",
+      sections: ["challenges", "multiplayer"],
+      gameType: "multiplayer",
+      status: "active",
+      rtp: "100.00",
+      houseEdge: "0.00",
+      volatility: "low",
+      minBet: "1.00",
+      maxBet: "500.00",
+      multiplierMin: "1.00",
+      multiplierMax: "2.00",
+      isFeatured: true,
+      minPlayers: 2,
+      maxPlayers: 2,
+      sortOrder: 6,
+    },
   ];
 
   let addedCount = 0;
@@ -153,7 +172,7 @@ export async function seedMultiplayerGames() {
       });
     }
   }
-  
+
   if (addedCount > 0) {
     console.log(`[Seed] Added ${addedCount} multiplayer games`);
   } else {

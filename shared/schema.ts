@@ -1738,6 +1738,10 @@ export const challenges = pgTable("challenges", {
   opponentType: text("opponent_type").default("random"), // random, friend
   friendAccountId: text("friend_account_id"),
   dominoTargetScore: integer("domino_target_score"),
+  nativeLanguageCode: text("native_language_code"),
+  targetLanguageCode: text("target_language_code"),
+  languageDuelMode: text("language_duel_mode"), // typed, spoken, mixed
+  languageDuelPointsToWin: integer("language_duel_points_to_win"),
   timeLimit: integer("time_limit").notNull().default(300), // seconds
   player1Score: integer("player1_score").default(0),
   player2Score: integer("player2_score").default(0),
@@ -1759,6 +1763,8 @@ export const challenges = pgTable("challenges", {
   index("idx_challenges_status_created").on(table.status, table.createdAt),
   check("chk_challenges_bet_non_negative", sql`${table.betAmount} >= 0`),
   check("chk_challenges_required_players", sql`${table.requiredPlayers} IN (2, 4)`),
+  check("chk_challenges_language_duel_mode", sql`${table.languageDuelMode} IS NULL OR ${table.languageDuelMode} IN ('typed', 'spoken', 'mixed')`),
+  check("chk_challenges_language_duel_points_to_win", sql`${table.languageDuelPointsToWin} IS NULL OR (${table.languageDuelPointsToWin} >= 3 AND ${table.languageDuelPointsToWin} <= 30)`),
 ]);
 
 export const challengeSpectatorBets = pgTable("challenge_spectator_bets", {

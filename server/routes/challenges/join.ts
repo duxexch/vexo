@@ -47,6 +47,13 @@ function buildInitialChallengeState(challenge: ChallengeRow): { gameState: strin
           timeMs: Math.max(60, challenge.timeLimit || 300) * 1000,
           incrementMs,
         });
+      } else if (gameType === "languageduel") {
+        gameState = engine.initializeWithPlayers(playerIds[0], playerIds[1], {
+          nativeLanguageCode: challenge.nativeLanguageCode || "ar",
+          targetLanguageCode: challenge.targetLanguageCode || "en",
+          mode: challenge.languageDuelMode || "mixed",
+          pointsToWin: challenge.languageDuelPointsToWin || 10,
+        });
       } else {
         gameState = engine.initializeWithPlayers(playerIds[0], playerIds[1]);
       }

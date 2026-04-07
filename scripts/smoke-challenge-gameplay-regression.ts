@@ -10,7 +10,7 @@ import type { BackgammonState } from "../server/game-engines/backgammon/types";
 
 const SMOKE_USER_AGENT = "smoke-challenge-gameplay-regression/1.0";
 
-type GameType = "chess" | "backgammon" | "tarneeb" | "baloot";
+type GameType = "chess" | "backgammon" | "tarneeb" | "baloot" | "languageduel";
 
 interface CliOptions {
     baseUrl: string;
@@ -51,8 +51,10 @@ interface SetupData {
 
 interface Scenario {
     gameType: GameType;
+    actor: "player1" | "player2";
     move: Record<string, unknown>;
     expectedCurrentTurn: string;
+    expectedMinTotalMoves?: number;
     assertAck?: (ack: WsMessage) => void;
 }
 
@@ -588,6 +590,24 @@ async function seedChallengesAndSessions(
     await pool.query(
         `INSERT INTO challenges (
             id, game_type, bet_amount, currency_type, visibility, status,
+            player1_id, player2_id, required_players, current_players, opponent_type, time_limit,
+            native_language_code, target_language_code, language_duel_mode, language_duel_points_to_win
+         ) VALUES (
+            $1, 'languageduel', '0.00', $4, 'public', 'active',
+            $2, $3, 2, 2, 'anyone', 30,
+            'en', 'es', 'mixed', 10
+         )`,
+        [
+            setupData.challengeIds.languageduel,
+            setupData.userIds.player1,
+            setupData.userIds.player2,
+            currencyType,
+        ],
+    );
+
+    await pool.query(
+        `INSERT INTO challenges (
+            id, game_type, bet_amount, currency_type, visibility, status,
             player1_id, player2_id, player3_id, player4_id,
             required_players, current_players, opponent_type, time_limit
          ) VALUES (
@@ -628,6 +648,7 @@ async function seedChallengesAndSessions(
     const sessions: Array<{ gameType: GameType; challengeId: string; sessionId: string }> = [
         { gameType: "chess", challengeId: setupData.challengeIds.chess, sessionId: setupData.sessionIds.chess },
         { gameType: "backgammon", challengeId: setupData.challengeIds.backgammon, sessionId: setupData.sessionIds.backgammon },
+        { gameType: "languageduel", challengeId: setupData.challengeIds.languageduel, sessionId: setupData.sessionIds.languageduel },
         { gameType: "tarneeb", challengeId: setupData.challengeIds.tarneeb, sessionId: setupData.sessionIds.tarneeb },
         { gameType: "baloot", challengeId: setupData.challengeIds.baloot, sessionId: setupData.sessionIds.baloot },
     ];
@@ -697,6 +718,7 @@ async function verifySessionProgress(options: {
     sessionId: string;
     gameType: GameType;
     expectedCurrentTurn: string;
+    expectedMinTotalMoves?: number;
 }): Promise<void> {
     const result = await options.pool.query(
         `SELECT total_moves AS "totalMoves", current_turn AS "currentTurn", game_state AS "gameState", status
@@ -714,7 +736,11 @@ async function verifySessionProgress(options: {
         status: string;
     };
 
-    assertCondition(Number(row.totalMoves) >= 1, `${options.gameType} total_moves did not increment`, row);
+    const expectedMinTotalMoves = options.expectedMinTotalMoves ?? 1;
+    assertCondition(Number(row.totalMoves) >= expectedMinTotalMoves, `${options.gameType} total_moves did not increment as expected`, {
+        expectedMinTotalMoves,
+        row,
+    });
     assertCondition(typeof row.gameState === "string" && row.gameState.length > 10, `${options.gameType} game_state was not persisted`, row);
     assertCondition(String(row.currentTurn || "") === options.expectedCurrentTurn, `${options.gameType} current_turn mismatch`, {
         expected: options.expectedCurrentTurn,
@@ -724,6 +750,74 @@ async function verifySessionProgress(options: {
     assertCondition(String(row.status || "").toLowerCase() === "playing", `${options.gameType} status changed unexpectedly`, row);
 
     console.log(`[smoke:challenge-gameplay-regression] PASS ${options.gameType} DB progression persisted`);
+}
+
+async function verifyLanguageDuelWatchdogTimeout(options: {
+    pool: Pool;
+    sessionId: string;
+    timedOutPlayerId: string;
+    expectedCurrentTurn: string;
+    expectedMinTotalMoves: number;
+    timeoutMs: number;
+}): Promise<void> {
+    const deadline = Date.now() + options.timeoutMs;
+    let lastRow: {
+        totalMoves: number;
+        currentTurn: string | null;
+        gameState: string | null;
+        status: string;
+    } | null = null;
+
+    while (Date.now() < deadline) {
+        const result = await options.pool.query(
+            `SELECT total_moves AS "totalMoves", current_turn AS "currentTurn", game_state AS "gameState", status
+             FROM challenge_game_sessions
+             WHERE id = $1`,
+            [options.sessionId],
+        );
+
+        if (result.rowCount === 1) {
+            const row = result.rows[0] as {
+                totalMoves: number;
+                currentTurn: string | null;
+                gameState: string | null;
+                status: string;
+            };
+            lastRow = row;
+
+            let state: Record<string, unknown> | null = null;
+            if (typeof row.gameState === "string" && row.gameState.length > 10) {
+                try {
+                    state = JSON.parse(row.gameState) as Record<string, unknown>;
+                } catch {
+                    state = null;
+                }
+            }
+
+            const scores = (state?.scores || {}) as Record<string, unknown>;
+            const timedOutPlayerScore = Number(scores[options.timedOutPlayerId] ?? 0);
+
+            if (
+                Number(row.totalMoves) >= options.expectedMinTotalMoves
+                && String(row.currentTurn || "") === options.expectedCurrentTurn
+                && String(row.status || "").toLowerCase() === "playing"
+                && Number.isFinite(timedOutPlayerScore)
+                && timedOutPlayerScore <= -1
+            ) {
+                console.log("[smoke:challenge-gameplay-regression] PASS languageduel watchdog timeout auto-move persisted");
+                return;
+            }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    fail("languageduel watchdog timeout auto-move was not observed in time", {
+        sessionId: options.sessionId,
+        expectedCurrentTurn: options.expectedCurrentTurn,
+        expectedMinTotalMoves: options.expectedMinTotalMoves,
+        lastRow,
+    });
 }
 
 async function main(): Promise<void> {
@@ -752,12 +846,14 @@ async function main(): Promise<void> {
         challengeIds: {
             chess: crypto.randomUUID(),
             backgammon: crypto.randomUUID(),
+            languageduel: crypto.randomUUID(),
             tarneeb: crypto.randomUUID(),
             baloot: crypto.randomUUID(),
         },
         sessionIds: {
             chess: crypto.randomUUID(),
             backgammon: crypto.randomUUID(),
+            languageduel: crypto.randomUUID(),
             tarneeb: crypto.randomUUID(),
             baloot: crypto.randomUUID(),
         },
@@ -783,16 +879,25 @@ async function main(): Promise<void> {
 
         await seedChallengesAndSessions(pool, setupData, challengeCurrencyType);
 
-        const player1Token = await login({
-            baseUrl: options.baseUrl,
-            username: setupData.usernames.player1,
-            password: options.password,
-            timeoutMs: options.timeoutMs,
-        });
+        const actorTokens = {
+            player1: await login({
+                baseUrl: options.baseUrl,
+                username: setupData.usernames.player1,
+                password: options.password,
+                timeoutMs: options.timeoutMs,
+            }),
+            player2: await login({
+                baseUrl: options.baseUrl,
+                username: setupData.usernames.player2,
+                password: options.password,
+                timeoutMs: options.timeoutMs,
+            }),
+        } as const;
 
         const scenarios: Scenario[] = [
             {
                 gameType: "chess",
+                actor: "player1",
                 move: { type: "move", from: "e2", to: "e4" },
                 expectedCurrentTurn: setupData.userIds.player2,
                 assertAck: (ack) => {
@@ -802,6 +907,7 @@ async function main(): Promise<void> {
             },
             {
                 gameType: "backgammon",
+                actor: "player1",
                 move: { type: "roll" },
                 expectedCurrentTurn: setupData.userIds.player2,
                 assertAck: (ack) => {
@@ -812,22 +918,58 @@ async function main(): Promise<void> {
                 },
             },
             {
+                gameType: "languageduel",
+                actor: "player1",
+                move: { type: "submit_answer", answerText: "hola", responseMs: 1500 },
+                expectedCurrentTurn: setupData.userIds.player2,
+                expectedMinTotalMoves: 1,
+                assertAck: (ack) => {
+                    const view = (ack.view || {}) as Record<string, unknown>;
+                    assertCondition(view.gameType === "languageduel", "language duel ack view game type mismatch", ack);
+                    assertCondition(view.currentTurn === setupData.userIds.player2, "language duel should pass turn to opponent after first submission", ack);
+                },
+            },
+            {
+                gameType: "languageduel",
+                actor: "player2",
+                move: { type: "submit_answer", answerText: "adios", responseMs: 2200 },
+                expectedCurrentTurn: setupData.userIds.player2,
+                expectedMinTotalMoves: 2,
+                assertAck: (ack) => {
+                    const view = (ack.view || {}) as Record<string, unknown>;
+                    assertCondition(view.gameType === "languageduel", "language duel second ack view game type mismatch", ack);
+                    assertCondition(view.roundNumber === 2, "language duel should advance to round 2 after both submissions", ack);
+
+                    const scores = (view.scores || {}) as Record<string, unknown>;
+                    const player1Score = Number(scores[setupData.userIds.player1] ?? 0);
+                    assertCondition(player1Score >= 1, "language duel should award round score after both submissions", ack);
+
+                    const lastRound = view.lastRound as Record<string, unknown> | undefined;
+                    assertCondition(Boolean(lastRound), "language duel should expose lastRound after round resolution", ack);
+                },
+            },
+            {
                 gameType: "tarneeb",
+                actor: "player1",
                 move: { type: "bid", bid: 7 },
                 expectedCurrentTurn: setupData.userIds.player2,
             },
             {
                 gameType: "baloot",
+                actor: "player1",
                 move: { type: "choose", gameType: "sun" },
                 expectedCurrentTurn: setupData.userIds.player1,
             },
         ];
 
         for (const scenario of scenarios) {
+            const actorToken = actorTokens[scenario.actor];
+            assertCondition(typeof actorToken === "string" && actorToken.length > 20, "scenario actor token missing", scenario);
+
             await runScenario({
                 wsBaseUrl,
                 timeoutMs: options.timeoutMs,
-                actorToken: player1Token,
+                actorToken,
                 challengeId: setupData.challengeIds[scenario.gameType],
                 scenario,
             });
@@ -837,10 +979,27 @@ async function main(): Promise<void> {
                 sessionId: setupData.sessionIds[scenario.gameType],
                 gameType: scenario.gameType,
                 expectedCurrentTurn: scenario.expectedCurrentTurn,
+                expectedMinTotalMoves: scenario.expectedMinTotalMoves,
             });
         }
 
-        console.log("[smoke:challenge-gameplay-regression] PASS all game scenarios (chess/backgammon/tarneeb/baloot)");
+        await pool.query(
+            `UPDATE challenge_game_sessions
+             SET last_move_at = NOW() - INTERVAL '40 seconds'
+             WHERE id = $1`,
+            [setupData.sessionIds.languageduel],
+        );
+
+        await verifyLanguageDuelWatchdogTimeout({
+            pool,
+            sessionId: setupData.sessionIds.languageduel,
+            timedOutPlayerId: setupData.userIds.player2,
+            expectedCurrentTurn: setupData.userIds.player1,
+            expectedMinTotalMoves: 3,
+            timeoutMs: options.timeoutMs + 6000,
+        });
+
+        console.log("[smoke:challenge-gameplay-regression] PASS all game scenarios (chess/backgammon/languageduel/tarneeb/baloot)");
     } finally {
         if (!options.keepData && shouldCleanup) {
             try {

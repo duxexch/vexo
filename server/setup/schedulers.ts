@@ -1008,6 +1008,290 @@ export function startSchedulers(): void {
   setInterval(processChallengeDominoTimeouts, DOMINO_TIMEOUT_WATCHDOG_INTERVAL);
   logger.info(`[Domino Timeout Watchdog] Started (interval: ${DOMINO_TIMEOUT_WATCHDOG_INTERVAL}ms, turn=${DOMINO_TURN_TIMEOUT_MS}ms)`);
 
+  // ==================== LANGUAGE DUEL TIMEOUT AUTO-MOVE WATCHDOG ====================
+  // Server-authoritative 30s timeout for challenge language duel sessions.
+  const LANGUAGE_DUEL_TURN_TIMEOUT_MS = 30_000;
+  const LANGUAGE_DUEL_TIMEOUT_WATCHDOG_INTERVAL = 1000;
+
+  async function processChallengeLanguageDuelTimeouts() {
+    const languageDuelEngine = getGameEngine("languageduel");
+    if (!languageDuelEngine) {
+      return;
+    }
+
+    try {
+      const activeRows = await db.select({
+        challengeId: challengeGameSessions.challengeId,
+      })
+        .from(challengeGameSessions)
+        .innerJoin(challenges, eq(challengeGameSessions.challengeId, challenges.id))
+        .where(and(
+          eq(challengeGameSessions.status, "playing"),
+          eq(challenges.status, "active"),
+          eq(challengeGameSessions.gameType, "languageduel"),
+          sql`${challengeGameSessions.currentTurn} IS NOT NULL`
+        ))
+        .limit(80);
+
+      for (const row of activeRows) {
+        try {
+          const outcome = await db.transaction(async (tx) => {
+            const [session] = await tx.select()
+              .from(challengeGameSessions)
+              .where(eq(challengeGameSessions.challengeId, row.challengeId))
+              .orderBy(sql`${challengeGameSessions.createdAt} DESC`)
+              .limit(1)
+              .for("update");
+
+            if (!session || session.status !== "playing" || !session.currentTurn || String(session.gameType || "").toLowerCase() !== "languageduel") {
+              return null;
+            }
+
+            const [challenge] = await tx.select()
+              .from(challenges)
+              .where(eq(challenges.id, row.challengeId))
+              .limit(1)
+              .for("update");
+
+            if (!challenge || challenge.status !== "active" || !challenge.player2Id) {
+              return null;
+            }
+
+            const playerIds = [challenge.player1Id, challenge.player2Id].filter(Boolean) as string[];
+            const timedOutPlayerId = session.currentTurn;
+
+            if (!playerIds.includes(timedOutPlayerId)) {
+              return null;
+            }
+
+            const nowMs = Date.now();
+            const turnStartedAt = session.lastMoveAt ?? session.updatedAt ?? session.createdAt ?? new Date(nowMs);
+            const elapsedMs = Math.max(0, nowMs - new Date(turnStartedAt).getTime());
+            if (elapsedMs < LANGUAGE_DUEL_TURN_TIMEOUT_MS) {
+              return null;
+            }
+
+            const normalizedState = normalizeChallengeGameState(session.gameState);
+            if (!normalizedState) {
+              logger.warn(`[Language Duel Timeout Watchdog] Skipped challenge ${row.challengeId} due to invalid game state`);
+              return null;
+            }
+
+            const validMoves = languageDuelEngine.getValidMoves(normalizedState, timedOutPlayerId);
+            const timeoutMove = validMoves.find((move) => move.type === "timeout") || validMoves[0] || null;
+            if (!timeoutMove) {
+              logger.warn(`[Language Duel Timeout Watchdog] No valid timeout move for challenge ${row.challengeId}`);
+              return null;
+            }
+
+            const validation = languageDuelEngine.validateMove(normalizedState, timedOutPlayerId, timeoutMove);
+            if (!validation.valid) {
+              logger.warn(`[Language Duel Timeout Watchdog] Invalid timeout move for challenge ${row.challengeId}: ${validation.error || "unknown"}`);
+              return null;
+            }
+
+            const applyResult = languageDuelEngine.applyMove(normalizedState, timedOutPlayerId, timeoutMove);
+            if (!applyResult.success) {
+              logger.warn(`[Language Duel Timeout Watchdog] Failed applying timeout move for challenge ${row.challengeId}: ${applyResult.error || "unknown"}`);
+              return null;
+            }
+
+            const gameStatus = languageDuelEngine.getGameStatus(applyResult.newState);
+            const isGameOver = Boolean(gameStatus.isOver);
+            const isDraw = Boolean(gameStatus.isDraw);
+            const parsedNewState = JSON.parse(applyResult.newState) as Record<string, unknown>;
+
+            const winnerId = typeof gameStatus.winner === "string" ? gameStatus.winner : null;
+            const nextTurn = !isGameOver && typeof parsedNewState.currentTurn === "string"
+              ? parsedNewState.currentTurn
+              : null;
+
+            const winReason = isGameOver
+              ? (isDraw ? "draw" : (gameStatus.reason || "timeout"))
+              : null;
+
+            const [updatedSession] = await tx.update(challengeGameSessions)
+              .set({
+                gameState: applyResult.newState,
+                currentTurn: isGameOver ? null : nextTurn,
+                totalMoves: (session.totalMoves || 0) + 1,
+                lastMoveAt: new Date(),
+                updatedAt: new Date(),
+                status: isGameOver ? "finished" : "playing",
+                winnerId: isGameOver ? winnerId : null,
+                winReason,
+              })
+              .where(eq(challengeGameSessions.id, session.id))
+              .returning();
+
+            return {
+              challenge,
+              updatedSession,
+              newState: applyResult.newState,
+              events: applyResult.events,
+              timeoutMove,
+              timedOutPlayerId,
+              isGameOver,
+              isDraw,
+              winnerId,
+              winReason,
+            };
+          });
+
+          if (!outcome) {
+            continue;
+          }
+
+          const seq = typeof outcome.updatedSession.totalMoves === "number" ? outcome.updatedSession.totalMoves : 0;
+          const room = challengeGameRooms.get(row.challengeId);
+
+          if (room) {
+            room.currentState = {
+              challengeId: row.challengeId,
+              gameType: "languageduel",
+              gameState: outcome.newState,
+              currentTurn: outcome.updatedSession.currentTurn || "",
+              totalMoves: seq,
+              status: outcome.updatedSession.status,
+              spectatorCount: room.spectators.size,
+            };
+
+            const timeoutMessage = JSON.stringify({
+              type: "turn_timeout",
+              payload: {
+                timedOutPlayer: outcome.timedOutPlayerId,
+                autoAction: "auto_move",
+                moveType: outcome.timeoutMove.type,
+                turnTimeLimitMs: LANGUAGE_DUEL_TURN_TIMEOUT_MS,
+              },
+              seq,
+            });
+
+            [...room.players.values(), ...room.spectators.values()].forEach((socket) => {
+              if (socket.readyState === WebSocket.OPEN) {
+                socket.send(timeoutMessage);
+              }
+            });
+
+            for (const [playerId, socket] of room.players) {
+              if (socket.readyState !== WebSocket.OPEN) {
+                continue;
+              }
+
+              const playerView = languageDuelEngine.getPlayerView(outcome.newState, playerId);
+              socket.send(JSON.stringify({
+                type: "game_move",
+                session: { ...outcome.updatedSession, gameState: undefined },
+                view: playerView,
+                events: outcome.events,
+                move: outcome.timeoutMove,
+                playerId: outcome.timedOutPlayerId,
+                seq,
+                timeoutAuto: true,
+              }));
+            }
+
+            const spectatorView = languageDuelEngine.getPlayerView(outcome.newState, "spectator");
+            for (const [, socket] of room.spectators) {
+              if (socket.readyState !== WebSocket.OPEN) {
+                continue;
+              }
+
+              socket.send(JSON.stringify({
+                type: "game_move",
+                session: { ...outcome.updatedSession, gameState: undefined },
+                view: spectatorView,
+                events: outcome.events,
+                move: outcome.timeoutMove,
+                playerId: outcome.timedOutPlayerId,
+                seq,
+                timeoutAuto: true,
+              }));
+            }
+          }
+
+          if (outcome.isGameOver) {
+            let payoutSettled = true;
+
+            if (outcome.isDraw) {
+              const drawSettlement = await settleDrawPayout(
+                row.challengeId,
+                outcome.challenge.player1Id,
+                outcome.challenge.player2Id || "",
+                "languageduel",
+              );
+
+              if (!drawSettlement.success) {
+                payoutSettled = false;
+                logger.error(`[Language Duel Timeout Watchdog] Draw payout failed for challenge ${row.challengeId}: ${drawSettlement.error}`);
+              }
+            } else if (outcome.winnerId) {
+              const loserId = outcome.winnerId === outcome.challenge.player1Id
+                ? outcome.challenge.player2Id
+                : outcome.challenge.player1Id;
+
+              if (loserId) {
+                const payoutResult = await settleChallengePayout(
+                  row.challengeId,
+                  outcome.winnerId,
+                  loserId,
+                  "languageduel",
+                );
+
+                if (!payoutResult.success) {
+                  payoutSettled = false;
+                  logger.error(`[Language Duel Timeout Watchdog] Winner payout failed for challenge ${row.challengeId}: ${payoutResult.error}`);
+                }
+              }
+            }
+
+            if (payoutSettled) {
+              await db.update(challenges)
+                .set({
+                  status: "completed",
+                  winnerId: outcome.winnerId,
+                  endedAt: new Date(),
+                })
+                .where(eq(challenges.id, row.challengeId));
+            }
+
+            await db.delete(challengeChatMessages)
+              .where(eq(challengeChatMessages.sessionId, outcome.updatedSession.id));
+
+            if (room) {
+              const endedMessage = JSON.stringify({
+                type: "game_ended",
+                winnerId: outcome.winnerId,
+                isDraw: outcome.isDraw,
+                reason: outcome.winReason || (outcome.isDraw ? "draw" : "timeout"),
+                seq,
+              });
+
+              [...room.players.values(), ...room.spectators.values()].forEach((socket) => {
+                if (socket.readyState === WebSocket.OPEN) {
+                  socket.send(endedMessage);
+                }
+              });
+            }
+          }
+
+          logger.info(`[Language Duel Timeout Watchdog] Applied timeout auto-move for challenge ${row.challengeId}`);
+        } catch (perChallengeError) {
+          logger.error(
+            `[Language Duel Timeout Watchdog] Failed processing challenge ${row.challengeId}`,
+            perChallengeError instanceof Error ? perChallengeError : new Error(String(perChallengeError)),
+          );
+        }
+      }
+    } catch (error) {
+      logger.error("[Language Duel Timeout Watchdog] Error", error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  setTimeout(processChallengeLanguageDuelTimeouts, 13000);
+  setInterval(processChallengeLanguageDuelTimeouts, LANGUAGE_DUEL_TIMEOUT_WATCHDOG_INTERVAL);
+  logger.info(`[Language Duel Timeout Watchdog] Started (interval: ${LANGUAGE_DUEL_TIMEOUT_WATCHDOG_INTERVAL}ms, turn=${LANGUAGE_DUEL_TURN_TIMEOUT_MS}ms)`);
+
   // ==================== BALOOT TIMEOUT AUTO-MOVE WATCHDOG ====================
   // Server-authoritative 30s per-turn timeout for challenge baloot sessions.
   const BALOOT_TURN_TIMEOUT_MS = 30_000;

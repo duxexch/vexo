@@ -1773,9 +1773,21 @@ const ar: Record<string, string> = {
   'challenge.resign': 'استسلام',
   'challenge.offerDraw': 'عرض تعادل',
   'challenge.waitingResponse': 'بانتظار الرد...',
+  'challenges.languageDuel.invalidLanguageCode': 'أدخل رموز لغات صحيحة مثل ar أو en-US',
+  'challenges.languageDuel.pointsToWinRange': 'نقاط الفوز يجب أن تكون بين 3 و 30',
+  'challenges.languageDuel.mode': 'الوضع',
   'challenge.drawOffer': 'عرض تعادل',
   'challenge.accept': 'قبول',
   'challenge.decline': 'رفض',
+  'languageduel.title': 'تحدي اللغات',
+  'languageduel.mode': 'الوضع',
+  'languageduel.mode.typed': 'كتابي',
+  'languageduel.mode.spoken': 'صوتي',
+  'languageduel.mode.mixed': 'مختلط',
+  'languageduel.currentPrompt': 'المفردة الحالية',
+  'languageduel.yourSubmission': 'إجابتك',
+  'languageduel.accuracy': 'الدقة',
+  'languageduel.opponentSubmissionAvailable': 'إجابة الخصم متاحة',
 };
 
 export default ar;

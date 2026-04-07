@@ -47,12 +47,19 @@ export async function getActiveChallenges(): Promise<any[]> {
 
 export async function getChallengeSettings(gameType: string): Promise<ChallengeSettings> {
   // SECURITY: Only allow valid game types to prevent DB pollution
-  const VALID_GAME_TYPES = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot'];
+  const VALID_GAME_TYPES = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot', 'languageduel'];
   const safeGameType = VALID_GAME_TYPES.includes(gameType) ? gameType : 'chess';
-  
+
   const [result] = await db.select().from(challengeSettings).where(eq(challengeSettings.gameType, safeGameType));
   if (result) return result;
   // Auto-create with secure defaults if not exists
+  const languageDuelDefaults = safeGameType === 'languageduel'
+    ? {
+      turnTimeoutSeconds: 30,
+      minMovesBeforeSurrender: 0,
+    }
+    : {};
+
   const [created] = await db.insert(challengeSettings).values({
     gameType: safeGameType,
     isEnabled: true,
@@ -71,6 +78,7 @@ export async function getChallengeSettings(gameType: string): Promise<ChallengeS
     allowSpectators: true,
     minMovesBeforeSurrender: 2,
     maxConcurrentChallenges: 3,
+    ...languageDuelDefaults,
   }).onConflictDoNothing().returning();
   if (created) return created;
   // Race condition: another request created it - fetch again

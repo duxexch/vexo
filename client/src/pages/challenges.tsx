@@ -148,6 +148,7 @@ interface Sam9SoloConfig {
 }
 
 type CurrencyType = 'project' | 'usd';
+type LanguageDuelMode = 'typed' | 'spoken' | 'mixed';
 
 type ChessSystemKey =
   | 'bullet_1_0'
@@ -211,6 +212,10 @@ export default function ChallengesPage() {
   const [requiredPlayers, setRequiredPlayers] = useState<2 | 4>(2);
   const [chessSystem, setChessSystem] = useState<ChessSystemKey>('rapid_10_0');
   const [dominoTargetScore, setDominoTargetScore] = useState<101 | 201>(101);
+  const [languageDuelNativeLanguageCode, setLanguageDuelNativeLanguageCode] = useState('ar');
+  const [languageDuelTargetLanguageCode, setLanguageDuelTargetLanguageCode] = useState('en');
+  const [languageDuelMode, setLanguageDuelMode] = useState<LanguageDuelMode>('mixed');
+  const [languageDuelPointsToWin, setLanguageDuelPointsToWin] = useState(10);
   const [currencyType, setCurrencyType] = useState<CurrencyType>('project');
   const [quickConvertAmount, setQuickConvertAmount] = useState('5');
   const [showAdvancedCreateOptions, setShowAdvancedCreateOptions] = useState(false);
@@ -454,6 +459,10 @@ export default function ChallengesPage() {
       requiredPlayers?: number;
       chessSystem?: ChessSystemKey;
       dominoTargetScore?: 101 | 201;
+      nativeLanguageCode?: string;
+      targetLanguageCode?: string;
+      languageDuelMode?: LanguageDuelMode;
+      languageDuelPointsToWin?: number;
       currencyType?: CurrencyType;
     }) =>
       apiRequest('POST', '/api/challenges', data),
@@ -597,6 +606,10 @@ export default function ChallengesPage() {
     setRequiredPlayers(2);
     setChessSystem('rapid_10_0');
     setDominoTargetScore(101);
+    setLanguageDuelNativeLanguageCode('ar');
+    setLanguageDuelTargetLanguageCode('en');
+    setLanguageDuelMode('mixed');
+    setLanguageDuelPointsToWin(10);
     setCurrencyType(currencyPolicy?.projectOnly ? 'project' : 'usd');
     setShowAdvancedCreateOptions(false);
   };
@@ -637,6 +650,31 @@ export default function ChallengesPage() {
       toast({ title: t('common.error'), description: t('challenges.enterFriendId'), variant: "destructive" });
       return;
     }
+
+    if (selectedGame === 'languageduel') {
+      const languageCodeRegex = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/i;
+      const nativeCode = languageDuelNativeLanguageCode.trim();
+      const targetCode = languageDuelTargetLanguageCode.trim();
+
+      if (!languageCodeRegex.test(nativeCode) || !languageCodeRegex.test(targetCode)) {
+        toast({
+          title: t('common.error'),
+          description: t('challenges.languageDuel.invalidLanguageCode'),
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (!Number.isInteger(languageDuelPointsToWin) || languageDuelPointsToWin < 3 || languageDuelPointsToWin > 30) {
+        toast({
+          title: t('common.error'),
+          description: t('challenges.languageDuel.pointsToWinRange'),
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     // Validate challenge amount against game limits
     const selectedGameData = challengeGames.find(g => g.name.toLowerCase() === selectedGame.toLowerCase() || g.id === selectedGame);
     if (selectedGameData && !isSam9FriendlyFixedFee) {
@@ -678,6 +716,10 @@ export default function ChallengesPage() {
         : (multiPlayerGames.includes(selectedGame) ? requiredPlayers : 2),
       chessSystem: selectedGame === 'chess' ? chessSystem : undefined,
       dominoTargetScore: selectedGame === 'domino' ? dominoTargetScore : undefined,
+      nativeLanguageCode: selectedGame === 'languageduel' ? languageDuelNativeLanguageCode.trim().toLowerCase() : undefined,
+      targetLanguageCode: selectedGame === 'languageduel' ? languageDuelTargetLanguageCode.trim().toLowerCase() : undefined,
+      languageDuelMode: selectedGame === 'languageduel' ? languageDuelMode : undefined,
+      languageDuelPointsToWin: selectedGame === 'languageduel' ? languageDuelPointsToWin : undefined,
       currencyType: currencyPolicy?.projectOnly ? 'project' : currencyType,
     });
   };
@@ -1524,6 +1566,63 @@ export default function ChallengesPage() {
                       >
                         201
                       </Button>
+                    </div>
+                  </div>
+                )}
+
+                {selectedGame === 'languageduel' && (
+                  <div className="space-y-3">
+                    <div>
+                      <Label>{t('settings.language')}</Label>
+                      <Input
+                        value={languageDuelNativeLanguageCode}
+                        onChange={(e) => setLanguageDuelNativeLanguageCode(e.target.value)}
+                        placeholder="ar"
+                        className="mt-2"
+                        data-testid="input-language-duel-native"
+                      />
+                    </div>
+                    <div>
+                      <Label>{t('admin.announcements.columnTarget')}</Label>
+                      <Input
+                        value={languageDuelTargetLanguageCode}
+                        onChange={(e) => setLanguageDuelTargetLanguageCode(e.target.value)}
+                        placeholder="en"
+                        className="mt-2"
+                        data-testid="input-language-duel-target"
+                      />
+                    </div>
+                    <div>
+                      <Label>{t('challenges.languageDuel.mode')}</Label>
+                      <div className="grid grid-cols-3 gap-2 mt-2">
+                        {([
+                          { key: 'typed', labelKey: 'languageduel.mode.typed' },
+                          { key: 'spoken', labelKey: 'languageduel.mode.spoken' },
+                          { key: 'mixed', labelKey: 'languageduel.mode.mixed' },
+                        ] as const).map((mode) => (
+                          <Button
+                            key={mode.key}
+                            type="button"
+                            variant={languageDuelMode === mode.key ? 'default' : 'outline'}
+                            onClick={() => setLanguageDuelMode(mode.key)}
+                            data-testid={`button-language-duel-mode-${mode.key}`}
+                          >
+                            {t(mode.labelKey)}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <Label>{t('baloot.targetPoints')}</Label>
+                      <Input
+                        type="number"
+                        min={3}
+                        max={30}
+                        value={languageDuelPointsToWin}
+                        onChange={(e) => setLanguageDuelPointsToWin(Number(e.target.value) || 10)}
+                        className="mt-2"
+                        data-testid="input-language-duel-points"
+                      />
                     </div>
                   </div>
                 )}

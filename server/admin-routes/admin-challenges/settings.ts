@@ -128,7 +128,7 @@ export function registerChallengeSettingsRoutes(app: Express) {
       const { gameType } = req.params;
       const data = req.body;
 
-      const VALID_GAME_TYPES = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot'];
+      const VALID_GAME_TYPES = ['chess', 'backgammon', 'domino', 'tarneeb', 'baloot', 'languageduel'];
       if (!VALID_GAME_TYPES.includes(gameType)) {
         return res.status(400).json({ error: `Invalid game type. Must be one of: ${VALID_GAME_TYPES.join(', ')}` });
       }
