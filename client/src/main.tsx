@@ -7,6 +7,9 @@ import "./index.css";
 
 const UPDATE_POLL_INTERVAL_MS = 60_000;
 const UPDATE_BANNER_ID = "app-update-banner";
+const UPDATE_FORCE_GATE_ID = "app-force-update-gate";
+const UPDATE_BANNER_TEXT = "تحديث جديد متاح — A new update is available";
+const UPDATE_BUTTON_TEXT = "تحديث / Update";
 
 interface ReleaseInfo {
   webVersion: string;
@@ -165,11 +168,11 @@ function showUpdateBanner(onAction: () => void | Promise<void>) {
   });
 
   const text = document.createElement('span');
-  text.textContent = 'تحديث جديد متاح — A new update is available';
+  text.textContent = UPDATE_BANNER_TEXT;
   Object.assign(text.style, { color: '#e4e6ea', fontSize: '13px', flex: '1' });
 
   const btn = document.createElement('button');
-  btn.textContent = 'تحديث / Update';
+  btn.textContent = UPDATE_BUTTON_TEXT;
   Object.assign(btn.style, {
     background: 'linear-gradient(135deg, #4ade80, #22c55e)',
     color: '#0f1419',
@@ -188,6 +191,72 @@ function showUpdateBanner(onAction: () => void | Promise<void>) {
 
   banner.append(text, btn);
   document.body.appendChild(banner);
+}
+
+function showForceUpdateGate(onAction: () => void | Promise<void>) {
+  if (document.getElementById(UPDATE_FORCE_GATE_ID)) {
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = UPDATE_FORCE_GATE_ID;
+  overlay.dir = 'auto';
+  overlay.setAttribute('role', 'alertdialog');
+  overlay.setAttribute('aria-modal', 'true');
+  Object.assign(overlay.style, {
+    position: 'fixed',
+    inset: '0',
+    zIndex: '10001',
+    background: 'rgba(10, 14, 18, 0.92)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '24px',
+  });
+
+  const card = document.createElement('div');
+  Object.assign(card.style, {
+    width: 'min(420px, 100%)',
+    background: '#1a1d23',
+    border: '1px solid rgba(74,222,128,0.35)',
+    borderRadius: '14px',
+    padding: '20px',
+    boxShadow: '0 12px 36px rgba(0,0,0,0.55)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+    textAlign: 'center',
+    fontFamily: 'system-ui, sans-serif',
+  });
+
+  const text = document.createElement('p');
+  text.textContent = UPDATE_BANNER_TEXT;
+  Object.assign(text.style, {
+    color: '#e4e6ea',
+    margin: '0',
+    fontSize: '14px',
+    lineHeight: '1.5',
+  });
+
+  const btn = document.createElement('button');
+  btn.textContent = UPDATE_BUTTON_TEXT;
+  Object.assign(btn.style, {
+    background: 'linear-gradient(135deg, #4ade80, #22c55e)',
+    color: '#0f1419',
+    border: 'none',
+    borderRadius: '10px',
+    padding: '10px 16px',
+    fontWeight: '700',
+    fontSize: '14px',
+    cursor: 'pointer',
+  });
+  btn.onclick = () => {
+    void onAction();
+  };
+
+  card.append(text, btn);
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
 }
 
 function activateLatestWebUpdate() {
@@ -295,18 +364,26 @@ async function maybePromptNativeUpdate(release: ReleaseInfo): Promise<void> {
     return;
   }
 
-  if (announcedNativeVersion === release.nativeLatestVersion) {
-    return;
-  }
-
   try {
     const info = await CapacitorApp.getInfo();
     if (compareSemver(info.version, release.nativeLatestVersion) >= 0) {
       return;
     }
 
+    const triggerUpdate = () => openNativeUpdateUrl(updateUrl);
+
+    if (release.forceNativeUpdate) {
+      announcedNativeVersion = release.nativeLatestVersion;
+      showForceUpdateGate(triggerUpdate);
+      return;
+    }
+
+    if (announcedNativeVersion === release.nativeLatestVersion) {
+      return;
+    }
+
     announcedNativeVersion = release.nativeLatestVersion;
-    showUpdateBanner(() => openNativeUpdateUrl(updateUrl));
+    showUpdateBanner(triggerUpdate);
   } catch {
     // Ignore native version lookup errors and keep app usable.
   }

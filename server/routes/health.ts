@@ -20,27 +20,57 @@ interface ReleaseInfo {
   forceNativeUpdate: boolean;
 }
 
-function readReleaseInfo(): ReleaseInfo {
+function resolveRequestOrigin(req: Request): string {
+  const forwardedProtoHeader = req.headers["x-forwarded-proto"];
+  const forwardedProto = Array.isArray(forwardedProtoHeader)
+    ? forwardedProtoHeader[0]
+    : typeof forwardedProtoHeader === "string"
+      ? forwardedProtoHeader.split(",")[0]
+      : undefined;
+
+  const protocol = (forwardedProto || req.protocol || "https").trim();
+  const host = req.get("host");
+
+  if (host) {
+    return `${protocol}://${host}`;
+  }
+
+  return process.env.APP_PUBLIC_BASE_URL || "https://vixo.click";
+}
+
+function resolveNativeLatestVersion(webVersion: string): string | null {
+  if (process.env.APP_NATIVE_LATEST_VERSION) {
+    return process.env.APP_NATIVE_LATEST_VERSION;
+  }
+
+  return /\d/.test(webVersion) ? webVersion : null;
+}
+
+function readReleaseInfo(req: Request): ReleaseInfo {
   const webVersion =
     process.env.APP_RELEASE_VERSION ||
     process.env.RELEASE_VERSION ||
     process.env.npm_package_version ||
     "dev";
 
+  const requestOrigin = resolveRequestOrigin(req);
+  const nativeLatestVersion = resolveNativeLatestVersion(webVersion);
+
   return {
     webVersion,
     releasedAt: process.env.APP_RELEASED_AT || process.env.BUILD_TIMESTAMP || PROCESS_BOOT_AT,
-    nativeLatestVersion: process.env.APP_NATIVE_LATEST_VERSION || null,
-    nativeUpdateUrlAndroid: process.env.APP_UPDATE_URL_ANDROID || null,
+    nativeLatestVersion,
+    nativeUpdateUrlAndroid:
+      process.env.APP_UPDATE_URL_ANDROID || `${requestOrigin}/downloads/VEX-official-release.apk`,
     nativeUpdateUrlIos: process.env.APP_UPDATE_URL_IOS || null,
     forceNativeUpdate: process.env.APP_FORCE_UPDATE === "true",
   };
 }
 
 export function registerHealthRoutes(app: Express): void {
-  app.get("/api/release", (_req: Request, res: Response) => {
+  app.get("/api/release", (req: Request, res: Response) => {
     res.json({
-      release: readReleaseInfo(),
+      release: readReleaseInfo(req),
       timestamp: new Date().toISOString(),
     });
   });
@@ -66,7 +96,7 @@ export function registerHealthRoutes(app: Express): void {
         },
         redis: { status: redisOk ? "connected" : "unavailable" },
         minio: { status: minioOk ? "connected" : "unavailable" },
-        release: readReleaseInfo(),
+        release: readReleaseInfo(_req),
         uptime: process.uptime(),
       });
     } catch (error: unknown) {
@@ -110,7 +140,7 @@ export function registerHealthRoutes(app: Express): void {
         },
         redis: { status: redisOk ? "connected" : "unavailable" },
         minio: { status: minioOk ? "connected" : "unavailable" },
-        release: readReleaseInfo(),
+        release: readReleaseInfo(_req),
         memory: {
           heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
           heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
