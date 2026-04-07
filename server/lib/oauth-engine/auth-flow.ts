@@ -4,7 +4,7 @@
 import crypto from "crypto";
 import { db } from "../../db";
 import { oauthStates } from "@shared/schema";
-import { eq, lt } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { encryptSecret, decryptSecret } from "../crypto-utils";
 import { getProvider, generateCodeVerifier, generateCodeChallenge } from "./providers";
 import type { OAuthTokenResponse, NormalizedProfile } from "./types";
@@ -22,15 +22,13 @@ export async function createOAuthState(platformName: string, redirectUrl?: strin
     codeVerifier = generateCodeVerifier();
   }
 
-  // State expires in 10 minutes
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
   await db.insert(oauthStates).values({
     state,
     platformName,
     redirectUrl: redirectUrl || null,
     codeVerifier: codeVerifier ? encryptSecret(codeVerifier) : null,
-    expiresAt,
+    // Use DB clock to avoid timezone drift between app/runtime and DB.
+    expiresAt: sql`NOW() + INTERVAL '10 minutes'` as unknown as Date,
   });
 
   return { state, codeVerifier };
@@ -41,21 +39,20 @@ export async function verifyAndConsumeState(state: string): Promise<{
   redirectUrl?: string;
   codeVerifier?: string;
 } | null> {
+  // Atomically consume only non-expired state using DB time.
   const [record] = await db
-    .select()
-    .from(oauthStates)
-    .where(eq(oauthStates.state, state));
+    .delete(oauthStates)
+    .where(and(
+      eq(oauthStates.state, state),
+      sql`${oauthStates.expiresAt} > NOW()`,
+    ))
+    .returning();
 
-  if (!record || record.expiresAt < new Date()) {
-    // Clean up expired state if found
-    if (record) {
-      await db.delete(oauthStates).where(eq(oauthStates.id, record.id));
-    }
+  if (!record) {
+    // Best-effort cleanup for any stale duplicate rows matching same state.
+    await db.delete(oauthStates).where(eq(oauthStates.state, state));
     return null;
   }
-
-  // Consume the state (single use)
-  await db.delete(oauthStates).where(eq(oauthStates.id, record.id));
 
   return {
     platformName: record.platformName,
@@ -66,7 +63,7 @@ export async function verifyAndConsumeState(state: string): Promise<{
 
 // Cleanup old expired states periodically
 export async function cleanupExpiredStates() {
-  await db.delete(oauthStates).where(lt(oauthStates.expiresAt, new Date()));
+  await db.delete(oauthStates).where(lt(oauthStates.expiresAt, sql`NOW()` as unknown as Date));
 }
 
 // ==================== Authorization URL ====================
