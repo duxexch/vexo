@@ -230,6 +230,17 @@ export default function WalletPage() {
     enabled: !!currencySettings?.isActive,
   });
 
+  const walletCurrencyName = useMemo(() => {
+    const configuredName = String(currencySettings?.currencyName || "").trim();
+    if (!configuredName || /^vex\s*coins?$/i.test(configuredName)) {
+      return "vx";
+    }
+    return configuredName;
+  }, [currencySettings?.currencyName]);
+
+  const convertNowLabel = tOr("wallet.convertNow", `Convert to ${walletCurrencyName}`)
+    .replace(/VEX\s*Coins?/gi, walletCurrencyName);
+
   const convertMutation = useMutation({
     mutationFn: (data: { amount: string }) =>
       apiRequestWithPaymentToken('POST', '/api/project-currency/convert', data, 'convert'),
@@ -418,7 +429,7 @@ export default function WalletPage() {
                 </div>
                 <div>
                   <CardTitle className="text-xl">
-                    {currencySettings.currencyName || 'VEX Coin'}
+                    {walletCurrencyName}
                   </CardTitle>
                   <CardDescription>
                     {currencySettings.useInGames && currencySettings.useInP2P
@@ -480,7 +491,7 @@ export default function WalletPage() {
                   data-testid="button-convert-to-vxc"
                 >
                   <ArrowRightLeft className="h-5 w-5 shrink-0" />
-                  <span className="min-w-0 text-center leading-tight">{tOr('wallet.convertNow', 'Convert Balance')}</span>
+                  <span className="min-w-0 text-center leading-tight">{convertNowLabel}</span>
                 </Button>
               </div>
             </div>
@@ -775,7 +786,7 @@ export default function WalletPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Coins className="h-5 w-5 text-primary" />
-                Convert to {currencySettings.currencyName || 'VEX Coin'}
+                Convert to {walletCurrencyName}
               </DialogTitle>
               <DialogDescription className="space-y-1">
                 <p className="inline-flex items-center gap-1">
