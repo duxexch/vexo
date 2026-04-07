@@ -459,6 +459,11 @@ spec:
                 secretKeyRef:
                   name: vex-secrets
                   key: ADMIN_JWT_SECRET
+            - name: SECRETS_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vex-secrets
+                  key: SECRETS_ENCRYPTION_KEY
             - name: ADMIN_BOOTSTRAP_USERNAME
               valueFrom:
                 secretKeyRef:

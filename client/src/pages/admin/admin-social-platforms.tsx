@@ -97,6 +97,11 @@ async function adminFetch(url: string, options?: RequestInit) {
               : ""))
             .filter(Boolean)
             .join("; ")
+        : payload && typeof payload === "object" && "issues" in payload && Array.isArray((payload as Record<string, unknown>).issues)
+          ? ((payload as Record<string, unknown>).issues as unknown[])
+              .map((item) => (typeof item === "string" ? item : ""))
+              .filter(Boolean)
+              .join("; ")
         : "");
 
     const message = details ? `${baseMessage}: ${details}` : baseMessage;
@@ -135,6 +140,25 @@ interface SocialPlatform {
   otpExpiry: number;
   sortOrder: number;
   settings: string | null;
+  runtime?: {
+    runtimeReady: boolean;
+    oauthLoginEnabled: boolean;
+    oauth: {
+      enabled: boolean;
+      ready: boolean;
+      issues: string[];
+      providerRegistered: boolean;
+      configured: boolean;
+    };
+    otp: {
+      enabled: boolean;
+      ready: boolean;
+      issues: string[];
+      adapter: string;
+      adapterConfigured: boolean;
+      requiredFields: string[];
+    };
+  };
 }
 
 const PLATFORM_ICONS: Record<string, any> = {
@@ -232,6 +256,23 @@ const FIELD_LABELS: Record<string, { en: string; ar: string }> = {
   otpExpiry: { en: "OTP Expiry (seconds)", ar: "مدة صلاحية OTP (ثانية)" },
 };
 
+function resolvePlatformFields(platform: SocialPlatform): string[] {
+  const fromMap = PLATFORM_FIELDS[platform.name]?.fields || [];
+  if (fromMap.length > 0) {
+    return fromMap;
+  }
+
+  const genericFields = new Set<string>();
+  if (platform.type === "oauth" || platform.type === "both") {
+    ["clientId", "clientSecret", "callbackUrl"].forEach((field) => genericFields.add(field));
+  }
+  if (platform.type === "otp" || platform.type === "both") {
+    ["webhookUrl", "apiKey", "apiSecret", "accessToken", "botToken", "phoneNumberId", "businessAccountId", "otpTemplate"].forEach((field) => genericFields.add(field));
+  }
+
+  return Array.from(genericFields);
+}
+
 function PlatformCard({
   platform,
   isArabic,
@@ -248,18 +289,10 @@ function PlatformCard({
   isToggling: boolean;
 }) {
   const Icon = PLATFORM_ICONS[platform.icon] || Globe;
-  
-  // Check configuration status based on platform type
-  const p = platform as SocialPlatform & Record<string, unknown>;
-  const isOAuthConfigured = !!p.has_clientId && !!p.has_clientSecret;
-  const isOtpConfigured = platform.type === "otp" 
-    ? !!(p.has_apiKey || p.has_botToken || p.has_accessToken)
-    : true;
-  const isFullyConfigured = platform.type === "oauth" 
-    ? isOAuthConfigured
-    : platform.type === "otp"
-    ? isOtpConfigured
-    : isOAuthConfigured && isOtpConfigured;
+
+  const runtime = platform.runtime;
+  const isFullyConfigured = runtime ? runtime.runtimeReady : false;
+  const runtimeIssues = runtime ? [...runtime.oauth.issues, ...runtime.otp.issues] : [];
 
   return (
     <Card className="relative overflow-visible hover-elevate">
@@ -314,6 +347,11 @@ function PlatformCard({
                   </>
                 )}
               </CardDescription>
+              {platform.isEnabled && runtimeIssues.length > 0 && (
+                <p className="text-xs text-destructive mt-1">
+                  {runtimeIssues[0]}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -405,7 +443,8 @@ function PlatformSettingsDialog({
 
   if (!platform) return null;
 
-  const platformConfig = PLATFORM_FIELDS[platform.name] || { label: platform.displayName, labelAr: platform.displayNameAr, fields: [] };
+  const platformConfig = PLATFORM_FIELDS[platform.name] || { label: platform.displayName, labelAr: platform.displayNameAr, fields: resolvePlatformFields(platform) };
+  const fieldsToRender = platformConfig.fields.length > 0 ? platformConfig.fields : resolvePlatformFields(platform);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -441,10 +480,10 @@ function PlatformSettingsDialog({
               </Select>
             </div>
 
-            {platformConfig.fields.map((field) => (
+            {fieldsToRender.map((field) => (
               <div key={field} className="space-y-2">
                 <Label htmlFor={field}>
-                  {isArabic ? FIELD_LABELS[field]?.ar : FIELD_LABELS[field]?.en}
+                  {isArabic ? (FIELD_LABELS[field]?.ar || field) : (FIELD_LABELS[field]?.en || field)}
                 </Label>
                 {field === "otpTemplate" ? (
                   <Textarea
@@ -460,7 +499,7 @@ function PlatformSettingsDialog({
                     type={field.toLowerCase().includes("secret") || field.toLowerCase().includes("token") || field.toLowerCase().includes("key") ? "password" : "text"}
                     value={(formData as Record<string, unknown>)[field] as string || ""}
                     onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
-                    placeholder={isArabic ? FIELD_LABELS[field]?.ar : FIELD_LABELS[field]?.en}
+                    placeholder={isArabic ? (FIELD_LABELS[field]?.ar || field) : (FIELD_LABELS[field]?.en || field)}
                     data-testid={`input-${field}`}
                   />
                 )}

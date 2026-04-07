@@ -2,11 +2,7 @@
  * Social OTP Engine — Send OTP codes via WhatsApp Business API, Telegram Bot API, SMS
  */
 import crypto from "crypto";
-import { db } from "../db";
-import { otpVerifications } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
 import { storage } from "../storage";
-import { decryptSecret } from "./crypto-utils";
 import { getErrorMessage } from "../routes/helpers";
 
 export interface OtpSendResult {
@@ -107,6 +103,68 @@ export async function sendTelegramOTP(
   }
 }
 
+// ==================== Generic Webhook OTP Adapter ====================
+export async function sendWebhookOTP(
+  recipient: string,
+  code: string,
+  webhookUrl: string,
+  options?: {
+    template?: string;
+    apiKey?: string | null;
+    apiSecret?: string | null;
+    accessToken?: string | null;
+    platformName?: string;
+  },
+): Promise<OtpSendResult> {
+  try {
+    const message = options?.template
+      ? options.template.replace("{{code}}", code)
+      : `Your VEX verification code is: ${code}`;
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (options?.accessToken) {
+      headers.Authorization = `Bearer ${options.accessToken}`;
+    } else if (options?.apiKey) {
+      headers["X-API-KEY"] = options.apiKey;
+    }
+
+    if (options?.apiSecret) {
+      headers["X-API-SECRET"] = options.apiSecret;
+    }
+
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        recipient,
+        code,
+        message,
+        channel: "otp",
+        platform: options?.platformName,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text().catch(() => "");
+      return {
+        success: false,
+        error: `Webhook OTP error: ${response.status}${errorData ? ` ${errorData}` : ""}`,
+      };
+    }
+
+    const body = await response.json().catch(() => ({}));
+    return {
+      success: true,
+      messageId: typeof body.messageId === "string" ? body.messageId : undefined,
+    };
+  } catch (error: unknown) {
+    return { success: false, error: getErrorMessage(error) };
+  }
+}
+
 // ==================== Generic OTP via Social Platform ====================
 export async function sendSocialOTP(
   platformName: string,
@@ -153,8 +211,33 @@ export async function sendSocialOTP(
       );
     }
 
-    default:
-      return { success: false, error: `OTP not supported for platform: ${platformName}` };
+    case "sms": {
+      if (!platform.webhookUrl) {
+        return { success: false, error: "SMS not configured (missing webhook URL)" };
+      }
+
+      return sendWebhookOTP(recipient, code, platform.webhookUrl, {
+        template: platform.otpTemplate || undefined,
+        apiKey: platform.apiKey,
+        apiSecret: platform.apiSecret,
+        accessToken: platform.accessToken,
+        platformName,
+      });
+    }
+
+    default: {
+      if (!platform.webhookUrl) {
+        return { success: false, error: `OTP not supported for platform: ${platformName}. Configure webhook URL for generic adapter` };
+      }
+
+      return sendWebhookOTP(recipient, code, platform.webhookUrl, {
+        template: platform.otpTemplate || undefined,
+        apiKey: platform.apiKey,
+        apiSecret: platform.apiSecret,
+        accessToken: platform.accessToken,
+        platformName,
+      });
+    }
   }
 }
 

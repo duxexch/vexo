@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Copy, Check, CheckCircle2, Smartphone, Mail, User, Zap, KeyRound, Share2 } from "lucide-react";
+import { Loader2, Copy, Check, CheckCircle2, Smartphone, Mail, User, Zap, KeyRound, Share2, Globe } from "lucide-react";
 import { VexLogo } from "@/components/vex-logo";
 import { SiGoogle, SiFacebook, SiTelegram, SiWhatsapp, SiX, SiApple, SiDiscord, SiLinkedin, SiGithub, SiTiktok, SiInstagram } from "react-icons/si";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -37,6 +37,9 @@ interface SocialPlatform {
   icon: string;
   type: "oauth" | "otp" | "both";
   otpEnabled: boolean;
+  runtime?: {
+    oauthLoginEnabled?: boolean;
+  };
 }
 
 const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -51,6 +54,7 @@ const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>
   SiGithub: SiGithub,
   SiTiktok: SiTiktok,
   SiInstagram: SiInstagram,
+  Phone: Smartphone,
 };
 
 export default function LoginPage() {
@@ -110,15 +114,38 @@ export default function LoginPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/settings")
-      .then(res => res.json())
-      .then(setAuthSettings)
-      .catch(() => { });
+    let isMounted = true;
 
-    fetch("/api/social-platforms")
-      .then(res => res.json())
-      .then(setSocialPlatforms)
-      .catch(() => { });
+    const refreshAuthSurface = async () => {
+      try {
+        const [settingsRes, socialRes] = await Promise.all([
+          fetch("/api/auth/settings"),
+          fetch("/api/social-platforms"),
+        ]);
+
+        if (!isMounted) return;
+
+        if (settingsRes.ok) {
+          const settings = await settingsRes.json();
+          if (isMounted) setAuthSettings(settings);
+        }
+
+        if (socialRes.ok) {
+          const socials = await socialRes.json();
+          if (isMounted) setSocialPlatforms(Array.isArray(socials) ? socials : []);
+        }
+      } catch {
+        // Keep previous UI state when network refresh fails.
+      }
+    };
+
+    refreshAuthSurface();
+    const interval = window.setInterval(refreshAuthSurface, 10000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -783,8 +810,10 @@ export default function LoginPage() {
                 <div className="pt-4 border-t border-border">
                   <p className="text-xs text-muted-foreground text-center mb-3">{t('auth.orContinueWith')}</p>
                   <div className="flex justify-center gap-3 flex-wrap">
-                    {socialPlatforms.filter(p => p.type === 'oauth' || p.type === 'both').map((platform) => {
-                      const Icon = PLATFORM_ICONS[platform.icon];
+                    {socialPlatforms
+                      .filter((platform) => platform.runtime?.oauthLoginEnabled ?? (platform.type === "oauth" || platform.type === "both"))
+                      .map((platform) => {
+                      const Icon = PLATFORM_ICONS[platform.icon] || Globe;
                       return (
                         <Button
                           key={platform.id}
@@ -837,7 +866,7 @@ export default function LoginPage() {
                           title={platform.displayName}
                           data-testid={`button-${platform.name}-login`}
                         >
-                          {Icon && <Icon className="w-5 h-5" />}
+                          <Icon className="w-5 h-5" />
                         </Button>
                       );
                     })}

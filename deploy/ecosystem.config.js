@@ -17,6 +17,7 @@ module.exports = {
         // Single process: ~3,000 req/s | 4 workers: ~8,000-12,000 req/s
         NODE_CLUSTER_ENABLED: "true",
         WEB_CONCURRENCY: "4",
+        SECRETS_ENCRYPTION_KEY: process.env.SECRETS_ENCRYPTION_KEY,
       },
 
       // PM2 fork mode — clustering is handled internally by server/cluster.ts

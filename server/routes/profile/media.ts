@@ -5,6 +5,7 @@ import { storage } from "../../storage";
 import { db } from "../../db";
 import { eq } from "drizzle-orm";
 import { users } from "@shared/schema";
+import { evaluateSocialPlatformRuntime } from "../../lib/social-platform-runtime";
 
 export function registerMediaRoutes(app: Express): void {
 
@@ -78,9 +79,11 @@ export function registerMediaRoutes(app: Express): void {
   app.get("/api/social-platforms", async (_req: Request, res: Response) => {
     try {
       const platforms = await storage.getEnabledSocialPlatforms();
+      res.set("Cache-Control", "no-store, no-cache, must-revalidate");
       const publicPlatforms = platforms.map(p => ({
         id: p.id, name: p.name, displayName: p.displayName, displayNameAr: p.displayNameAr,
         icon: p.icon, type: p.type, otpEnabled: p.otpEnabled,
+        runtime: evaluateSocialPlatformRuntime(p),
       }));
       res.json(publicPlatforms);
     } catch (error: unknown) {

@@ -21,6 +21,7 @@ import { JWT_USER_SECRET, JWT_USER_EXPIRY } from "../../lib/auth-config";
 import { emitSystemAlert } from "../../lib/admin-alerts";
 import { getErrorMessage } from "../helpers";
 import { createSession, getSessionFingerprint, setAuthCookie } from "../auth/helpers";
+import { evaluateSocialPlatformRuntime } from "../../lib/social-platform-runtime";
 
 interface OAuthExchangeRecord {
   userId: string;
@@ -145,16 +146,18 @@ export function registerOAuthFlowRoutes(app: Express) {
         return res.status(404).json({ error: "Platform not available" });
       }
 
-      if (platformRecord.type === "otp") {
+      const runtime = evaluateSocialPlatformRuntime(platformRecord);
+      if (!runtime.oauth.enabled) {
         return res.status(400).json({ error: "This platform only supports OTP, not OAuth login" });
       }
 
-      // Check required credentials
-      if (!platformRecord.clientId) {
-        return res.status(503).json({ error: "Platform not configured" });
+      if (!runtime.oauth.ready) {
+        const issues = runtime.oauth.issues.join("; ");
+        return res.status(503).json({ error: issues || "Platform OAuth runtime is not ready" });
       }
 
       const callbackUrl = platformRecord.callbackUrl || `${req.protocol}://${req.get("host")}/api/auth/social/${platform}/callback`;
+      const clientId = platformRecord.clientId || "";
 
       // Create state (with PKCE if supported)
       const { state, codeVerifier } = await createOAuthState(platform, redirectUrl);
@@ -171,7 +174,7 @@ export function registerOAuthFlowRoutes(app: Express) {
 
       const authUrl = await buildAuthorizationUrl(
         platform,
-        platformRecord.clientId,
+        clientId,
         callbackUrl,
         state,
         codeVerifier,
@@ -233,9 +236,17 @@ export function registerOAuthFlowRoutes(app: Express) {
 
       // Look up platform credentials
       const platformRecord = await storage.getSocialPlatformByName(platform);
-      if (!platformRecord) {
+      if (!platformRecord || !platformRecord.isEnabled) {
         logOAuthSecurityEvent(req, platform, "oauth_platform_not_found");
         return res.redirect(`/login?error=platform_not_found`);
+      }
+
+      const runtime = evaluateSocialPlatformRuntime(platformRecord);
+      if (!runtime.oauth.enabled || !runtime.oauth.ready) {
+        logOAuthSecurityEvent(req, platform, "oauth_platform_not_ready", {
+          issues: runtime.oauth.issues,
+        });
+        return res.redirect(`/login?error=platform_not_ready&platform=${safePlatform}`);
       }
 
       const callbackUrl = platformRecord.callbackUrl || `${req.protocol}://${req.get("host")}/api/auth/social/${platform}/callback`;
