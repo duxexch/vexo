@@ -31,6 +31,18 @@ interface OAuthExchangeRecord {
   userAgent?: string;
 }
 
+interface OAuthInitiationRecord {
+  authUrl: string;
+  state: string;
+  expiresAt: number;
+}
+
+interface OAuthStateReplayRecord {
+  redirectPath: string;
+  userAgent?: string;
+  expiresAt: number;
+}
+
 function classifyUserAgent(userAgent?: string): "android" | "ios" | "windows" | "macos" | "linux" | "unknown" {
   if (!userAgent) return "unknown";
 
@@ -54,12 +66,120 @@ function logOAuthSecurityEvent(req: Request, platform: string, event: string, me
 }
 
 const oauthExchangeStore = new Map<string, OAuthExchangeRecord>();
+const oauthExchangeReplayStore = new Map<string, OAuthExchangeRecord>();
+const oauthInitiationStore = new Map<string, OAuthInitiationRecord>();
+const oauthInitiationStateToKey = new Map<string, string>();
+const oauthStateReplayStore = new Map<string, OAuthStateReplayRecord>();
+
+function buildOAuthInitiationKey(req: Request, platform: string): string {
+  const ip = req.ip || "unknown";
+  const ua = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : "unknown";
+  const rawKey = `${platform}:${ip}:${ua}`;
+  return crypto.createHash("sha256").update(rawKey).digest("hex").substring(0, 24);
+}
+
+function isUserAgentCompatible(recordUserAgent?: string, requestUserAgent?: string): boolean {
+  if (!recordUserAgent || !requestUserAgent) {
+    return true;
+  }
+
+  const exactMatch = recordUserAgent === requestUserAgent;
+  const sourceClass = classifyUserAgent(recordUserAgent);
+  const targetClass = classifyUserAgent(requestUserAgent);
+  const samePlatformClass = sourceClass !== "unknown" && sourceClass === targetClass;
+
+  // Allow native app flows where callback and exchange may run in different browser engines.
+  return exactMatch || samePlatformClass;
+}
+
+function getReusableOAuthInitiationUrl(req: Request, platform: string): string | null {
+  const key = buildOAuthInitiationKey(req, platform);
+  const record = oauthInitiationStore.get(key);
+
+  if (!record) {
+    return null;
+  }
+
+  if (record.expiresAt <= Date.now()) {
+    oauthInitiationStore.delete(key);
+    oauthInitiationStateToKey.delete(record.state);
+    return null;
+  }
+
+  return record.authUrl;
+}
+
+function rememberOAuthInitiation(req: Request, platform: string, state: string, authUrl: string) {
+  const key = buildOAuthInitiationKey(req, platform);
+  const expiresAt = Date.now() + 45_000;
+  oauthInitiationStore.set(key, { authUrl, state, expiresAt });
+  oauthInitiationStateToKey.set(state, key);
+}
+
+function clearOAuthInitiationByState(state: string | undefined) {
+  if (!state) {
+    return;
+  }
+
+  const key = oauthInitiationStateToKey.get(state);
+  if (!key) {
+    return;
+  }
+
+  oauthInitiationStore.delete(key);
+  oauthInitiationStateToKey.delete(state);
+}
+
+function getOAuthStateReplayRedirect(state: string, userAgent?: string): string | null {
+  const record = oauthStateReplayStore.get(state);
+  if (!record) {
+    return null;
+  }
+
+  if (record.expiresAt <= Date.now()) {
+    oauthStateReplayStore.delete(state);
+    return null;
+  }
+
+  if (!isUserAgentCompatible(record.userAgent, userAgent)) {
+    return null;
+  }
+
+  return record.redirectPath;
+}
+
+function rememberOAuthStateReplay(state: string, redirectPath: string, userAgent?: string) {
+  oauthStateReplayStore.set(state, {
+    redirectPath,
+    userAgent,
+    expiresAt: Date.now() + 2 * 60 * 1000,
+  });
+}
 
 setInterval(() => {
   const now = Date.now();
   for (const [code, record] of oauthExchangeStore.entries()) {
     if (record.expiresAt <= now) {
       oauthExchangeStore.delete(code);
+    }
+  }
+
+  for (const [code, record] of oauthExchangeReplayStore.entries()) {
+    if (record.expiresAt <= now) {
+      oauthExchangeReplayStore.delete(code);
+    }
+  }
+
+  for (const [key, record] of oauthInitiationStore.entries()) {
+    if (record.expiresAt <= now) {
+      oauthInitiationStore.delete(key);
+      oauthInitiationStateToKey.delete(record.state);
+    }
+  }
+
+  for (const [state, record] of oauthStateReplayStore.entries()) {
+    if (record.expiresAt <= now) {
+      oauthStateReplayStore.delete(state);
     }
   }
 }, 60_000);
@@ -75,28 +195,36 @@ function createOAuthExchangeCode(record: Omit<OAuthExchangeRecord, "expiresAt">)
 
 function consumeOAuthExchangeCode(code: string, userAgent?: string): OAuthExchangeRecord | null {
   const record = oauthExchangeStore.get(code);
-  if (!record) {
-    return null;
-  }
-
-  oauthExchangeStore.delete(code);
-  if (record.expiresAt <= Date.now()) {
-    return null;
-  }
-
-  if (record.userAgent && userAgent) {
-    const exactMatch = record.userAgent === userAgent;
-    const sourceClass = classifyUserAgent(record.userAgent);
-    const targetClass = classifyUserAgent(userAgent);
-    const samePlatformClass = sourceClass !== "unknown" && sourceClass === targetClass;
-
-    // Allow native app flows where OAuth callback and exchange happen in different browser engines.
-    if (!exactMatch && !samePlatformClass) {
+  if (record) {
+    oauthExchangeStore.delete(code);
+    if (record.expiresAt <= Date.now()) {
       return null;
     }
+
+    if (!isUserAgentCompatible(record.userAgent, userAgent)) {
+      return null;
+    }
+
+    // Keep short replay window to make exchange idempotent for same callback code.
+    oauthExchangeReplayStore.set(code, record);
+    return record;
   }
 
-  return record;
+  const replayRecord = oauthExchangeReplayStore.get(code);
+  if (!replayRecord) {
+    return null;
+  }
+
+  if (replayRecord.expiresAt <= Date.now()) {
+    oauthExchangeReplayStore.delete(code);
+    return null;
+  }
+
+  if (!isUserAgentCompatible(replayRecord.userAgent, userAgent)) {
+    return null;
+  }
+
+  return replayRecord;
 }
 
 // Decode Apple id_token for profile data
@@ -186,6 +314,11 @@ export function registerOAuthFlowRoutes(app: Express) {
       const requestedRedirectUrl = typeof req.query.redirect === "string" ? req.query.redirect : undefined;
       const redirectUrl = sanitizePostLoginRedirect(requestedRedirectUrl);
 
+      const reusableAuthUrl = getReusableOAuthInitiationUrl(req, platform);
+      if (reusableAuthUrl) {
+        return res.json({ url: reusableAuthUrl, reused: true });
+      }
+
       if (requestedRedirectUrl && !redirectUrl) {
         logOAuthSecurityEvent(req, platform, "oauth_invalid_redirect_param", {
           redirectLength: requestedRedirectUrl.length,
@@ -233,6 +366,8 @@ export function registerOAuthFlowRoutes(app: Express) {
         extraParams,
       );
 
+      rememberOAuthInitiation(req, platform, state, authUrl);
+
       res.json({ url: authUrl });
     } catch (error: unknown) {
       logger.error(`OAuth initiation error for ${req.params.platform}`, new Error(getErrorMessage(error)));
@@ -258,6 +393,7 @@ export function registerOAuthFlowRoutes(app: Express) {
       const code = (req.query.code || req.body?.code) as string;
       const state = (req.query.state || req.body?.state) as string;
       const error = (req.query.error || req.body?.error) as string;
+      const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined;
 
       if (error) {
         logOAuthSecurityEvent(req, platform, "oauth_denied_by_provider", { providerError: error });
@@ -272,12 +408,20 @@ export function registerOAuthFlowRoutes(app: Express) {
         return res.redirect(`/login?error=missing_params&platform=${safePlatform}`);
       }
 
+      const replayRedirect = getOAuthStateReplayRedirect(state, userAgent);
+      if (replayRedirect) {
+        logOAuthSecurityEvent(req, platform, "oauth_state_replay_served_from_cache");
+        return res.redirect(replayRedirect);
+      }
+
       // Verify and consume state (CSRF protection)
       const stateRecord = await verifyAndConsumeState(state);
       if (!stateRecord) {
         logOAuthSecurityEvent(req, platform, "oauth_invalid_or_replayed_state");
         return res.redirect(`/login?error=invalid_state&platform=${safePlatform}`);
       }
+
+      clearOAuthInitiationByState(state);
 
       if (stateRecord.platformName !== platform) {
         logOAuthSecurityEvent(req, platform, "oauth_state_platform_mismatch", {
@@ -355,11 +499,12 @@ export function registerOAuthFlowRoutes(app: Express) {
       }
 
       const redirect = sanitizePostLoginRedirect(stateRecord.redirectUrl) || "/";
-      const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined;
       const exchangeCode = createOAuthExchangeCode({ userId: user.id, redirect, isNew, userAgent });
+      const callbackRedirectPath = `/auth/callback?code=${encodeURIComponent(exchangeCode)}`;
+      rememberOAuthStateReplay(state, callbackRedirectPath, userAgent);
 
       // Redirect to frontend with one-time code (never expose JWT in URL query).
-      res.redirect(`/auth/callback?code=${encodeURIComponent(exchangeCode)}`);
+      res.redirect(callbackRedirectPath);
     } catch (error: unknown) {
       logger.error(`OAuth callback error for ${req.params.platform}`, new Error(getErrorMessage(error)));
       const safePlatform = encodeURIComponent((req.params.platform || '').replace(/[^a-zA-Z0-9_-]/g, ''));

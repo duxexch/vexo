@@ -29,6 +29,25 @@ export default function AuthCallbackPage() {
       const legacyIsNew = params.get("isNew") === "true";
 
       if (code) {
+        const exchangeGuardKey = `vex_oauth_exchange_${code}`;
+        const previousGuardState = sessionStorage.getItem(exchangeGuardKey);
+
+        if (previousGuardState === "done") {
+          if (window.opener && !window.opener.closed) {
+            notifyOpener("vex_oauth_success");
+            window.close();
+            return;
+          }
+          setLocation("/");
+          return;
+        }
+
+        if (previousGuardState === "pending") {
+          return;
+        }
+
+        sessionStorage.setItem(exchangeGuardKey, "pending");
+
         try {
           const exchangeCode = async () => {
             let lastError: unknown;
@@ -64,6 +83,7 @@ export default function AuthCallbackPage() {
           const res = await exchangeCode();
 
           if (!res.ok) {
+            sessionStorage.removeItem(exchangeGuardKey);
             notifyOpener("vex_oauth_error", "oauth_exchange_failed");
             setLocation("/login?error=oauth_exchange_failed");
             return;
@@ -71,12 +91,14 @@ export default function AuthCallbackPage() {
 
           const data = await res.json();
           if (!data?.token) {
+            sessionStorage.removeItem(exchangeGuardKey);
             notifyOpener("vex_oauth_error", "no_token");
             setLocation("/login?error=no_token");
             return;
           }
 
           localStorage.setItem("pwm_token", data.token);
+          sessionStorage.setItem(exchangeGuardKey, "done");
 
           if (window.opener && !window.opener.closed) {
             notifyOpener("vex_oauth_success");
@@ -92,6 +114,7 @@ export default function AuthCallbackPage() {
           setLocation(typeof data.redirect === "string" && data.redirect.length > 0 ? data.redirect : "/");
           return;
         } catch {
+          sessionStorage.removeItem(exchangeGuardKey);
           notifyOpener("vex_oauth_error", "oauth_exchange_failed");
           setLocation("/login?error=oauth_exchange_failed");
           return;

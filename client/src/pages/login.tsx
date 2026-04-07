@@ -111,9 +111,61 @@ export default function LoginPage() {
   const [showRedirectModal, setShowRedirectModal] = useState(false);
   const [redirectInfo, setRedirectInfo] = useState<{ correctMethod: string; maskedHint: string; password: string } | null>(null);
   const socialPopupWatcherRef = useRef<number | null>(null);
+  const socialLoginLockRef = useRef<{ platformName: string; startedAt: number } | null>(null);
+  const socialLoginUnlockTimeoutRef = useRef<number | null>(null);
+  const [activeSocialLoginPlatform, setActiveSocialLoginPlatform] = useState<string | null>(null);
 
   // Terms & privacy agreement state
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  const clearSocialLoginLock = (resetLoading: boolean = true) => {
+    socialLoginLockRef.current = null;
+    setActiveSocialLoginPlatform(null);
+
+    if (socialLoginUnlockTimeoutRef.current) {
+      window.clearTimeout(socialLoginUnlockTimeoutRef.current);
+      socialLoginUnlockTimeoutRef.current = null;
+    }
+
+    if (socialPopupWatcherRef.current) {
+      window.clearInterval(socialPopupWatcherRef.current);
+      socialPopupWatcherRef.current = null;
+    }
+
+    if (resetLoading) {
+      setIsLoading(false);
+    }
+  };
+
+  const beginSocialLoginAttempt = (platformName: string): boolean => {
+    if (socialLoginLockRef.current) {
+      return false;
+    }
+
+    socialLoginLockRef.current = {
+      platformName,
+      startedAt: Date.now(),
+    };
+    setActiveSocialLoginPlatform(platformName);
+    setIsLoading(true);
+
+    if (socialLoginUnlockTimeoutRef.current) {
+      window.clearTimeout(socialLoginUnlockTimeoutRef.current);
+    }
+
+    socialLoginUnlockTimeoutRef.current = window.setTimeout(() => {
+      clearSocialLoginLock();
+      toast({
+        title: t('auth.error') || 'Error',
+        description: dir === "rtl"
+          ? "انتهت محاولة تسجيل الدخول. حاول مرة أخرى."
+          : "Login attempt timed out. Please try again.",
+        variant: 'destructive',
+      });
+    }, 90_000);
+
+    return true;
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -158,21 +210,14 @@ export default function LoginPage() {
 
       const payload = event.data as { type?: string; reason?: string };
       if (payload.type === "vex_oauth_success") {
-        if (socialPopupWatcherRef.current) {
-          window.clearInterval(socialPopupWatcherRef.current);
-          socialPopupWatcherRef.current = null;
-        }
+        clearSocialLoginLock(false);
         await refreshUser();
         setIsLoading(false);
         setLocation("/");
       }
 
       if (payload.type === "vex_oauth_error") {
-        if (socialPopupWatcherRef.current) {
-          window.clearInterval(socialPopupWatcherRef.current);
-          socialPopupWatcherRef.current = null;
-        }
-        setIsLoading(false);
+        clearSocialLoginLock();
         toast({
           title: t('auth.error') || 'Error',
           description: payload.reason || 'Social login failed',
@@ -184,12 +229,17 @@ export default function LoginPage() {
     window.addEventListener("message", onMessage);
     return () => {
       window.removeEventListener("message", onMessage);
+      if (socialLoginUnlockTimeoutRef.current) {
+        window.clearTimeout(socialLoginUnlockTimeoutRef.current);
+        socialLoginUnlockTimeoutRef.current = null;
+      }
+      socialLoginLockRef.current = null;
       if (socialPopupWatcherRef.current) {
         window.clearInterval(socialPopupWatcherRef.current);
         socialPopupWatcherRef.current = null;
       }
     };
-  }, [refreshUser, setLocation, t, toast]);
+  }, [dir, refreshUser, setLocation, t, toast]);
 
   const checkTermsAgreed = () => {
     if (!agreedToTerms) {
@@ -823,14 +873,16 @@ export default function LoginPage() {
                             size="icon"
                             className="w-12 h-12 rounded-full hover:scale-105 transition-transform"
                             onClick={async () => {
+                              if (!beginSocialLoginAttempt(platform.name)) {
+                                return;
+                              }
+
                               try {
-                                setIsLoading(true);
                                 const res = await fetch(`/api/auth/social/${platform.name}`);
                                 const data = await res.json();
                                 if (data.url) {
                                   if (Capacitor.isNativePlatform()) {
                                     await Browser.open({ url: data.url });
-                                    setIsLoading(false);
                                     return;
                                   }
 
@@ -853,28 +905,26 @@ export default function LoginPage() {
                                   popup.focus();
                                   socialPopupWatcherRef.current = window.setInterval(() => {
                                     if (popup.closed) {
-                                      if (socialPopupWatcherRef.current) {
-                                        window.clearInterval(socialPopupWatcherRef.current);
-                                        socialPopupWatcherRef.current = null;
-                                      }
-                                      setIsLoading(false);
+                                      clearSocialLoginLock();
                                     }
                                   }, 500);
                                 } else {
                                   toast({ title: t('auth.error') || 'Error', description: data.error || 'Failed to initiate login', variant: 'destructive' });
-                                  setIsLoading(false);
+                                  clearSocialLoginLock();
                                 }
                               } catch {
                                 toast({ title: t('auth.error') || 'Error', description: 'Connection failed', variant: 'destructive' });
-                                setIsLoading(false);
+                                clearSocialLoginLock();
                               }
                             }}
-                            disabled={isLoading}
+                            disabled={isLoading || activeSocialLoginPlatform !== null}
                             aria-label={platform.displayName}
                             title={platform.displayName}
                             data-testid={`button-${platform.name}-login`}
                           >
-                            <Icon className="w-5 h-5" />
+                            {isLoading && activeSocialLoginPlatform === platform.name
+                              ? <Loader2 className="w-5 h-5 animate-spin" />
+                              : <Icon className="w-5 h-5" />}
                           </Button>
                         );
                       })}
