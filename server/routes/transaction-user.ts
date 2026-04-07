@@ -155,7 +155,7 @@ export function registerTransactionUserRoutes(app: Express): void {
           message: `User ${user.username} requested a deposit of ${totalAmount.toFixed(2)} ${normalizedDepositCurrency} (~${creditedAmountUsd.toFixed(2)} USD) via ${safePaymentMethod || 'unknown'}`,
           messageAr: `طلب المستخدم ${user.username} إيداع بقيمة ${totalAmount.toFixed(2)} ${normalizedDepositCurrency} (حوالي ${creditedAmountUsd.toFixed(2)} USD)`,
           severity: 'info',
-          deepLink: '/admin/users',
+          deepLink: '/admin/transactions',
           entityType: 'transaction',
           entityId: transaction.id,
         }).catch(() => { });
@@ -286,7 +286,7 @@ export function registerTransactionUserRoutes(app: Express): void {
           message: `User ${result.user.username} requested a withdrawal of $${withdrawAmount.toFixed(2)}`,
           messageAr: `طلب المستخدم ${result.user.username} سحب بقيمة $${withdrawAmount.toFixed(2)}`,
           severity: 'warning',
-          deepLink: '/admin/users',
+          deepLink: '/admin/transactions',
           entityType: 'transaction',
           entityId: transaction.id,
         }).catch(() => { });

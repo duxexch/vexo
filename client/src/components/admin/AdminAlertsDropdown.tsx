@@ -15,6 +15,8 @@ import { Bell, AlertTriangle, Info, AlertCircle, Flame, Check, ExternalLink } fr
 import { queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+import { playSound } from "@/hooks/use-sound-effects";
 
 function getAdminToken() {
   return localStorage.getItem("adminToken");
@@ -51,10 +53,15 @@ interface AdminAlert {
 
 export function AdminAlertsDropdown() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const isUnmountingRef = useRef(false);
+  const seenAlertIdsRef = useRef<Set<string>>(new Set());
 
-  const { data: alerts = [], refetch } = useQuery<AdminAlert[]>({
+  const { data: alerts = [] } = useQuery<AdminAlert[]>({
     queryKey: ["/api/admin/alerts"],
     queryFn: () => adminFetch("/api/admin/alerts?limit=20"),
     refetchInterval: 30000,
@@ -88,53 +95,203 @@ export function AdminAlertsDropdown() {
     },
   });
 
+  const navigateToDeepLink = useCallback((deepLink: string | null | undefined) => {
+    if (!deepLink) return;
+
+    try {
+      const parsed = new URL(deepLink, window.location.origin);
+      const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      if (path.startsWith("/admin")) {
+        setLocation(path);
+      }
+    } catch {
+      if (deepLink.startsWith("/admin")) {
+        setLocation(deepLink);
+      }
+    }
+  }, [setLocation]);
+
+  const playAdminAlertSound = useCallback((severity: string) => {
+    if (severity === "urgent") {
+      playSound("urgent_alarm");
+      return;
+    }
+    if (severity === "critical") {
+      playSound("security_alert");
+      return;
+    }
+    if (severity === "warning") {
+      playSound("support");
+      return;
+    }
+    playSound("notification");
+  }, []);
+
   const handleNewAlert = useCallback((alert: AdminAlert) => {
-    queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts/count"] });
+    if (!alert?.id) return;
+    if (seenAlertIdsRef.current.has(alert.id)) return;
+
+    seenAlertIdsRef.current.add(alert.id);
+
+    queryClient.setQueryData<AdminAlert[]>(["/api/admin/alerts"], (previous) => {
+      const list = previous || [];
+      const next = [alert, ...list.filter((item) => item.id !== alert.id)];
+      return next.slice(0, 20);
+    });
+
+    queryClient.setQueryData<{ count: number }>(["/api/admin/alerts/count"], (previous) => {
+      const prevCount = previous?.count || 0;
+      const increment = alert.isRead ? 0 : 1;
+      return { count: prevCount + increment };
+    });
+
     queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts/unread-by-section"] });
     queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts/unread-entities"] });
     queryClient.invalidateQueries({ queryKey: ["/api/admin/pending-counts"] });
+
+    playAdminAlertSound(alert.severity);
+
+    toast({
+      title: alert.title,
+      description: alert.message,
+    });
+
+    if (typeof Notification !== "undefined" && Notification.permission === "granted" && alert.title) {
+      try {
+        const browserNotification = new Notification(alert.title, {
+          body: alert.message || "",
+          icon: "/icons/vex-gaming-logo-192x192.png",
+          tag: `vex-admin-alert-${alert.id}`,
+          requireInteraction: true,
+        });
+
+        browserNotification.onclick = () => {
+          window.focus();
+          navigateToDeepLink(alert.deepLink);
+          browserNotification.close();
+        };
+
+        setTimeout(() => browserNotification.close(), 15000);
+      } catch {
+        // Ignore browser notification failures.
+      }
+    }
+  }, [navigateToDeepLink, playAdminAlertSound, toast]);
+
+  useEffect(() => {
+    alerts.forEach((alert) => {
+      if (alert?.id) {
+        seenAlertIdsRef.current.add(alert.id);
+      }
+    });
+  }, [alerts]);
+
+  useEffect(() => {
+    if (typeof Notification !== "undefined" && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {
+        // Ignore notification permission failures.
+      });
+    }
   }, []);
 
   useEffect(() => {
     const token = getAdminToken();
     if (!token) return;
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    wsRef.current = ws;
+    isUnmountingRef.current = false;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "admin_auth", token }));
+    const connect = () => {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        reconnectAttemptRef.current = 0;
+        ws.send(JSON.stringify({ type: "admin_auth", token }));
+      };
+
+      ws.onmessage = (event) => {
+        let payload: unknown;
+        try {
+          payload = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+
+        const payloadRecord = typeof payload === "object" && payload !== null
+          ? payload as Record<string, unknown>
+          : null;
+
+        const messages = payloadRecord?.type === "batch" && Array.isArray(payloadRecord.messages)
+          ? payloadRecord.messages
+          : [payload];
+
+        messages.forEach((message) => {
+          if (!message || typeof message !== "object") return;
+
+          const typedMessage = message as { type?: string; data?: AdminAlert; count?: number };
+          if (typedMessage.type === "admin_alert" && typedMessage.data) {
+            handleNewAlert(typedMessage.data);
+          }
+
+          if (typedMessage.type === "admin_alert_count" && typeof typedMessage.count === "number") {
+            queryClient.setQueryData(["/api/admin/alerts/count"], { count: typedMessage.count });
+          }
+        });
+      };
+
+      ws.onclose = () => {
+        if (isUnmountingRef.current) return;
+
+        const nextAttempt = Math.min(reconnectAttemptRef.current + 1, 8);
+        reconnectAttemptRef.current = nextAttempt;
+        const reconnectDelayMs = Math.min(10000, 500 * (2 ** nextAttempt));
+
+        if (reconnectTimerRef.current !== null) {
+          window.clearTimeout(reconnectTimerRef.current);
+        }
+
+        reconnectTimerRef.current = window.setTimeout(() => {
+          connect();
+        }, reconnectDelayMs);
+      };
+
+      ws.onerror = () => {
+        // onclose handles retry.
+      };
     };
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "admin_alert") {
-        handleNewAlert(data.data);
-      }
-      if (data.type === "admin_alert_count") {
-        queryClient.setQueryData(["/api/admin/alerts/count"], { count: data.count });
-      }
-    };
-
-    ws.onerror = () => {
-      console.error("Admin alerts WebSocket error");
-    };
+    connect();
 
     return () => {
-      ws.close();
+      isUnmountingRef.current = true;
+
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+
+      wsRef.current?.close();
     };
   }, [handleNewAlert]);
 
   const handleAlertClick = (alert: AdminAlert) => {
     if (!alert.isRead) {
+      queryClient.setQueryData<AdminAlert[]>(["/api/admin/alerts"], (previous) => {
+        if (!previous) return previous;
+        return previous.map((item) => item.id === alert.id ? { ...item, isRead: true } : item);
+      });
+
+      queryClient.setQueryData<{ count: number }>(["/api/admin/alerts/count"], (previous) => {
+        const current = previous?.count || 0;
+        return { count: Math.max(0, current - 1) };
+      });
+
       markReadMutation.mutate(alert.id);
     }
-    if (alert.deepLink) {
-      setLocation(alert.deepLink);
-      setIsOpen(false);
-    }
+
+    navigateToDeepLink(alert.deepLink);
+    setIsOpen(false);
   };
 
   const getSeverityIcon = (severity: string) => {

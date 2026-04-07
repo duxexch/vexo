@@ -107,6 +107,7 @@ const AuthCallbackPage = lazy(() => import("@/pages/auth-callback"));
 const AdminLoginPage = lazy(() => import("@/pages/admin/admin-login"));
 const AdminDashboardPage = lazy(() => import("@/pages/admin/admin-dashboard"));
 const AdminUsersPage = lazy(() => import("@/pages/admin/admin-users"));
+const AdminTransactionsPage = lazy(() => import("@/pages/admin/admin-transactions"));
 const AdminP2PPage = lazy(() => import("@/pages/admin/admin-p2p"));
 const AdminCurrencyPage = lazy(() => import("@/pages/admin/admin-currency"));
 const AdminSectionsPage = lazy(() => import("@/pages/admin/admin-sections"));
@@ -493,6 +494,9 @@ function AdminRouter() {
           </Route>
           <Route path="/admin/users">
             <AdminLayout><AdminUsersPage /></AdminLayout>
+          </Route>
+          <Route path="/admin/transactions">
+            <AdminLayout><AdminTransactionsPage /></AdminLayout>
           </Route>
           <Route path="/admin/sections">
             <AdminLayout><AdminSectionsPage /></AdminLayout>

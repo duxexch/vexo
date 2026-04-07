@@ -39,6 +39,7 @@ import {
   IdCard,
   Search,
   CreditCard,
+  DollarSign,
   Share2,
   Coins,
   Heart,
@@ -86,6 +87,7 @@ function AdminSidebar() {
   const menuItems = [
     { title: "Dashboard", url: "/admin/dashboard", icon: LayoutDashboard },
     { title: "Users", url: "/admin/users", icon: Users, hasBadge: true },
+    { title: "Transactions", url: "/admin/transactions", icon: DollarSign, hasBadge: true },
     { title: "Games", url: "/admin/games", icon: Gamepad2 },
     { title: "Game Sections", url: "/admin/game-sections", icon: LayoutGrid },
     { title: "Challenges", url: "/admin/challenges", icon: Swords },
