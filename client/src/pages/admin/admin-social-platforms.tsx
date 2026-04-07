@@ -74,8 +74,41 @@ async function adminFetch(url: string, options?: RequestInit) {
     window.location.href = "/admin/login";
     throw new Error("Session expired");
   }
-  if (!res.ok) throw new Error("Failed to fetch");
-  return res.json();
+
+  const contentType = res.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+  const payload = isJson
+    ? await res.json().catch(() => null)
+    : await res.text().catch(() => "");
+
+  if (!res.ok) {
+    const baseMessage =
+      (payload && typeof payload === "object" && "error" in payload && typeof (payload as Record<string, unknown>).error === "string"
+        ? (payload as Record<string, unknown>).error as string
+        : typeof payload === "string" && payload.trim().length > 0
+          ? payload.trim()
+          : `Request failed (${res.status})`);
+
+    const details =
+      (payload && typeof payload === "object" && "details" in payload && Array.isArray((payload as Record<string, unknown>).details)
+        ? ((payload as Record<string, unknown>).details as unknown[])
+            .map((item) => (item && typeof item === "object" && "message" in item && typeof (item as Record<string, unknown>).message === "string"
+              ? (item as Record<string, unknown>).message as string
+              : ""))
+            .filter(Boolean)
+            .join("; ")
+        : "");
+
+    const message = details ? `${baseMessage}: ${details}` : baseMessage;
+    throw new Error(message);
+  }
+
+  return payload;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return "Unknown error";
 }
 
 interface SocialPlatform {
@@ -548,10 +581,13 @@ export default function AdminSocialPlatformsPage() {
         description: isArabic ? "تم حفظ إعدادات المنصة" : "Platform settings saved",
       });
     },
-    onError: () => {
+    onError: (error: unknown) => {
+      const details = getErrorMessage(error);
       toast({
         title: isArabic ? "خطأ" : "Error",
-        description: isArabic ? "فشل حفظ الإعدادات" : "Failed to save settings",
+        description: isArabic
+          ? `فشل حفظ الإعدادات: ${details}`
+          : `Failed to save settings: ${details}`,
         variant: "destructive",
       });
     },
