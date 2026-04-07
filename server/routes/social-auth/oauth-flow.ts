@@ -91,6 +91,31 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
+function sanitizePostLoginRedirect(redirect?: string): string | undefined {
+  if (!redirect) return undefined;
+
+  const trimmed = redirect.trim();
+  if (!trimmed || trimmed.length > 2048) {
+    return undefined;
+  }
+
+  // Accept only same-origin relative paths.
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return undefined;
+  }
+
+  if (/[\r\n]/.test(trimmed)) {
+    return undefined;
+  }
+
+  try {
+    const normalized = new URL(trimmed, "https://vixo.click");
+    return `${normalized.pathname}${normalized.search}${normalized.hash}`;
+  } catch {
+    return undefined;
+  }
+}
+
 export function registerOAuthFlowRoutes(app: Express) {
   app.post("/api/auth/social/exchange", authRateLimiter, async (req: Request, res: Response) => {
     const { code } = req.body || {};
@@ -138,7 +163,14 @@ export function registerOAuthFlowRoutes(app: Express) {
   app.get("/api/auth/social/:platform", authRateLimiter, async (req: Request, res: Response) => {
     try {
       const { platform } = req.params;
-      const redirectUrl = req.query.redirect as string | undefined;
+      const requestedRedirectUrl = typeof req.query.redirect === "string" ? req.query.redirect : undefined;
+      const redirectUrl = sanitizePostLoginRedirect(requestedRedirectUrl);
+
+      if (requestedRedirectUrl && !redirectUrl) {
+        logOAuthSecurityEvent(req, platform, "oauth_invalid_redirect_param", {
+          redirectLength: requestedRedirectUrl.length,
+        });
+      }
 
       // Look up platform in DB
       const platformRecord = await storage.getSocialPlatformByName(platform);
@@ -302,7 +334,7 @@ export function registerOAuthFlowRoutes(app: Express) {
         }).catch(() => { });
       }
 
-      const redirect = stateRecord.redirectUrl || "/";
+      const redirect = sanitizePostLoginRedirect(stateRecord.redirectUrl) || "/";
       const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined;
       const exchangeCode = createOAuthExchangeCode({ userId: user.id, redirect, isNew, userAgent });
 

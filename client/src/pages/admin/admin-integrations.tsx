@@ -203,6 +203,15 @@ const INTEGRATION_ICONS: Record<string, any> = {
 function IntegrationCard({ integration, isArabic }: { integration: IntegrationStatus; isArabic: boolean }) {
   const [showSetup, setShowSetup] = useState(false);
   const Icon = INTEGRATION_ICONS[integration.id] || Settings2;
+  const isSocialIntegration = integration.category === "auth";
+
+  const setupDescription = isSocialIntegration
+    ? (isArabic
+      ? "إعدادات تسجيل الدخول الاجتماعي تتم من لوحة الأدمن > Social Platforms. متغيرات البيئة أدناه اختيارية كخطة احتياط."
+      : "Social login settings are managed in Admin > Social Platforms. Environment variables below are optional fallback.")
+    : (isArabic
+      ? "أضف المتغيرات التالية إلى ملف .env.production.local الخاص بك"
+      : "Add the following environment variables to your .env.production.local file");
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -230,8 +239,8 @@ function IntegrationCard({ integration, isArabic }: { integration: IntegrationSt
               variant={integration.isConfigured ? "default" : "secondary"}
               className={integration.isConfigured ? "bg-green-600" : ""}
             >
-              {integration.isConfigured 
-                ? (isArabic ? "مُفعّل" : "Connected") 
+              {integration.isConfigured
+                ? (isArabic ? "مُفعّل" : "Connected")
                 : (isArabic ? "غير مُفعّل" : "Not Connected")}
             </Badge>
           </div>
@@ -241,7 +250,9 @@ function IntegrationCard({ integration, isArabic }: { integration: IntegrationSt
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Key className="w-3 h-3" />
               <span>
-                {integration.requiredEnvVars.length} {isArabic ? "متغيرات مطلوبة" : "variables required"}
+                {isSocialIntegration
+                  ? (isArabic ? "تتم الإدارة من Social Platforms" : "Managed in Social Platforms")
+                  : `${integration.requiredEnvVars.length} ${isArabic ? "متغيرات مطلوبة" : "variables required"}`}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -275,16 +286,16 @@ function IntegrationCard({ integration, isArabic }: { integration: IntegrationSt
               {isArabic ? `إعداد ${integration.nameAr}` : `Setup ${integration.name}`}
             </DialogTitle>
             <DialogDescription>
-              {isArabic 
-                ? "أضف المتغيرات التالية إلى ملف .env الخاص بك"
-                : "Add the following environment variables to your .env file"}
+              {setupDescription}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="rounded-lg border p-4 space-y-3">
               <h4 className="font-medium text-sm">
-                {isArabic ? "المتغيرات المطلوبة:" : "Required Environment Variables:"}
+                {isSocialIntegration
+                  ? (isArabic ? "متغيرات بيئة اختيارية (Fallback):" : "Optional Environment Variables (Fallback):")
+                  : (isArabic ? "المتغيرات المطلوبة:" : "Required Environment Variables:")}
               </h4>
               {integration.requiredEnvVars.map((envVar) => (
                 <div key={envVar} className="flex items-center justify-between bg-muted rounded p-2">
@@ -304,20 +315,33 @@ function IntegrationCard({ integration, isArabic }: { integration: IntegrationSt
 
             <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800 p-4">
               <h4 className="font-medium text-sm text-blue-700 dark:text-blue-300 mb-2">
-                {isArabic ? "كيفية الإضافة:" : "How to add:"}
+                {isSocialIntegration
+                  ? (isArabic ? "كيفية الإعداد:" : "How to configure:")
+                  : (isArabic ? "كيفية الإضافة:" : "How to add:")}
               </h4>
               <ol className="text-xs text-blue-600 dark:text-blue-400 space-y-1 list-decimal list-inside">
-                <li>{isArabic ? "افتح ملف .env على الخادم" : "Open the .env file on your server"}</li>
-                <li>{isArabic ? "أضف كل متغير مع القيمة المناسبة" : "Add each variable with the appropriate value"}</li>
-                <li>{isArabic ? "أعد تشغيل التطبيق لتفعيل التغييرات" : "Restart the application to apply changes"}</li>
+                {isSocialIntegration ? (
+                  <>
+                    <li>{isArabic ? "افتح لوحة الأدمن ثم انتقل إلى Social Platforms" : "Open Admin panel and go to Social Platforms"}</li>
+                    <li>{isArabic ? "أدخل Client ID و Client Secret و Callback URL لكل مزود" : "Set Client ID, Client Secret, and Callback URL for each provider"}</li>
+                    <li>{isArabic ? "فعّل المزود المطلوب ثم احفظ" : "Enable the provider and save"}</li>
+                    <li>{isArabic ? "استخدم .env.production.local فقط كخيار احتياطي إذا لزم" : "Use .env.production.local only as fallback when needed"}</li>
+                  </>
+                ) : (
+                  <>
+                    <li>{isArabic ? "افتح ملف .env.production.local على الخادم" : "Open .env.production.local on your server"}</li>
+                    <li>{isArabic ? "أضف كل متغير مع القيمة المناسبة" : "Add each variable with the appropriate value"}</li>
+                    <li>{isArabic ? "أعد تشغيل التطبيق لتفعيل التغييرات" : "Restart the application to apply changes"}</li>
+                  </>
+                )}
               </ol>
             </div>
 
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Link2 className="w-3 h-3" />
-              <a 
-                href={integration.documentationUrl} 
-                target="_blank" 
+              <a
+                href={integration.documentationUrl}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="hover:underline"
               >
@@ -375,7 +399,7 @@ export default function AdminIntegrationsPage() {
             {isArabic ? "إعدادات الربط الخارجي" : "External Integrations"}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {isArabic 
+            {isArabic
               ? "اربط التطبيق بالخدمات الخارجية للحصول على ميزات إضافية"
               : "Connect your app to external services for additional features"}
           </p>
@@ -393,7 +417,7 @@ export default function AdminIntegrationsPage() {
             (i) => i.category === category && i.isConfigured
           ).length;
           const total = integrationsWithStatus.filter((i) => i.category === category).length;
-          
+
           return (
             <Card key={category} className="p-4">
               <div className="flex items-center gap-3">
@@ -429,10 +453,10 @@ export default function AdminIntegrationsPage() {
         <TabsContent value="all" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             {integrationsWithStatus.map((integration) => (
-              <IntegrationCard 
-                key={integration.id} 
-                integration={integration} 
-                isArabic={isArabic} 
+              <IntegrationCard
+                key={integration.id}
+                integration={integration}
+                isArabic={isArabic}
               />
             ))}
           </div>
@@ -444,10 +468,10 @@ export default function AdminIntegrationsPage() {
               {integrationsWithStatus
                 .filter((i) => i.category === category)
                 .map((integration) => (
-                  <IntegrationCard 
-                    key={integration.id} 
-                    integration={integration} 
-                    isArabic={isArabic} 
+                  <IntegrationCard
+                    key={integration.id}
+                    integration={integration}
+                    isArabic={isArabic}
                   />
                 ))}
             </div>

@@ -470,7 +470,7 @@ export default function InstallAppPage() {
                     ))}
                   </ul>
                   <a
-                    href="/downloads/VEX-v1.1.0.apk"
+                    href="/downloads/VEX-official-release.apk"
                     download
                     className="flex items-center justify-center gap-2 w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/20"
                   >
@@ -516,7 +516,7 @@ export default function InstallAppPage() {
                     ))}
                   </ul>
                   <a
-                    href="/downloads/VEX-v1.1.0.aab"
+                    href="/downloads/VEX-official-release.aab"
                     download
                     className="flex items-center justify-center gap-2 w-full py-4 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-amber-700 transition-all shadow-lg shadow-orange-500/20"
                   >

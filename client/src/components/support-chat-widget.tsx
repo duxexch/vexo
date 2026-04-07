@@ -195,7 +195,7 @@ export function SupportChatWidget({ isLoggedIn = false }: { isLoggedIn?: boolean
   const handleSendWithMedia = useCallback(async () => {
     if (sendMutation.isPending || uploading || !ticket) return;
     const trimmed = message.trim();
-    
+
     if (mediaPreview) {
       setUploading(true);
       try {
@@ -359,13 +359,12 @@ export function SupportChatWidget({ isLoggedIn = false }: { isLoggedIn?: boolean
                 className={`flex ${msg.senderType === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                    msg.senderType === "user"
+                  className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${msg.senderType === "user"
                       ? "bg-primary text-primary-foreground rounded-ee-sm"
                       : msg.senderType === "system"
-                      ? "bg-muted text-muted-foreground rounded-es-sm italic"
-                      : "bg-card border border-border text-card-foreground rounded-es-sm"
-                  }`}
+                        ? "bg-muted text-muted-foreground rounded-es-sm italic"
+                        : "bg-card border border-border text-card-foreground rounded-es-sm"
+                    }`}
                 >
                   {msg.senderType === "admin" && (
                     <p className="text-[10px] font-semibold text-primary mb-0.5 flex items-center gap-1">
@@ -539,15 +538,15 @@ function getContactUrl(type: string, value: string): string {
 }
 
 const CONTACT_STYLES: Record<string, { gradient: string; icon: string; shadow: string }> = {
-  whatsapp:  { gradient: "from-green-500 to-green-600",   icon: "📱", shadow: "shadow-green-500/25" },
-  telegram:  { gradient: "from-sky-400 to-blue-500",      icon: "✈️", shadow: "shadow-blue-500/25" },
-  email:     { gradient: "from-amber-500 to-orange-500",  icon: "✉️", shadow: "shadow-orange-500/25" },
-  phone:     { gradient: "from-emerald-500 to-teal-600",  icon: "📞", shadow: "shadow-emerald-500/25" },
-  facebook:  { gradient: "from-blue-500 to-blue-700",     icon: "👤", shadow: "shadow-blue-600/25" },
-  instagram: { gradient: "from-pink-500 to-purple-600",   icon: "📸", shadow: "shadow-pink-500/25" },
-  twitter:   { gradient: "from-gray-700 to-gray-900",     icon: "𝕏",  shadow: "shadow-gray-700/25" },
-  discord:   { gradient: "from-indigo-500 to-violet-600", icon: "🎮", shadow: "shadow-indigo-500/25" },
-  other:     { gradient: "from-gray-500 to-gray-600",     icon: "🔗", shadow: "shadow-gray-500/25" },
+  whatsapp: { gradient: "from-green-500 to-green-600", icon: "📱", shadow: "shadow-green-500/25" },
+  telegram: { gradient: "from-sky-400 to-blue-500", icon: "✈️", shadow: "shadow-blue-500/25" },
+  email: { gradient: "from-amber-500 to-orange-500", icon: "✉️", shadow: "shadow-orange-500/25" },
+  phone: { gradient: "from-emerald-500 to-teal-600", icon: "📞", shadow: "shadow-emerald-500/25" },
+  facebook: { gradient: "from-blue-500 to-blue-700", icon: "👤", shadow: "shadow-blue-600/25" },
+  instagram: { gradient: "from-pink-500 to-purple-600", icon: "📸", shadow: "shadow-pink-500/25" },
+  twitter: { gradient: "from-gray-700 to-gray-900", icon: "𝕏", shadow: "shadow-gray-700/25" },
+  discord: { gradient: "from-indigo-500 to-violet-600", icon: "🎮", shadow: "shadow-indigo-500/25" },
+  other: { gradient: "from-gray-500 to-gray-600", icon: "🔗", shadow: "shadow-gray-500/25" },
 };
 
 const CONTACT_LABEL_KEYS: Record<string, string> = {
@@ -613,6 +612,8 @@ export function SupportChatIcon() {
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-1.5 h-9 px-3"
+        aria-label={t('support.title')}
+        title={t('support.title')}
       >
         <Headphones className="h-4 w-4" />
         <span className="hidden sm:inline text-xs">{t('support.title')}</span>
@@ -643,8 +644,10 @@ export function SupportChatIcon() {
                     </div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setIsOpen(false)}
                     className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+                    aria-label={t('common.close')}
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -682,7 +685,7 @@ export function SupportChatIcon() {
                             <p className="font-semibold text-sm">
                               {contact.label || t(CONTACT_LABEL_KEYS[contact.type] || 'support.otherLink')}
                             </p>
-                            <p className="text-[11px] text-white/70 truncate mt-0.5" dir="ltr" style={{textAlign: "start"}}>
+                            <p className="text-[11px] text-white/70 truncate mt-0.5" dir="ltr" style={{ textAlign: "start" }}>
                               {contact.value}
                             </p>
                           </div>

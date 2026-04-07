@@ -18,6 +18,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SupportChatIcon } from "@/components/support-chat-widget";
 import { LanguageSwitcher } from "@/lib/i18n";
 import { fetchWithCsrf } from "@/lib/csrf";
+import { Browser } from "@capacitor/browser";
+import { Capacitor } from "@capacitor/core";
 
 interface AuthSettings {
   oneClickEnabled: boolean;
@@ -597,7 +599,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative" dir={dir}>
+    <main id="main-content" className="min-h-screen flex items-center justify-center bg-background p-4 relative" dir={dir}>
       <div className="absolute top-4 start-4 end-4 flex items-center justify-between z-50">
         <div className="flex items-center gap-2">
           <SupportChatIcon />
@@ -665,7 +667,7 @@ export default function LoginPage() {
                   <div className="text-center space-y-4">
                     <div className="p-4 bg-accent/10 rounded-md border border-accent/20">
                       <Zap className="w-12 h-12 text-accent mx-auto mb-2" />
-                      <h3 className="font-semibold text-foreground">{t('auth.oneClickTitle')}</h3>
+                      <h2 className="font-semibold text-foreground">{t('auth.oneClickTitle')}</h2>
                       <p className="text-sm text-muted-foreground mt-1">
                         {t('auth.oneClickDesc')}
                       </p>
@@ -813,63 +815,69 @@ export default function LoginPage() {
                     {socialPlatforms
                       .filter((platform) => platform.runtime?.oauthLoginEnabled ?? (platform.type === "oauth" || platform.type === "both"))
                       .map((platform) => {
-                      const Icon = PLATFORM_ICONS[platform.icon] || Globe;
-                      return (
-                        <Button
-                          key={platform.id}
-                          variant="outline"
-                          size="icon"
-                          className="w-12 h-12 rounded-full hover:scale-105 transition-transform"
-                          onClick={async () => {
-                            try {
-                              setIsLoading(true);
-                              const res = await fetch(`/api/auth/social/${platform.name}`);
-                              const data = await res.json();
-                              if (data.url) {
-                                const popupWidth = 520;
-                                const popupHeight = 700;
-                                const left = Math.max(0, Math.round((window.screen.width - popupWidth) / 2));
-                                const top = Math.max(0, Math.round((window.screen.height - popupHeight) / 2));
-                                const popup = window.open(
-                                  data.url,
-                                  "vex_social_auth",
-                                  `popup=yes,width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`
-                                );
-
-                                // Popup blocked or unsupported contexts: fallback to full redirect.
-                                if (!popup) {
-                                  window.location.href = data.url;
-                                  return;
-                                }
-
-                                popup.focus();
-                                socialPopupWatcherRef.current = window.setInterval(() => {
-                                  if (popup.closed) {
-                                    if (socialPopupWatcherRef.current) {
-                                      window.clearInterval(socialPopupWatcherRef.current);
-                                      socialPopupWatcherRef.current = null;
-                                    }
+                        const Icon = PLATFORM_ICONS[platform.icon] || Globe;
+                        return (
+                          <Button
+                            key={platform.id}
+                            variant="outline"
+                            size="icon"
+                            className="w-12 h-12 rounded-full hover:scale-105 transition-transform"
+                            onClick={async () => {
+                              try {
+                                setIsLoading(true);
+                                const res = await fetch(`/api/auth/social/${platform.name}`);
+                                const data = await res.json();
+                                if (data.url) {
+                                  if (Capacitor.isNativePlatform()) {
+                                    await Browser.open({ url: data.url });
                                     setIsLoading(false);
+                                    return;
                                   }
-                                }, 500);
-                              } else {
-                                toast({ title: t('auth.error') || 'Error', description: data.error || 'Failed to initiate login', variant: 'destructive' });
+
+                                  const popupWidth = 520;
+                                  const popupHeight = 700;
+                                  const left = Math.max(0, Math.round((window.screen.width - popupWidth) / 2));
+                                  const top = Math.max(0, Math.round((window.screen.height - popupHeight) / 2));
+                                  const popup = window.open(
+                                    data.url,
+                                    "vex_social_auth",
+                                    `popup=yes,width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`
+                                  );
+
+                                  // Popup blocked or unsupported contexts: fallback to full redirect.
+                                  if (!popup) {
+                                    window.location.href = data.url;
+                                    return;
+                                  }
+
+                                  popup.focus();
+                                  socialPopupWatcherRef.current = window.setInterval(() => {
+                                    if (popup.closed) {
+                                      if (socialPopupWatcherRef.current) {
+                                        window.clearInterval(socialPopupWatcherRef.current);
+                                        socialPopupWatcherRef.current = null;
+                                      }
+                                      setIsLoading(false);
+                                    }
+                                  }, 500);
+                                } else {
+                                  toast({ title: t('auth.error') || 'Error', description: data.error || 'Failed to initiate login', variant: 'destructive' });
+                                  setIsLoading(false);
+                                }
+                              } catch {
+                                toast({ title: t('auth.error') || 'Error', description: 'Connection failed', variant: 'destructive' });
                                 setIsLoading(false);
                               }
-                            } catch {
-                              toast({ title: t('auth.error') || 'Error', description: 'Connection failed', variant: 'destructive' });
-                              setIsLoading(false);
-                            }
-                          }}
-                          disabled={isLoading}
-                          aria-label={platform.displayName}
-                          title={platform.displayName}
-                          data-testid={`button-${platform.name}-login`}
-                        >
-                          <Icon className="w-5 h-5" />
-                        </Button>
-                      );
-                    })}
+                            }}
+                            disabled={isLoading}
+                            aria-label={platform.displayName}
+                            title={platform.displayName}
+                            data-testid={`button-${platform.name}-login`}
+                          >
+                            <Icon className="w-5 h-5" />
+                          </Button>
+                        );
+                      })}
                   </div>
                 </div>
               )}
@@ -949,6 +957,8 @@ export default function LoginPage() {
                   size="icon"
                   onClick={() => copyToClipboard(generatedCredentials?.accountId || "", "accountId")}
                   data-testid="button-copy-account-id"
+                  aria-label={t('auth.copyAll')}
+                  title={t('auth.copyAll')}
                 >
                   {copiedField === "accountId" ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
                 </Button>
@@ -965,6 +975,8 @@ export default function LoginPage() {
                   size="icon"
                   onClick={() => copyToClipboard(generatedCredentials?.password || "", "password")}
                   data-testid="button-copy-password"
+                  aria-label={t('auth.copyAll')}
+                  title={t('auth.copyAll')}
                 >
                   {copiedField === "password" ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
                 </Button>
@@ -1003,6 +1015,8 @@ export default function LoginPage() {
                   }}
                   data-testid="button-share-whatsapp"
                   className="bg-[#25D366]/10 hover:bg-[#25D366]/20 border-[#25D366]/30"
+                  aria-label="WhatsApp"
+                  title="WhatsApp"
                 >
                   <SiWhatsapp className="w-4 h-4 text-[#25D366]" />
                 </Button>
@@ -1015,6 +1029,8 @@ export default function LoginPage() {
                   }}
                   data-testid="button-share-telegram"
                   className="bg-[#0088cc]/10 hover:bg-[#0088cc]/20 border-[#0088cc]/30"
+                  aria-label="Telegram"
+                  title="Telegram"
                 >
                   <SiTelegram className="w-4 h-4 text-[#0088cc]" />
                 </Button>
@@ -1027,6 +1043,8 @@ export default function LoginPage() {
                   }}
                   data-testid="button-share-email"
                   className="bg-muted hover:bg-muted/80"
+                  aria-label={t('auth.email')}
+                  title={t('auth.email')}
                 >
                   <Mail className="w-4 h-4" />
                 </Button>
@@ -1039,6 +1057,8 @@ export default function LoginPage() {
                   }}
                   data-testid="button-share-sms"
                   className="bg-muted hover:bg-muted/80"
+                  aria-label={t('auth.phone')}
+                  title={t('auth.phone')}
                 >
                   <Smartphone className="w-4 h-4" />
                 </Button>
@@ -1343,6 +1363,6 @@ export default function LoginPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </main>
   );
 }

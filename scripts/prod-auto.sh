@@ -16,7 +16,8 @@ COMPOSE_FILE="docker-compose.prod.yml"
 ENV_TEMPLATE_FILE=".env.production"
 ENV_FALLBACK_FILE=".env.example"
 ENV_FILE=".env.production.local"
-TRAEFIK_CONTAINER="traefik-mebu-traefik-1"
+TRAEFIK_CONTAINER=""
+TRAEFIK_CONTAINER_OVERRIDE=""
 DOMAIN="vixo.click"
 TRAEFIK_NETWORK_OVERRIDE=""
 PULL_LATEST="false"
@@ -52,7 +53,7 @@ Usage: ./scripts/prod-auto.sh [options]
 Options:
   --domain <domain>           Public domain (default: vixo.click)
   --network <name>            External Traefik network name override
-  --traefik-container <name>  Traefik container used for auto-detect
+  --traefik-container <name>  Explicit Traefik container name (optional)
   --env-file <path>           Env file path (default: .env.production.local)
   --compose-file <path>       Compose file path (default: docker-compose.prod.yml)
   --pull-latest               Pull latest code from origin/main before deploy
@@ -78,7 +79,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --traefik-container)
-      TRAEFIK_CONTAINER="$2"
+      TRAEFIK_CONTAINER_OVERRIDE="$2"
       shift 2
       ;;
     --env-file)
@@ -291,7 +292,7 @@ detect_traefik_network() {
     return 0
   fi
 
-  if docker container inspect "$TRAEFIK_CONTAINER" >/dev/null 2>&1; then
+  if [[ -n "$TRAEFIK_CONTAINER" ]] && docker container inspect "$TRAEFIK_CONTAINER" >/dev/null 2>&1; then
     local candidate
     while IFS= read -r candidate; do
       candidate="$(printf '%s' "$candidate" | tr -d '[:space:]')"
@@ -303,6 +304,31 @@ detect_traefik_network() {
   fi
 
   printf '%s' "vex-traefik"
+}
+
+detect_traefik_container() {
+  if [[ -n "$TRAEFIK_CONTAINER_OVERRIDE" ]]; then
+    if docker container inspect "$TRAEFIK_CONTAINER_OVERRIDE" >/dev/null 2>&1; then
+      printf '%s' "$TRAEFIK_CONTAINER_OVERRIDE"
+      return 0
+    fi
+    log_error "Specified Traefik container was not found: $TRAEFIK_CONTAINER_OVERRIDE"
+    exit 1
+  fi
+
+  local candidate
+  candidate="$(docker ps --format '{{.Names}} {{.Image}}' | awk '$2 ~ /(^|\/)traefik(:|@|$)/ {print $1; exit}')"
+  if [[ -n "$candidate" ]]; then
+    printf '%s' "$candidate"
+    return 0
+  fi
+
+  candidate="$(docker ps --format '{{.Names}}' | grep -Ei 'traefik' | head -n 1 || true)"
+  printf '%s' "$candidate"
+}
+
+traefik_container_exists() {
+  [[ -n "$TRAEFIK_CONTAINER" ]] && docker container inspect "$TRAEFIK_CONTAINER" >/dev/null 2>&1
 }
 
 ensure_host_sysctl() {
@@ -383,6 +409,49 @@ container_has_network() {
   docker inspect "$container" --format '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | grep -Fxq "$network_name"
 }
 
+cleanup_legacy_mobile_downloads() {
+  local legacy_files=(
+    "client/public/downloads/VEX-v1.1.0.apk"
+    "client/public/downloads/VEX-v1.1.0.aab"
+    "dist/public/downloads/VEX-v1.1.0.apk"
+    "dist/public/downloads/VEX-v1.1.0.aab"
+  )
+
+  local official_files=(
+    "client/public/downloads/VEX-official-release.apk"
+    "client/public/downloads/VEX-official-release.aab"
+  )
+
+  local removed_count=0
+  local missing_official=0
+  local path
+
+  for path in "${legacy_files[@]}"; do
+    if [[ -f "$path" ]]; then
+      rm -f "$path"
+      removed_count=$((removed_count + 1))
+      log_info "Removed legacy mobile artifact: $path"
+    fi
+  done
+
+  for path in "${official_files[@]}"; do
+    if [[ ! -f "$path" ]]; then
+      log_warn "Official mobile artifact not found: $path"
+      missing_official=1
+    fi
+  done
+
+  if (( removed_count == 0 )); then
+    log_info "No legacy mobile artifacts found to remove"
+  else
+    log_success "Removed $removed_count legacy mobile artifact(s)"
+  fi
+
+  if (( missing_official == 0 )); then
+    log_success "Official mobile artifacts are present in client/public/downloads"
+  fi
+}
+
 print_header() {
   echo "========================================"
   echo "  VEX Production Auto Bootstrap"
@@ -413,6 +482,17 @@ if [[ "$PULL_LATEST" == "true" ]]; then
   log_info "Pulling latest code from origin/main"
   git fetch origin main
   git pull --ff-only origin main
+fi
+
+cleanup_legacy_mobile_downloads
+
+TRAEFIK_CONTAINER="$(detect_traefik_container)"
+if traefik_container_exists; then
+  TRAEFIK_CONTAINER_MODE="$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$TRAEFIK_CONTAINER" 2>/dev/null || true)"
+  log_info "Detected Traefik container: $TRAEFIK_CONTAINER (network mode: ${TRAEFIK_CONTAINER_MODE:-unknown})"
+else
+  TRAEFIK_CONTAINER_MODE=""
+  log_warn "No running Traefik container detected. Falling back to default Traefik network heuristics."
 fi
 
 TRAEFIK_NETWORK="$(detect_traefik_network)"
@@ -465,14 +545,19 @@ if ! wait_for_container_health vex-app 180; then
   fi
 fi
 
-if ! container_has_network vex-app "$TRAEFIK_NETWORK"; then
+if [[ "$TRAEFIK_CONTAINER_MODE" == "host" ]]; then
+  if container_has_network vex-app "$TRAEFIK_NETWORK"; then
+    log_success "vex-app is attached to Traefik network: $TRAEFIK_NETWORK"
+  else
+    log_warn "vex-app is not attached to $TRAEFIK_NETWORK, but Traefik runs in host mode so host-published ports can still work."
+  fi
+elif ! container_has_network vex-app "$TRAEFIK_NETWORK"; then
   log_error "vex-app is not attached to Traefik network: $TRAEFIK_NETWORK"
   exit 1
 fi
 
-if docker container inspect "$TRAEFIK_CONTAINER" >/dev/null 2>&1; then
-  traefik_network_mode="$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$TRAEFIK_CONTAINER" 2>/dev/null || true)"
-  if [[ "$traefik_network_mode" == "host" ]]; then
+if traefik_container_exists; then
+  if [[ "$TRAEFIK_CONTAINER_MODE" == "host" ]]; then
     log_warn "$TRAEFIK_CONTAINER is running in host network mode; skipping shared-network attachment check"
   elif ! container_has_network "$TRAEFIK_CONTAINER" "$TRAEFIK_NETWORK"; then
     log_error "$TRAEFIK_CONTAINER is not attached to network: $TRAEFIK_NETWORK"
@@ -486,7 +571,7 @@ if ! wait_for_http_code_200 "http://127.0.0.1:3001/api/health" 120; then
   exit 1
 fi
 
-if docker container inspect "$TRAEFIK_CONTAINER" >/dev/null 2>&1; then
+if traefik_container_exists; then
   if ! wait_for_http_code_200 "https://127.0.0.1/api/health" 120 "$DOMAIN"; then
     log_error "Traefik route check failed for domain: $DOMAIN"
     exit 1
@@ -504,4 +589,7 @@ echo ""
 echo "Useful commands:"
 echo "  docker compose -f $COMPOSE_FILE --env-file $ENV_FILE ps"
 echo "  docker logs -f vex-app"
+if traefik_container_exists; then
+  echo "  docker logs -f $TRAEFIK_CONTAINER"
+fi
 echo "  curl -k -I https://127.0.0.1 -H \"Host: $DOMAIN\""

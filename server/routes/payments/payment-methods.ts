@@ -3,6 +3,7 @@ import { AuthRequest, authMiddleware, adminTokenMiddleware } from "../middleware
 import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import { insertCountryPaymentMethodSchema } from "@shared/schema";
+import { evaluateSocialPlatformRuntime } from "../../lib/social-platform-runtime";
 
 export function registerPaymentMethodRoutes(app: Express): void {
 
@@ -51,15 +52,55 @@ export function registerPaymentMethodRoutes(app: Express): void {
 
   app.get("/api/admin/integrations/status", adminTokenMiddleware, async (_req: AuthRequest, res: Response) => {
     try {
+      const hasEnvValue = (value: string | undefined): boolean => typeof value === "string" && value.trim().length > 0;
+
+      const socialPlatforms = await storage.listSocialPlatforms();
+      const socialPlatformMap = new Map(
+        socialPlatforms.map((platform) => [platform.name.toLowerCase(), platform]),
+      );
+
+      const isSocialOAuthConfigured = (platformName: string, envConfigured: boolean): boolean => {
+        const platform = socialPlatformMap.get(platformName.toLowerCase());
+        if (!platform) {
+          return envConfigured;
+        }
+
+        const runtime = evaluateSocialPlatformRuntime(platform);
+        return runtime.oauth.ready || envConfigured;
+      };
+
+      const telegramPlatform = socialPlatformMap.get("telegram");
+      const telegramDbConfigured = Boolean(
+        telegramPlatform && typeof telegramPlatform.botToken === "string" && telegramPlatform.botToken.trim().length > 0,
+      );
+
+      const sendgridFrom = process.env.SENDGRID_FROM_EMAIL || process.env.SENDGRID_FROM;
+
       const integrations: Record<string, boolean> = {
-        twilio: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER),
-        sendgrid: !!(process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL),
-        google_oauth: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-        facebook_oauth: !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET),
-        telegram_oauth: !!process.env.TELEGRAM_BOT_TOKEN,
-        twitter_oauth: !!(process.env.TWITTER_API_KEY && process.env.TWITTER_API_SECRET),
-        stripe: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PUBLISHABLE_KEY),
-        firebase_push: !!(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY),
+        twilio: hasEnvValue(process.env.TWILIO_ACCOUNT_SID)
+          && hasEnvValue(process.env.TWILIO_AUTH_TOKEN)
+          && hasEnvValue(process.env.TWILIO_PHONE_NUMBER),
+        sendgrid: hasEnvValue(process.env.SENDGRID_API_KEY)
+          && hasEnvValue(sendgridFrom),
+        google_oauth: isSocialOAuthConfigured(
+          "google",
+          hasEnvValue(process.env.GOOGLE_CLIENT_ID) && hasEnvValue(process.env.GOOGLE_CLIENT_SECRET),
+        ),
+        facebook_oauth: isSocialOAuthConfigured(
+          "facebook",
+          hasEnvValue(process.env.FACEBOOK_APP_ID) && hasEnvValue(process.env.FACEBOOK_APP_SECRET),
+        ),
+        telegram_oauth: telegramDbConfigured || hasEnvValue(process.env.TELEGRAM_BOT_TOKEN),
+        twitter_oauth: isSocialOAuthConfigured(
+          "twitter",
+          hasEnvValue(process.env.TWITTER_API_KEY) && hasEnvValue(process.env.TWITTER_API_SECRET),
+        ),
+        stripe: hasEnvValue(process.env.STRIPE_SECRET_KEY)
+          && hasEnvValue(process.env.STRIPE_PUBLISHABLE_KEY)
+          && hasEnvValue(process.env.STRIPE_WEBHOOK_SECRET),
+        firebase_push: hasEnvValue(process.env.FIREBASE_PROJECT_ID)
+          && hasEnvValue(process.env.FIREBASE_PRIVATE_KEY)
+          && hasEnvValue(process.env.FIREBASE_CLIENT_EMAIL),
       };
       res.json(integrations);
     } catch (error: unknown) {

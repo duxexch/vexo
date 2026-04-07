@@ -535,10 +535,17 @@ What this does automatically:
 
 - Creates `.env.production.local` from `.env.production` if missing
 - Detects and/or creates the shared Traefik network
+- Auto-detects the running Traefik container (even when hosted in a separate Compose project)
 - Persists required server tuning (`vm.overcommit_memory=1`) for Redis
 - Prepares runtime directories and permissions (`logs`, `uploads`)
 - Starts required services and validates container health
 - Verifies app routing through Traefik for production domain
+
+If Traefik is running under a non-standard container name, pass it explicitly:
+
+```bash
+bash ./scripts/prod-auto.sh --domain vixo.click --traefik-container traefik-mebu-traefik-1
+```
 
 #### Updates (backup + pull + redeploy + verification)
 
@@ -547,6 +554,8 @@ bash ./scripts/prod-update.sh --domain vixo.click
 ```
 
 `prod-update.sh` performs a DB backup (when possible), pulls `origin/main`, and re-runs the same production safety checks before completing.
+
+For real-world production diagnostics and Traefik runtime caveats, see `docs/PRODUCTION_TRAEFIK_RUNTIME_NOTES_2026-04-07.md`.
 
 ### Option 2: Docker (Manual)
 
@@ -1131,6 +1140,8 @@ const TOKEN_EXPIRY = '7d'; // Token valid for 7 days
 
 ### Setting Up OAuth Providers
 
+For production-safe Web/Mobile OAuth setup (provider-compliant), follow `docs/SOCIAL_LOGIN_WEB_MOBILE_COMPLIANCE.md`.
+
 #### Google OAuth Setup
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
@@ -1139,9 +1150,11 @@ const TOKEN_EXPIRY = '7d'; // Token valid for 7 days
 4. Click "Create Credentials" → "OAuth client ID"
 5. Select "Web application"
 6. Add authorized redirect URIs:
-   - `https://your-domain.com/api/auth/google/callback`
+
+- `https://your-domain.com/api/auth/social/google/callback`
+
 7. Copy Client ID and Client Secret
-8. Add to `.env`:
+2. Add to `.env`:
 
 ```env
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
@@ -1154,9 +1167,11 @@ GOOGLE_CLIENT_SECRET=your-client-secret
 2. Create a new app → Select "Consumer"
 3. Add Facebook Login product
 4. Configure Valid OAuth Redirect URIs:
-   - `https://your-domain.com/api/auth/facebook/callback`
+
+- `https://your-domain.com/api/auth/social/facebook/callback`
+
 5. Copy App ID and App Secret
-6. Add to `.env`:
+2. Add to `.env`:
 
 ```env
 FACEBOOK_APP_ID=your-app-id
