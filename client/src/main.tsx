@@ -316,6 +316,40 @@ if (!isRedirectingToCanonicalHost) {
   void startReleaseMonitoring();
 }
 
+if (!isRedirectingToCanonicalHost && Capacitor.isNativePlatform()) {
+  void CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
+    if (!url || typeof url !== 'string') {
+      return;
+    }
+
+    try {
+      const parsed = new URL(url);
+      const isTrustedHost =
+        parsed.hostname === 'vixo.click' ||
+        parsed.hostname.endsWith('.vixo.click') ||
+        parsed.protocol === 'vexapp:';
+      const isAuthCallback = parsed.pathname.startsWith('/auth/callback');
+
+      if (!isTrustedHost || !isAuthCallback) {
+        return;
+      }
+
+      const nextPath = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      window.history.replaceState({}, '', nextPath);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+
+      // Close any in-app browser sheet after handing callback back to the app shell.
+      try {
+        await Browser.close();
+      } catch {
+        // Browser may already be closed on some platforms.
+      }
+    } catch {
+      // Ignore malformed deep-link payloads.
+    }
+  });
+}
+
 if (!isRedirectingToCanonicalHost) {
   createRoot(document.getElementById("root")!).render(<App />);
 }

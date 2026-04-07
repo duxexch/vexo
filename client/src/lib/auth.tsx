@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from "react";
 import type { User } from "@shared/schema";
 import { fetchWithCsrf } from "@/lib/csrf";
 
@@ -44,6 +44,7 @@ const USER_CACHE_KEY = "pwm_user_cache";
 const TOKEN_STORAGE_KEY = "pwm_token";
 const TOKEN_BACKUP_KEY = "pwm_token_backup";
 const CACHE_TTL = 60 * 1000;
+const TOKEN_REFRESH_THRESHOLD_SECONDS = 24 * 60 * 60;
 
 interface CachedUser {
   data: User;
@@ -82,6 +83,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isRefreshingTokenRef = useRef(false);
+
+  const getTokenExpiry = (jwtToken: string): number | null => {
+    try {
+      const parts = jwtToken.split(".");
+      if (parts.length !== 3) return null;
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))) as { exp?: number };
+      return typeof payload.exp === "number" ? payload.exp : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const shouldRefreshTokenSoon = (jwtToken: string): boolean => {
+    const exp = getTokenExpiry(jwtToken);
+    if (!exp) return false;
+    const now = Math.floor(Date.now() / 1000);
+    return exp - now <= TOKEN_REFRESH_THRESHOLD_SECONDS;
+  };
+
+  const refreshAccessToken = async (currentToken: string): Promise<string | null> => {
+    if (isRefreshingTokenRef.current) return null;
+    if (!shouldRefreshTokenSoon(currentToken)) return null;
+
+    isRefreshingTokenRef.current = true;
+    try {
+      const res = await fetchWithCsrf("/api/auth/refresh-token", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${currentToken}`,
+        },
+      });
+
+      if (!res.ok) {
+        return null;
+      }
+
+      const data = await res.json();
+      if (!data?.token || typeof data.token !== "string") {
+        return null;
+      }
+
+      setToken(data.token);
+      localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+      sessionStorage.setItem(TOKEN_BACKUP_KEY, data.token);
+      return data.token;
+    } catch {
+      return null;
+    } finally {
+      isRefreshingTokenRef.current = false;
+    }
+  };
 
   useEffect(() => {
     const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY) || sessionStorage.getItem(TOKEN_BACKUP_KEY);
@@ -319,7 +372,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) return;
 
     const interval = setInterval(() => {
-      fetchUser(token);
+      void (async () => {
+        const refreshedToken = await refreshAccessToken(token);
+        await fetchUser(refreshedToken || token);
+      })();
     }, 30000);
 
     return () => clearInterval(interval);

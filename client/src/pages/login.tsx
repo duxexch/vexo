@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import type { User as UserSchema } from "@shared/schema";
@@ -55,7 +55,7 @@ const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
-  const { login, loginByAccount, loginByPhone, loginByEmail, oneClickRegister, confirmOneClickLogin, register } = useAuth();
+  const { login, loginByAccount, loginByPhone, loginByEmail, oneClickRegister, confirmOneClickLogin, register, refreshUser } = useAuth();
   const { toast } = useToast();
   const { t, dir } = useI18n();
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -104,6 +104,7 @@ export default function LoginPage() {
   // Smart redirect state - when user is on wrong tab
   const [showRedirectModal, setShowRedirectModal] = useState(false);
   const [redirectInfo, setRedirectInfo] = useState<{ correctMethod: string; maskedHint: string; password: string } | null>(null);
+  const socialPopupWatcherRef = useRef<number | null>(null);
 
   // Terms & privacy agreement state
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -119,6 +120,47 @@ export default function LoginPage() {
       .then(setSocialPlatforms)
       .catch(() => { });
   }, []);
+
+  useEffect(() => {
+    const onMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || !event.data || typeof event.data !== "object") {
+        return;
+      }
+
+      const payload = event.data as { type?: string; reason?: string };
+      if (payload.type === "vex_oauth_success") {
+        if (socialPopupWatcherRef.current) {
+          window.clearInterval(socialPopupWatcherRef.current);
+          socialPopupWatcherRef.current = null;
+        }
+        await refreshUser();
+        setIsLoading(false);
+        setLocation("/");
+      }
+
+      if (payload.type === "vex_oauth_error") {
+        if (socialPopupWatcherRef.current) {
+          window.clearInterval(socialPopupWatcherRef.current);
+          socialPopupWatcherRef.current = null;
+        }
+        setIsLoading(false);
+        toast({
+          title: t('auth.error') || 'Error',
+          description: payload.reason || 'Social login failed',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      if (socialPopupWatcherRef.current) {
+        window.clearInterval(socialPopupWatcherRef.current);
+        socialPopupWatcherRef.current = null;
+      }
+    };
+  }, [refreshUser, setLocation, t, toast]);
 
   const checkTermsAgreed = () => {
     if (!agreedToTerms) {
@@ -755,13 +797,38 @@ export default function LoginPage() {
                               const res = await fetch(`/api/auth/social/${platform.name}`);
                               const data = await res.json();
                               if (data.url) {
-                                window.location.href = data.url;
+                                const popupWidth = 520;
+                                const popupHeight = 700;
+                                const left = Math.max(0, Math.round((window.screen.width - popupWidth) / 2));
+                                const top = Math.max(0, Math.round((window.screen.height - popupHeight) / 2));
+                                const popup = window.open(
+                                  data.url,
+                                  "vex_social_auth",
+                                  `popup=yes,width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`
+                                );
+
+                                // Popup blocked or unsupported contexts: fallback to full redirect.
+                                if (!popup) {
+                                  window.location.href = data.url;
+                                  return;
+                                }
+
+                                popup.focus();
+                                socialPopupWatcherRef.current = window.setInterval(() => {
+                                  if (popup.closed) {
+                                    if (socialPopupWatcherRef.current) {
+                                      window.clearInterval(socialPopupWatcherRef.current);
+                                      socialPopupWatcherRef.current = null;
+                                    }
+                                    setIsLoading(false);
+                                  }
+                                }, 500);
                               } else {
                                 toast({ title: t('auth.error') || 'Error', description: data.error || 'Failed to initiate login', variant: 'destructive' });
+                                setIsLoading(false);
                               }
                             } catch {
                               toast({ title: t('auth.error') || 'Error', description: 'Connection failed', variant: 'destructive' });
-                            } finally {
                               setIsLoading(false);
                             }
                           }}

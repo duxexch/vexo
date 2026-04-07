@@ -156,6 +156,13 @@ interface UserAssignedBadgeResponse {
     assignedBadges: AssignedBadge[];
 }
 
+interface InitializeBadgesResponse {
+    success: boolean;
+    insertedCount: number;
+    skippedCount: number;
+    totalDefaults: number;
+}
+
 const optionalLimitField = z.preprocess((value) => {
     if (value === "" || value === null || value === undefined) {
         return null;
@@ -353,6 +360,24 @@ export default function AdminBadgesPage() {
         },
     });
 
+    const initializeBadgesMutation = useMutation({
+        mutationFn: async () => {
+            return adminFetch("/api/admin/badges/initialize", { method: "POST" }) as Promise<InitializeBadgesResponse>;
+        },
+        onSuccess: (result) => {
+            queryClient.invalidateQueries({ queryKey: ["/api/admin/badges"] });
+            toast({
+                title: isArabic ? "تمت التهيئة" : "Badges Initialized",
+                description: isArabic
+                    ? `تم إدراج ${result.insertedCount} شارة. المتبقي موجود مسبقًا: ${result.skippedCount}`
+                    : `Inserted ${result.insertedCount} badges. Already existed: ${result.skippedCount}`,
+            });
+        },
+        onError: (error: Error) => {
+            toast({ title: isArabic ? "خطأ" : "Error", description: error.message, variant: "destructive" });
+        },
+    });
+
     const assignBadgeMutation = useMutation({
         mutationFn: async (payload: { userId: string; badgeId: string; replaceExisting: boolean }) => {
             return adminFetch("/api/admin/badges/assign", {
@@ -496,10 +521,26 @@ export default function AdminBadgesPage() {
                         {isArabic ? "إدارة شارات الثقة والمكافآت والصلاحيات" : "Manage trust badges, rewards, and entitlement limits"}
                     </p>
                 </div>
-                <Button onClick={openCreateDialog} data-testid="button-add-badge">
-                    <Plus className="me-2 h-4 w-4" />
-                    {isArabic ? "إضافة شارة" : "Add Badge"}
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={() => initializeBadgesMutation.mutate()}
+                        disabled={initializeBadgesMutation.isPending}
+                        data-testid="button-initialize-badges"
+                    >
+                        {initializeBadgesMutation.isPending ? (
+                            <Loader2 className="me-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <Sparkles className="me-2 h-4 w-4" />
+                        )}
+                        {isArabic ? "تهيئة الشارات" : "Initialize Badges"}
+                    </Button>
+
+                    <Button onClick={openCreateDialog} data-testid="button-add-badge">
+                        <Plus className="me-2 h-4 w-4" />
+                        {isArabic ? "إضافة شارة" : "Add Badge"}
+                    </Button>
+                </div>
             </div>
 
             <Card>

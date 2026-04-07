@@ -23,7 +23,7 @@ import { getErrorMessage } from "../helpers";
 import { createSession, getSessionFingerprint, setAuthCookie } from "../auth/helpers";
 
 interface OAuthExchangeRecord {
-  token: string;
+  userId: string;
   redirect: string;
   isNew: boolean;
   expiresAt: number;
@@ -105,9 +105,29 @@ export function registerOAuthFlowRoutes(app: Express) {
       return res.status(400).json({ error: "Invalid or expired exchange code" });
     }
 
-    setAuthCookie(res, exchange.token);
+    const user = await storage.getUser(exchange.userId);
+    if (!user || user.status !== "active") {
+      logOAuthSecurityEvent(req, "exchange", "exchange_user_not_active", {
+        hasUser: Boolean(user),
+      });
+      return res.status(401).json({ error: "User session is not available" });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role, fp: getSessionFingerprint(req) },
+      JWT_USER_SECRET,
+      { expiresIn: JWT_USER_EXPIRY },
+    );
+
+    setAuthCookie(res, token);
+    await storage.updateUser(user.id, {
+      lastLoginAt: new Date(),
+      isOnline: true,
+    });
+    await createSession(user.id, token, req);
+
     return res.json({
-      token: exchange.token,
+      token,
       redirect: exchange.redirect,
       isNew: exchange.isNew,
     });
@@ -271,24 +291,9 @@ export function registerOAuthFlowRoutes(app: Express) {
         }).catch(() => { });
       }
 
-      // Generate JWT
-      const token = jwt.sign(
-        { id: user.id, username: user.username, role: user.role, fp: getSessionFingerprint(req) },
-        JWT_USER_SECRET,
-        { expiresIn: JWT_USER_EXPIRY },
-      );
-
-      // Update last login
-      await storage.updateUser(user.id, {
-        lastLoginAt: new Date(),
-        isOnline: true,
-      });
-
-      await createSession(user.id, token, req);
-
       const redirect = stateRecord.redirectUrl || "/";
       const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined;
-      const exchangeCode = createOAuthExchangeCode({ token, redirect, isNew, userAgent });
+      const exchangeCode = createOAuthExchangeCode({ userId: user.id, redirect, isNew, userAgent });
 
       // Redirect to frontend with one-time code (never expose JWT in URL query).
       res.redirect(`/auth/callback?code=${encodeURIComponent(exchangeCode)}`);

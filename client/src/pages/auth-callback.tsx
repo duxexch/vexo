@@ -8,6 +8,16 @@ import { useLocation } from "wouter";
 export default function AuthCallbackPage() {
   const [, setLocation] = useLocation();
 
+  const notifyOpener = (type: "vex_oauth_success" | "vex_oauth_error", reason?: string) => {
+    if (window.opener && !window.opener.closed) {
+      try {
+        window.opener.postMessage({ type, reason }, window.location.origin);
+      } catch {
+        // Ignore cross-window notification failures.
+      }
+    }
+  };
+
   useEffect(() => {
     const run = async () => {
       const params = new URLSearchParams(window.location.search);
@@ -28,17 +38,25 @@ export default function AuthCallbackPage() {
           });
 
           if (!res.ok) {
+            notifyOpener("vex_oauth_error", "oauth_exchange_failed");
             setLocation("/login?error=oauth_exchange_failed");
             return;
           }
 
           const data = await res.json();
           if (!data?.token) {
+            notifyOpener("vex_oauth_error", "no_token");
             setLocation("/login?error=no_token");
             return;
           }
 
           localStorage.setItem("pwm_token", data.token);
+
+          if (window.opener && !window.opener.closed) {
+            notifyOpener("vex_oauth_success");
+            window.close();
+            return;
+          }
 
           if (data.isNew === true) {
             setLocation("/profile?setup=true");
@@ -48,6 +66,7 @@ export default function AuthCallbackPage() {
           setLocation(typeof data.redirect === "string" && data.redirect.length > 0 ? data.redirect : "/");
           return;
         } catch {
+          notifyOpener("vex_oauth_error", "oauth_exchange_failed");
           setLocation("/login?error=oauth_exchange_failed");
           return;
         }
@@ -55,6 +74,13 @@ export default function AuthCallbackPage() {
 
       if (legacyToken) {
         localStorage.setItem("pwm_token", legacyToken);
+
+        if (window.opener && !window.opener.closed) {
+          notifyOpener("vex_oauth_success");
+          window.close();
+          return;
+        }
+
         if (legacyIsNew) {
           setLocation("/profile?setup=true");
           return;
@@ -63,6 +89,7 @@ export default function AuthCallbackPage() {
         return;
       }
 
+      notifyOpener("vex_oauth_error", "no_token");
       setLocation("/login?error=no_token");
     };
 
