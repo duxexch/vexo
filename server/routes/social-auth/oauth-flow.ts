@@ -307,6 +307,112 @@ export function registerOAuthFlowRoutes(app: Express) {
     });
   });
 
+  app.get("/api/auth/social/google/native/config", authRateLimiter, async (req: Request, res: Response) => {
+    try {
+      const platformRecord = await storage.getSocialPlatformByName("google");
+      if (!platformRecord || !platformRecord.isEnabled) {
+        return res.status(404).json({ error: "Platform not available" });
+      }
+
+      const runtime = evaluateSocialPlatformRuntime(platformRecord);
+      if (!runtime.oauth.enabled) {
+        return res.status(400).json({ error: "This platform only supports OTP, not OAuth login" });
+      }
+
+      if (!runtime.oauth.ready || !platformRecord.clientId) {
+        const issues = runtime.oauth.issues.join("; ");
+        return res.status(503).json({ error: issues || "Platform OAuth runtime is not ready" });
+      }
+
+      return res.json({
+        clientId: platformRecord.clientId,
+        scope: "openid email profile",
+      });
+    } catch (error: unknown) {
+      logger.error("Native Google config error", new Error(getErrorMessage(error)));
+      return res.status(500).json({ error: "Failed to initialize native authentication" });
+    }
+  });
+
+  app.post("/api/auth/social/google/native/exchange", authRateLimiter, async (req: Request, res: Response) => {
+    try {
+      const { accessToken } = req.body || {};
+      if (typeof accessToken !== "string" || accessToken.trim().length < 20) {
+        logOAuthSecurityEvent(req, "google", "native_access_token_missing_or_invalid");
+        return res.status(400).json({ error: "Access token is required" });
+      }
+
+      const platformRecord = await storage.getSocialPlatformByName("google");
+      if (!platformRecord || !platformRecord.isEnabled) {
+        return res.status(404).json({ error: "Platform not available" });
+      }
+
+      const runtime = evaluateSocialPlatformRuntime(platformRecord);
+      if (!runtime.oauth.enabled) {
+        return res.status(400).json({ error: "This platform only supports OTP, not OAuth login" });
+      }
+
+      if (!runtime.oauth.ready) {
+        const issues = runtime.oauth.issues.join("; ");
+        return res.status(503).json({ error: issues || "Platform OAuth runtime is not ready" });
+      }
+
+      let profile;
+      try {
+        profile = await fetchUserProfile("google", accessToken);
+      } catch {
+        logOAuthSecurityEvent(req, "google", "native_access_token_rejected");
+        return res.status(401).json({ error: "Invalid Google access token" });
+      }
+
+      if (!profile.id) {
+        logOAuthSecurityEvent(req, "google", "native_profile_missing_id");
+        return res.status(401).json({ error: "Unable to read Google profile" });
+      }
+
+      const { user, isNew } = await findOrCreateUser("google", profile, {
+        access_token: accessToken,
+        token_type: "Bearer",
+      });
+
+      if (user.status === "banned" || user.status === "suspended") {
+        logOAuthSecurityEvent(req, "google", "native_user_suspended", { userId: user.id });
+        return res.status(403).json({ error: "User account is suspended" });
+      }
+
+      if (isNew) {
+        emitSystemAlert({
+          title: "New User Registered",
+          titleAr: "مستخدم جديد مسجل",
+          message: `New social registration (google): ${user.username} (ID: ${user.id})`,
+          messageAr: `تسجيل اجتماعي جديد (google): ${user.username} (رقم: ${user.id})`,
+          severity: "info",
+          deepLink: "/admin/users",
+          entityType: "user",
+          entityId: String(user.id),
+        }).catch(() => { });
+      }
+
+      const token = jwt.sign(
+        { id: user.id, username: user.username, role: user.role, fp: getSessionFingerprint(req) },
+        JWT_USER_SECRET,
+        { expiresIn: JWT_USER_EXPIRY },
+      );
+
+      setAuthCookie(res, token);
+      await storage.updateUser(user.id, {
+        lastLoginAt: new Date(),
+        isOnline: true,
+      });
+      await createSession(user.id, token, req);
+
+      return res.json({ token, redirect: "/", isNew });
+    } catch (error: unknown) {
+      logger.error("Native Google exchange error", new Error(getErrorMessage(error)));
+      return res.status(500).json({ error: "Failed to complete native authentication" });
+    }
+  });
+
   // ==================== Initiate OAuth ====================
   app.get("/api/auth/social/:platform", authRateLimiter, async (req: Request, res: Response) => {
     try {

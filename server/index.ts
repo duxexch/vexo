@@ -316,7 +316,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
   // Content Security Policy (CSP) - prevent XSS and injection attacks
   if (isProduction) {
-    const scriptSources = ["'self'", ...cspInlineScriptHashes].join(" ");
+    const scriptSources = ["'self'", "https://accounts.google.com", ...cspInlineScriptHashes].join(" ");
 
     res.setHeader(
       "Content-Security-Policy",
@@ -326,6 +326,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
       "img-src 'self' data: https: blob:; " +
       "font-src 'self' data: https://fonts.gstatic.com; " +
+      "frame-src 'self' https://accounts.google.com; " +
       "connect-src 'self' wss: ws: https:; " +
       "media-src 'self' blob:; " +
       "worker-src 'self' blob:; " +

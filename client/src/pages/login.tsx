@@ -59,6 +59,32 @@ const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>
   Phone: Smartphone,
 };
 
+type GoogleTokenClientResponse = {
+  access_token?: string;
+  error?: string;
+  error_description?: string;
+};
+
+type GoogleTokenClient = {
+  requestAccessToken: (overrides?: { prompt?: string }) => void;
+};
+
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        oauth2?: {
+          initTokenClient: (config: {
+            client_id: string;
+            scope: string;
+            callback: (response: GoogleTokenClientResponse) => void;
+          }) => GoogleTokenClient;
+        };
+      };
+    };
+  }
+}
+
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { login, loginByAccount, loginByPhone, loginByEmail, oneClickRegister, confirmOneClickLogin, register, refreshUser } = useAuth();
@@ -113,6 +139,7 @@ export default function LoginPage() {
   const socialPopupWatcherRef = useRef<number | null>(null);
   const socialLoginLockRef = useRef<{ platformName: string; startedAt: number } | null>(null);
   const socialLoginUnlockTimeoutRef = useRef<number | null>(null);
+  const googleIdentityScriptLoaderRef = useRef<Promise<void> | null>(null);
   const [activeSocialLoginPlatform, setActiveSocialLoginPlatform] = useState<string | null>(null);
 
   // Terms & privacy agreement state
@@ -165,6 +192,198 @@ export default function LoginPage() {
     }, 90_000);
 
     return true;
+  };
+
+  const ensureGoogleIdentityServices = async (): Promise<void> => {
+    if (window.google?.accounts?.oauth2) {
+      return;
+    }
+
+    if (googleIdentityScriptLoaderRef.current) {
+      return googleIdentityScriptLoaderRef.current;
+    }
+
+    googleIdentityScriptLoaderRef.current = new Promise<void>((resolve, reject) => {
+      const existingScript = document.getElementById("google-identity-services-sdk") as HTMLScriptElement | null;
+
+      const handleReady = () => {
+        if (window.google?.accounts?.oauth2) {
+          resolve();
+          return;
+        }
+
+        googleIdentityScriptLoaderRef.current = null;
+        reject(new Error("google_identity_not_ready"));
+      };
+
+      const handleError = () => {
+        googleIdentityScriptLoaderRef.current = null;
+        reject(new Error("google_identity_load_failed"));
+      };
+
+      if (existingScript) {
+        existingScript.addEventListener("load", handleReady, { once: true });
+        existingScript.addEventListener("error", handleError, { once: true });
+
+        if (window.google?.accounts?.oauth2) {
+          handleReady();
+        }
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.id = "google-identity-services-sdk";
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.addEventListener("load", handleReady, { once: true });
+      script.addEventListener("error", handleError, { once: true });
+      document.head.appendChild(script);
+    });
+
+    return googleIdentityScriptLoaderRef.current;
+  };
+
+  const requestNativeGoogleAccessToken = (clientId: string, scope: string): Promise<string> => {
+    return new Promise<string>((resolve, reject) => {
+      const oauth2 = window.google?.accounts?.oauth2;
+      if (!oauth2) {
+        reject(new Error("google_identity_not_ready"));
+        return;
+      }
+
+      const tokenClient = oauth2.initTokenClient({
+        client_id: clientId,
+        scope,
+        callback: (response: GoogleTokenClientResponse) => {
+          if (typeof response.access_token === "string" && response.access_token.length > 0) {
+            resolve(response.access_token);
+            return;
+          }
+
+          reject(new Error(response.error_description || response.error || "google_token_missing"));
+        },
+      });
+
+      tokenClient.requestAccessToken({ prompt: "select_account" });
+    });
+  };
+
+  const completeSocialLogin = async (payload: { token?: string; redirect?: string; isNew?: boolean }) => {
+    if (!payload.token || typeof payload.token !== "string") {
+      throw new Error("oauth_exchange_failed");
+    }
+
+    localStorage.setItem("pwm_token", payload.token);
+    sessionStorage.setItem("pwm_token_backup", payload.token);
+    await refreshUser();
+
+    if (payload.isNew === true) {
+      setLocation("/profile?setup=true");
+      return;
+    }
+
+    setLocation(typeof payload.redirect === "string" && payload.redirect.length > 0 ? payload.redirect : "/");
+  };
+
+  const handleNativeGoogleLogin = async () => {
+    const configRes = await fetch("/api/auth/social/google/native/config", {
+      cache: "no-store",
+      credentials: "include",
+    });
+    const configData = await configRes.json().catch(() => ({} as Record<string, unknown>));
+
+    if (!configRes.ok || typeof configData.clientId !== "string" || configData.clientId.length === 0) {
+      throw new Error(
+        typeof configData.error === "string" && configData.error.length > 0
+          ? configData.error
+          : "native_google_not_available",
+      );
+    }
+
+    const scope = typeof configData.scope === "string" && configData.scope.length > 0
+      ? configData.scope
+      : "openid email profile";
+
+    await ensureGoogleIdentityServices();
+    const accessToken = await requestNativeGoogleAccessToken(configData.clientId, scope);
+
+    const exchangeRes = await fetchWithCsrf("/api/auth/social/google/native/exchange", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accessToken }),
+    });
+    const exchangeData = await exchangeRes.json().catch(() => ({} as Record<string, unknown>));
+
+    if (!exchangeRes.ok) {
+      throw new Error(
+        typeof exchangeData.error === "string" && exchangeData.error.length > 0
+          ? exchangeData.error
+          : "oauth_exchange_failed",
+      );
+    }
+
+    await completeSocialLogin(exchangeData as { token?: string; redirect?: string; isNew?: boolean });
+  };
+
+  const handleSocialLogin = async (platform: SocialPlatform) => {
+    if (!beginSocialLoginAttempt(platform.name)) {
+      return;
+    }
+
+    try {
+      if (Capacitor.isNativePlatform() && platform.name === "google") {
+        await handleNativeGoogleLogin();
+        clearSocialLoginLock();
+        return;
+      }
+
+      const res = await fetch(`/api/auth/social/${platform.name}`);
+      const data = await res.json();
+
+      if (!data.url) {
+        throw new Error(typeof data.error === "string" ? data.error : "oauth_initiation_failed");
+      }
+
+      if (Capacitor.isNativePlatform()) {
+        await Browser.open({ url: data.url });
+        return;
+      }
+
+      const popupWidth = 520;
+      const popupHeight = 700;
+      const left = Math.max(0, Math.round((window.screen.width - popupWidth) / 2));
+      const top = Math.max(0, Math.round((window.screen.height - popupHeight) / 2));
+      const popup = window.open(
+        data.url,
+        "vex_social_auth",
+        `popup=yes,width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      );
+
+      // Popup blocked or unsupported contexts: fallback to full redirect.
+      if (!popup) {
+        window.location.href = data.url;
+        return;
+      }
+
+      popup.focus();
+      socialPopupWatcherRef.current = window.setInterval(() => {
+        if (popup.closed) {
+          clearSocialLoginLock();
+        }
+      }, 500);
+    } catch (error: unknown) {
+      const description = error instanceof Error && error.message
+        ? error.message
+        : t('common.error');
+
+      toast({
+        title: t('common.error'),
+        description,
+        variant: 'destructive',
+      });
+      clearSocialLoginLock();
+    }
   };
 
   useEffect(() => {
@@ -872,50 +1091,8 @@ export default function LoginPage() {
                             variant="outline"
                             size="icon"
                             className="w-12 h-12 rounded-full hover:scale-105 transition-transform"
-                            onClick={async () => {
-                              if (!beginSocialLoginAttempt(platform.name)) {
-                                return;
-                              }
-
-                              try {
-                                const res = await fetch(`/api/auth/social/${platform.name}`);
-                                const data = await res.json();
-                                if (data.url) {
-                                  if (Capacitor.isNativePlatform()) {
-                                    await Browser.open({ url: data.url });
-                                    return;
-                                  }
-
-                                  const popupWidth = 520;
-                                  const popupHeight = 700;
-                                  const left = Math.max(0, Math.round((window.screen.width - popupWidth) / 2));
-                                  const top = Math.max(0, Math.round((window.screen.height - popupHeight) / 2));
-                                  const popup = window.open(
-                                    data.url,
-                                    "vex_social_auth",
-                                    `popup=yes,width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`
-                                  );
-
-                                  // Popup blocked or unsupported contexts: fallback to full redirect.
-                                  if (!popup) {
-                                    window.location.href = data.url;
-                                    return;
-                                  }
-
-                                  popup.focus();
-                                  socialPopupWatcherRef.current = window.setInterval(() => {
-                                    if (popup.closed) {
-                                      clearSocialLoginLock();
-                                    }
-                                  }, 500);
-                                } else {
-                                  toast({ title: t('auth.error') || 'Error', description: data.error || 'Failed to initiate login', variant: 'destructive' });
-                                  clearSocialLoginLock();
-                                }
-                              } catch {
-                                toast({ title: t('auth.error') || 'Error', description: 'Connection failed', variant: 'destructive' });
-                                clearSocialLoginLock();
-                              }
+                            onClick={() => {
+                              void handleSocialLogin(platform);
                             }}
                             disabled={isLoading || activeSocialLoginPlatform !== null}
                             aria-label={platform.displayName}
