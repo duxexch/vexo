@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,16 +15,20 @@ import {
   ArrowUpFromLine,
   CheckCircle2,
   Clock3,
+  Copy,
   Loader2,
+  Search,
   Wallet,
   XCircle,
 } from "lucide-react";
 
-type TransactionFilter = "all" | "deposit" | "withdrawal";
+type TransactionTypeFilter = "all" | "deposit" | "withdrawal";
+type TransactionStatusFilter = "all" | "pending" | "completed" | "rejected";
 type ProcessStatus = "completed" | "rejected";
 
-interface PendingTransaction {
+interface AdminTransaction {
   id: string;
+  publicReference: string;
   userId: string;
   type: "deposit" | "withdrawal" | string;
   status: string;
@@ -34,6 +38,8 @@ interface PendingTransaction {
   description: string | null;
   referenceId: string | null;
   adminNote: string | null;
+  processedBy: string | null;
+  processedAt: string | null;
   createdAt: string;
   updatedAt: string;
   user: {
@@ -42,6 +48,18 @@ interface PendingTransaction {
     nickname: string | null;
     accountId: string | null;
     balance: string;
+  };
+}
+
+interface TransactionsArchiveResponse {
+  data: AdminTransaction[];
+  total: number;
+  page: number;
+  pageSize: number;
+  summary: {
+    pending: number;
+    completed: number;
+    rejected: number;
   };
 }
 
@@ -89,23 +107,47 @@ export default function AdminTransactionsPage() {
   const { toast } = useToast();
   const isArabic = language === "ar";
 
-  const [filterType, setFilterType] = useState<TransactionFilter>("all");
+  const [filterType, setFilterType] = useState<TransactionTypeFilter>("all");
+  const [filterStatus, setFilterStatus] = useState<TransactionStatusFilter>("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [amountOverrides, setAmountOverrides] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchInput]);
 
   const { data: unreadData } = useUnreadAlertEntities("/admin/transactions");
   const unreadEntityIds = new Set(unreadData?.entityIds || []);
   const markAlertRead = useMarkAlertReadByEntity();
 
-  const { data: pendingTransactions = [], isLoading } = useQuery<PendingTransaction[]>({
-    queryKey: ["/api/admin/transactions/pending", filterType],
+  const { data: archiveResponse, isLoading, isFetching } = useQuery<TransactionsArchiveResponse>({
+    queryKey: ["/api/admin/transactions", filterType, filterStatus, searchQuery],
     queryFn: () => {
-      const url = filterType === "all"
-        ? "/api/admin/transactions/pending"
-        : `/api/admin/transactions/pending?type=${filterType}`;
-      return adminFetch(url);
+      const params = new URLSearchParams();
+      if (filterType !== "all") {
+        params.set("type", filterType);
+      }
+      if (filterStatus !== "all") {
+        params.set("status", filterStatus);
+      }
+      if (searchQuery) {
+        params.set("q", searchQuery);
+      }
+      params.set("pageSize", "150");
+
+      const queryString = params.toString();
+      return adminFetch(queryString ? `/api/admin/transactions?${queryString}` : "/api/admin/transactions");
     },
   });
+
+  const transactionRows = archiveResponse?.data || [];
+  const summary = archiveResponse?.summary || { pending: 0, completed: 0, rejected: 0 };
 
   const processMutation = useMutation({
     mutationFn: ({ entityId: _entityId, ...payload }: ProcessPayload) => {
@@ -122,7 +164,7 @@ export default function AdminTransactionsPage() {
           : (isArabic ? "تم رفض المعاملة" : "Transaction rejected"),
       });
 
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions/pending"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts/unread-by-section"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts/unread-entities"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts/count"] });
@@ -151,25 +193,61 @@ export default function AdminTransactionsPage() {
     },
   });
 
-  const stats = useMemo(() => {
-    const total = pendingTransactions.length;
-    const deposits = pendingTransactions.filter((tx) => tx.type === "deposit").length;
-    const withdrawals = pendingTransactions.filter((tx) => tx.type === "withdrawal").length;
-    return { total, deposits, withdrawals };
-  }, [pendingTransactions]);
+  const statsByType = useMemo(() => {
+    const deposits = transactionRows.filter((tx) => tx.type === "deposit").length;
+    const withdrawals = transactionRows.filter((tx) => tx.type === "withdrawal").length;
+    return { deposits, withdrawals };
+  }, [transactionRows]);
 
   const activeTransactionId = processMutation.variables?.id;
 
-  const getAmountValue = (transaction: PendingTransaction): string => {
+  const getAmountValue = (transaction: AdminTransaction): string => {
     return amountOverrides[transaction.id] ?? transaction.amount;
   };
 
-  const isValidApprovedAmount = (transaction: PendingTransaction): boolean => {
+  const isValidApprovedAmount = (transaction: AdminTransaction): boolean => {
     const parsed = Number.parseFloat(getAmountValue(transaction));
     return Number.isFinite(parsed) && parsed > 0 && parsed <= 1_000_000;
   };
 
-  const handleProcess = (transaction: PendingTransaction, status: ProcessStatus) => {
+  const getDisplayReference = (transaction: AdminTransaction): string => {
+    return transaction.publicReference || transaction.referenceId || transaction.id;
+  };
+
+  const copyReference = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({
+        title: isArabic ? "تم النسخ" : "Copied",
+        description: isArabic ? "تم نسخ الرقم المرجعي" : "Reference copied",
+      });
+    } catch {
+      toast({
+        title: isArabic ? "فشل النسخ" : "Copy failed",
+        description: isArabic ? "تعذر نسخ الرقم المرجعي" : "Unable to copy reference",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    if (status === "pending") {
+      return <Badge variant="secondary">{isArabic ? "معلق" : "Pending"}</Badge>;
+    }
+    if (status === "approved" || status === "completed") {
+      return <Badge className="bg-green-600 hover:bg-green-600">{isArabic ? "مقبول" : "Approved"}</Badge>;
+    }
+    if (status === "rejected") {
+      return <Badge variant="destructive">{isArabic ? "مرفوض" : "Rejected"}</Badge>;
+    }
+    return <Badge variant="outline">{status}</Badge>;
+  };
+
+  const handleProcess = (transaction: AdminTransaction, status: ProcessStatus) => {
+    if (transaction.status !== "pending") {
+      return;
+    }
+
     const adminNote = (notes[transaction.id] || "").trim() || undefined;
 
     if (status === "completed") {
@@ -233,8 +311,8 @@ export default function AdminTransactionsPage() {
         <Card>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">{isArabic ? "الإجمالي" : "Total Pending"}</p>
-              <p className="text-2xl font-bold">{stats.total}</p>
+              <p className="text-sm text-muted-foreground">{isArabic ? "المعلقة" : "Pending"}</p>
+              <p className="text-2xl font-bold">{summary.pending}</p>
             </div>
             <Clock3 className="h-7 w-7 text-amber-500" />
           </CardContent>
@@ -242,45 +320,82 @@ export default function AdminTransactionsPage() {
         <Card>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">{isArabic ? "الإيداعات" : "Deposits"}</p>
-              <p className="text-2xl font-bold">{stats.deposits}</p>
+              <p className="text-sm text-muted-foreground">{isArabic ? "المقبولة" : "Approved"}</p>
+              <p className="text-2xl font-bold">{summary.completed}</p>
             </div>
-            <ArrowDownToLine className="h-7 w-7 text-emerald-500" />
+            <CheckCircle2 className="h-7 w-7 text-emerald-500" />
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">{isArabic ? "السحوبات" : "Withdrawals"}</p>
-              <p className="text-2xl font-bold">{stats.withdrawals}</p>
+              <p className="text-sm text-muted-foreground">{isArabic ? "المرفوضة" : "Rejected"}</p>
+              <p className="text-2xl font-bold">{summary.rejected}</p>
             </div>
-            <ArrowUpFromLine className="h-7 w-7 text-orange-500" />
+            <XCircle className="h-7 w-7 text-red-500" />
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader className="space-y-4">
-          <CardTitle>{isArabic ? "قائمة الطلبات" : "Request Queue"}</CardTitle>
-          <Tabs value={filterType} onValueChange={(value) => setFilterType(value as TransactionFilter)}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <CardTitle>{isArabic ? "أرشيف العمليات" : "Operations Archive"}</CardTitle>
+            <div className="relative w-full md:w-96">
+              <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                className="ps-9"
+                placeholder={isArabic ? "بحث ذكي: مرجع، مستخدم، مبلغ، حالة..." : "Smart search: reference, user, amount, status..."}
+                data-testid="admin-transactions-smart-search"
+              />
+            </div>
+          </div>
+
+          <Tabs value={filterStatus} onValueChange={(value) => setFilterStatus(value as TransactionStatusFilter)}>
+            <TabsList>
+              <TabsTrigger value="all">{isArabic ? "الكل" : "All"}</TabsTrigger>
+              <TabsTrigger value="pending">{isArabic ? "معلقة" : "Pending"}</TabsTrigger>
+              <TabsTrigger value="completed">{isArabic ? "مقبولة" : "Approved"}</TabsTrigger>
+              <TabsTrigger value="rejected">{isArabic ? "مرفوضة" : "Rejected"}</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <Tabs value={filterType} onValueChange={(value) => setFilterType(value as TransactionTypeFilter)}>
             <TabsList>
               <TabsTrigger value="all">{isArabic ? "الكل" : "All"}</TabsTrigger>
               <TabsTrigger value="deposit">{isArabic ? "إيداع" : "Deposits"}</TabsTrigger>
               <TabsTrigger value="withdrawal">{isArabic ? "سحب" : "Withdrawals"}</TabsTrigger>
             </TabsList>
           </Tabs>
+
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              {isArabic ? "المعروض" : "Showing"}: {transactionRows.length}
+              {archiveResponse?.total !== undefined ? ` / ${archiveResponse.total}` : ""}
+            </span>
+            <span>
+              {isArabic ? "إيداع" : "Deposits"}: {statsByType.deposits} | {isArabic ? "سحب" : "Withdrawals"}: {statsByType.withdrawals}
+              {isFetching ? (
+                <Loader2 className="inline ms-2 h-3 w-3 animate-spin" />
+              ) : null}
+            </span>
+          </div>
         </CardHeader>
         <CardContent>
-          {pendingTransactions.length === 0 ? (
+          {transactionRows.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground" data-testid="admin-transactions-empty">
               <Clock3 className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p>{isArabic ? "لا توجد طلبات معلقة" : "No pending requests"}</p>
+              <p>{isArabic ? "لا توجد عمليات مطابقة" : "No matching operations"}</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {pendingTransactions.map((transaction) => {
+              {transactionRows.map((transaction) => {
                 const isBusy = processMutation.isPending && activeTransactionId === transaction.id;
+                const isPendingTransaction = transaction.status === "pending";
                 const hasUnreadAlert = unreadEntityIds.has(transaction.id);
+                const displayReference = getDisplayReference(transaction);
                 return (
                   <div
                     key={transaction.id}
@@ -302,11 +417,13 @@ export default function AdminTransactionsPage() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={transaction.type === "deposit" ? "default" : "secondary"}>
+                        <Badge variant={transaction.type === "deposit" ? "default" : "secondary"} className="gap-1">
+                          {transaction.type === "deposit" ? <ArrowDownToLine className="h-3.5 w-3.5" /> : <ArrowUpFromLine className="h-3.5 w-3.5" />}
                           {transaction.type === "deposit"
                             ? (isArabic ? "إيداع" : "Deposit")
                             : (isArabic ? "سحب" : "Withdrawal")}
                         </Badge>
+                        {getStatusBadge(transaction.status)}
                         <Badge variant="outline">
                           {isArabic ? "المبلغ المطلوب" : "Requested"}: {formatUsd(transaction.amount)}
                         </Badge>
@@ -316,69 +433,96 @@ export default function AdminTransactionsPage() {
                       </div>
                     </div>
 
-                    {transaction.referenceId && (
-                      <p className="text-xs text-muted-foreground">
-                        {isArabic ? "المرجع" : "Reference"}: {transaction.referenceId}
-                      </p>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>{isArabic ? "المرجع الفريد" : "Unique Reference"}: {displayReference}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => copyReference(displayReference)}
+                        data-testid={`copy-reference-${transaction.id}`}
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
+                      {transaction.referenceId && transaction.referenceId !== displayReference ? (
+                        <span>{isArabic ? "مرجع الدفع" : "Payment Ref"}: {transaction.referenceId}</span>
+                      ) : null}
+                    </div>
+
                     {transaction.description && (
                       <p className="text-xs text-muted-foreground break-words">
                         {transaction.description}
                       </p>
                     )}
 
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">
-                          {isArabic ? "المبلغ المعتمد (USD)" : "Approved Amount (USD)"}
-                        </p>
-                        <Input
-                          type="number"
-                          min="0.01"
-                          max="1000000"
-                          step="0.01"
-                          value={getAmountValue(transaction)}
-                          onChange={(e) => {
-                            const nextValue = e.target.value;
-                            setAmountOverrides((prev) => ({ ...prev, [transaction.id]: nextValue }));
-                          }}
-                          data-testid={`approved-amount-${transaction.id}`}
-                        />
-                      </div>
+                    {isPendingTransaction ? (
+                      <>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">
+                              {isArabic ? "المبلغ المعتمد (USD)" : "Approved Amount (USD)"}
+                            </p>
+                            <Input
+                              type="number"
+                              min="0.01"
+                              max="1000000"
+                              step="0.01"
+                              value={getAmountValue(transaction)}
+                              onChange={(e) => {
+                                const nextValue = e.target.value;
+                                setAmountOverrides((prev) => ({ ...prev, [transaction.id]: nextValue }));
+                              }}
+                              data-testid={`approved-amount-${transaction.id}`}
+                            />
+                          </div>
 
-                      <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">
-                          {isArabic ? "ملاحظة (اختياري)" : "Note (optional)"}
-                        </p>
-                        <Textarea
-                          rows={2}
-                          value={notes[transaction.id] || ""}
-                          onChange={(e) => setNotes((prev) => ({ ...prev, [transaction.id]: e.target.value }))}
-                          placeholder={isArabic ? "سبب الرفض أو ملاحظة للعميل" : "Reason or internal note"}
-                          data-testid={`admin-note-${transaction.id}`}
-                        />
-                      </div>
-                    </div>
+                          <div className="space-y-1">
+                            <p className="text-xs text-muted-foreground">
+                              {isArabic ? "ملاحظة (اختياري)" : "Note (optional)"}
+                            </p>
+                            <Textarea
+                              rows={2}
+                              value={notes[transaction.id] || ""}
+                              onChange={(e) => setNotes((prev) => ({ ...prev, [transaction.id]: e.target.value }))}
+                              placeholder={isArabic ? "سبب الرفض أو ملاحظة للعميل" : "Reason or internal note"}
+                              data-testid={`admin-note-${transaction.id}`}
+                            />
+                          </div>
+                        </div>
 
-                    <div className="flex flex-wrap gap-2 justify-end">
-                      <Button
-                        variant="destructive"
-                        onClick={() => handleProcess(transaction, "rejected")}
-                        disabled={isBusy}
-                        data-testid={`reject-transaction-${transaction.id}`}
-                      >
-                        {isBusy ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : <XCircle className="h-4 w-4 me-1" />}
-                        {isArabic ? "رفض" : "Reject"}
-                      </Button>
-                      <Button
-                        onClick={() => handleProcess(transaction, "completed")}
-                        disabled={isBusy || !isValidApprovedAmount(transaction)}
-                        data-testid={`approve-transaction-${transaction.id}`}
-                      >
-                        {isBusy ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : <CheckCircle2 className="h-4 w-4 me-1" />}
-                        {isArabic ? "موافقة" : "Approve"}
-                      </Button>
-                    </div>
+                        <div className="flex flex-wrap gap-2 justify-end">
+                          <Button
+                            variant="destructive"
+                            onClick={() => handleProcess(transaction, "rejected")}
+                            disabled={isBusy}
+                            data-testid={`reject-transaction-${transaction.id}`}
+                          >
+                            {isBusy ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : <XCircle className="h-4 w-4 me-1" />}
+                            {isArabic ? "رفض" : "Reject"}
+                          </Button>
+                          <Button
+                            onClick={() => handleProcess(transaction, "completed")}
+                            disabled={isBusy || !isValidApprovedAmount(transaction)}
+                            data-testid={`approve-transaction-${transaction.id}`}
+                          >
+                            {isBusy ? <Loader2 className="h-4 w-4 animate-spin me-1" /> : <CheckCircle2 className="h-4 w-4 me-1" />}
+                            {isArabic ? "موافقة" : "Approve"}
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+                        <p>
+                          {isArabic ? "الحالة النهائية" : "Final Status"}: {transaction.status}
+                        </p>
+                        <p>
+                          {isArabic ? "تمت المعالجة" : "Processed"}: {transaction.processedAt ? new Date(transaction.processedAt).toLocaleString() : (isArabic ? "غير متاح" : "N/A")}
+                        </p>
+                        {transaction.adminNote ? (
+                          <p>{isArabic ? "ملاحظة الأدمن" : "Admin Note"}: {transaction.adminNote}</p>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                 );
               })}

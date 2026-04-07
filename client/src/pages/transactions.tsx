@@ -166,6 +166,11 @@ export default function TransactionsPage() {
     toast({ title: t('transactions.copied'), description: t('transactions.copiedToClipboard') });
   };
 
+  const getPublicReference = (tx: Transaction): string => {
+    const publicReference = (tx as Transaction & { publicReference?: string | null }).publicReference;
+    return publicReference || tx.referenceId || tx.id;
+  };
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -435,34 +440,49 @@ export default function TransactionsPage() {
           <Card>
             <CardContent className="p-0">
               <div className="divide-y">
-                {transactions?.map((tx) => (
-                  <div
-                    key={tx.id}
-                    className="flex items-center justify-between gap-4 p-4"
-                    data-testid={`row-transaction-${tx.id}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {getTypeIcon(tx.type)}
-                      <div>
-                        <p className="font-medium capitalize">{tx.type}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(tx.createdAt).toLocaleString()}
-                        </p>
-                        {tx.referenceId && (
-                          <p className="text-xs text-muted-foreground">
-                            Ref: {tx.referenceId}
+                {transactions?.map((tx) => {
+                  const displayReference = getPublicReference(tx);
+                  return (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between gap-4 p-4"
+                      data-testid={`row-transaction-${tx.id}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {getTypeIcon(tx.type)}
+                        <div>
+                          <p className="font-medium capitalize">{tx.type}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {new Date(tx.createdAt).toLocaleString()}
                           </p>
-                        )}
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            Ref: {displayReference}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-4 w-4"
+                              onClick={() => copyToClipboard(displayReference)}
+                              data-testid={`copy-reference-${tx.id}`}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </p>
+                          {tx.referenceId && tx.referenceId !== displayReference && (
+                            <p className="text-xs text-muted-foreground">
+                              Payment Ref: {tx.referenceId}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className={`font-bold ${tx.type === "deposit" || tx.type === "win" || tx.type === "bonus" ? "text-primary" : "text-destructive"}`}>
+                          {tx.type === "deposit" || tx.type === "win" || tx.type === "bonus" ? "+" : "-"}${tx.amount}
+                        </span>
+                        {getStatusBadge(tx.status)}
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className={`font-bold ${tx.type === "deposit" || tx.type === "win" || tx.type === "bonus" ? "text-primary" : "text-destructive"}`}>
-                        {tx.type === "deposit" || tx.type === "win" || tx.type === "bonus" ? "+" : "-"}${tx.amount}
-                      </span>
-                      {getStatusBadge(tx.status)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {transactions?.length === 0 && (
                   <div className="p-8 text-center text-muted-foreground">
@@ -482,56 +502,63 @@ export default function TransactionsPage() {
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y">
-                  {pendingTx?.map((tx) => (
-                    <div
-                      key={tx.id}
-                      className="flex items-center justify-between gap-4 p-4"
-                      data-testid={`row-pending-${tx.id}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {getTypeIcon(tx.type)}
-                        <div>
-                          <p className="font-medium capitalize">{tx.type}</p>
-                          <p className="text-sm text-muted-foreground">
-                            User ID: {tx.userId.slice(0, 8)}...
-                          </p>
-                          {tx.referenceId && (
+                  {pendingTx?.map((tx) => {
+                    const displayReference = getPublicReference(tx);
+                    return (
+                      <div
+                        key={tx.id}
+                        className="flex items-center justify-between gap-4 p-4"
+                        data-testid={`row-pending-${tx.id}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {getTypeIcon(tx.type)}
+                          <div>
+                            <p className="font-medium capitalize">{tx.type}</p>
+                            <p className="text-sm text-muted-foreground">
+                              User ID: {tx.userId.slice(0, 8)}...
+                            </p>
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              Ref: {tx.referenceId}
+                              Ref: {displayReference}
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-4 w-4"
-                                onClick={() => copyToClipboard(tx.referenceId!)}
+                                onClick={() => copyToClipboard(displayReference)}
+                                data-testid={`copy-pending-reference-${tx.id}`}
                               >
                                 <Copy className="h-3 w-3" />
                               </Button>
                             </p>
-                          )}
+                            {tx.referenceId && tx.referenceId !== displayReference && (
+                              <p className="text-xs text-muted-foreground">
+                                Payment Ref: {tx.referenceId}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold">${tx.amount}</span>
+                          <Button
+                            size="sm"
+                            data-testid={`button-approve-${tx.id}`}
+                            onClick={() => processMutation.mutate({ id: tx.id, status: "completed" })}
+                            disabled={processMutation.isPending}
+                          >
+                            {processMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t('transactions.approve')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            data-testid={`button-reject-${tx.id}`}
+                            onClick={() => processMutation.mutate({ id: tx.id, status: "rejected" })}
+                            disabled={processMutation.isPending}
+                          >
+                            {t('transactions.reject')}
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold">${tx.amount}</span>
-                        <Button
-                          size="sm"
-                          data-testid={`button-approve-${tx.id}`}
-                          onClick={() => processMutation.mutate({ id: tx.id, status: "completed" })}
-                          disabled={processMutation.isPending}
-                        >
-                          {processMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : t('transactions.approve')}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          data-testid={`button-reject-${tx.id}`}
-                          onClick={() => processMutation.mutate({ id: tx.id, status: "rejected" })}
-                          disabled={processMutation.isPending}
-                        >
-                          {t('transactions.reject')}
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {pendingTx?.length === 0 && (
                     <div className="p-8 text-center text-muted-foreground">

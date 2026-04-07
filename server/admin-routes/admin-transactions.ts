@@ -1,5 +1,5 @@
 import type { Express, Response } from "express";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "../db";
 import { sendNotification } from "../websocket";
 import {
@@ -16,6 +16,8 @@ import {
 } from "./helpers";
 
 type ProcessableStatus = "approved" | "completed" | "rejected";
+type ArchiveTypeFilter = "all" | "deposit" | "withdrawal";
+type ArchiveStatusFilter = "all" | "pending" | "completed" | "rejected";
 
 type HttpError = Error & { statusCode?: number };
 
@@ -38,7 +40,199 @@ function parseApprovedAmount(rawAmount: unknown): number | undefined {
   return Number(parsed.toFixed(2));
 }
 
+function normalizeTypeFilter(rawValue: unknown): ArchiveTypeFilter {
+  const normalized = typeof rawValue === "string" ? rawValue.trim().toLowerCase() : "";
+  if (normalized === "deposit" || normalized === "withdrawal") {
+    return normalized;
+  }
+  return "all";
+}
+
+function normalizeStatusFilter(rawValue: unknown): ArchiveStatusFilter {
+  const normalized = typeof rawValue === "string" ? rawValue.trim().toLowerCase() : "";
+  if (normalized === "pending" || normalized === "completed" || normalized === "rejected") {
+    return normalized;
+  }
+  return "all";
+}
+
+function inferTypeFromSearch(searchLower: string): Exclude<ArchiveTypeFilter, "all"> | undefined {
+  if (!searchLower) return undefined;
+
+  const depositKeywords = ["deposit", "dep", "ايداع", "إيداع"];
+  const withdrawalKeywords = ["withdraw", "withdrawal", "سحب"];
+
+  if (depositKeywords.some((keyword) => searchLower.includes(keyword.toLowerCase()))) {
+    return "deposit";
+  }
+
+  if (withdrawalKeywords.some((keyword) => searchLower.includes(keyword.toLowerCase()))) {
+    return "withdrawal";
+  }
+
+  return undefined;
+}
+
+function inferStatusFromSearch(searchLower: string): Exclude<ArchiveStatusFilter, "all"> | undefined {
+  if (!searchLower) return undefined;
+
+  const pendingKeywords = ["pending", "wait", "waiting", "معلق", "قيد"];
+  const completedKeywords = ["approved", "complete", "completed", "success", "مقبول", "تم", "موافق"];
+  const rejectedKeywords = ["reject", "rejected", "declined", "مرفوض", "رفض"];
+
+  if (pendingKeywords.some((keyword) => searchLower.includes(keyword.toLowerCase()))) {
+    return "pending";
+  }
+
+  if (completedKeywords.some((keyword) => searchLower.includes(keyword.toLowerCase()))) {
+    return "completed";
+  }
+
+  if (rejectedKeywords.some((keyword) => searchLower.includes(keyword.toLowerCase()))) {
+    return "rejected";
+  }
+
+  return undefined;
+}
+
+function getStatusCondition(statusFilter: ArchiveStatusFilter): SQL | null {
+  if (statusFilter === "pending") {
+    return eq(transactions.status, "pending");
+  }
+
+  if (statusFilter === "rejected") {
+    return eq(transactions.status, "rejected");
+  }
+
+  if (statusFilter === "completed") {
+    return inArray(transactions.status, ["approved", "completed"] as const);
+  }
+
+  return null;
+}
+
+function buildSmartSearchCondition(search: string): SQL | null {
+  if (!search) {
+    return null;
+  }
+
+  const likeValue = `%${search}%`;
+  return or(
+    ilike(transactions.publicReference, likeValue),
+    ilike(transactions.id, likeValue),
+    ilike(transactions.referenceId, likeValue),
+    ilike(transactions.description, likeValue),
+    ilike(transactions.adminNote, likeValue),
+    ilike(users.username, likeValue),
+    ilike(users.nickname, likeValue),
+    ilike(users.accountId, likeValue),
+    sql`CAST(${transactions.amount} AS TEXT) ILIKE ${likeValue}`,
+  ) ?? null;
+}
+
 export function registerAdminTransactionsRoutes(app: Express) {
+  app.get("/api/admin/transactions", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const typeFilter = normalizeTypeFilter(req.query.type);
+      const statusFilter = normalizeStatusFilter(req.query.status);
+      const page = Math.max(1, Number.parseInt(String(req.query.page || "1"), 10) || 1);
+      const pageSize = Math.min(200, Math.max(1, Number.parseInt(String(req.query.pageSize || "100"), 10) || 100));
+      const rawSearch = typeof req.query.q === "string" ? req.query.q : "";
+      const safeSearch = sanitizeNullablePlainText(rawSearch, 140)?.trim() || "";
+      const safeSearchLower = safeSearch.toLowerCase();
+
+      const inferredType = typeFilter === "all" ? inferTypeFromSearch(safeSearchLower) : undefined;
+      const inferredStatus = statusFilter === "all" ? inferStatusFromSearch(safeSearchLower) : undefined;
+      const effectiveTypeFilter: ArchiveTypeFilter = typeFilter === "all" ? (inferredType || "all") : typeFilter;
+      const effectiveStatusFilter: ArchiveStatusFilter = statusFilter === "all" ? (inferredStatus || "all") : statusFilter;
+
+      const scopedConditions: SQL[] = [
+        inArray(transactions.type, ["deposit", "withdrawal"] as const),
+      ];
+
+      if (effectiveTypeFilter !== "all") {
+        scopedConditions.push(eq(transactions.type, effectiveTypeFilter));
+      }
+
+      const searchCondition = buildSmartSearchCondition(safeSearch);
+      if (searchCondition) {
+        scopedConditions.push(searchCondition);
+      }
+
+      const rowConditions: SQL[] = [...scopedConditions];
+      const statusCondition = getStatusCondition(effectiveStatusFilter);
+      if (statusCondition) {
+        rowConditions.push(statusCondition);
+      }
+
+      const whereClause = rowConditions.length > 0 ? and(...rowConditions) : undefined;
+      const summaryWhereClause = scopedConditions.length > 0 ? and(...scopedConditions) : undefined;
+      const offset = (page - 1) * pageSize;
+
+      const [countRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(transactions)
+        .innerJoin(users, eq(transactions.userId, users.id))
+        .where(whereClause);
+
+      const rows = await db
+        .select({
+          id: transactions.id,
+          publicReference: transactions.publicReference,
+          userId: transactions.userId,
+          type: transactions.type,
+          status: transactions.status,
+          amount: transactions.amount,
+          balanceBefore: transactions.balanceBefore,
+          balanceAfter: transactions.balanceAfter,
+          description: transactions.description,
+          referenceId: transactions.referenceId,
+          adminNote: transactions.adminNote,
+          processedBy: transactions.processedBy,
+          processedAt: transactions.processedAt,
+          createdAt: transactions.createdAt,
+          updatedAt: transactions.updatedAt,
+          user: {
+            id: users.id,
+            username: users.username,
+            nickname: users.nickname,
+            accountId: users.accountId,
+            balance: users.balance,
+          },
+        })
+        .from(transactions)
+        .innerJoin(users, eq(transactions.userId, users.id))
+        .where(whereClause)
+        .orderBy(desc(transactions.createdAt))
+        .limit(pageSize)
+        .offset(offset);
+
+      const [summaryRow] = await db
+        .select({
+          pending: sql<number>`COUNT(*) FILTER (WHERE ${transactions.status} = 'pending')::int`,
+          completed: sql<number>`COUNT(*) FILTER (WHERE ${transactions.status} IN ('approved', 'completed'))::int`,
+          rejected: sql<number>`COUNT(*) FILTER (WHERE ${transactions.status} = 'rejected')::int`,
+        })
+        .from(transactions)
+        .innerJoin(users, eq(transactions.userId, users.id))
+        .where(summaryWhereClause);
+
+      res.json({
+        data: rows,
+        total: Number(countRow?.count || 0),
+        page,
+        pageSize,
+        summary: {
+          pending: Number(summaryRow?.pending || 0),
+          completed: Number(summaryRow?.completed || 0),
+          rejected: Number(summaryRow?.rejected || 0),
+        },
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
   app.get("/api/admin/transactions/pending", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
       const rawType = typeof req.query.type === "string" ? req.query.type.trim().toLowerCase() : "";
@@ -46,7 +240,7 @@ export function registerAdminTransactionsRoutes(app: Express) {
         return res.status(400).json({ error: "type must be one of: deposit, withdrawal" });
       }
 
-      const conditions = [
+      const conditions: SQL[] = [
         eq(transactions.status, "pending" as TransactionStatus),
         inArray(transactions.type, ["deposit", "withdrawal"] as const),
       ];
@@ -58,6 +252,7 @@ export function registerAdminTransactionsRoutes(app: Express) {
       const pendingTransactions = await db
         .select({
           id: transactions.id,
+          publicReference: transactions.publicReference,
           userId: transactions.userId,
           type: transactions.type,
           status: transactions.status,
@@ -222,11 +417,12 @@ export function registerAdminTransactionsRoutes(app: Express) {
           priority: "high",
           title: `${txType.en} Approved`,
           titleAr: `تمت الموافقة على ${txType.ar}`,
-          message: `Your ${txType.en.toLowerCase()} of $${processedResult.processedAmount.toFixed(2)} has been approved successfully.`,
-          messageAr: `تمت الموافقة على ${txType.ar} بقيمة $${processedResult.processedAmount.toFixed(2)} بنجاح.`,
+          message: `Your ${txType.en.toLowerCase()} of $${processedResult.processedAmount.toFixed(2)} has been approved successfully. Ref: ${processedResult.transaction.publicReference}`,
+          messageAr: `تمت الموافقة على ${txType.ar} بقيمة $${processedResult.processedAmount.toFixed(2)} بنجاح. المرجع: ${processedResult.transaction.publicReference}`,
           link: "/transactions",
           metadata: JSON.stringify({
             transactionId: processedResult.transaction.id,
+            reference: processedResult.transaction.publicReference,
             type: processedResult.type,
             amount: processedResult.transaction.amount,
           }),
@@ -237,11 +433,12 @@ export function registerAdminTransactionsRoutes(app: Express) {
           priority: "high",
           title: `${txType.en} Rejected`,
           titleAr: `تم رفض ${txType.ar}`,
-          message: `Your ${txType.en.toLowerCase()} of $${processedResult.processedAmount.toFixed(2)} has been rejected.${safeAdminNote ? ` Reason: ${safeAdminNote}` : ""}`,
-          messageAr: `تم رفض ${txType.ar} بقيمة $${processedResult.processedAmount.toFixed(2)}.${safeAdminNote ? ` السبب: ${safeAdminNote}` : ""}`,
+          message: `Your ${txType.en.toLowerCase()} of $${processedResult.processedAmount.toFixed(2)} has been rejected.${safeAdminNote ? ` Reason: ${safeAdminNote}` : ""} Ref: ${processedResult.transaction.publicReference}`,
+          messageAr: `تم رفض ${txType.ar} بقيمة $${processedResult.processedAmount.toFixed(2)}.${safeAdminNote ? ` السبب: ${safeAdminNote}` : ""} المرجع: ${processedResult.transaction.publicReference}`,
           link: "/transactions",
           metadata: JSON.stringify({
             transactionId: processedResult.transaction.id,
+            reference: processedResult.transaction.publicReference,
             type: processedResult.type,
             amount: processedResult.transaction.amount,
           }),
@@ -259,6 +456,7 @@ export function registerAdminTransactionsRoutes(app: Express) {
             status,
             amount: processedResult.transaction.amount,
             type: processedResult.type,
+            publicReference: processedResult.transaction.publicReference,
           }),
           reason: safeAdminNote,
         },

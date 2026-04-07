@@ -681,6 +681,7 @@ export const gameSessionsRelations = relations(gameSessions, ({ one }) => ({
 
 export const transactions = pgTable("transactions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  publicReference: text("public_reference").notNull().default(sql`UPPER('TXN-' || SUBSTRING(REPLACE(gen_random_uuid()::text, '-', '') FROM 1 FOR 16))`),
   userId: varchar("user_id").notNull().references(() => users.id),
   type: transactionTypeEnum("type").notNull(),
   status: transactionStatusEnum("status").notNull().default("pending"),
@@ -700,6 +701,7 @@ export const transactions = pgTable("transactions", {
   index("idx_transactions_status").on(table.status),
   index("idx_transactions_created_at").on(table.createdAt),
   index("idx_transactions_user_date").on(table.userId, table.createdAt),
+  uniqueIndex("uq_transactions_public_reference").on(table.publicReference),
   check("chk_transactions_amount_positive", sql`${table.amount} > 0`),
 ]);
 

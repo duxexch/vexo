@@ -783,6 +783,23 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
           console.error("[DB] Media columns migration warning:", err instanceof Error ? err.message : String(err));
         }
 
+        // Ensure transactions have a globally unique public reference for user-facing support and copy flows.
+        try {
+          const { pool } = await import("./db");
+          await pool.query(`
+          ALTER TABLE transactions ADD COLUMN IF NOT EXISTS public_reference TEXT;
+          ALTER TABLE transactions ALTER COLUMN public_reference SET DEFAULT (UPPER('TXN-' || SUBSTRING(REPLACE(gen_random_uuid()::text, '-', '') FROM 1 FOR 16)));
+          UPDATE transactions
+          SET public_reference = UPPER('TXN-' || SUBSTRING(REPLACE(gen_random_uuid()::text, '-', '') FROM 1 FOR 16))
+          WHERE public_reference IS NULL OR BTRIM(public_reference) = '';
+          ALTER TABLE transactions ALTER COLUMN public_reference SET NOT NULL;
+          CREATE UNIQUE INDEX IF NOT EXISTS uq_transactions_public_reference ON transactions(public_reference);
+        `);
+          log("DB transactions public references verified", "db");
+        } catch (err: unknown) {
+          console.error("[DB] Transactions public reference migration warning:", err instanceof Error ? err.message : String(err));
+        }
+
         // Ensure chat_messages has Telegram-grade feature columns
         try {
           const { pool } = await import("./db");
