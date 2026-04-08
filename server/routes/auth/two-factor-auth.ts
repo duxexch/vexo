@@ -102,6 +102,9 @@ export function registerTwoFactorAuthRoutes(app: Express) {
       if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) {
         return res.status(400).json({ error: "Invalid request" });
       }
+      if (user.status !== "active" || Boolean(user.accountDeletedAt)) {
+        return res.status(403).json({ error: "Account is not active" });
+      }
 
       let verified = false;
 

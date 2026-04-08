@@ -70,6 +70,13 @@ export function registerUsersRoutes(app: Express): void {
         return res.status(400).json({ error: "Invalid status" });
       }
 
+      if (sanitizedUpdate.status === 'active') {
+        sanitizedUpdate.accountDeletedAt = null;
+        sanitizedUpdate.accountDeletionReason = null;
+        sanitizedUpdate.accountDisabledAt = null;
+        sanitizedUpdate.accountRestoredAt = new Date();
+      }
+
       const user = await storage.updateUser(req.params.id, sanitizedUpdate);
       if (!user) {
         return res.status(404).json({ error: "User not found" });

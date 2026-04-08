@@ -139,6 +139,7 @@ export default function LoginPage() {
   const [showRedirectModal, setShowRedirectModal] = useState(false);
   const [redirectInfo, setRedirectInfo] = useState<{ correctMethod: string; maskedHint: string; password: string } | null>(null);
   const socialPopupWatcherRef = useRef<number | null>(null);
+  const socialPopupRef = useRef<Window | null>(null);
   const socialLoginLockRef = useRef<{ platformName: string; startedAt: number } | null>(null);
   const socialLoginUnlockTimeoutRef = useRef<number | null>(null);
   const googleIdentityScriptLoaderRef = useRef<Promise<void> | null>(null);
@@ -160,6 +161,10 @@ export default function LoginPage() {
     if (socialPopupWatcherRef.current) {
       window.clearInterval(socialPopupWatcherRef.current);
       socialPopupWatcherRef.current = null;
+    }
+
+    if (socialPopupRef.current?.closed) {
+      socialPopupRef.current = null;
     }
 
     if (resetLoading) {
@@ -370,8 +375,10 @@ export default function LoginPage() {
       }
 
       popup.focus();
+      socialPopupRef.current = popup;
       socialPopupWatcherRef.current = window.setInterval(() => {
         if (popup.closed) {
+          socialPopupRef.current = null;
           clearSocialLoginLock();
         }
       }, 500);
@@ -447,6 +454,14 @@ export default function LoginPage() {
       }
 
       if (payload.type === "vex_oauth_success") {
+        if (socialPopupRef.current && !socialPopupRef.current.closed) {
+          try {
+            socialPopupRef.current.close();
+          } catch {
+            // Ignore popup close failures in hardened browser contexts.
+          }
+        }
+        socialPopupRef.current = null;
         clearSocialLoginLock(false);
         await refreshUser();
         setIsLoading(false);
@@ -537,6 +552,33 @@ export default function LoginPage() {
     }
   };
 
+  const isSocialRegistrationMethod = (method?: string): boolean => {
+    return typeof method === "string" && method.startsWith("social_");
+  };
+
+  const openPasswordRecoveryForIdentifier = (identifier: string) => {
+    const cleanIdentifier = identifier.trim();
+    if (!cleanIdentifier) {
+      return;
+    }
+
+    setForgotPasswordForm({
+      identifier: cleanIdentifier,
+      newPassword: "",
+      confirmPassword: "",
+    });
+    setResetToken("");
+    setForgotPasswordStep("request");
+    setShowForgotPassword(true);
+    setShowRedirectModal(false);
+    setRedirectInfo(null);
+
+    toast({
+      title: t('auth.forgotPassword'),
+      description: t('auth.resetDesc'),
+    });
+  };
+
   const handleAccountLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!checkTermsAgreed()) return;
@@ -548,6 +590,12 @@ export default function LoginPage() {
       const err = error as Error & { errorCode?: string; correctMethod?: string };
       // Handle WRONG_LOGIN_METHOD - auto redirect to correct tab
       if (err.errorCode === "WRONG_LOGIN_METHOD" && err.correctMethod) {
+        if (isSocialRegistrationMethod(err.correctMethod)) {
+          openPasswordRecoveryForIdentifier(accountLoginForm.accountId);
+          setIsLoading(false);
+          return;
+        }
+
         setRedirectInfo({
           correctMethod: err.correctMethod,
           maskedHint: "",
@@ -609,6 +657,12 @@ export default function LoginPage() {
       const err = error as Error & { errorCode?: string; correctMethod?: string };
       // Handle WRONG_LOGIN_METHOD - auto redirect to correct tab
       if (err.errorCode === "WRONG_LOGIN_METHOD" && err.correctMethod) {
+        if (isSocialRegistrationMethod(err.correctMethod)) {
+          openPasswordRecoveryForIdentifier(phoneLoginForm.phone.trim());
+          setIsLoading(false);
+          return;
+        }
+
         setRedirectInfo({
           correctMethod: err.correctMethod,
           maskedHint: "",
@@ -674,6 +728,12 @@ export default function LoginPage() {
       const err = error as Error & { errorCode?: string; correctMethod?: string };
       // Handle WRONG_LOGIN_METHOD - auto redirect to correct tab
       if (err.errorCode === "WRONG_LOGIN_METHOD" && err.correctMethod) {
+        if (isSocialRegistrationMethod(err.correctMethod)) {
+          openPasswordRecoveryForIdentifier(emailLoginForm.username.trim());
+          setIsLoading(false);
+          return;
+        }
+
         setRedirectInfo({
           correctMethod: err.correctMethod,
           maskedHint: "",
@@ -773,9 +833,19 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setResetToken(data.token);
+      const tokenFromResponse = typeof data.token === "string" ? data.token : "";
+      const deliveryMasked = data?.delivery && typeof data.delivery === "object" && typeof data.delivery.masked === "string"
+        ? data.delivery.masked
+        : "";
+
+      setResetToken(tokenFromResponse);
       setForgotPasswordStep("reset");
-      toast({ title: t('common.success'), description: t('auth.resetTokenGenerated') });
+      toast({
+        title: t('common.success'),
+        description: deliveryMasked
+          ? `${t('auth.resetTokenGenerated')}: ${deliveryMasked}`
+          : t('auth.resetTokenGenerated'),
+      });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       toast({ title: t('common.error'), description: message, variant: "destructive" });
@@ -802,6 +872,7 @@ export default function LoginPage() {
       toast({ title: t('common.success'), description: t('auth.resetSuccess') });
       setShowForgotPassword(false);
       setForgotPasswordStep("request");
+      setResetToken("");
       setForgotPasswordForm({ identifier: "", newPassword: "", confirmPassword: "" });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1377,6 +1448,18 @@ export default function LoginPage() {
             </form>
           ) : (
             <form onSubmit={handleResetPassword} className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="resetCode">{t('settings.verificationCodeLabel')}</Label>
+                <Input
+                  id="resetCode"
+                  data-testid="input-reset-code"
+                  value={resetToken}
+                  onChange={e => setResetToken(e.target.value.trim())}
+                  placeholder={t('settings.otpPlaceholder')}
+                  autoCapitalize="characters"
+                  required
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="newPassword">{t('auth.newPassword')}</Label>
                 <Input

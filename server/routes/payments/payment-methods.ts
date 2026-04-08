@@ -4,6 +4,12 @@ import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import { insertCountryPaymentMethodSchema } from "@shared/schema";
 import { evaluateSocialPlatformRuntime } from "../../lib/social-platform-runtime";
+import { z } from "zod";
+
+const bulkActionSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(300),
+  action: z.enum(["activate", "deactivate", "enable_withdrawal", "disable_withdrawal", "delete"]),
+});
 
 export function registerPaymentMethodRoutes(app: Express): void {
 
@@ -133,6 +139,43 @@ export function registerPaymentMethodRoutes(app: Express): void {
         return res.status(404).json({ error: "Payment method not found" });
       }
       res.json(method);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/admin/payment-methods/bulk-action", adminTokenMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const parsed = bulkActionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Invalid bulk action payload",
+          details: parsed.error.errors,
+        });
+      }
+
+      const ids = Array.from(new Set(parsed.data.ids.map((id) => id.trim()).filter(Boolean)));
+      if (ids.length === 0) {
+        return res.status(400).json({ error: "No valid payment method IDs provided" });
+      }
+
+      const action = parsed.data.action;
+
+      if (action === "delete") {
+        const deletedCount = await storage.deleteCountryPaymentMethodsBulk(ids);
+        return res.json({ success: true, action, affectedCount: deletedCount });
+      }
+
+      const updateData = action === "activate"
+        ? { isActive: true }
+        : action === "deactivate"
+          ? { isActive: false }
+          : action === "enable_withdrawal"
+            ? { isWithdrawalEnabled: true }
+            : { isWithdrawalEnabled: false };
+
+      const updatedRows = await storage.updateCountryPaymentMethodsBulk(ids, updateData);
+      return res.json({ success: true, action, affectedCount: updatedRows.length });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

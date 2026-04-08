@@ -1,4 +1,4 @@
-import { useRef, useState, type ComponentType } from "react";
+import { useMemo, useRef, useState, type ComponentType } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,13 +14,7 @@ import {
     DialogTitle,
     DialogFooter,
 } from "@/components/ui/dialog";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -526,6 +520,37 @@ export default function AdminBadgesPage() {
     const existingBadgeNames = new Set((badges || []).map((badge) => badge.name.trim().toLowerCase()));
     const hasAllDefaultTrustBadges = DEFAULT_TRUST_BADGE_NAMES.every((name) => existingBadgeNames.has(name.toLowerCase()));
 
+    const assignableUserOptions = useMemo<SearchableSelectOption[]>(
+        () => users.map((user) => ({
+            value: user.id,
+            label: `${user.nickname || user.username} (${user.username})`,
+            keywords: [user.username, user.nickname || "", user.accountId || ""],
+        })),
+        [users],
+    );
+
+    const assignableBadgeOptions = useMemo<SearchableSelectOption[]>(
+        () => (badges || [])
+            .filter((badge) => badge.isActive)
+            .map((badge) => ({
+                value: badge.id,
+                label: `L${badge.level} - ${isArabic && badge.nameAr ? badge.nameAr : badge.name}`,
+                keywords: [badge.name, badge.nameAr || "", String(badge.level)],
+            })),
+        [badges, isArabic],
+    );
+
+    const badgeCategoryOptions = useMemo<SearchableSelectOption[]>(
+        () => [
+            { value: "achievement", label: isArabic ? "إنجاز" : "Achievement" },
+            { value: "vip", label: "VIP" },
+            { value: "special", label: isArabic ? "خاص" : "Special" },
+            { value: "event", label: isArabic ? "حدث" : "Event" },
+            { value: "trust", label: isArabic ? "ثقة" : "Trust" },
+        ],
+        [isArabic],
+    );
+
     return (
         <div className="p-6 space-y-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -591,35 +616,31 @@ export default function AdminBadgesPage() {
 
                         <div className="space-y-2 md:col-span-1">
                             <Label>{isArabic ? "المستخدم" : "User"}</Label>
-                            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                                <SelectTrigger data-testid="select-assign-user">
-                                    <SelectValue placeholder={isArabic ? "اختر مستخدم" : "Select user"} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {users.map((user) => (
-                                        <SelectItem key={user.id} value={user.id}>
-                                            {user.nickname || user.username} ({user.username})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                value={selectedUserId}
+                                onValueChange={setSelectedUserId}
+                                options={assignableUserOptions}
+                                placeholder={isArabic ? "اختر مستخدم" : "Select user"}
+                                searchPlaceholder={isArabic ? "اكتب للبحث عن المستخدم" : "Type to search user"}
+                                emptyText={isArabic ? "لا يوجد مستخدم مطابق" : "No matching user"}
+                                triggerTestId="select-assign-user"
+                                searchInputTestId="input-search-assign-user"
+                            />
                             {usersLoading && <p className="text-xs text-muted-foreground">{isArabic ? "جاري تحميل المستخدمين..." : "Loading users..."}</p>}
                         </div>
 
                         <div className="space-y-2 md:col-span-1">
                             <Label>{isArabic ? "الشارة" : "Badge"}</Label>
-                            <Select value={selectedBadgeId} onValueChange={setSelectedBadgeId}>
-                                <SelectTrigger data-testid="select-assign-badge">
-                                    <SelectValue placeholder={isArabic ? "اختر شارة" : "Select badge"} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {badges?.filter((badge) => badge.isActive).map((badge) => (
-                                        <SelectItem key={badge.id} value={badge.id}>
-                                            L{badge.level} - {isArabic && badge.nameAr ? badge.nameAr : badge.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                value={selectedBadgeId}
+                                onValueChange={setSelectedBadgeId}
+                                options={assignableBadgeOptions}
+                                placeholder={isArabic ? "اختر شارة" : "Select badge"}
+                                searchPlaceholder={isArabic ? "اكتب للبحث عن الشارة" : "Type to search badge"}
+                                emptyText={isArabic ? "لا توجد شارة مطابقة" : "No matching badge"}
+                                triggerTestId="select-assign-badge"
+                                searchInputTestId="input-search-assign-badge"
+                            />
                         </div>
                     </div>
 
@@ -955,20 +976,18 @@ export default function AdminBadgesPage() {
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>{isArabic ? "الفئة" : "Category"}</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <FormControl>
-                                                    <SelectTrigger data-testid="select-badge-category">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value="achievement">{isArabic ? "إنجاز" : "Achievement"}</SelectItem>
-                                                    <SelectItem value="vip">VIP</SelectItem>
-                                                    <SelectItem value="special">{isArabic ? "خاص" : "Special"}</SelectItem>
-                                                    <SelectItem value="event">{isArabic ? "حدث" : "Event"}</SelectItem>
-                                                    <SelectItem value="trust">{isArabic ? "ثقة" : "Trust"}</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            <FormControl>
+                                                <SearchableSelect
+                                                    value={field.value}
+                                                    onValueChange={field.onChange}
+                                                    options={badgeCategoryOptions}
+                                                    placeholder={isArabic ? "اختر الفئة" : "Select category"}
+                                                    searchPlaceholder={isArabic ? "اكتب للبحث عن الفئة" : "Type to search category"}
+                                                    emptyText={isArabic ? "لا توجد فئة مطابقة" : "No matching category"}
+                                                    triggerTestId="select-badge-category"
+                                                    searchInputTestId="input-search-badge-category"
+                                                />
+                                            </FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}

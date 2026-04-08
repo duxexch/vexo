@@ -11,12 +11,33 @@ import {
   IS_DEV_MODE,
 } from "../helpers";
 
+const RESET_CODE_EXPIRY_MINUTES = 60;
+const RESET_CODE_EXPIRY_MS = RESET_CODE_EXPIRY_MINUTES * 60 * 1000;
+
+function generateResetCode(): string {
+  // 8-char hexadecimal code, human-friendly for manual entry.
+  return crypto.randomBytes(4).toString("hex").toUpperCase();
+}
+
+function maskEmail(email: string): string {
+  const [localPart, domain] = email.split("@");
+  if (!domain) return "***";
+  const visibleLocal = localPart.slice(0, Math.min(2, localPart.length));
+  return `${visibleLocal}***@${domain}`;
+}
+
+function maskPhone(phone: string): string {
+  const normalized = phone.trim();
+  if (normalized.length <= 4) return "****";
+  return `${normalized.slice(0, 2)}****${normalized.slice(-2)}`;
+}
+
 export function registerPasswordResetRoutes(app: Express) {
   // Request password reset
   app.post("/api/auth/forgot-password", passwordResetRateLimiter, async (req: Request, res: Response) => {
     try {
       const { email, phone, accountId } = req.body;
-      
+
       // Don't reveal whether an account exists — always return success-like response
       if (!email && !phone && !accountId) {
         return res.status(400).json({ error: "Please provide email, phone, or account ID" });
@@ -30,65 +51,90 @@ export function registerPasswordResetRoutes(app: Express) {
       } else if (accountId && typeof accountId === 'string') {
         user = await storage.getUserByAccountId(accountId);
       }
-      
+
       if (!user) {
         // Return generic message to prevent account enumeration
         return res.json({ message: "If an account exists with this identifier, reset instructions have been sent" });
       }
-      
-      const resetToken = crypto.randomBytes(32).toString("hex");
-      const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
-      const expiresAt = new Date(Date.now() + 3600000);
-      
+
+      if (user.status !== "active" || Boolean(user.accountDeletedAt)) {
+        return res.json({ message: "If an account exists with this identifier, reset instructions have been sent" });
+      }
+
+      const resetCode = generateResetCode();
+      const tokenHash = crypto.createHash('sha256').update(resetCode).digest('hex');
+      const expiresAt = new Date(Date.now() + RESET_CODE_EXPIRY_MS);
+
       // Invalidate any previous reset tokens for this user
       await storage.invalidateUserResetTokens(user.id);
-      
+
       await storage.createPasswordResetToken({
         userId: user.id,
         tokenHash,
         expiresAt,
       });
-      
+
       // In production, send token via email/SMS only — never expose in API response
-      const responseData: Record<string, unknown> = { 
-        success: true, 
+      const responseData: Record<string, unknown> = {
+        success: true,
         message: "Password reset instructions sent. Check your email/phone.",
       };
-      
-      // Deliver reset token via email or SMS
-      const resetUrl = `${process.env.APP_URL || 'https://vixo.click'}/reset-password?token=${resetToken}`;
-      
-      if (email && user.email) {
-        sendEmail({
-          to: user.email,
+
+      // Prefer user-entered channel; fallback to available verified contact for account-id based requests.
+      const recoveryEmail =
+        email && user.email
+          ? user.email
+          : !email && !phone && user.email
+            ? user.email
+            : null;
+      const recoveryPhone =
+        phone && user.phone
+          ? user.phone
+          : !email && !phone && !recoveryEmail && user.phone
+            ? user.phone
+            : null;
+
+      if (recoveryEmail) {
+        void sendEmail({
+          to: recoveryEmail,
           subject: "VEX - استعادة كلمة المرور",
-          text: `رمز استعادة كلمة المرور: ${resetToken}\nأو استخدم الرابط: ${resetUrl}\nصالح لمدة 60 دقيقة`,
-          html: buildResetPasswordEmailHtml(resetToken.substring(0, 8).toUpperCase(), 60),
+          text: `رمز استعادة كلمة المرور: ${resetCode}\nصالح لمدة ${RESET_CODE_EXPIRY_MINUTES} دقيقة`,
+          html: buildResetPasswordEmailHtml(resetCode, RESET_CODE_EXPIRY_MINUTES),
         }).catch(err => console.error("Reset email delivery error:", err));
-      } else if (phone && user.phone) {
-        sendSms({
-          to: user.phone,
-          message: buildResetSmsMessage(resetToken.substring(0, 8).toUpperCase(), 60),
+
+        responseData.delivery = {
+          type: "email",
+          masked: maskEmail(recoveryEmail),
+        };
+      } else if (recoveryPhone) {
+        void sendSms({
+          to: recoveryPhone,
+          message: buildResetSmsMessage(resetCode, RESET_CODE_EXPIRY_MINUTES),
         }).catch(err => console.error("Reset SMS delivery error:", err));
+
+        responseData.delivery = {
+          type: "phone",
+          masked: maskPhone(recoveryPhone),
+        };
       }
-      
+
       // Only expose token in explicit dev mode (VEX_DEV_MODE=true)
       if (IS_DEV_MODE) {
-        responseData.token = resetToken;
+        responseData.token = resetCode;
         responseData.devNote = "Token exposed only in development mode (VEX_DEV_MODE)";
       }
-      
+
       res.json(responseData);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
   });
-  
+
   // Reset password with token
   app.post("/api/auth/reset-password", strictRateLimiter, async (req: Request, res: Response) => {
     try {
       const { token, newPassword } = req.body;
-      
+
       if (!token || typeof token !== 'string') {
         return res.status(400).json({ error: "Reset token is required" });
       }
@@ -100,31 +146,59 @@ export function registerPasswordResetRoutes(app: Express) {
         return res.status(400).json({ error: pwCheck.error });
       }
 
-      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      const resetToken = await storage.getPasswordResetTokenByHash(tokenHash);
+      const normalizedToken = token.trim();
+      const tokenCandidates = Array.from(new Set([normalizedToken, normalizedToken.toUpperCase()])).filter(Boolean);
+
+      let resetToken = null;
+      for (const candidate of tokenCandidates) {
+        const tokenHash = crypto.createHash('sha256').update(candidate).digest('hex');
+        const found = await storage.getPasswordResetTokenByHash(tokenHash);
+        if (found) {
+          resetToken = found;
+          break;
+        }
+      }
+
       if (!resetToken) {
         return res.status(400).json({ error: "Invalid or expired token" });
       }
-      
+
       if (resetToken.usedAt) {
         return res.status(400).json({ error: "Token has already been used" });
       }
-      
+
       if (new Date() > resetToken.expiresAt) {
         return res.status(400).json({ error: "Token has expired" });
       }
-      
+
       const hashedPassword = await bcrypt.hash(newPassword, 12);
-      await storage.updateUser(resetToken.userId, { 
+      const existingUser = await storage.getUser(resetToken.userId);
+      if (!existingUser || existingUser.status !== "active" || Boolean(existingUser.accountDeletedAt)) {
+        return res.status(400).json({ error: "Invalid or expired token" });
+      }
+      const shouldSwitchFromSocial = Boolean(existingUser?.registrationType && existingUser.registrationType.startsWith("social_"));
+
+      await storage.updateUser(resetToken.userId, {
         password: hashedPassword,
         passwordChangedAt: new Date(),
         failedLoginAttempts: 0,
         lockedUntil: null,
+        ...(shouldSwitchFromSocial
+          ? {
+            registrationType: existingUser?.email
+              ? "email"
+              : existingUser?.phone
+                ? "phone"
+                : existingUser?.accountId
+                  ? "account"
+                  : "username",
+          }
+          : {}),
       });
       await storage.markTokenAsUsed(resetToken.id);
       // Invalidate all other reset tokens for this user
       await storage.invalidateUserResetTokens(resetToken.userId);
-      
+
       await storage.createAuditLog({
         userId: resetToken.userId,
         action: "password_changed",
@@ -133,7 +207,7 @@ export function registerPasswordResetRoutes(app: Express) {
         details: "Password reset via recovery token",
         ipAddress: req.ip,
       });
-      
+
       // Notify user of password change
       sendSecurityNotification(
         resetToken.userId,
@@ -142,7 +216,7 @@ export function registerPasswordResetRoutes(app: Express) {
         "Your password has been successfully changed. If you did not make this change, please contact support immediately.",
         "تم تغيير كلمة المرور بنجاح. إذا لم تقم بهذا التغيير، يرجى التواصل مع الدعم فوراً."
       );
-      
+
       res.json({ success: true, message: "Password has been reset successfully" });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

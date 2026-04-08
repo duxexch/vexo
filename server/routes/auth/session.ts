@@ -65,7 +65,7 @@ export function registerSessionRoutes(app: Express) {
   app.post("/api/auth/refresh-token", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const user = await storage.getUser(req.user!.id);
-      if (!user || user.status !== "active") {
+      if (!user || user.status !== "active" || Boolean(user.accountDeletedAt)) {
         return res.status(401).json({ error: "Invalid session" });
       }
 

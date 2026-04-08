@@ -78,6 +78,7 @@ export function resolveEffectiveP2PMonthlyLimit(
 export async function getBadgeEntitlementsForUsers(userIds: string[]): Promise<Map<string, UserBadgeEntitlements>> {
     const normalizedUserIds = Array.from(new Set(userIds.filter((id) => typeof id === "string" && id.trim().length > 0)));
     const entitlementsMap = new Map<string, UserBadgeEntitlements>();
+    const fallbackTopBadges = new Map<string, TrustBadgeSummary | null>();
 
     for (const userId of normalizedUserIds) {
         entitlementsMap.set(userId, createDefaultEntitlements());
@@ -114,8 +115,23 @@ export async function getBadgeEntitlementsForUsers(userIds: string[]): Promise<M
     for (const row of rows) {
         const current = entitlementsMap.get(row.userId) ?? createDefaultEntitlements();
 
+        const candidate: TrustBadgeSummary = {
+            id: row.badgeId,
+            name: row.name,
+            nameAr: row.nameAr,
+            iconUrl: row.iconUrl,
+            iconName: row.iconName,
+            color: row.color,
+            category: row.category,
+            level: row.level,
+            points: row.points,
+        };
+
         current.badgeCount += 1;
         current.grantsP2pPrivileges = current.grantsP2pPrivileges || Boolean(row.grantsP2pPrivileges);
+
+        const currentFallback = fallbackTopBadges.get(row.userId) ?? null;
+        fallbackTopBadges.set(row.userId, pickTopBadge(currentFallback, candidate));
 
         const p2pLimit = parseDecimal(row.p2pMonthlyLimit);
         if (p2pLimit !== null) {
@@ -132,22 +148,17 @@ export async function getBadgeEntitlementsForUsers(userIds: string[]): Promise<M
         }
 
         if (row.showOnProfile) {
-            const candidate: TrustBadgeSummary = {
-                id: row.badgeId,
-                name: row.name,
-                nameAr: row.nameAr,
-                iconUrl: row.iconUrl,
-                iconName: row.iconName,
-                color: row.color,
-                category: row.category,
-                level: row.level,
-                points: row.points,
-            };
-
             current.topBadge = pickTopBadge(current.topBadge, candidate);
         }
 
         entitlementsMap.set(row.userId, current);
+    }
+
+    for (const [userId, entitlements] of entitlementsMap.entries()) {
+        if (!entitlements.topBadge) {
+            entitlements.topBadge = fallbackTopBadges.get(userId) ?? null;
+            entitlementsMap.set(userId, entitlements);
+        }
     }
 
     return entitlementsMap;

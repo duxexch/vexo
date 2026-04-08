@@ -80,6 +80,13 @@ export function registerUserCrudRoutes(app: Express) {
         return res.status(400).json({ error: "Invalid status value" });
       }
 
+      if (updates.status === 'active') {
+        updates.accountDeletedAt = null;
+        updates.accountDeletionReason = null;
+        updates.accountDisabledAt = null;
+        updates.accountRestoredAt = new Date();
+      }
+
       if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: "No valid fields to update" });
       }

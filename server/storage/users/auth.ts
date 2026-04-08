@@ -1,5 +1,8 @@
 import {
+  accountRecoveryTokens,
   passwordResetTokens, userSessions, loginHistory, userPreferences,
+  type AccountRecoveryPurpose,
+  type AccountRecoveryToken,
   type PasswordResetToken,
   type UserSession, type InsertUserSession,
   type LoginHistory, type InsertLoginHistory,
@@ -27,6 +30,50 @@ export async function markTokenAsUsed(id: string): Promise<void> {
 export async function invalidateUserResetTokens(userId: string): Promise<void> {
   await db.update(passwordResetTokens).set({ usedAt: new Date() })
     .where(and(eq(passwordResetTokens.userId, userId), sql`${passwordResetTokens.usedAt} IS NULL`));
+}
+
+// ==================== ACCOUNT RECOVERY TOKENS ====================
+
+export async function createAccountRecoveryToken(data: {
+  userId: string;
+  purpose: AccountRecoveryPurpose;
+  tokenHash: string;
+  expiresAt: Date;
+}): Promise<AccountRecoveryToken> {
+  const [token] = await db.insert(accountRecoveryTokens).values(data).returning();
+  return token;
+}
+
+export async function getAccountRecoveryTokenByHash(tokenHash: string): Promise<AccountRecoveryToken | undefined> {
+  const [token] = await db.select().from(accountRecoveryTokens).where(eq(accountRecoveryTokens.tokenHash, tokenHash));
+  return token || undefined;
+}
+
+export async function markAccountRecoveryTokenAsUsed(id: string): Promise<void> {
+  await db.update(accountRecoveryTokens).set({ usedAt: new Date() }).where(eq(accountRecoveryTokens.id, id));
+}
+
+export async function invalidateUserAccountRecoveryTokens(
+  userId: string,
+  purpose?: AccountRecoveryPurpose,
+): Promise<void> {
+  if (purpose) {
+    await db.update(accountRecoveryTokens)
+      .set({ usedAt: new Date() })
+      .where(and(
+        eq(accountRecoveryTokens.userId, userId),
+        sql`${accountRecoveryTokens.usedAt} IS NULL`,
+        eq(accountRecoveryTokens.purpose, purpose),
+      ));
+    return;
+  }
+
+  await db.update(accountRecoveryTokens)
+    .set({ usedAt: new Date() })
+    .where(and(
+      eq(accountRecoveryTokens.userId, userId),
+      sql`${accountRecoveryTokens.usedAt} IS NULL`,
+    ));
 }
 
 // ==================== USER SESSIONS ====================

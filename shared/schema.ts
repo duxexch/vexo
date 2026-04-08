@@ -58,6 +58,7 @@ export type SupportStatus = (typeof supportStatusEnum.enumValues)[number];
 export type DepositRequestStatus = (typeof depositRequestStatusEnum.enumValues)[number];
 export type PaymentOperationType = (typeof paymentOperationTypeEnum.enumValues)[number];
 export type PaymentOperationTokenStatus = (typeof paymentOperationTokenStatusEnum.enumValues)[number];
+export type AccountRecoveryPurpose = "reactivate" | "restore_deleted";
 
 // ==================== USERS ====================
 
@@ -72,6 +73,10 @@ export const users = pgTable("users", {
   coverPhoto: text("cover_photo"),
   role: userRoleEnum("role").notNull().default("player"),
   status: userStatusEnum("status").notNull().default("active"),
+  accountDisabledAt: timestamp("account_disabled_at"),
+  accountDeletedAt: timestamp("account_deleted_at"),
+  accountDeletionReason: text("account_deletion_reason"),
+  accountRestoredAt: timestamp("account_restored_at"),
   firstName: text("first_name"),
   lastName: text("last_name"),
   phone: text("phone").unique(),
@@ -942,6 +947,27 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
 
 export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
   user: one(users, { fields: [passwordResetTokens.userId], references: [users.id] }),
+}));
+
+// ==================== ACCOUNT RECOVERY TOKENS ====================
+
+export const accountRecoveryTokens = pgTable("account_recovery_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  purpose: text("purpose").notNull(), // reactivate | restore_deleted
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_account_recovery_tokens_user_id").on(table.userId),
+  index("idx_account_recovery_tokens_purpose").on(table.purpose),
+  index("idx_account_recovery_tokens_token_hash").on(table.tokenHash),
+  index("idx_account_recovery_tokens_expires_at").on(table.expiresAt),
+]);
+
+export const accountRecoveryTokensRelations = relations(accountRecoveryTokens, ({ one }) => ({
+  user: one(users, { fields: [accountRecoveryTokens.userId], references: [users.id] }),
 }));
 
 // ==================== ACTIVE SESSIONS ====================
@@ -2398,6 +2424,7 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: tru
 export const insertFinancialLimitSchema = createInsertSchema(financialLimits).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSystemSettingSchema = createInsertSchema(systemSettings).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPasswordResetTokenSchema = createInsertSchema(passwordResetTokens).omit({ id: true, createdAt: true });
+export const insertAccountRecoveryTokenSchema = createInsertSchema(accountRecoveryTokens).omit({ id: true, createdAt: true });
 export const insertDepositRequestSchema = createInsertSchema(depositRequests).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertLanguageSchema = createInsertSchema(languages).omit({ id: true });
 export const insertCurrencySchema = createInsertSchema(currencies).omit({ id: true });
@@ -2476,6 +2503,9 @@ export type PromoCodeUsage = typeof promoCodeUsages.$inferSelect;
 
 export type InsertPasswordResetToken = z.infer<typeof insertPasswordResetTokenSchema>;
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+
+export type InsertAccountRecoveryToken = z.infer<typeof insertAccountRecoveryTokenSchema>;
+export type AccountRecoveryToken = typeof accountRecoveryTokens.$inferSelect;
 
 export type InsertDepositRequest = z.infer<typeof insertDepositRequestSchema>;
 export type DepositRequest = typeof depositRequests.$inferSelect;

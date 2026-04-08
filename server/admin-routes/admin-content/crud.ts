@@ -510,7 +510,7 @@ export function registerContentCrudRoutes(app: Express) {
       }
 
       const [targetBadge] = await db
-        .select({ id: badgeCatalog.id, name: badgeCatalog.name })
+        .select({ id: badgeCatalog.id, name: badgeCatalog.name, nameAr: badgeCatalog.nameAr })
         .from(badgeCatalog)
         .where(eq(badgeCatalog.id, badgeId))
         .limit(1);
@@ -529,6 +529,22 @@ export function registerContentCrudRoutes(app: Express) {
         .onConflictDoNothing();
 
       const entitlements = await getBadgeEntitlementForUser(userId);
+
+      await sendNotification(userId, {
+        type: "success",
+        priority: "high",
+        title: "New badge assigned",
+        titleAr: "تم منحك شارة جديدة",
+        message: `You received the ${targetBadge.name} badge.`,
+        messageAr: `حصلت على شارة ${targetBadge.nameAr || targetBadge.name}.`,
+        link: `/player/${userId}`,
+        metadata: JSON.stringify({
+          event: "badge_assigned",
+          badgeId,
+          badgeName: targetBadge.name,
+          replaceExisting,
+        }),
+      }).catch(() => { });
 
       await logAdminAction(req.admin!.id, "settings_change", "user_badges", userId, {
         newValue: JSON.stringify({ userId, badgeId, replaceExisting, topBadge: entitlements.topBadge }),

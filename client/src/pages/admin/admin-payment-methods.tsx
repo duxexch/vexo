@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect, type SearchableSelectOption } from "@/components/ui/searchable-select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -27,11 +27,8 @@ import {
   Plus,
   Edit2,
   Trash2,
-  ToggleLeft,
-  ToggleRight,
-  Image,
-  ArrowUpDown,
-  Settings2
+  CheckSquare,
+  Play,
 } from "lucide-react";
 import type { CountryPaymentMethod } from "@shared/schema";
 
@@ -65,12 +62,25 @@ const TYPE_LABELS = {
   card: "Credit/Debit Card",
 };
 
+type BulkAction = "activate" | "deactivate" | "enable_withdrawal" | "disable_withdrawal" | "delete";
+
+const BULK_ACTION_OPTIONS: SearchableSelectOption[] = [
+  { value: "activate", label: "Activate selected methods" },
+  { value: "deactivate", label: "Deactivate selected methods" },
+  { value: "enable_withdrawal", label: "Enable withdrawals for selected" },
+  { value: "disable_withdrawal", label: "Disable withdrawals for selected" },
+  { value: "delete", label: "Delete selected methods" },
+];
+
 export default function AdminPaymentMethodsPage() {
   const { t, language } = useI18n();
   const { toast } = useToast();
   const [editingMethod, setEditingMethod] = useState<CountryPaymentMethod | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const [deleteMethodId, setDeleteMethodId] = useState<string | null>(null);
+  const [selectedMethodIds, setSelectedMethodIds] = useState<string[]>([]);
+  const [bulkAction, setBulkAction] = useState<BulkAction>("activate");
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const { data: paymentMethods, isLoading } = useQuery<CountryPaymentMethod[]>({
     queryKey: ["/api/admin/payment-methods"],
@@ -93,6 +103,21 @@ export default function AdminPaymentMethodsPage() {
       return left.localeCompare(right);
     });
   }, [paymentMethods]);
+
+  const countrySelectOptions = useMemo<SearchableSelectOption[]>(
+    () => countryCodeOptions.map((countryCode) => ({ value: countryCode, label: countryCode })),
+    [countryCodeOptions],
+  );
+
+  const typeSelectOptions = useMemo<SearchableSelectOption[]>(
+    () => [
+      { value: "bank_transfer", label: "Bank Transfer" },
+      { value: "e_wallet", label: "E-Wallet" },
+      { value: "crypto", label: "Cryptocurrency" },
+      { value: "card", label: "Credit/Debit Card" },
+    ],
+    [],
+  );
 
   const form = useForm<PaymentMethodForm>({
     resolver: zodResolver(paymentMethodSchema),
@@ -172,6 +197,69 @@ export default function AdminPaymentMethodsPage() {
     },
   });
 
+  const bulkActionMutation = useMutation({
+    mutationFn: async (payload: { ids: string[]; action: BulkAction }) => {
+      const response = await apiRequest("POST", "/api/admin/payment-methods/bulk-action", payload);
+      return response.json() as Promise<{ success: boolean; action: BulkAction; affectedCount: number }>;
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-methods"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payment-methods"] });
+      setSelectedMethodIds([]);
+      setShowBulkDeleteConfirm(false);
+
+      toast({
+        title: "Success",
+        description: `Bulk action completed on ${result.affectedCount} method(s)`,
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  useEffect(() => {
+    if (!paymentMethods) {
+      return;
+    }
+
+    const existingIds = new Set(paymentMethods.map((method) => method.id));
+    setSelectedMethodIds((previous) => previous.filter((id) => existingIds.has(id)));
+  }, [paymentMethods]);
+
+  const handleToggleSelectMethod = (methodId: string, checked: boolean) => {
+    setSelectedMethodIds((previous) => {
+      if (checked) {
+        if (previous.includes(methodId)) return previous;
+        return [...previous, methodId];
+      }
+      return previous.filter((id) => id !== methodId);
+    });
+  };
+
+  const handleToggleSelectAll = (checked: boolean) => {
+    if (!paymentMethods?.length) {
+      setSelectedMethodIds([]);
+      return;
+    }
+
+    setSelectedMethodIds(checked ? paymentMethods.map((method) => method.id) : []);
+  };
+
+  const handleApplyBulkAction = () => {
+    if (selectedMethodIds.length === 0) {
+      toast({ title: "Error", description: "Select at least one method", variant: "destructive" });
+      return;
+    }
+
+    if (bulkAction === "delete") {
+      setShowBulkDeleteConfirm(true);
+      return;
+    }
+
+    bulkActionMutation.mutate({ ids: selectedMethodIds, action: bulkAction });
+  };
+
   const openEditDialog = (method: CountryPaymentMethod) => {
     setEditingMethod(method);
     form.reset({
@@ -216,6 +304,14 @@ export default function AdminPaymentMethodsPage() {
     }
   };
 
+  const totalMethods = paymentMethods?.length || 0;
+  const selectedCount = selectedMethodIds.length;
+  const selectAllState: boolean | "indeterminate" = selectedCount === 0
+    ? false
+    : selectedCount === totalMethods
+      ? true
+      : "indeterminate";
+
   if (isLoading) {
     return (
       <div className="p-6 space-y-6">
@@ -248,84 +344,140 @@ export default function AdminPaymentMethodsPage() {
         </CardHeader>
         <CardContent>
           {paymentMethods && paymentMethods.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Icon</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Limits</TableHead>
-                  <TableHead>Country</TableHead>
-                  <TableHead>Withdrawals</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paymentMethods.map((method) => {
-                  const TypeIcon = TYPE_ICONS[method.type as keyof typeof TYPE_ICONS] || CreditCard;
-                  return (
-                    <TableRow key={method.id} data-testid={`row-payment-method-${method.id}`}>
-                      <TableCell>
-                        {method.iconUrl ? (
-                          <img src={method.iconUrl} alt={method.name} loading="lazy" className="h-8 w-8 rounded object-contain" />
-                        ) : (
-                          <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center">
-                            <TypeIcon className="h-4 w-4 text-primary" />
+            <>
+              <div className="mb-4 flex flex-col gap-3 rounded-lg border p-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    checked={selectAllState}
+                    onCheckedChange={(checked) => handleToggleSelectAll(Boolean(checked))}
+                    data-testid="checkbox-select-all-payment-methods"
+                  />
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <CheckSquare className="h-4 w-4" />
+                    <span>{selectedCount} selected</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="w-full sm:w-72">
+                    <SearchableSelect
+                      value={bulkAction}
+                      onValueChange={(value) => setBulkAction(value as BulkAction)}
+                      options={BULK_ACTION_OPTIONS}
+                      placeholder="Choose bulk action"
+                      searchPlaceholder="Type to filter action"
+                      emptyText="No actions found"
+                      triggerTestId="select-bulk-action"
+                      searchInputTestId="input-search-bulk-action"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleApplyBulkAction}
+                    disabled={selectedCount === 0 || bulkActionMutation.isPending}
+                    data-testid="button-apply-bulk-action"
+                  >
+                    <Play className="me-2 h-4 w-4" />
+                    Apply to selected
+                  </Button>
+                </div>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={selectAllState}
+                        onCheckedChange={(checked) => handleToggleSelectAll(Boolean(checked))}
+                        data-testid="checkbox-select-all-payment-methods-header"
+                      />
+                    </TableHead>
+                    <TableHead>Icon</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Limits</TableHead>
+                    <TableHead>Country</TableHead>
+                    <TableHead>Withdrawals</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paymentMethods.map((method) => {
+                    const TypeIcon = TYPE_ICONS[method.type as keyof typeof TYPE_ICONS] || CreditCard;
+                    const isSelected = selectedMethodIds.includes(method.id);
+
+                    return (
+                      <TableRow key={method.id} data-testid={`row-payment-method-${method.id}`}>
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => handleToggleSelectMethod(method.id, Boolean(checked))}
+                            data-testid={`checkbox-select-payment-method-${method.id}`}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {method.iconUrl ? (
+                            <img src={method.iconUrl} alt={method.name} loading="lazy" className="h-8 w-8 rounded object-contain" />
+                          ) : (
+                            <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center">
+                              <TypeIcon className="h-4 w-4 text-primary" />
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium">{method.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{TYPE_LABELS[method.type as keyof typeof TYPE_LABELS]}</Badge>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          ${method.minAmount} - ${method.maxAmount}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{method.countryCode}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={method.isWithdrawalEnabled}
+                            onCheckedChange={(checked) => toggleMutation.mutate({ id: method.id, data: { isWithdrawalEnabled: checked } })}
+                            data-testid={`switch-withdrawal-enabled-${method.id}`}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={method.isActive}
+                            onCheckedChange={(checked) => toggleMutation.mutate({ id: method.id, data: { isActive: checked } })}
+                            data-testid={`switch-toggle-${method.id}`}
+                          />
+                        </TableCell>
+                        <TableCell>{method.sortOrder}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openEditDialog(method)}
+                              data-testid={`button-edit-${method.id}`}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDeleteMethodId(method.id)}
+                              data-testid={`button-delete-${method.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="font-medium">{method.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{TYPE_LABELS[method.type as keyof typeof TYPE_LABELS]}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        ${method.minAmount} - ${method.maxAmount}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{method.countryCode}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={method.isWithdrawalEnabled}
-                          onCheckedChange={(checked) => toggleMutation.mutate({ id: method.id, data: { isWithdrawalEnabled: checked } })}
-                          data-testid={`switch-withdrawal-enabled-${method.id}`}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={method.isActive}
-                          onCheckedChange={(checked) => toggleMutation.mutate({ id: method.id, data: { isActive: checked } })}
-                          data-testid={`switch-toggle-${method.id}`}
-                        />
-                      </TableCell>
-                      <TableCell>{method.sortOrder}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditDialog(method)}
-                            data-testid={`button-edit-${method.id}`}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteMethodId(method.id)}
-                            data-testid={`button-delete-${method.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </>
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               <CreditCard className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -355,20 +507,18 @@ export default function AdminPaymentMethodsPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Country</FormLabel>
-                    <Select onValueChange={(value) => field.onChange(value.toUpperCase())} value={String(field.value || "ALL").toUpperCase()}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-country-code">
-                          <SelectValue placeholder="Select country" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {countryCodeOptions.map((countryCode) => (
-                          <SelectItem key={countryCode} value={countryCode}>
-                            {countryCode}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <SearchableSelect
+                        value={String(field.value || "ALL").toUpperCase()}
+                        onValueChange={(value) => field.onChange(value.toUpperCase())}
+                        options={countrySelectOptions}
+                        placeholder="Select country"
+                        searchPlaceholder="Type country code"
+                        emptyText="No country found"
+                        triggerTestId="select-country-code"
+                        searchInputTestId="input-search-country-code"
+                      />
+                    </FormControl>
                     <FormDescription>Use ALL for global availability</FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -395,19 +545,18 @@ export default function AdminPaymentMethodsPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-method-type">
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                        <SelectItem value="e_wallet">E-Wallet</SelectItem>
-                        <SelectItem value="crypto">Cryptocurrency</SelectItem>
-                        <SelectItem value="card">Credit/Debit Card</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <SearchableSelect
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        options={typeSelectOptions}
+                        placeholder="Select type"
+                        searchPlaceholder="Type payment type"
+                        emptyText="No type found"
+                        triggerTestId="select-method-type"
+                        searchInputTestId="input-search-method-type"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -568,6 +717,17 @@ export default function AdminPaymentMethodsPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={showBulkDeleteConfirm}
+        title="Delete selected payment methods"
+        description={`Are you sure you want to delete ${selectedCount} selected method(s)? This action cannot be undone.`}
+        variant="destructive"
+        confirmLabel="Delete selected"
+        loading={bulkActionMutation.isPending}
+        onConfirm={() => bulkActionMutation.mutate({ ids: selectedMethodIds, action: "delete" })}
+        onCancel={() => setShowBulkDeleteConfirm(false)}
+      />
 
       <ConfirmDialog
         open={!!deleteMethodId}

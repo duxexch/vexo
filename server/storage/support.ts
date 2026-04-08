@@ -11,7 +11,7 @@ import {
   type MatchedSupport, type InsertMatchedSupport,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, desc, and, asc } from "drizzle-orm";
+import { eq, desc, and, asc, inArray } from "drizzle-orm";
 
 // ==================== COMPLAINTS ====================
 
@@ -35,7 +35,7 @@ export async function listComplaints(userId?: string, status?: string): Promise<
   const conditions = [];
   if (userId) conditions.push(eq(complaints.userId, userId));
   if (status) conditions.push(eq(complaints.status, status as ComplaintStatus));
-  
+
   if (conditions.length > 0) {
     return db.select().from(complaints).where(and(...conditions)).orderBy(desc(complaints.createdAt));
   }
@@ -71,6 +71,21 @@ export async function updateCountryPaymentMethod(id: string, data: Partial<Inser
   return updated;
 }
 
+export async function updateCountryPaymentMethodsBulk(
+  ids: string[],
+  data: Partial<InsertCountryPaymentMethod>,
+): Promise<CountryPaymentMethod[]> {
+  const uniqueIds = Array.from(new Set(ids.filter((id) => typeof id === "string" && id.trim().length > 0)));
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  return db.update(countryPaymentMethods)
+    .set(data)
+    .where(inArray(countryPaymentMethods.id, uniqueIds))
+    .returning();
+}
+
 export async function deleteCountryPaymentMethod(id: string): Promise<boolean> {
   const existing = await db.select().from(countryPaymentMethods).where(eq(countryPaymentMethods.id, id));
   if (existing.length === 0) {
@@ -80,12 +95,25 @@ export async function deleteCountryPaymentMethod(id: string): Promise<boolean> {
   return true;
 }
 
+export async function deleteCountryPaymentMethodsBulk(ids: string[]): Promise<number> {
+  const uniqueIds = Array.from(new Set(ids.filter((id) => typeof id === "string" && id.trim().length > 0)));
+  if (uniqueIds.length === 0) {
+    return 0;
+  }
+
+  const deletedRows = await db.delete(countryPaymentMethods)
+    .where(inArray(countryPaymentMethods.id, uniqueIds))
+    .returning({ id: countryPaymentMethods.id });
+
+  return deletedRows.length;
+}
+
 // ==================== SUPPORT SETTINGS ====================
 
 export async function getSupportSettings(gameType: string): Promise<SupportSettings | undefined> {
   const [result] = await db.select().from(supportSettings).where(eq(supportSettings.gameType, gameType));
   if (result) return result;
-  
+
   const defaultSettings: InsertSupportSettings = {
     gameType,
     isEnabled: true,

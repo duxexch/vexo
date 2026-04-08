@@ -68,7 +68,14 @@ export function registerUserModerationRoutes(app: Express) {
       }
 
       const [updated] = await db.update(users)
-        .set({ status: "active", updatedAt: new Date() })
+        .set({
+          status: "active",
+          accountDeletedAt: null,
+          accountDeletionReason: null,
+          accountDisabledAt: null,
+          accountRestoredAt: new Date(),
+          updatedAt: new Date(),
+        })
         .where(eq(users.id, id))
         .returning();
 

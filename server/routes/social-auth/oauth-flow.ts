@@ -280,7 +280,7 @@ export function registerOAuthFlowRoutes(app: Express) {
     }
 
     const user = await storage.getUser(exchange.userId);
-    if (!user || user.status !== "active") {
+    if (!user || user.status !== "active" || Boolean(user.accountDeletedAt)) {
       logOAuthSecurityEvent(req, "exchange", "exchange_user_not_active", {
         hasUser: Boolean(user),
       });
@@ -375,7 +375,7 @@ export function registerOAuthFlowRoutes(app: Express) {
         token_type: "Bearer",
       });
 
-      if (user.status === "banned" || user.status === "suspended") {
+      if (user.status !== "active" || Boolean(user.accountDeletedAt)) {
         logOAuthSecurityEvent(req, "google", "native_user_suspended", { userId: user.id });
         return res.status(403).json({ error: "User account is suspended" });
       }
@@ -586,7 +586,7 @@ export function registerOAuthFlowRoutes(app: Express) {
       const { user, isNew } = await findOrCreateUser(platform, profile, tokens);
 
       // Check if user is banned
-      if (user.status === "banned" || user.status === "suspended") {
+      if (user.status !== "active" || Boolean(user.accountDeletedAt)) {
         return res.redirect(`/login?error=account_suspended`);
       }
 

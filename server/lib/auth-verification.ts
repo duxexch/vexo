@@ -104,6 +104,7 @@ export async function verifyUserAccessToken(
         status: users.status,
         role: users.role,
         username: users.username,
+        accountDeletedAt: users.accountDeletedAt,
         passwordChangedAt: users.passwordChangedAt,
         lockedUntil: users.lockedUntil,
     })
@@ -121,6 +122,14 @@ export async function verifyUserAccessToken(
 
     if (user.status === "suspended") {
         throw new AuthVerificationError(403, "Account is suspended", "ACCOUNT_SUSPENDED");
+    }
+
+    if (user.status === "inactive") {
+        throw new AuthVerificationError(403, "Account is inactive", "ACCOUNT_INACTIVE");
+    }
+
+    if (user.accountDeletedAt) {
+        throw new AuthVerificationError(403, "Account is deleted", "ACCOUNT_DELETED");
     }
 
     if (user.lockedUntil && user.lockedUntil > new Date()) {
@@ -216,6 +225,7 @@ export async function verifyAdminAccessToken(token: string): Promise<VerifiedAdm
         status: users.status,
         role: users.role,
         username: users.username,
+        accountDeletedAt: users.accountDeletedAt,
     })
         .from(users)
         .where(eq(users.id, decoded.id))
@@ -225,7 +235,12 @@ export async function verifyAdminAccessToken(token: string): Promise<VerifiedAdm
         throw new AuthVerificationError(403, "Admin access revoked", "ADMIN_ACCESS_REVOKED");
     }
 
-    if (adminUser.status === "banned" || adminUser.status === "suspended") {
+    if (
+        adminUser.status === "banned"
+        || adminUser.status === "suspended"
+        || adminUser.status === "inactive"
+        || Boolean(adminUser.accountDeletedAt)
+    ) {
         throw new AuthVerificationError(403, "Admin account is disabled", "ADMIN_DISABLED");
     }
 

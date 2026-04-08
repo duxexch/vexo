@@ -243,6 +243,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
+  const isBadgeAssignmentNotification = useCallback((notification: AppNotification): boolean => {
+    if (notification.type !== "success" || !notification.metadata) {
+      return false;
+    }
+
+    try {
+      const metadata = JSON.parse(notification.metadata) as { event?: string };
+      return metadata?.event === "badge_assigned";
+    } catch {
+      return false;
+    }
+  }, []);
+
   const isDuplicateRealtimeNotification = useCallback((notification: AppNotification): boolean => {
     const now = Date.now();
     const dedupeWindowMs = 15000;
@@ -303,6 +316,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
           queryClient.invalidateQueries({ queryKey: ["/api/notifications/section-counts"] });
           const notification = data.data as AppNotification;
+
+          if (isBadgeAssignmentNotification(notification)) {
+            queryClient.invalidateQueries({ queryKey: ["/api/me/stats"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+
+            const currentUserId = userRef.current?.id;
+            if (currentUserId) {
+              queryClient.invalidateQueries({ queryKey: ["/api/player", currentUserId, "stats"] });
+            }
+          }
 
           if (isDuplicateRealtimeNotification(notification)) {
             return;
@@ -488,7 +511,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         ws.close();
       }
     };
-  }, [token, showNotificationToast, maxReconnectAttempts, isDuplicateRealtimeNotification]);
+  }, [token, showNotificationToast, maxReconnectAttempts, isDuplicateRealtimeNotification, isBadgeAssignmentNotification]);
   // Connect WebSocket when authenticated
   useEffect(() => {
     if (token && user) {

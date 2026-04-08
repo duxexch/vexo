@@ -49,7 +49,7 @@ export function registerUsernameLoginRoute(app: Express) {
         return handleFailedLogin(user, res, req);
       }
 
-      if (user.status !== "active") {
+      if (user.status !== "active" || Boolean(user.accountDeletedAt)) {
         return res.status(403).json({ error: "Account is not active" });
       }
 

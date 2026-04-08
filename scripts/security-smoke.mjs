@@ -1,4 +1,4 @@
-const baseUrl = (process.env.SECURITY_BASE_URL || process.env.BASE_URL || "http://localhost:3011").replace(/\/$/, "");
+const baseUrl = (process.env.SECURITY_BASE_URL || process.env.BASE_URL || "http://127.0.0.1:3001").replace(/\/$/, "");
 
 function fail(message, details) {
     if (details !== undefined) {
