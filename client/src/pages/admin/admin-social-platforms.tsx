@@ -264,6 +264,16 @@ const PLATFORM_FIELDS: Record<string, { label: string; labelAr: string; fields: 
     labelAr: "مزود الرسائل النصية",
     fields: ["apiKey", "apiSecret", "phoneNumberId", "otpTemplate"],
   },
+  email: {
+    label: "Email OTP",
+    labelAr: "OTP عبر البريد",
+    fields: ["otpTemplate"],
+  },
+  phone: {
+    label: "Phone OTP",
+    labelAr: "OTP عبر الهاتف",
+    fields: ["otpTemplate"],
+  },
 };
 
 const FIELD_LABELS: Record<string, { en: string; ar: string }> = {

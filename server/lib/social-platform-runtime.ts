@@ -2,7 +2,13 @@ import type { SocialPlatform } from "@shared/schema";
 import { getProvider } from "./oauth-engine";
 import "./oauth-providers";
 
-type OtpAdapter = "whatsapp" | "telegram" | "generic-webhook" | "none";
+type OtpAdapter = "whatsapp" | "telegram" | "generic-webhook" | "system-email" | "system-sms" | "none";
+
+type OtpAdapterResolution = {
+  adapter: OtpAdapter;
+  requiredFields: Array<keyof SocialPlatform>;
+  issues: string[];
+};
 
 type RuntimeModeStatus = {
   enabled: boolean;
@@ -28,6 +34,15 @@ function hasValue(value: unknown): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function envValue(name: string): string {
+  const value = process.env[name];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function hasEnv(name: string): boolean {
+  return envValue(name).length > 0;
+}
+
 function hasOAuthMode(platform: SocialPlatform): boolean {
   return platform.type === "oauth" || platform.type === "both";
 }
@@ -42,20 +57,134 @@ function isOtpActive(platform: SocialPlatform): boolean {
   return false;
 }
 
-function resolveOtpAdapter(platform: SocialPlatform): { adapter: OtpAdapter; requiredFields: Array<keyof SocialPlatform> } {
+function resolveSmsEnvAdapter(): OtpAdapterResolution | null {
+  const provider = envValue("SMS_PROVIDER").toLowerCase() || "console";
+
+  if (provider === "twilio") {
+    const missing = ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"].filter((name) => !hasEnv(name));
+    if (missing.length === 0) {
+      return { adapter: "system-sms", requiredFields: [], issues: [] };
+    }
+
+    return {
+      adapter: "none",
+      requiredFields: ["webhookUrl"],
+      issues: [`SMS provider is twilio but env is incomplete: ${missing.join(", ")}`],
+    };
+  }
+
+  if (provider === "custom") {
+    if (hasEnv("SMS_WEBHOOK_URL")) {
+      return { adapter: "system-sms", requiredFields: [], issues: [] };
+    }
+
+    return {
+      adapter: "none",
+      requiredFields: ["webhookUrl"],
+      issues: ["SMS provider is custom but SMS_WEBHOOK_URL is missing"],
+    };
+  }
+
+  if (provider === "console") {
+    return {
+      adapter: "none",
+      requiredFields: ["webhookUrl"],
+      issues: ["SMS OTP provider is not configured. Set SMS_PROVIDER to twilio or custom."],
+    };
+  }
+
+  return {
+    adapter: "none",
+    requiredFields: ["webhookUrl"],
+    issues: [`Unsupported SMS_PROVIDER value \"${provider}\". Expected twilio or custom.`],
+  };
+}
+
+function resolveEmailEnvAdapter(): OtpAdapterResolution | null {
+  const provider = envValue("EMAIL_PROVIDER").toLowerCase() || "console";
+
+  if (provider === "smtp") {
+    const missing = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS"].filter((name) => !hasEnv(name));
+    if (missing.length === 0) {
+      return { adapter: "system-email", requiredFields: [], issues: [] };
+    }
+
+    return {
+      adapter: "none",
+      requiredFields: [],
+      issues: [`Email provider is smtp but env is incomplete: ${missing.join(", ")}`],
+    };
+  }
+
+  if (provider === "sendgrid") {
+    if (hasEnv("SENDGRID_API_KEY")) {
+      return { adapter: "system-email", requiredFields: [], issues: [] };
+    }
+
+    return {
+      adapter: "none",
+      requiredFields: [],
+      issues: ["Email provider is sendgrid but SENDGRID_API_KEY is missing"],
+    };
+  }
+
+  if (provider === "console") {
+    return {
+      adapter: "none",
+      requiredFields: [],
+      issues: ["Email OTP provider is not configured. Set EMAIL_PROVIDER to smtp or sendgrid."],
+    };
+  }
+
+  return {
+    adapter: "none",
+    requiredFields: [],
+    issues: [`Unsupported EMAIL_PROVIDER value \"${provider}\". Expected smtp or sendgrid.`],
+  };
+}
+
+function resolveOtpAdapter(platform: SocialPlatform): OtpAdapterResolution {
   if (platform.name === "whatsapp") {
-    return { adapter: "whatsapp", requiredFields: ["accessToken", "phoneNumberId"] };
+    return { adapter: "whatsapp", requiredFields: ["accessToken", "phoneNumberId"], issues: [] };
   }
 
   if (platform.name === "telegram") {
-    return { adapter: "telegram", requiredFields: ["botToken"] };
+    return { adapter: "telegram", requiredFields: ["botToken"], issues: [] };
+  }
+
+  if (platform.name === "sms" || platform.name === "phone") {
+    const envAdapter = resolveSmsEnvAdapter();
+    if (envAdapter && envAdapter.adapter !== "none") {
+      return envAdapter;
+    }
+
+    if (hasValue(platform.webhookUrl)) {
+      return { adapter: "generic-webhook", requiredFields: ["webhookUrl"], issues: [] };
+    }
+
+    return envAdapter ?? {
+      adapter: "none",
+      requiredFields: ["webhookUrl"],
+      issues: ["No OTP adapter configured. Add webhook URL or use supported provider config"],
+    };
+  }
+
+  if (platform.name === "email") {
+    const envAdapter = resolveEmailEnvAdapter();
+    if (envAdapter) {
+      return envAdapter;
+    }
   }
 
   if (hasValue(platform.webhookUrl)) {
-    return { adapter: "generic-webhook", requiredFields: ["webhookUrl"] };
+    return { adapter: "generic-webhook", requiredFields: ["webhookUrl"], issues: [] };
   }
 
-  return { adapter: "none", requiredFields: ["webhookUrl"] };
+  return {
+    adapter: "none",
+    requiredFields: ["webhookUrl"],
+    issues: ["No OTP adapter configured. Add webhook URL or use supported provider config"],
+  };
 }
 
 export function evaluateSocialPlatformRuntime(platform: SocialPlatform): SocialPlatformRuntimeStatus {
@@ -81,16 +210,15 @@ export function evaluateSocialPlatformRuntime(platform: SocialPlatform): SocialP
   }
 
   const otpAdapterInfo = resolveOtpAdapter(platform);
+  const otpRequiredFields = otpEnabled ? otpAdapterInfo.requiredFields : [];
   const otpAdapterConfigured = !otpEnabled
     ? true
-    : otpAdapterInfo.requiredFields.every((field) => hasValue(platform[field]));
+    : otpRequiredFields.every((field) => hasValue(platform[field]));
 
   if (otpEnabled) {
-    if (otpAdapterInfo.adapter === "none") {
-      otpIssues.push("No OTP adapter configured. Add webhook URL or use supported provider config");
-    }
+    otpIssues.push(...otpAdapterInfo.issues);
 
-    for (const field of otpAdapterInfo.requiredFields) {
+    for (const field of otpRequiredFields) {
       if (!hasValue(platform[field])) {
         otpIssues.push(`Missing ${String(field)}`);
       }
@@ -115,7 +243,7 @@ export function evaluateSocialPlatformRuntime(platform: SocialPlatform): SocialP
       issues: otpIssues,
       adapter: otpAdapterInfo.adapter,
       adapterConfigured: otpAdapterConfigured,
-      requiredFields: otpAdapterInfo.requiredFields.map((field) => String(field)),
+      requiredFields: otpRequiredFields.map((field) => String(field)),
     },
     runtimeReady,
     oauthLoginEnabled: platform.isEnabled && oauthEnabled && oauthReady,
