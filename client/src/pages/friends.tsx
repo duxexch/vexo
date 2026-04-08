@@ -386,18 +386,13 @@ export default function FriendsPage() {
     queryKey: ["/api/users/blocked"],
   });
 
-  const normalizedSearchQuery = debouncedSearchQuery.toLowerCase();
-  const filteredFriends = friends.filter((user) => {
-    if (!normalizedSearchQuery) return true;
-    const username = (user.username || "").toLowerCase();
-    const accountId = (user.accountId || "").toLowerCase();
-    const nickname = (user.nickname || "").toLowerCase();
+  const searchUrl = debouncedSearchQuery.length >= 2
+    ? `/api/users/search?q=${encodeURIComponent(debouncedSearchQuery)}&filter=all`
+    : "";
 
-    return (
-      username.includes(normalizedSearchQuery) ||
-      accountId.includes(normalizedSearchQuery) ||
-      nickname.includes(normalizedSearchQuery)
-    );
+  const { data: searchResults = [], isLoading: searchLoading } = useQuery<UserWithFollowStatus[]>({
+    queryKey: [searchUrl],
+    enabled: isSearchActive && debouncedSearchQuery.length >= 2,
   });
 
   const invalidateSocialQueries = () => {
@@ -405,7 +400,12 @@ export default function FriendsPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/users/following"] });
     queryClient.invalidateQueries({ queryKey: ["/api/users/followers"] });
     queryClient.invalidateQueries({ queryKey: ["/api/users/blocked"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/users/search"] });
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const key = query.queryKey?.[0];
+        return typeof key === "string" && key.startsWith("/api/users/search");
+      },
+    });
   };
 
   const followMutation = useMutation({
@@ -467,17 +467,17 @@ export default function FriendsPage() {
   // Determine active content
   const renderContent = () => {
     if (isSearchActive && debouncedSearchQuery.length >= 2) {
-      if (friendsLoading) return <CardSkeleton />;
-      if (filteredFriends.length === 0) {
+      if (searchLoading) return <CardSkeleton />;
+      if (searchResults.length === 0) {
         return <EmptySection icon={Search} message={t("friends.noResults")} sub={t("friends.noResultsDesc")} />;
       }
       return (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground px-1">
-            {t("friends.searchResults")} ({filteredFriends.length})
+            {t("friends.searchResults")} ({searchResults.length})
           </p>
-          {filteredFriends.map((user) => (
-            <UserCard key={user.id} user={user} actionType="friend" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
+          {searchResults.map((user) => (
+            <UserCard key={user.id} user={user} actionType="search" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
           ))}
         </div>
       );
