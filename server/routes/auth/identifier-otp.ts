@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { loginMethodConfigs, otpVerifications, type User } from "@shared/schema";
 import { JWT_USER_SECRET } from "../../lib/auth-config";
@@ -278,9 +278,20 @@ export async function verifyIdentifierOtpCode(input: {
             continue;
         }
 
-        await db.update(otpVerifications)
+        const [consumedRecord] = await db.update(otpVerifications)
             .set({ consumedAt: new Date() })
-            .where(eq(otpVerifications.id, record.id));
+            .where(and(
+                eq(otpVerifications.id, record.id),
+                isNull(otpVerifications.consumedAt),
+                gt(otpVerifications.expiresAt, now),
+                sql`${otpVerifications.attempts} < ${otpVerifications.maxAttempts}`,
+            ))
+            .returning({ id: otpVerifications.id });
+
+        // A parallel request may have consumed this OTP already.
+        if (!consumedRecord) {
+            continue;
+        }
 
         return {
             valid: true,
@@ -290,8 +301,13 @@ export async function verifyIdentifierOtpCode(input: {
 
     if (attemptsCandidate) {
         await db.update(otpVerifications)
-            .set({ attempts: attemptsCandidate.attempts + 1 })
-            .where(eq(otpVerifications.id, attemptsCandidate.id));
+            .set({ attempts: sql`${otpVerifications.attempts} + 1` })
+            .where(and(
+                eq(otpVerifications.id, attemptsCandidate.id),
+                isNull(otpVerifications.consumedAt),
+                gt(otpVerifications.expiresAt, now),
+                sql`${otpVerifications.attempts} < ${otpVerifications.maxAttempts}`,
+            ));
     }
 
     return { valid: false };

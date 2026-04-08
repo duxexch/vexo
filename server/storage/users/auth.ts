@@ -1,4 +1,5 @@
 import {
+  activeSessions,
   accountRecoveryTokens,
   passwordResetTokens, userSessions, loginHistory, userPreferences,
   type AccountRecoveryPurpose,
@@ -9,7 +10,7 @@ import {
   type UserPreferences, type InsertUserPreferences,
 } from "@shared/schema";
 import { db } from "../../db";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, gt, isNull, sql } from "drizzle-orm";
 
 // ==================== PASSWORD RESET TOKENS ====================
 
@@ -25,6 +26,20 @@ export async function getPasswordResetTokenByHash(tokenHash: string): Promise<Pa
 
 export async function markTokenAsUsed(id: string): Promise<void> {
   await db.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, id));
+}
+
+export async function consumePasswordResetToken(id: string): Promise<boolean> {
+  const now = new Date();
+  const [consumed] = await db.update(passwordResetTokens)
+    .set({ usedAt: now })
+    .where(and(
+      eq(passwordResetTokens.id, id),
+      isNull(passwordResetTokens.usedAt),
+      gt(passwordResetTokens.expiresAt, now),
+    ))
+    .returning({ id: passwordResetTokens.id });
+
+  return Boolean(consumed);
 }
 
 export async function invalidateUserResetTokens(userId: string): Promise<void> {
@@ -51,6 +66,20 @@ export async function getAccountRecoveryTokenByHash(tokenHash: string): Promise<
 
 export async function markAccountRecoveryTokenAsUsed(id: string): Promise<void> {
   await db.update(accountRecoveryTokens).set({ usedAt: new Date() }).where(eq(accountRecoveryTokens.id, id));
+}
+
+export async function consumeAccountRecoveryToken(id: string): Promise<boolean> {
+  const now = new Date();
+  const [consumed] = await db.update(accountRecoveryTokens)
+    .set({ usedAt: now })
+    .where(and(
+      eq(accountRecoveryTokens.id, id),
+      isNull(accountRecoveryTokens.usedAt),
+      gt(accountRecoveryTokens.expiresAt, now),
+    ))
+    .returning({ id: accountRecoveryTokens.id });
+
+  return Boolean(consumed);
 }
 
 export async function invalidateUserAccountRecoveryTokens(
@@ -107,6 +136,15 @@ export async function revokeAllUserSessions(userId: string, exceptSessionId?: st
       .set({ isActive: false })
       .where(and(eq(userSessions.userId, userId), eq(userSessions.isActive, true)));
   }
+}
+
+export async function revokeAllActiveSessions(userId: string): Promise<void> {
+  await db.update(activeSessions)
+    .set({ isActive: false })
+    .where(and(
+      eq(activeSessions.userId, userId),
+      eq(activeSessions.isActive, true),
+    ));
 }
 
 // ==================== LOGIN HISTORY ====================

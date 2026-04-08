@@ -5,13 +5,22 @@ import type { AccountRecoveryPurpose, User } from "@shared/schema";
 import { storage } from "../../storage";
 import { sendEmail, sendSms } from "../../lib/messaging";
 import { isSafeEmailAddress, isSafePhoneNumber } from "../../lib/input-security";
-import { passwordResetRateLimiter, strictRateLimiter } from "../middleware";
+import {
+    accountRecoveryConfirmRateLimiter,
+    passwordResetIdentifierRateLimiter,
+    passwordResetRateLimiter,
+} from "../middleware";
 import {
     getErrorMessage,
     IS_DEV_MODE,
     sendSecurityNotification,
     validatePasswordStrength,
 } from "./helpers";
+import {
+    clearResetBruteForceFailures,
+    getResetBruteForceBlockState,
+    registerResetBruteForceFailure,
+} from "./reset-security";
 
 function readIntEnv(name: string, fallback: number, min: number, max: number): number {
     const raw = process.env[name];
@@ -26,11 +35,44 @@ const ACCOUNT_RECOVERY_CODE_EXPIRY_MINUTES = readIntEnv("ACCOUNT_RECOVERY_CODE_E
 const ACCOUNT_RECOVERY_CODE_EXPIRY_MS = ACCOUNT_RECOVERY_CODE_EXPIRY_MINUTES * 60 * 1000;
 const ACCOUNT_RESTORE_WINDOW_DAYS = readIntEnv("ACCOUNT_RESTORE_WINDOW_DAYS", 30, 1, 365);
 const ACCOUNT_RESTORE_WINDOW_MS = ACCOUNT_RESTORE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+const RECOVERY_RESPONSE_MIN_DELAY_MS = 250;
+const RECOVERY_RESPONSE_JITTER_MS = 150;
+
+type RecoveryDeliveryChannel = "email" | "phone";
+
+type RecoveryDeliverySelection = {
+    channel: RecoveryDeliveryChannel;
+    target: string;
+};
 
 type RecoveryAction = "reactivate" | "restore";
 
 function toRecoveryPurpose(action: RecoveryAction): AccountRecoveryPurpose {
     return action === "restore" ? "restore_deleted" : "reactivate";
+}
+
+function normalizeEmail(value: string): string {
+    return value.trim().toLowerCase();
+}
+
+function normalizePhone(value: string): string {
+    return value.trim();
+}
+
+function hashRecoveryToken(code: string, channel?: RecoveryDeliveryChannel): string {
+    const normalized = code.trim();
+    const scopedCode = channel ? `${channel}:${normalized}` : normalized;
+    return crypto.createHash("sha256").update(scopedCode).digest("hex");
+}
+
+async function applyRecoveryNondisclosureDelay(startedAt: number): Promise<void> {
+    const targetDelay = RECOVERY_RESPONSE_MIN_DELAY_MS + crypto.randomInt(0, RECOVERY_RESPONSE_JITTER_MS + 1);
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= targetDelay) {
+        return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, targetDelay - elapsed));
 }
 
 function generateRecoveryCode(): string {
@@ -44,13 +86,15 @@ async function findUserByIdentifier(identifier: string): Promise<User | undefine
     const byAccount = await storage.getUserByAccountId(clean);
     if (byAccount) return byAccount;
 
-    if (isSafeEmailAddress(clean)) {
-        const byEmail = await storage.getUserByEmail(clean);
+    const normalizedEmail = normalizeEmail(clean);
+    if (isSafeEmailAddress(normalizedEmail)) {
+        const byEmail = await storage.getUserByEmail(normalizedEmail);
         if (byEmail) return byEmail;
     }
 
-    if (isSafePhoneNumber(clean)) {
-        const byPhone = await storage.getUserByPhone(clean);
+    const normalizedPhone = normalizePhone(clean);
+    if (isSafePhoneNumber(normalizedPhone)) {
+        const byPhone = await storage.getUserByPhone(normalizedPhone);
         if (byPhone) return byPhone;
     }
 
@@ -75,7 +119,7 @@ function canRequestRecovery(user: User, purpose: AccountRecoveryPurpose): boolea
     return Date.now() - deletedAtMs <= ACCOUNT_RESTORE_WINDOW_MS;
 }
 
-async function deliverRecoveryCode(user: User, code: string, action: RecoveryAction): Promise<void> {
+async function deliverRecoveryCode(delivery: RecoveryDeliverySelection, code: string, action: RecoveryAction): Promise<boolean> {
     const subject = action === "restore"
         ? "VEX - Account Restore Verification"
         : "VEX - Account Reactivation Verification";
@@ -83,21 +127,22 @@ async function deliverRecoveryCode(user: User, code: string, action: RecoveryAct
         ? `Your VEX account restore code is: ${code}. It expires in ${ACCOUNT_RECOVERY_CODE_EXPIRY_MINUTES} minutes.`
         : `Your VEX account reactivation code is: ${code}. It expires in ${ACCOUNT_RECOVERY_CODE_EXPIRY_MINUTES} minutes.`;
 
-    if (user.email && isSafeEmailAddress(user.email)) {
-        await sendEmail({
-            to: user.email,
+    if (delivery.channel === "email") {
+        return sendEmail({
+            to: delivery.target,
             subject,
             text,
-        }).catch(() => { });
-        return;
+        }).catch(() => false);
     }
 
-    if (user.phone && isSafePhoneNumber(user.phone)) {
-        await sendSms({
-            to: user.phone,
+    if (delivery.channel === "phone") {
+        return sendSms({
+            to: delivery.target,
             message: text,
-        }).catch(() => { });
+        }).catch(() => false);
     }
+
+    return false;
 }
 
 function getGenericRecoveryResponse() {
@@ -107,17 +152,37 @@ function getGenericRecoveryResponse() {
     };
 }
 
-function hasRecoverableChannel(user: User): boolean {
-    return Boolean(
-        (user.email && isSafeEmailAddress(user.email))
-        || (user.phone && isSafePhoneNumber(user.phone)),
-    );
+function resolveRecoveryDeliveryChannel(user: User): RecoveryDeliverySelection | null {
+    const email = user.email ? normalizeEmail(user.email) : "";
+    const phone = user.phone ? normalizePhone(user.phone) : "";
+
+    if (email && user.emailVerified && isSafeEmailAddress(email)) {
+        return {
+            channel: "email",
+            target: email,
+        };
+    }
+
+    if (phone && user.phoneVerified && isSafePhoneNumber(phone)) {
+        return {
+            channel: "phone",
+            target: phone,
+        };
+    }
+
+    return null;
 }
 
 export function registerAccountLifecycleAuthRoutes(app: Express) {
-    app.post("/api/auth/account/recovery/request", passwordResetRateLimiter, async (req: Request, res: Response) => {
+    app.post("/api/auth/account/recovery/request", passwordResetRateLimiter, passwordResetIdentifierRateLimiter, async (req: Request, res: Response) => {
         try {
             const { identifier, action } = req.body || {};
+            const requestStartedAt = Date.now();
+
+            const sendGenericResponse = async () => {
+                await applyRecoveryNondisclosureDelay(requestStartedAt);
+                return res.json(getGenericRecoveryResponse());
+            };
 
             if (typeof identifier !== "string" || identifier.trim().length < 3) {
                 return res.status(400).json({ error: "Valid identifier is required" });
@@ -127,19 +192,19 @@ export function registerAccountLifecycleAuthRoutes(app: Express) {
             }
 
             const purpose = toRecoveryPurpose(action);
-            const generic = getGenericRecoveryResponse();
             const user = await findUserByIdentifier(identifier);
 
             if (!user || !canRequestRecovery(user, purpose)) {
-                return res.json(generic);
+                return sendGenericResponse();
             }
 
-            if (!hasRecoverableChannel(user)) {
-                return res.json(generic);
+            const delivery = resolveRecoveryDeliveryChannel(user);
+            if (!delivery) {
+                return sendGenericResponse();
             }
 
             const code = generateRecoveryCode();
-            const tokenHash = crypto.createHash("sha256").update(code).digest("hex");
+            const tokenHash = hashRecoveryToken(code, delivery.channel);
             const expiresAt = new Date(Date.now() + ACCOUNT_RECOVERY_CODE_EXPIRY_MS);
 
             await storage.invalidateUserAccountRecoveryTokens(user.id, purpose);
@@ -150,7 +215,11 @@ export function registerAccountLifecycleAuthRoutes(app: Express) {
                 expiresAt,
             });
 
-            await deliverRecoveryCode(user, code, action);
+            const delivered = await deliverRecoveryCode(delivery, code, action);
+            if (!delivered) {
+                await storage.invalidateUserAccountRecoveryTokens(user.id, purpose);
+                return sendGenericResponse();
+            }
 
             await storage.createAuditLog({
                 userId: user.id,
@@ -162,22 +231,31 @@ export function registerAccountLifecycleAuthRoutes(app: Express) {
             });
 
             if (IS_DEV_MODE) {
+                await applyRecoveryNondisclosureDelay(requestStartedAt);
                 return res.json({
-                    ...generic,
+                    ...getGenericRecoveryResponse(),
                     code,
                     devNote: "Recovery code exposed only in development mode (VEX_DEV_MODE)",
                 });
             }
 
-            return res.json(generic);
+            return sendGenericResponse();
         } catch (error: unknown) {
             return res.status(500).json({ error: getErrorMessage(error) });
         }
     });
 
-    app.post("/api/auth/account/recovery/confirm", strictRateLimiter, async (req: Request, res: Response) => {
+    app.post("/api/auth/account/recovery/confirm", accountRecoveryConfirmRateLimiter, async (req: Request, res: Response) => {
         try {
             const { code, action, newPassword } = req.body || {};
+
+            const bruteForceState = await getResetBruteForceBlockState(req, "account-recovery-confirm");
+            if (bruteForceState.blocked) {
+                if (bruteForceState.retryAfterSeconds > 0) {
+                    res.setHeader("Retry-After", String(bruteForceState.retryAfterSeconds));
+                }
+                return res.status(429).json({ error: "Too many attempts, please try again later" });
+            }
 
             if (typeof code !== "string" || code.trim().length < 6) {
                 return res.status(400).json({ error: "Verification code is required" });
@@ -199,54 +277,85 @@ export function registerAccountLifecycleAuthRoutes(app: Express) {
             const candidates = Array.from(new Set([normalizedCode, normalizedCode.toUpperCase()]));
 
             let recoveryToken = undefined;
+            let matchedChannel: RecoveryDeliveryChannel | null = null;
             for (const candidate of candidates) {
-                const tokenHash = crypto.createHash("sha256").update(candidate).digest("hex");
-                const found = await storage.getAccountRecoveryTokenByHash(tokenHash);
-                if (found) {
-                    recoveryToken = found;
+                const hashCandidates: Array<{ tokenHash: string; channel: RecoveryDeliveryChannel | null }> = [
+                    { tokenHash: hashRecoveryToken(candidate, "email"), channel: "email" },
+                    { tokenHash: hashRecoveryToken(candidate, "phone"), channel: "phone" },
+                    { tokenHash: hashRecoveryToken(candidate), channel: null },
+                ];
+
+                for (const hashCandidate of hashCandidates) {
+                    const found = await storage.getAccountRecoveryTokenByHash(hashCandidate.tokenHash);
+                    if (found) {
+                        recoveryToken = found;
+                        matchedChannel = hashCandidate.channel;
+                        break;
+                    }
+                }
+
+                if (recoveryToken) {
                     break;
                 }
             }
 
             if (!recoveryToken || recoveryToken.purpose !== purpose) {
+                await registerResetBruteForceFailure(req, "account-recovery-confirm", "invalid_or_expired_recovery_code");
                 return res.status(400).json({ error: "Invalid or expired verification code" });
             }
-            if (recoveryToken.usedAt) {
-                return res.status(400).json({ error: "Verification code has already been used" });
-            }
-            if (new Date() > recoveryToken.expiresAt) {
-                return res.status(400).json({ error: "Verification code has expired" });
+            if (recoveryToken.usedAt || new Date() > recoveryToken.expiresAt) {
+                await registerResetBruteForceFailure(req, "account-recovery-confirm", "used_or_expired_recovery_code");
+                return res.status(400).json({ error: "Invalid or expired verification code" });
             }
 
             const user = await storage.getUser(recoveryToken.userId);
             if (!user) {
+                await registerResetBruteForceFailure(req, "account-recovery-confirm", "recovery_code_user_not_found");
                 return res.status(400).json({ error: "Invalid or expired verification code" });
             }
 
             if (user.status === "banned" || user.status === "suspended") {
+                await registerResetBruteForceFailure(req, "account-recovery-confirm", "recovery_code_user_not_allowed");
                 return res.status(400).json({ error: "Invalid or expired verification code" });
             }
 
             if (purpose === "reactivate") {
                 if (user.status !== "inactive" || user.accountDeletedAt) {
+                    await registerResetBruteForceFailure(req, "account-recovery-confirm", "reactivate_not_eligible");
                     return res.status(400).json({ error: "Account is not eligible for reactivation" });
                 }
             } else {
                 if (user.status !== "inactive" || !user.accountDeletedAt) {
+                    await registerResetBruteForceFailure(req, "account-recovery-confirm", "restore_not_eligible");
                     return res.status(400).json({ error: "Account is not eligible for restore" });
                 }
                 const deletedAtMs = new Date(user.accountDeletedAt).getTime();
                 if (Date.now() - deletedAtMs > ACCOUNT_RESTORE_WINDOW_MS) {
+                    await registerResetBruteForceFailure(req, "account-recovery-confirm", "restore_window_expired");
                     return res.status(400).json({ error: "Restore window has expired. Contact support." });
                 }
             }
 
             const passwordHash = await bcrypt.hash(newPassword, 12);
+
+            const consumedRecoveryToken = await storage.consumeAccountRecoveryToken(recoveryToken.id);
+            if (!consumedRecoveryToken) {
+                await registerResetBruteForceFailure(req, "account-recovery-confirm", "recovery_code_already_consumed");
+                return res.status(400).json({ error: "Invalid or expired verification code" });
+            }
+
+            const verifiedChannelPatch = matchedChannel === "email"
+                ? { emailVerified: true }
+                : matchedChannel === "phone"
+                    ? { phoneVerified: true }
+                    : {};
+
             await storage.updateUser(user.id, {
                 password: passwordHash,
                 passwordChangedAt: new Date(),
                 status: "active",
                 accountDisabledAt: null,
+                ...verifiedChannelPatch,
                 ...(purpose === "restore_deleted"
                     ? {
                         accountDeletedAt: null,
@@ -258,9 +367,13 @@ export function registerAccountLifecycleAuthRoutes(app: Express) {
                 lockedUntil: null,
             });
 
-            await storage.markAccountRecoveryTokenAsUsed(recoveryToken.id);
+            // Revoke stale sessions immediately after account recovery.
+            await storage.revokeAllUserSessions(user.id);
+            await storage.revokeAllActiveSessions(user.id);
+
             await storage.invalidateUserAccountRecoveryTokens(user.id, purpose);
             await storage.invalidateUserResetTokens(user.id);
+            await clearResetBruteForceFailures(req, "account-recovery-confirm");
 
             await storage.createAuditLog({
                 userId: user.id,

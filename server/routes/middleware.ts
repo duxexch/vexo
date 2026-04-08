@@ -8,6 +8,12 @@ import {
   verifyUserAccessToken,
 } from "../lib/auth-verification";
 import { redisStoreOpts } from "./helpers";
+import {
+  getClientIpFromRequest,
+  getResetIdentifierHashFromBody,
+  logResetSecurityEvent,
+  type ResetSecurityFlow,
+} from "./auth/reset-security";
 
 export interface AuthRequest extends Request {
   user?: {
@@ -17,6 +23,44 @@ export interface AuthRequest extends Request {
     tokenFingerprint?: string;
     token?: string;
   };
+}
+
+function readIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name];
+  const parsed = Number.parseInt(raw || "", 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, parsed));
+}
+
+const AUTH_RESET_REQUEST_MAX_PER_15M = readIntEnv("AUTH_RESET_REQUEST_MAX_PER_15M", 6, 2, 200);
+const AUTH_RESET_IDENTIFIER_MAX_PER_HOUR = readIntEnv("AUTH_RESET_IDENTIFIER_MAX_PER_HOUR", 4, 1, 100);
+const AUTH_RESET_CONFIRM_MAX_PER_15M = readIntEnv("AUTH_RESET_CONFIRM_MAX_PER_15M", 8, 2, 200);
+const AUTH_RECOVERY_CONFIRM_MAX_PER_15M = readIntEnv("AUTH_RECOVERY_CONFIRM_MAX_PER_15M", 8, 2, 200);
+
+function resolveResetFlowFromPath(path: string): ResetSecurityFlow {
+  return path.includes("/account/recovery") ? "account-recovery-request" : "password-reset-request";
+}
+
+function handleResetRateLimit(req: Request, res: Response, options: {
+  flow: ResetSecurityFlow;
+  event: string;
+  reason: string;
+  severity: "warning" | "critical";
+  message: string;
+}) {
+  void logResetSecurityEvent({
+    req,
+    flow: options.flow,
+    event: options.event,
+    reason: options.reason,
+    result: "blocked",
+    severity: options.severity,
+    includeLiveAlert: true,
+  });
+
+  return res.status(429).json({ error: options.message });
 }
 
 export const authRateLimiter = rateLimit({
@@ -69,12 +113,71 @@ export const otpRateLimiter = rateLimit({
 
 // Password reset: max 3 per hour per IP
 export const passwordResetRateLimiter = rateLimit({
-  ...redisStoreOpts("pwreset"),
-  windowMs: 60 * 60 * 1000,
-  max: 3,
-  message: { error: "تم طلب عدد كبير من طلبات استعادة كلمة المرور. حاول لاحقاً" },
+  ...redisStoreOpts("pwreset-ip"),
+  windowMs: 15 * 60 * 1000,
+  max: AUTH_RESET_REQUEST_MAX_PER_15M,
+  keyGenerator: (req) => getClientIpFromRequest(req),
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req: Request, res: Response) => handleResetRateLimit(req, res, {
+    flow: resolveResetFlowFromPath(req.path),
+    event: "reset_request_rate_limited_ip",
+    reason: "too_many_requests_from_ip",
+    severity: "warning",
+    message: "تم طلب عدد كبير من طلبات استعادة كلمة المرور. حاول لاحقاً",
+  }),
+});
+
+export const passwordResetIdentifierRateLimiter = rateLimit({
+  ...redisStoreOpts("pwreset-id"),
+  windowMs: 60 * 60 * 1000,
+  max: AUTH_RESET_IDENTIFIER_MAX_PER_HOUR,
+  keyGenerator: (req) => {
+    const identifierHash = getResetIdentifierHashFromBody(req.body);
+    return identifierHash || getClientIpFromRequest(req);
+  },
+  skip: (req) => !getResetIdentifierHashFromBody(req.body),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => handleResetRateLimit(req, res, {
+    flow: resolveResetFlowFromPath(req.path),
+    event: "reset_request_rate_limited_identifier",
+    reason: "too_many_requests_for_same_identifier",
+    severity: "critical",
+    message: "تم طلب عدد كبير من طلبات استعادة كلمة المرور. حاول لاحقاً",
+  }),
+});
+
+export const passwordResetConfirmRateLimiter = rateLimit({
+  ...redisStoreOpts("pwreset-confirm"),
+  windowMs: 15 * 60 * 1000,
+  max: AUTH_RESET_CONFIRM_MAX_PER_15M,
+  keyGenerator: (req) => getClientIpFromRequest(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => handleResetRateLimit(req, res, {
+    flow: "password-reset-confirm",
+    event: "reset_confirm_rate_limited",
+    reason: "too_many_reset_confirm_attempts",
+    severity: "critical",
+    message: "Too many attempts, please try again later",
+  }),
+});
+
+export const accountRecoveryConfirmRateLimiter = rateLimit({
+  ...redisStoreOpts("recovery-confirm"),
+  windowMs: 15 * 60 * 1000,
+  max: AUTH_RECOVERY_CONFIRM_MAX_PER_15M,
+  keyGenerator: (req) => getClientIpFromRequest(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => handleResetRateLimit(req, res, {
+    flow: "account-recovery-confirm",
+    event: "recovery_confirm_rate_limited",
+    reason: "too_many_recovery_confirm_attempts",
+    severity: "critical",
+    message: "Too many attempts, please try again later",
+  }),
 });
 
 export const sensitiveRateLimiter = rateLimit({

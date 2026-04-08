@@ -27,30 +27,30 @@ export function registerIdentifierRoutes(app: Express) {
     try {
       const { identifier, type } = req.body;
 
-      if (!identifier || !type) {
+      if (!identifier || !type || typeof identifier !== "string" || typeof type !== "string") {
         return res.status(400).json({ error: "Identifier and type are required" });
       }
 
-      let user = null;
-      if (type === "email") {
-        user = await storage.getUserByEmail(identifier);
-      } else if (type === "phone") {
-        // Validate phone format before lookup
-        if (!isSafePhoneNumber(identifier.trim())) {
-          return res.status(400).json({ error: "الرجاء إدخال رقم هاتف صحيح" });
-        }
-        user = await storage.getUserByPhone(identifier.trim());
-      } else if (type === "account") {
-        user = await storage.getUserByAccountId(identifier);
-      } else {
+      if (!["email", "phone", "account"].includes(type)) {
         return res.status(400).json({ error: "Invalid type" });
       }
 
+      const clean = identifier.trim();
+      if (!clean) {
+        return res.status(400).json({ error: "Identifier and type are required" });
+      }
+
+      if (type === "phone" && !isSafePhoneNumber(clean)) {
+        return res.status(400).json({ error: "الرجاء إدخال رقم هاتف صحيح" });
+      }
+
       // SECURITY: Always return consistent response to prevent account enumeration
-      // Real existence check is only useful for legitimate UI flows during registration
       // Add artificial delay to prevent timing-based enumeration
       await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
-      res.json({ exists: !!user, type });
+      res.json({
+        success: true,
+        message: "Identifier accepted",
+      });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -65,58 +65,12 @@ export function registerIdentifierRoutes(app: Express) {
         return res.status(400).json({ error: "Identifier is required" });
       }
 
-      const clean = identifier.trim();
-
-      // Search in all possible columns
-      let user = null;
-      let foundVia: string | null = null;
-
-      // 1. Try accountId
-      user = await storage.getUserByAccountId(clean);
-      if (user) foundVia = "account";
-
-      // 2. Try email
-      if (!user) {
-        user = await storage.getUserByEmail(clean);
-        if (user) foundVia = "email";
-      }
-
-      // 3. Try phone
-      if (!user) {
-        user = await storage.getUserByPhone(clean);
-        if (user) foundVia = "phone";
-      }
-
-      // 4. Try username
-      if (!user) {
-        user = await storage.getUserByUsername(clean);
-        if (user) foundVia = "username";
-      }
-
-      if (!user) {
-        // SECURITY: Add delay and return consistent structure to prevent timing-based enumeration
-        await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
-        return res.json({ found: false });
-      }
-
-      // Return the method this user registered with (NOT what we found them by)
-      const correctMethod = user.registrationType || foundVia || "account";
-
-      // SECURITY: Only return minimal masked hint, don't reveal registration type to unauthenticated users
-      let maskedHint = "";
-      if (correctMethod === "account" && user.accountId) {
-        maskedHint = "***" + user.accountId.substring(user.accountId.length - 2);
-      } else if (correctMethod === "phone" && user.phone) {
-        maskedHint = "****" + user.phone.substring(user.phone.length - 2);
-      } else if (correctMethod === "email" && user.email) {
-        const [, domain] = user.email.split("@");
-        maskedHint = "***@" + domain;
-      }
+      // SECURITY: Endpoint intentionally avoids disclosing whether the identifier exists
+      // or which credential method is registered.
+      await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
 
       res.json({
-        found: true,
-        correctMethod,
-        maskedHint,
+        found: false,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

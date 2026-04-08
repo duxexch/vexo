@@ -1,7 +1,7 @@
 /**
  * SMS Service — Multi-provider SMS delivery
  * 
- * Providers: console | twilio | custom
+ * Providers: console | twilio | custom | webhook
  * Configure via SMS_PROVIDER, TWILIO_*, SMS_WEBHOOK_URL env vars
  */
 
@@ -12,7 +12,7 @@ interface SmsOptions {
   message: string;
 }
 
-type SmsProvider = 'console' | 'twilio' | 'custom';
+type SmsProvider = 'console' | 'twilio' | 'custom' | 'webhook';
 
 async function sendSmsConsole(options: SmsOptions): Promise<boolean> {
   logger.debug(`[SMS Console] To: ${options.to} | Message: ${options.message.substring(0, 50)}...`);
@@ -92,8 +92,9 @@ async function sendSmsCustomWebhook(options: SmsOptions): Promise<boolean> {
 }
 
 export async function sendSms(options: SmsOptions): Promise<boolean> {
-  const provider = (process.env.SMS_PROVIDER || 'console') as SmsProvider;
-  
+  const rawProvider = (process.env.SMS_PROVIDER || 'console').toLowerCase();
+  const provider: SmsProvider = rawProvider === 'webhook' ? 'custom' : rawProvider as SmsProvider;
+
   switch (provider) {
     case 'twilio':
       return sendSmsTwilio(options);

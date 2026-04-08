@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { storage } from "../../storage";
 import { db } from "../../db";
 import { otpVerifications, loginMethodConfigs } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gt, isNull, sql } from "drizzle-orm";
 import { sendEmail, sendSms, buildOtpEmailHtml, buildOtpSmsMessage } from "../../lib/messaging";
 import { authMiddleware, AuthRequest, otpRateLimiter, strictRateLimiter } from "../middleware";
 import { sendNotification } from "../../websocket";
@@ -110,7 +110,7 @@ export function registerOtpRoutes(app: Express) {
       if (contactType === "phone" && isProduction && smsProvider === "console") {
         await clearCurrentOtp();
         return res.status(503).json({
-          error: "SMS OTP provider is not configured in production. Set SMS_PROVIDER to twilio or custom."
+          error: "SMS OTP provider is not configured in production. Set SMS_PROVIDER to twilio, custom, or webhook."
         });
       }
 
@@ -210,13 +210,20 @@ export function registerOtpRoutes(app: Express) {
       }
 
       // Verify OTP
-      const isValid = await bcrypt.compare(code, otpRecord.codeHash);
+      const normalizedCode = String(code).trim();
+      const isValid = await bcrypt.compare(normalizedCode, otpRecord.codeHash);
+      const now = new Date();
 
       if (!isValid) {
         // Increment attempts
         await db.update(otpVerifications)
-          .set({ attempts: otpRecord.attempts + 1 })
-          .where(eq(otpVerifications.id, otpRecord.id));
+          .set({ attempts: sql`${otpVerifications.attempts} + 1` })
+          .where(and(
+            eq(otpVerifications.id, otpRecord.id),
+            isNull(otpVerifications.consumedAt),
+            gt(otpVerifications.expiresAt, now),
+            sql`${otpVerifications.attempts} < ${otpVerifications.maxAttempts}`,
+          ));
 
         return res.status(400).json({
           error: "Invalid OTP code.",
@@ -224,10 +231,20 @@ export function registerOtpRoutes(app: Express) {
         });
       }
 
-      // Mark OTP as consumed
-      await db.update(otpVerifications)
+      // Atomically consume OTP to prevent parallel replay.
+      const [consumedOtp] = await db.update(otpVerifications)
         .set({ consumedAt: new Date() })
-        .where(eq(otpVerifications.id, otpRecord.id));
+        .where(and(
+          eq(otpVerifications.id, otpRecord.id),
+          isNull(otpVerifications.consumedAt),
+          gt(otpVerifications.expiresAt, now),
+          sql`${otpVerifications.attempts} < ${otpVerifications.maxAttempts}`,
+        ))
+        .returning({ id: otpVerifications.id });
+
+      if (!consumedOtp) {
+        return res.status(400).json({ error: "OTP has expired or already been used. Please request a new one." });
+      }
 
       // Update user verification status
       if (contactType === "email") {

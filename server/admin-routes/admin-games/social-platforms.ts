@@ -2,7 +2,12 @@ import type { Express, Response } from "express";
 import { insertSocialPlatformSchema, type SocialPlatform } from "@shared/schema";
 import { storage } from "../../storage";
 import { maskPlatformSecrets, filterMaskedValues, SENSITIVE_FIELDS } from "../../lib/crypto-utils";
-import { evaluateSocialPlatformRuntime, type SocialPlatformRuntimeStatus } from "../../lib/social-platform-runtime";
+import {
+  evaluateSocialPlatformRuntime,
+  getSocialPlatformCapability,
+  type OAuthCredentialResolutionMode,
+  type SocialPlatformRuntimeStatus,
+} from "../../lib/social-platform-runtime";
 import { sensitiveRateLimiter } from "../../routes/middleware";
 import { z } from "zod";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
@@ -10,10 +15,13 @@ import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage
 const VALID_PLATFORM_NAME = /^[a-z][a-z0-9_]{1,30}$/;
 const VALID_URL = /^https?:\/\/.{3,500}$/;
 
-type RuntimeConfigSource = "admin-db" | "env-fallback" | "missing";
+type RuntimeConfigSource = "admin-db" | "env" | "missing";
 
 type PlatformConfigMetadata = {
   configSource: RuntimeConfigSource;
+  oauthResolutionMode: OAuthCredentialResolutionMode;
+  effectiveCredentialSource: RuntimeConfigSource;
+  conflicts: Array<{ code: string; message: string; reason: string }>;
   envFallback: {
     configured: boolean;
     fields: string[];
@@ -28,28 +36,74 @@ type PlatformConfigMetadata = {
   warnings: string[];
 };
 
+type SettingsObject = Record<string, unknown>;
+
 function hasFieldValue(value: unknown): boolean {
   return typeof value === "string" ? value.trim().length > 0 : Boolean(value);
 }
 
-function hasEnvValue(name: string): boolean {
-  const value = process.env[name];
-  return typeof value === "string" && value.trim().length > 0;
+function parseSettingsObject(settings: string | null | undefined): SettingsObject {
+  if (!settings || typeof settings !== "string") {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(settings);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as SettingsObject;
+    }
+  } catch {
+    // Ignore invalid stored settings payload and start from an empty object.
+  }
+
+  return {};
 }
 
-function resolveEnvFallbackFields(platformName: string): string[] {
-  switch (platformName) {
-    case "google":
-      return ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"];
-    case "facebook":
-      return ["FACEBOOK_APP_ID", "FACEBOOK_APP_SECRET"];
-    case "twitter":
-      return ["TWITTER_API_KEY", "TWITTER_API_SECRET"];
-    case "telegram":
-      return ["TELEGRAM_BOT_TOKEN"];
-    default:
-      return [];
+function mergeOAuthResolutionMode(
+  settings: string | null | undefined,
+  mode: OAuthCredentialResolutionMode,
+): string {
+  const settingsObject = parseSettingsObject(settings);
+  settingsObject.oauthResolutionMode = mode;
+  return JSON.stringify(settingsObject);
+}
+
+function parseOAuthResolutionModeFromRequest(payload: unknown): OAuthCredentialResolutionMode | undefined {
+  if (!payload || typeof payload !== "object") {
+    return undefined;
   }
+
+  const value = (payload as Record<string, unknown>).oauthResolutionMode;
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  if (value === "env-first" || value === "admin-first") {
+    return value;
+  }
+
+  throw new Error("oauthResolutionMode must be env-first or admin-first");
+}
+
+function getCapabilityIssues(platform: SocialPlatform): string[] {
+  const capability = getSocialPlatformCapability(platform.name);
+  const wantsOAuth = platform.type === "oauth" || platform.type === "both";
+  const wantsOtp = platform.type === "otp" || platform.type === "both" || platform.otpEnabled;
+  const issues: string[] = [];
+
+  if (wantsOAuth && !capability.oauth) {
+    issues.push(`OAuth mode is not supported for ${platform.name}. ${capability.reason}.`);
+  }
+
+  if (wantsOtp && !capability.otp) {
+    issues.push(`OTP mode is not supported for ${platform.name}. ${capability.reason}.`);
+  }
+
+  if (!capability.otp && platform.otpEnabled) {
+    issues.push(`otpEnabled must be false for ${platform.name}.`);
+  }
+
+  return issues;
 }
 
 function buildCallbackCompliance(platform: SocialPlatform): PlatformConfigMetadata["callbackCompliance"] {
@@ -84,31 +138,40 @@ function buildCallbackCompliance(platform: SocialPlatform): PlatformConfigMetada
 }
 
 function buildPlatformConfigMetadata(platform: SocialPlatform, runtime: SocialPlatformRuntimeStatus): PlatformConfigMetadata {
-  const envFields = resolveEnvFallbackFields(platform.name);
-  const missingEnvFields = envFields.filter((field) => !hasEnvValue(field));
-  const envConfigured = envFields.length > 0 && missingEnvFields.length === 0;
+  const oauthCredentials = runtime.oauth.credentials;
+  const envFields = oauthCredentials.envFields;
+  const missingEnvFields = oauthCredentials.envMissingFields;
+  const envConfigured = oauthCredentials.envConfigured;
+  const effectiveSource = oauthCredentials.effectiveSource;
 
   let configSource: RuntimeConfigSource = "admin-db";
   if (runtime.oauth.enabled) {
-    if (runtime.oauth.configured) {
-      configSource = "admin-db";
-    } else if (envConfigured) {
-      configSource = "env-fallback";
-    } else {
-      configSource = "missing";
-    }
+    configSource = effectiveSource;
   }
 
   const callbackCompliance = buildCallbackCompliance(platform);
   const warnings: string[] = [];
+  const conflicts = [...oauthCredentials.conflicts];
 
   if (runtime.oauth.enabled) {
-    if (runtime.oauth.configured && envConfigured) {
-      warnings.push("Both Admin panel and .env OAuth credentials are set. Admin panel values take precedence at runtime.");
+    if (oauthCredentials.adminConfigured && oauthCredentials.envConfigured && conflicts.length === 0) {
+      warnings.push("Both Admin panel and .env OAuth credentials are set and currently synchronized.");
     }
 
-    if (!runtime.oauth.configured && envConfigured) {
-      warnings.push("OAuth credentials are currently resolved from .env fallback. Move them to Admin panel for centralized management.");
+    if (oauthCredentials.effectiveSource === "env") {
+      warnings.push("OAuth credentials are currently resolved from project ENV files.");
+    }
+
+    if (oauthCredentials.effectiveSource === "admin-db" && oauthCredentials.envConfigured) {
+      warnings.push("ENV credentials are configured but Admin panel source is active for this platform.");
+    }
+
+    if (oauthCredentials.effectiveSource === "missing") {
+      warnings.push("Neither ENV nor Admin panel contains complete OAuth credentials for this provider.");
+    }
+
+    for (const conflict of conflicts) {
+      warnings.push(`${conflict.message}: ${conflict.reason}`);
     }
 
     if (!hasFieldValue(platform.callbackUrl)) {
@@ -135,6 +198,9 @@ function buildPlatformConfigMetadata(platform: SocialPlatform, runtime: SocialPl
 
   return {
     configSource,
+    oauthResolutionMode: oauthCredentials.resolutionMode,
+    effectiveCredentialSource: effectiveSource,
+    conflicts,
     envFallback: {
       configured: envConfigured,
       fields: envFields,
@@ -190,6 +256,16 @@ function serializePlatform(platform: SocialPlatform) {
 }
 
 function assertEnableReadiness(platform: SocialPlatform, res: Response): boolean {
+  const capabilityIssues = getCapabilityIssues(platform);
+  if (capabilityIssues.length > 0) {
+    res.status(400).json({
+      error: "Platform configuration conflicts with provider capability matrix",
+      issues: capabilityIssues,
+      capability: getSocialPlatformCapability(platform.name),
+    });
+    return false;
+  }
+
   const runtime = evaluateSocialPlatformRuntime(platform);
   if (!platform.isEnabled) {
     return true;
@@ -235,7 +311,14 @@ export function registerSocialPlatformsRoutes(app: Express) {
 
   app.post("/api/admin/social-platforms", adminAuthMiddleware, sensitiveRateLimiter, async (req: AdminRequest, res: Response) => {
     try {
-      const validatedData = insertSocialPlatformSchema.parse(req.body);
+      let validatedData = insertSocialPlatformSchema.parse(req.body);
+      const oauthResolutionMode = parseOAuthResolutionModeFromRequest(req.body);
+      if (oauthResolutionMode) {
+        validatedData = {
+          ...validatedData,
+          settings: mergeOAuthResolutionMode(validatedData.settings ?? null, oauthResolutionMode),
+        };
+      }
 
       if (!VALID_PLATFORM_NAME.test(validatedData.name)) {
         return res.status(400).json({ error: "Platform name must be lowercase alphanumeric with underscores, 2-31 chars" });
@@ -271,6 +354,9 @@ export function registerSocialPlatformsRoutes(app: Express) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Validation error", details: error.errors });
       }
+      if (error instanceof Error && error.message.includes("oauthResolutionMode")) {
+        return res.status(400).json({ error: error.message });
+      }
       res.status(500).json({ error: getErrorMessage(error) });
     }
   });
@@ -280,6 +366,7 @@ export function registerSocialPlatformsRoutes(app: Express) {
       const { id } = req.params;
       const updateSchema = insertSocialPlatformSchema.partial();
       let validatedData = updateSchema.parse(req.body);
+      const oauthResolutionMode = parseOAuthResolutionModeFromRequest(req.body);
 
       validatedData = filterMaskedValues(validatedData) as typeof validatedData;
 
@@ -299,6 +386,13 @@ export function registerSocialPlatformsRoutes(app: Express) {
       const existing = await storage.getSocialPlatform(id);
       if (!existing) {
         return res.status(404).json({ error: "Platform not found" });
+      }
+
+      if (oauthResolutionMode) {
+        validatedData = {
+          ...validatedData,
+          settings: mergeOAuthResolutionMode(existing.settings ?? null, oauthResolutionMode),
+        };
       }
 
       if (validatedData.name && validatedData.name !== existing.name) {
@@ -331,6 +425,9 @@ export function registerSocialPlatformsRoutes(app: Express) {
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      if (error instanceof Error && error.message.includes("oauthResolutionMode")) {
+        return res.status(400).json({ error: error.message });
       }
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -400,8 +497,27 @@ export function registerSocialPlatformsRoutes(app: Express) {
       const runtime = evaluateSocialPlatformRuntime(platform);
       const metadata = buildPlatformConfigMetadata(platform, runtime);
       const checks: Array<{ name: string; status: "pass" | "fail" | "skip"; detail?: string }> = [];
+      const capabilityIssues = getCapabilityIssues(platform);
+
+      checks.push({
+        name: "Capability Matrix",
+        status: capabilityIssues.length === 0 ? "pass" : "fail",
+        detail: capabilityIssues.length === 0
+          ? runtime.capability.reason
+          : capabilityIssues.join("; "),
+      });
 
       if (runtime.oauth.enabled) {
+        checks.push({
+          name: "OAuth Resolution Mode",
+          status: "pass",
+          detail: runtime.oauth.credentials.resolutionMode,
+        });
+        checks.push({
+          name: "Effective OAuth Source",
+          status: runtime.oauth.credentials.effectiveSource === "missing" ? "fail" : "pass",
+          detail: `${runtime.oauth.credentials.effectiveSource} (${runtime.oauth.credentials.selectedReason})`,
+        });
         checks.push({
           name: "OAuth Provider",
           status: runtime.oauth.providerRegistered ? "pass" : "fail",
@@ -409,13 +525,17 @@ export function registerSocialPlatformsRoutes(app: Express) {
         });
         checks.push({
           name: "Client ID",
-          status: hasFieldValue(platform.clientId) ? "pass" : "fail",
-          detail: hasFieldValue(platform.clientId) ? "Configured" : "Missing",
+          status: runtime.oauth.credentials.effectiveMissingFields.includes("Client ID") ? "fail" : "pass",
+          detail: runtime.oauth.credentials.effectiveMissingFields.includes("Client ID")
+            ? `Missing in ${runtime.oauth.credentials.effectiveSource}`
+            : `Resolved from ${runtime.oauth.credentials.effectiveSource}`,
         });
         checks.push({
           name: "Client Secret",
-          status: hasFieldValue(platform.clientSecret) ? "pass" : "fail",
-          detail: hasFieldValue(platform.clientSecret) ? "Configured" : "Missing",
+          status: runtime.oauth.credentials.effectiveMissingFields.includes("Client Secret") ? "fail" : "pass",
+          detail: runtime.oauth.credentials.effectiveMissingFields.includes("Client Secret")
+            ? `Missing in ${runtime.oauth.credentials.effectiveSource}`
+            : `Resolved from ${runtime.oauth.credentials.effectiveSource}`,
         });
         checks.push({
           name: "Callback URL",
@@ -451,13 +571,21 @@ export function registerSocialPlatformsRoutes(app: Express) {
 
         if (metadata.envFallback.fields.length > 0) {
           checks.push({
-            name: "ENV Fallback",
+            name: "ENV Source",
             status: metadata.envFallback.configured ? "pass" : "skip",
             detail: metadata.envFallback.configured
               ? "Configured in .env"
               : `Missing ${metadata.envFallback.missing.join(", ")}`,
           });
         }
+
+        checks.push({
+          name: "Source Conflicts",
+          status: runtime.oauth.credentials.conflicts.length === 0 ? "pass" : "fail",
+          detail: runtime.oauth.credentials.conflicts.length === 0
+            ? "No source conflicts detected"
+            : runtime.oauth.credentials.conflicts.map((conflict) => `${conflict.code}: ${conflict.reason}`).join("; "),
+        });
       }
 
       if (runtime.otp.enabled) {
@@ -488,7 +616,12 @@ export function registerSocialPlatformsRoutes(app: Express) {
         });
       }
 
-      const issues = [...runtime.oauth.issues, ...runtime.otp.issues, ...metadata.warnings];
+      const issues = [
+        ...runtime.oauth.issues,
+        ...runtime.otp.issues,
+        ...capabilityIssues,
+        ...metadata.warnings,
+      ];
 
       res.json({
         platform: platform.name,

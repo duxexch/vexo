@@ -142,9 +142,21 @@ interface SocialPlatform {
   sortOrder: number;
   settings: string | null;
   runtime?: {
+    capability: {
+      oauth: boolean;
+      otp: boolean;
+      reason: string;
+    };
+    conflicts?: Array<{
+      code: string;
+      message: string;
+      reason: string;
+    }>;
     runtimeReady: boolean;
     oauthLoginEnabled: boolean;
-    configSource?: "admin-db" | "env-fallback" | "missing";
+    configSource?: "admin-db" | "env" | "missing";
+    oauthResolutionMode?: "env-first" | "admin-first";
+    effectiveCredentialSource?: "admin-db" | "env" | "missing";
     envFallback?: {
       configured: boolean;
       fields: string[];
@@ -163,6 +175,23 @@ interface SocialPlatform {
       issues: string[];
       providerRegistered: boolean;
       configured: boolean;
+      credentials: {
+        resolutionMode: "env-first" | "admin-first";
+        effectiveSource: "admin-db" | "env" | "missing";
+        selectedReason: string;
+        configured: boolean;
+        envFields: string[];
+        adminConfigured: boolean;
+        envConfigured: boolean;
+        adminMissingFields: string[];
+        envMissingFields: string[];
+        effectiveMissingFields: string[];
+        conflicts: Array<{
+          code: string;
+          message: string;
+          reason: string;
+        }>;
+      };
     };
     otp: {
       enabled: boolean;
@@ -174,6 +203,10 @@ interface SocialPlatform {
     };
   };
 }
+
+type PlatformSettingsPayload = Partial<SocialPlatform> & {
+  oauthResolutionMode?: "env-first" | "admin-first";
+};
 
 interface PlatformVerificationResult {
   platform: string;
@@ -310,16 +343,24 @@ function resolvePlatformFields(platform: SocialPlatform): string[] {
 }
 
 function resolveConfigSourceLabel(
-  source: "admin-db" | "env-fallback" | "missing" | undefined,
+  source: "admin-db" | "env" | "missing" | undefined,
   isArabic: boolean,
 ) {
-  if (source === "env-fallback") {
-    return isArabic ? "ENV احتياطي" : "ENV Fallback";
+  if (source === "env") {
+    return isArabic ? "ملفات ENV" : "ENV Files";
   }
   if (source === "missing") {
     return isArabic ? "غير مكتمل" : "Missing";
   }
   return isArabic ? "لوحة الأدمن" : "Admin Panel";
+}
+
+function resolveResolutionModeLabel(mode: "env-first" | "admin-first" | undefined, isArabic: boolean): string {
+  if (mode === "admin-first") {
+    return isArabic ? "الأدمن أولاً ثم ENV" : "Admin First -> ENV Fallback";
+  }
+
+  return isArabic ? "ENV أولاً ثم الأدمن" : "ENV First -> Admin Fallback";
 }
 
 function PlatformCard({
@@ -340,9 +381,11 @@ function PlatformCard({
   const Icon = PLATFORM_ICONS[platform.icon] || Globe;
 
   const runtime = platform.runtime;
-  const isFullyConfigured = runtime ? runtime.runtimeReady : false;
+  const oauthReady = runtime?.oauth.enabled ? runtime.oauth.ready : null;
+  const otpReady = runtime?.otp.enabled ? runtime.otp.ready : null;
   const runtimeIssues = runtime ? [...runtime.oauth.issues, ...runtime.otp.issues] : [];
   const runtimeWarnings = runtime?.warnings || [];
+  const sourceConflict = runtime?.oauth?.credentials?.conflicts?.[0] || runtime?.conflicts?.[0];
 
   return (
     <Card className="relative overflow-visible hover-elevate">
@@ -360,20 +403,30 @@ function PlatformCard({
                     ? (isArabic ? "مفعّل" : "Enabled")
                     : (isArabic ? "معطّل" : "Disabled")}
                 </Badge>
-                {platform.isEnabled && (
+                {platform.isEnabled && oauthReady !== null && (
                   <Badge
-                    variant={isFullyConfigured ? "outline" : "destructive"}
-                    className={`text-xs ${isFullyConfigured ? 'border-green-500 text-green-600' : ''}`}
+                    variant={oauthReady ? "outline" : "destructive"}
+                    className={`text-xs ${oauthReady ? 'border-green-500 text-green-600' : ''}`}
                   >
-                    {isFullyConfigured
-                      ? (isArabic ? "مُهيّأ" : "Configured")
-                      : (isArabic ? "غير مُهيّأ" : "Not configured")}
+                    {oauthReady
+                      ? (isArabic ? "OAuth جاهز" : "OAuth Ready")
+                      : (isArabic ? "OAuth غير جاهز" : "OAuth Not Ready")}
+                  </Badge>
+                )}
+                {platform.isEnabled && otpReady !== null && (
+                  <Badge
+                    variant={otpReady ? "outline" : "destructive"}
+                    className={`text-xs ${otpReady ? 'border-green-500 text-green-600' : ''}`}
+                  >
+                    {otpReady
+                      ? (isArabic ? "OTP جاهز" : "OTP Ready")
+                      : (isArabic ? "OTP غير جاهز" : "OTP Not Ready")}
                   </Badge>
                 )}
                 {platform.isEnabled && runtime?.oauth.enabled && (
                   <Badge
                     variant="outline"
-                    className={`text-xs ${runtime?.configSource === "missing" ? "border-destructive text-destructive" : runtime?.configSource === "env-fallback" ? "border-amber-500 text-amber-600" : "border-blue-500 text-blue-600"}`}
+                    className={`text-xs ${runtime?.configSource === "missing" ? "border-destructive text-destructive" : runtime?.configSource === "env" ? "border-amber-500 text-amber-600" : "border-blue-500 text-blue-600"}`}
                   >
                     {resolveConfigSourceLabel(runtime?.configSource, isArabic)}
                   </Badge>
@@ -414,6 +467,12 @@ function PlatformCard({
                 <p className="text-xs text-amber-600 mt-1 flex items-start gap-1">
                   <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
                   <span>{runtimeWarnings[0]}</span>
+                </p>
+              )}
+              {platform.isEnabled && sourceConflict && (
+                <p className="text-xs text-destructive mt-1 flex items-start gap-1">
+                  <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
+                  <span>{sourceConflict.reason}</span>
                 </p>
               )}
             </div>
@@ -477,17 +536,26 @@ function PlatformSettingsDialog({
   isOpen: boolean;
   onClose: () => void;
   isArabic: boolean;
-  onSave: (data: Partial<SocialPlatform>) => void;
+  onSave: (data: PlatformSettingsPayload) => void;
   isSaving: boolean;
 }) {
   const { toast } = useToast();
-  const [formData, setFormData] = useState<Partial<SocialPlatform>>({});
+  const [formData, setFormData] = useState<PlatformSettingsPayload>({});
   const [verificationResult, setVerificationResult] = useState<PlatformVerificationResult | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
 
   // Populate form data whenever platform or dialog open state changes
   useEffect(() => {
     if (platform && isOpen) {
+      const capability = platform.runtime?.capability;
+      const initialType: "oauth" | "otp" | "both" = capability
+        ? capability.oauth && capability.otp
+          ? platform.type
+          : capability.oauth
+            ? "oauth"
+            : "otp"
+        : platform.type;
+
       setFormData({
         clientId: platform.clientId || "",
         clientSecret: platform.clientSecret || "",
@@ -500,10 +568,11 @@ function PlatformSettingsDialog({
         businessAccountId: platform.businessAccountId || "",
         accessToken: platform.accessToken || "",
         refreshToken: platform.refreshToken || "",
-        otpEnabled: platform.otpEnabled,
+        otpEnabled: capability?.otp ? platform.otpEnabled : false,
         otpTemplate: platform.otpTemplate || "",
         otpExpiry: platform.otpExpiry,
-        type: platform.type,
+        type: initialType,
+        oauthResolutionMode: platform.runtime?.oauth?.credentials?.resolutionMode || "env-first",
       });
       setVerificationResult(null);
     }
@@ -513,8 +582,11 @@ function PlatformSettingsDialog({
 
   const platformConfig = PLATFORM_FIELDS[platform.name] || { label: platform.displayName, labelAr: platform.displayNameAr, fields: resolvePlatformFields(platform) };
   const baseFields = platformConfig.fields.length > 0 ? platformConfig.fields : resolvePlatformFields(platform);
+  const capability = platform.runtime?.capability;
+  const oauthSupported = capability?.oauth ?? true;
+  const otpSupported = capability?.otp ?? true;
   const nextType = (formData.type || platform.type) as "oauth" | "otp" | "both";
-  const shouldRenderOtpSection = nextType === "otp" || nextType === "both";
+  const shouldRenderOtpSection = (nextType === "otp" || nextType === "both") && otpSupported;
   const otpRequiredFields = shouldRenderOtpSection ? (platform.runtime?.otp.requiredFields || []) : [];
   const fieldsToRender = Array.from(new Set([...baseFields, ...otpRequiredFields]));
   const callbackExpectedPath = `/api/auth/social/${platform.name}/callback`;
@@ -589,19 +661,21 @@ function PlatformSettingsDialog({
               </div>
 
               {platform.runtime?.oauth.enabled && (
-                <p className="text-xs text-muted-foreground">
-                  {platform.runtime.configSource === "env-fallback"
-                    ? (isArabic
-                      ? "المنصة تعتمد حاليا على ENV الاحتياطي. يفضّل نقل الإعدادات إلى لوحة الأدمن للتوحيد."
-                      : "This platform is currently using ENV fallback. Move credentials to Admin panel for centralized control.")
-                    : platform.runtime.configSource === "missing"
-                      ? (isArabic
-                        ? "إعدادات OAuth غير مكتملة حاليا في الأدمن وENV."
-                        : "OAuth configuration is incomplete in both Admin and ENV.")
-                      : (isArabic
-                        ? "المصدر الأساسي الحالي هو لوحة الأدمن (موصى به)."
-                        : "Current primary source is Admin panel (recommended).")}
-                </p>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    {isArabic
+                      ? `نمط حل المصدر: ${resolveResolutionModeLabel(platform.runtime.oauth.credentials.resolutionMode, isArabic)}`
+                      : `Resolution mode: ${resolveResolutionModeLabel(platform.runtime.oauth.credentials.resolutionMode, isArabic)}`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {isArabic
+                      ? `المصدر الفعلي الحالي: ${resolveConfigSourceLabel(platform.runtime.configSource, isArabic)}`
+                      : `Effective source: ${resolveConfigSourceLabel(platform.runtime.configSource, isArabic)}`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {platform.runtime.oauth.credentials.selectedReason}
+                  </p>
+                </div>
               )}
 
               {platform.runtime?.envFallback?.fields && platform.runtime.envFallback.fields.length > 0 && (
@@ -614,6 +688,13 @@ function PlatformSettingsDialog({
                 <div key={`${platform.id}-warning-${index}`} className="text-xs text-amber-700 flex items-start gap-1">
                   <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                   <span>{warning}</span>
+                </div>
+              ))}
+
+              {(platform.runtime?.oauth?.credentials?.conflicts || []).map((conflict, index) => (
+                <div key={`${platform.id}-conflict-${index}`} className="text-xs text-destructive flex items-start gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>{conflict.reason}</span>
                 </div>
               ))}
             </CardContent>
@@ -645,13 +726,13 @@ function PlatformSettingsDialog({
               <AccordionContent className="space-y-1 text-xs text-muted-foreground">
                 <p>
                   {isArabic
-                    ? "الأولوية: إعدادات لوحة الأدمن هي المصدر الأساسي."
-                    : "Precedence: Admin panel settings are the primary source of truth."}
+                    ? "الأولوية قابلة للتغيير لكل منصة: ENV أولاً أو الأدمن أولاً."
+                    : "Precedence is configurable per provider: ENV-first or Admin-first."}
                 </p>
                 <p>
                   {isArabic
-                    ? "استخدم ENV فقط كنسخة احتياطية/Bootstrap، وتجنب كتابة نفس بيانات المنصة في المكانين معا."
-                    : "Use ENV only as fallback/bootstrap and avoid duplicating provider credentials in both places."}
+                    ? "عند وجود قيم مختلفة بين المصدرين ستظهر تحذيرات تعارض مع السبب والمصدر الفعلي المستخدم."
+                    : "When ENV and Admin values differ, conflict diagnostics will explain why and which source is active."}
                 </p>
               </AccordionContent>
             </AccordionItem>
@@ -668,12 +749,35 @@ function PlatformSettingsDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="oauth">{isArabic ? "تسجيل دخول فقط" : "Login Only"}</SelectItem>
-                  <SelectItem value="otp">{isArabic ? "OTP فقط" : "OTP Only"}</SelectItem>
-                  <SelectItem value="both">{isArabic ? "تسجيل دخول + OTP" : "Login + OTP"}</SelectItem>
+                  {oauthSupported && <SelectItem value="oauth">{isArabic ? "تسجيل دخول فقط" : "Login Only"}</SelectItem>}
+                  {otpSupported && <SelectItem value="otp">{isArabic ? "OTP فقط" : "OTP Only"}</SelectItem>}
+                  {oauthSupported && otpSupported && <SelectItem value="both">{isArabic ? "تسجيل دخول + OTP" : "Login + OTP"}</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
+
+            {(nextType === "oauth" || nextType === "both") && oauthSupported && (
+              <div className="space-y-2">
+                <Label>{isArabic ? "أولوية مصدر OAuth" : "OAuth Source Priority"}</Label>
+                <Select
+                  value={formData.oauthResolutionMode || platform.runtime?.oauth?.credentials?.resolutionMode || "env-first"}
+                  onValueChange={(value) => setFormData({ ...formData, oauthResolutionMode: value as "env-first" | "admin-first" })}
+                >
+                  <SelectTrigger data-testid="select-oauth-resolution-mode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="env-first">{isArabic ? "ENV أولاً ثم الأدمن" : "ENV First -> Admin Fallback"}</SelectItem>
+                    <SelectItem value="admin-first">{isArabic ? "الأدمن أولاً ثم ENV" : "Admin First -> ENV Fallback"}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  {isArabic
+                    ? "يمكنك تغيير المصدر النشط لكل منصة. عند التعارض ستظهر تفاصيل السبب في أعلى النافذة."
+                    : "Choose the active source order per provider. Conflict diagnostics appear at the top when values diverge."}
+                </p>
+              </div>
+            )}
 
             {fieldsToRender.map((field) => (
               <div key={field} className="space-y-2">
@@ -875,7 +979,7 @@ export default function AdminSocialPlatformsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<SocialPlatform> }) => {
+    mutationFn: async ({ id, data }: { id: string; data: PlatformSettingsPayload }) => {
       return adminFetch(`/api/admin/social-platforms/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),
@@ -1016,13 +1120,13 @@ export default function AdminSocialPlatformsPage() {
               <AccordionContent className="space-y-1 text-xs text-muted-foreground">
                 <p>
                   {isArabic
-                    ? "الأولوية دائما لإعدادات لوحة الأدمن."
-                    : "Admin panel values always take precedence at runtime."}
+                    ? "الأولوية قابلة للتحديد لكل مزود: ENV أولاً أو الأدمن أولاً."
+                    : "Source precedence is configurable per provider: ENV-first or Admin-first."}
                 </p>
                 <p>
                   {isArabic
-                    ? "استخدم .env فقط كحل احتياطي/Bootstrap وتجنب تكرار نفس مفاتيح OAuth في المكانين."
-                    : "Use .env only as fallback/bootstrap and avoid duplicating OAuth credentials in both places."}
+                    ? "عند اختلاف القيم بين .env ولوحة الأدمن ستظهر تفاصيل التعارض والسبب والمصدر الفعلي المستخدم."
+                    : "If .env and Admin values differ, conflict diagnostics explain why and which source is currently active."}
                 </p>
               </AccordionContent>
             </AccordionItem>

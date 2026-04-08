@@ -21,7 +21,10 @@ import { JWT_USER_SECRET, JWT_USER_EXPIRY } from "../../lib/auth-config";
 import { emitSystemAlert } from "../../lib/admin-alerts";
 import { getErrorMessage } from "../helpers";
 import { createSession, getSessionFingerprint, setAuthCookie } from "../auth/helpers";
-import { evaluateSocialPlatformRuntime } from "../../lib/social-platform-runtime";
+import {
+  evaluateSocialPlatformRuntime,
+  resolveEffectiveOAuthCredentials,
+} from "../../lib/social-platform-runtime";
 
 interface OAuthExchangeRecord {
   userId: string;
@@ -315,17 +318,18 @@ export function registerOAuthFlowRoutes(app: Express) {
       }
 
       const runtime = evaluateSocialPlatformRuntime(platformRecord);
+      const oauthCredentials = resolveEffectiveOAuthCredentials(platformRecord);
       if (!runtime.oauth.enabled) {
         return res.status(400).json({ error: "This platform only supports OTP, not OAuth login" });
       }
 
-      if (!runtime.oauth.ready || !platformRecord.clientId) {
+      if (!runtime.oauth.ready || !oauthCredentials.configured || !oauthCredentials.clientId) {
         const issues = runtime.oauth.issues.join("; ");
         return res.status(503).json({ error: issues || "Platform OAuth runtime is not ready" });
       }
 
       return res.json({
-        clientId: platformRecord.clientId,
+        clientId: oauthCredentials.clientId,
         scope: "openid email profile",
       });
     } catch (error: unknown) {
@@ -438,6 +442,7 @@ export function registerOAuthFlowRoutes(app: Express) {
       }
 
       const runtime = evaluateSocialPlatformRuntime(platformRecord);
+      const oauthCredentials = resolveEffectiveOAuthCredentials(platformRecord);
       if (!runtime.oauth.enabled) {
         return res.status(400).json({ error: "This platform only supports OTP, not OAuth login" });
       }
@@ -447,8 +452,8 @@ export function registerOAuthFlowRoutes(app: Express) {
         return res.status(503).json({ error: issues || "Platform OAuth runtime is not ready" });
       }
 
-      const callbackUrl = platformRecord.callbackUrl || `${req.protocol}://${req.get("host")}/api/auth/social/${platform}/callback`;
-      const clientId = platformRecord.clientId || "";
+      const callbackUrl = oauthCredentials.callbackUrl || `${req.protocol}://${req.get("host")}/api/auth/social/${platform}/callback`;
+      const clientId = oauthCredentials.clientId;
 
       // Create state (with PKCE if supported)
       const { state, codeVerifier } = await createOAuthState(platform, redirectUrl);
@@ -551,14 +556,23 @@ export function registerOAuthFlowRoutes(app: Express) {
         return res.redirect(`/login?error=platform_not_ready&platform=${safePlatform}`);
       }
 
-      const callbackUrl = platformRecord.callbackUrl || `${req.protocol}://${req.get("host")}/api/auth/social/${platform}/callback`;
-      const clientSecret = platformRecord.clientSecret || "";
+      const oauthCredentials = resolveEffectiveOAuthCredentials(platformRecord);
+      if (!oauthCredentials.configured || !oauthCredentials.clientId || !oauthCredentials.clientSecret) {
+        logOAuthSecurityEvent(req, platform, "oauth_platform_missing_effective_credentials", {
+          source: oauthCredentials.effectiveSource,
+          missing: oauthCredentials.effectiveMissingFields,
+        });
+        return res.redirect(`/login?error=platform_not_ready&platform=${safePlatform}`);
+      }
+
+      const callbackUrl = oauthCredentials.callbackUrl || `${req.protocol}://${req.get("host")}/api/auth/social/${platform}/callback`;
+      const clientSecret = oauthCredentials.clientSecret;
 
       // Exchange code for tokens
       const tokens = await exchangeCodeForTokens(
         platform,
         code,
-        platformRecord.clientId || "",
+        oauthCredentials.clientId,
         clientSecret,
         callbackUrl,
         stateRecord.codeVerifier,
