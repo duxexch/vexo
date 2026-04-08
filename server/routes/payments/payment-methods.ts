@@ -81,6 +81,10 @@ export function registerPaymentMethodRoutes(app: Express): void {
       );
 
       const sendgridFrom = process.env.SENDGRID_FROM_EMAIL || process.env.SENDGRID_FROM;
+      const hasGoogleWebOAuthEnv = hasEnvValue(process.env.GOOGLE_CLIENT_ID)
+        && hasEnvValue(process.env.GOOGLE_CLIENT_SECRET);
+      const hasGoogleNativeOAuthEnv = hasEnvValue(process.env.GOOGLE_ANDROID_CLIENT_ID)
+        || hasEnvValue(process.env.GOOGLE_CLIENT_ID_ANDROID);
 
       const integrations: Record<string, boolean> = {
         twilio: hasEnvValue(process.env.TWILIO_ACCOUNT_SID)
@@ -90,7 +94,7 @@ export function registerPaymentMethodRoutes(app: Express): void {
           && hasEnvValue(sendgridFrom),
         google_oauth: isSocialOAuthConfigured(
           "google",
-          hasEnvValue(process.env.GOOGLE_CLIENT_ID) && hasEnvValue(process.env.GOOGLE_CLIENT_SECRET),
+          hasGoogleWebOAuthEnv || hasGoogleNativeOAuthEnv,
         ),
         facebook_oauth: isSocialOAuthConfigured(
           "facebook",

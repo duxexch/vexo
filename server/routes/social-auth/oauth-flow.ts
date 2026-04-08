@@ -300,6 +300,130 @@ function sanitizePostLoginRedirect(redirect?: string): string | undefined {
   }
 }
 
+const DEFAULT_GOOGLE_SCOPES = ["openid", "email", "profile"] as const;
+
+function resolveGoogleNativeScope(): string {
+  const rawScopes = typeof process.env.GOOGLE_SCOPES === "string"
+    ? process.env.GOOGLE_SCOPES
+    : "";
+
+  const providedScopes = rawScopes
+    .split(/[\s,]+/)
+    .map((scope) => scope.trim())
+    .filter((scope) => scope.length > 0);
+
+  const merged = new Set<string>([...DEFAULT_GOOGLE_SCOPES, ...providedScopes]);
+  return Array.from(merged).join(" ");
+}
+
+function resolveGoogleNativeClientId(fallbackClientId?: string): string {
+  const androidClientId = typeof process.env.GOOGLE_ANDROID_CLIENT_ID === "string"
+    ? process.env.GOOGLE_ANDROID_CLIENT_ID.trim()
+    : "";
+  const androidAliasClientId = typeof process.env.GOOGLE_CLIENT_ID_ANDROID === "string"
+    ? process.env.GOOGLE_CLIENT_ID_ANDROID.trim()
+    : "";
+  const fallback = typeof fallbackClientId === "string"
+    ? fallbackClientId.trim()
+    : "";
+
+  return fallback || androidClientId || androidAliasClientId;
+}
+
+function resolveGoogleAllowedAudiences(fallbackClientId?: string): string[] {
+  const audienceSet = new Set<string>();
+  const maybeAdd = (value?: string) => {
+    if (typeof value !== "string") return;
+    const normalized = value.trim();
+    if (normalized.length > 0) {
+      audienceSet.add(normalized);
+    }
+  };
+
+  maybeAdd(process.env.GOOGLE_CLIENT_ID);
+  maybeAdd(process.env.GOOGLE_ANDROID_CLIENT_ID);
+  maybeAdd(process.env.GOOGLE_CLIENT_ID_ANDROID);
+  maybeAdd(fallbackClientId);
+
+  return Array.from(audienceSet);
+}
+
+async function validateGoogleNativeAccessToken(
+  accessToken: string,
+  allowedAudiences: string[],
+  requiredScope: string,
+): Promise<{ ok: boolean; reason?: string; details?: Record<string, unknown> }> {
+  if (!allowedAudiences.length) {
+    return { ok: true };
+  }
+
+  const tokenInfoResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
+  if (!tokenInfoResponse.ok) {
+    return {
+      ok: false,
+      reason: "tokeninfo_unavailable",
+      details: { status: tokenInfoResponse.status },
+    };
+  }
+
+  const tokenInfo = await tokenInfoResponse.json() as {
+    audience?: string;
+    issued_to?: string;
+    aud?: string;
+    scope?: string;
+  };
+
+  const audience = [tokenInfo.audience, tokenInfo.issued_to, tokenInfo.aud]
+    .find((value) => typeof value === "string" && value.trim().length > 0)
+    ?.trim();
+
+  if (!audience) {
+    return {
+      ok: false,
+      reason: "tokeninfo_missing_audience",
+    };
+  }
+
+  if (!allowedAudiences.includes(audience)) {
+    return {
+      ok: false,
+      reason: "token_audience_mismatch",
+      details: {
+        audience,
+        allowedAudiences,
+      },
+    };
+  }
+
+  const requiredScopes = new Set(
+    requiredScope
+      .split(/[\s,]+/)
+      .map((scope) => scope.trim())
+      .filter((scope) => scope.length > 0),
+  );
+
+  const grantedScopes = new Set(
+    (typeof tokenInfo.scope === "string" ? tokenInfo.scope : "")
+      .split(/[\s,]+/)
+      .map((scope) => scope.trim())
+      .filter((scope) => scope.length > 0),
+  );
+
+  const missingScopes = Array.from(requiredScopes).filter((scope) => !grantedScopes.has(scope));
+  if (missingScopes.length > 0) {
+    return {
+      ok: false,
+      reason: "token_scope_mismatch",
+      details: {
+        missingScopes,
+        grantedScopes: Array.from(grantedScopes),
+      },
+    };
+  }
+
+  return { ok: true };
+}
+
 export function registerOAuthFlowRoutes(app: Express) {
   app.post("/api/auth/social/exchange", authRateLimiter, async (req: Request, res: Response) => {
     const { code } = req.body || {};
@@ -356,14 +480,28 @@ export function registerOAuthFlowRoutes(app: Express) {
         return res.status(400).json({ error: "This platform only supports OTP, not OAuth login" });
       }
 
-      if (!runtime.oauth.ready || !oauthCredentials.configured || !oauthCredentials.clientId) {
-        const issues = runtime.oauth.issues.join("; ");
-        return res.status(503).json({ error: issues || "Platform OAuth runtime is not ready" });
+      const nativeClientId = resolveGoogleNativeClientId(oauthCredentials.clientId);
+      if (!nativeClientId) {
+        return res.status(503).json({
+          error: "Google native client id is missing. Set GOOGLE_CLIENT_ID or GOOGLE_ANDROID_CLIENT_ID (or GOOGLE_CLIENT_ID_ANDROID).",
+        });
       }
 
+      const androidPackageName = typeof process.env.GOOGLE_ANDROID_PACKAGE_NAME === "string"
+        ? process.env.GOOGLE_ANDROID_PACKAGE_NAME.trim()
+        : "";
+      const androidSha1 = typeof process.env.GOOGLE_ANDROID_SHA1 === "string"
+        ? process.env.GOOGLE_ANDROID_SHA1.trim()
+        : "";
+
       return res.json({
-        clientId: oauthCredentials.clientId,
-        scope: "openid email profile",
+        clientId: nativeClientId,
+        scope: resolveGoogleNativeScope(),
+        android: {
+          packageName: androidPackageName || null,
+          packageConfigured: androidPackageName.length > 0,
+          sha1Configured: androidSha1.length > 0,
+        },
       });
     } catch (error: unknown) {
       logger.error("Native Google config error", new Error(getErrorMessage(error)));
@@ -389,9 +527,22 @@ export function registerOAuthFlowRoutes(app: Express) {
         return res.status(400).json({ error: "This platform only supports OTP, not OAuth login" });
       }
 
-      if (!runtime.oauth.ready) {
-        const issues = runtime.oauth.issues.join("; ");
-        return res.status(503).json({ error: issues || "Platform OAuth runtime is not ready" });
+      const oauthCredentials = resolveEffectiveOAuthCredentials(platformRecord);
+      const requiredScope = resolveGoogleNativeScope();
+      const validation = await validateGoogleNativeAccessToken(
+        accessToken,
+        resolveGoogleAllowedAudiences(resolveGoogleNativeClientId(oauthCredentials.clientId)),
+        requiredScope,
+      );
+
+      if (!validation.ok) {
+        const reason = validation.reason || "google_access_token_validation_failed";
+        logOAuthSecurityEvent(req, "google", reason, validation.details);
+        const statusCode = reason === "tokeninfo_unavailable" ? 503 : 401;
+        const errorMessage = statusCode === 503
+          ? "Google token validation is temporarily unavailable"
+          : "Invalid Google access token";
+        return res.status(statusCode).json({ error: errorMessage });
       }
 
       let profile;
