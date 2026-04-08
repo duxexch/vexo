@@ -577,7 +577,11 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         const adminToken = getAdminTokenFromRequest(req);
         if (!authenticated && adminToken) {
           try {
-            await verifyAdminAccessToken(adminToken);
+            await verifyAdminAccessToken(adminToken, {
+              userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+              requireActiveSession: true,
+              updateSessionActivity: true,
+            });
             authenticated = true;
           } catch { }
         }

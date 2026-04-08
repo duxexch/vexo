@@ -19,6 +19,8 @@
     "quality:gate:i18n-global": "npm run check:types && npm run i18n:gate",
     "security:audit": "npm audit --audit-level=high",
     "security:smoke": "node scripts/security-smoke.mjs",
+    "security:smoke:auth-matrix": "node scripts/regression-auth-nondisclosure.mjs --matrix",
+    "security:regression:auth-nondisclosure": "node scripts/regression-auth-nondisclosure.mjs",
     "security:smoke:challenges": "node scripts/smoke-challenge-permissions.mjs",
     "security:smoke:challenges:deterministic": "node scripts/smoke-challenge-permissions.mjs --reset-sensitive-limiter",
     "security:smoke:domino-e2e": "node scripts/smoke-challenge-domino-e2e.mjs",

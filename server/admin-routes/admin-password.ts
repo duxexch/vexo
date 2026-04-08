@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { users, passwordResetTokens } from "@shared/schema";
+import { users, passwordResetTokens, activeSessions } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, isNull } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -7,6 +7,7 @@ import crypto from "crypto";
 import { authRateLimiter } from "../routes/middleware";
 import { sendEmail, buildResetPasswordEmailHtml } from "../lib/messaging";
 import { logAdminAction, getErrorMessage } from "./helpers";
+import { storage } from "../storage";
 
 export function registerAdminPasswordRoutes(app: Express) {
 
@@ -34,6 +35,13 @@ export function registerAdminPasswordRoutes(app: Express) {
 
       // Store reset token in passwordResetTokens table
       const tokenHash = crypto.createHash('sha256').update(resetCode).digest('hex');
+      await db.update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(and(
+          eq(passwordResetTokens.userId, admin.id),
+          isNull(passwordResetTokens.usedAt),
+        ));
+
       await db.insert(passwordResetTokens).values({
         userId: admin.id,
         tokenHash,
@@ -103,9 +111,18 @@ export function registerAdminPasswordRoutes(app: Express) {
         .where(eq(passwordResetTokens.id, resetToken.id));
       await db.update(users).set({
         password: hashedPassword,
+        passwordChangedAt: new Date(),
         failedLoginAttempts: 0,
         lockedUntil: null,
       }).where(eq(users.id, admin.id));
+
+      await storage.revokeAllUserSessions(admin.id);
+      await db.update(activeSessions)
+        .set({ isActive: false })
+        .where(and(
+          eq(activeSessions.userId, admin.id),
+          eq(activeSessions.isActive, true),
+        ));
 
       await logAdminAction(admin.id, "settings_change", "admin", admin.id, {
         metadata: JSON.stringify({ action: "password_reset_completed", ip: req.ip })

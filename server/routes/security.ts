@@ -7,9 +7,17 @@ import { db } from "../db";
 import { activeSessions } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { z } from "zod";
-import { verifyTOTP } from "./auth/helpers";
+import {
+  verifyTOTP,
+  validatePasswordStrength,
+  getSessionFingerprint,
+  setAuthCookie,
+  createSession,
+} from "./auth/helpers";
 import { sanitizePlainText } from "../lib/input-security";
+import { JWT_USER_SECRET, JWT_USER_EXPIRY } from "../lib/auth-config";
 
 const rawRestoreWindowDays = Number.parseInt(process.env.ACCOUNT_RESTORE_WINDOW_DAYS || "30", 10);
 const ACCOUNT_RESTORE_WINDOW_DAYS = Number.isFinite(rawRestoreWindowDays)
@@ -23,8 +31,8 @@ export function registerSecurityRoutes(app: Express): void {
   const passwordChangeSchema = z.object({
     currentPassword: z.string().min(1, "Current password is required"),
     newPassword: z.string()
-      .min(6, "Password must be at least 6 characters")
-      .max(100, "Password is too long")
+      .min(8, "Password must be at least 8 characters")
+      .max(72, "Password is too long")
       .regex(/[a-zA-Z]/, "Password must contain at least one letter")
       .regex(/[0-9]/, "Password must contain at least one number"),
     confirmPassword: z.string(),
@@ -57,8 +65,37 @@ export function registerSecurityRoutes(app: Express): void {
       const isValid = await bcrypt.compare(validated.currentPassword, user.password);
       if (!isValid) return res.status(400).json({ error: "Current password is incorrect" });
 
-      const hashedPassword = await bcrypt.hash(validated.newPassword, 10);
-      await storage.updateUser(req.user!.id, { password: hashedPassword });
+      const passwordValidation = validatePasswordStrength(validated.newPassword);
+      if (!passwordValidation.valid) {
+        return res.status(400).json({ error: passwordValidation.error || "Password does not meet security requirements" });
+      }
+
+      const passwordChangedAt = new Date();
+      const hashedPassword = await bcrypt.hash(validated.newPassword, 12);
+      await storage.updateUser(req.user!.id, {
+        password: hashedPassword,
+        passwordChangedAt,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      });
+
+      // Invalidate all active sessions/tokens before issuing a fresh session.
+      await storage.revokeAllUserSessions(req.user!.id);
+      await db.update(activeSessions)
+        .set({ isActive: false })
+        .where(and(
+          eq(activeSessions.userId, req.user!.id),
+          eq(activeSessions.isActive, true),
+        ));
+
+      const freshToken = jwt.sign(
+        { id: user.id, role: user.role, username: user.username, fp: getSessionFingerprint(req) },
+        JWT_USER_SECRET,
+        { expiresIn: JWT_USER_EXPIRY },
+      );
+
+      setAuthCookie(res, freshToken);
+      await createSession(user.id, freshToken, req);
 
       await storage.createAuditLog({
         userId: req.user!.id, action: "settings_change", entityType: "user",
@@ -73,7 +110,7 @@ export function registerSecurityRoutes(app: Express): void {
         link: '/settings',
       });
 
-      res.json({ success: true, message: "Password changed successfully" });
+      res.json({ success: true, message: "Password changed successfully", token: freshToken });
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: error.errors[0]?.message || "Invalid input" });

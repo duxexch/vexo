@@ -10,6 +10,7 @@ import {
   getSessionFingerprint,
   setAuthCookie,
   createSession,
+  consumeInvalidLoginDelay,
   checkAccountLockout,
   handleFailedLogin,
   handleSuccessfulLogin,
@@ -27,6 +28,7 @@ export function registerUsernameLoginRoute(app: Express) {
 
       const user = await storage.getUserByUsername(username);
       if (!user) {
+        await consumeInvalidLoginDelay(password);
         return res.status(401).json({ error: "Invalid credentials", errorCode: "INVALID_CREDENTIALS" });
       }
 
@@ -37,10 +39,10 @@ export function registerUsernameLoginRoute(app: Express) {
       if (!user.registrationType) {
         await storage.updateUser(user.id, { registrationType: "username" });
       } else if (user.registrationType !== "username") {
+        await consumeInvalidLoginDelay(password);
         return res.status(401).json({
-          error: "الرجاء استخدام طريقة تسجيل الدخول الصحيحة",
-          errorCode: "WRONG_LOGIN_METHOD",
-          correctMethod: user.registrationType
+          error: "Invalid credentials",
+          errorCode: "INVALID_CREDENTIALS",
         });
       }
 

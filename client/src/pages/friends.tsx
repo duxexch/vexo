@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Users,
+  Globe,
   UserPlus,
   UserMinus,
   Search,
@@ -355,6 +356,7 @@ export default function FriendsPage() {
   const { t, dir } = useI18n();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"friends" | "following" | "followers" | "blocked">("friends");
+  const [searchFilter, setSearchFilter] = useState<"all" | "friends" | "following" | "followers" | "blocked">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -387,7 +389,7 @@ export default function FriendsPage() {
   });
 
   const searchUrl = debouncedSearchQuery.length >= 2
-    ? `/api/users/search?q=${encodeURIComponent(debouncedSearchQuery)}&filter=all`
+    ? `/api/users/search?q=${encodeURIComponent(debouncedSearchQuery)}&filter=${encodeURIComponent(searchFilter)}`
     : "";
 
   const { data: searchResults = [], isLoading: searchLoading } = useQuery<UserWithFollowStatus[]>({
@@ -582,6 +584,7 @@ export default function FriendsPage() {
               onClick={() => {
                 setSearchQuery("");
                 setIsSearchActive(false);
+                setSearchFilter("all");
                 searchInputRef.current?.blur();
               }}
             >
@@ -590,8 +593,8 @@ export default function FriendsPage() {
           )}
         </div>
 
-        {/* Tab Navigation — hidden when search is active */}
-        {!isSearchActive && (
+        {/* Tab Navigation */}
+        {!isSearchActive ? (
           <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none" data-testid="tabs-friends">
             <TabButton
               active={activeTab === "friends"}
@@ -624,6 +627,48 @@ export default function FriendsPage() {
               label={t("friends.blocked")}
               count={blocked.length}
               testId="tab-blocked"
+            />
+          </div>
+        ) : (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none" data-testid="tabs-search-scope">
+            <TabButton
+              active={searchFilter === "all"}
+              onClick={() => setSearchFilter("all")}
+              icon={Globe}
+              label={t("common.all")}
+              testId="tab-search-all"
+            />
+            <TabButton
+              active={searchFilter === "friends"}
+              onClick={() => setSearchFilter("friends")}
+              icon={Users}
+              label={t("friends.friends")}
+              count={friends.length}
+              testId="tab-search-friends"
+            />
+            <TabButton
+              active={searchFilter === "following"}
+              onClick={() => setSearchFilter("following")}
+              icon={UserPlus}
+              label={t("friends.following")}
+              count={following.length}
+              testId="tab-search-following"
+            />
+            <TabButton
+              active={searchFilter === "followers"}
+              onClick={() => setSearchFilter("followers")}
+              icon={Users}
+              label={t("friends.followers")}
+              count={followers.length}
+              testId="tab-search-followers"
+            />
+            <TabButton
+              active={searchFilter === "blocked"}
+              onClick={() => setSearchFilter("blocked")}
+              icon={Ban}
+              label={t("friends.blocked")}
+              count={blocked.length}
+              testId="tab-search-blocked"
             />
           </div>
         )}

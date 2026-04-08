@@ -8,28 +8,14 @@ import {
   getErrorMessage,
   sendSecurityNotification,
   validatePasswordStrength,
-  IS_DEV_MODE,
 } from "../helpers";
 
 const RESET_CODE_EXPIRY_MINUTES = 60;
 const RESET_CODE_EXPIRY_MS = RESET_CODE_EXPIRY_MINUTES * 60 * 1000;
 
 function generateResetCode(): string {
-  // 8-char hexadecimal code, human-friendly for manual entry.
-  return crypto.randomBytes(4).toString("hex").toUpperCase();
-}
-
-function maskEmail(email: string): string {
-  const [localPart, domain] = email.split("@");
-  if (!domain) return "***";
-  const visibleLocal = localPart.slice(0, Math.min(2, localPart.length));
-  return `${visibleLocal}***@${domain}`;
-}
-
-function maskPhone(phone: string): string {
-  const normalized = phone.trim();
-  if (normalized.length <= 4) return "****";
-  return `${normalized.slice(0, 2)}****${normalized.slice(-2)}`;
+  // 12-char hexadecimal code (48-bit entropy), easier to type than long URL tokens.
+  return crypto.randomBytes(6).toString("hex").toUpperCase();
 }
 
 export function registerPasswordResetRoutes(app: Express) {
@@ -37,6 +23,10 @@ export function registerPasswordResetRoutes(app: Express) {
   app.post("/api/auth/forgot-password", passwordResetRateLimiter, async (req: Request, res: Response) => {
     try {
       const { email, phone, accountId } = req.body;
+      const genericResponse = {
+        success: true,
+        message: "If an account exists with this identifier, reset instructions have been sent",
+      };
 
       // Don't reveal whether an account exists — always return success-like response
       if (!email && !phone && !accountId) {
@@ -53,12 +43,11 @@ export function registerPasswordResetRoutes(app: Express) {
       }
 
       if (!user) {
-        // Return generic message to prevent account enumeration
-        return res.json({ message: "If an account exists with this identifier, reset instructions have been sent" });
+        return res.json(genericResponse);
       }
 
       if (user.status !== "active" || Boolean(user.accountDeletedAt)) {
-        return res.json({ message: "If an account exists with this identifier, reset instructions have been sent" });
+        return res.json(genericResponse);
       }
 
       const resetCode = generateResetCode();
@@ -73,12 +62,6 @@ export function registerPasswordResetRoutes(app: Express) {
         tokenHash,
         expiresAt,
       });
-
-      // In production, send token via email/SMS only — never expose in API response
-      const responseData: Record<string, unknown> = {
-        success: true,
-        message: "Password reset instructions sent. Check your email/phone.",
-      };
 
       // Prefer user-entered channel; fallback to available verified contact for account-id based requests.
       const recoveryEmail =
@@ -101,30 +84,14 @@ export function registerPasswordResetRoutes(app: Express) {
           text: `رمز استعادة كلمة المرور: ${resetCode}\nصالح لمدة ${RESET_CODE_EXPIRY_MINUTES} دقيقة`,
           html: buildResetPasswordEmailHtml(resetCode, RESET_CODE_EXPIRY_MINUTES),
         }).catch(err => console.error("Reset email delivery error:", err));
-
-        responseData.delivery = {
-          type: "email",
-          masked: maskEmail(recoveryEmail),
-        };
       } else if (recoveryPhone) {
         void sendSms({
           to: recoveryPhone,
           message: buildResetSmsMessage(resetCode, RESET_CODE_EXPIRY_MINUTES),
         }).catch(err => console.error("Reset SMS delivery error:", err));
-
-        responseData.delivery = {
-          type: "phone",
-          masked: maskPhone(recoveryPhone),
-        };
       }
 
-      // Only expose token in explicit dev mode (VEX_DEV_MODE=true)
-      if (IS_DEV_MODE) {
-        responseData.token = resetCode;
-        responseData.devNote = "Token exposed only in development mode (VEX_DEV_MODE)";
-      }
-
-      res.json(responseData);
+      res.json(genericResponse);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

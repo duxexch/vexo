@@ -34,7 +34,7 @@ function toRecoveryPurpose(action: RecoveryAction): AccountRecoveryPurpose {
 }
 
 function generateRecoveryCode(): string {
-    return crypto.randomBytes(4).toString("hex").toUpperCase();
+    return crypto.randomBytes(6).toString("hex").toUpperCase();
 }
 
 async function findUserByIdentifier(identifier: string): Promise<User | undefined> {

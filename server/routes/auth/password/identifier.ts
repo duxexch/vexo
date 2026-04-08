@@ -1,7 +1,6 @@
 import type { Express, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import jwt from "jsonwebtoken";
 import { storage } from "../../../storage";
 import type { InsertUser } from "@shared/schema";
 import {
@@ -9,17 +8,18 @@ import {
   sensitiveRateLimiter,
   registrationRateLimiter,
 } from "../../middleware";
-import { JWT_USER_SECRET, JWT_USER_EXPIRY } from "../../../lib/auth-config";
 import { emitSystemAlert } from "../../../lib/admin-alerts";
-import { toSafeUser } from "../../../lib/safe-user";
 import {
   getErrorMessage,
-  getSessionFingerprint,
-  setAuthCookie,
-  createSession,
   validatePasswordStrength,
 } from "../helpers";
 import { isSafeEmailAddress, isSafePhoneNumber } from "../../../lib/input-security";
+import {
+  createIdentifierOtpChallengeToken,
+  getSignupIdentifierMethods,
+  issueIdentifierOtp,
+  type IdentifierOtpMethod,
+} from "../identifier-otp";
 
 export function registerIdentifierRoutes(app: Express) {
   // Check if identifier (email/phone/accountId) exists
@@ -184,14 +184,39 @@ export function registerIdentifierRoutes(app: Express) {
 
       const user = await storage.createUser(userData as InsertUser);
 
-      const token = jwt.sign({ id: user.id, role: user.role, username: user.username, fp: getSessionFingerprint(req) }, JWT_USER_SECRET, { expiresIn: JWT_USER_EXPIRY });
+      const signupMethods = getSignupIdentifierMethods(user);
+      if (signupMethods.length === 0) {
+        return res.status(400).json({ error: "Registration failed. No valid verification method is configured." });
+      }
+
+      const preferredMethod: IdentifierOtpMethod = type === "email" ? "email" : "phone";
+      const selectedMethod = signupMethods.includes(preferredMethod)
+        ? preferredMethod
+        : signupMethods[0];
+
+      const issuedOtp = await issueIdentifierOtp({
+        user,
+        method: selectedMethod,
+        flow: "signup",
+      });
+
+      if (!issuedOtp.sent) {
+        return res.status(503).json({ error: "Unable to send verification code" });
+      }
+
+      const challengeToken = createIdentifierOtpChallengeToken({
+        userId: user.id,
+        methods: signupMethods,
+        preferredMethod: selectedMethod,
+        flow: "signup",
+      });
 
       await storage.createAuditLog({
         userId: user.id,
-        action: "login",
+        action: "settings_change",
         entityType: "user",
         entityId: user.id,
-        details: "Auto-registered from login attempt",
+        details: "Auto-registered from login attempt (pending OTP verification)",
         ipAddress: req.ip,
       });
 
@@ -207,12 +232,13 @@ export function registerIdentifierRoutes(app: Express) {
         entityId: String(user.id),
       }).catch(() => { });
 
-      setAuthCookie(res, token);
-      await createSession(user.id, token, req);
       res.json({
-        user: toSafeUser(user),
-        token,
-        message: "Account created successfully. Please verify your " + type + "."
+        requiresIdentifierOtp: true,
+        challengeToken,
+        availableMethods: signupMethods,
+        maskedTarget: issuedOtp.maskedTarget,
+        expiresIn: issuedOtp.expiresInSeconds,
+        message: "Account created successfully. Please verify to continue.",
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

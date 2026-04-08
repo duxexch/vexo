@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/lib/auth";
+import { useAuth, type IdentifierOtpMethod, type LoginFlowResult } from "@/lib/auth";
 import type { User as UserSchema } from "@shared/schema";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -89,7 +89,19 @@ const OAUTH_EVENT_STORAGE_KEY = "vex_oauth_event";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
-  const { login, loginByAccount, loginByPhone, loginByEmail, oneClickRegister, confirmOneClickLogin, register, refreshUser } = useAuth();
+  const {
+    login,
+    loginByAccount,
+    loginByPhone,
+    loginByEmail,
+    requestIdentifierOtp,
+    verifyIdentifierOtp,
+    verifyTwoFactorChallenge,
+    oneClickRegister,
+    confirmOneClickLogin,
+    register,
+    refreshUser,
+  } = useAuth();
   const { toast } = useToast();
   const { t, dir } = useI18n();
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -135,9 +147,19 @@ export default function LoginPage() {
   const [pendingRegistration, setPendingRegistration] = useState<{ identifier: string; type: "email" | "phone"; password: string } | null>(null);
   const [showAccountNotFoundModal, setShowAccountNotFoundModal] = useState(false);
 
-  // Smart redirect state - when user is on wrong tab
-  const [showRedirectModal, setShowRedirectModal] = useState(false);
-  const [redirectInfo, setRedirectInfo] = useState<{ correctMethod: string; maskedHint: string; password: string } | null>(null);
+  // Mandatory identifier OTP challenge state
+  const [showIdentifierOtpModal, setShowIdentifierOtpModal] = useState(false);
+  const [identifierOtpCode, setIdentifierOtpCode] = useState("");
+  const [identifierOtpChallengeToken, setIdentifierOtpChallengeToken] = useState("");
+  const [identifierOtpMethods, setIdentifierOtpMethods] = useState<IdentifierOtpMethod[]>([]);
+  const [selectedIdentifierOtpMethod, setSelectedIdentifierOtpMethod] = useState<IdentifierOtpMethod>("email");
+  const [identifierOtpMaskedTarget, setIdentifierOtpMaskedTarget] = useState("");
+
+  // Optional account 2FA challenge state (after OTP if account has 2FA)
+  const [showTwoFactorModal, setShowTwoFactorModal] = useState(false);
+  const [twoFactorChallengeToken, setTwoFactorChallengeToken] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+
   const socialPopupWatcherRef = useRef<number | null>(null);
   const socialPopupRef = useRef<Window | null>(null);
   const socialLoginLockRef = useRef<{ platformName: string; startedAt: number } | null>(null);
@@ -535,6 +557,113 @@ export default function LoginPage() {
     return true;
   };
 
+  const applyLoginFlowResult = (result: LoginFlowResult) => {
+    if (result.status === "authenticated") {
+      setShowIdentifierOtpModal(false);
+      setShowTwoFactorModal(false);
+      setIdentifierOtpCode("");
+      setTwoFactorCode("");
+      setLocation("/");
+      return;
+    }
+
+    if (result.status === "identifier_otp_required") {
+      setIdentifierOtpChallengeToken(result.challengeToken);
+      setIdentifierOtpMethods(result.availableMethods);
+      setSelectedIdentifierOtpMethod(result.availableMethods[0] || "email");
+      setIdentifierOtpMaskedTarget(result.maskedTarget || "");
+      setIdentifierOtpCode("");
+      setShowIdentifierOtpModal(true);
+      return;
+    }
+
+    if (result.status === "two_factor_required") {
+      setShowIdentifierOtpModal(false);
+      setShowTwoFactorModal(true);
+      setTwoFactorChallengeToken(result.challengeToken);
+      setTwoFactorCode("");
+    }
+  };
+
+  const checkIdentifierExists = async (
+    identifier: string,
+    type: "account" | "phone" | "email",
+  ): Promise<boolean | null> => {
+    try {
+      const res = await fetchWithCsrf("/api/auth/check-identifier", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier, type }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json().catch(() => ({} as Record<string, unknown>));
+      if (typeof data.exists !== "boolean") return null;
+      return data.exists;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleIdentifierOtpResend = async (requestedMethod?: IdentifierOtpMethod) => {
+    if (!identifierOtpChallengeToken) return;
+    setIsLoading(true);
+    try {
+      const nextMethod = requestedMethod || selectedIdentifierOtpMethod;
+      const resendResult = await requestIdentifierOtp(identifierOtpChallengeToken, nextMethod);
+      setSelectedIdentifierOtpMethod(nextMethod);
+      if (resendResult.maskedTarget) {
+        setIdentifierOtpMaskedTarget(resendResult.maskedTarget);
+      }
+
+      toast({
+        title: t('common.success'),
+        description: resendResult.maskedTarget
+          ? `${t('settings.verificationCodeLabel')}: ${resendResult.maskedTarget}`
+          : t('settings.verificationCodeLabel'),
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast({ title: t('common.error'), description: message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleIdentifierOtpVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!identifierOtpChallengeToken || !identifierOtpCode.trim()) return;
+
+    setIsLoading(true);
+    try {
+      const result = await verifyIdentifierOtp(identifierOtpChallengeToken, identifierOtpCode.trim());
+      applyLoginFlowResult(result);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast({ title: t('common.error'), description: message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTwoFactorVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!twoFactorChallengeToken || !twoFactorCode.trim()) return;
+
+    setIsLoading(true);
+    try {
+      await verifyTwoFactorChallenge(twoFactorChallengeToken, twoFactorCode.trim(), false);
+      setShowTwoFactorModal(false);
+      setTwoFactorCode("");
+      setTwoFactorChallengeToken("");
+      setLocation("/");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast({ title: t('common.error'), description: message, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleOneClickRegister = async () => {
     if (!checkTermsAgreed()) return;
     setIsLoading(true);
@@ -552,85 +681,21 @@ export default function LoginPage() {
     }
   };
 
-  const isSocialRegistrationMethod = (method?: string): boolean => {
-    return typeof method === "string" && method.startsWith("social_");
-  };
-
-  const openPasswordRecoveryForIdentifier = (identifier: string) => {
-    const cleanIdentifier = identifier.trim();
-    if (!cleanIdentifier) {
-      return;
-    }
-
-    setForgotPasswordForm({
-      identifier: cleanIdentifier,
-      newPassword: "",
-      confirmPassword: "",
-    });
-    setResetToken("");
-    setForgotPasswordStep("request");
-    setShowForgotPassword(true);
-    setShowRedirectModal(false);
-    setRedirectInfo(null);
-
-    toast({
-      title: t('auth.forgotPassword'),
-      description: t('auth.resetDesc'),
-    });
-  };
-
   const handleAccountLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!checkTermsAgreed()) return;
     setIsLoading(true);
     try {
-      await loginByAccount(accountLoginForm.accountId, accountLoginForm.password);
-      setLocation("/");
+      const result = await loginByAccount(accountLoginForm.accountId, accountLoginForm.password);
+      applyLoginFlowResult(result);
     } catch (error: unknown) {
-      const err = error as Error & { errorCode?: string; correctMethod?: string };
-      // Handle WRONG_LOGIN_METHOD - auto redirect to correct tab
-      if (err.errorCode === "WRONG_LOGIN_METHOD" && err.correctMethod) {
-        if (isSocialRegistrationMethod(err.correctMethod)) {
-          openPasswordRecoveryForIdentifier(accountLoginForm.accountId);
-          setIsLoading(false);
+      const err = error as Error & { errorCode?: string };
+      if (err.errorCode === "INVALID_CREDENTIALS" && accountLoginForm.accountId.trim()) {
+        const exists = await checkIdentifierExists(accountLoginForm.accountId.trim(), "account");
+        if (exists === false) {
+          setShowAccountNotFoundModal(true);
           return;
         }
-
-        setRedirectInfo({
-          correctMethod: err.correctMethod,
-          maskedHint: "",
-          password: accountLoginForm.password
-        });
-        setShowRedirectModal(true);
-        setIsLoading(false);
-        return;
-      }
-
-      // Handle ACCOUNT_NOT_FOUND - use find-credential to search everywhere
-      if (err.errorCode === "ACCOUNT_NOT_FOUND" && accountLoginForm.accountId) {
-        try {
-          const findRes = await fetchWithCsrf("/api/auth/find-credential", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ identifier: accountLoginForm.accountId }),
-          });
-          const findData = await findRes.json();
-          if (findRes.ok && findData.found) {
-            // User exists but registered via different method
-            setRedirectInfo({
-              correctMethod: findData.correctMethod,
-              maskedHint: findData.maskedHint || "",
-              password: accountLoginForm.password
-            });
-            setShowRedirectModal(true);
-            setIsLoading(false);
-            return;
-          }
-        } catch { }
-        // Account truly doesn't exist
-        setShowAccountNotFoundModal(true);
-        setIsLoading(false);
-        return;
       }
 
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
@@ -651,58 +716,21 @@ export default function LoginPage() {
         setIsLoading(false);
         return;
       }
-      await loginByPhone(phoneClean, phoneLoginForm.password);
-      setLocation("/");
+      const result = await loginByPhone(phoneClean, phoneLoginForm.password);
+      applyLoginFlowResult(result);
     } catch (error: unknown) {
-      const err = error as Error & { errorCode?: string; correctMethod?: string };
-      // Handle WRONG_LOGIN_METHOD - auto redirect to correct tab
-      if (err.errorCode === "WRONG_LOGIN_METHOD" && err.correctMethod) {
-        if (isSocialRegistrationMethod(err.correctMethod)) {
-          openPasswordRecoveryForIdentifier(phoneLoginForm.phone.trim());
-          setIsLoading(false);
+      const err = error as Error & { errorCode?: string };
+      if (err.errorCode === "INVALID_CREDENTIALS" && phoneLoginForm.phone.trim()) {
+        const exists = await checkIdentifierExists(phoneLoginForm.phone.trim(), "phone");
+        if (exists === false) {
+          setPendingRegistration({
+            identifier: phoneLoginForm.phone.trim(),
+            type: "phone",
+            password: phoneLoginForm.password,
+          });
+          setShowCreateAccountModal(true);
           return;
         }
-
-        setRedirectInfo({
-          correctMethod: err.correctMethod,
-          maskedHint: "",
-          password: phoneLoginForm.password
-        });
-        setShowRedirectModal(true);
-        setIsLoading(false);
-        return;
-      }
-
-      // Handle ACCOUNT_NOT_FOUND - use find-credential to search everywhere
-      if (err.errorCode === "ACCOUNT_NOT_FOUND" && phoneLoginForm.phone) {
-        try {
-          const findRes = await fetchWithCsrf("/api/auth/find-credential", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ identifier: phoneLoginForm.phone.trim() }),
-          });
-          const findData = await findRes.json();
-          if (findRes.ok && findData.found) {
-            // User exists but registered via different method
-            setRedirectInfo({
-              correctMethod: findData.correctMethod,
-              maskedHint: findData.maskedHint || "",
-              password: phoneLoginForm.password
-            });
-            setShowRedirectModal(true);
-            setIsLoading(false);
-            return;
-          }
-        } catch { }
-        // Phone not found anywhere - offer to create account
-        setPendingRegistration({
-          identifier: phoneLoginForm.phone.trim(),
-          type: "phone",
-          password: phoneLoginForm.password
-        });
-        setShowCreateAccountModal(true);
-        setIsLoading(false);
-        return;
       }
 
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
@@ -722,58 +750,21 @@ export default function LoginPage() {
         setIsLoading(false);
         return;
       }
-      await loginByEmail(emailLoginForm.username, emailLoginForm.password);
-      setLocation("/");
+      const result = await loginByEmail(emailLoginForm.username, emailLoginForm.password);
+      applyLoginFlowResult(result);
     } catch (error: unknown) {
-      const err = error as Error & { errorCode?: string; correctMethod?: string };
-      // Handle WRONG_LOGIN_METHOD - auto redirect to correct tab
-      if (err.errorCode === "WRONG_LOGIN_METHOD" && err.correctMethod) {
-        if (isSocialRegistrationMethod(err.correctMethod)) {
-          openPasswordRecoveryForIdentifier(emailLoginForm.username.trim());
-          setIsLoading(false);
+      const err = error as Error & { errorCode?: string };
+      if (err.errorCode === "INVALID_CREDENTIALS" && emailLoginForm.username.includes("@")) {
+        const exists = await checkIdentifierExists(emailLoginForm.username.trim(), "email");
+        if (exists === false) {
+          setPendingRegistration({
+            identifier: emailLoginForm.username.trim(),
+            type: "email",
+            password: emailLoginForm.password,
+          });
+          setShowCreateAccountModal(true);
           return;
         }
-
-        setRedirectInfo({
-          correctMethod: err.correctMethod,
-          maskedHint: "",
-          password: emailLoginForm.password
-        });
-        setShowRedirectModal(true);
-        setIsLoading(false);
-        return;
-      }
-
-      // Handle ACCOUNT_NOT_FOUND - use find-credential to search everywhere
-      if (err.errorCode === "ACCOUNT_NOT_FOUND" && emailLoginForm.username.includes("@")) {
-        try {
-          const findRes = await fetchWithCsrf("/api/auth/find-credential", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ identifier: emailLoginForm.username }),
-          });
-          const findData = await findRes.json();
-          if (findRes.ok && findData.found) {
-            // User exists but registered via different method
-            setRedirectInfo({
-              correctMethod: findData.correctMethod,
-              maskedHint: findData.maskedHint || "",
-              password: emailLoginForm.password
-            });
-            setShowRedirectModal(true);
-            setIsLoading(false);
-            return;
-          }
-        } catch { }
-        // Email not found anywhere - offer to create account
-        setPendingRegistration({
-          identifier: emailLoginForm.username,
-          type: "email",
-          password: emailLoginForm.password
-        });
-        setShowCreateAccountModal(true);
-        setIsLoading(false);
-        return;
       }
 
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
@@ -794,22 +785,24 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // Store token with correct key and cache user data
-      localStorage.setItem("pwm_token", data.token);
-      localStorage.setItem("pwm_user_cache", JSON.stringify({
-        data: data.user,
-        etag: "",
-        cachedAt: Date.now()
-      }));
+      if (data.requiresIdentifierOtp === true && typeof data.challengeToken === "string") {
+        setIdentifierOtpChallengeToken(data.challengeToken);
+        const methods = Array.isArray(data.availableMethods)
+          ? data.availableMethods.filter((value: unknown): value is IdentifierOtpMethod => value === "email" || value === "phone")
+          : [];
+        setIdentifierOtpMethods(methods);
+        setSelectedIdentifierOtpMethod(methods[0] || "email");
+        setIdentifierOtpMaskedTarget(typeof data.maskedTarget === "string" ? data.maskedTarget : "");
+        setIdentifierOtpCode("");
+        setShowIdentifierOtpModal(true);
+      }
+
       setShowCreateAccountModal(false);
       setPendingRegistration(null);
       toast({
         title: t('auth.createAccount'),
         description: t('auth.accountCreatedVerify')
       });
-      // Navigate and reload to pick up the new auth state
-      setLocation("/");
-      window.location.reload();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       toast({ title: t('common.error'), description: message, variant: "destructive" });
@@ -1493,6 +1486,106 @@ export default function LoginPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={showIdentifierOtpModal} onOpenChange={setShowIdentifierOtpModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-primary" />
+              {t('settings.verificationCodeLabel')}
+            </DialogTitle>
+            <DialogDescription>
+              {identifierOtpMaskedTarget
+                ? `${t('settings.verificationCodeLabel')}: ${identifierOtpMaskedTarget}`
+                : t('settings.verificationDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleIdentifierOtpVerify} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="identifier-otp-code">{t('settings.verificationCodeLabel')}</Label>
+              <Input
+                id="identifier-otp-code"
+                value={identifierOtpCode}
+                onChange={(e) => setIdentifierOtpCode(e.target.value.replace(/\s+/g, ""))}
+                placeholder={t('settings.otpPlaceholder')}
+                inputMode="numeric"
+                required
+              />
+            </div>
+
+            {identifierOtpMethods.length > 1 && (
+              <div className="space-y-2">
+                <Label>{t('support.chooseContact')}</Label>
+                <div className="flex gap-2">
+                  {identifierOtpMethods.map((method) => (
+                    <Button
+                      key={method}
+                      type="button"
+                      variant={selectedIdentifierOtpMethod === method ? "default" : "outline"}
+                      className="flex-1"
+                      onClick={() => {
+                        void handleIdentifierOtpResend(method);
+                      }}
+                      disabled={isLoading}
+                    >
+                      {method === "email" ? t('auth.email') : t('auth.phone')}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  void handleIdentifierOtpResend(selectedIdentifierOtpMethod);
+                }}
+                disabled={isLoading}
+              >
+                {t('settings.resendCode')}
+              </Button>
+              <Button type="submit" className="flex-1" disabled={isLoading}>
+                {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                {t('settings.verify')}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showTwoFactorModal} onOpenChange={setShowTwoFactorModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-5 h-5 text-primary" />
+              {t('settings.twoFactorAuth')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('settings.twoFactorAuthDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleTwoFactorVerify} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="two-factor-code">{t('settings.twoFactorCode')}</Label>
+              <Input
+                id="two-factor-code"
+                value={twoFactorCode}
+                onChange={(e) => setTwoFactorCode(e.target.value.replace(/\s+/g, ""))}
+                placeholder={t('settings.otpPlaceholder')}
+                inputMode="numeric"
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+              {t('settings.verify')}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showCreateAccountModal} onOpenChange={setShowCreateAccountModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -1583,82 +1676,6 @@ export default function LoginPage() {
               >
                 <Zap className="me-2 h-4 w-4" />
                 {t('auth.quickRegister')}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Smart Redirect Modal - guides user to correct login tab */}
-      <Dialog open={showRedirectModal} onOpenChange={setShowRedirectModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <KeyRound className="w-5 h-5 text-primary" />
-              طريقة تسجيل الدخول غير صحيحة
-            </DialogTitle>
-            <DialogDescription>
-              {redirectInfo?.correctMethod === "account" && "حسابك مسجل عبر رقم الحساب. انتقل لتسجيل الدخول الصحيح."}
-              {redirectInfo?.correctMethod === "phone" && "حسابك مسجل عبر رقم الهاتف. انتقل لتسجيل الدخول الصحيح."}
-              {redirectInfo?.correctMethod === "email" && "حسابك مسجل عبر البريد الإلكتروني. انتقل لتسجيل الدخول الصحيح."}
-              {redirectInfo?.correctMethod === "username" && "حسابك مسجل عبر اسم المستخدم. انتقل لتسجيل الدخول الصحيح."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {redirectInfo?.maskedHint && (
-              <div className="p-4 bg-accent/10 rounded-md border border-accent/20">
-                <p className="text-sm text-center">
-                  <span className="font-semibold">معلومات الحساب: </span>
-                  {redirectInfo.maskedHint}
-                </p>
-              </div>
-            )}
-            <div className="p-4 bg-primary/5 rounded-md border border-primary/20">
-              <p className="text-sm text-center font-medium">
-                {redirectInfo?.correctMethod === "account" && (
-                  <span className="flex items-center justify-center gap-2">
-                    <User className="w-4 h-4" /> استخدم تبويب "رقم الحساب"
-                  </span>
-                )}
-                {redirectInfo?.correctMethod === "phone" && (
-                  <span className="flex items-center justify-center gap-2">
-                    <Smartphone className="w-4 h-4" /> استخدم تبويب "الهاتف"
-                  </span>
-                )}
-                {redirectInfo?.correctMethod === "email" && (
-                  <span className="flex items-center justify-center gap-2">
-                    <Mail className="w-4 h-4" /> استخدم تبويب "البريد"
-                  </span>
-                )}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowRedirectModal(false);
-                  setRedirectInfo(null);
-                }}
-                className="flex-1"
-              >
-                إلغاء
-              </Button>
-              <Button
-                onClick={() => {
-                  const method = redirectInfo?.correctMethod;
-                  setShowRedirectModal(false);
-                  if (method === "account") {
-                    setActiveTab("account");
-                  } else if (method === "phone") {
-                    setActiveTab("phone");
-                  } else if (method === "email") {
-                    setActiveTab("email");
-                  }
-                  setRedirectInfo(null);
-                }}
-                className="flex-1"
-              >
-                انتقل الآن
               </Button>
             </div>
           </div>

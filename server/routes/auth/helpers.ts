@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { activeSessions } from "@shared/schema";
@@ -103,7 +104,7 @@ export function sendSecurityNotification(userId: string, title: string, titleAr:
     message,
     messageAr,
     link: '/settings',
-  }).catch(() => {}); // non-blocking, don't fail login on notification error
+  }).catch(() => { }); // non-blocking, don't fail login on notification error
 }
 
 /** Set JWT as httpOnly secure cookie alongside JSON response */
@@ -146,8 +147,8 @@ export async function createSession(userId: string, token: string, req: Request)
       message: `Logged in from ${deviceInfo} (IP: ${ipStr}).`,
       messageAr: `تم تسجيل الدخول من ${deviceInfo === 'Mobile' ? 'الهاتف' : deviceInfo === 'Tablet' ? 'التابلت' : deviceInfo === 'Desktop' ? 'الكمبيوتر' : 'جهاز غير معروف'} (IP: ${ipStr}).`,
       link: '/settings',
-    }).catch(() => {});
-  } catch {} // non-blocking
+    }).catch(() => { });
+  } catch { } // non-blocking
 }
 
 /** Password strength validator */
@@ -173,17 +174,25 @@ export function validatePasswordStrength(password: string): { valid: boolean; er
 // Account lockout constants
 export const MAX_FAILED_ATTEMPTS = 5;
 export const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("vex_dummy_password_for_timing_equalization", 12);
+
+/**
+ * Equalize login timing for unknown accounts to reduce username/account enumeration via timing.
+ */
+export async function consumeInvalidLoginDelay(password: string): Promise<void> {
+  try {
+    await bcrypt.compare(password || "", DUMMY_PASSWORD_HASH);
+  } catch {
+    // non-blocking
+  }
+}
 
 /** Check if account is locked and handle failed login attempts */
 export async function checkAccountLockout(user: Pick<User, 'id' | 'lockedUntil' | 'failedLoginAttempts'>, res: Response): Promise<boolean> {
   if (user.lockedUntil && new Date() < new Date(user.lockedUntil)) {
-    const remainingMs = new Date(user.lockedUntil).getTime() - Date.now();
-    const remainingMin = Math.ceil(remainingMs / 60000);
-    res.status(423).json({
-      error: `الحساب مقفل مؤقتاً. حاول بعد ${remainingMin} دقيقة`,
-      errorCode: "ACCOUNT_LOCKED",
-      lockedUntil: user.lockedUntil,
-      remainingMinutes: remainingMin
+    res.status(401).json({
+      error: "Invalid credentials",
+      errorCode: "INVALID_CREDENTIALS",
     });
     return true;
   }
@@ -207,7 +216,7 @@ export async function handleFailedLogin(user: Pick<User, 'id' | 'failedLoginAtte
       details: `Failed login attempt #${attempts}`,
       ipAddress: req?.ip || null,
     });
-  } catch {}
+  } catch { }
 
   if (attempts >= MAX_FAILED_ATTEMPTS) {
     updateData.lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
@@ -222,13 +231,11 @@ export async function handleFailedLogin(user: Pick<User, 'id' | 'failedLoginAtte
         details: `Account locked after ${MAX_FAILED_ATTEMPTS} failed attempts. Locked for 15 minutes.`,
         ipAddress: req?.ip || null,
       });
-    } catch {}
+    } catch { }
 
-    res.status(423).json({
-      error: "تم قفل الحساب بسبب محاولات فاشلة متعددة. حاول بعد 15 دقيقة",
-      errorCode: "ACCOUNT_LOCKED",
-      lockedUntil: updateData.lockedUntil,
-      remainingMinutes: 15
+    res.status(401).json({
+      error: "Invalid credentials",
+      errorCode: "INVALID_CREDENTIALS",
     });
 
     sendSecurityNotification(
@@ -245,7 +252,6 @@ export async function handleFailedLogin(user: Pick<User, 'id' | 'failedLoginAtte
   res.status(401).json({
     error: "Invalid credentials",
     errorCode: "INVALID_CREDENTIALS",
-    attemptsRemaining: MAX_FAILED_ATTEMPTS - attempts
   });
 }
 

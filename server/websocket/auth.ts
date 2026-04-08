@@ -92,7 +92,11 @@ export async function handleAuth(ws: AuthenticatedSocket, data: any): Promise<vo
         return;
       }
 
-      const verifiedAdmin = await verifyAdminAccessToken(data.token);
+      const verifiedAdmin = await verifyAdminAccessToken(data.token, {
+        userAgent: ws.userAgent,
+        requireActiveSession: true,
+        updateSessionActivity: true,
+      });
       ws.userId = verifiedAdmin.id;
       ws.role = verifiedAdmin.role;
       ws.username = verifiedAdmin.username;

@@ -12,13 +12,32 @@ interface OneClickResult {
   message: string;
 }
 
+export type IdentifierOtpMethod = "email" | "phone";
+
+export type LoginFlowResult =
+  | { status: "authenticated" }
+  | {
+    status: "identifier_otp_required";
+    challengeToken: string;
+    availableMethods: IdentifierOtpMethod[];
+    maskedTarget: string;
+    expiresIn?: number;
+  }
+  | {
+    status: "two_factor_required";
+    challengeToken: string;
+  };
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (username: string, password: string) => Promise<void>;
-  loginByAccount: (accountId: string, password: string) => Promise<void>;
-  loginByPhone: (phone: string, password: string) => Promise<void>;
-  loginByEmail: (email: string, password: string) => Promise<void>;
+  loginByAccount: (accountId: string, password: string) => Promise<LoginFlowResult>;
+  loginByPhone: (phone: string, password: string) => Promise<LoginFlowResult>;
+  loginByEmail: (email: string, password: string) => Promise<LoginFlowResult>;
+  requestIdentifierOtp: (challengeToken: string, method?: IdentifierOtpMethod) => Promise<{ maskedTarget?: string; expiresIn?: number }>;
+  verifyIdentifierOtp: (challengeToken: string, code: string) => Promise<LoginFlowResult>;
+  verifyTwoFactorChallenge: (challengeToken: string, code: string, isBackupCode?: boolean) => Promise<void>;
   oneClickRegister: (referralCode?: string) => Promise<OneClickResult>;
   confirmOneClickLogin: (user: User, token: string) => void;
   register: (data: RegisterData) => Promise<void>;
@@ -221,7 +240,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearUserCache();
   };
 
-  const loginByAccount = async (accountId: string, password: string) => {
+  const applyAuthenticatedPayload = (data: { user?: User; token?: string }) => {
+    if (!data.user || !data.token) {
+      throw new Error("Authentication payload is incomplete");
+    }
+
+    setUser(data.user);
+    setToken(data.token);
+    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+    sessionStorage.setItem(TOKEN_BACKUP_KEY, data.token);
+    clearUserCache();
+  };
+
+  const parseLoginFlowResult = (data: Record<string, unknown>): LoginFlowResult => {
+    if (data.requiresIdentifierOtp === true && typeof data.challengeToken === "string") {
+      const methods = Array.isArray(data.availableMethods)
+        ? data.availableMethods.filter((value): value is IdentifierOtpMethod => value === "email" || value === "phone")
+        : [];
+
+      return {
+        status: "identifier_otp_required",
+        challengeToken: data.challengeToken,
+        availableMethods: methods,
+        maskedTarget: typeof data.maskedTarget === "string" ? data.maskedTarget : "",
+        expiresIn: typeof data.expiresIn === "number" ? data.expiresIn : undefined,
+      };
+    }
+
+    if (data.requires2FA === true && typeof data.challengeToken === "string") {
+      return {
+        status: "two_factor_required",
+        challengeToken: data.challengeToken,
+      };
+    }
+
+    applyAuthenticatedPayload({
+      user: data.user as User | undefined,
+      token: data.token as string | undefined,
+    });
+
+    return { status: "authenticated" };
+  };
+
+  const loginByAccount = async (accountId: string, password: string): Promise<LoginFlowResult> => {
     const res = await fetchWithCsrf("/api/auth/login-by-account", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -238,14 +299,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await res.json();
-    setUser(data.user);
-    setToken(data.token);
-    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
-    sessionStorage.setItem(TOKEN_BACKUP_KEY, data.token);
-    clearUserCache();
+    return parseLoginFlowResult(data as Record<string, unknown>);
   };
 
-  const loginByPhone = async (phone: string, password: string) => {
+  const loginByPhone = async (phone: string, password: string): Promise<LoginFlowResult> => {
     const res = await fetchWithCsrf("/api/auth/login-by-phone", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -262,14 +319,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await res.json();
-    setUser(data.user);
-    setToken(data.token);
-    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
-    sessionStorage.setItem(TOKEN_BACKUP_KEY, data.token);
-    clearUserCache();
+    return parseLoginFlowResult(data as Record<string, unknown>);
   };
 
-  const loginByEmail = async (email: string, password: string) => {
+  const loginByEmail = async (email: string, password: string): Promise<LoginFlowResult> => {
     const res = await fetchWithCsrf("/api/auth/login-by-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -286,11 +339,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await res.json();
-    setUser(data.user);
-    setToken(data.token);
-    localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
-    sessionStorage.setItem(TOKEN_BACKUP_KEY, data.token);
-    clearUserCache();
+    return parseLoginFlowResult(data as Record<string, unknown>);
+  };
+
+  const requestIdentifierOtp = async (
+    challengeToken: string,
+    method?: IdentifierOtpMethod,
+  ): Promise<{ maskedTarget?: string; expiresIn?: number }> => {
+    const res = await fetchWithCsrf("/api/auth/login-otp/resend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ challengeToken, method }),
+    });
+
+    const data = await res.json().catch(() => ({} as Record<string, unknown>));
+    if (!res.ok) {
+      throw new Error((data.error as string) || "Failed to resend verification code");
+    }
+
+    return {
+      maskedTarget: typeof data.maskedTarget === "string" && data.maskedTarget.length > 0
+        ? data.maskedTarget
+        : undefined,
+      expiresIn: typeof data.expiresIn === "number" ? data.expiresIn : undefined,
+    };
+  };
+
+  const verifyIdentifierOtp = async (challengeToken: string, code: string): Promise<LoginFlowResult> => {
+    const res = await fetchWithCsrf("/api/auth/login-otp/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ challengeToken, code }),
+    });
+
+    const data = await res.json().catch(() => ({} as Record<string, unknown>));
+    if (!res.ok) {
+      throw new Error((data.error as string) || "OTP verification failed");
+    }
+
+    return parseLoginFlowResult(data as Record<string, unknown>);
+  };
+
+  const verifyTwoFactorChallenge = async (challengeToken: string, code: string, isBackupCode: boolean = false): Promise<void> => {
+    const res = await fetchWithCsrf("/api/auth/2fa/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ challengeToken, code, isBackupCode }),
+    });
+
+    const data = await res.json().catch(() => ({} as Record<string, unknown>));
+    if (!res.ok) {
+      throw new Error((data.error as string) || "Two-factor verification failed");
+    }
+
+    applyAuthenticatedPayload({
+      user: data.user as User | undefined,
+      token: data.token as string | undefined,
+    });
   };
 
   const oneClickRegister = async (referralCode?: string): Promise<OneClickResult> => {
@@ -390,6 +495,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginByAccount,
         loginByPhone,
         loginByEmail,
+        requestIdentifierOtp,
+        verifyIdentifierOtp,
+        verifyTwoFactorChallenge,
         oneClickRegister,
         confirmOneClickLogin,
         register,

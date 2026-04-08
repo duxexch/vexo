@@ -88,7 +88,11 @@ export const adminAuthMiddleware = async (req: AdminRequest, res: Response, next
   }
 
   try {
-    const verified = await verifyAdminAccessToken(token);
+    const verified = await verifyAdminAccessToken(token, {
+      userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+      requireActiveSession: true,
+      updateSessionActivity: true,
+    });
     req.admin = { id: verified.id, role: verified.role, username: verified.username };
     next();
   } catch (error) {

@@ -206,10 +206,21 @@ export interface VerifiedAdminToken {
     id: string;
     username: string;
     role: "admin";
+    tokenFingerprint: string;
     payload: JwtAdminPayload;
 }
 
-export async function verifyAdminAccessToken(token: string): Promise<VerifiedAdminToken> {
+export interface VerifyAdminTokenOptions {
+    userAgent?: string;
+    enforceSessionFingerprint?: boolean;
+    requireActiveSession?: boolean;
+    updateSessionActivity?: boolean;
+}
+
+export async function verifyAdminAccessToken(
+    token: string,
+    options: VerifyAdminTokenOptions = {},
+): Promise<VerifiedAdminToken> {
     let decoded: JwtAdminPayload;
     try {
         decoded = jwt.verify(token, JWT_ADMIN_SECRET) as JwtAdminPayload;
@@ -226,6 +237,7 @@ export async function verifyAdminAccessToken(token: string): Promise<VerifiedAdm
         role: users.role,
         username: users.username,
         accountDeletedAt: users.accountDeletedAt,
+        passwordChangedAt: users.passwordChangedAt,
     })
         .from(users)
         .where(eq(users.id, decoded.id))
@@ -244,10 +256,64 @@ export async function verifyAdminAccessToken(token: string): Promise<VerifiedAdm
         throw new AuthVerificationError(403, "Admin account is disabled", "ADMIN_DISABLED");
     }
 
+    if (adminUser.passwordChangedAt && decoded.iat) {
+        const passwordChangedTimestamp = Math.floor(adminUser.passwordChangedAt.getTime() / 1000);
+        if (passwordChangedTimestamp > decoded.iat) {
+            throw new AuthVerificationError(401, "Password changed. Please login again.", "PASSWORD_CHANGED");
+        }
+    }
+
+    const enforceSessionFingerprint = shouldEnforceSessionFingerprint(options.enforceSessionFingerprint);
+    if (enforceSessionFingerprint && decoded.fp) {
+        const currentFingerprint = getSessionFingerprintFromUserAgent(options.userAgent);
+        if (decoded.fp !== currentFingerprint) {
+            throw new AuthVerificationError(401, "Admin session invalid. Please login again.", "SESSION_FINGERPRINT_MISMATCH");
+        }
+    }
+
+    const tokenFingerprint = getTokenFingerprint(token);
+    const requireActiveSession = options.requireActiveSession !== false;
+
+    if (requireActiveSession) {
+        const [session] = await db.select({
+            id: activeSessions.id,
+            expiresAt: activeSessions.expiresAt,
+        })
+            .from(activeSessions)
+            .where(and(
+                eq(activeSessions.userId, decoded.id),
+                eq(activeSessions.tokenFingerprint, tokenFingerprint),
+                eq(activeSessions.isActive, true),
+            ))
+            .limit(1);
+
+        if (!session) {
+            throw new AuthVerificationError(401, "Admin session not active. Please login again.", "SESSION_INACTIVE");
+        }
+
+        if (session.expiresAt <= new Date()) {
+            db.update(activeSessions)
+                .set({ isActive: false })
+                .where(eq(activeSessions.id, session.id))
+                .execute()
+                .catch(() => { });
+            throw new AuthVerificationError(401, "Admin session expired. Please login again.", "SESSION_EXPIRED");
+        }
+
+        if (options.updateSessionActivity) {
+            db.update(activeSessions)
+                .set({ lastActivityAt: new Date() })
+                .where(eq(activeSessions.id, session.id))
+                .execute()
+                .catch(() => { });
+        }
+    }
+
     return {
         id: decoded.id,
         username: decoded.username || adminUser.username,
         role: "admin",
+        tokenFingerprint,
         payload: decoded,
     };
 }
