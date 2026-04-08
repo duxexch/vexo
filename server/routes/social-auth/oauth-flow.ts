@@ -46,6 +46,11 @@ interface OAuthStateReplayRecord {
   expiresAt: number;
 }
 
+interface OAuthStatePopupHintRecord {
+  isPopup: boolean;
+  expiresAt: number;
+}
+
 function classifyUserAgent(userAgent?: string): "android" | "ios" | "windows" | "macos" | "linux" | "unknown" {
   if (!userAgent) return "unknown";
 
@@ -73,6 +78,7 @@ const oauthExchangeReplayStore = new Map<string, OAuthExchangeRecord>();
 const oauthInitiationStore = new Map<string, OAuthInitiationRecord>();
 const oauthInitiationStateToKey = new Map<string, string>();
 const oauthStateReplayStore = new Map<string, OAuthStateReplayRecord>();
+const oauthStatePopupHintStore = new Map<string, OAuthStatePopupHintRecord>();
 
 function buildOAuthInitiationKey(req: Request, platform: string): string {
   const ip = req.ip || "unknown";
@@ -159,6 +165,27 @@ function rememberOAuthStateReplay(state: string, redirectPath: string, userAgent
   });
 }
 
+function rememberOAuthStatePopupHint(state: string, isPopup: boolean) {
+  oauthStatePopupHintStore.set(state, {
+    isPopup,
+    expiresAt: Date.now() + 10 * 60 * 1000,
+  });
+}
+
+function consumeOAuthStatePopupHint(state: string): boolean {
+  const record = oauthStatePopupHintStore.get(state);
+  if (!record) {
+    return false;
+  }
+
+  oauthStatePopupHintStore.delete(state);
+  if (record.expiresAt <= Date.now()) {
+    return false;
+  }
+
+  return record.isPopup;
+}
+
 setInterval(() => {
   const now = Date.now();
   for (const [code, record] of oauthExchangeStore.entries()) {
@@ -183,6 +210,12 @@ setInterval(() => {
   for (const [state, record] of oauthStateReplayStore.entries()) {
     if (record.expiresAt <= now) {
       oauthStateReplayStore.delete(state);
+    }
+  }
+
+  for (const [state, record] of oauthStatePopupHintStore.entries()) {
+    if (record.expiresAt <= now) {
+      oauthStatePopupHintStore.delete(state);
     }
   }
 }, 60_000);
@@ -423,6 +456,7 @@ export function registerOAuthFlowRoutes(app: Express) {
       const { platform } = req.params;
       const requestedRedirectUrl = typeof req.query.redirect === "string" ? req.query.redirect : undefined;
       const redirectUrl = sanitizePostLoginRedirect(requestedRedirectUrl);
+      const isPopupRequest = req.query.popup === "1" || req.query.popup === "true";
 
       const reusableAuthUrl = getReusableOAuthInitiationUrl(req, platform);
       if (reusableAuthUrl) {
@@ -457,6 +491,7 @@ export function registerOAuthFlowRoutes(app: Express) {
 
       // Create state (with PKCE if supported)
       const { state, codeVerifier } = await createOAuthState(platform, redirectUrl);
+      rememberOAuthStatePopupHint(state, isPopupRequest);
 
       // Build authorization URL
       const extraParams: Record<string, string> = {};
@@ -528,9 +563,12 @@ export function registerOAuthFlowRoutes(app: Express) {
       // Verify and consume state (CSRF protection)
       const stateRecord = await verifyAndConsumeState(state);
       if (!stateRecord) {
+        consumeOAuthStatePopupHint(state);
         logOAuthSecurityEvent(req, platform, "oauth_invalid_or_replayed_state");
         return res.redirect(`/login?error=invalid_state&platform=${safePlatform}`);
       }
+
+      const isPopupFlow = consumeOAuthStatePopupHint(state);
 
       clearOAuthInitiationByState(state);
 
@@ -620,7 +658,9 @@ export function registerOAuthFlowRoutes(app: Express) {
 
       const redirect = sanitizePostLoginRedirect(stateRecord.redirectUrl) || "/";
       const exchangeCode = createOAuthExchangeCode({ userId: user.id, redirect, isNew, userAgent });
-      const callbackRedirectPath = `/auth/callback?code=${encodeURIComponent(exchangeCode)}`;
+      const callbackRedirectPath = isPopupFlow
+        ? `/auth/callback?code=${encodeURIComponent(exchangeCode)}&popup=1`
+        : `/auth/callback?code=${encodeURIComponent(exchangeCode)}`;
       rememberOAuthStateReplay(state, callbackRedirectPath, userAgent);
 
       // Redirect to frontend with one-time code (never expose JWT in URL query).

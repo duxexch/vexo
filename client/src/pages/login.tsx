@@ -88,7 +88,7 @@ declare global {
 const OAUTH_EVENT_STORAGE_KEY = "vex_oauth_event";
 
 export default function LoginPage() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const {
     login,
     loginByAccount,
@@ -192,6 +192,56 @@ export default function LoginPage() {
     if (resetLoading) {
       setIsLoading(false);
     }
+  };
+
+  const sanitizeRelativeRedirect = (candidate?: string | null): string | undefined => {
+    if (!candidate) {
+      return undefined;
+    }
+
+    const trimmed = candidate.trim();
+    if (!trimmed || trimmed.length > 2048 || !trimmed.startsWith("/") || trimmed.startsWith("//")) {
+      return undefined;
+    }
+
+    if (/[\r\n]/.test(trimmed)) {
+      return undefined;
+    }
+
+    try {
+      const normalized = new URL(trimmed, window.location.origin);
+      return `${normalized.pathname}${normalized.search}${normalized.hash}`;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const resolvePostLoginRedirect = (): string => {
+    const queryParams = new URLSearchParams(window.location.search);
+    const explicitRedirect = sanitizeRelativeRedirect(queryParams.get("redirect"));
+    if (explicitRedirect && !explicitRedirect.startsWith("/auth/callback")) {
+      return explicitRedirect;
+    }
+
+    const currentPath = sanitizeRelativeRedirect(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+    if (!currentPath || currentPath === "/login" || currentPath.startsWith("/login?") || currentPath.startsWith("/auth/callback")) {
+      return "/";
+    }
+
+    return currentPath;
+  };
+
+  const resolveOAuthEventRedirect = (payload: { redirect?: unknown; isNew?: unknown }): string => {
+    if (payload.isNew === true) {
+      return "/profile?setup=true";
+    }
+
+    const redirect = sanitizeRelativeRedirect(typeof payload.redirect === "string" ? payload.redirect : undefined);
+    if (!redirect || redirect.startsWith("/auth/callback") || redirect === "/login" || redirect.startsWith("/login?")) {
+      return "/";
+    }
+
+    return redirect;
   };
 
   const beginSocialLoginAttempt = (platformName: string): boolean => {
@@ -368,7 +418,13 @@ export default function LoginPage() {
         return;
       }
 
-      const res = await fetch(`/api/auth/social/${platform.name}`);
+      const postLoginRedirect = resolvePostLoginRedirect();
+      const startParams = new URLSearchParams({ redirect: postLoginRedirect });
+      if (!Capacitor.isNativePlatform()) {
+        startParams.set("popup", "1");
+      }
+
+      const res = await fetch(`/api/auth/social/${platform.name}?${startParams.toString()}`);
       const data = await res.json();
 
       if (!data.url) {
@@ -466,7 +522,7 @@ export default function LoginPage() {
       }
     };
 
-    const handleOAuthSignal = async (payload: { type?: string; reason?: string; ts?: number }) => {
+    const handleOAuthSignal = async (payload: { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean }) => {
       if (typeof payload.ts === "number" && payload.ts <= lastOAuthEventTsRef.current) {
         return;
       }
@@ -476,6 +532,7 @@ export default function LoginPage() {
       }
 
       if (payload.type === "vex_oauth_success") {
+        const redirectTarget = resolveOAuthEventRedirect(payload);
         if (socialPopupRef.current && !socialPopupRef.current.closed) {
           try {
             socialPopupRef.current.close();
@@ -487,7 +544,7 @@ export default function LoginPage() {
         clearSocialLoginLock(false);
         await refreshUser();
         setIsLoading(false);
-        window.location.replace("/");
+        window.location.replace(redirectTarget);
         return;
       }
 
@@ -510,7 +567,7 @@ export default function LoginPage() {
         return;
       }
 
-      await handleOAuthSignal(event.data as { type?: string; reason?: string; ts?: number });
+      await handleOAuthSignal(event.data as { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean });
     };
 
     const onStorage = async (event: StorageEvent) => {
@@ -519,7 +576,7 @@ export default function LoginPage() {
       }
 
       try {
-        const payload = JSON.parse(event.newValue) as { type?: string; reason?: string; ts?: number };
+        const payload = JSON.parse(event.newValue) as { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean };
         await handleOAuthSignal(payload);
       } catch {
         // Ignore malformed storage payloads.
@@ -541,7 +598,7 @@ export default function LoginPage() {
         socialPopupWatcherRef.current = null;
       }
     };
-  }, [dir, refreshUser, setLocation, t, toast]);
+  }, [dir, location, refreshUser, setLocation, t, toast]);
 
   const checkTermsAgreed = () => {
     if (!agreedToTerms) {

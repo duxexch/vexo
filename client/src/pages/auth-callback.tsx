@@ -8,6 +8,8 @@ type OAuthEventType = "vex_oauth_success" | "vex_oauth_error";
 type OAuthEventPayload = {
   type: OAuthEventType;
   reason?: string;
+  redirect?: string;
+  isNew?: boolean;
   ts: number;
 };
 
@@ -18,18 +20,57 @@ type OAuthEventPayload = {
 export default function AuthCallbackPage() {
   const [, setLocation] = useLocation();
 
-  const isPopupContext = () => window.name === "vex_social_auth" || Boolean(window.opener);
+  const sanitizeRelativeRedirect = (candidate?: string | null): string | undefined => {
+    if (!candidate) {
+      return undefined;
+    }
 
-  const emitOAuthEvent = (type: OAuthEventType, reason?: string) => {
-    const payload: OAuthEventPayload = {
-      type,
-      reason,
+    const trimmed = candidate.trim();
+    if (!trimmed || trimmed.length > 2048 || !trimmed.startsWith("/") || trimmed.startsWith("//")) {
+      return undefined;
+    }
+
+    if (/[\r\n]/.test(trimmed)) {
+      return undefined;
+    }
+
+    try {
+      const normalized = new URL(trimmed, window.location.origin);
+      return `${normalized.pathname}${normalized.search}${normalized.hash}`;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const resolveSuccessRedirect = (rawRedirect?: unknown, isNew?: unknown): string => {
+    if (isNew === true) {
+      return "/profile?setup=true";
+    }
+
+    const sanitized = sanitizeRelativeRedirect(typeof rawRedirect === "string" ? rawRedirect : undefined);
+    if (!sanitized || sanitized.startsWith("/auth/callback")) {
+      return "/";
+    }
+
+    return sanitized;
+  };
+
+  const hasPopupHint = () => {
+    const popupHint = new URLSearchParams(window.location.search).get("popup");
+    return popupHint === "1" || popupHint === "true";
+  };
+
+  const isPopupContext = () => hasPopupHint() || window.name === "vex_social_auth" || Boolean(window.opener);
+
+  const emitOAuthEvent = (payload: Omit<OAuthEventPayload, "ts">) => {
+    const fullPayload: OAuthEventPayload = {
+      ...payload,
       ts: Date.now(),
     };
 
     if (window.opener && !window.opener.closed) {
       try {
-        window.opener.postMessage(payload, window.location.origin);
+        window.opener.postMessage(fullPayload, window.location.origin);
       } catch {
         // Ignore cross-window notification failures.
       }
@@ -37,7 +78,7 @@ export default function AuthCallbackPage() {
 
     // Fallback channel for cases where opener gets detached during provider redirects.
     try {
-      localStorage.setItem(OAUTH_EVENT_STORAGE_KEY, JSON.stringify(payload));
+      localStorage.setItem(OAUTH_EVENT_STORAGE_KEY, JSON.stringify(fullPayload));
     } catch {
       // Ignore storage failures (private mode/quota/etc).
     }
@@ -48,14 +89,30 @@ export default function AuthCallbackPage() {
       return false;
     }
 
-    window.close();
+    const attemptClose = () => {
+      try {
+        window.close();
+      } catch {
+        // Ignore close failures; we retry and then fallback.
+      }
+
+      // Some browsers only allow close after a _self context touch.
+      try {
+        window.open("", "_self");
+        window.close();
+      } catch {
+        // Ignore fallback close failures.
+      }
+    };
+
+    attemptClose();
 
     // If browser blocks closing, continue in this tab as a safe fallback.
     window.setTimeout(() => {
       if (!window.closed) {
-        setLocation(fallbackPath);
+        window.location.replace(fallbackPath);
       }
-    }, 150);
+    }, 250);
 
     return true;
   };
@@ -72,14 +129,16 @@ export default function AuthCallbackPage() {
 
       if (code) {
         const exchangeGuardKey = `vex_oauth_exchange_${code}`;
+        const exchangeRedirectKey = `${exchangeGuardKey}_redirect`;
         const previousGuardState = sessionStorage.getItem(exchangeGuardKey);
 
         if (previousGuardState === "done") {
-          emitOAuthEvent("vex_oauth_success");
-          if (closePopupOrFallback("/")) {
+          const guardedRedirect = resolveSuccessRedirect(sessionStorage.getItem(exchangeRedirectKey), false);
+          emitOAuthEvent({ type: "vex_oauth_success", redirect: guardedRedirect });
+          if (closePopupOrFallback(guardedRedirect)) {
             return;
           }
-          setLocation("/");
+          window.location.replace(guardedRedirect);
           return;
         }
 
@@ -125,7 +184,7 @@ export default function AuthCallbackPage() {
 
           if (!res.ok) {
             sessionStorage.removeItem(exchangeGuardKey);
-            emitOAuthEvent("vex_oauth_error", "oauth_exchange_failed");
+            emitOAuthEvent({ type: "vex_oauth_error", reason: "oauth_exchange_failed" });
             if (closePopupOrFallback("/login?error=oauth_exchange_failed")) {
               return;
             }
@@ -136,7 +195,7 @@ export default function AuthCallbackPage() {
           const data = await res.json();
           if (!data?.token) {
             sessionStorage.removeItem(exchangeGuardKey);
-            emitOAuthEvent("vex_oauth_error", "no_token");
+            emitOAuthEvent({ type: "vex_oauth_error", reason: "no_token" });
             if (closePopupOrFallback("/login?error=no_token")) {
               return;
             }
@@ -146,22 +205,22 @@ export default function AuthCallbackPage() {
 
           localStorage.setItem("pwm_token", data.token);
           sessionStorage.setItem(exchangeGuardKey, "done");
+          const successRedirect = resolveSuccessRedirect(data?.redirect, data?.isNew);
+          sessionStorage.setItem(exchangeRedirectKey, successRedirect);
 
-          emitOAuthEvent("vex_oauth_success");
-          if (closePopupOrFallback("/")) {
+          emitOAuthEvent({
+            type: "vex_oauth_success",
+            redirect: successRedirect,
+            isNew: data?.isNew === true,
+          });
+          if (closePopupOrFallback(successRedirect)) {
             return;
           }
-
-          if (data.isNew === true) {
-            setLocation("/profile?setup=true");
-            return;
-          }
-
-          setLocation(typeof data.redirect === "string" && data.redirect.length > 0 ? data.redirect : "/");
+          window.location.replace(successRedirect);
           return;
         } catch {
           sessionStorage.removeItem(exchangeGuardKey);
-          emitOAuthEvent("vex_oauth_error", "oauth_exchange_failed");
+          emitOAuthEvent({ type: "vex_oauth_error", reason: "oauth_exchange_failed" });
           if (closePopupOrFallback("/login?error=oauth_exchange_failed")) {
             return;
           }
@@ -172,21 +231,21 @@ export default function AuthCallbackPage() {
 
       if (legacyToken) {
         localStorage.setItem("pwm_token", legacyToken);
+        const legacyDestination = resolveSuccessRedirect(legacyRedirect, legacyIsNew);
 
-        emitOAuthEvent("vex_oauth_success");
-        if (closePopupOrFallback("/")) {
+        emitOAuthEvent({
+          type: "vex_oauth_success",
+          redirect: legacyDestination,
+          isNew: legacyIsNew,
+        });
+        if (closePopupOrFallback(legacyDestination)) {
           return;
         }
-
-        if (legacyIsNew) {
-          setLocation("/profile?setup=true");
-          return;
-        }
-        setLocation(legacyRedirect);
+        window.location.replace(legacyDestination);
         return;
       }
 
-      emitOAuthEvent("vex_oauth_error", "no_token");
+      emitOAuthEvent({ type: "vex_oauth_error", reason: "no_token" });
       if (closePopupOrFallback("/login?error=no_token")) {
         return;
       }
