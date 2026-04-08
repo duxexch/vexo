@@ -1,9 +1,80 @@
 import { WebSocket } from "ws";
 import { db } from "../db";
-import { gameMatches } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { challenges, gameMatches, liveGameSessions } from "@shared/schema";
+import { desc, eq } from "drizzle-orm";
 import type { AuthenticatedSocket } from "./shared";
 import { voiceRooms } from "./shared";
+
+function isNonEmptyId(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function toUniqueParticipantIds(values: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(values.filter(isNonEmptyId)));
+}
+
+async function resolveVoiceParticipantIds(roomId: string, userId: string): Promise<string[] | null> {
+  const [match] = await db
+    .select({
+      player1Id: gameMatches.player1Id,
+      player2Id: gameMatches.player2Id,
+    })
+    .from(gameMatches)
+    .where(eq(gameMatches.id, roomId))
+    .limit(1);
+
+  if (match) {
+    return toUniqueParticipantIds([match.player1Id, match.player2Id]);
+  }
+
+  const [challenge] = await db
+    .select({
+      player1Id: challenges.player1Id,
+      player2Id: challenges.player2Id,
+      player3Id: challenges.player3Id,
+      player4Id: challenges.player4Id,
+    })
+    .from(challenges)
+    .where(eq(challenges.id, roomId))
+    .limit(1);
+
+  if (!challenge) {
+    return null;
+  }
+
+  let participantIds = toUniqueParticipantIds([
+    challenge.player1Id,
+    challenge.player2Id,
+    challenge.player3Id,
+    challenge.player4Id,
+  ]);
+
+  // Challenge seating can lag in the challenge row during reconnect windows.
+  if (!participantIds.includes(userId)) {
+    const [liveSession] = await db
+      .select({
+        player1Id: liveGameSessions.player1Id,
+        player2Id: liveGameSessions.player2Id,
+        player3Id: liveGameSessions.player3Id,
+        player4Id: liveGameSessions.player4Id,
+      })
+      .from(liveGameSessions)
+      .where(eq(liveGameSessions.challengeId, roomId))
+      .orderBy(desc(liveGameSessions.createdAt))
+      .limit(1);
+
+    if (liveSession) {
+      participantIds = toUniqueParticipantIds([
+        liveSession.player1Id,
+        liveSession.player2Id,
+        liveSession.player3Id,
+        liveSession.player4Id,
+      ]);
+    }
+  }
+
+  return participantIds;
+}
 
 /**
  * Handle voice chat/WebRTC signaling message types:
@@ -14,10 +85,20 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
   if (data.type === "voice_join" && ws.userId) {
     const { matchId } = data;
 
-    // Verify user is participant in this match
-    const [match] = await db.select().from(gameMatches).where(eq(gameMatches.id, matchId));
-    if (!match || (match.player1Id !== ws.userId && match.player2Id !== ws.userId)) {
+    if (typeof matchId !== "string" || matchId.length === 0) {
+      ws.send(JSON.stringify({ type: "voice_error", error: "Invalid room identifier" }));
+      return;
+    }
+
+    const participantIds = await resolveVoiceParticipantIds(matchId, ws.userId);
+    if (!participantIds || !participantIds.includes(ws.userId)) {
       ws.send(JSON.stringify({ type: "voice_error", error: "Not authorized for this match" }));
+      return;
+    }
+
+    // Current signaling client is single-peer; keep voice limited to head-to-head rooms.
+    if (participantIds.length !== 2) {
+      ws.send(JSON.stringify({ type: "voice_error", error: "Voice chat is currently available for 2-player games only" }));
       return;
     }
 
@@ -28,10 +109,12 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
     voiceRooms.get(matchId)!.set(ws.userId, ws);
 
     // Notify other participant that peer joined
-    const otherPlayerId = match.player1Id === ws.userId ? match.player2Id : match.player1Id;
-    const otherPlayerRoom = voiceRooms.get(matchId)?.get(otherPlayerId);
-    if (otherPlayerRoom && otherPlayerRoom.readyState === WebSocket.OPEN) {
-      otherPlayerRoom.send(JSON.stringify({ type: "voice_peer_joined", matchId }));
+    for (const participantId of participantIds) {
+      if (participantId === ws.userId) continue;
+      const participantSocket = voiceRooms.get(matchId)?.get(participantId);
+      if (participantSocket && participantSocket.readyState === WebSocket.OPEN) {
+        participantSocket.send(JSON.stringify({ type: "voice_peer_joined", matchId }));
+      }
     }
 
     ws.send(JSON.stringify({ type: "voice_joined", matchId }));

@@ -1688,7 +1688,7 @@ export default function ChallengeGamePage() {
                 <span className="text-sm">{gameSession?.spectatorCount || 0}</span>
               </div>
 
-              {isPlayer && (
+              {isPlayer && challenge.requiredPlayers === 2 && (
                 <VoiceChat
                   challengeId={challengeId!}
                   isEnabled={isVoiceEnabled}
