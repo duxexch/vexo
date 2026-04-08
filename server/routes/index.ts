@@ -30,6 +30,7 @@ import { authMiddleware } from "./middleware";
 
 export function registerModularRoutes(app: Express): void {
   registerHealthRoutes(app);
+  registerSocialRoutes(app);
   registerUsersRoutes(app);
   registerGamesRoutes(app);
   registerTransactionUserRoutes(app);
@@ -52,7 +53,6 @@ export function registerModularRoutes(app: Express): void {
   registerSecurityRoutes(app);
   registerP2PProfileRoutes(app);
   registerGiftsRoutes(app);
-  registerSocialRoutes(app);
   registerChatRoutes(app);
   registerMatchmakingRoutes(app);
   registerGameConfigRoutes(app);

@@ -89,6 +89,7 @@ export async function searchUsers(query: string, excludeUserId: string, options:
   const whereConditions = [
     ne(users.id, excludeUserId),
     eq(users.status, "active"),
+    eq(users.stealthMode, false),
     or(
       ilike(users.username, searchQuery),
       ilike(users.accountId, searchQuery),

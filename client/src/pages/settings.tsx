@@ -27,6 +27,7 @@ import { User, Shield, Settings2, Loader2, Monitor, Smartphone, Globe, Trash2, L
 import { BlockedMutedSettings } from "@/components/BlockedMutedSettings";
 import { useSoundEffects } from "@/hooks/use-sound-effects";
 import { format } from "date-fns";
+import QRCode from "qrcode";
 
 const profileSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -36,6 +37,24 @@ const profileSchema = z.object({
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
+
+type ProfileSecurityMethod = "two_factor" | "email" | "phone";
+
+type UpdateProfilePayload = ProfileFormValues & {
+  securityMethod?: ProfileSecurityMethod;
+  securityCode?: string;
+};
+
+type UpdateProfileError = Error & {
+  code?: string;
+  allowedMethods?: ProfileSecurityMethod[];
+};
+
+const PROFILE_SECURITY_METHODS: ProfileSecurityMethod[] = ["two_factor", "email", "phone"];
+
+function isProfileSecurityMethod(value: unknown): value is ProfileSecurityMethod {
+  return typeof value === "string" && PROFILE_SECURITY_METHODS.includes(value as ProfileSecurityMethod);
+}
 
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
@@ -120,6 +139,12 @@ function ProfileSection() {
 
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [pendingSecureUpdate, setPendingSecureUpdate] = useState<ProfileFormValues | null>(null);
+  const [securityAllowedMethods, setSecurityAllowedMethods] = useState<ProfileSecurityMethod[]>([]);
+  const [selectedSecurityMethod, setSelectedSecurityMethod] = useState<ProfileSecurityMethod>("two_factor");
+  const [securityCode, setSecurityCode] = useState("");
+  const [isSendingSecurityCode, setIsSendingSecurityCode] = useState(false);
+  const [securityOtpSent, setSecurityOtpSent] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -133,25 +158,139 @@ function ProfileSection() {
     },
   });
 
+  const extractProfileValues = (payload: UpdateProfilePayload): ProfileFormValues => ({
+    firstName: payload.firstName || "",
+    lastName: payload.lastName || "",
+    email: payload.email || "",
+    phone: payload.phone || "",
+  });
+
+  const resetSecurityChallenge = () => {
+    setPendingSecureUpdate(null);
+    setSecurityAllowedMethods([]);
+    setSelectedSecurityMethod("two_factor");
+    setSecurityCode("");
+    setSecurityOtpSent(false);
+  };
+
+  const getSecurityMethodLabel = (method: ProfileSecurityMethod) => {
+    if (method === "two_factor") return t("settings.twoFactorAuth") || "2FA";
+    if (method === "email") return t("settings.contactTypeEmail") || "Email";
+    return t("settings.contactTypePhone") || "Phone";
+  };
+
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: ProfileFormValues) => {
+    mutationFn: async (data: UpdateProfilePayload) => {
       const res = await fetch("/api/user/profile", {
         method: "PATCH",
         headers,
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to update profile");
-      return res.json();
+
+      const responseData = await res.json().catch(() => null) as Record<string, unknown> | null;
+      if (!res.ok) {
+        const error = new Error(
+          typeof responseData?.error === "string" ? responseData.error : "Failed to update profile"
+        ) as UpdateProfileError;
+        if (typeof responseData?.errorCode === "string") {
+          error.code = responseData.errorCode;
+        }
+        if (Array.isArray(responseData?.allowedMethods)) {
+          error.allowedMethods = responseData.allowedMethods.filter(isProfileSecurityMethod);
+        }
+        throw error;
+      }
+
+      return responseData;
     },
     onSuccess: (data) => {
-      updateUser(data);
+      updateUser(data as Parameters<typeof updateUser>[0]);
+      resetSecurityChallenge();
       toast({ title: t("common.success"), description: t("settings.profileUpdated") });
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     },
-    onError: () => {
+    onError: (error: unknown, variables: UpdateProfilePayload) => {
+      const typedError = error as UpdateProfileError;
+
+      if (typedError.code === "SECURITY_VERIFICATION_REQUIRED") {
+        const allowedMethods = Array.isArray(typedError.allowedMethods)
+          ? typedError.allowedMethods.filter(isProfileSecurityMethod)
+          : [];
+        const nextAllowedMethods: ProfileSecurityMethod[] = allowedMethods.length > 0
+          ? allowedMethods
+          : ["email", "phone"];
+        const preferredMethod: ProfileSecurityMethod = nextAllowedMethods.includes("two_factor")
+          ? "two_factor"
+          : nextAllowedMethods[0];
+
+        setPendingSecureUpdate(extractProfileValues(variables));
+        setSecurityAllowedMethods(nextAllowedMethods);
+        setSelectedSecurityMethod(preferredMethod);
+        setSecurityCode("");
+        setSecurityOtpSent(false);
+
+        toast({
+          title: t("settings.security") || "Security",
+          description: t("settings.verificationDescription"),
+        });
+        return;
+      }
+
       toast({ title: t("common.error"), description: t("settings.profileUpdateFailed"), variant: "destructive" });
     },
   });
+
+  const handleSendSecurityCode = async () => {
+    if (!pendingSecureUpdate) return;
+    if (selectedSecurityMethod !== "email" && selectedSecurityMethod !== "phone") return;
+
+    const contactValue = selectedSecurityMethod === "email" ? user?.email : user?.phone;
+    if (!contactValue) {
+      toast({ title: t("common.error"), description: t("settings.profileUpdateFailed"), variant: "destructive" });
+      return;
+    }
+
+    setIsSendingSecurityCode(true);
+    try {
+      const res = await fetch("/api/auth/otp/send", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ contactType: selectedSecurityMethod, contactValue }),
+      });
+
+      const data = await res.json().catch(() => null) as { error?: string; message?: string } | null;
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to send security code");
+      }
+
+      setSecurityOtpSent(true);
+      toast({
+        title: t("common.success"),
+        description: data?.message || t("settings.otpSent"),
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : t("settings.profileUpdateFailed");
+      toast({ title: t("common.error"), description: message, variant: "destructive" });
+    } finally {
+      setIsSendingSecurityCode(false);
+    }
+  };
+
+  const handleProfileSubmit = (data: ProfileFormValues) => {
+    resetSecurityChallenge();
+    updateProfileMutation.mutate(data);
+  };
+
+  const handleConfirmSecureProfileUpdate = () => {
+    if (!pendingSecureUpdate) return;
+    if (!selectedSecurityMethod || securityCode.trim().length < 4) return;
+
+    updateProfileMutation.mutate({
+      ...pendingSecureUpdate,
+      securityMethod: selectedSecurityMethod,
+      securityCode: securityCode.trim(),
+    });
+  };
 
   const convertToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -314,7 +453,7 @@ function ProfileSection() {
           </div>
         </div>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((data) => updateProfileMutation.mutate(data))} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleProfileSubmit)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -401,6 +540,93 @@ function ProfileSection() {
               {updateProfileMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
               {t("common.save")}
             </Button>
+
+            {pendingSecureUpdate && securityAllowedMethods.length > 0 && (
+              <div className="space-y-4 rounded-md border border-amber-500/30 bg-amber-500/10 p-4" data-testid="profile-security-challenge">
+                <div className="flex items-start gap-2">
+                  <ShieldCheck className="h-4 w-4 text-amber-500 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">{t("settings.security")}</p>
+                    <p className="text-xs text-muted-foreground">{t("settings.verificationDescription")}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {securityAllowedMethods.map((method) => (
+                    <Button
+                      key={method}
+                      type="button"
+                      variant={selectedSecurityMethod === method ? "default" : "outline"}
+                      onClick={() => {
+                        setSelectedSecurityMethod(method);
+                        setSecurityCode("");
+                        setSecurityOtpSent(false);
+                      }}
+                      data-testid={`button-profile-security-method-${method}`}
+                    >
+                      {getSecurityMethodLabel(method)}
+                    </Button>
+                  ))}
+                </div>
+
+                {(selectedSecurityMethod === "email" || selectedSecurityMethod === "phone") && (
+                  <div className="space-y-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSendSecurityCode}
+                      disabled={isSendingSecurityCode}
+                      data-testid="button-send-profile-security-otp"
+                    >
+                      {isSendingSecurityCode && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                      {t("settings.resendCode")}
+                    </Button>
+                    {securityOtpSent && (
+                      <p className="text-xs text-muted-foreground">{t("settings.otpSent")}</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>
+                    {selectedSecurityMethod === "two_factor"
+                      ? t("settings.twoFactorCode")
+                      : t("settings.verificationCodeLabel")}
+                  </Label>
+                  <Input
+                    value={securityCode}
+                    onChange={(e) => setSecurityCode(e.target.value)}
+                    placeholder={t("settings.otpPlaceholder")}
+                    inputMode="numeric"
+                    maxLength={12}
+                    data-testid="input-profile-security-code"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={resetSecurityChallenge}
+                    disabled={updateProfileMutation.isPending}
+                    className="flex-1"
+                    data-testid="button-cancel-profile-security"
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleConfirmSecureProfileUpdate}
+                    disabled={updateProfileMutation.isPending || securityCode.trim().length < 4}
+                    className="flex-1"
+                    data-testid="button-confirm-profile-security"
+                  >
+                    {updateProfileMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                    {t("common.confirm")}
+                  </Button>
+                </div>
+              </div>
+            )}
           </form>
         </Form>
       </CardContent>
@@ -1147,6 +1373,7 @@ function SecuritySection() {
   const headers = useAuthHeaders();
 
   const [twoFactorSetupData, setTwoFactorSetupData] = useState<TwoFactorSetupResponse | null>(null);
+  const [twoFactorQrDataUrl, setTwoFactorQrDataUrl] = useState<string | null>(null);
   const [twoFactorSetupCode, setTwoFactorSetupCode] = useState("");
   const [newBackupCodes, setNewBackupCodes] = useState<string[]>([]);
   const [disableTwoFactorPassword, setDisableTwoFactorPassword] = useState("");
@@ -1154,6 +1381,36 @@ function SecuritySection() {
 
   const normalizedEmail = (user?.email || "").trim().toLowerCase();
   const hasLinkedGmail = normalizedEmail.endsWith("@gmail.com") || normalizedEmail.endsWith("@googlemail.com");
+
+  useEffect(() => {
+    let active = true;
+    const otpauthUri = twoFactorSetupData?.otpauthUri;
+
+    if (!otpauthUri) {
+      setTwoFactorQrDataUrl(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    QRCode.toDataURL(otpauthUri, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 220,
+    }).then((qrDataUrl) => {
+      if (active) {
+        setTwoFactorQrDataUrl(qrDataUrl);
+      }
+    }).catch(() => {
+      if (active) {
+        setTwoFactorQrDataUrl(null);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [twoFactorSetupData?.otpauthUri]);
 
   const { data: twoFactorStatus, isLoading: twoFactorStatusLoading } = useQuery<TwoFactorStatus>({
     queryKey: ["/api/auth/2fa/status"],
@@ -1181,6 +1438,7 @@ function SecuritySection() {
     },
     onSuccess: (data) => {
       setTwoFactorSetupData(data);
+      setTwoFactorQrDataUrl(null);
       setTwoFactorSetupCode("");
       setNewBackupCodes([]);
       toast({ title: t("common.success"), description: t("settings.twoFactorSetupReady") });
@@ -1205,6 +1463,7 @@ function SecuritySection() {
     },
     onSuccess: (data) => {
       setTwoFactorSetupData(null);
+      setTwoFactorQrDataUrl(null);
       setTwoFactorSetupCode("");
       setNewBackupCodes(data.backupCodes || []);
       queryClient.invalidateQueries({ queryKey: ["/api/auth/2fa/status"] });
@@ -1508,21 +1767,27 @@ function SecuritySection() {
                 <div className="space-y-4 rounded-lg border p-4">
                   <p className="text-sm text-muted-foreground">{t("settings.twoFactorSetupStep1")}</p>
 
+                  <div className="rounded-md border bg-background/30 p-3">
+                    <div className="mx-auto flex min-h-[220px] w-[220px] items-center justify-center rounded-md bg-background p-2">
+                      {twoFactorQrDataUrl ? (
+                        <img
+                          src={twoFactorQrDataUrl}
+                          alt={t("settings.twoFactorAuth")}
+                          className="h-[200px] w-[200px]"
+                          data-testid="img-two-factor-qr"
+                        />
+                      ) : (
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <Label>{t("settings.twoFactorSecret")}</Label>
                     <Input
                       value={twoFactorSetupData.secret}
                       readOnly
                       data-testid="input-two-factor-secret"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>{t("settings.twoFactorSetupUri")}</Label>
-                    <Input
-                      value={twoFactorSetupData.otpauthUri}
-                      readOnly
-                      data-testid="input-two-factor-uri"
                     />
                   </div>
 
@@ -1552,6 +1817,7 @@ function SecuritySection() {
                       variant="outline"
                       onClick={() => {
                         setTwoFactorSetupData(null);
+                        setTwoFactorQrDataUrl(null);
                         setTwoFactorSetupCode("");
                       }}
                       data-testid="button-two-factor-cancel-setup"

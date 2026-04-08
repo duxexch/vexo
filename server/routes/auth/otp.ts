@@ -13,6 +13,11 @@ import { getErrorMessage, IS_DEV_MODE } from "./helpers";
 const OTP_RESEND_COOLDOWN_SECONDS = 5 * 60;
 
 export function registerOtpRoutes(app: Express) {
+  const normalizeContactValue = (contactType: "email" | "phone", value: string | null | undefined): string => {
+    const normalized = String(value || "").trim();
+    return contactType === "email" ? normalized.toLowerCase() : normalized;
+  };
+
   // Send OTP for verification
   app.post("/api/auth/otp/send", authMiddleware, otpRateLimiter, async (req: AuthRequest, res: Response) => {
     try {
@@ -26,6 +31,26 @@ export function registerOtpRoutes(app: Express) {
       if (!["email", "phone"].includes(contactType)) {
         return res.status(400).json({ error: "Invalid contact type" });
       }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const expectedContactValue = contactType === "email" ? user.email : user.phone;
+      if (!expectedContactValue) {
+        return res.status(400).json({ error: "No contact value found for the selected type" });
+      }
+
+      const normalizedExpected = normalizeContactValue(contactType, expectedContactValue);
+      const normalizedRequested = normalizeContactValue(contactType, contactValue);
+      if (normalizedExpected !== normalizedRequested) {
+        return res.status(400).json({ error: "Contact value mismatch. Refresh your profile and try again." });
+      }
+
+      const effectiveContactValue = contactType === "email"
+        ? normalizedExpected
+        : String(expectedContactValue).trim();
 
       const [latestOtp] = await db.select({ createdAt: otpVerifications.createdAt })
         .from(otpVerifications)
@@ -81,7 +106,7 @@ export function registerOtpRoutes(app: Express) {
       await db.insert(otpVerifications).values({
         userId,
         contactType,
-        contactValue,
+        contactValue: effectiveContactValue,
         codeHash,
         expiresAt,
         attempts: 0,
@@ -122,7 +147,7 @@ export function registerOtpRoutes(app: Express) {
       // Deliver OTP via email or SMS
       if (contactType === "email") {
         const delivered = await sendEmail({
-          to: contactValue,
+          to: effectiveContactValue,
           subject: "VEX - رمز التحقق",
           text: `رمز التحقق الخاص بك: ${otpCode}\nصالح لمدة ${otpExpiryMinutes} دقيقة`,
           html: buildOtpEmailHtml(otpCode, otpExpiryMinutes),
@@ -136,7 +161,7 @@ export function registerOtpRoutes(app: Express) {
         }
       } else if (contactType === "phone") {
         const delivered = await sendSms({
-          to: contactValue,
+          to: effectiveContactValue,
           message: buildOtpSmsMessage(otpCode, otpExpiryMinutes),
         });
 
@@ -149,12 +174,12 @@ export function registerOtpRoutes(app: Express) {
       }
 
       // Mask the contact value for response
-      let maskedValue = contactValue;
+      let maskedValue = effectiveContactValue;
       if (contactType === "email") {
-        const [name, domain] = contactValue.split("@");
+        const [name, domain] = effectiveContactValue.split("@");
         maskedValue = name.substring(0, 2) + "***@" + domain;
       } else if (contactType === "phone") {
-        maskedValue = contactValue.substring(0, 3) + "****" + contactValue.substring(contactValue.length - 3);
+        maskedValue = effectiveContactValue.substring(0, 3) + "****" + effectiveContactValue.substring(effectiveContactValue.length - 3);
       }
 
       res.json({
@@ -180,12 +205,31 @@ export function registerOtpRoutes(app: Express) {
         return res.status(400).json({ error: "Contact type and code are required" });
       }
 
+      if (!["email", "phone"].includes(contactType)) {
+        return res.status(400).json({ error: "Invalid contact type" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const expectedContactValue = contactType === "email" ? user.email : user.phone;
+      if (!expectedContactValue) {
+        return res.status(400).json({ error: "No contact value found for the selected type" });
+      }
+
+      const effectiveContactValue = contactType === "email"
+        ? normalizeContactValue("email", expectedContactValue)
+        : normalizeContactValue("phone", expectedContactValue);
+
       // Get latest OTP for this user and contact type
       const [otpRecord] = await db.select()
         .from(otpVerifications)
         .where(and(
           eq(otpVerifications.userId, userId),
-          eq(otpVerifications.contactType, contactType)
+          eq(otpVerifications.contactType, contactType),
+          eq(otpVerifications.contactValue, effectiveContactValue)
         ))
         .orderBy(desc(otpVerifications.createdAt))
         .limit(1);
@@ -250,12 +294,12 @@ export function registerOtpRoutes(app: Express) {
       if (contactType === "email") {
         await storage.updateUser(userId, {
           emailVerified: true,
-          email: otpRecord.contactValue
+          email: effectiveContactValue
         });
       } else if (contactType === "phone") {
         await storage.updateUser(userId, {
           phoneVerified: true,
-          phone: otpRecord.contactValue
+          phone: effectiveContactValue
         });
       }
 

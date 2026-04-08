@@ -1,9 +1,20 @@
-import type { Express, Request, Response } from "express";
+import type { Express, NextFunction, Request, Response } from "express";
 import { storage } from "../storage";
 import { authMiddleware, adminMiddleware, type AuthRequest } from "./middleware";
 import { getErrorMessage } from "./helpers";
 import { toSafeUser, toSafeUsers } from "../lib/safe-user";
 import { sanitizePlainText } from "../lib/input-security";
+
+const UUID_PATH_PARAM_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function requireUuidUserId(req: Request, _res: Response, next: NextFunction): void {
+  const userIdParam = String(req.params.id || "");
+  if (!UUID_PATH_PARAM_REGEX.test(userIdParam)) {
+    next("route");
+    return;
+  }
+  next();
+}
 
 export function registerUsersRoutes(app: Express): void {
   app.get("/api/users", authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
@@ -16,7 +27,7 @@ export function registerUsersRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/users/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
+  app.get("/api/users/:id", requireUuidUserId, authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const user = await storage.getUser(req.params.id);
       if (!user) {
@@ -43,7 +54,7 @@ export function registerUsersRoutes(app: Express): void {
     }
   });
 
-  app.patch("/api/users/:id", authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
+  app.patch("/api/users/:id", requireUuidUserId, authMiddleware, adminMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       // SECURITY: Whitelist allowed fields — never pass raw req.body
       const allowedFields = ['status', 'role', 'firstName', 'lastName', 'email', 'phone', 'profilePicture', 'country', 'language'];

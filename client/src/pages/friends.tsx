@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,8 @@ import {
   X,
   UserCheck,
   ShieldOff,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import type { User } from "@shared/schema";
 
@@ -353,6 +356,7 @@ function StatsBar({
 
 /* ═══════════════ Main Page ═══════════════ */
 export default function FriendsPage() {
+  const { user, updateUser } = useAuth();
   const { t, dir } = useI18n();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"friends" | "following" | "followers" | "blocked">("friends");
@@ -439,6 +443,22 @@ export default function FriendsPage() {
     },
     onError: () => toast({ title: t("common.error"), variant: "destructive" }),
     onSettled: () => setActionLoadingId(null),
+  });
+
+  const toggleSearchVisibilityMutation = useMutation({
+    mutationFn: async () => {
+      const nextStealthMode = !(user?.stealthMode ?? false);
+      const response = await apiRequest("PATCH", "/api/user/status", { stealthMode: nextStealthMode });
+      return response.json() as Promise<User>;
+    },
+    onSuccess: (updatedUser) => {
+      updateUser(updatedUser);
+      toast({ title: t("settings.visibilityUpdated") });
+      invalidateSocialQueries();
+    },
+    onError: () => {
+      toast({ title: t("settings.updateFailed"), variant: "destructive" });
+    },
   });
 
   const handleAction = (userId: string, action: string) => {
@@ -563,34 +583,55 @@ export default function FriendsPage() {
         />
 
         {/* Global Search + Filter Trigger */}
-        <div className="relative">
-          <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-          <Input
-            ref={searchInputRef}
-            placeholder={t("friends.searchPlaceholder")}
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              if (e.target.value.length > 0) setIsSearchActive(true);
-            }}
-            onFocus={() => setIsSearchActive(true)}
-            className="ps-10 pe-9 h-11 rounded-xl bg-muted/40 border-border/30 
-                       focus:bg-card focus:border-primary/30 transition-all"
-            data-testid="input-search-users"
-          />
-          {isSearchActive && (
-            <button
-              className="absolute end-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground transition-colors"
-              onClick={() => {
-                setSearchQuery("");
-                setIsSearchActive(false);
-                setSearchFilter("all");
-                searchInputRef.current?.blur();
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+            <Input
+              ref={searchInputRef}
+              placeholder={t("friends.searchPlaceholder")}
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (e.target.value.length > 0) setIsSearchActive(true);
               }}
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+              onFocus={() => setIsSearchActive(true)}
+              className="ps-10 pe-9 h-11 rounded-xl bg-muted/40 border-border/30 
+                       focus:bg-card focus:border-primary/30 transition-all"
+              data-testid="input-search-users"
+            />
+            {isSearchActive && (
+              <button
+                className="absolute end-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground transition-colors"
+                onClick={() => {
+                  setSearchQuery("");
+                  setIsSearchActive(false);
+                  setSearchFilter("all");
+                  searchInputRef.current?.blur();
+                }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-11 w-11 rounded-xl"
+            onClick={() => toggleSearchVisibilityMutation.mutate()}
+            disabled={toggleSearchVisibilityMutation.isPending}
+            title={t("settings.stealthModeDescription")}
+            data-testid="button-toggle-search-visibility"
+          >
+            {toggleSearchVisibilityMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : user?.stealthMode ? (
+              <EyeOff className="w-4 h-4" />
+            ) : (
+              <Eye className="w-4 h-4" />
+            )}
+          </Button>
         </div>
 
         {/* Tab Navigation */}
