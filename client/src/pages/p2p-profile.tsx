@@ -42,6 +42,7 @@ import { formatDistanceToNow } from "date-fns";
 interface TraderProfile {
   id: string;
   username: string;
+  p2pUsername: string;
   displayName: string;
   bio: string;
   region: string;
@@ -205,7 +206,7 @@ export default function P2PProfilePage() {
                     <Badge variant="secondary">{t('p2p.profile.offline')}</Badge>
                   )}
                 </div>
-                <p className="text-muted-foreground">@{profile.username}</p>
+                <p className="text-muted-foreground">@{profile.p2pUsername || profile.username}</p>
                 <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
                   <span className="flex items-center gap-1">
                     <MapPin className="h-4 w-4" />

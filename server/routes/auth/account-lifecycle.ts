@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import type { AccountRecoveryPurpose, User } from "@shared/schema";
 import { storage } from "../../storage";
-import { sendEmail, sendSms } from "../../lib/messaging";
+import { buildAccountRecoveryEmailHtml, sendEmail, sendSms } from "../../lib/messaging";
 import { isSafeEmailAddress, isSafePhoneNumber } from "../../lib/input-security";
 import {
     accountRecoveryConfirmRateLimiter,
@@ -132,6 +132,7 @@ async function deliverRecoveryCode(delivery: RecoveryDeliverySelection, code: st
             to: delivery.target,
             subject,
             text,
+            html: buildAccountRecoveryEmailHtml(action, code, ACCOUNT_RECOVERY_CODE_EXPIRY_MINUTES),
         }).catch(() => false);
     }
 

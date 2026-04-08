@@ -192,15 +192,19 @@ const cspInlineScriptHashes = isProduction ? computeInlineScriptHashes() : [];
     ? path.resolve(__dirname, "..", "dist", "public", "downloads")
     : path.resolve(__dirname, "..", "client", "public", "downloads");
 
-  app.use("/downloads", express.static(downloadsDir, {
+  const blockPublicAabDownload = (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.toLowerCase().endsWith(".aab")) {
+      return res.status(404).type("text/plain").send("Not found");
+    }
+    return next();
+  };
+
+  app.use("/downloads", blockPublicAabDownload, express.static(downloadsDir, {
     etag: true,
     maxAge: "1h",
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.apk')) {
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-        res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
-      } else if (filePath.endsWith('.aab')) {
-        res.setHeader('Content-Type', 'application/octet-stream');
         res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
       }
     }

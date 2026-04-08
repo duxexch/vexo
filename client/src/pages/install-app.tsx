@@ -8,7 +8,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import {
   Download, Smartphone, Monitor, Share, Plus, MoreVertical,
   CheckCircle2, Wifi, Bell, Zap, Shield, ArrowDown, RefreshCw,
-  ExternalLink, Globe, Package, FileArchive, Star, Clock, HardDrive,
+  ExternalLink, Globe, Package, Star, Clock, HardDrive,
   X, Check, Sparkles, Image, MessageCircleQuestion, Share2,
   ChevronRight, Trophy, Gamepad2, ArrowUpRight
 } from "lucide-react";
@@ -369,18 +369,14 @@ export default function InstallAppPage() {
           </div>
 
           <Tabs defaultValue={platformHint} className="w-full">
-            <TabsList className="w-full grid grid-cols-3 h-12">
-              <TabsTrigger value="pwa" className="gap-1.5 text-xs sm:text-sm data-[state=active]:text-primary">
+            <TabsList className="w-full grid grid-cols-2 h-12 rounded-2xl bg-muted/40 border border-border/60 p-1">
+              <TabsTrigger value="pwa" className="gap-1.5 text-xs sm:text-sm rounded-xl data-[state=active]:text-primary data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Globe className="w-3.5 h-3.5" />
                 PWA
               </TabsTrigger>
-              <TabsTrigger value="apk" className="gap-1.5 text-xs sm:text-sm data-[state=active]:text-blue-500">
+              <TabsTrigger value="apk" className="gap-1.5 text-xs sm:text-sm rounded-xl data-[state=active]:text-blue-500 data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Package className="w-3.5 h-3.5" />
                 APK
-              </TabsTrigger>
-              <TabsTrigger value="aab" className="gap-1.5 text-xs sm:text-sm data-[state=active]:text-orange-500">
-                <FileArchive className="w-3.5 h-3.5" />
-                AAB
               </TabsTrigger>
             </TabsList>
 
@@ -484,51 +480,6 @@ export default function InstallAppPage() {
               </Card>
             </TabsContent>
 
-            {/* ── Tab: AAB ── */}
-            <TabsContent value="aab">
-              <Card className="border-orange-500/30 bg-gradient-to-b from-orange-500/5 to-transparent overflow-hidden">
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                      <FileArchive className="w-6 h-6 text-orange-500" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-bold">{t('install.aabTitle')}</h3>
-                        <span className="text-[10px] px-2 py-0.5 bg-orange-500/10 text-orange-500 rounded-full font-medium">
-                          {t('install.advanced')}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{t('install.aabSubtitle')}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1 px-2 py-1 bg-background/50 rounded-md"><HardDrive className="w-3 h-3" /> ~10 MB</span>
-                    <span className="flex items-center gap-1 px-2 py-1 bg-background/50 rounded-md"><Smartphone className="w-3 h-3" /> Android 7.0+</span>
-                    <span className="flex items-center gap-1 px-2 py-1 bg-background/50 rounded-md"><Shield className="w-3 h-3" /> {t('install.signedCert')}</span>
-                  </div>
-                  <ul className="space-y-2 text-sm">
-                    {['install.aabPro1', 'install.aabPro2', 'install.aabPro3'].map((key) => (
-                      <li key={key} className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-orange-500 shrink-0" />
-                        <span>{t(key)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <a
-                    href="/downloads/VEX-official-release.aab"
-                    download
-                    className="flex items-center justify-center gap-2 w-full py-4 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-amber-700 transition-all shadow-lg shadow-orange-500/20"
-                  >
-                    <ArrowDown className="w-5 h-5" />
-                    {t('install.downloadAab')}
-                  </a>
-                  <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
-                    {t('install.aabNote')}
-                  </p>
-                </CardContent>
-              </Card>
-            </TabsContent>
           </Tabs>
         </div>
 
@@ -554,24 +505,21 @@ export default function InstallAppPage() {
                     <th className="p-3 text-center">
                       <span className="text-blue-500 font-bold">APK</span>
                     </th>
-                    <th className="p-3 text-center">
-                      <span className="text-orange-500 font-bold">AAB</span>
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/20">
                   {[
-                    { label: 'install.compSize', pwa: '< 1 MB', apk: '11.8 MB', aab: '~10 MB', isText: true },
-                    { label: 'install.compUpdate', pwa: true, apk: false, aab: false },
-                    { label: 'install.compOffline', pwa: true, apk: true, aab: true },
-                    { label: 'install.compNotif', pwa: true, apk: true, aab: true },
-                    { label: 'install.compStore', pwa: false, apk: false, aab: true },
-                    { label: 'install.compNoInstall', pwa: true, apk: false, aab: false },
-                    { label: 'install.compNative', pwa: false, apk: true, aab: true },
+                    { label: 'install.compSize', pwa: '< 1 MB', apk: '11.8 MB', isText: true },
+                    { label: 'install.compUpdate', pwa: true, apk: false },
+                    { label: 'install.compOffline', pwa: true, apk: true },
+                    { label: 'install.compNotif', pwa: true, apk: true },
+                    { label: 'install.compStore', pwa: false, apk: false },
+                    { label: 'install.compNoInstall', pwa: true, apk: false },
+                    { label: 'install.compNative', pwa: false, apk: true },
                   ].map((row, i) => (
                     <tr key={i} className="hover:bg-muted/20 transition-colors">
                       <td className="p-3 font-medium">{t(row.label)}</td>
-                      {(['pwa', 'apk', 'aab'] as const).map((col) => (
+                      {(['pwa', 'apk'] as const).map((col) => (
                         <td key={col} className="p-3 text-center">
                           {'isText' in row && row.isText ? (
                             <span className="text-muted-foreground">{row[col] as string}</span>
@@ -729,7 +677,6 @@ export default function InstallAppPage() {
                 { q: 'install.faq2q', a: 'install.faq2a' },
                 { q: 'install.faq3q', a: 'install.faq3a' },
                 { q: 'install.faq4q', a: 'install.faq4a' },
-                { q: 'install.faq5q', a: 'install.faq5a' },
               ].map((faq, i) => (
                 <AccordionItem key={i} value={`faq-${i}`} className="border-border/30">
                   <AccordionTrigger className="text-sm py-3 hover:no-underline">

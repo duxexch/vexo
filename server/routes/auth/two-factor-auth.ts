@@ -8,7 +8,7 @@ import { twoFactorBackupCodes } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { authMiddleware, AuthRequest, strictRateLimiter } from "../middleware";
 import { JWT_USER_SECRET, JWT_USER_EXPIRY } from "../../lib/auth-config";
-import { sendEmail } from "../../lib/messaging";
+import { buildTwoFactorBackupCodesEmailHtml, sendEmail } from "../../lib/messaging";
 import { isSafeEmailAddress } from "../../lib/input-security";
 import {
   getErrorMessage,
@@ -34,15 +34,6 @@ function maskEmail(email: string): string {
   const visibleChars = Math.min(2, localPart.length);
   const maskedLocal = `${localPart.slice(0, visibleChars)}${"*".repeat(Math.max(3, localPart.length - visibleChars))}`;
   return `${maskedLocal}@${domain}`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 }
 
 async function regenerateBackupCodes(userId: string): Promise<string[]> {
@@ -239,13 +230,11 @@ export function registerTwoFactorAuthRoutes(app: Express) {
 
       const backupCodes = await regenerateBackupCodes(user.id);
       const codesText = backupCodes.join("\n");
-      const safeUsername = escapeHtml(user.username);
-      const safeCodesText = escapeHtml(codesText);
       const sent = await sendEmail({
         to: accountEmail,
         subject: "Your VEX 2FA Backup Codes",
         text: `Hello ${user.username},\n\nYour two-factor backup codes were regenerated:\n\n${codesText}\n\nEach code can only be used once. Keep these codes in a safe place.\n\nIf this was not you, reset your password immediately.`,
-        html: `<p>Hello ${safeUsername},</p><p>Your two-factor backup codes were regenerated:</p><pre style="padding:12px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;">${safeCodesText}</pre><p>Each code can only be used once. Keep these codes in a safe place.</p><p>If this was not you, reset your password immediately.</p>`,
+        html: buildTwoFactorBackupCodesEmailHtml(user.username, backupCodes),
       });
 
       if (!sent) {

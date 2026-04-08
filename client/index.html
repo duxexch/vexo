@@ -40,6 +40,8 @@
   <meta property="og:description"
     content="شطرنج، طاولة زهر، دومينو، طرنيب وبلوت أونلاين مع لاعبين حقيقيين، بالإضافة إلى تداول P2P آمن ومحفظة رقمية ومكافآت يومية." />
   <meta property="og:image" content="https://vixo.click/icons/vex-gaming-logo-512x512.png" />
+  <meta property="og:image:secure_url" content="https://vixo.click/icons/vex-gaming-logo-512x512.png" />
+  <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="512" />
   <meta property="og:image:height" content="512" />
   <meta property="og:image:alt" content="VEX Gaming Platform Logo" />
@@ -48,6 +50,8 @@
   <meta property="og:locale:alternate" content="en_US" />
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://vixo.click/" />
+  <meta name="twitter:domain" content="vixo.click" />
   <meta name="twitter:title" content="VEX | ألعاب اونلاين وتداول P2P آمن" />
   <meta name="twitter:description"
     content="العب أشهر ألعاب الطاولة والورق أونلاين وتداول P2P بأمان داخل منصة VEX مع محفظة رقمية ومكافآت يومية." />
@@ -139,6 +143,7 @@
     {
       "@context": "https://schema.org",
       "@type": "WebSite",
+      "@id": "https://vixo.click/#website",
       "name": "VEX",
       "alternateName": ["VEX Platform", "منصة VEX", "vixo.click"],
       "url": "https://vixo.click/",
@@ -147,7 +152,18 @@
       "publisher": {
         "@type": "Organization",
         "name": "VEX",
-        "url": "https://vixo.click"
+        "url": "https://vixo.click",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+          "width": 512,
+          "height": 512
+        }
+      },
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://vixo.click/games?q={search_term_string}",
+        "query-input": "required name=search_term_string"
       }
     }
     </script>

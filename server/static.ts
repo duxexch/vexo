@@ -1,4 +1,4 @@
-import express, { type Express, type Request } from "express";
+import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import rateLimit from "express-rate-limit";
 import escapeHtml from "escape-html";
 import fs from "fs";
@@ -251,16 +251,20 @@ export function serveStatic(app: Express) {
     }
   });
 
-  // Downloads folder — APK, AAB with proper MIME types and Content-Disposition
-  app.use("/downloads", express.static(path.join(distPath, "downloads"), {
+  // Downloads folder — serve public APK files only. AAB is admin-only.
+  const blockPublicAabDownload = (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.toLowerCase().endsWith(".aab")) {
+      return res.status(404).type("text/plain").send("Not found");
+    }
+    return next();
+  };
+
+  app.use("/downloads", blockPublicAabDownload, express.static(path.join(distPath, "downloads"), {
     maxAge: "1h",
     etag: true,
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.apk')) {
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-        res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
-      } else if (filePath.endsWith('.aab')) {
-        res.setHeader('Content-Type', 'application/octet-stream');
         res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
       }
     }

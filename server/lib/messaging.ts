@@ -7,6 +7,8 @@ export { sendSms } from "./sms";
 export {
   buildOtpEmailHtml,
   buildResetPasswordEmailHtml,
+  buildAccountRecoveryEmailHtml,
+  buildTwoFactorBackupCodesEmailHtml,
   buildOtpSmsMessage,
   buildResetSmsMessage,
 } from "./msg-templates";

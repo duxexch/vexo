@@ -97,6 +97,8 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
 
   const isAr = language === 'ar';
 
+  const welcomeName = String(user?.nickname || user?.username || '');
+
   return (
     <div className="p-3 sm:p-6 space-y-3 sm:space-y-6" dir={dir}>
       {/* Online Status Bar */}
@@ -122,7 +124,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
           )}
         </div>
       )}
-      <h1 className="text-xl sm:text-2xl font-bold">{t('dashboard.welcome')}, {String(user?.username || '')}</h1>
+      <h1 className="text-xl sm:text-2xl font-bold">{t('dashboard.welcome')}, {welcomeName}</h1>
       
       {/* Balance & Account Summary */}
       <Card>

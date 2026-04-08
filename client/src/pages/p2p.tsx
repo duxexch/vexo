@@ -1909,7 +1909,7 @@ function MyTradesTab() {
                               )}>
                                 {!isSystemMessage && (
                                   <p className="text-xs opacity-80 mb-1">
-                                    {message.sender?.nickname || message.sender?.username || t('p2p.trader')}
+                                    {message.sender?.username || message.sender?.nickname || t('p2p.trader')}
                                   </p>
                                 )}
                                 <p>{message.message}</p>

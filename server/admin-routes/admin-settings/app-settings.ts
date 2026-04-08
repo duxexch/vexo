@@ -3,6 +3,37 @@ import { featureFlags, themes, appSettings, insertAppSettingSchema } from "@shar
 import { db } from "../../db";
 import { eq, inArray } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
+import fs from "fs";
+import path from "path";
+
+function resolveAdminAabFilePath(): string | null {
+  const rootPath = process.cwd();
+  const candidateDirs = [
+    path.resolve(rootPath, "dist", "public", "downloads"),
+    path.resolve(rootPath, "client", "public", "downloads"),
+  ];
+
+  for (const dirPath of candidateDirs) {
+    if (!fs.existsSync(dirPath)) {
+      continue;
+    }
+
+    const preferred = path.join(dirPath, "VEX-official-release.aab");
+    if (fs.existsSync(preferred)) {
+      return preferred;
+    }
+
+    const fallback = fs
+      .readdirSync(dirPath)
+      .find((fileName) => fileName.toLowerCase().endsWith(".aab"));
+
+    if (fallback) {
+      return path.join(dirPath, fallback);
+    }
+  }
+
+  return null;
+}
 
 export function registerAppSettingsRoutes(app: Express) {
 
@@ -13,12 +44,12 @@ export function registerAppSettingsRoutes(app: Express) {
         db.select().from(featureFlags),
         db.select().from(themes).where(eq(themes.isDefault, true)).limit(1)
       ]);
-      
+
       const enabledSections: Record<string, boolean> = {};
       flagsList.forEach(flag => {
         enabledSections[flag.key] = flag.isEnabled;
       });
-      
+
       res.json({
         sections: enabledSections,
         theme: activeTheme[0] || null
@@ -39,7 +70,7 @@ export function registerAppSettingsRoutes(app: Express) {
       ];
       const settings = await db.select().from(appSettings)
         .where(inArray(appSettings.key, storeKeys));
-      
+
       const result: Record<string, string | null> = {};
       for (const s of settings) {
         result[s.key] = s.value;
@@ -61,6 +92,29 @@ export function registerAppSettingsRoutes(app: Express) {
       res.json(settings);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/admin/downloads/aab", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const filePath = resolveAdminAabFilePath();
+      if (!filePath) {
+        return res.status(404).json({ error: "AAB file not found" });
+      }
+
+      const fileName = path.basename(filePath);
+      await logAdminAction(
+        req.admin!.id,
+        "settings_update",
+        "admin_download",
+        fileName,
+        { metadata: JSON.stringify({ downloadType: "aab" }) },
+        req,
+      );
+
+      return res.download(filePath, fileName);
+    } catch (error: unknown) {
+      return res.status(500).json({ error: getErrorMessage(error) });
     }
   });
 
@@ -88,7 +142,7 @@ export function registerAppSettingsRoutes(app: Express) {
       const { value, valueAr, category } = req.body;
 
       const [existing] = await db.select().from(appSettings).where(eq(appSettings.key, key));
-      
+
       if (!existing) {
         const [created] = await db.insert(appSettings).values({
           key,

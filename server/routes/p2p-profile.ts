@@ -17,6 +17,7 @@ import { and, asc, desc, eq, or, sql } from "drizzle-orm";
 import { sanitizePlainText } from "../lib/input-security";
 import {
     ensureP2PUsername,
+    getP2PUsernameMap,
     getP2PUsernameSettings,
     updateP2PUsernameOnce,
 } from "../lib/p2p-username";
@@ -139,22 +140,22 @@ export function registerP2PProfileRoutes(app: Express): void {
                 .orderBy(desc(p2pTrades.completedAt), desc(p2pTrades.createdAt))
                 .limit(10);
 
-            const recentTrades = await Promise.all(
-                recentTradeRows.map(async (trade) => {
-                    const counterpartyId = trade.buyerId === userId ? trade.sellerId : trade.buyerId;
-                    const counterparty = await storage.getUser(counterpartyId);
-                    return {
-                        id: trade.id,
-                        type: trade.buyerId === userId ? "buy" : "sell",
-                        amount: trade.amount,
-                        currency: trade.currencyType === "project" ? "VEX" : "USD",
-                        fiatAmount: trade.fiatAmount,
-                        counterparty: counterparty?.username || "Unknown",
-                        status: trade.status,
-                        completedAt: trade.completedAt || trade.updatedAt,
-                    };
-                }),
-            );
+            const recentCounterpartyIds = recentTradeRows.map((trade) => (trade.buyerId === userId ? trade.sellerId : trade.buyerId));
+            const p2pUsernamesByUserId = await getP2PUsernameMap(recentCounterpartyIds);
+
+            const recentTrades = recentTradeRows.map((trade) => {
+                const counterpartyId = trade.buyerId === userId ? trade.sellerId : trade.buyerId;
+                return {
+                    id: trade.id,
+                    type: trade.buyerId === userId ? "buy" : "sell",
+                    amount: trade.amount,
+                    currency: trade.currencyType === "project" ? "VEX" : "USD",
+                    fiatAmount: trade.fiatAmount,
+                    counterparty: p2pUsernamesByUserId.get(counterpartyId) || "Unknown",
+                    status: trade.status,
+                    completedAt: trade.completedAt || trade.updatedAt,
+                };
+            });
 
             const derivedTotalTrades = toNumber(derivedTradeStats?.totalTrades);
             const derivedCompletedTrades = toNumber(derivedTradeStats?.completedTrades);
@@ -196,10 +197,9 @@ export function registerP2PProfileRoutes(app: Express): void {
                             ? "email"
                             : "none");
 
-            const derivedDisplayName = profile?.displayName
-                || `${user.firstName || ""} ${user.lastName || ""}`.trim()
-                || user.nickname
+            const derivedDisplayName = profile?.displayName?.trim()
                 || p2pUsernameSettings.p2pUsername
+                || `${user.firstName || ""} ${user.lastName || ""}`.trim()
                 || user.username;
 
             res.json({
@@ -209,7 +209,7 @@ export function registerP2PProfileRoutes(app: Express): void {
                 p2pUsernameChangeCount: p2pUsernameSettings.p2pUsernameChangeCount,
                 canChangeP2PUsername: p2pUsernameSettings.canChangeP2PUsername,
                 displayName: derivedDisplayName,
-                bio: profile?.bio || user.nickname || "",
+                bio: profile?.bio || "",
                 region: profile?.region || "",
                 verificationLevel: profileVerificationLevel,
                 isOnline: profile?.isOnline || false,

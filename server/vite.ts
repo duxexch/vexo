@@ -1,4 +1,4 @@
-import { type Express } from "express";
+import { type Express, type NextFunction, type Request, type Response } from "express";
 import express from "express";
 import { createServer as createViteServer, createLogger } from "vite";
 import rateLimit from "express-rate-limit";
@@ -62,13 +62,17 @@ export async function setupVite(server: Server, app: Express) {
     }
   });
 
-  app.use("/downloads", devStaticLimiter, express.static(publicDownloads, {
+  const blockPublicAabDownload = (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.toLowerCase().endsWith(".aab")) {
+      return res.status(404).type("text/plain").send("Not found");
+    }
+    return next();
+  };
+
+  app.use("/downloads", blockPublicAabDownload, devStaticLimiter, express.static(publicDownloads, {
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.apk')) {
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-        res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
-      } else if (filePath.endsWith('.aab')) {
-        res.setHeader('Content-Type', 'application/octet-stream');
         res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
       }
     }

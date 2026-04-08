@@ -122,6 +122,7 @@ export default function AdminAppSettingsPage() {
     showGooglePlay: true,
     showAppStore: true,
   });
+  const [isDownloadingAab, setIsDownloadingAab] = useState(false);
 
   const { data: appSettings, isLoading: loadingAppSettings } = useQuery({
     queryKey: ["/api/admin/app-settings"],
@@ -225,12 +226,73 @@ export default function AdminAppSettingsPage() {
     }
   };
 
+  const downloadAdminAab = async () => {
+    const token = getAdminToken();
+    if (!token) {
+      toast({
+        title: isArabic ? "غير مصرح" : "Unauthorized",
+        description: isArabic ? "سجل دخول الأدمن أولاً" : "Please sign in as admin first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsDownloadingAab(true);
+      const res = await fetch("/api/admin/downloads/aab", {
+        method: "GET",
+        headers: {
+          "x-admin-token": token,
+        },
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        throw new Error("download_failed");
+      }
+
+      const blob = await res.blob();
+      const contentDisposition = res.headers.get("content-disposition") || "";
+      const fileNameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?\"?([^\";]+)/i);
+      const rawFileName = fileNameMatch?.[1] || "VEX-official-release.aab";
+      const fileName = (() => {
+        try {
+          return decodeURIComponent(rawFileName);
+        } catch {
+          return rawFileName;
+        }
+      })();
+
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+
+      toast({
+        title: isArabic ? "تم بدء التحميل" : "Download started",
+        description: isArabic ? "تم تنزيل ملف AAB من لوحة الأدمن" : "AAB package was downloaded from admin panel",
+      });
+    } catch {
+      toast({
+        title: isArabic ? "خطأ" : "Error",
+        description: isArabic ? "فشل تحميل ملف AAB" : "Failed to download AAB package",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingAab(false);
+    }
+  };
+
   const getLoginConfig = (method: string): LoginMethodConfig | undefined => {
     return (loginConfigs as LoginMethodConfig[])?.find((c) => c.method === method);
   };
 
-  const isSaving = updateAppSettingMutation.isPending || 
-                   updateLoginConfigMutation.isPending;
+  const isSaving = updateAppSettingMutation.isPending ||
+    updateLoginConfigMutation.isPending;
 
   return (
     <div className="p-6 space-y-6">
@@ -360,8 +422,8 @@ export default function AdminAppSettingsPage() {
                 </div>
 
                 <div className="flex justify-end pt-4">
-                  <Button 
-                    onClick={saveBranding} 
+                  <Button
+                    onClick={saveBranding}
                     disabled={isSaving}
                     data-testid="button-save-branding"
                   >
@@ -430,7 +492,7 @@ export default function AdminAppSettingsPage() {
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded bg-blue-500/10">
                           <svg viewBox="0 0 24 24" className="h-4 w-4 text-blue-500" fill="currentColor">
-                            <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 0 1-.61-.92V2.734a1 1 0 0 1 .609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.199l2.807 1.626a1 1 0 0 1 0 1.732l-2.807 1.626L15.206 12l2.492-2.492zM5.864 2.658L16.8 8.99l-2.3 2.3-8.636-8.632z"/>
+                            <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 0 1-.61-.92V2.734a1 1 0 0 1 .609-.92zm10.89 10.893l2.302 2.302-10.937 6.333 8.635-8.635zm3.199-3.199l2.807 1.626a1 1 0 0 1 0 1.732l-2.807 1.626L15.206 12l2.492-2.492zM5.864 2.658L16.8 8.99l-2.3 2.3-8.636-8.632z" />
                           </svg>
                         </div>
                         <div>
@@ -452,7 +514,7 @@ export default function AdminAppSettingsPage() {
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded bg-gray-500/10">
                           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
-                            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
                           </svg>
                         </div>
                         <div>
@@ -508,6 +570,30 @@ export default function AdminAppSettingsPage() {
                   </div>
                 </div>
 
+                <div className="rounded-xl border border-orange-500/30 bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold">
+                        {isArabic ? "تحميل ملف AAB (للأدمن فقط)" : "AAB Package Download (Admin Only)"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {isArabic
+                          ? "الملف مخفي تمامًا من صفحة المستخدم، ومتاح هنا فقط عبر صلاحيات الأدمن."
+                          : "This package is fully hidden from the public install page and available here only for admins."}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={downloadAdminAab}
+                      disabled={isDownloadingAab}
+                      className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white"
+                    >
+                      {isDownloadingAab ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Download className="h-4 w-4 me-2" />}
+                      {isArabic ? "تنزيل AAB" : "Download AAB"}
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="flex justify-end pt-4">
                   <Button
                     onClick={saveStoreLinks}
@@ -553,7 +639,7 @@ export default function AdminAppSettingsPage() {
                   return (
                     <AccordionItem key={lm.method} value={lm.method}>
                       <AccordionTrigger className="hover:no-underline">
-                          <div className="flex items-center justify-between gap-4 w-full pe-4">
+                        <div className="flex items-center justify-between gap-4 w-full pe-4">
                           <div className="flex items-center gap-3">
                             <div className="p-2 rounded bg-muted">
                               <Icon className="h-4 w-4" />

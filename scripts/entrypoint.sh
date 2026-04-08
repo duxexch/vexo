@@ -73,6 +73,49 @@ if [ "$NODE_ENV" = "production" ] && [ "$ALLOW_FORCE_MIGRATIONS" = "true" ]; the
     echo "  WARNING: ALLOW_FORCE_MIGRATIONS=true in production!"
 fi
 
+EMAIL_PROVIDER_NORMALIZED=$(echo "${EMAIL_PROVIDER:-console}" | tr '[:upper:]' '[:lower:]')
+if [ "$EMAIL_PROVIDER_NORMALIZED" = "smtp" ]; then
+    missing_smtp=""
+    for key in SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
+        eval "value=\${$key}"
+        if [ -z "$value" ]; then
+            if [ -z "$missing_smtp" ]; then
+                missing_smtp="$key"
+            else
+                missing_smtp="$missing_smtp, $key"
+            fi
+        fi
+    done
+    if [ -n "$missing_smtp" ]; then
+        echo "ERROR: EMAIL_PROVIDER=smtp but missing required vars: $missing_smtp"
+        exit 1
+    fi
+    echo "  EMAIL_PROVIDER: smtp (configured)"
+elif [ "$EMAIL_PROVIDER_NORMALIZED" = "sendgrid" ]; then
+    missing_sendgrid=""
+    for key in SENDGRID_API_KEY SENDGRID_FROM; do
+        eval "value=\${$key}"
+        if [ -z "$value" ]; then
+            if [ -z "$missing_sendgrid" ]; then
+                missing_sendgrid="$key"
+            else
+                missing_sendgrid="$missing_sendgrid, $key"
+            fi
+        fi
+    done
+    if [ -n "$missing_sendgrid" ]; then
+        echo "ERROR: EMAIL_PROVIDER=sendgrid but missing required vars: $missing_sendgrid"
+        exit 1
+    fi
+    echo "  EMAIL_PROVIDER: sendgrid (configured)"
+else
+    if [ "$NODE_ENV" = "production" ]; then
+        echo "  WARNING: EMAIL_PROVIDER=$EMAIL_PROVIDER_NORMALIZED (email delivery disabled or non-remote provider)"
+    else
+        echo "  EMAIL_PROVIDER: $EMAIL_PROVIDER_NORMALIZED"
+    fi
+fi
+
 # ─── Extract DB connection info ───
 if [ -z "$PGHOST" ]; then
     export PGHOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:\/]*\).*/\1/p')

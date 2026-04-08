@@ -191,12 +191,7 @@ export async function ensureP2PUsername(userId: string, fallbackUsername?: strin
         .where(eq(users.id, userId))
         .limit(1);
 
-    const preferredSeed = normalizeP2PUsernameCore(
-        sanitizePlainText(String(fallbackUsername || user?.username || ""), { maxLength: 80 }),
-    );
-    const baseCandidate = preferredSeed.length > 0
-        ? ensureP2PUsernameLength(preferredSeed)
-        : buildDefaultP2PUsernameBase(userId, user?.username);
+    const baseCandidate = buildDefaultP2PUsernameBase(userId, fallbackUsername || user?.username);
 
     for (let attempt = 0; attempt < 8; attempt += 1) {
         const nextSeed = attempt === 0 ? baseCandidate : `${baseCandidate}_${attempt + 1}`;
