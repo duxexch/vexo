@@ -647,6 +647,8 @@ function VerificationSection() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [devOtp, setDevOtp] = useState<string | null>(null);
+  const [lastOtpMessage, setLastOtpMessage] = useState<string | null>(null);
+  const [expectedOtpLength, setExpectedOtpLength] = useState(6);
   const [nowTs, setNowTs] = useState(() => Date.now());
   const [resendReadyAtByType, setResendReadyAtByType] = useState<Record<"email" | "phone", number>>({
     email: 0,
@@ -688,6 +690,7 @@ function VerificationSection() {
   const handleSendOtp = async (type: "email" | "phone") => {
     const contactValue = type === "email" ? user?.email : user?.phone;
     if (!contactValue) {
+      setLastOtpMessage(null);
       toast({
         title: t("common.error") || "Error",
         description: t("settings.addContactFirst", { type: getContactTypeLabel(type) }),
@@ -704,18 +707,29 @@ function VerificationSection() {
         headers,
         body: JSON.stringify({ contactType: type, contactValue }),
       });
-      const data = await res.json().catch(() => null) as { error?: string; message?: string; devOtp?: string; resendAfter?: number; retryAfter?: number } | null;
+      const data = await res.json().catch(() => null) as {
+        error?: string;
+        message?: string;
+        devOtp?: string;
+        resendAfter?: number;
+        retryAfter?: number;
+        otpLength?: number;
+      } | null;
+
       if (!res.ok) {
         const retryAfterSeconds = typeof data?.retryAfter === "number" ? data.retryAfter : 0;
         if (retryAfterSeconds > 0) {
           setShowOtpInput(true);
           setResendCooldown(type, retryAfterSeconds);
         }
+        setLastOtpMessage(null);
         throw new Error(data?.error || "Failed to send OTP");
       }
 
       setShowOtpInput(true);
       setResendCooldown(type, typeof data?.resendAfter === "number" ? data.resendAfter : OTP_RESEND_COOLDOWN_SECONDS);
+      setExpectedOtpLength(Math.max(4, Math.min(12, Number(data?.otpLength || 6))));
+      setLastOtpMessage(data?.message || null);
       if (data?.devOtp) {
         setDevOtp(data.devOtp);
       }
@@ -765,6 +779,8 @@ function VerificationSection() {
       setVerifyingType(null);
       setOtpCode("");
       setDevOtp(null);
+      setLastOtpMessage(null);
+      setExpectedOtpLength(6);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       toast({
@@ -782,6 +798,8 @@ function VerificationSection() {
     setVerifyingType(null);
     setOtpCode("");
     setDevOtp(null);
+    setLastOtpMessage(null);
+    setExpectedOtpLength(6);
   };
 
   const resendRemainingSeconds = verifyingType ? getResendRemainingSeconds(verifyingType) : 0;
@@ -804,28 +822,42 @@ function VerificationSection() {
       <CardContent className="space-y-4">
         {showOtpInput ? (
           <div className="space-y-4">
-            <div className="p-4 bg-accent/10 rounded-md border border-accent/20">
-              <p className="text-sm">
-                {t("settings.enterVerificationCode", {
-                  type: verifyingType ? getContactTypeLabel(verifyingType) : "",
-                })}
-              </p>
-              {devOtp && (
-                <p className="text-xs text-muted-foreground mt-2">
-                  (Dev mode) OTP: <span className="font-mono font-bold">{devOtp}</span>
-                </p>
-              )}
+            <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-primary/15 p-2 text-primary">
+                  {verifyingType === "phone" ? <Smartphone className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">
+                    {t("settings.enterVerificationCode", {
+                      type: verifyingType ? getContactTypeLabel(verifyingType) : "",
+                    })}
+                  </p>
+                  {lastOtpMessage && (
+                    <p className="text-xs text-muted-foreground">{lastOtpMessage}</p>
+                  )}
+                  {devOtp && (
+                    <p className="text-xs text-muted-foreground">
+                      (Dev mode) OTP: <span className="font-mono font-bold">{devOtp}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
+
             <div className="space-y-2">
               <Label>{t('settings.verificationCodeLabel')}</Label>
               <Input
                 value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
                 placeholder={t('settings.otpPlaceholder')}
-                maxLength={6}
+                inputMode="numeric"
+                className="h-12 text-center font-mono text-lg tracking-[0.3em]"
+                maxLength={expectedOtpLength}
                 data-testid="input-otp-code"
               />
             </div>
+
             <div className="flex items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2">
               <p className="text-xs text-muted-foreground">
                 {resendRemainingSeconds > 0
@@ -856,7 +888,7 @@ function VerificationSection() {
               </Button>
               <Button
                 onClick={handleVerifyOtp}
-                disabled={isVerifying || otpCode.length !== 6}
+                disabled={isVerifying || otpCode.length !== expectedOtpLength}
                 className="flex-1"
                 data-testid="button-verify-otp"
               >
@@ -868,47 +900,53 @@ function VerificationSection() {
         ) : (
           <div className="space-y-3">
             {user?.email && !user?.emailVerified && (
-              <div className="flex items-center justify-between p-3 rounded-md border">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-muted rounded-full">
-                    <User className="h-4 w-4" />
+              <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-primary/15 p-2 text-primary">
+                      <Mail className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{user.email}</p>
+                      <p className="text-xs text-muted-foreground">{t('settings.emailNotVerified')}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{user.email}</p>
-                    <p className="text-xs text-muted-foreground">{t('settings.emailNotVerified')}</p>
-                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => handleSendOtp("email")}
+                    disabled={isSending}
+                    className="shrink-0"
+                    data-testid="button-verify-email"
+                  >
+                    {isSending && verifyingType === "email" && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                    {t('settings.verify')}
+                  </Button>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={() => handleSendOtp("email")}
-                  disabled={isSending}
-                  data-testid="button-verify-email"
-                >
-                  {isSending && verifyingType === "email" && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-                  {t('settings.verify')}
-                </Button>
               </div>
             )}
             {user?.phone && !user?.phoneVerified && (
-              <div className="flex items-center justify-between p-3 rounded-md border">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-muted rounded-full">
-                    <Smartphone className="h-4 w-4" />
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-muted p-2">
+                      <Smartphone className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{user.phone}</p>
+                      <p className="text-xs text-muted-foreground">{t('settings.phoneNotVerified')}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{user.phone}</p>
-                    <p className="text-xs text-muted-foreground">{t('settings.phoneNotVerified')}</p>
-                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => handleSendOtp("phone")}
+                    disabled={isSending}
+                    className="shrink-0"
+                    data-testid="button-verify-phone"
+                  >
+                    {isSending && verifyingType === "phone" && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                    {t('settings.verify')}
+                  </Button>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={() => handleSendOtp("phone")}
-                  disabled={isSending}
-                  data-testid="button-verify-phone"
-                >
-                  {isSending && verifyingType === "phone" && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
-                  {t('settings.verify')}
-                </Button>
               </div>
             )}
           </div>

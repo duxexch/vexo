@@ -7,22 +7,42 @@
 
 import { logger } from "./logger";
 
-interface EmailOptions {
+export interface EmailOptions {
   to: string;
   subject: string;
   text: string;
   html?: string;
 }
 
-type EmailProvider = 'console' | 'smtp' | 'sendgrid';
-let warnedConsoleProviderInProduction = false;
+export type EmailProvider = 'console' | 'smtp' | 'sendgrid';
 
-async function sendEmailConsole(options: EmailOptions): Promise<boolean> {
-  logger.debug(`[Email Console] To: ${options.to} | Subject: ${options.subject}`);
-  return true;
+export interface EmailSendResult {
+  delivered: boolean;
+  provider: EmailProvider;
+  reason?: string;
+  statusCode?: number;
+  messageId?: string;
 }
 
-async function sendEmailSMTP(options: EmailOptions): Promise<boolean> {
+let warnedConsoleProviderInProduction = false;
+
+function maskEmailAddress(value: string): string {
+  const [name, domain] = String(value || "").trim().split("@");
+  if (!name || !domain) return "invalid-email";
+  const safeName = name.length <= 2 ? `${name[0] ?? "*"}*` : `${name.slice(0, 2)}***`;
+  return `${safeName}@${domain}`;
+}
+
+async function sendEmailConsole(options: EmailOptions): Promise<EmailSendResult> {
+  logger.debug(`[Email Console] To: ${maskEmailAddress(options.to)} | Subject: ${options.subject}`);
+  return {
+    delivered: true,
+    provider: "console",
+    reason: "console_provider",
+  };
+}
+
+async function sendEmailSMTP(options: EmailOptions): Promise<EmailSendResult> {
   try {
     // Dynamic import to avoid requiring nodemailer when not used
     // Install: npm install nodemailer @types/nodemailer
@@ -30,44 +50,117 @@ async function sendEmailSMTP(options: EmailOptions): Promise<boolean> {
     try {
       nodemailer = await import('nodemailer' as string) as Record<string, unknown>;
     } catch {
-      logger.error('nodemailer package not installed. Run: npm install nodemailer');
-      return false;
+      logger.warn('nodemailer package not installed. Run: npm install nodemailer');
+      return {
+        delivered: false,
+        provider: "smtp",
+        reason: "nodemailer_not_installed",
+      };
+    }
+
+    const smtpHost = process.env.SMTP_HOST || "localhost";
+    const smtpPortRaw = process.env.SMTP_PORT || "587";
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpFrom = process.env.SMTP_FROM || "noreply@vixo.click";
+    const smtpPort = Number.parseInt(smtpPortRaw, 10);
+
+    if (!Number.isFinite(smtpPort) || smtpPort <= 0) {
+      logger.warn(`Invalid SMTP_PORT value: ${smtpPortRaw}`);
+      return {
+        delivered: false,
+        provider: "smtp",
+        reason: "invalid_smtp_port",
+      };
+    }
+
+    const missing: string[] = [];
+    if (!smtpUser) missing.push("SMTP_USER");
+    if (!smtpPass) missing.push("SMTP_PASS");
+
+    if (missing.length > 0) {
+      logger.warn(`SMTP configuration incomplete: ${missing.join(", ")}`);
+      return {
+        delivered: false,
+        provider: "smtp",
+        reason: `missing_${missing.join("_").toLowerCase()}`,
+      };
     }
 
     const createTransport = (nodemailer.default as Record<string, unknown>)?.createTransport || nodemailer.createTransport;
     const transporter = (createTransport as Function)({
-      host: process.env.SMTP_HOST || 'localhost',
-      port: parseInt(process.env.SMTP_PORT || '587'),
+      host: smtpHost,
+      port: smtpPort,
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
+        user: smtpUser,
+        pass: smtpPass,
       },
     });
 
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || 'noreply@vixo.click',
+    const info = await transporter.sendMail({
+      from: smtpFrom,
       to: options.to,
       subject: options.subject,
       text: options.text,
       html: options.html,
     });
 
-    logger.info(`Email sent to ${options.to}: ${options.subject}`);
-    return true;
+    const accepted = Array.isArray((info as { accepted?: unknown[] }).accepted)
+      ? ((info as { accepted?: unknown[] }).accepted?.length || 0)
+      : 0;
+    const rejected = Array.isArray((info as { rejected?: unknown[] }).rejected)
+      ? ((info as { rejected?: unknown[] }).rejected?.length || 0)
+      : 0;
+
+    const messageId = typeof (info as { messageId?: unknown }).messageId === "string"
+      ? ((info as { messageId?: string }).messageId)
+      : undefined;
+
+    if (rejected > 0 && accepted === 0) {
+      logger.error(`SMTP rejected email to ${maskEmailAddress(options.to)}`);
+      return {
+        delivered: false,
+        provider: "smtp",
+        reason: "smtp_rejected",
+        messageId,
+      };
+    }
+
+    logger.info(`Email sent via SMTP to ${maskEmailAddress(options.to)}: ${options.subject}`, {
+      provider: "smtp",
+      messageId,
+      accepted,
+      rejected,
+    });
+    return {
+      delivered: true,
+      provider: "smtp",
+      messageId,
+    };
   } catch (error) {
-    logger.error(`Email failed to ${options.to}`, error instanceof Error ? error : new Error(String(error)));
-    return false;
+    logger.error(`Email failed via SMTP to ${maskEmailAddress(options.to)}`, error instanceof Error ? error : new Error(String(error)));
+    return {
+      delivered: false,
+      provider: "smtp",
+      reason: "smtp_send_failed",
+    };
   }
 }
 
-async function sendEmailSendGrid(options: EmailOptions): Promise<boolean> {
+async function sendEmailSendGrid(options: EmailOptions): Promise<EmailSendResult> {
   try {
     const apiKey = process.env.SENDGRID_API_KEY;
     if (!apiKey) {
-      logger.error('SendGrid API key not configured');
-      return false;
+      logger.warn('SendGrid API key not configured');
+      return {
+        delivered: false,
+        provider: "sendgrid",
+        reason: "missing_sendgrid_api_key",
+      };
     }
+
+    const fromEmail = process.env.SENDGRID_FROM || 'noreply@vixo.click';
 
     const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
       method: 'POST',
@@ -77,7 +170,7 @@ async function sendEmailSendGrid(options: EmailOptions): Promise<boolean> {
       },
       body: JSON.stringify({
         personalizations: [{ to: [{ email: options.to }] }],
-        from: { email: process.env.SENDGRID_FROM || 'noreply@vixo.click' },
+        from: { email: fromEmail },
         subject: options.subject,
         content: [
           { type: 'text/plain', value: options.text },
@@ -87,20 +180,38 @@ async function sendEmailSendGrid(options: EmailOptions): Promise<boolean> {
     });
 
     if (response.ok || response.status === 202) {
-      logger.info(`Email sent via SendGrid to ${options.to}: ${options.subject}`);
-      return true;
+      const messageId = response.headers.get("x-message-id") || undefined;
+      logger.info(`Email sent via SendGrid to ${maskEmailAddress(options.to)}: ${options.subject}`, {
+        provider: "sendgrid",
+        messageId,
+      });
+      return {
+        delivered: true,
+        provider: "sendgrid",
+        statusCode: response.status,
+        messageId,
+      };
     }
 
     const errorText = await response.text();
-    logger.error(`SendGrid error: ${response.status} ${errorText}`);
-    return false;
+    logger.warn(`SendGrid error: ${response.status} ${errorText.substring(0, 400)}`);
+    return {
+      delivered: false,
+      provider: "sendgrid",
+      reason: "sendgrid_rejected",
+      statusCode: response.status,
+    };
   } catch (error) {
     logger.error('SendGrid failed', error instanceof Error ? error : new Error(String(error)));
-    return false;
+    return {
+      delivered: false,
+      provider: "sendgrid",
+      reason: "sendgrid_request_failed",
+    };
   }
 }
 
-export async function sendEmail(options: EmailOptions): Promise<boolean> {
+export async function sendEmailWithResult(options: EmailOptions): Promise<EmailSendResult> {
   const provider = (process.env.EMAIL_PROVIDER || 'console') as EmailProvider;
 
   if (provider === 'console' && process.env.NODE_ENV === 'production' && !warnedConsoleProviderInProduction) {
@@ -117,4 +228,9 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     default:
       return sendEmailConsole(options);
   }
+}
+
+export async function sendEmail(options: EmailOptions): Promise<boolean> {
+  const result = await sendEmailWithResult(options);
+  return result.delivered;
 }

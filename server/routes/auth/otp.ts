@@ -5,10 +5,11 @@ import { storage } from "../../storage";
 import { db } from "../../db";
 import { otpVerifications, loginMethodConfigs } from "@shared/schema";
 import { eq, and, desc, gt, isNull, sql } from "drizzle-orm";
-import { sendEmail, sendSms, buildOtpEmailHtml, buildOtpSmsMessage } from "../../lib/messaging";
+import { sendEmailWithResult, sendSms, buildOtpEmailHtml, buildOtpSmsMessage } from "../../lib/messaging";
 import { authMiddleware, AuthRequest, otpRateLimiter, strictRateLimiter } from "../middleware";
 import { sendNotification } from "../../websocket";
 import { getErrorMessage, IS_DEV_MODE } from "./helpers";
+import { logger } from "../../lib/logger";
 
 const OTP_RESEND_COOLDOWN_SECONDS = 5 * 60;
 
@@ -146,19 +147,37 @@ export function registerOtpRoutes(app: Express) {
 
       // Deliver OTP via email or SMS
       if (contactType === "email") {
-        const delivered = await sendEmail({
+        const deliveryResult = await sendEmailWithResult({
           to: effectiveContactValue,
           subject: "VEX - رمز التحقق",
           text: `رمز التحقق الخاص بك: ${otpCode}\nصالح لمدة ${otpExpiryMinutes} دقيقة`,
           html: buildOtpEmailHtml(otpCode, otpExpiryMinutes),
         });
 
-        if (!delivered) {
+        if (!deliveryResult.delivered) {
+          logger.error("[OTP] Email delivery failed", new Error(deliveryResult.reason || "email_delivery_failed"), {
+            userId,
+            provider: deliveryResult.provider,
+            statusCode: deliveryResult.statusCode,
+          });
+
           await clearCurrentOtp();
           return res.status(502).json({
-            error: "Failed to send OTP email. Please verify mail provider settings and try again."
+            error: "Failed to send OTP email. Please verify mail provider settings and try again.",
+            errorCode: "OTP_EMAIL_DELIVERY_FAILED",
+            ...(IS_DEV_MODE && {
+              deliveryReason: deliveryResult.reason,
+              deliveryProvider: deliveryResult.provider,
+              deliveryStatusCode: deliveryResult.statusCode,
+            })
           });
         }
+
+        logger.info("[OTP] Email delivery accepted", {
+          userId,
+          provider: deliveryResult.provider,
+          messageId: deliveryResult.messageId,
+        });
       } else if (contactType === "phone") {
         const delivered = await sendSms({
           to: effectiveContactValue,
@@ -185,6 +204,9 @@ export function registerOtpRoutes(app: Express) {
       res.json({
         success: true,
         message: `OTP sent to ${maskedValue}`,
+        maskedDestination: maskedValue,
+        contactType,
+        otpLength,
         expiresIn: otpExpiryMinutes * 60,
         resendAfter: OTP_RESEND_COOLDOWN_SECONDS,
         // Only in explicit dev mode for testing
