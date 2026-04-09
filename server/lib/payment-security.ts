@@ -5,6 +5,7 @@ import {
     paymentIpActivities,
     paymentIpBlocks,
     paymentOperationTokens,
+    systemSettings,
     type PaymentOperationType,
     users,
 } from "@shared/schema";
@@ -20,9 +21,102 @@ const PAYMENT_IP_MIN_OPERATIONS_FOR_AUTO_BLOCK = Math.max(1, Number(process.env.
 const PAYMENT_IP_RISK_SCORE_BLOCK_THRESHOLD = Math.min(100, Math.max(10, Number(process.env.PAYMENT_IP_RISK_SCORE_BLOCK_THRESHOLD || 80)));
 const PAYMENT_IP_AUTO_BLOCK_ENABLED = process.env.PAYMENT_IP_AUTO_BLOCK_ENABLED !== "false";
 const PAYMENT_IP_IGNORE_PRIVATE_RANGES = process.env.PAYMENT_IP_IGNORE_PRIVATE_RANGES === "true";
+const PAYMENT_IP_SECURITY_MODE_SETTING_KEY = "payment_security.ip_mode";
+const PAYMENT_IP_SECURITY_MODE_CACHE_TTL_MS = 15_000;
+const PAYMENT_IP_NOTIFY_COOLDOWN_MS = Math.max(30_000, Number(process.env.PAYMENT_IP_NOTIFY_COOLDOWN_MS || 300_000));
+
+type PaymentIpSecurityMode = "auto_block" | "notify_only";
+
+let paymentIpSecurityModeCache: { value: PaymentIpSecurityMode; expiresAtMs: number } | null = null;
+const paymentRiskNotifyCooldownByIp = new Map<string, number>();
 
 export type PaymentIpRiskLevel = "low" | "medium" | "high" | "critical";
 export type PaymentIpRecommendedAction = "allow" | "monitor" | "review" | "block" | "blocked";
+
+function getDefaultPaymentIpSecurityMode(): PaymentIpSecurityMode {
+    return PAYMENT_IP_AUTO_BLOCK_ENABLED ? "auto_block" : "notify_only";
+}
+
+function normalizePaymentIpSecurityMode(value: string | null | undefined): PaymentIpSecurityMode | null {
+    if (value === "auto_block" || value === "notify_only") {
+        return value;
+    }
+    return null;
+}
+
+function setPaymentIpSecurityModeCache(value: PaymentIpSecurityMode): void {
+    paymentIpSecurityModeCache = {
+        value,
+        expiresAtMs: Date.now() + PAYMENT_IP_SECURITY_MODE_CACHE_TTL_MS,
+    };
+}
+
+function shouldEmitNotifyOnlyRiskAlert(ipAddress: string): boolean {
+    const currentTimeMs = Date.now();
+    const lastNotifiedAtMs = paymentRiskNotifyCooldownByIp.get(ipAddress) || 0;
+
+    if (currentTimeMs - lastNotifiedAtMs < PAYMENT_IP_NOTIFY_COOLDOWN_MS) {
+        return false;
+    }
+
+    paymentRiskNotifyCooldownByIp.set(ipAddress, currentTimeMs);
+
+    if (paymentRiskNotifyCooldownByIp.size > 5000) {
+        for (const [ip, notifiedAtMs] of paymentRiskNotifyCooldownByIp) {
+            if (currentTimeMs - notifiedAtMs > PAYMENT_IP_NOTIFY_COOLDOWN_MS * 4) {
+                paymentRiskNotifyCooldownByIp.delete(ip);
+            }
+        }
+    }
+
+    return true;
+}
+
+export async function getPaymentIpSecurityMode(): Promise<PaymentIpSecurityMode> {
+    if (paymentIpSecurityModeCache && paymentIpSecurityModeCache.expiresAtMs > Date.now()) {
+        return paymentIpSecurityModeCache.value;
+    }
+
+    const [setting] = await db
+        .select({ value: systemSettings.value })
+        .from(systemSettings)
+        .where(eq(systemSettings.key, PAYMENT_IP_SECURITY_MODE_SETTING_KEY))
+        .limit(1);
+
+    const normalized = normalizePaymentIpSecurityMode(setting?.value);
+    const resolved = normalized || getDefaultPaymentIpSecurityMode();
+    setPaymentIpSecurityModeCache(resolved);
+    return resolved;
+}
+
+export async function setPaymentIpSecurityMode(mode: PaymentIpSecurityMode, updatedBy?: string): Promise<PaymentIpSecurityMode> {
+    const resolvedMode = normalizePaymentIpSecurityMode(mode) || getDefaultPaymentIpSecurityMode();
+
+    await db
+        .insert(systemSettings)
+        .values({
+            key: PAYMENT_IP_SECURITY_MODE_SETTING_KEY,
+            value: resolvedMode,
+            category: "payment_security",
+            description: "Payment IP security mode: auto_block or notify_only",
+            dataType: "string",
+            updatedBy: updatedBy || null,
+        })
+        .onConflictDoUpdate({
+            target: systemSettings.key,
+            set: {
+                value: resolvedMode,
+                category: "payment_security",
+                description: "Payment IP security mode: auto_block or notify_only",
+                dataType: "string",
+                updatedBy: updatedBy || null,
+                updatedAt: now(),
+            },
+        });
+
+    setPaymentIpSecurityModeCache(resolvedMode);
+    return resolvedMode;
+}
 
 interface PaymentIpRiskMetrics {
     distinctUsers: number;
@@ -227,7 +321,8 @@ export async function getPaymentIpBlock(ipAddress: string) {
 }
 
 async function autoBlockIpIfNeeded(ipAddress: string, triggerUserId: string): Promise<{ blocked: boolean; reason?: string }> {
-    if (!PAYMENT_IP_AUTO_BLOCK_ENABLED) {
+    const mode = await getPaymentIpSecurityMode();
+    if (mode === "auto_block" && !PAYMENT_IP_AUTO_BLOCK_ENABLED) {
         return { blocked: false };
     }
 
@@ -262,6 +357,41 @@ async function autoBlockIpIfNeeded(ipAddress: string, triggerUserId: string): Pr
     const meetsRiskScoreRule = risk.score >= PAYMENT_IP_RISK_SCORE_BLOCK_THRESHOLD;
 
     if (!meetsDistinctAndVolumeRule && !meetsRiskScoreRule) {
+        return { blocked: false };
+    }
+
+    if (mode === "notify_only") {
+        if (shouldEmitNotifyOnlyRiskAlert(ipAddress)) {
+            const reason = risk.reasons.length > 0
+                ? `Risk score ${risk.score}/100 (${risk.level}) in notify-only mode: ${risk.reasons.join("; ")}`
+                : `Risk score ${risk.score}/100 (${risk.level}) in notify-only mode`;
+
+            await emitSystemAlert({
+                title: "Payment IP Risk Detected (Notify-Only)",
+                titleAr: "تم رصد مخاطرة IP (تنبيه فقط)",
+                message: `IP ${ipAddress} matched block-level risk, but current mode is notify-only. Manual review required.`,
+                messageAr: `العنوان ${ipAddress} وصل إلى مستوى مخاطرة يستدعي الحظر، لكن الوضع الحالي تنبيه فقط ويتطلب مراجعة يدوية.`,
+                severity: "warning",
+                deepLink: "/admin/payment-security",
+                entityType: "payment_ip_risk",
+                entityId: ipAddress,
+            }).catch((error) => {
+                logger.warn("Failed to emit payment IP notify-only alert", {
+                    action: "payment_ip_alert_notify_only",
+                    error: error instanceof Error ? error.message : String(error),
+                    ipAddress,
+                });
+            });
+
+            logger.warn("Payment IP reached block threshold in notify-only mode", {
+                ipAddress,
+                triggerUserId,
+                riskScore: risk.score,
+                riskLevel: risk.level,
+                reason,
+            });
+        }
+
         return { blocked: false };
     }
 

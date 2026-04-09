@@ -6,6 +6,46 @@ import { getBlockedUserIds } from "../../lib/user-blocking";
 
 export function registerSocialListRoutes(app: Express): void {
 
+  app.get("/api/users/friend-requests/incoming", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const incomingRequests = await storage.getIncomingFriendRequests(req.user!.id);
+      const requesterIds = incomingRequests.map((request) => request.userId);
+
+      const usersMap = await storage.getUsersByIds(requesterIds);
+      const users = requesterIds
+        .map((id) => usersMap.get(id))
+        .filter(Boolean)
+        .map((user) => {
+          const { password, ...safeUser } = user!;
+          return safeUser;
+        });
+
+      res.json(users);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/users/friend-requests/outgoing", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const outgoingRequests = await storage.getOutgoingFriendRequests(req.user!.id);
+      const targetIds = outgoingRequests.map((request) => request.targetUserId);
+
+      const usersMap = await storage.getUsersByIds(targetIds);
+      const users = targetIds
+        .map((id) => usersMap.get(id))
+        .filter(Boolean)
+        .map((user) => {
+          const { password, ...safeUser } = user!;
+          return safeUser;
+        });
+
+      res.json(users);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
   app.get("/api/users/friends", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const [following, followers, blockedIds] = await Promise.all([

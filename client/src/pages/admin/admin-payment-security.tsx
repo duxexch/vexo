@@ -157,6 +157,13 @@ interface IpDetailsResponse {
     }>;
 }
 
+interface PaymentSecurityConfigResponse {
+    mode: "auto_block" | "notify_only";
+    autoBlockEnabled: boolean;
+    notifyOnly: boolean;
+    allowManualBlock: boolean;
+}
+
 const WINDOW_OPTIONS = [
     { value: "24", label: "24h" },
     { value: "72", label: "72h" },
@@ -192,6 +199,11 @@ export default function AdminPaymentSecurityPage() {
     const { data: overview, isLoading: overviewLoading, refetch: refetchOverview } = useQuery<OverviewResponse>({
         queryKey: ["/api/admin/payment-security/overview", parsedWindowHours],
         queryFn: () => adminFetch(`/api/admin/payment-security/overview?windowHours=${parsedWindowHours}`),
+    });
+
+    const { data: securityConfig, isLoading: securityConfigLoading } = useQuery<PaymentSecurityConfigResponse>({
+        queryKey: ["/api/admin/payment-security/config"],
+        queryFn: () => adminFetch("/api/admin/payment-security/config"),
     });
 
     const { data: blockedIps, isLoading: blockedLoading, refetch: refetchBlocked } = useQuery<BlockedIpRow[]>({
@@ -255,6 +267,26 @@ export default function AdminPaymentSecurityPage() {
         },
     });
 
+    const modeMutation = useMutation({
+        mutationFn: (mode: "auto_block" | "notify_only") => adminFetch("/api/admin/payment-security/config", {
+            method: "PATCH",
+            body: JSON.stringify({ mode }),
+        }),
+        onSuccess: (updated: PaymentSecurityConfigResponse) => {
+            queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-security/config"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-security/overview"] });
+            toast({
+                title: "Payment security mode updated",
+                description: updated.mode === "auto_block"
+                    ? "Automatic blocking is now ON."
+                    : "Notify-only mode is ON. Manual blocking remains available.",
+            });
+        },
+        onError: (error: Error) => {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        },
+    });
+
     const allUsageRows = usageRows || [];
     const allBlockedIps = blockedIps || [];
     const loading = overviewLoading || blockedLoading || usageLoading;
@@ -285,6 +317,14 @@ export default function AdminPaymentSecurityPage() {
         await Promise.all([refetchOverview(), refetchBlocked(), refetchUsage()]);
     };
 
+    const currentMode = securityConfig?.mode ?? "auto_block";
+    const isNotifyOnlyMode = currentMode === "notify_only";
+
+    const onToggleSecurityMode = () => {
+        const nextMode: "auto_block" | "notify_only" = isNotifyOnlyMode ? "auto_block" : "notify_only";
+        modeMutation.mutate(nextMode);
+    };
+
     return (
         <div className="p-6 space-y-6">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -293,8 +333,25 @@ export default function AdminPaymentSecurityPage() {
                     <p className="text-sm text-muted-foreground">
                         Smarter multi-account monitoring, risk scoring, and stronger global payment IP block controls.
                     </p>
+                    <p className="text-xs text-muted-foreground mt-1" data-testid="payment-security-mode-caption">
+                        Mode: {isNotifyOnlyMode ? "Notify Only (manual decisions)" : "Auto Block + Manual"}
+                    </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Button
+                        type="button"
+                        variant={isNotifyOnlyMode ? "outline" : "default"}
+                        onClick={onToggleSecurityMode}
+                        disabled={modeMutation.isPending || securityConfigLoading}
+                        data-testid="button-toggle-payment-security-mode"
+                    >
+                        {isNotifyOnlyMode ? (
+                            <Eye className="h-4 w-4 me-2" />
+                        ) : (
+                            <ShieldAlert className="h-4 w-4 me-2" />
+                        )}
+                        {isNotifyOnlyMode ? "Switch to Auto Block" : "Switch to Notify Only"}
+                    </Button>
                     <Button variant="outline" onClick={refreshAll} data-testid="button-refresh-ip-security">
                         <RefreshCw className="h-4 w-4 me-2" /> Refresh
                     </Button>

@@ -43,6 +43,7 @@ export function registerDetailsRoutes(app: Express) {
         currencyType: dbChallenge.currencyType === "project" ? "project" : "usd",
         status: dbChallenge.status,
         visibility: dbChallenge.visibility,
+        requiredPlayers: Number(dbChallenge.requiredPlayers || 2),
         player1Id: dbChallenge.player1Id,
         player1Name: player1?.nickname || player1?.username || "Unknown",
         player1Rating: { wins: p1Won, losses: p1Lost, winRate: p1WinRate, rank: p1Rank },

@@ -1,22 +1,26 @@
 import type { Express, Response } from "express";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { p2pSettings } from "@shared/schema";
+import { p2pOffers, p2pSettings, p2pTrades } from "@shared/schema";
 import { authMiddleware, AuthRequest, sensitiveRateLimiter } from "../middleware";
 import { emitSystemAlert } from "../../lib/admin-alerts";
 import { sendNotification } from "../../websocket";
 import {
+  computeFreezeUntilDate,
   checkUserP2PTradingPermission,
+  createP2PTradeAuditLog,
   getErrorMessage,
+  getP2PEscrowFreezeHours,
   calculateP2PFee,
   getEffectiveP2PVerificationLevel,
   getP2PVerificationErrorMessage,
   hasRequiredP2PVerification,
   MIN_P2P_VERIFICATION_LEVEL,
 } from "./helpers";
-import { isCurrencyAllowedForOfferType, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
+import { isCurrencyAllowedForOfferType, normalizeCurrencyCode, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../../lib/payment-security";
 import { getP2PUsernameMap } from "../../lib/p2p-username";
+import { and, eq, ne, or } from "drizzle-orm";
 
 /** GET /api/p2p/my-trades, POST /api/p2p/trades, GET /api/p2p/trades/:id */
 export function registerTradeRoutes(app: Express) {
@@ -64,6 +68,124 @@ export function registerTradeRoutes(app: Express) {
         };
       });
       res.json(enriched);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/p2p/wallet-balances", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const freezeHours = await getP2PEscrowFreezeHours();
+      const now = new Date();
+
+      const tradeRows = await db
+        .select({
+          id: p2pTrades.id,
+          buyerId: p2pTrades.buyerId,
+          sellerId: p2pTrades.sellerId,
+          amount: p2pTrades.amount,
+          status: p2pTrades.status,
+          completedAt: p2pTrades.completedAt,
+          confirmedAt: p2pTrades.confirmedAt,
+          offerCurrency: p2pOffers.cryptoCurrency,
+        })
+        .from(p2pTrades)
+        .innerJoin(p2pOffers, eq(p2pTrades.offerId, p2pOffers.id))
+        .where(and(
+          or(eq(p2pTrades.buyerId, userId), eq(p2pTrades.sellerId, userId)),
+          ne(p2pTrades.status, "cancelled"),
+        ));
+
+      type CurrencyBalanceState = {
+        currency: string;
+        available: number;
+        frozen: number;
+        pendingIncoming: number;
+        reservedOutgoing: number;
+        nextReleaseAt: Date | null;
+      };
+
+      const balances = new Map<string, CurrencyBalanceState>();
+
+      const getState = (currencyCode: string): CurrencyBalanceState => {
+        const normalized = normalizeCurrencyCode(currencyCode) || "USD";
+        const existing = balances.get(normalized);
+        if (existing) {
+          return existing;
+        }
+
+        const created: CurrencyBalanceState = {
+          currency: normalized,
+          available: 0,
+          frozen: 0,
+          pendingIncoming: 0,
+          reservedOutgoing: 0,
+          nextReleaseAt: null,
+        };
+        balances.set(normalized, created);
+        return created;
+      };
+
+      for (const trade of tradeRows) {
+        const amount = Number(trade.amount || 0);
+        if (!Number.isFinite(amount) || amount <= 0) {
+          continue;
+        }
+
+        const state = getState(String(trade.offerCurrency || "USD"));
+        const isBuyer = trade.buyerId === userId;
+        const isSeller = trade.sellerId === userId;
+
+        if (isBuyer) {
+          if (trade.status === "completed") {
+            const completedAt = trade.completedAt ? new Date(trade.completedAt) : now;
+            const freezeUntil = computeFreezeUntilDate(completedAt, freezeHours);
+
+            if (freezeUntil > now) {
+              state.frozen += amount;
+              if (!state.nextReleaseAt || freezeUntil > state.nextReleaseAt) {
+                state.nextReleaseAt = freezeUntil;
+              }
+            } else {
+              state.available += amount;
+            }
+          } else if (trade.status === "confirmed") {
+            state.pendingIncoming += amount;
+          }
+        }
+
+        if (isSeller) {
+          if (trade.status === "completed") {
+            state.available -= amount;
+          } else if (trade.status === "pending" || trade.status === "paid" || trade.status === "confirmed") {
+            state.reservedOutgoing += amount;
+          }
+        }
+      }
+
+      const response = Array.from(balances.values())
+        .map((state) => {
+          const available = Math.max(0, state.available);
+          const frozen = Math.max(0, state.frozen + state.pendingIncoming);
+          const reservedOutgoing = Math.max(0, state.reservedOutgoing);
+
+          return {
+            currency: state.currency,
+            available: available.toFixed(8),
+            frozen: frozen.toFixed(8),
+            reservedOutgoing: reservedOutgoing.toFixed(8),
+            total: (available + frozen).toFixed(8),
+            nextReleaseAt: state.nextReleaseAt ? state.nextReleaseAt.toISOString() : null,
+            freezeHours,
+          };
+        })
+        .filter((entry) => {
+          return Number(entry.available) > 0 || Number(entry.frozen) > 0 || Number(entry.reservedOutgoing) > 0;
+        })
+        .sort((a, b) => a.currency.localeCompare(b.currency));
+
+      res.json(response);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -258,6 +380,37 @@ export function registerTradeRoutes(app: Express) {
         }
 
         const trade = result.trade!;
+
+        await createP2PTradeAuditLog({
+          tradeId: trade.id,
+          userId: req.user!.id,
+          action: "trade_created",
+          description: `Trade created by user ${req.user!.id}`,
+          descriptionAr: `تم إنشاء الصفقة بواسطة المستخدم ${req.user!.id}`,
+          metadata: {
+            offerId,
+            amount,
+            fiatAmount: fiatAmount.toFixed(2),
+            paymentMethod: matchedPaymentMethod,
+          },
+          ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
+          userAgent: req.headers["user-agent"] || "",
+        });
+
+        await createP2PTradeAuditLog({
+          tradeId: trade.id,
+          userId: trade.sellerId,
+          action: "escrow_held",
+          description: `Escrow hold activated for seller balance on trade ${trade.id}`,
+          descriptionAr: `تم حجز الضمان من رصيد البائع في الصفقة ${trade.id}`,
+          metadata: {
+            escrowAmount: trade.escrowAmount,
+            expiresAt: trade.expiresAt,
+            offerCurrency: offer.cryptoCurrency,
+          },
+          ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
+          userAgent: req.headers["user-agent"] || "",
+        });
 
         await storage.createP2PTradeMessage({
           tradeId: trade.id,

@@ -1,11 +1,13 @@
 import type { Express, Response } from "express";
 import {
     blockPaymentIpManually,
+    getPaymentIpSecurityMode,
     getPaymentIpDetails,
     getPaymentSecurityOverview,
     listBlockedPaymentIps,
     listPaymentIpUsage,
     normalizeIpAddress,
+    setPaymentIpSecurityMode,
     unblockPaymentIpManually,
 } from "../lib/payment-security";
 import { emitSystemAlert } from "../lib/admin-alerts";
@@ -17,6 +19,61 @@ import {
 } from "./helpers";
 
 export function registerAdminPaymentSecurityRoutes(app: Express) {
+    app.get("/api/admin/payment-security/config", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
+        try {
+            const mode = await getPaymentIpSecurityMode();
+            return res.json({
+                mode,
+                autoBlockEnabled: mode === "auto_block",
+                notifyOnly: mode === "notify_only",
+                allowManualBlock: true,
+            });
+        } catch (error: unknown) {
+            return res.status(500).json({ error: getErrorMessage(error) });
+        }
+    });
+
+    app.patch("/api/admin/payment-security/config", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+        try {
+            if (!req.admin?.id) {
+                return res.status(401).json({ error: "Admin authentication required" });
+            }
+
+            const requestedMode = typeof req.body?.mode === "string" ? req.body.mode : "";
+            if (requestedMode !== "auto_block" && requestedMode !== "notify_only") {
+                return res.status(400).json({ error: "mode must be either auto_block or notify_only" });
+            }
+
+            const previousMode = await getPaymentIpSecurityMode();
+            const updatedMode = await setPaymentIpSecurityMode(requestedMode, req.admin.id);
+
+            await logAdminAction(req.admin.id, "settings_update", "payment_security_mode", "payment_security.ip_mode", {
+                previousValue: previousMode,
+                newValue: updatedMode,
+            }, req);
+
+            await emitSystemAlert({
+                title: "Payment Security Mode Updated",
+                titleAr: "تم تحديث وضع أمان الدفع",
+                message: `Payment security mode changed to ${updatedMode}.`,
+                messageAr: `تم تغيير وضع أمان الدفع إلى ${updatedMode === "auto_block" ? "الحظر التلقائي" : "تنبيه فقط"}.`,
+                severity: "warning",
+                deepLink: "/admin/payment-security",
+                entityType: "payment_security_mode",
+                entityId: "payment_security.ip_mode",
+            }).catch(() => { });
+
+            return res.json({
+                mode: updatedMode,
+                autoBlockEnabled: updatedMode === "auto_block",
+                notifyOnly: updatedMode === "notify_only",
+                allowManualBlock: true,
+            });
+        } catch (error: unknown) {
+            return res.status(500).json({ error: getErrorMessage(error) });
+        }
+    });
+
     app.get("/api/admin/payment-security/blocked-ips", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
         try {
             const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 200));

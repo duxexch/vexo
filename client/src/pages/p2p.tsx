@@ -271,6 +271,42 @@ function formatFiatRange(minValue: string | number, maxValue: string | number, l
   return `${formatFixedFiat(minValue, locale)} - ${formatFixedFiat(maxValue, locale)}`;
 }
 
+function resolveLanguageLocale(languageCode?: string): string {
+  const normalizedCode = String(languageCode || "en").trim();
+  const requestedLocale = normalizedCode === "ar" ? "ar-SA-u-nu-arab" : normalizedCode;
+
+  try {
+    new Intl.NumberFormat(requestedLocale);
+    return requestedLocale;
+  } catch {
+    return "en-US";
+  }
+}
+
+function formatLocalizedDate(dateValue: string | Date, locale: string): string {
+  const parsedDate = new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "-";
+  }
+  return parsedDate.toLocaleDateString(locale);
+}
+
+function formatLocalizedTime(dateValue: string | Date, locale: string): string {
+  const parsedDate = new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "-";
+  }
+  return parsedDate.toLocaleTimeString(locale);
+}
+
+function formatLocalizedDateTime(dateValue: string | Date, locale: string): string {
+  const parsedDate = new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "-";
+  }
+  return parsedDate.toLocaleString(locale);
+}
+
 function MarketplaceTab() {
   const { t, language } = useI18n();
   const { toast } = useToast();
@@ -284,7 +320,7 @@ function MarketplaceTab() {
   const [selectedOffer, setSelectedOffer] = useState<P2POffer | null>(null);
   const [tradeAmount, setTradeAmount] = useState("");
   const [tradePaymentMethod, setTradePaymentMethod] = useState("");
-  const numberLocale = language === "ar" ? "ar-SA" : "en-US";
+  const numberLocale = resolveLanguageLocale(language);
 
   const { data: offerEligibility } = useQuery<OfferEligibility>({
     queryKey: ["/api/p2p/offer-eligibility"],
@@ -493,6 +529,13 @@ function MarketplaceTab() {
       paymentMethod: tradePaymentMethod,
     });
   };
+
+  const tradeAmountNumeric = Number(tradeAmount);
+  const selectedOfferPrice = Number(selectedOffer?.price ?? 0);
+  const previewHasValidAmount = Number.isFinite(tradeAmountNumeric) && tradeAmountNumeric > 0;
+  const previewTotalPrice = previewHasValidAmount && Number.isFinite(selectedOfferPrice)
+    ? tradeAmountNumeric * selectedOfferPrice
+    : 0;
 
   if (isLoading) {
     return (
@@ -828,6 +871,32 @@ function MarketplaceTab() {
                 />
               </div>
 
+              <div className="rounded-lg border p-3 space-y-2" data-testid="trade-amount-preview">
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-muted-foreground">{t('common.amount')}</span>
+                  <span className="font-medium tabular-nums">
+                    {previewHasValidAmount
+                      ? formatAssetAmount(tradeAmountNumeric, selectedOffer.currency, numberLocale)
+                      : formatAssetAmount(0, selectedOffer.currency, numberLocale)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-muted-foreground">{t('p2p.price')}</span>
+                  <span className="font-medium tabular-nums">{formatFixedFiat(selectedOffer.price, numberLocale)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-muted-foreground">{t('p2p.totalPrice')}</span>
+                  <span className="font-semibold tabular-nums">
+                    {formatFixedFiat(previewTotalPrice, numberLocale)}
+                  </span>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="text-muted-foreground">{t('p2p.limit')}</span>
+                  <span className="font-medium tabular-nums">{formatFiatRange(selectedOffer.minLimit, selectedOffer.maxLimit, numberLocale)}</span>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label>{t('p2p.paymentMethod')}</Label>
                 <Select value={tradePaymentMethod} onValueChange={setTradePaymentMethod}>
@@ -843,8 +912,11 @@ function MarketplaceTab() {
               </div>
 
               {selectedOffer.terms && (
-                <div className="rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">
-                  {selectedOffer.terms}
+                <div className="rounded-lg border border-amber-300/40 bg-amber-50/40 p-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p className="leading-6">{selectedOffer.terms}</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -876,9 +948,10 @@ function MarketplaceTab() {
 }
 
 function MyOffersTab() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const numberLocale = resolveLanguageLocale(language);
 
   const { data: myOffers, isLoading } = useQuery<P2POffer[]>({
     queryKey: ["/api/p2p/my-offers"],
@@ -1333,15 +1406,15 @@ function MyOffersTab() {
         <div className="grid grid-cols-3 gap-2 p-3 sm:p-4">
           <div className="rounded-lg border border-slate-800 bg-slate-900 p-2">
             <p className="text-[11px] text-slate-400 sm:text-xs">{t('p2p.yourOffers')}</p>
-            <p className="mt-1 text-lg font-semibold text-slate-100">{offerStats.total}</p>
+            <p className="mt-1 text-lg font-semibold text-slate-100">{formatNumericValue(offerStats.total, numberLocale, 0, 0)}</p>
           </div>
           <div className="rounded-lg border border-slate-800 bg-slate-900 p-2">
             <p className="text-[11px] text-slate-400 sm:text-xs">{t('p2p.statusActive')}</p>
-            <p className="mt-1 text-lg font-semibold text-slate-100">{offerStats.active}</p>
+            <p className="mt-1 text-lg font-semibold text-slate-100">{formatNumericValue(offerStats.active, numberLocale, 0, 0)}</p>
           </div>
           <div className="rounded-lg border border-slate-800 bg-slate-900 p-2">
             <p className="text-[11px] text-slate-400 sm:text-xs">{t('p2p.statusInactive')}</p>
-            <p className="mt-1 text-lg font-semibold text-slate-100">{offerStats.inactive}</p>
+            <p className="mt-1 text-lg font-semibold text-slate-100">{formatNumericValue(offerStats.inactive, numberLocale, 0, 0)}</p>
           </div>
         </div>
       </div>
@@ -1372,7 +1445,7 @@ function MyOffersTab() {
                           {getStatusBadge(offer.status).props.children}
                         </Badge>
                       </div>
-                      <p className="mt-2 text-xs text-slate-400">${offer.minLimit} - ${offer.maxLimit}</p>
+                      <p className="mt-2 text-xs text-slate-400">{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}</p>
                     </div>
 
                     <div className="flex gap-1">
@@ -1395,11 +1468,11 @@ function MyOffersTab() {
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div className="rounded-md bg-slate-900 p-2">
                       <p className="text-xs text-slate-400">{t('common.amount')}</p>
-                      <p className="mt-1 font-semibold text-slate-100">{offer.amount} {offer.currency}</p>
+                      <p className="mt-1 font-semibold text-slate-100">{formatAssetAmount(offer.amount, offer.currency, numberLocale)}</p>
                     </div>
                     <div className="rounded-md bg-slate-900 p-2">
                       <p className="text-xs text-slate-400">{t('p2p.price')}</p>
-                      <p className="mt-1 font-semibold text-slate-100">${offer.price}</p>
+                      <p className="mt-1 font-semibold text-slate-100">{formatFixedFiat(offer.price, numberLocale)}</p>
                     </div>
                   </div>
 
@@ -1411,7 +1484,7 @@ function MyOffersTab() {
                     ))}
                     {offer.paymentMethods.length > 2 && (
                       <Badge variant="outline" className="border-slate-700 text-slate-300">
-                        +{offer.paymentMethods.length - 2}
+                        +{formatNumericValue(offer.paymentMethods.length - 2, numberLocale, 0, 0)}
                       </Badge>
                     )}
                   </div>
@@ -1441,9 +1514,9 @@ function MyOffersTab() {
                         {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-slate-100"><span>{offer.amount} {offer.currency}</span></TableCell>
-                    <TableCell className="text-slate-100 font-semibold">${offer.price}</TableCell>
-                    <TableCell className="text-slate-300"><span>${offer.minLimit} - ${offer.maxLimit}</span></TableCell>
+                    <TableCell className="text-slate-100"><span>{formatAssetAmount(offer.amount, offer.currency, numberLocale)}</span></TableCell>
+                    <TableCell className="text-slate-100 font-semibold">{formatFixedFiat(offer.price, numberLocale)}</TableCell>
+                    <TableCell className="text-slate-300"><span>{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}</span></TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {offer.paymentMethods.slice(0, 2).map((method) => (
@@ -1453,7 +1526,7 @@ function MyOffersTab() {
                         ))}
                         {offer.paymentMethods.length > 2 && (
                           <Badge variant="outline" className="border-slate-700 text-slate-300">
-                            +{offer.paymentMethods.length - 2}
+                            +{formatNumericValue(offer.paymentMethods.length - 2, numberLocale, 0, 0)}
                           </Badge>
                         )}
                       </div>
@@ -1492,13 +1565,14 @@ function MyOffersTab() {
 }
 
 function MyTradesTab() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { user } = useAuth();
   const { toast } = useToast();
   const [activeTradeId, setActiveTradeId] = useState<string | null>(null);
   const [outgoingMessage, setOutgoingMessage] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [cancelReason, setCancelReason] = useState("");
+  const numberLocale = resolveLanguageLocale(language);
 
   const { data: trades, isLoading } = useQuery<P2PTrade[]>({
     queryKey: ["/api/p2p/my-trades"],
@@ -1521,6 +1595,16 @@ function MyTradesTab() {
     refetchInterval: activeTradeId ? 4000 : false,
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/p2p/trades/${activeTradeId!}/messages`);
+      return res.json();
+    },
+  });
+
+  const { data: tradeLogs = [], isLoading: tradeLogsLoading } = useQuery<P2PTransactionLog[]>({
+    queryKey: ["/api/p2p/trades", activeTradeId, "logs"],
+    enabled: !!activeTradeId,
+    refetchInterval: activeTradeId ? 5000 : false,
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/p2p/trades/${activeTradeId!}/logs`);
       return res.json();
     },
   });
@@ -1587,6 +1671,7 @@ function MyTradesTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/my-trades"] });
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId] });
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId, "logs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/offers"] });
       setCancelReason("");
       toast({
@@ -1717,21 +1802,21 @@ function MyTradesTab() {
             <History className="h-4 w-4" />
             <h3 className="text-sm font-semibold sm:text-base">{t('p2p.tradeHistory')}</h3>
           </div>
-          <Badge className="bg-slate-900 text-[#f0c73f] hover:bg-slate-900">{tradeStats.total}</Badge>
+          <Badge className="bg-slate-900 text-[#f0c73f] hover:bg-slate-900">{formatNumericValue(tradeStats.total, numberLocale, 0, 0)}</Badge>
         </div>
 
         <div className="grid grid-cols-3 gap-2 p-3 sm:p-4">
           <div className="rounded-lg border border-slate-800 bg-slate-900 p-2">
             <p className="text-[11px] text-slate-400 sm:text-xs">{t('p2p.tradeHistory')}</p>
-            <p className="mt-1 text-lg font-semibold text-slate-100">{tradeStats.total}</p>
+            <p className="mt-1 text-lg font-semibold text-slate-100">{formatNumericValue(tradeStats.total, numberLocale, 0, 0)}</p>
           </div>
           <div className="rounded-lg border border-slate-800 bg-slate-900 p-2">
             <p className="text-[11px] text-slate-400 sm:text-xs">{t('p2p.tradePending')}</p>
-            <p className="mt-1 text-lg font-semibold text-slate-100">{tradeStats.pending}</p>
+            <p className="mt-1 text-lg font-semibold text-slate-100">{formatNumericValue(tradeStats.pending, numberLocale, 0, 0)}</p>
           </div>
           <div className="rounded-lg border border-slate-800 bg-slate-900 p-2">
             <p className="text-[11px] text-slate-400 sm:text-xs">{t('p2p.tradeCompleted')}</p>
-            <p className="mt-1 text-lg font-semibold text-slate-100">{tradeStats.completed}</p>
+            <p className="mt-1 text-lg font-semibold text-slate-100">{formatNumericValue(tradeStats.completed, numberLocale, 0, 0)}</p>
           </div>
         </div>
       </div>
@@ -1774,7 +1859,7 @@ function MyTradesTab() {
                   </div>
 
                   <div className="mt-3 flex items-center justify-between gap-2">
-                    <p className="text-xs text-slate-400">{new Date(trade.createdAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-slate-400">{formatLocalizedDate(trade.createdAt, numberLocale)}</p>
                     <Button
                       size="sm"
                       variant="outline"
@@ -1825,7 +1910,7 @@ function MyTradesTab() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-slate-400">
-                      {new Date(trade.createdAt).toLocaleDateString()}
+                      {formatLocalizedDate(trade.createdAt, numberLocale)}
                     </TableCell>
                     <TableCell>
                       <Button
@@ -1874,7 +1959,7 @@ function MyTradesTab() {
                     {activeTrade.expiresAt && (
                       <div className="flex items-center gap-1 text-xs text-slate-400">
                         <Clock className="h-3.5 w-3.5" />
-                        <span>{new Date(activeTrade.expiresAt).toLocaleString()}</span>
+                        <span>{formatLocalizedDateTime(activeTrade.expiresAt, numberLocale)}</span>
                       </div>
                     )}
                   </div>
@@ -1914,7 +1999,7 @@ function MyTradesTab() {
                                 )}
                                 <p>{message.message}</p>
                                 <p className="text-[10px] opacity-70 mt-1">
-                                  {new Date(message.createdAt).toLocaleTimeString()}
+                                  {formatLocalizedTime(message.createdAt, numberLocale)}
                                 </p>
                               </div>
                             </div>
@@ -1974,7 +2059,7 @@ function MyTradesTab() {
                           <Clock className="h-3.5 w-3.5" />
                           <span>{t('common.date')}</span>
                         </span>
-                        <span className="font-medium">{new Date(activeTrade.expiresAt).toLocaleString()}</span>
+                        <span className="font-medium">{formatLocalizedDateTime(activeTrade.expiresAt, numberLocale)}</span>
                       </div>
                     )}
                   </CardContent>
@@ -2084,6 +2169,35 @@ function MyTradesTab() {
                     )}
                   </CardContent>
                 </Card>
+
+                <Card className="border-slate-800 bg-slate-900/70 text-slate-100">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{t('p2p.tradeHistory')}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-44 pe-2">
+                      {tradeLogsLoading ? (
+                        <div className="space-y-2">
+                          <Skeleton className="h-8" />
+                          <Skeleton className="h-8" />
+                        </div>
+                      ) : tradeLogs.length === 0 ? (
+                        <p className="text-xs text-slate-400">{t('p2p.noTradesDesc')}</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {tradeLogs.slice(-8).map((log) => (
+                            <div key={log.id} className="rounded-md border border-slate-800 bg-slate-950/60 p-2">
+                              <p className="text-[11px] text-slate-200 leading-5">{log.description}</p>
+                              <p className="mt-1 text-[10px] text-slate-500">
+                                {formatLocalizedDateTime(log.createdAt, numberLocale)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           ) : (
@@ -2141,6 +2255,7 @@ function DisputesTab() {
   const { t, language } = useI18n();
   const { user } = useAuth();
   const { toast } = useToast();
+  const numberLocale = resolveLanguageLocale(language);
   const [selectedDispute, setSelectedDispute] = useState<string | null>(null);
   const [showFileDispute, setShowFileDispute] = useState(false);
   const [disputeStep, setDisputeStep] = useState(1);
@@ -2562,7 +2677,7 @@ function DisputesTab() {
                         )}
                         <div className="p-2 bg-background">
                           <p className="text-xs font-medium truncate">{safeFileName}</p>
-                          <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                          <p className="text-xs text-muted-foreground">{formatNumericValue(file.size / 1024 / 1024, numberLocale, 2, 2)} MB</p>
                         </div>
                         <Button
                           variant="destructive"
@@ -2946,7 +3061,7 @@ function DisputesTab() {
                                     <div>
                                       <p className="text-sm font-medium">{ev.fileName}</p>
                                       <p className="text-xs text-slate-400">
-                                        {ev.uploaderName} - {new Date(ev.createdAt).toLocaleString()}
+                                        {ev.uploaderName} - {formatLocalizedDateTime(ev.createdAt, numberLocale)}
                                       </p>
                                     </div>
                                   </div>
@@ -3000,7 +3115,7 @@ function DisputesTab() {
                                     {getDisputeActionLabel(log.action)}
                                   </Badge>
                                   <span className="text-xs text-slate-400">
-                                    {new Date(log.createdAt).toLocaleString()}
+                                    {formatLocalizedDateTime(log.createdAt, numberLocale)}
                                   </span>
                                 </div>
                                 <p className="text-sm">

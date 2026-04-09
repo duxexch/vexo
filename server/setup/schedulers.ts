@@ -371,6 +371,30 @@ export function startSchedulers(): void {
           if (result.success) {
             logger.info(`[P2P Scheduler] Auto-cancelled expired trade ${trade.id}`);
 
+            await db.insert(p2pTransactionLogs).values({
+              tradeId: trade.id,
+              userId: trade.sellerId,
+              action: "trade_cancelled",
+              description: `Trade auto-cancelled after payment timeout expiry.`,
+              descriptionAr: `تم إلغاء الصفقة تلقائياً بعد انتهاء مهلة الدفع.`,
+              metadata: JSON.stringify({
+                reason: "auto_expired",
+                expiresAt: trade.expiresAt,
+              }),
+            });
+
+            await db.insert(p2pTransactionLogs).values({
+              tradeId: trade.id,
+              userId: trade.sellerId,
+              action: "escrow_returned",
+              description: `Escrow returned to seller after auto-cancellation.`,
+              descriptionAr: `تم إرجاع الضمان للبائع بعد الإلغاء التلقائي.`,
+              metadata: JSON.stringify({
+                reason: "auto_expired",
+                escrowAmount: trade.escrowAmount,
+              }),
+            });
+
             await storage.createNotification({
               userId: trade.buyerId,
               type: 'p2p',

@@ -80,6 +80,155 @@ export function registerSocialActionRoutes(app: Express): void {
     }
   });
 
+  app.post("/api/users/friend-request/:userId", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const targetUserId = req.params.userId;
+      const requesterId = req.user!.id;
+
+      if (targetUserId === requesterId) {
+        return res.status(400).json({ error: "Cannot send a friend request to yourself" });
+      }
+
+      const [targetUser, currentUser] = await Promise.all([
+        storage.getUser(targetUserId),
+        storage.getUser(requesterId),
+      ]);
+
+      if (!targetUser || !currentUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const isBlocked = await isEitherUserBlocked(requesterId, targetUserId);
+      if (isBlocked) {
+        return res.status(403).json({ error: "Cannot send a friend request to this user" });
+      }
+
+      const [myFollow, theirFollow, outgoingRequest, incomingRequest] = await Promise.all([
+        storage.getUserRelationship(requesterId, targetUserId, "follow"),
+        storage.getUserRelationship(targetUserId, requesterId, "follow"),
+        storage.getUserRelationship(requesterId, targetUserId, "friend_request"),
+        storage.getUserRelationship(targetUserId, requesterId, "friend_request"),
+      ]);
+
+      const alreadyFriends = myFollow?.status === "active" && theirFollow?.status === "active";
+      if (alreadyFriends) {
+        return res.status(400).json({ error: "Already friends" });
+      }
+
+      if (outgoingRequest?.status === "pending") {
+        return res.status(400).json({ error: "Friend request already sent" });
+      }
+
+      if (incomingRequest?.status === "pending") {
+        return res.status(409).json({
+          error: "This user already sent you a friend request",
+          code: "INCOMING_REQUEST_EXISTS",
+        });
+      }
+
+      await storage.createUserRelationship({
+        userId: requesterId,
+        targetUserId,
+        type: "friend_request",
+        status: "pending",
+      });
+
+      await sendNotification(targetUserId, {
+        type: "system",
+        priority: "normal",
+        title: "Friend Request",
+        titleAr: "طلب صداقة",
+        message: `${currentUser.username || "Someone"} sent you a friend request`,
+        messageAr: `أرسل ${currentUser.username || "شخص ما"} طلب صداقة`,
+        link: "/friends",
+      });
+
+      res.json({ success: true, message: "Friend request sent" });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/users/friend-request/:userId/accept", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const requesterId = req.params.userId;
+      const approverId = req.user!.id;
+
+      if (requesterId === approverId) {
+        return res.status(400).json({ error: "Invalid friend request" });
+      }
+
+      const [requesterUser, approverUser] = await Promise.all([
+        storage.getUser(requesterId),
+        storage.getUser(approverId),
+      ]);
+
+      if (!requesterUser || !approverUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const isBlocked = await isEitherUserBlocked(requesterId, approverId);
+      if (isBlocked) {
+        return res.status(403).json({ error: "Cannot accept this friend request" });
+      }
+
+      const accepted = await storage.acceptFriendRequest(requesterId, approverId);
+      if (!accepted) {
+        return res.status(404).json({ error: "Friend request not found" });
+      }
+
+      await sendNotification(requesterId, {
+        type: "system",
+        priority: "normal",
+        title: "Friend Request Accepted",
+        titleAr: "تم قبول طلب الصداقة",
+        message: `${approverUser.username || "A user"} accepted your friend request`,
+        messageAr: `قبل ${approverUser.username || "مستخدم"} طلب صداقتك`,
+        link: `/player/${approverId}`,
+      });
+
+      res.json({ success: true, message: "Friend request accepted" });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/users/friend-request/:userId/reject", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const requesterId = req.params.userId;
+      const rejectorId = req.user!.id;
+
+      if (requesterId === rejectorId) {
+        return res.status(400).json({ error: "Invalid friend request" });
+      }
+
+      const rejected = await storage.rejectFriendRequest(requesterId, rejectorId);
+      if (!rejected) {
+        return res.status(404).json({ error: "Friend request not found" });
+      }
+
+      res.json({ success: true, message: "Friend request rejected" });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/users/friend-request/:userId", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const requesterId = req.user!.id;
+      const targetUserId = req.params.userId;
+
+      const cancelled = await storage.cancelFriendRequest(requesterId, targetUserId);
+      if (!cancelled) {
+        return res.status(404).json({ error: "Friend request not found" });
+      }
+
+      res.json({ success: true, message: "Friend request cancelled" });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
   app.delete("/api/users/unfollow/:userId", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const targetUserId = req.params.userId;

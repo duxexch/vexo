@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { p2pSettings, p2pTraderProfiles, p2pTrades, type User } from "@shared/schema";
+import { p2pSettings, p2pTraderProfiles, p2pTrades, p2pTransactionLogs, type User } from "@shared/schema";
 import { and, eq, gte, lt, ne, or, sql } from "drizzle-orm";
 import { getBadgeEntitlementForUser, resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
 
@@ -145,6 +145,67 @@ export interface P2PTradingPermissionResult {
   reason?: string;
   monthlyLimit: number | null;
   monthlyUsed: number;
+}
+
+export interface P2PTradeAuditLogInput {
+  tradeId: string;
+  action:
+  | "trade_created"
+  | "payment_marked"
+  | "payment_confirmed"
+  | "trade_completed"
+  | "trade_cancelled"
+  | "escrow_held"
+  | "escrow_released"
+  | "escrow_returned";
+  userId?: string | null;
+  disputeId?: string | null;
+  description: string;
+  descriptionAr?: string;
+  metadata?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+export async function createP2PTradeAuditLog(input: P2PTradeAuditLogInput): Promise<void> {
+  try {
+    await db.insert(p2pTransactionLogs).values({
+      tradeId: input.tradeId,
+      disputeId: input.disputeId ?? null,
+      userId: input.userId ?? null,
+      action: input.action,
+      description: input.description,
+      descriptionAr: input.descriptionAr,
+      metadata: input.metadata ? JSON.stringify(input.metadata) : null,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+    });
+  } catch (error) {
+    console.warn("[P2P Trading] Failed to create trade audit log", {
+      tradeId: input.tradeId,
+      action: input.action,
+      error: getErrorMessage(error),
+    });
+  }
+}
+
+export async function getP2PEscrowFreezeHours(): Promise<number> {
+  const [settings] = await db
+    .select({ escrowTimeoutHours: p2pSettings.escrowTimeoutHours })
+    .from(p2pSettings)
+    .limit(1);
+
+  const configured = Number(settings?.escrowTimeoutHours ?? 24);
+  if (!Number.isFinite(configured) || configured <= 0) {
+    return 24;
+  }
+
+  return configured;
+}
+
+export function computeFreezeUntilDate(referenceDate: Date, freezeHours: number): Date {
+  const hours = Number.isFinite(freezeHours) && freezeHours > 0 ? freezeHours : 24;
+  return new Date(referenceDate.getTime() + (hours * 60 * 60 * 1000));
 }
 
 export async function checkUserP2PTradingPermission(

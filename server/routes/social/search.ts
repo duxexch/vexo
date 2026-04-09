@@ -105,20 +105,26 @@ export function registerSocialSearchRoutes(app: Express): void {
         regionCode,
         city,
       });
-      const [following, followers, blockedIds] = await Promise.all([
+      const [following, followers, blockedIds, outgoingRequests, incomingRequests] = await Promise.all([
         storage.getUserFollowing(req.user!.id),
         storage.getUserFollowers(req.user!.id),
         getBlockedUserIds(req.user!.id),
+        storage.getOutgoingFriendRequests(req.user!.id),
+        storage.getIncomingFriendRequests(req.user!.id),
       ]);
       const followingIds = new Set(following.map(r => r.targetUserId));
       const followerIds = new Set(followers.map(r => r.userId));
       const blockedSet = new Set(blockedIds);
+      const outgoingRequestIds = new Set(outgoingRequests.map(r => r.targetUserId));
+      const incomingRequestIds = new Set(incomingRequests.map(r => r.userId));
 
       const mappedResults = searchResults.map(user => {
         const { password, ...safeUser } = user;
         const isFollowing = followingIds.has(user.id);
         const isFollower = followerIds.has(user.id);
         const isBlocked = blockedSet.has(user.id);
+        const hasPendingRequestSent = outgoingRequestIds.has(user.id);
+        const hasPendingRequestReceived = incomingRequestIds.has(user.id);
 
         return {
           ...safeUser,
@@ -126,6 +132,8 @@ export function registerSocialSearchRoutes(app: Express): void {
           isFollower,
           isFriend: isFollowing && isFollower,
           isBlocked,
+          hasPendingRequestSent,
+          hasPendingRequestReceived,
         };
       });
 
@@ -162,16 +170,20 @@ export function registerSocialSearchRoutes(app: Express): void {
 
       const { password, ...safeUser } = user;
 
-      const [following, followers, blockedIds] = await Promise.all([
+      const [following, followers, blockedIds, outgoingRequests, incomingRequests] = await Promise.all([
         storage.getUserFollowing(req.user!.id),
         storage.getUserFollowers(req.user!.id),
         getBlockedUserIds(req.user!.id),
+        storage.getOutgoingFriendRequests(req.user!.id),
+        storage.getIncomingFriendRequests(req.user!.id),
       ]);
 
       const isFollowing = following.some(r => r.targetUserId === user.id);
       const isFollower = followers.some(r => r.userId === user.id);
       const isBlocked = blockedIds.includes(user.id);
       const isFriend = isFollowing && isFollower;
+      const hasPendingRequestSent = outgoingRequests.some(r => r.targetUserId === user.id);
+      const hasPendingRequestReceived = incomingRequests.some(r => r.userId === user.id);
 
       res.json({
         ...safeUser,
@@ -179,6 +191,8 @@ export function registerSocialSearchRoutes(app: Express): void {
         isFollower,
         isBlocked,
         isFriend,
+        hasPendingRequestSent,
+        hasPendingRequestReceived,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

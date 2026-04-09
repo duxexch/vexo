@@ -1426,6 +1426,8 @@ export default function ChallengeGamePage() {
   const elapsedSinceSyncSec = Math.floor((Date.now() - lastSyncRef.current) / 1000);
   const isMyTurnForTimer = gameSession?.currentTurn === user?.id;
   const fallbackTimeLimit = challenge?.timeLimit ?? 0;
+  const requiredPlayers = Number(challenge?.requiredPlayers ?? 2);
+  const isHeadToHeadChallenge = requiredPlayers === 2;
   const isPlayerOne = challenge?.player1Id === user?.id;
   const serverMyTime = isPlayerOne
     ? (gameSession?.player1TimeRemaining ?? fallbackTimeLimit)
@@ -1688,7 +1690,7 @@ export default function ChallengeGamePage() {
                 <span className="text-sm">{gameSession?.spectatorCount || 0}</span>
               </div>
 
-              {isPlayer && challenge.requiredPlayers === 2 && (
+              {isPlayer && isHeadToHeadChallenge && (
                 <VoiceChat
                   challengeId={challengeId!}
                   isEnabled={isVoiceEnabled}

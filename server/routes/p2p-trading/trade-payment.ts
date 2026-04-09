@@ -4,6 +4,7 @@ import { authMiddleware, AuthRequest } from "../middleware";
 import { sendNotification } from "../../websocket";
 import { getErrorMessage } from "./helpers";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../../lib/payment-security";
+import { createP2PTradeAuditLog } from "./helpers";
 
 /** POST pay, confirm — Trade payment actions */
 export function registerTradePaymentRoutes(app: Express) {
@@ -40,6 +41,19 @@ export function registerTradePaymentRoutes(app: Express) {
         const trade = result.trade!;
 
         if (result.transitioned) {
+          await createP2PTradeAuditLog({
+            tradeId: trade.id,
+            userId: req.user!.id,
+            action: "payment_marked",
+            description: `Buyer marked payment as sent for trade ${trade.id}`,
+            descriptionAr: `قام المشتري بتحديد الدفع كمرسل للصفقة ${trade.id}`,
+            metadata: {
+              paymentReference: paymentReference || null,
+            },
+            ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
+            userAgent: req.headers["user-agent"] || "",
+          });
+
           await storage.createP2PTradeMessage({
             tradeId: trade.id,
             senderId: req.user!.id,
@@ -86,6 +100,16 @@ export function registerTradePaymentRoutes(app: Express) {
         const trade = result.trade!;
 
         if (result.transitioned) {
+          await createP2PTradeAuditLog({
+            tradeId: trade.id,
+            userId: req.user!.id,
+            action: "payment_confirmed",
+            description: `Seller confirmed payment for trade ${trade.id}`,
+            descriptionAr: `قام البائع بتأكيد الدفع للصفقة ${trade.id}`,
+            ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "",
+            userAgent: req.headers["user-agent"] || "",
+          });
+
           await storage.createP2PTradeMessage({
             tradeId: trade.id,
             senderId: req.user!.id,

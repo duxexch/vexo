@@ -52,9 +52,23 @@ export async function blockUser(blockerId: string, targetUserId: string): Promis
 
         await tx.delete(userRelationships)
             .where(and(
+                eq(userRelationships.userId, blockerId),
+                eq(userRelationships.targetUserId, targetUserId),
+                eq(userRelationships.type, "friend_request")
+            ));
+
+        await tx.delete(userRelationships)
+            .where(and(
                 eq(userRelationships.userId, targetUserId),
                 eq(userRelationships.targetUserId, blockerId),
                 eq(userRelationships.type, "follow")
+            ));
+
+        await tx.delete(userRelationships)
+            .where(and(
+                eq(userRelationships.userId, targetUserId),
+                eq(userRelationships.targetUserId, blockerId),
+                eq(userRelationships.type, "friend_request")
             ));
 
         return { alreadyBlocked };

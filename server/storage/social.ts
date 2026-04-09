@@ -63,6 +63,113 @@ export async function getUserFollowers(userId: string): Promise<UserRelationship
     .orderBy(desc(userRelationships.createdAt));
 }
 
+export async function getIncomingFriendRequests(userId: string): Promise<UserRelationship[]> {
+  return db.select().from(userRelationships)
+    .where(and(
+      eq(userRelationships.targetUserId, userId),
+      eq(userRelationships.type, "friend_request"),
+      eq(userRelationships.status, "pending")
+    ))
+    .orderBy(desc(userRelationships.createdAt));
+}
+
+export async function getOutgoingFriendRequests(userId: string): Promise<UserRelationship[]> {
+  return db.select().from(userRelationships)
+    .where(and(
+      eq(userRelationships.userId, userId),
+      eq(userRelationships.type, "friend_request"),
+      eq(userRelationships.status, "pending")
+    ))
+    .orderBy(desc(userRelationships.createdAt));
+}
+
+export async function acceptFriendRequest(requesterId: string, approverId: string): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [pendingRequest] = await tx.select().from(userRelationships)
+      .where(and(
+        eq(userRelationships.userId, requesterId),
+        eq(userRelationships.targetUserId, approverId),
+        eq(userRelationships.type, "friend_request"),
+        eq(userRelationships.status, "pending")
+      ))
+      .limit(1)
+      .for("update");
+
+    if (!pendingRequest) {
+      return false;
+    }
+
+    await tx.update(userRelationships)
+      .set({ status: "accepted", updatedAt: new Date() })
+      .where(eq(userRelationships.id, pendingRequest.id));
+
+    await tx.insert(userRelationships)
+      .values({
+        userId: requesterId,
+        targetUserId: approverId,
+        type: "follow",
+        status: "active",
+      })
+      .onConflictDoUpdate({
+        target: [userRelationships.userId, userRelationships.targetUserId, userRelationships.type],
+        set: {
+          status: "active",
+          updatedAt: new Date(),
+        },
+      });
+
+    await tx.insert(userRelationships)
+      .values({
+        userId: approverId,
+        targetUserId: requesterId,
+        type: "follow",
+        status: "active",
+      })
+      .onConflictDoUpdate({
+        target: [userRelationships.userId, userRelationships.targetUserId, userRelationships.type],
+        set: {
+          status: "active",
+          updatedAt: new Date(),
+        },
+      });
+
+    return true;
+  });
+}
+
+export async function rejectFriendRequest(requesterId: string, rejectorId: string): Promise<boolean> {
+  const [pendingRequest] = await db.select().from(userRelationships)
+    .where(and(
+      eq(userRelationships.userId, requesterId),
+      eq(userRelationships.targetUserId, rejectorId),
+      eq(userRelationships.type, "friend_request"),
+      eq(userRelationships.status, "pending")
+    ))
+    .limit(1);
+
+  if (!pendingRequest) {
+    return false;
+  }
+
+  await db.update(userRelationships)
+    .set({ status: "rejected", updatedAt: new Date() })
+    .where(eq(userRelationships.id, pendingRequest.id));
+
+  return true;
+}
+
+export async function cancelFriendRequest(requesterId: string, targetUserId: string): Promise<boolean> {
+  const result = await db.delete(userRelationships)
+    .where(and(
+      eq(userRelationships.userId, requesterId),
+      eq(userRelationships.targetUserId, targetUserId),
+      eq(userRelationships.type, "friend_request"),
+      eq(userRelationships.status, "pending")
+    ));
+
+  return (result.rowCount || 0) > 0;
+}
+
 interface SearchUsersOptions {
   limit?: number;
   language?: string;

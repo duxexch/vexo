@@ -79,6 +79,16 @@ interface DepositConfig {
   usdRateByCurrency?: Record<string, number>;
 }
 
+interface P2PWalletBalanceEntry {
+  currency: string;
+  available: string;
+  frozen: string;
+  reservedOutgoing: string;
+  total: string;
+  nextReleaseAt: string | null;
+  freezeHours: number;
+}
+
 export default function WalletPage() {
   const { t, language } = useI18n();
   const { user, refreshUser } = useAuth();
@@ -222,6 +232,11 @@ export default function WalletPage() {
   const { data: projectWallet, isLoading: walletLoading } = useQuery<ProjectCurrencyWallet>({
     queryKey: ['/api/project-currency/wallet'],
     enabled: !!currencySettings?.isActive,
+    ...financialQueryOptions,
+  });
+
+  const { data: p2pWalletBalances = [] } = useQuery<P2PWalletBalanceEntry[]>({
+    queryKey: ['/api/p2p/wallet-balances'],
     ...financialQueryOptions,
   });
 
@@ -418,6 +433,63 @@ export default function WalletPage() {
           </CardContent>
         </Card>
       </div>
+
+      {p2pWalletBalances.length > 0 && (
+        <Card className="border border-slate-300/60 bg-gradient-to-b from-slate-50 to-white dark:border-slate-800 dark:from-slate-900/70 dark:to-slate-950">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-primary" />
+              {tOr('wallet.p2pBalancesTitle', 'P2P Asset Balances')}
+            </CardTitle>
+            <CardDescription>
+              {tOr('wallet.p2pBalancesDesc', 'Available, frozen, and reserved balances by currency')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {p2pWalletBalances.map((entry) => {
+                const available = Number(entry.available || 0);
+                const frozen = Number(entry.frozen || 0);
+                const reservedOutgoing = Number(entry.reservedOutgoing || 0);
+                const total = Number(entry.total || 0);
+
+                return (
+                  <div key={entry.currency} className="rounded-lg border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/60" data-testid={`row-p2p-wallet-${entry.currency}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="text-sm font-semibold">{entry.currency}</h4>
+                      <Badge variant="outline" className="text-xs">{total.toFixed(8)}</Badge>
+                    </div>
+                    <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+                      <div className="rounded-md bg-emerald-50 p-2 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                        <p className="text-[11px] opacity-80">{t('wallet.availableBalance')}</p>
+                        <p className="mt-1 font-semibold">{available.toFixed(8)}</p>
+                      </div>
+                      <div className="rounded-md bg-amber-50 p-2 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                        <p className="text-[11px] opacity-80">{tOr('wallet.frozenBalance', 'Frozen')}</p>
+                        <p className="mt-1 font-semibold">{frozen.toFixed(8)}</p>
+                        {entry.nextReleaseAt && (
+                          <p className="mt-1 text-[10px] opacity-70">
+                            {tOr('wallet.nextReleaseAt', 'Next release')}: {new Date(entry.nextReleaseAt).toLocaleString(language === 'ar' ? 'ar-SA' : 'en-US')}
+                          </p>
+                        )}
+                      </div>
+                      <div className="rounded-md bg-slate-100 p-2 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                        <p className="text-[11px] opacity-80">{tOr('wallet.reservedOutgoing', 'Reserved for open sells')}</p>
+                        <p className="mt-1 font-semibold">{reservedOutgoing.toFixed(8)}</p>
+                      </div>
+                    </div>
+                    {frozen > 0 && (
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        {tOr('wallet.freezeWindow', 'Freeze window')}: {entry.freezeHours}h
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {currencySettings?.isActive && (
         <Card className="border-2 border-primary/50 bg-gradient-to-br from-primary/5 to-transparent">

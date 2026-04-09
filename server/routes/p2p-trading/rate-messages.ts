@@ -5,6 +5,9 @@ import { sendNotification } from "../../websocket";
 import { getErrorMessage } from "./helpers";
 import { sanitizePlainText } from "../../lib/input-security";
 import { ensureP2PUsername, getP2PUsernameMap } from "../../lib/p2p-username";
+import { db } from "../../db";
+import { p2pTraderProfiles } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 /** POST rate, GET/POST messages — Rating and messaging */
 export function registerRateMessageRoutes(app: Express) {
@@ -179,6 +182,32 @@ export function registerRateMessageRoutes(app: Express) {
 
       const sender = await storage.getUser(req.user!.id);
       const senderP2PUsername = await ensureP2PUsername(req.user!.id, sender?.username || req.user!.username);
+
+      const recipientId = trade.buyerId === req.user!.id ? trade.sellerId : trade.buyerId;
+      const [recipientProfile] = await db
+        .select({ notifyOnMessage: p2pTraderProfiles.notifyOnMessage })
+        .from(p2pTraderProfiles)
+        .where(eq(p2pTraderProfiles.userId, recipientId))
+        .limit(1);
+
+      const shouldNotifyRecipient = recipientProfile?.notifyOnMessage ?? true;
+      if (shouldNotifyRecipient) {
+        const compactTradeId = trade.id.slice(0, 8);
+        const trimmedMessage = safeMessage.length > 140
+          ? `${safeMessage.slice(0, 137)}...`
+          : safeMessage;
+
+        await notifyWithLog(recipientId, {
+          type: 'p2p',
+          priority: 'normal',
+          title: 'New P2P Message',
+          titleAr: 'رسالة جديدة في P2P',
+          message: `${senderP2PUsername} sent a new message on trade #${compactTradeId}: "${trimmedMessage}"`,
+          messageAr: `أرسل ${senderP2PUsername} رسالة جديدة في الصفقة #${compactTradeId}: "${trimmedMessage}"`,
+          link: `/p2p/trade/${trade.id}`,
+          metadata: JSON.stringify({ tradeId: trade.id, senderId: req.user!.id, type: 'trade_message' }),
+        }, "trade-message:recipient");
+      }
 
       res.status(201).json({
         ...newMessage,

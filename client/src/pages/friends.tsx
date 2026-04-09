@@ -32,6 +32,8 @@ type UserWithFollowStatus = Omit<User, "password"> & {
   isFollower?: boolean;
   isFriend?: boolean;
   isBlocked?: boolean;
+  hasPendingRequestSent?: boolean;
+  hasPendingRequestReceived?: boolean;
   isOnline?: boolean;
   level?: number;
   avatarUrl?: string;
@@ -46,7 +48,7 @@ function UserCard({
   t,
 }: {
   user: UserWithFollowStatus;
-  actionType: "friend" | "following" | "follower" | "blocked" | "search";
+  actionType: "friend" | "following" | "follower" | "request" | "blocked" | "search";
   onAction: (userId: string, action: string) => void;
   isLoading: boolean;
   t: (key: string) => string;
@@ -167,7 +169,7 @@ function UserCard({
             <Button
               size="sm"
               className="h-8 rounded-full text-xs bg-primary hover:bg-primary/90"
-              onClick={() => onAction(user.id, "follow")}
+              onClick={() => onAction(user.id, "friend-request")}
               disabled={isLoading}
               data-testid={`button-followback-${user.id}`}
             >
@@ -176,11 +178,49 @@ function UserCard({
               ) : (
                 <>
                   <UserPlus className="w-3.5 h-3.5 me-1" />
-                  {t("friends.followBack")}
+                  {t("friends.addFriend")}
                 </>
               )}
             </Button>
           )
+        )}
+
+        {actionType === "request" && (
+          <>
+            <Button
+              size="sm"
+              className="h-8 rounded-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => onAction(user.id, "accept-friend-request")}
+              disabled={isLoading}
+              data-testid={`button-accept-request-${user.id}`}
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <UserCheck className="w-3.5 h-3.5 me-1" />
+                  {t("common.accept")}
+                </>
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 rounded-full text-xs hover:bg-red-500/10 hover:text-red-500"
+              onClick={() => onAction(user.id, "reject-friend-request")}
+              disabled={isLoading}
+              data-testid={`button-reject-request-${user.id}`}
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <X className="w-3.5 h-3.5 me-1" />
+                  {t("transactions.reject")}
+                </>
+              )}
+            </Button>
+          </>
         )}
 
         {actionType === "blocked" && (
@@ -204,31 +244,103 @@ function UserCard({
         )}
 
         {actionType === "search" && !user.isBlocked && (
-          <Button
-            variant={user.isFollowing ? "ghost" : "default"}
-            size="sm"
-            className={`h-8 rounded-full text-xs ${user.isFollowing
-              ? "hover:bg-red-500/10 hover:text-red-500"
-              : "bg-primary hover:bg-primary/90"
-              }`}
-            onClick={() => onAction(user.id, user.isFollowing ? "unfollow" : "follow")}
-            disabled={isLoading}
-            data-testid={`button-follow-${user.id}`}
-          >
-            {isLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : user.isFollowing ? (
+          <>
+            {user.isFriend ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 rounded-full text-xs text-emerald-600 hover:text-emerald-600"
+                disabled
+                data-testid={`button-friend-state-${user.id}`}
+              >
+                <UserCheck className="w-3.5 h-3.5 me-1" />
+                {t("friends.mutualFriend")}
+              </Button>
+            ) : user.hasPendingRequestSent ? (
               <>
-                <UserMinus className="w-3.5 h-3.5 me-1" />
-                {t("friends.unfollow")}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 rounded-full text-xs text-amber-600 hover:text-amber-600"
+                  disabled
+                  data-testid={`button-request-pending-${user.id}`}
+                >
+                  <Loader2 className="w-3.5 h-3.5 me-1" />
+                  {t("friends.requestPending")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 rounded-full text-xs hover:bg-red-500/10 hover:text-red-500"
+                  onClick={() => onAction(user.id, "cancel-friend-request")}
+                  disabled={isLoading}
+                  data-testid={`button-cancel-request-${user.id}`}
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <X className="w-3.5 h-3.5 me-1" />
+                      {t("common.cancel")}
+                    </>
+                  )}
+                </Button>
+              </>
+            ) : user.hasPendingRequestReceived ? (
+              <>
+                <Button
+                  size="sm"
+                  className="h-8 rounded-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={() => onAction(user.id, "accept-friend-request")}
+                  disabled={isLoading}
+                  data-testid={`button-search-accept-request-${user.id}`}
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <UserCheck className="w-3.5 h-3.5 me-1" />
+                      {t("common.accept")}
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 rounded-full text-xs hover:bg-red-500/10 hover:text-red-500"
+                  onClick={() => onAction(user.id, "reject-friend-request")}
+                  disabled={isLoading}
+                  data-testid={`button-search-reject-request-${user.id}`}
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <X className="w-3.5 h-3.5 me-1" />
+                      {t("transactions.reject")}
+                    </>
+                  )}
+                </Button>
               </>
             ) : (
-              <>
-                <UserPlus className="w-3.5 h-3.5 me-1" />
-                {t("friends.follow")}
-              </>
+              <Button
+                size="sm"
+                className="h-8 rounded-full text-xs bg-primary hover:bg-primary/90"
+                onClick={() => onAction(user.id, "friend-request")}
+                disabled={isLoading}
+                data-testid={`button-add-friend-${user.id}`}
+              >
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <>
+                    <UserPlus className="w-3.5 h-3.5 me-1" />
+                    {t("friends.addFriend")}
+                  </>
+                )}
+              </Button>
             )}
-          </Button>
+          </>
         )}
 
         {actionType !== "blocked" && (
@@ -359,7 +471,7 @@ export default function FriendsPage() {
   const { user, updateUser } = useAuth();
   const { t, dir } = useI18n();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"friends" | "following" | "followers" | "blocked">("friends");
+  const [activeTab, setActiveTab] = useState<"friends" | "following" | "followers" | "requests" | "blocked">("friends");
   const [searchFilter, setSearchFilter] = useState<"all" | "friends" | "following" | "followers" | "blocked">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -392,6 +504,10 @@ export default function FriendsPage() {
     queryKey: ["/api/users/blocked"],
   });
 
+  const { data: incomingRequests = [], isLoading: incomingRequestsLoading } = useQuery<UserWithFollowStatus[]>({
+    queryKey: ["/api/users/friend-requests/incoming"],
+  });
+
   const searchUrl = debouncedSearchQuery.length >= 2
     ? `/api/users/search?q=${encodeURIComponent(debouncedSearchQuery)}&filter=${encodeURIComponent(searchFilter)}`
     : "";
@@ -406,6 +522,8 @@ export default function FriendsPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/users/following"] });
     queryClient.invalidateQueries({ queryKey: ["/api/users/followers"] });
     queryClient.invalidateQueries({ queryKey: ["/api/users/blocked"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/users/friend-requests/incoming"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/users/friend-requests/outgoing"] });
     queryClient.invalidateQueries({
       predicate: (query) => {
         const key = query.queryKey?.[0];
@@ -428,6 +546,46 @@ export default function FriendsPage() {
     mutationFn: async (userId: string) => apiRequest("DELETE", `/api/users/unfollow/${userId}`),
     onSuccess: () => {
       toast({ title: t("friends.unfollowSuccess") });
+      invalidateSocialQueries();
+    },
+    onError: () => toast({ title: t("common.error"), variant: "destructive" }),
+    onSettled: () => setActionLoadingId(null),
+  });
+
+  const sendFriendRequestMutation = useMutation({
+    mutationFn: async (userId: string) => apiRequest("POST", `/api/users/friend-request/${userId}`),
+    onSuccess: () => {
+      toast({ title: t("friends.requestSentSuccess") });
+      invalidateSocialQueries();
+    },
+    onError: () => toast({ title: t("common.error"), variant: "destructive" }),
+    onSettled: () => setActionLoadingId(null),
+  });
+
+  const acceptFriendRequestMutation = useMutation({
+    mutationFn: async (userId: string) => apiRequest("POST", `/api/users/friend-request/${userId}/accept`),
+    onSuccess: () => {
+      toast({ title: t("friends.requestAcceptedSuccess") });
+      invalidateSocialQueries();
+    },
+    onError: () => toast({ title: t("common.error"), variant: "destructive" }),
+    onSettled: () => setActionLoadingId(null),
+  });
+
+  const rejectFriendRequestMutation = useMutation({
+    mutationFn: async (userId: string) => apiRequest("POST", `/api/users/friend-request/${userId}/reject`),
+    onSuccess: () => {
+      toast({ title: t("friends.requestRejectedSuccess") });
+      invalidateSocialQueries();
+    },
+    onError: () => toast({ title: t("common.error"), variant: "destructive" }),
+    onSettled: () => setActionLoadingId(null),
+  });
+
+  const cancelFriendRequestMutation = useMutation({
+    mutationFn: async (userId: string) => apiRequest("DELETE", `/api/users/friend-request/${userId}`),
+    onSuccess: () => {
+      toast({ title: t("friends.requestCancelledSuccess") });
       invalidateSocialQueries();
     },
     onError: () => toast({ title: t("common.error"), variant: "destructive" }),
@@ -466,6 +624,10 @@ export default function FriendsPage() {
     switch (action) {
       case "follow": followMutation.mutate(userId); break;
       case "unfollow": unfollowMutation.mutate(userId); break;
+      case "friend-request": sendFriendRequestMutation.mutate(userId); break;
+      case "accept-friend-request": acceptFriendRequestMutation.mutate(userId); break;
+      case "reject-friend-request": rejectFriendRequestMutation.mutate(userId); break;
+      case "cancel-friend-request": cancelFriendRequestMutation.mutate(userId); break;
       case "block": blockMutation.mutate({ userId, action: "block" }); break;
       case "unblock": blockMutation.mutate({ userId, action: "unblock" }); break;
       case "chat":
@@ -543,6 +705,19 @@ export default function FriendsPage() {
           <div className="space-y-2">
             {followerUsers.map((user) => (
               <UserCard key={user.id} user={user} actionType="follower" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
+            ))}
+          </div>
+        );
+
+      case "requests":
+        if (incomingRequestsLoading) return <CardSkeleton />;
+        if (incomingRequests.length === 0) {
+          return <EmptySection icon={UserCheck} message={t("friends.noPendingRequests")} sub={t("friends.noPendingRequestsDesc")} />;
+        }
+        return (
+          <div className="space-y-2">
+            {incomingRequests.map((user) => (
+              <UserCard key={user.id} user={user} actionType="request" onAction={handleAction} isLoading={actionLoadingId === user.id} t={t} />
             ))}
           </div>
         );
@@ -660,6 +835,14 @@ export default function FriendsPage() {
               label={t("friends.followers")}
               count={followers.length}
               testId="tab-followers"
+            />
+            <TabButton
+              active={activeTab === "requests"}
+              onClick={() => setActiveTab("requests")}
+              icon={UserCheck}
+              label={t("friends.requests")}
+              count={incomingRequests.length}
+              testId="tab-requests"
             />
             <TabButton
               active={activeTab === "blocked"}

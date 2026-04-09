@@ -103,6 +103,18 @@ const PAYMENT_TYPES = [
 
 const CURRENCIES = ["USD", "USDT", "EUR", "GBP", "SAR", "AED", "EGP"];
 
+function resolveLanguageLocale(languageCode?: string): string {
+  const normalizedCode = String(languageCode || "en").trim();
+  const requestedLocale = normalizedCode === "ar" ? "ar-SA-u-nu-arab" : normalizedCode;
+
+  try {
+    new Intl.NumberFormat(requestedLocale);
+    return requestedLocale;
+  } catch {
+    return "en-US";
+  }
+}
+
 interface IdVerificationData {
   idVerificationStatus: string | null;
   idFrontImage: string | null;
@@ -112,10 +124,11 @@ interface IdVerificationData {
 }
 
 function IdVerificationSection({ language }: { language: string }) {
+  const { t } = useI18n();
   const { toast } = useToast();
   const [frontImage, setFrontImage] = useState<string | null>(null);
   const [backImage, setBackImage] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const numberLocale = resolveLanguageLocale(language);
 
   const { data: verificationData, isLoading } = useQuery<IdVerificationData>({
     queryKey: ['/api/user/id-verification'],
@@ -126,7 +139,7 @@ function IdVerificationSection({ language }: { language: string }) {
       apiRequest('POST', '/api/user/id-verification', data),
     onSuccess: () => {
       toast({
-        title: language === 'ar' ? 'تم الإرسال' : 'Submitted',
+        title: t('common.success'),
         description: language === 'ar' ? 'تم إرسال طلب التوثيق بنجاح' : 'ID verification request submitted successfully'
       });
       queryClient.invalidateQueries({ queryKey: ['/api/user/id-verification'] });
@@ -134,7 +147,7 @@ function IdVerificationSection({ language }: { language: string }) {
       setBackImage(null);
     },
     onError: (err: Error) => {
-      toast({ title: language === 'ar' ? 'خطأ' : 'Error', description: err.message, variant: "destructive" });
+      toast({ title: t('common.error'), description: err.message, variant: "destructive" });
     }
   });
 
@@ -145,7 +158,7 @@ function IdVerificationSection({ language }: { language: string }) {
     // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        title: t('common.error'),
         description: language === 'ar' ? 'حجم الملف يجب أن يكون أقل من 10 ميجابايت' : 'File size must be less than 10MB',
         variant: "destructive"
       });
@@ -155,7 +168,7 @@ function IdVerificationSection({ language }: { language: string }) {
     // Validate it's actually an image
     if (!file.type.startsWith('image/')) {
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        title: t('common.error'),
         description: language === 'ar' ? 'يرجى رفع صورة فقط' : 'Please upload an image file only',
         variant: "destructive"
       });
@@ -177,7 +190,7 @@ function IdVerificationSection({ language }: { language: string }) {
   const handleSubmit = () => {
     if (!frontImage || !backImage) {
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        title: t('common.error'),
         description: language === 'ar' ? 'يرجى رفع صورتي الهوية' : 'Please upload both ID images',
         variant: "destructive"
       });
@@ -206,12 +219,10 @@ function IdVerificationSection({ language }: { language: string }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <IdCard className="h-5 w-5 text-primary" />
-          {language === 'ar' ? 'التحقق من الهوية' : 'ID Verification'}
+          {t('p2p.settings.idVerification')}
         </CardTitle>
         <CardDescription>
-          {language === 'ar'
-            ? 'قم بتوثيق هويتك لزيادة مصداقيتك في التداولات P2P'
-            : 'Verify your identity to increase your credibility in P2P trades'}
+          {t('p2p.settings.idVerificationDesc')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -220,10 +231,10 @@ function IdVerificationSection({ language }: { language: string }) {
             <CheckCircle className="h-6 w-6 text-green-500" />
             <div>
               <p className="font-medium text-green-600">
-                {language === 'ar' ? 'تم التحقق من هويتك' : 'Your ID is Verified'}
+                {t('p2p.settings.verificationApproved')}
               </p>
               <p className="text-sm text-muted-foreground">
-                {verificationData?.idVerifiedAt && `${language === 'ar' ? 'تم التحقق في' : 'Verified on'}: ${new Date(verificationData.idVerifiedAt).toLocaleDateString()}`}
+                {verificationData?.idVerifiedAt && `${t('common.date')}: ${new Date(verificationData.idVerifiedAt).toLocaleDateString(numberLocale)}`}
               </p>
             </div>
           </div>
@@ -234,7 +245,7 @@ function IdVerificationSection({ language }: { language: string }) {
             <Clock className="h-6 w-6 text-yellow-500" />
             <div>
               <p className="font-medium text-yellow-600">
-                {language === 'ar' ? 'قيد المراجعة' : 'Pending Review'}
+                {t('p2p.settings.verificationPending')}
               </p>
               <p className="text-sm text-muted-foreground">
                 {language === 'ar' ? 'جاري مراجعة وثائقك من قبل فريقنا' : 'Your documents are being reviewed by our team'}
@@ -248,7 +259,7 @@ function IdVerificationSection({ language }: { language: string }) {
             <XCircle className="h-6 w-6 text-red-500" />
             <div>
               <p className="font-medium text-red-600">
-                {language === 'ar' ? 'تم رفض التحقق' : 'Verification Rejected'}
+                {t('p2p.settings.verificationRejected')}
               </p>
               <p className="text-sm text-muted-foreground">
                 {verificationData?.idVerificationRejectionReason || (language === 'ar' ? 'يرجى المحاولة مرة أخرى' : 'Please try again')}
@@ -261,7 +272,7 @@ function IdVerificationSection({ language }: { language: string }) {
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>{language === 'ar' ? 'الوجه الأمامي للهوية' : 'Front Side of ID'}</Label>
+                <Label>{t('p2p.settings.uploadIdFront')}</Label>
                 <div className="border-2 border-dashed rounded-lg p-4 text-center">
                   {frontImage ? (
                     <div className="relative">
@@ -294,7 +305,7 @@ function IdVerificationSection({ language }: { language: string }) {
               </div>
 
               <div className="space-y-2">
-                <Label>{language === 'ar' ? 'الوجه الخلفي للهوية' : 'Back Side of ID'}</Label>
+                <Label>{t('p2p.settings.uploadIdBack')}</Label>
                 <div className="border-2 border-dashed rounded-lg p-4 text-center">
                   {backImage ? (
                     <div className="relative">
@@ -338,7 +349,7 @@ function IdVerificationSection({ language }: { language: string }) {
               ) : (
                 <Upload className="h-4 w-4 me-2" />
               )}
-              {language === 'ar' ? 'إرسال للتحقق' : 'Submit for Verification'}
+              {t('p2p.settings.submitVerification')}
             </Button>
           </div>
         )}
@@ -514,7 +525,7 @@ export default function P2PSettingsPage() {
             className="h-auto min-h-[48px] w-full gap-2 whitespace-normal rounded-lg border border-transparent px-2 py-2 text-center text-xs leading-tight sm:text-sm data-[state=active]:border-primary/30 data-[state=active]:text-primary data-[state=active]:shadow-sm"
           >
             <IdCard className="h-4 w-4 shrink-0" />
-            {language === 'ar' ? 'التوثيق' : 'Verification'}
+            {t('p2p.settings.idVerification')}
           </TabsTrigger>
           <TabsTrigger
             value="general"
@@ -874,7 +885,7 @@ export default function P2PSettingsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>{language === 'ar' ? 'الدولة' : 'Country'}</Label>
+              <Label>{t('p2p.country')}</Label>
               <Select value={selectedPaymentCountry} onValueChange={setSelectedPaymentCountry}>
                 <SelectTrigger className="mt-2" data-testid="select-payment-country">
                   <SelectValue />
@@ -945,7 +956,7 @@ export default function P2PSettingsPage() {
             {selectedCatalogMethod ? (
               <div className="rounded-md border border-border/70 bg-muted/40 p-3 text-xs text-muted-foreground">
                 <div>
-                  {language === 'ar' ? 'الحدود' : 'Limits'}: {selectedCatalogMethod.minAmount} - {selectedCatalogMethod.maxAmount}
+                  {t('p2p.limit')}: {selectedCatalogMethod.minAmount} - {selectedCatalogMethod.maxAmount}
                 </div>
               </div>
             ) : (

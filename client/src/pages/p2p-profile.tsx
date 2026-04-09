@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,6 @@ import {
   Building2,
   AlertCircle,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
 
 interface TraderProfile {
   id: string;
@@ -136,10 +136,85 @@ const PAYMENT_ICONS: Record<string, React.ComponentType<{ className?: string }>>
   card: CreditCard,
 };
 
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+function resolveLanguageLocale(languageCode?: string): string {
+  const normalizedCode = String(languageCode || "en").trim();
+  const requestedLocale = normalizedCode === "ar" ? "ar-SA-u-nu-arab" : normalizedCode;
+
+  try {
+    new Intl.NumberFormat(requestedLocale);
+    return requestedLocale;
+  } catch {
+    return "en-US";
+  }
+}
+
+function formatLocalizedNumber(
+  rawValue: string | number,
+  locale: string,
+  maximumFractionDigits = 8,
+  minimumFractionDigits = 0,
+): string {
+  const parsedValue = typeof rawValue === "number" ? rawValue : Number(rawValue);
+  if (!Number.isFinite(parsedValue)) {
+    return "0";
+  }
+
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits,
+    maximumFractionDigits,
+  }).format(parsedValue);
+}
+
+function formatLocalizedAssetAmount(rawAmount: string | number, currencyCode: string, locale: string): string {
+  return `${formatLocalizedNumber(rawAmount, locale, 8, 0)} ${String(currencyCode || "").toUpperCase()}`;
+}
+
+function formatRelativeTimeFromNow(dateValue: string, locale: string): string {
+  const parsedDate = new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "-";
+  }
+
+  const diffInSeconds = Math.round((parsedDate.getTime() - Date.now()) / 1000);
+  const absoluteSeconds = Math.abs(diffInSeconds);
+  const relativeTimeFormatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+
+  if (absoluteSeconds < 60) {
+    return relativeTimeFormatter.format(diffInSeconds, "second");
+  }
+
+  const diffInMinutes = Math.round(diffInSeconds / 60);
+  if (Math.abs(diffInMinutes) < 60) {
+    return relativeTimeFormatter.format(diffInMinutes, "minute");
+  }
+
+  const diffInHours = Math.round(diffInMinutes / 60);
+  if (Math.abs(diffInHours) < 24) {
+    return relativeTimeFormatter.format(diffInHours, "hour");
+  }
+
+  const diffInDays = Math.round(diffInHours / 24);
+  if (Math.abs(diffInDays) < 30) {
+    return relativeTimeFormatter.format(diffInDays, "day");
+  }
+
+  const diffInMonths = Math.round(diffInDays / 30);
+  if (Math.abs(diffInMonths) < 12) {
+    return relativeTimeFormatter.format(diffInMonths, "month");
+  }
+
+  const diffInYears = Math.round(diffInMonths / 12);
+  return relativeTimeFormatter.format(diffInYears, "year");
+}
+
+function formatDuration(seconds: number, locale: string): string {
+  const unitLabels = locale.startsWith("ar")
+    ? { second: "ث", minute: "د", hour: "س" }
+    : { second: "s", minute: "m", hour: "h" };
+
+  if (seconds < 60) return `${formatLocalizedNumber(seconds, locale, 0, 0)}${unitLabels.second}`;
+  if (seconds < 3600) return `${formatLocalizedNumber(Math.floor(seconds / 60), locale, 0, 0)}${unitLabels.minute}`;
+  return `${formatLocalizedNumber(Math.floor(seconds / 3600), locale, 0, 0)}${unitLabels.hour} ${formatLocalizedNumber(Math.floor((seconds % 3600) / 60), locale, 0, 0)}${unitLabels.minute}`;
 }
 
 export default function P2PProfilePage() {
@@ -148,6 +223,7 @@ export default function P2PProfilePage() {
   const params = useParams<{ userId?: string }>();
   const userId = params.userId || 'me';
   const isOwnProfile = userId === 'me' || userId === user?.id;
+  const numberLocale = useMemo(() => resolveLanguageLocale(language), [language]);
 
   const { data: profile, isLoading } = useQuery<TraderProfile>({
     queryKey: ['/api/p2p/profile', userId],
@@ -214,7 +290,7 @@ export default function P2PProfilePage() {
                   </span>
                   <span className="flex items-center gap-1">
                     <Calendar className="h-4 w-4" />
-                    {t('p2p.profile.memberSince')} {formatDistanceToNow(new Date(profile.memberSince), { addSuffix: true })}
+                    {t('p2p.profile.memberSince')} {formatRelativeTimeFromNow(profile.memberSince, numberLocale)}
                   </span>
                 </div>
               </div>
@@ -251,19 +327,19 @@ export default function P2PProfilePage() {
       <div className="grid md:grid-cols-4 gap-4">
         <Card data-testid="card-trades-stat">
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold">{profile.metrics.totalTrades}</p>
+            <p className="text-3xl font-bold">{formatLocalizedNumber(profile.metrics.totalTrades, numberLocale, 0, 0)}</p>
             <p className="text-sm text-muted-foreground">{t('p2p.profile.totalTrades')}</p>
           </CardContent>
         </Card>
         <Card data-testid="card-completion-stat">
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold text-green-500">{profile.metrics.completionRate}%</p>
+            <p className="text-3xl font-bold text-green-500">{formatLocalizedNumber(profile.metrics.completionRate, numberLocale, 2, 0)}%</p>
             <p className="text-sm text-muted-foreground">{t('p2p.profile.completionRate')}</p>
           </CardContent>
         </Card>
         <Card data-testid="card-volume-stat">
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold">${parseFloat(profile.metrics.totalVolumeUsdt).toLocaleString()}</p>
+            <p className="text-3xl font-bold">${formatLocalizedNumber(profile.metrics.totalVolumeUsdt, numberLocale, 2, 0)}</p>
             <p className="text-sm text-muted-foreground">{t('p2p.profile.totalVolume')}</p>
           </CardContent>
         </Card>
@@ -271,7 +347,7 @@ export default function P2PProfilePage() {
           <CardContent className="p-4 text-center">
             <div className="flex items-center justify-center gap-1">
               <Star className="h-5 w-5 text-yellow-500 fill-yellow-500" />
-              <p className="text-3xl font-bold">{profile.metrics.overallRating}</p>
+              <p className="text-3xl font-bold">{formatLocalizedNumber(profile.metrics.overallRating, numberLocale, 2, 0)}</p>
             </div>
             <p className="text-sm text-muted-foreground">{t('p2p.profile.rating')}</p>
           </CardContent>
@@ -351,14 +427,14 @@ export default function P2PProfilePage() {
                   <span className="text-muted-foreground">{t('p2p.profile.completedTrades')}</span>
                   <span className="font-medium flex items-center gap-1">
                     <CheckCircle className="h-4 w-4 text-green-500" />
-                    {profile.metrics.completedTrades}
+                    {formatLocalizedNumber(profile.metrics.completedTrades, numberLocale, 0, 0)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">{t('p2p.profile.cancelledTrades')}</span>
                   <span className="font-medium flex items-center gap-1">
                     <XCircle className="h-4 w-4 text-red-500" />
-                    {profile.metrics.cancelledTrades}
+                    {formatLocalizedNumber(profile.metrics.cancelledTrades, numberLocale, 0, 0)}
                   </span>
                 </div>
                 <Separator />
@@ -366,24 +442,24 @@ export default function P2PProfilePage() {
                   <span className="text-muted-foreground">{t('p2p.profile.buyTrades')}</span>
                   <span className="font-medium flex items-center gap-1">
                     <ArrowDownRight className="h-4 w-4 text-green-500" />
-                    {profile.metrics.totalBuyTrades}
+                    {formatLocalizedNumber(profile.metrics.totalBuyTrades, numberLocale, 0, 0)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">{t('p2p.profile.sellTrades')}</span>
                   <span className="font-medium flex items-center gap-1">
                     <ArrowUpRight className="h-4 w-4 text-primary" />
-                    {profile.metrics.totalSellTrades}
+                    {formatLocalizedNumber(profile.metrics.totalSellTrades, numberLocale, 0, 0)}
                   </span>
                 </div>
                 <Separator />
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">{t('p2p.profile.trades30d')}</span>
-                  <span className="font-medium">{profile.metrics.trades30d}</span>
+                  <span className="font-medium">{formatLocalizedNumber(profile.metrics.trades30d, numberLocale, 0, 0)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">{t('p2p.profile.volume30d')}</span>
-                  <span className="font-medium">${parseFloat(profile.metrics.volume30d).toLocaleString()}</span>
+                  <span className="font-medium">${formatLocalizedNumber(profile.metrics.volume30d, numberLocale, 2, 0)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -396,33 +472,33 @@ export default function P2PProfilePage() {
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span>{t('p2p.profile.avgReleaseTime')}</span>
-                    <span className="font-medium">{formatDuration(profile.metrics.avgReleaseTimeSeconds)}</span>
+                    <span className="font-medium">{formatDuration(profile.metrics.avgReleaseTimeSeconds, numberLocale)}</span>
                   </div>
                   <Progress value={Math.min(100, (300 - profile.metrics.avgReleaseTimeSeconds) / 3)} />
                 </div>
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span>{t('p2p.profile.avgPaymentTime')}</span>
-                    <span className="font-medium">{formatDuration(profile.metrics.avgPaymentTimeSeconds)}</span>
+                    <span className="font-medium">{formatDuration(profile.metrics.avgPaymentTimeSeconds, numberLocale)}</span>
                   </div>
                   <Progress value={Math.min(100, (600 - profile.metrics.avgPaymentTimeSeconds) / 6)} />
                 </div>
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span>{t('p2p.profile.avgResponseTime')}</span>
-                    <span className="font-medium">{formatDuration(profile.metrics.avgResponseTimeSeconds)}</span>
+                    <span className="font-medium">{formatDuration(profile.metrics.avgResponseTimeSeconds, numberLocale)}</span>
                   </div>
                   <Progress value={Math.min(100, (120 - profile.metrics.avgResponseTimeSeconds) / 1.2)} />
                 </div>
                 <Separator />
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">{t('p2p.profile.disputes')}</span>
-                  <span className="font-medium">{profile.metrics.totalDisputes}</span>
+                  <span className="font-medium">{formatLocalizedNumber(profile.metrics.totalDisputes, numberLocale, 0, 0)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">{t('p2p.profile.disputeRate')}</span>
                   <span className={`font-medium ${profile.metrics.disputeRate < 2 ? 'text-green-500' : 'text-red-500'}`}>
-                    {profile.metrics.disputeRate}%
+                    {formatLocalizedNumber(profile.metrics.disputeRate, numberLocale, 2, 0)}%
                   </span>
                 </div>
               </CardContent>
@@ -438,14 +514,14 @@ export default function P2PProfilePage() {
                 <div className="flex items-center gap-2">
                   <ThumbsUp className="h-6 w-6 text-green-500" />
                   <div>
-                    <p className="text-2xl font-bold">{profile.metrics.positiveRatings}</p>
+                    <p className="text-2xl font-bold">{formatLocalizedNumber(profile.metrics.positiveRatings, numberLocale, 0, 0)}</p>
                     <p className="text-sm text-muted-foreground">{t('p2p.profile.positive')}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <ThumbsDown className="h-6 w-6 text-red-500" />
                   <div>
-                    <p className="text-2xl font-bold">{profile.metrics.negativeRatings}</p>
+                    <p className="text-2xl font-bold">{formatLocalizedNumber(profile.metrics.negativeRatings, numberLocale, 0, 0)}</p>
                     <p className="text-sm text-muted-foreground">{t('p2p.profile.negative')}</p>
                   </div>
                 </div>
@@ -455,7 +531,7 @@ export default function P2PProfilePage() {
                     className="h-3"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    {positiveRate.toFixed(1)}% {t('p2p.profile.positiveRate')}
+                    {formatLocalizedNumber(positiveRate, numberLocale, 1, 1)}% {t('p2p.profile.positiveRate')}
                   </p>
                 </div>
               </div>
@@ -475,17 +551,17 @@ export default function P2PProfilePage() {
                     <div className="flex items-center gap-3">
                       <Badge variant={trade.type === 'buy' ? 'default' : 'secondary'}>
                         {trade.type === 'buy' ? <ArrowDownRight className="h-3 w-3 me-1" /> : <ArrowUpRight className="h-3 w-3 me-1" />}
-                        {trade.type.toUpperCase()}
+                        {trade.type === 'buy' ? t('p2p.buy') : t('p2p.sell')}
                       </Badge>
                       <div>
-                        <p className="font-medium">{trade.amount} {trade.currency}</p>
+                        <p className="font-medium">{formatLocalizedAssetAmount(trade.amount, trade.currency, numberLocale)}</p>
                         <p className="text-sm text-muted-foreground">{t('p2p.profile.with')} {trade.counterparty}</p>
                       </div>
                     </div>
                     <div className="text-end">
-                      <p className="font-medium">{trade.fiatAmount} EGP</p>
+                      <p className="font-medium">{formatLocalizedNumber(trade.fiatAmount, numberLocale, 2, 0)} EGP</p>
                       <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(trade.completedAt), { addSuffix: true })}
+                        {formatRelativeTimeFromNow(trade.completedAt, numberLocale)}
                       </p>
                     </div>
                   </div>
