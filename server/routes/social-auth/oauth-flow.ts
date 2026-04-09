@@ -384,6 +384,11 @@ function resolveGoogleNativeClientId(fallbackClientId?: string): string {
     ? fallbackClientId.trim()
     : "";
 
+  // Capgo/Google Android SDK expects the server (web) OAuth client id here.
+  if (fallback) {
+    return fallback;
+  }
+
   if (androidClientId) {
     return androidClientId;
   }
@@ -411,6 +416,8 @@ function resolveGoogleAllowedAudiences(fallbackClientId?: string): string[] {
 
   maybeAdd(process.env.GOOGLE_ANDROID_CLIENT_ID);
   maybeAdd(process.env.GOOGLE_CLIENT_ID_ANDROID);
+  maybeAdd(process.env.GOOGLE_CLIENT_ID);
+  maybeAdd(fallbackClientId);
 
   const extraAudiences = typeof process.env.GOOGLE_ALLOWED_AUDIENCES === "string"
     ? process.env.GOOGLE_ALLOWED_AUDIENCES
@@ -420,11 +427,6 @@ function resolveGoogleAllowedAudiences(fallbackClientId?: string): string[] {
     : [];
   for (const audience of extraAudiences) {
     maybeAdd(audience);
-  }
-
-  if (isTruthyEnvFlag(process.env.GOOGLE_ANDROID_ALLOW_WEB_CLIENT_FALLBACK)) {
-    maybeAdd(process.env.GOOGLE_CLIENT_ID);
-    maybeAdd(fallbackClientId);
   }
 
   return Array.from(audienceSet);
@@ -696,7 +698,7 @@ export function registerOAuthFlowRoutes(app: Express) {
       const nativeClientId = resolveGoogleNativeClientId(oauthCredentials.clientId);
       if (!nativeClientId) {
         return res.status(503).json({
-          error: "Google Android client id is missing. Set GOOGLE_ANDROID_CLIENT_ID (or GOOGLE_CLIENT_ID_ANDROID).",
+          error: "Google SDK client id is missing. Configure GOOGLE_CLIENT_ID (web OAuth client id).",
         });
       }
 
@@ -758,7 +760,7 @@ export function registerOAuthFlowRoutes(app: Express) {
 
       const oauthCredentials = resolveEffectiveOAuthCredentials(platformRecord);
       const requiredScope = resolveGoogleNativeScope();
-      const allowedAudiences = resolveGoogleAllowedAudiences(resolveGoogleNativeClientId(oauthCredentials.clientId));
+      const allowedAudiences = resolveGoogleAllowedAudiences(oauthCredentials.clientId);
 
       let profile;
       if (normalizedAccessToken) {
