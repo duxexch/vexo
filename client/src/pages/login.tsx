@@ -281,13 +281,6 @@ export default function LoginPage() {
     return true;
   };
 
-  const parseGoogleScopeList = (scopeValue: string): string[] => {
-    return scopeValue
-      .split(/[\s,]+/)
-      .map((scope) => scope.trim())
-      .filter((scope) => scope.length > 0);
-  };
-
   const extractNativeGoogleTokens = (payload: GoogleLoginResponse): { accessToken?: string; idToken?: string } => {
     if (payload.responseType === "offline") {
       return {};
@@ -349,11 +342,6 @@ export default function LoginPage() {
       throw new Error("google_native_sdk_mode_disabled");
     }
 
-    const scope = typeof configData.scope === "string" && configData.scope.length > 0
-      ? configData.scope
-      : "openid email profile";
-
-    const scopes = parseGoogleScopeList(scope);
     await SocialLogin.initialize({
       google: {
         webClientId: configData.clientId,
@@ -364,7 +352,6 @@ export default function LoginPage() {
     const loginResult = await SocialLogin.login({
       provider: "google",
       options: {
-        scopes,
         style: "standard",
       },
     });
