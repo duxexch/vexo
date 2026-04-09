@@ -247,6 +247,31 @@ validate_required_env() {
   fi
 }
 
+validate_compose_social_env_wiring() {
+  local google_android_mode
+  google_android_mode="$(read_env GOOGLE_ANDROID_LOGIN_MODE)"
+  google_android_mode="${google_android_mode,,}"
+  google_android_mode="${google_android_mode:-sdk-only}"
+
+  if [[ "$google_android_mode" != "sdk-only" ]]; then
+    return 0
+  fi
+
+  # Fail fast if compose app env does not expose native Google IDs to the runtime process.
+  local resolved_compose
+  resolved_compose="$(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config 2>/dev/null || true)"
+  if [[ -z "$resolved_compose" ]]; then
+    log_error "Unable to resolve docker compose config for env wiring validation"
+    exit 1
+  fi
+
+  if ! printf '%s\n' "$resolved_compose" | grep -Eq 'GOOGLE_ANDROID_CLIENT_ID:|GOOGLE_CLIENT_ID_ANDROID:'; then
+    log_error "Compose app environment does not expose GOOGLE_ANDROID_CLIENT_ID/GOOGLE_CLIENT_ID_ANDROID while sdk-only mode is enabled"
+    log_error "Add Google native env passthrough keys under app.environment in $COMPOSE_FILE"
+    exit 1
+  fi
+}
+
 wait_for_container_health() {
   local container="$1"
   local timeout_seconds="$2"
@@ -500,6 +525,7 @@ fi
 
 ensure_env_file_exists
 validate_required_env
+validate_compose_social_env_wiring
 
 print_header
 
