@@ -3,6 +3,7 @@ import {
   games, languages, currencies, countryPaymentMethods,
   themes, p2pSettings, financialLimits, promoCodes, socialPlatforms,
 } from "@shared/schema";
+import { getSeedSocialPlatforms } from "@shared/social-providers.config";
 import { defaultGames } from "./game-data";
 
 /** Main seed — games, languages, currencies, payment methods, themes, p2p settings, financial limits, promo codes */
@@ -114,20 +115,7 @@ export async function seedSocialPlatforms() {
   }
 
   console.log("Seeding default social platforms...");
-  const defaultPlatforms = [
-    { name: "google", displayName: "Google", displayNameAr: "جوجل", icon: "SiGoogle", type: "oauth" as const, sortOrder: 1, isEnabled: true },
-    { name: "facebook", displayName: "Facebook", displayNameAr: "فيسبوك", icon: "SiFacebook", type: "oauth" as const, sortOrder: 2, isEnabled: true },
-    { name: "telegram", displayName: "Telegram", displayNameAr: "تيليجرام", icon: "SiTelegram", type: "both" as const, sortOrder: 3, isEnabled: true },
-    { name: "whatsapp", displayName: "WhatsApp", displayNameAr: "واتساب", icon: "SiWhatsapp", type: "otp" as const, sortOrder: 4, isEnabled: true },
-    { name: "twitter", displayName: "X (Twitter)", displayNameAr: "إكس (تويتر)", icon: "SiX", type: "oauth" as const, sortOrder: 5, isEnabled: true },
-    { name: "apple", displayName: "Apple", displayNameAr: "آبل", icon: "SiApple", type: "oauth" as const, sortOrder: 6, isEnabled: true },
-    { name: "discord", displayName: "Discord", displayNameAr: "ديسكورد", icon: "SiDiscord", type: "oauth" as const, sortOrder: 7, isEnabled: false },
-    { name: "linkedin", displayName: "LinkedIn", displayNameAr: "لينكدإن", icon: "SiLinkedin", type: "oauth" as const, sortOrder: 8, isEnabled: false },
-    { name: "github", displayName: "GitHub", displayNameAr: "جيت هاب", icon: "SiGithub", type: "oauth" as const, sortOrder: 9, isEnabled: false },
-    { name: "tiktok", displayName: "TikTok", displayNameAr: "تيك توك", icon: "SiTiktok", type: "oauth" as const, sortOrder: 10, isEnabled: false },
-    { name: "instagram", displayName: "Instagram", displayNameAr: "إنستجرام", icon: "SiInstagram", type: "oauth" as const, sortOrder: 11, isEnabled: false },
-    { name: "sms", displayName: "SMS", displayNameAr: "رسائل SMS", icon: "Phone", type: "otp" as const, sortOrder: 12, isEnabled: false },
-  ];
+  const defaultPlatforms = getSeedSocialPlatforms();
 
   for (const platform of defaultPlatforms) {
     await db.insert(socialPlatforms).values(platform);

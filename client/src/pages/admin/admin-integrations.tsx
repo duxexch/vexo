@@ -218,8 +218,8 @@ function IntegrationCard({ integration, isArabic }: { integration: IntegrationSt
       ? "إعدادات تسجيل الدخول الاجتماعي تتم من لوحة الأدمن > Social Platforms. متغيرات البيئة أدناه اختيارية كخطة احتياط."
       : "Social login settings are managed in Admin > Social Platforms. Environment variables below are optional fallback.")
     : (isArabic
-      ? "أضف المتغيرات التالية إلى ملف .env.production.local الخاص بك"
-      : "Add the following environment variables to your .env.production.local file");
+      ? "أضف المتغيرات التالية إلى ملف .env الخاص بك"
+      : "Add the following environment variables to your .env file");
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -333,11 +333,11 @@ function IntegrationCard({ integration, isArabic }: { integration: IntegrationSt
                     <li>{isArabic ? "افتح لوحة الأدمن ثم انتقل إلى Social Platforms" : "Open Admin panel and go to Social Platforms"}</li>
                     <li>{isArabic ? "أدخل Client ID و Client Secret و Callback URL لكل مزود" : "Set Client ID, Client Secret, and Callback URL for each provider"}</li>
                     <li>{isArabic ? "فعّل المزود المطلوب ثم احفظ" : "Enable the provider and save"}</li>
-                    <li>{isArabic ? "استخدم .env.production.local فقط كخيار احتياطي إذا لزم" : "Use .env.production.local only as fallback when needed"}</li>
+                    <li>{isArabic ? "استخدم ملف .env كمصدر متغيرات البيئة الأساسي" : "Use the .env file as the primary environment source"}</li>
                   </>
                 ) : (
                   <>
-                    <li>{isArabic ? "افتح ملف .env.production.local على الخادم" : "Open .env.production.local on your server"}</li>
+                    <li>{isArabic ? "افتح ملف .env على الخادم" : "Open the .env file on your server"}</li>
                     <li>{isArabic ? "أضف كل متغير مع القيمة المناسبة" : "Add each variable with the appropriate value"}</li>
                     <li>{isArabic ? "أعد تشغيل التطبيق لتفعيل التغييرات" : "Restart the application to apply changes"}</li>
                   </>

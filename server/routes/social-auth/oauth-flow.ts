@@ -25,6 +25,10 @@ import {
   evaluateSocialPlatformRuntime,
   resolveEffectiveOAuthCredentials,
 } from "../../lib/social-platform-runtime";
+import {
+  getSocialProviderDefinition,
+  resolveGoogleAndroidLoginMode,
+} from "@shared/social-providers.config";
 
 interface OAuthExchangeRecord {
   userId: string;
@@ -63,8 +67,61 @@ function classifyUserAgent(userAgent?: string): "android" | "ios" | "windows" | 
   return "unknown";
 }
 
+function normalizeIpAddress(ip?: string): string {
+  if (!ip) {
+    return "unknown";
+  }
+
+  const trimmed = ip.trim();
+  if (!trimmed) {
+    return "unknown";
+  }
+
+  return trimmed.replace(/^::ffff:/, "");
+}
+
+function toIpPrefix(ip: string): string {
+  if (!ip || ip === "unknown") {
+    return "unknown";
+  }
+
+  if (ip.includes(".")) {
+    const parts = ip.split(".");
+    if (parts.length === 4) {
+      return `${parts[0]}.${parts[1]}.${parts[2]}`;
+    }
+  }
+
+  if (ip.includes(":")) {
+    return ip.split(":").slice(0, 4).join(":");
+  }
+
+  return ip;
+}
+
+function buildOAuthClientBinding(req: Request, sessionFingerprint: string): string {
+  const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : "";
+  const userAgentClass = classifyUserAgent(userAgent);
+  const ipPrefix = toIpPrefix(normalizeIpAddress(req.ip));
+  const language = typeof req.headers["accept-language"] === "string" ? req.headers["accept-language"] : "";
+  const host = typeof req.headers.host === "string" ? req.headers.host : "";
+
+  const raw = `${sessionFingerprint}:${userAgentClass}:${ipPrefix}:${language}:${host}`;
+  return crypto.createHash("sha256").update(raw).digest("hex").substring(0, 48);
+}
+
 function logOAuthSecurityEvent(req: Request, platform: string, event: string, metadata?: Record<string, unknown>) {
   logger.warn(`[OAuth] ${event}`, {
+    platform,
+    ip: req.ip,
+    userAgent: req.headers["user-agent"],
+    path: req.path,
+    ...(metadata || {}),
+  });
+}
+
+function logOAuthRuntimeEvent(req: Request, platform: string, event: string, metadata?: Record<string, unknown>) {
+  logger.warn(`[OAuth Trace] ${event}`, {
     platform,
     ip: req.ip,
     userAgent: req.headers["user-agent"],
@@ -327,7 +384,19 @@ function resolveGoogleNativeClientId(fallbackClientId?: string): string {
     ? fallbackClientId.trim()
     : "";
 
-  return fallback || androidClientId || androidAliasClientId;
+  if (androidClientId) {
+    return androidClientId;
+  }
+
+  if (androidAliasClientId) {
+    return androidAliasClientId;
+  }
+
+  if (isTruthyEnvFlag(process.env.GOOGLE_ANDROID_ALLOW_WEB_CLIENT_FALLBACK)) {
+    return fallback;
+  }
+
+  return "";
 }
 
 function resolveGoogleAllowedAudiences(fallbackClientId?: string): string[] {
@@ -340,12 +409,72 @@ function resolveGoogleAllowedAudiences(fallbackClientId?: string): string[] {
     }
   };
 
-  maybeAdd(process.env.GOOGLE_CLIENT_ID);
   maybeAdd(process.env.GOOGLE_ANDROID_CLIENT_ID);
   maybeAdd(process.env.GOOGLE_CLIENT_ID_ANDROID);
-  maybeAdd(fallbackClientId);
+
+  const extraAudiences = typeof process.env.GOOGLE_ALLOWED_AUDIENCES === "string"
+    ? process.env.GOOGLE_ALLOWED_AUDIENCES
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0)
+    : [];
+  for (const audience of extraAudiences) {
+    maybeAdd(audience);
+  }
+
+  if (isTruthyEnvFlag(process.env.GOOGLE_ANDROID_ALLOW_WEB_CLIENT_FALLBACK)) {
+    maybeAdd(process.env.GOOGLE_CLIENT_ID);
+    maybeAdd(fallbackClientId);
+  }
 
   return Array.from(audienceSet);
+}
+
+function isTruthyEnvFlag(value: string | undefined): boolean {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
+function shouldRequestGoogleOfflineAccess(): boolean {
+  if (isTruthyEnvFlag(process.env.GOOGLE_REQUEST_OFFLINE_ACCESS)) {
+    return true;
+  }
+
+  const strategy = typeof process.env.OAUTH_REFRESH_TOKEN_STRATEGY === "string"
+    ? process.env.OAUTH_REFRESH_TOKEN_STRATEGY.trim().toLowerCase()
+    : "";
+
+  return strategy === "always" || strategy === "google";
+}
+
+function buildProviderAuthorizationParams(platform: string, isPopupRequest: boolean): Record<string, string> {
+  const normalizedPlatform = platform.trim().toLowerCase();
+  const providerDefinition = getSocialProviderDefinition(normalizedPlatform);
+  const params: Record<string, string> = {
+    ...(providerDefinition?.oauth?.defaultAuthorizationParams || {}),
+  };
+
+  if (isPopupRequest && providerDefinition?.oauth?.popupAuthorizationParams) {
+    Object.assign(params, providerDefinition.oauth.popupAuthorizationParams);
+  }
+
+  if (normalizedPlatform === "google" && shouldRequestGoogleOfflineAccess()) {
+    params.access_type = "offline";
+    const promptTokens = new Set(
+      (params.prompt || "select_account")
+        .split(/\s+/)
+        .map((token) => token.trim())
+        .filter((token) => token.length > 0),
+    );
+    promptTokens.add("consent");
+    params.prompt = Array.from(promptTokens).join(" ");
+  }
+
+  return params;
 }
 
 async function validateGoogleNativeAccessToken(
@@ -424,6 +553,80 @@ async function validateGoogleNativeAccessToken(
   return { ok: true };
 }
 
+async function validateGoogleNativeIdToken(
+  idToken: string,
+  allowedAudiences: string[],
+): Promise<{
+  ok: boolean;
+  reason?: string;
+  details?: Record<string, unknown>;
+  profile?: Record<string, unknown>;
+}> {
+  if (!allowedAudiences.length) {
+    return {
+      ok: false,
+      reason: "id_token_missing_allowed_audience",
+    };
+  }
+
+  const tokenInfoResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+  if (!tokenInfoResponse.ok) {
+    return {
+      ok: false,
+      reason: "id_tokeninfo_unavailable",
+      details: { status: tokenInfoResponse.status },
+    };
+  }
+
+  const tokenInfo = await tokenInfoResponse.json() as {
+    aud?: string;
+    sub?: string;
+    email?: string;
+    email_verified?: string;
+    name?: string;
+    picture?: string;
+  };
+
+  const audience = typeof tokenInfo.aud === "string" ? tokenInfo.aud.trim() : "";
+  if (!audience) {
+    return {
+      ok: false,
+      reason: "id_token_missing_audience",
+    };
+  }
+
+  if (!allowedAudiences.includes(audience)) {
+    return {
+      ok: false,
+      reason: "id_token_audience_mismatch",
+      details: {
+        audience,
+        allowedAudiences,
+      },
+    };
+  }
+
+  const providerUserId = typeof tokenInfo.sub === "string" ? tokenInfo.sub.trim() : "";
+  if (!providerUserId) {
+    return {
+      ok: false,
+      reason: "id_token_missing_subject",
+    };
+  }
+
+  return {
+    ok: true,
+    profile: {
+      id: providerUserId,
+      sub: providerUserId,
+      email: tokenInfo.email,
+      verified_email: tokenInfo.email_verified === "true",
+      name: tokenInfo.name,
+      picture: tokenInfo.picture,
+    },
+  };
+}
+
 export function registerOAuthFlowRoutes(app: Express) {
   app.post("/api/auth/social/exchange", authRateLimiter, async (req: Request, res: Response) => {
     const { code } = req.body || {};
@@ -469,6 +672,16 @@ export function registerOAuthFlowRoutes(app: Express) {
 
   app.get("/api/auth/social/google/native/config", authRateLimiter, async (req: Request, res: Response) => {
     try {
+      logOAuthRuntimeEvent(req, "google", "google_native_config_requested");
+
+      const googleAndroidMode = resolveGoogleAndroidLoginMode();
+      if (googleAndroidMode !== "sdk-only") {
+        return res.status(409).json({
+          error: "Google Android SDK login mode is disabled",
+          loginMode: googleAndroidMode,
+        });
+      }
+
       const platformRecord = await storage.getSocialPlatformByName("google");
       if (!platformRecord || !platformRecord.isEnabled) {
         return res.status(404).json({ error: "Platform not available" });
@@ -483,7 +696,7 @@ export function registerOAuthFlowRoutes(app: Express) {
       const nativeClientId = resolveGoogleNativeClientId(oauthCredentials.clientId);
       if (!nativeClientId) {
         return res.status(503).json({
-          error: "Google native client id is missing. Set GOOGLE_CLIENT_ID or GOOGLE_ANDROID_CLIENT_ID (or GOOGLE_CLIENT_ID_ANDROID).",
+          error: "Google Android client id is missing. Set GOOGLE_ANDROID_CLIENT_ID (or GOOGLE_CLIENT_ID_ANDROID).",
         });
       }
 
@@ -494,9 +707,15 @@ export function registerOAuthFlowRoutes(app: Express) {
         ? process.env.GOOGLE_ANDROID_SHA1.trim()
         : "";
 
+      logOAuthRuntimeEvent(req, "google", "google_native_config_served", {
+        packageConfigured: androidPackageName.length > 0,
+        sha1Configured: androidSha1.length > 0,
+      });
+
       return res.json({
         clientId: nativeClientId,
         scope: resolveGoogleNativeScope(),
+        loginMode: googleAndroidMode,
         android: {
           packageName: androidPackageName || null,
           packageConfigured: androidPackageName.length > 0,
@@ -511,10 +730,20 @@ export function registerOAuthFlowRoutes(app: Express) {
 
   app.post("/api/auth/social/google/native/exchange", authRateLimiter, async (req: Request, res: Response) => {
     try {
-      const { accessToken } = req.body || {};
-      if (typeof accessToken !== "string" || accessToken.trim().length < 20) {
-        logOAuthSecurityEvent(req, "google", "native_access_token_missing_or_invalid");
-        return res.status(400).json({ error: "Access token is required" });
+      logOAuthRuntimeEvent(req, "google", "google_native_exchange_requested");
+
+      if (resolveGoogleAndroidLoginMode() !== "sdk-only") {
+        return res.status(409).json({
+          error: "Google Android SDK login mode is disabled",
+        });
+      }
+
+      const { accessToken, idToken } = req.body || {};
+      const normalizedAccessToken = typeof accessToken === "string" ? accessToken.trim() : "";
+      const normalizedIdToken = typeof idToken === "string" ? idToken.trim() : "";
+      if (!normalizedAccessToken && !normalizedIdToken) {
+        logOAuthSecurityEvent(req, "google", "native_google_tokens_missing");
+        return res.status(400).json({ error: "Google token is required" });
       }
 
       const platformRecord = await storage.getSocialPlatformByName("google");
@@ -529,28 +758,52 @@ export function registerOAuthFlowRoutes(app: Express) {
 
       const oauthCredentials = resolveEffectiveOAuthCredentials(platformRecord);
       const requiredScope = resolveGoogleNativeScope();
-      const validation = await validateGoogleNativeAccessToken(
-        accessToken,
-        resolveGoogleAllowedAudiences(resolveGoogleNativeClientId(oauthCredentials.clientId)),
-        requiredScope,
-      );
-
-      if (!validation.ok) {
-        const reason = validation.reason || "google_access_token_validation_failed";
-        logOAuthSecurityEvent(req, "google", reason, validation.details);
-        const statusCode = reason === "tokeninfo_unavailable" ? 503 : 401;
-        const errorMessage = statusCode === 503
-          ? "Google token validation is temporarily unavailable"
-          : "Invalid Google access token";
-        return res.status(statusCode).json({ error: errorMessage });
-      }
+      const allowedAudiences = resolveGoogleAllowedAudiences(resolveGoogleNativeClientId(oauthCredentials.clientId));
 
       let profile;
-      try {
-        profile = await fetchUserProfile("google", accessToken);
-      } catch {
-        logOAuthSecurityEvent(req, "google", "native_access_token_rejected");
-        return res.status(401).json({ error: "Invalid Google access token" });
+      if (normalizedAccessToken) {
+        const validation = await validateGoogleNativeAccessToken(
+          normalizedAccessToken,
+          allowedAudiences,
+          requiredScope,
+        );
+
+        if (!validation.ok) {
+          const reason = validation.reason || "google_access_token_validation_failed";
+          logOAuthSecurityEvent(req, "google", reason, validation.details);
+          const statusCode = reason === "tokeninfo_unavailable" ? 503 : 401;
+          const errorMessage = statusCode === 503
+            ? "Google token validation is temporarily unavailable"
+            : "Invalid Google access token";
+          return res.status(statusCode).json({ error: errorMessage });
+        }
+
+        try {
+          profile = await fetchUserProfile("google", normalizedAccessToken);
+        } catch {
+          logOAuthSecurityEvent(req, "google", "native_access_token_rejected");
+          return res.status(401).json({ error: "Invalid Google access token" });
+        }
+      } else {
+        const idTokenValidation = await validateGoogleNativeIdToken(normalizedIdToken, allowedAudiences);
+        if (!idTokenValidation.ok || !idTokenValidation.profile) {
+          const reason = idTokenValidation.reason || "google_id_token_validation_failed";
+          logOAuthSecurityEvent(req, "google", reason, idTokenValidation.details);
+          const statusCode = reason === "id_tokeninfo_unavailable" ? 503 : 401;
+          const errorMessage = statusCode === 503
+            ? "Google token validation is temporarily unavailable"
+            : "Invalid Google id token";
+          return res.status(statusCode).json({ error: errorMessage });
+        }
+
+        profile = {
+          id: String(idTokenValidation.profile.id || idTokenValidation.profile.sub || ""),
+          email: idTokenValidation.profile.email as string | undefined,
+          emailVerified: idTokenValidation.profile.verified_email === true,
+          displayName: idTokenValidation.profile.name as string | undefined,
+          avatar: idTokenValidation.profile.picture as string | undefined,
+          raw: idTokenValidation.profile,
+        };
       }
 
       if (!profile.id) {
@@ -558,10 +811,23 @@ export function registerOAuthFlowRoutes(app: Express) {
         return res.status(401).json({ error: "Unable to read Google profile" });
       }
 
-      const { user, isNew } = await findOrCreateUser("google", profile, {
-        access_token: accessToken,
-        token_type: "Bearer",
-      });
+      let nativeUserResult;
+      try {
+        nativeUserResult = await findOrCreateUser("google", profile, {
+          access_token: normalizedAccessToken,
+          token_type: "Bearer",
+          id_token: normalizedIdToken || undefined,
+        });
+      } catch (linkError: unknown) {
+        if (getErrorMessage(linkError) === "social_email_linking_blocked_by_policy") {
+          return res.status(409).json({
+            error: "Email is already in use and automatic social linking is disabled by policy",
+          });
+        }
+        throw linkError;
+      }
+
+      const { user, isNew } = nativeUserResult;
 
       if (user.status !== "active" || Boolean(user.accountDeletedAt)) {
         logOAuthSecurityEvent(req, "google", "native_user_suspended", { userId: user.id });
@@ -594,6 +860,11 @@ export function registerOAuthFlowRoutes(app: Express) {
       });
       await createSession(user.id, token, req);
 
+      logOAuthRuntimeEvent(req, "google", "google_native_exchange_success", {
+        userId: user.id,
+        isNew,
+      });
+
       return res.json({ token, redirect: "/", isNew });
     } catch (error: unknown) {
       logger.error("Native Google exchange error", new Error(getErrorMessage(error)));
@@ -603,14 +874,26 @@ export function registerOAuthFlowRoutes(app: Express) {
 
   // ==================== Initiate OAuth ====================
   app.get("/api/auth/social/:platform", authRateLimiter, async (req: Request, res: Response) => {
+    const platform = req.params.platform;
+    const traceId = crypto.randomBytes(8).toString("hex");
+    const startedAt = Date.now();
+
+    logOAuthRuntimeEvent(req, platform, "oauth_initiation_started", {
+      traceId,
+      popup: req.query.popup === "1" || req.query.popup === "true",
+    });
+
     try {
-      const { platform } = req.params;
       const requestedRedirectUrl = typeof req.query.redirect === "string" ? req.query.redirect : undefined;
       const redirectUrl = sanitizePostLoginRedirect(requestedRedirectUrl);
       const isPopupRequest = req.query.popup === "1" || req.query.popup === "true";
 
       const reusableAuthUrl = getReusableOAuthInitiationUrl(req, platform);
       if (reusableAuthUrl) {
+        logOAuthRuntimeEvent(req, platform, "oauth_initiation_reused", {
+          traceId,
+          durationMs: Date.now() - startedAt,
+        });
         return res.json({ url: reusableAuthUrl, reused: true });
       }
 
@@ -639,20 +922,18 @@ export function registerOAuthFlowRoutes(app: Express) {
 
       const callbackUrl = oauthCredentials.callbackUrl || `${req.protocol}://${req.get("host")}/api/auth/social/${platform}/callback`;
       const clientId = oauthCredentials.clientId;
+      const sessionFingerprint = getSessionFingerprint(req);
+      const clientBindingHash = buildOAuthClientBinding(req, sessionFingerprint);
 
       // Create state (with PKCE if supported)
-      const { state, codeVerifier } = await createOAuthState(platform, redirectUrl);
+      const { state, codeVerifier } = await createOAuthState(platform, redirectUrl, {
+        sessionFingerprint,
+        clientBindingHash,
+      });
       rememberOAuthStatePopupHint(state, isPopupRequest);
 
       // Build authorization URL
-      const extraParams: Record<string, string> = {};
-      if (platform === "google") {
-        extraParams.access_type = "offline";
-        extraParams.prompt = "consent";
-      }
-      if (platform === "apple") {
-        extraParams.response_mode = "form_post";
-      }
+      const extraParams = buildProviderAuthorizationParams(platform, isPopupRequest);
 
       const authUrl = await buildAuthorizationUrl(
         platform,
@@ -665,8 +946,18 @@ export function registerOAuthFlowRoutes(app: Express) {
 
       rememberOAuthInitiation(req, platform, state, authUrl);
 
+      logOAuthRuntimeEvent(req, platform, "oauth_initiation_success", {
+        traceId,
+        durationMs: Date.now() - startedAt,
+      });
+
       res.json({ url: authUrl });
     } catch (error: unknown) {
+      logOAuthRuntimeEvent(req, platform, "oauth_initiation_failed", {
+        traceId,
+        durationMs: Date.now() - startedAt,
+        error: getErrorMessage(error),
+      });
       logger.error(`OAuth initiation error for ${req.params.platform}`, new Error(getErrorMessage(error)));
       res.status(500).json({ error: "Failed to initiate authentication" });
     }
@@ -683,18 +974,34 @@ export function registerOAuthFlowRoutes(app: Express) {
   });
 
   async function handleOAuthCallback(req: Request, res: Response) {
+    const platform = req.params.platform;
+    const traceId = crypto.randomBytes(8).toString("hex");
+    const startedAt = Date.now();
+
     try {
-      const { platform } = req.params;
+      logOAuthRuntimeEvent(req, platform, "oauth_callback_started", {
+        traceId,
+      });
+
       // SECURITY: Sanitize platform parameter to prevent URL injection
       const safePlatform = encodeURIComponent(platform.replace(/[^a-zA-Z0-9_-]/g, ''));
       const code = (req.query.code || req.body?.code) as string;
       const state = (req.query.state || req.body?.state) as string;
       const error = (req.query.error || req.body?.error) as string;
       const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined;
+      const popupHintFromState = state ? consumeOAuthStatePopupHint(state) : false;
+
+      const buildErrorRedirectPath = (reason: string) => {
+        if (popupHintFromState) {
+          return `/auth/callback?error=${encodeURIComponent(reason)}&platform=${safePlatform}&popup=1`;
+        }
+
+        return `/login?error=${encodeURIComponent(reason)}&platform=${safePlatform}`;
+      };
 
       if (error) {
         logOAuthSecurityEvent(req, platform, "oauth_denied_by_provider", { providerError: error });
-        return res.redirect(`/login?error=oauth_denied&platform=${safePlatform}`);
+        return res.redirect(buildErrorRedirectPath("oauth_denied"));
       }
 
       if (!code || !state) {
@@ -702,7 +1009,7 @@ export function registerOAuthFlowRoutes(app: Express) {
           hasCode: Boolean(code),
           hasState: Boolean(state),
         });
-        return res.redirect(`/login?error=missing_params&platform=${safePlatform}`);
+        return res.redirect(buildErrorRedirectPath("missing_params"));
       }
 
       const replayRedirect = getOAuthStateReplayRedirect(state, userAgent);
@@ -712,14 +1019,26 @@ export function registerOAuthFlowRoutes(app: Express) {
       }
 
       // Verify and consume state (CSRF protection)
-      const stateRecord = await verifyAndConsumeState(state);
+      const expectedSessionFingerprint = getSessionFingerprint(req);
+      const expectedClientBindingHash = buildOAuthClientBinding(req, expectedSessionFingerprint);
+      const stateRecord = await verifyAndConsumeState(state, {
+        sessionFingerprint: expectedSessionFingerprint,
+        clientBindingHash: expectedClientBindingHash,
+      });
       if (!stateRecord) {
-        consumeOAuthStatePopupHint(state);
         logOAuthSecurityEvent(req, platform, "oauth_invalid_or_replayed_state");
-        return res.redirect(`/login?error=invalid_state&platform=${safePlatform}`);
+        return res.redirect(buildErrorRedirectPath("invalid_state"));
       }
 
-      const isPopupFlow = consumeOAuthStatePopupHint(state);
+      if (!stateRecord.bindingValid) {
+        logOAuthSecurityEvent(req, platform, "oauth_state_binding_failed", {
+          reason: stateRecord.bindingReason || "binding_verification_failed",
+          traceId,
+        });
+        return res.redirect(buildErrorRedirectPath("invalid_state_binding"));
+      }
+
+      const isPopupFlow = popupHintFromState;
 
       clearOAuthInitiationByState(state);
 
@@ -727,14 +1046,14 @@ export function registerOAuthFlowRoutes(app: Express) {
         logOAuthSecurityEvent(req, platform, "oauth_state_platform_mismatch", {
           expectedPlatform: stateRecord.platformName,
         });
-        return res.redirect(`/login?error=state_mismatch&platform=${safePlatform}`);
+        return res.redirect(buildErrorRedirectPath("state_mismatch"));
       }
 
       // Look up platform credentials
       const platformRecord = await storage.getSocialPlatformByName(platform);
       if (!platformRecord || !platformRecord.isEnabled) {
         logOAuthSecurityEvent(req, platform, "oauth_platform_not_found");
-        return res.redirect(`/login?error=platform_not_found`);
+        return res.redirect(buildErrorRedirectPath("platform_not_found"));
       }
 
       const runtime = evaluateSocialPlatformRuntime(platformRecord);
@@ -742,7 +1061,7 @@ export function registerOAuthFlowRoutes(app: Express) {
         logOAuthSecurityEvent(req, platform, "oauth_platform_not_ready", {
           issues: runtime.oauth.issues,
         });
-        return res.redirect(`/login?error=platform_not_ready&platform=${safePlatform}`);
+        return res.redirect(buildErrorRedirectPath("platform_not_ready"));
       }
 
       const oauthCredentials = resolveEffectiveOAuthCredentials(platformRecord);
@@ -751,7 +1070,7 @@ export function registerOAuthFlowRoutes(app: Express) {
           source: oauthCredentials.effectiveSource,
           missing: oauthCredentials.effectiveMissingFields,
         });
-        return res.redirect(`/login?error=platform_not_ready&platform=${safePlatform}`);
+        return res.redirect(buildErrorRedirectPath("platform_not_ready"));
       }
 
       const callbackUrl = oauthCredentials.callbackUrl || `${req.protocol}://${req.get("host")}/api/auth/social/${platform}/callback`;
@@ -776,6 +1095,7 @@ export function registerOAuthFlowRoutes(app: Express) {
         const profileData = {
           sub: idTokenPayload?.sub || "",
           email: idTokenPayload?.email,
+          email_verified: idTokenPayload?.email_verified,
           name: appleUser?.name,
         };
         const provider = await import("../../lib/oauth-engine");
@@ -786,11 +1106,22 @@ export function registerOAuthFlowRoutes(app: Express) {
       }
 
       // Find or create user, link social account
-      const { user, isNew } = await findOrCreateUser(platform, profile, tokens);
+      let oauthUserResult;
+      try {
+        oauthUserResult = await findOrCreateUser(platform, profile, tokens);
+      } catch (linkError: unknown) {
+        if (getErrorMessage(linkError) === "social_email_linking_blocked_by_policy") {
+          logOAuthSecurityEvent(req, platform, "oauth_email_linking_blocked_by_policy", { traceId });
+          return res.redirect(buildErrorRedirectPath("email_linking_policy_blocked"));
+        }
+        throw linkError;
+      }
+
+      const { user, isNew } = oauthUserResult;
 
       // Check if user is banned
       if (user.status !== "active" || Boolean(user.accountDeletedAt)) {
-        return res.redirect(`/login?error=account_suspended`);
+        return res.redirect(buildErrorRedirectPath("account_suspended"));
       }
 
       // Notify admin if this is a brand new registration via OAuth
@@ -809,16 +1140,35 @@ export function registerOAuthFlowRoutes(app: Express) {
 
       const redirect = sanitizePostLoginRedirect(stateRecord.redirectUrl) || "/";
       const exchangeCode = createOAuthExchangeCode({ userId: user.id, redirect, isNew, userAgent });
+      const callbackPlatformParam = `&platform=${safePlatform}`;
       const callbackRedirectPath = isPopupFlow
-        ? `/auth/callback?code=${encodeURIComponent(exchangeCode)}&popup=1`
-        : `/auth/callback?code=${encodeURIComponent(exchangeCode)}`;
+        ? `/auth/callback?code=${encodeURIComponent(exchangeCode)}&popup=1${callbackPlatformParam}`
+        : `/auth/callback?code=${encodeURIComponent(exchangeCode)}${callbackPlatformParam}`;
       rememberOAuthStateReplay(state, callbackRedirectPath, userAgent);
+
+      logOAuthRuntimeEvent(req, platform, "oauth_callback_success", {
+        traceId,
+        durationMs: Date.now() - startedAt,
+        userId: user.id,
+        isNew,
+      });
 
       // Redirect to frontend with one-time code (never expose JWT in URL query).
       res.redirect(callbackRedirectPath);
     } catch (error: unknown) {
+      logOAuthRuntimeEvent(req, platform, "oauth_callback_failed", {
+        traceId,
+        durationMs: Date.now() - startedAt,
+        error: getErrorMessage(error),
+      });
       logger.error(`OAuth callback error for ${req.params.platform}`, new Error(getErrorMessage(error)));
       const safePlatform = encodeURIComponent((req.params.platform || '').replace(/[^a-zA-Z0-9_-]/g, ''));
+      const state = (req.query.state || req.body?.state) as string;
+      const isPopupFlow = state ? consumeOAuthStatePopupHint(state) : false;
+      if (isPopupFlow) {
+        res.redirect(`/auth/callback?error=oauth_failed&platform=${safePlatform}&popup=1`);
+        return;
+      }
       res.redirect(`/login?error=oauth_failed&platform=${safePlatform}`);
     }
   }

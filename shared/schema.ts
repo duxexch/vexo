@@ -2852,6 +2852,8 @@ export const oauthStates = pgTable("oauth_states", {
   platformName: text("platform_name").notNull(),
   redirectUrl: text("redirect_url"),
   codeVerifier: text("code_verifier"), // PKCE
+  sessionFingerprint: text("session_fingerprint"),
+  clientBindingHash: text("client_binding_hash"),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [

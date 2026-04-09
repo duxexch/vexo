@@ -31,28 +31,39 @@ Use these callback paths exactly:
 - Mobile flow: open provider auth in system browser (Custom Tabs / ASWebAuthenticationSession equivalent).
 - Do not use embedded provider login forms inside a WebView for social sign-in.
 - Return to app using verified App Links / Universal Links to `https://vixo.click/auth/callback?...`.
+- Google on Android must use the native Google Sign-In SDK path (`sdk-only`) with backend token exchange.
+- Do not silently downgrade Google Android auth from SDK to browser OAuth unless incident mitigation explicitly requires it.
 
 VEX implementation notes:
 
 - Native builds use Capacitor Browser for social OAuth launch.
 - App URL callback is handled via Capacitor `appUrlOpen`.
+- Google native flow uses SDK token exchange endpoint (`/api/auth/social/google/native/exchange`) and enforces audience validation.
+
+Recommended production flags:
+
+- `GOOGLE_ANDROID_LOGIN_MODE=sdk-only`
+- `GOOGLE_ANDROID_ALLOW_WEB_CLIENT_FALLBACK=false`
+- `OAUTH_STATE_BINDING_STRICT=true`
+- `SOCIAL_OAUTH_DISABLED_PROVIDERS=` (optional kill-switch list)
+- `SOCIAL_ACCOUNT_LINKING_POLICY=strict-verified-email` (recommended for higher assurance)
 
 ## Configuration Source Policy (Admin Panel vs .env)
 
 Use this precedence to avoid conflicts:
 
 1. Admin panel (`social_platforms` in DB) is the primary source of truth.
-2. `.env.production.local` is fallback/bootstrap only.
+2. `.env` is fallback/bootstrap only.
 3. If both are configured, Admin panel takes precedence.
 
 Recommended operation model:
 
 1. Configure provider credentials in Admin panel first.
-2. Keep related `.env.production.local` variables empty for the same provider.
-3. Use `.env.production.local` only when bootstrap/fallback is required.
-4. Restart backend services after editing `.env.production.local`.
+2. Keep related `.env` variables empty for the same provider.
+3. Use `.env` only when bootstrap/fallback is required.
+4. Restart backend services after editing `.env`.
 
-If you must use fallback variables in `.env.production.local`, add only the provider you need:
+If you must use fallback variables in `.env`, add only the provider you need:
 
 - Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 - Facebook: `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`
@@ -61,7 +72,7 @@ If you must use fallback variables in `.env.production.local`, add only the prov
 
 Conflict warning:
 
-- Do not maintain different values for the same provider in both Admin and `.env.production.local`.
+- Do not maintain different values for the same provider in both Admin and `.env`.
 - This creates operational ambiguity during rotation and incident response.
 
 ## OTP Stability Policy

@@ -1,5 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { useI18n } from "@/lib/i18n";
+import { VexLogo } from "@/components/vex-logo";
+import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 
 const OAUTH_EVENT_STORAGE_KEY = "vex_oauth_event";
 
@@ -19,6 +22,22 @@ type OAuthEventPayload = {
  */
 export default function AuthCallbackPage() {
   const [, setLocation] = useLocation();
+  const { t } = useI18n();
+  const [stage, setStage] = useState<"processing" | "success" | "error">("processing");
+
+  const providerLabel = useMemo(() => {
+    const platform = new URLSearchParams(window.location.search).get("platform");
+    if (!platform) {
+      return "OAuth";
+    }
+
+    const normalized = platform.trim().toLowerCase();
+    if (!normalized) {
+      return "OAuth";
+    }
+
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  }, []);
 
   const sanitizeRelativeRedirect = (candidate?: string | null): string | undefined => {
     if (!candidate) {
@@ -84,7 +103,7 @@ export default function AuthCallbackPage() {
     }
   };
 
-  const closePopupOrFallback = (fallbackPath: string): boolean => {
+  const closePopupWindow = (): boolean => {
     if (!isPopupContext()) {
       return false;
     }
@@ -107,12 +126,21 @@ export default function AuthCallbackPage() {
 
     attemptClose();
 
-    // If browser blocks closing, continue in this tab as a safe fallback.
+    return window.closed;
+  };
+
+  const completePopupFlow = (): boolean => {
+    if (!isPopupContext()) {
+      return false;
+    }
+
+    if (closePopupWindow()) {
+      return true;
+    }
+
     window.setTimeout(() => {
-      if (!window.closed) {
-        window.location.replace(fallbackPath);
-      }
-    }, 250);
+      closePopupWindow();
+    }, 180);
 
     return true;
   };
@@ -121,11 +149,22 @@ export default function AuthCallbackPage() {
     const run = async () => {
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code");
+      const callbackError = params.get("error");
 
       // Legacy fallback for older redirects still carrying token directly.
       const legacyToken = params.get("token");
       const legacyRedirect = params.get("redirect") || "/";
       const legacyIsNew = params.get("isNew") === "true";
+
+      if (callbackError && !code && !legacyToken) {
+        setStage("error");
+        emitOAuthEvent({ type: "vex_oauth_error", reason: callbackError });
+        if (completePopupFlow()) {
+          return;
+        }
+        setLocation(`/login?error=${encodeURIComponent(callbackError)}`);
+        return;
+      }
 
       if (code) {
         const exchangeGuardKey = `vex_oauth_exchange_${code}`;
@@ -134,11 +173,12 @@ export default function AuthCallbackPage() {
 
         if (previousGuardState === "done") {
           const guardedRedirect = resolveSuccessRedirect(sessionStorage.getItem(exchangeRedirectKey), false);
+          setStage("success");
           emitOAuthEvent({ type: "vex_oauth_success", redirect: guardedRedirect });
-          if (closePopupOrFallback(guardedRedirect)) {
+          if (completePopupFlow()) {
             return;
           }
-          window.location.replace(guardedRedirect);
+          setLocation(guardedRedirect);
           return;
         }
 
@@ -184,8 +224,9 @@ export default function AuthCallbackPage() {
 
           if (!res.ok) {
             sessionStorage.removeItem(exchangeGuardKey);
+            setStage("error");
             emitOAuthEvent({ type: "vex_oauth_error", reason: "oauth_exchange_failed" });
-            if (closePopupOrFallback("/login?error=oauth_exchange_failed")) {
+            if (completePopupFlow()) {
               return;
             }
             setLocation("/login?error=oauth_exchange_failed");
@@ -195,8 +236,9 @@ export default function AuthCallbackPage() {
           const data = await res.json();
           if (!data?.token) {
             sessionStorage.removeItem(exchangeGuardKey);
+            setStage("error");
             emitOAuthEvent({ type: "vex_oauth_error", reason: "no_token" });
-            if (closePopupOrFallback("/login?error=no_token")) {
+            if (completePopupFlow()) {
               return;
             }
             setLocation("/login?error=no_token");
@@ -207,21 +249,23 @@ export default function AuthCallbackPage() {
           sessionStorage.setItem(exchangeGuardKey, "done");
           const successRedirect = resolveSuccessRedirect(data?.redirect, data?.isNew);
           sessionStorage.setItem(exchangeRedirectKey, successRedirect);
+          setStage("success");
 
           emitOAuthEvent({
             type: "vex_oauth_success",
             redirect: successRedirect,
             isNew: data?.isNew === true,
           });
-          if (closePopupOrFallback(successRedirect)) {
+          if (completePopupFlow()) {
             return;
           }
-          window.location.replace(successRedirect);
+          setLocation(successRedirect);
           return;
         } catch {
           sessionStorage.removeItem(exchangeGuardKey);
+          setStage("error");
           emitOAuthEvent({ type: "vex_oauth_error", reason: "oauth_exchange_failed" });
-          if (closePopupOrFallback("/login?error=oauth_exchange_failed")) {
+          if (completePopupFlow()) {
             return;
           }
           setLocation("/login?error=oauth_exchange_failed");
@@ -232,21 +276,23 @@ export default function AuthCallbackPage() {
       if (legacyToken) {
         localStorage.setItem("pwm_token", legacyToken);
         const legacyDestination = resolveSuccessRedirect(legacyRedirect, legacyIsNew);
+        setStage("success");
 
         emitOAuthEvent({
           type: "vex_oauth_success",
           redirect: legacyDestination,
           isNew: legacyIsNew,
         });
-        if (closePopupOrFallback(legacyDestination)) {
+        if (completePopupFlow()) {
           return;
         }
-        window.location.replace(legacyDestination);
+        setLocation(legacyDestination);
         return;
       }
 
+      setStage("error");
       emitOAuthEvent({ type: "vex_oauth_error", reason: "no_token" });
-      if (closePopupOrFallback("/login?error=no_token")) {
+      if (completePopupFlow()) {
         return;
       }
       setLocation("/login?error=no_token");
@@ -256,8 +302,39 @@ export default function AuthCallbackPage() {
   }, [setLocation]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-100 via-slate-50 to-white">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -top-28 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-cyan-200/40 blur-3xl" />
+        <div className="absolute -bottom-32 right-8 h-72 w-72 rounded-full bg-indigo-200/40 blur-3xl" />
+      </div>
+
+      <div className="relative mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-5 py-8">
+        <div className="w-full rounded-3xl border border-slate-200/80 bg-white/85 p-8 shadow-[0_22px_60px_-24px_rgba(15,23,42,0.45)] backdrop-blur-sm">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <VexLogo size={56} className="rounded-2xl" alt="VEX" />
+          </div>
+
+          <div className="space-y-2 text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">{providerLabel}</p>
+            <h1 className="text-xl font-semibold text-slate-900">{t("auth.signIn")}</h1>
+            <p className="text-sm text-slate-600">
+              {stage === "processing" ? t("common.loading") : stage === "success" ? t("auth.signIn") : t("common.error")}
+            </p>
+          </div>
+
+          <div className="mt-7 flex justify-center">
+            {stage === "processing" && <Loader2 className="h-10 w-10 animate-spin text-slate-700" />}
+            {stage === "success" && <CheckCircle2 className="h-10 w-10 text-emerald-600" />}
+            {stage === "error" && <AlertCircle className="h-10 w-10 text-rose-600" />}
+          </div>
+
+          <div className="mt-7 h-1.5 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className={`h-full w-full ${stage === "processing" ? "animate-pulse bg-slate-700" : stage === "success" ? "bg-emerald-600" : "bg-rose-600"}`}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

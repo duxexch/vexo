@@ -72,6 +72,14 @@ const config: CapacitorConfig = {
     Network: {
       // Network status monitoring
     },
+    SocialLogin: {
+      providers: {
+        google: true,
+        facebook: false,
+        apple: false,
+        twitter: false,
+      },
+    },
   },
 
   ios: {

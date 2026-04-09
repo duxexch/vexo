@@ -83,7 +83,7 @@ function Ensure-LocalInfra {
 $projectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $projectRoot
 
-$envFile = if ($Mode -eq "prod") { ".env.production.local" } else { ".env" }
+$envFile = ".env"
 
 Write-Info "Loading environment from $envFile"
 Import-EnvFile -FilePath $envFile

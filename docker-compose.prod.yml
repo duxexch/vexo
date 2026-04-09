@@ -2,7 +2,7 @@
 # Uses an existing Traefik reverse-proxy via a shared external Docker network.
 # Default external network name: vex-traefik (override with TRAEFIK_EXTERNAL_NETWORK).
 # Domain: vixo.click
-# Usage: docker compose -f docker-compose.prod.yml --env-file .env.production.local up -d
+# Usage: docker compose -f docker-compose.prod.yml --env-file .env up -d
 
 services:
   # ==================== PostgreSQL Database ====================

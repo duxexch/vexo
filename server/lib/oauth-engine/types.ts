@@ -28,6 +28,7 @@ export interface OAuthTokenResponse {
 export interface NormalizedProfile {
   id: string;
   email?: string;
+  emailVerified?: boolean;
   displayName?: string;
   avatar?: string;
   raw: Record<string, unknown>;

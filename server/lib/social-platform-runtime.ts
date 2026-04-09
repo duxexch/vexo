@@ -1,4 +1,9 @@
 import type { SocialPlatform } from "@shared/schema";
+import {
+  getCapabilityReason,
+  getOAuthEnvMapping,
+  getSocialProviderDefinition,
+} from "@shared/social-providers.config";
 import { getProvider } from "./oauth-engine";
 import "./oauth-providers";
 
@@ -51,6 +56,7 @@ type RuntimeModeStatus = {
 export interface SocialPlatformRuntimeStatus {
   capability: SocialPlatformCapability;
   oauth: RuntimeModeStatus & {
+    featureFlagEnabled: boolean;
     providerRegistered: boolean;
     configured: boolean;
     credentials: Omit<ResolvedOAuthCredentials, "clientId" | "clientSecret" | "callbackUrl">;
@@ -64,34 +70,6 @@ export interface SocialPlatformRuntimeStatus {
   runtimeReady: boolean;
   oauthLoginEnabled: boolean;
 }
-
-const OAUTH_ONLY_CAPABILITIES: Record<string, string> = {
-  google: "Google currently supports OAuth login only in runtime",
-  facebook: "Facebook currently supports OAuth login only in runtime",
-  apple: "Apple currently supports OAuth login only in runtime",
-  twitter: "Twitter/X currently supports OAuth login only in runtime",
-  discord: "Discord currently supports OAuth login only in runtime",
-  github: "GitHub currently supports OAuth login only in runtime",
-  linkedin: "LinkedIn currently supports OAuth login only in runtime",
-};
-
-const OTP_ONLY_CAPABILITIES: Record<string, string> = {
-  email: "Email platform is OTP only",
-  phone: "Phone platform is OTP only",
-  sms: "SMS platform is OTP only",
-  whatsapp: "WhatsApp platform is OTP only",
-  telegram: "Telegram platform is OTP only",
-};
-
-const OAUTH_ENV_MAPPINGS: Record<string, { clientId: string; clientSecret: string }> = {
-  google: { clientId: "GOOGLE_CLIENT_ID", clientSecret: "GOOGLE_CLIENT_SECRET" },
-  facebook: { clientId: "FACEBOOK_APP_ID", clientSecret: "FACEBOOK_APP_SECRET" },
-  twitter: { clientId: "TWITTER_API_KEY", clientSecret: "TWITTER_API_SECRET" },
-  apple: { clientId: "APPLE_CLIENT_ID", clientSecret: "APPLE_CLIENT_SECRET" },
-  discord: { clientId: "DISCORD_CLIENT_ID", clientSecret: "DISCORD_CLIENT_SECRET" },
-  github: { clientId: "GITHUB_CLIENT_ID", clientSecret: "GITHUB_CLIENT_SECRET" },
-  linkedin: { clientId: "LINKEDIN_CLIENT_ID", clientSecret: "LINKEDIN_CLIENT_SECRET" },
-};
 
 function hasValue(value: unknown): boolean {
   return typeof value === "string" && value.trim().length > 0;
@@ -108,6 +86,31 @@ function hasEnv(name: string): boolean {
 
 function normalizePlatformName(name: string): string {
   return name.trim().toLowerCase();
+}
+
+function parseProviderFeatureList(raw: string | undefined): Set<string> {
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return new Set<string>();
+  }
+
+  return new Set(
+    raw
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => value.length > 0),
+  );
+}
+
+function isOAuthFeatureEnabled(platformName: string): boolean {
+  const normalized = normalizePlatformName(platformName);
+  const disabled = parseProviderFeatureList(process.env.SOCIAL_OAUTH_DISABLED_PROVIDERS);
+  const forced = parseProviderFeatureList(process.env.SOCIAL_OAUTH_FORCE_ENABLED_PROVIDERS);
+
+  if (forced.has(normalized)) {
+    return true;
+  }
+
+  return !disabled.has(normalized);
 }
 
 function parsePlatformSettings(platform: SocialPlatform): Record<string, unknown> {
@@ -139,7 +142,7 @@ function getOAuthResolutionMode(platform: SocialPlatform): OAuthCredentialResolu
 }
 
 export function getOAuthEnvFieldNames(platformName: string): string[] {
-  const mapping = OAUTH_ENV_MAPPINGS[normalizePlatformName(platformName)];
+  const mapping = getOAuthEnvMapping(normalizePlatformName(platformName));
   if (!mapping) {
     return [];
   }
@@ -150,19 +153,21 @@ export function getOAuthEnvFieldNames(platformName: string): string[] {
 export function getSocialPlatformCapability(platformName: string): SocialPlatformCapability {
   const normalized = normalizePlatformName(platformName);
 
-  if (normalized in OAUTH_ONLY_CAPABILITIES) {
+  const providerDefinition = getSocialProviderDefinition(normalized);
+  const providerReason = getCapabilityReason(normalized);
+  if (providerDefinition?.capability === "oauth-only") {
     return {
       oauth: true,
       otp: false,
-      reason: OAUTH_ONLY_CAPABILITIES[normalized],
+      reason: providerReason || `${normalized} currently supports OAuth login only in runtime`,
     };
   }
 
-  if (normalized in OTP_ONLY_CAPABILITIES) {
+  if (providerDefinition?.capability === "otp-only") {
     return {
       oauth: false,
       otp: true,
-      reason: OTP_ONLY_CAPABILITIES[normalized],
+      reason: providerReason || `${normalized} platform is OTP only`,
     };
   }
 
@@ -457,6 +462,7 @@ export function evaluateSocialPlatformRuntime(platform: SocialPlatform): SocialP
   const capability = getSocialPlatformCapability(platform.name);
   const oauthEnabled = hasOAuthMode(platform);
   const otpEnabled = hasOtpMode(platform) && isOtpActive(platform);
+  const oauthFeatureEnabled = isOAuthFeatureEnabled(platform.name);
 
   const oauthIssues: string[] = [];
   const otpIssues: string[] = [];
@@ -482,6 +488,9 @@ export function evaluateSocialPlatformRuntime(platform: SocialPlatform): SocialP
     if (!capability.oauth) {
       oauthIssues.push(`OAuth mode is not supported for ${platform.name}. ${capability.reason}.`);
     } else {
+      if (!oauthFeatureEnabled) {
+        oauthIssues.push(`OAuth is disabled by SOCIAL_OAUTH_DISABLED_PROVIDERS for ${platform.name}`);
+      }
       if (!providerRegistered) {
         oauthIssues.push("OAuth provider is not registered in backend runtime");
       }
@@ -527,7 +536,7 @@ export function evaluateSocialPlatformRuntime(platform: SocialPlatform): SocialP
     }
   }
 
-  const oauthReady = !oauthEnabled || (capability.oauth && providerRegistered && oauthConfigured);
+  const oauthReady = !oauthEnabled || (capability.oauth && oauthFeatureEnabled && providerRegistered && oauthConfigured);
   const otpReady = !otpEnabled || (capability.otp && otpAdapterInfo.adapter !== "none" && otpAdapterConfigured);
   const runtimeReady = oauthReady && otpReady;
 
@@ -537,6 +546,7 @@ export function evaluateSocialPlatformRuntime(platform: SocialPlatform): SocialP
       enabled: oauthEnabled,
       ready: oauthReady,
       issues: oauthIssues,
+      featureFlagEnabled: oauthFeatureEnabled,
       providerRegistered,
       configured: oauthConfigured,
       credentials: oauthCredentialDetails,

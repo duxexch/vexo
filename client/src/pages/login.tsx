@@ -20,6 +20,7 @@ import { LanguageSwitcher } from "@/lib/i18n";
 import { fetchWithCsrf } from "@/lib/csrf";
 import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
+import { SocialLogin, type GoogleLoginResponse } from "@capgo/capacitor-social-login";
 
 interface AuthSettings {
   oneClickEnabled: boolean;
@@ -58,32 +59,6 @@ const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>
   SiInstagram: SiInstagram,
   Phone: Smartphone,
 };
-
-type GoogleTokenClientResponse = {
-  access_token?: string;
-  error?: string;
-  error_description?: string;
-};
-
-type GoogleTokenClient = {
-  requestAccessToken: (overrides?: { prompt?: string }) => void;
-};
-
-declare global {
-  interface Window {
-    google?: {
-      accounts?: {
-        oauth2?: {
-          initTokenClient: (config: {
-            client_id: string;
-            scope: string;
-            callback: (response: GoogleTokenClientResponse) => void;
-          }) => GoogleTokenClient;
-        };
-      };
-    };
-  }
-}
 
 const OAUTH_EVENT_STORAGE_KEY = "vex_oauth_event";
 
@@ -164,7 +139,6 @@ export default function LoginPage() {
   const socialPopupRef = useRef<Window | null>(null);
   const socialLoginLockRef = useRef<{ platformName: string; startedAt: number } | null>(null);
   const socialLoginUnlockTimeoutRef = useRef<number | null>(null);
-  const googleIdentityScriptLoaderRef = useRef<Promise<void> | null>(null);
   const lastOAuthEventTsRef = useRef<number>(0);
   const [activeSocialLoginPlatform, setActiveSocialLoginPlatform] = useState<string | null>(null);
 
@@ -274,79 +248,32 @@ export default function LoginPage() {
     return true;
   };
 
-  const ensureGoogleIdentityServices = async (): Promise<void> => {
-    if (window.google?.accounts?.oauth2) {
-      return;
-    }
-
-    if (googleIdentityScriptLoaderRef.current) {
-      return googleIdentityScriptLoaderRef.current;
-    }
-
-    googleIdentityScriptLoaderRef.current = new Promise<void>((resolve, reject) => {
-      const existingScript = document.getElementById("google-identity-services-sdk") as HTMLScriptElement | null;
-
-      const handleReady = () => {
-        if (window.google?.accounts?.oauth2) {
-          resolve();
-          return;
-        }
-
-        googleIdentityScriptLoaderRef.current = null;
-        reject(new Error("google_identity_not_ready"));
-      };
-
-      const handleError = () => {
-        googleIdentityScriptLoaderRef.current = null;
-        reject(new Error("google_identity_load_failed"));
-      };
-
-      if (existingScript) {
-        existingScript.addEventListener("load", handleReady, { once: true });
-        existingScript.addEventListener("error", handleError, { once: true });
-
-        if (window.google?.accounts?.oauth2) {
-          handleReady();
-        }
-        return;
-      }
-
-      const script = document.createElement("script");
-      script.id = "google-identity-services-sdk";
-      script.src = "https://accounts.google.com/gsi/client";
-      script.async = true;
-      script.defer = true;
-      script.addEventListener("load", handleReady, { once: true });
-      script.addEventListener("error", handleError, { once: true });
-      document.head.appendChild(script);
-    });
-
-    return googleIdentityScriptLoaderRef.current;
+  const parseGoogleScopeList = (scopeValue: string): string[] => {
+    return scopeValue
+      .split(/[\s,]+/)
+      .map((scope) => scope.trim())
+      .filter((scope) => scope.length > 0);
   };
 
-  const requestNativeGoogleAccessToken = (clientId: string, scope: string): Promise<string> => {
-    return new Promise<string>((resolve, reject) => {
-      const oauth2 = window.google?.accounts?.oauth2;
-      if (!oauth2) {
-        reject(new Error("google_identity_not_ready"));
-        return;
-      }
+  const extractNativeGoogleTokens = (payload: GoogleLoginResponse): { accessToken?: string; idToken?: string } => {
+    if (payload.responseType === "offline") {
+      return {};
+    }
 
-      const tokenClient = oauth2.initTokenClient({
-        client_id: clientId,
-        scope,
-        callback: (response: GoogleTokenClientResponse) => {
-          if (typeof response.access_token === "string" && response.access_token.length > 0) {
-            resolve(response.access_token);
-            return;
-          }
+    const accessToken =
+      payload.accessToken && typeof payload.accessToken.token === "string" && payload.accessToken.token.trim().length > 0
+        ? payload.accessToken.token.trim()
+        : undefined;
 
-          reject(new Error(response.error_description || response.error || "google_token_missing"));
-        },
-      });
+    const idToken =
+      typeof payload.idToken === "string" && payload.idToken.trim().length > 0
+        ? payload.idToken.trim()
+        : undefined;
 
-      tokenClient.requestAccessToken({ prompt: "select_account" });
-    });
+    return {
+      accessToken,
+      idToken,
+    };
   };
 
   const completeSocialLogin = async (payload: { token?: string; redirect?: string; isNew?: boolean }) => {
@@ -367,6 +294,10 @@ export default function LoginPage() {
   };
 
   const handleNativeGoogleLogin = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      throw new Error("google_native_not_available");
+    }
+
     const configRes = await fetch("/api/auth/social/google/native/config", {
       cache: "no-store",
       credentials: "include",
@@ -381,17 +312,42 @@ export default function LoginPage() {
       );
     }
 
+    if (configData.loginMode !== "sdk-only") {
+      throw new Error("google_native_sdk_mode_disabled");
+    }
+
     const scope = typeof configData.scope === "string" && configData.scope.length > 0
       ? configData.scope
       : "openid email profile";
 
-    await ensureGoogleIdentityServices();
-    const accessToken = await requestNativeGoogleAccessToken(configData.clientId, scope);
+    const scopes = parseGoogleScopeList(scope);
+    await SocialLogin.initialize({
+      google: {
+        webClientId: configData.clientId,
+        mode: "online",
+      },
+    });
+
+    const loginResult = await SocialLogin.login({
+      provider: "google",
+      options: {
+        scopes,
+        style: "standard",
+      },
+    });
+
+    const tokens = extractNativeGoogleTokens(loginResult.result);
+    if (!tokens.accessToken && !tokens.idToken) {
+      throw new Error("google_native_sdk_token_missing");
+    }
 
     const exchangeRes = await fetchWithCsrf("/api/auth/social/google/native/exchange", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accessToken }),
+      body: JSON.stringify({
+        accessToken: tokens.accessToken,
+        idToken: tokens.idToken,
+      }),
     });
     const exchangeData = await exchangeRes.json().catch(() => ({} as Record<string, unknown>));
 
@@ -406,6 +362,52 @@ export default function LoginPage() {
     await completeSocialLogin(exchangeData as { token?: string; redirect?: string; isNew?: boolean });
   };
 
+  const startPlatformOAuthFlow = async (platformName: string) => {
+    const postLoginRedirect = resolvePostLoginRedirect();
+    const startParams = new URLSearchParams({ redirect: postLoginRedirect });
+    if (!Capacitor.isNativePlatform()) {
+      startParams.set("popup", "1");
+    }
+
+    const res = await fetch(`/api/auth/social/${platformName}?${startParams.toString()}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    const data = await res.json();
+
+    if (!data.url) {
+      throw new Error(typeof data.error === "string" ? data.error : "oauth_initiation_failed");
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      await Browser.open({ url: data.url });
+      return;
+    }
+
+    const popupWidth = 520;
+    const popupHeight = 700;
+    const left = Math.max(0, Math.round((window.screen.width - popupWidth) / 2));
+    const top = Math.max(0, Math.round((window.screen.height - popupHeight) / 2));
+    const popup = window.open(
+      data.url,
+      "vex_social_auth",
+      `popup=yes,width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+
+    if (!popup) {
+      throw new Error("oauth_popup_blocked");
+    }
+
+    popup.focus();
+    socialPopupRef.current = popup;
+    socialPopupWatcherRef.current = window.setInterval(() => {
+      if (popup.closed) {
+        socialPopupRef.current = null;
+        clearSocialLoginLock();
+      }
+    }, 500);
+  };
+
   const handleSocialLogin = async (platform: SocialPlatform) => {
     if (!beginSocialLoginAttempt(platform.name)) {
       return;
@@ -418,48 +420,7 @@ export default function LoginPage() {
         return;
       }
 
-      const postLoginRedirect = resolvePostLoginRedirect();
-      const startParams = new URLSearchParams({ redirect: postLoginRedirect });
-      if (!Capacitor.isNativePlatform()) {
-        startParams.set("popup", "1");
-      }
-
-      const res = await fetch(`/api/auth/social/${platform.name}?${startParams.toString()}`);
-      const data = await res.json();
-
-      if (!data.url) {
-        throw new Error(typeof data.error === "string" ? data.error : "oauth_initiation_failed");
-      }
-
-      if (Capacitor.isNativePlatform()) {
-        await Browser.open({ url: data.url });
-        return;
-      }
-
-      const popupWidth = 520;
-      const popupHeight = 700;
-      const left = Math.max(0, Math.round((window.screen.width - popupWidth) / 2));
-      const top = Math.max(0, Math.round((window.screen.height - popupHeight) / 2));
-      const popup = window.open(
-        data.url,
-        "vex_social_auth",
-        `popup=yes,width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`
-      );
-
-      // Popup blocked or unsupported contexts: fallback to full redirect.
-      if (!popup) {
-        window.location.href = data.url;
-        return;
-      }
-
-      popup.focus();
-      socialPopupRef.current = popup;
-      socialPopupWatcherRef.current = window.setInterval(() => {
-        if (popup.closed) {
-          socialPopupRef.current = null;
-          clearSocialLoginLock();
-        }
-      }, 500);
+      await startPlatformOAuthFlow(platform.name);
     } catch (error: unknown) {
       const description = error instanceof Error && error.message
         ? error.message
@@ -544,7 +505,7 @@ export default function LoginPage() {
         clearSocialLoginLock(false);
         await refreshUser();
         setIsLoading(false);
-        window.location.replace(redirectTarget);
+        setLocation(redirectTarget);
         return;
       }
 

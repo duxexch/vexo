@@ -9,8 +9,36 @@ import { encryptSecret, decryptSecret } from "../crypto-utils";
 import { getProvider, generateCodeVerifier, generateCodeChallenge } from "./providers";
 import type { OAuthTokenResponse, NormalizedProfile } from "./types";
 
+export interface OAuthStateBinding {
+  sessionFingerprint?: string;
+  clientBindingHash?: string;
+}
+
+function normalizeBindingValue(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.substring(0, 256);
+}
+
+function timingSafeTextEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left, "utf8");
+  const rightBuffer = Buffer.from(right, "utf8");
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
 // ==================== State Management ====================
-export async function createOAuthState(platformName: string, redirectUrl?: string): Promise<{
+export async function createOAuthState(platformName: string, redirectUrl?: string, binding?: OAuthStateBinding): Promise<{
   state: string;
   codeVerifier?: string;
 }> {
@@ -27,6 +55,8 @@ export async function createOAuthState(platformName: string, redirectUrl?: strin
     platformName,
     redirectUrl: redirectUrl || null,
     codeVerifier: codeVerifier ? encryptSecret(codeVerifier) : null,
+    sessionFingerprint: normalizeBindingValue(binding?.sessionFingerprint) || null,
+    clientBindingHash: normalizeBindingValue(binding?.clientBindingHash) || null,
     // Use DB clock to avoid timezone drift between app/runtime and DB.
     expiresAt: sql`NOW() + INTERVAL '10 minutes'` as unknown as Date,
   });
@@ -34,10 +64,12 @@ export async function createOAuthState(platformName: string, redirectUrl?: strin
   return { state, codeVerifier };
 }
 
-export async function verifyAndConsumeState(state: string): Promise<{
+export async function verifyAndConsumeState(state: string, expectedBinding?: OAuthStateBinding): Promise<{
   platformName: string;
   redirectUrl?: string;
   codeVerifier?: string;
+  bindingValid: boolean;
+  bindingReason?: string;
 } | null> {
   // Atomically consume only non-expired state using DB time.
   const [record] = await db
@@ -54,10 +86,51 @@ export async function verifyAndConsumeState(state: string): Promise<{
     return null;
   }
 
+  const strictBinding = process.env.OAUTH_STATE_BINDING_STRICT !== "false";
+
+  const expectedSessionFingerprint = normalizeBindingValue(expectedBinding?.sessionFingerprint);
+  const expectedClientBindingHash = normalizeBindingValue(expectedBinding?.clientBindingHash);
+  const storedSessionFingerprint = normalizeBindingValue(record.sessionFingerprint);
+  const storedClientBindingHash = normalizeBindingValue(record.clientBindingHash);
+
+  const hasExpectedBinding = Boolean(expectedSessionFingerprint || expectedClientBindingHash);
+  const sessionFingerprintMissing = Boolean(expectedSessionFingerprint) && !storedSessionFingerprint;
+  const clientBindingMissing = Boolean(expectedClientBindingHash) && !storedClientBindingHash;
+
+  const sessionFingerprintMismatch =
+    Boolean(expectedSessionFingerprint)
+    && Boolean(storedSessionFingerprint)
+    && !timingSafeTextEqual(expectedSessionFingerprint, storedSessionFingerprint);
+
+  const clientBindingMismatch =
+    Boolean(expectedClientBindingHash)
+    && Boolean(storedClientBindingHash)
+    && !timingSafeTextEqual(expectedClientBindingHash, storedClientBindingHash);
+
+  let bindingValid = true;
+  let bindingReason: string | undefined;
+  if (hasExpectedBinding) {
+    if (sessionFingerprintMismatch) {
+      bindingValid = false;
+      bindingReason = "session_fingerprint_mismatch";
+    } else if (clientBindingMismatch) {
+      bindingValid = false;
+      bindingReason = "client_binding_mismatch";
+    } else if (strictBinding && sessionFingerprintMissing) {
+      bindingValid = false;
+      bindingReason = "session_fingerprint_missing";
+    } else if (strictBinding && clientBindingMissing) {
+      bindingValid = false;
+      bindingReason = "client_binding_missing";
+    }
+  }
+
   return {
     platformName: record.platformName,
     redirectUrl: record.redirectUrl || undefined,
     codeVerifier: record.codeVerifier ? decryptSecret(record.codeVerifier) as string : undefined,
+    bindingValid,
+    bindingReason,
   };
 }
 

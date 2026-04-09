@@ -15,7 +15,7 @@ cd "$PROJECT_ROOT"
 COMPOSE_FILE="docker-compose.prod.yml"
 ENV_TEMPLATE_FILE=".env.production"
 ENV_FALLBACK_FILE=".env.example"
-ENV_FILE=".env.production.local"
+ENV_FILE=".env"
 TRAEFIK_CONTAINER=""
 TRAEFIK_CONTAINER_OVERRIDE=""
 DOMAIN="vixo.click"
@@ -54,7 +54,7 @@ Options:
   --domain <domain>           Public domain (default: vixo.click)
   --network <name>            External Traefik network name override
   --traefik-container <name>  Explicit Traefik container name (optional)
-  --env-file <path>           Env file path (default: .env.production.local)
+  --env-file <path>           Env file path (default: .env)
   --compose-file <path>       Compose file path (default: docker-compose.prod.yml)
   --pull-latest               Pull latest code from origin/main before deploy
   --no-build                  Skip --build for app service
@@ -409,46 +409,54 @@ container_has_network() {
   docker inspect "$container" --format '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}' | grep -Fxq "$network_name"
 }
 
-cleanup_legacy_mobile_downloads() {
-  local legacy_files=(
-    "client/public/downloads/VEX-v1.1.0.apk"
-    "client/public/downloads/VEX-v1.1.0.aab"
-    "dist/public/downloads/VEX-v1.1.0.apk"
-    "dist/public/downloads/VEX-v1.1.0.aab"
+cleanup_mobile_release_artifacts() {
+  local release_dirs=(
+    "client/public/downloads"
+    "dist/public/downloads"
   )
 
   local official_files=(
-    "client/public/downloads/VEX-official-release.apk"
-    "client/public/downloads/VEX-official-release.aab"
+    "VEX-official-release.apk"
+    "VEX-official-release.aab"
   )
 
   local removed_count=0
-  local missing_official=0
+  local dir
   local path
+  local file_name
+  local keep_file
 
-  for path in "${legacy_files[@]}"; do
-    if [[ -f "$path" ]]; then
+  for dir in "${release_dirs[@]}"; do
+    if [[ ! -d "$dir" ]]; then
+      continue
+    fi
+
+    while IFS= read -r path; do
+      [[ -z "$path" ]] && continue
+
+      file_name="$(basename "$path")"
+      keep_file=false
+      for official in "${official_files[@]}"; do
+        if [[ "$file_name" == "$official" ]]; then
+          keep_file=true
+          break
+        fi
+      done
+
+      if [[ "$keep_file" == true ]]; then
+        continue
+      fi
+
       rm -f "$path"
       removed_count=$((removed_count + 1))
-      log_info "Removed legacy mobile artifact: $path"
-    fi
-  done
-
-  for path in "${official_files[@]}"; do
-    if [[ ! -f "$path" ]]; then
-      log_warn "Official mobile artifact not found: $path"
-      missing_official=1
-    fi
+      log_info "Removed mobile release artifact: $path"
+    done < <(find "$dir" -maxdepth 1 -type f \( -name '*.apk' -o -name '*.aab' \))
   done
 
   if (( removed_count == 0 )); then
-    log_info "No legacy mobile artifacts found to remove"
+    log_info "No mobile release artifacts found to remove"
   else
-    log_success "Removed $removed_count legacy mobile artifact(s)"
-  fi
-
-  if (( missing_official == 0 )); then
-    log_success "Official mobile artifacts are present in client/public/downloads"
+    log_success "Removed $removed_count mobile release artifact(s)"
   fi
 }
 
@@ -484,7 +492,7 @@ if [[ "$PULL_LATEST" == "true" ]]; then
   git pull --ff-only origin main
 fi
 
-cleanup_legacy_mobile_downloads
+cleanup_mobile_release_artifacts
 
 TRAEFIK_CONTAINER="$(detect_traefik_container)"
 if traefik_container_exists; then

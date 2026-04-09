@@ -9,12 +9,79 @@ import { storage } from "../../storage";
 import { encryptSecret } from "../crypto-utils";
 import type { NormalizedProfile, OAuthTokenResponse } from "./types";
 
+type AccountLinkingPolicy = "merge-by-email" | "strict-verified-email" | "separate-account";
+type RefreshTokenStrategy = "always" | "google" | "none";
+
+function resolveAccountLinkingPolicy(): AccountLinkingPolicy {
+  const policy = typeof process.env.SOCIAL_ACCOUNT_LINKING_POLICY === "string"
+    ? process.env.SOCIAL_ACCOUNT_LINKING_POLICY.trim().toLowerCase()
+    : "";
+
+  if (policy === "strict-verified-email") {
+    return "strict-verified-email";
+  }
+
+  if (policy === "separate-account" || policy === "separate") {
+    return "separate-account";
+  }
+
+  return "merge-by-email";
+}
+
+function canLinkByEmail(policy: AccountLinkingPolicy, profile: NormalizedProfile): boolean {
+  if (policy === "separate-account") {
+    return false;
+  }
+
+  if (policy === "strict-verified-email") {
+    return profile.emailVerified === true;
+  }
+
+  return true;
+}
+
+function resolveRefreshTokenStrategy(): RefreshTokenStrategy {
+  const strategy = typeof process.env.OAUTH_REFRESH_TOKEN_STRATEGY === "string"
+    ? process.env.OAUTH_REFRESH_TOKEN_STRATEGY.trim().toLowerCase()
+    : "";
+
+  if (strategy === "none") {
+    return "none";
+  }
+
+  if (strategy === "google" || strategy === "google-only") {
+    return "google";
+  }
+
+  return "always";
+}
+
+function shouldPersistRefreshToken(platformName: string, tokens: OAuthTokenResponse): boolean {
+  if (!tokens.refresh_token) {
+    return false;
+  }
+
+  const strategy = resolveRefreshTokenStrategy();
+  if (strategy === "none") {
+    return false;
+  }
+
+  if (strategy === "google") {
+    return platformName.trim().toLowerCase() === "google";
+  }
+
+  return true;
+}
+
 // ==================== Account Linking ====================
 export async function findOrCreateUser(
   platformName: string,
   profile: NormalizedProfile,
   tokens: OAuthTokenResponse,
 ): Promise<{ user: User; isNew: boolean; linked: boolean }> {
+  const accountLinkingPolicy = resolveAccountLinkingPolicy();
+  const persistRefreshToken = shouldPersistRefreshToken(platformName, tokens);
+
   // 1. Check if this social account is already linked
   const [existingLink] = await db
     .select()
@@ -32,7 +99,9 @@ export async function findOrCreateUser(
       .update(socialAuthAccounts)
       .set({
         accessToken: tokens.access_token ? encryptSecret(tokens.access_token) : existingLink.accessToken,
-        refreshToken: tokens.refresh_token ? encryptSecret(tokens.refresh_token) : existingLink.refreshToken,
+        refreshToken: persistRefreshToken
+          ? (tokens.refresh_token ? encryptSecret(tokens.refresh_token) : existingLink.refreshToken)
+          : null,
         tokenExpiresAt: tokens.expires_in
           ? new Date(Date.now() + tokens.expires_in * 1000)
           : existingLink.tokenExpiresAt,
@@ -52,8 +121,17 @@ export async function findOrCreateUser(
   let user: User | null = null;
   let isNew = false;
 
+  const existingEmailUser = profile.email
+    ? (await storage.getUserByEmail(profile.email) || null)
+    : null;
+
   if (profile.email) {
-    user = await storage.getUserByEmail(profile.email) || null;
+    const emailLinkAllowed = canLinkByEmail(accountLinkingPolicy, profile);
+    if (existingEmailUser && emailLinkAllowed) {
+      user = existingEmailUser;
+    } else if (existingEmailUser && !emailLinkAllowed) {
+      throw new Error("social_email_linking_blocked_by_policy");
+    }
   }
 
   // 3. Create new user if not found
@@ -66,7 +144,7 @@ export async function findOrCreateUser(
     user = await storage.createUser({
       username,
       email: profile.email || null,
-      emailVerified: !!profile.email, // Trust verified emails from OAuth providers
+      emailVerified: profile.emailVerified === true,
       password: hashedPassword,
       nickname: profile.displayName || username,
       profilePicture: profile.avatar || null,
@@ -84,7 +162,7 @@ export async function findOrCreateUser(
     providerDisplayName: profile.displayName || null,
     providerAvatar: profile.avatar || null,
     accessToken: tokens.access_token ? encryptSecret(tokens.access_token) : null,
-    refreshToken: tokens.refresh_token ? encryptSecret(tokens.refresh_token) : null,
+    refreshToken: persistRefreshToken && tokens.refresh_token ? encryptSecret(tokens.refresh_token) : null,
     tokenExpiresAt: tokens.expires_in
       ? new Date(Date.now() + tokens.expires_in * 1000)
       : null,

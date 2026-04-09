@@ -483,7 +483,7 @@ npx drizzle-kit studio
 # Local development (loads .env, starts infra if available, runs server)
 .\scripts\start-local.ps1 -Mode dev
 
-# Local production (loads .env.production.local, starts infra, runs dist server)
+# Local production (loads .env, starts infra, runs dist server)
 .\scripts\start-local.ps1 -Mode prod
 
 # Force production rebuild before start
@@ -533,7 +533,7 @@ bash ./scripts/prod-auto.sh --domain vixo.click
 
 What this does automatically:
 
-- Creates `.env.production.local` from `.env.production` if missing
+- Creates `.env` from `.env.production` if missing
 - Detects and/or creates the shared Traefik network
 - Auto-detects the running Traefik container (even when hosted in a separate Compose project)
 - Persists required server tuning (`vm.overcommit_memory=1`) for Redis
@@ -1153,7 +1153,7 @@ For production-safe Web/Mobile OAuth setup (provider-compliant), follow `docs/SO
 
 - `https://your-domain.com/api/auth/social/google/callback`
 
-7. Copy Client ID and Client Secret
+1. Copy Client ID and Client Secret
 2. Add to `.env`:
 
 ```env
@@ -1170,7 +1170,7 @@ GOOGLE_CLIENT_SECRET=your-client-secret
 
 - `https://your-domain.com/api/auth/social/facebook/callback`
 
-5. Copy App ID and App Secret
+1. Copy App ID and App Secret
 2. Add to `.env`:
 
 ```env
