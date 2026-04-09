@@ -101,6 +101,35 @@ export default function LoginPage() {
 
   const enabledTabs = getEnabledTabs();
   const currentTab = activeTab && enabledTabs.includes(activeTab) ? activeTab : enabledTabs[0];
+
+  const isSocialPlatformEnabledInAuthSettings = (platformName: string): boolean => {
+    if (!authSettings) {
+      return true;
+    }
+
+    switch (platformName.trim().toLowerCase()) {
+      case "google":
+        return authSettings.googleLoginEnabled !== false;
+      case "facebook":
+        return authSettings.facebookLoginEnabled !== false;
+      case "telegram":
+        return authSettings.telegramLoginEnabled !== false;
+      case "twitter":
+        return authSettings.twitterLoginEnabled !== false;
+      default:
+        return true;
+    }
+  };
+
+  const shouldShowSocialPlatform = (platform: SocialPlatform): boolean => {
+    const runtimeOAuthEnabled = platform.runtime?.oauthLoginEnabled ?? (platform.type === "oauth" || platform.type === "both");
+    if (!runtimeOAuthEnabled) {
+      return false;
+    }
+
+    return isSocialPlatformEnabledInAuthSettings(platform.name);
+  };
+
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [nickname, setNickname] = useState("");
@@ -413,6 +442,10 @@ export default function LoginPage() {
   };
 
   const handleSocialLogin = async (platform: SocialPlatform) => {
+    if (!checkTermsAgreed()) {
+      return;
+    }
+
     if (!beginSocialLoginAttempt(platform.name)) {
       return;
     }
@@ -1302,7 +1335,7 @@ export default function LoginPage() {
                   <p className="text-xs text-muted-foreground text-center mb-3">{t('auth.orContinueWith')}</p>
                   <div className="flex justify-center gap-3 flex-wrap">
                     {socialPlatforms
-                      .filter((platform) => platform.runtime?.oauthLoginEnabled ?? (platform.type === "oauth" || platform.type === "both"))
+                      .filter(shouldShowSocialPlatform)
                       .map((platform) => {
                         const Icon = PLATFORM_ICONS[platform.icon] || Globe;
                         return (

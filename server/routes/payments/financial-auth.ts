@@ -3,6 +3,7 @@ import { AuthRequest, authMiddleware, adminMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import { cancelPaymentOperationToken } from "../../lib/payment-security";
+import { evaluateSocialPlatformRuntime } from "../../lib/social-platform-runtime";
 
 export function registerFinancialAndAuthRoutes(app: Express): void {
 
@@ -60,6 +61,25 @@ export function registerFinancialAndAuthRoutes(app: Express): void {
         googleLoginEnabled: false, facebookLoginEnabled: false, telegramLoginEnabled: false, twitterLoginEnabled: false,
       };
       settings.forEach(s => { if (s.key in authConfig) authConfig[s.key] = s.value === "true"; });
+
+      // Keep social visibility aligned with the social-platform runtime source of truth.
+      const socialSettingToPlatform: Record<string, string> = {
+        googleLoginEnabled: "google",
+        facebookLoginEnabled: "facebook",
+        telegramLoginEnabled: "telegram",
+        twitterLoginEnabled: "twitter",
+      };
+
+      const enabledSocialPlatforms = await storage.getEnabledSocialPlatforms();
+      const runtimeByPlatformName = new Map(
+        enabledSocialPlatforms.map((platform) => [platform.name, evaluateSocialPlatformRuntime(platform)]),
+      );
+
+      for (const [settingKey, platformName] of Object.entries(socialSettingToPlatform)) {
+        const runtime = runtimeByPlatformName.get(platformName);
+        authConfig[settingKey] = Boolean(runtime?.oauthLoginEnabled);
+      }
+
       res.json(authConfig);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

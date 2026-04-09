@@ -228,6 +228,23 @@ validate_required_env() {
     log_error "SESSION_SECRET, JWT_SIGNING_KEY, and ADMIN_JWT_SECRET must be at least 32 chars"
     exit 1
   fi
+
+  local google_android_mode google_android_client_id google_android_alias_client_id
+  google_android_mode="$(read_env GOOGLE_ANDROID_LOGIN_MODE)"
+  google_android_mode="${google_android_mode,,}"
+  google_android_mode="${google_android_mode:-sdk-only}"
+  google_android_client_id="$(read_env GOOGLE_ANDROID_CLIENT_ID)"
+  google_android_alias_client_id="$(read_env GOOGLE_CLIENT_ID_ANDROID)"
+
+  if [[ "$google_android_mode" == "sdk-only" && -z "$google_android_client_id" && -z "$google_android_alias_client_id" ]]; then
+    log_error "GOOGLE_ANDROID_LOGIN_MODE=sdk-only requires GOOGLE_ANDROID_CLIENT_ID (or GOOGLE_CLIENT_ID_ANDROID)"
+    exit 1
+  fi
+
+  if [[ -n "$google_android_client_id" && -n "$google_android_alias_client_id" && "$google_android_client_id" != "$google_android_alias_client_id" ]]; then
+    log_error "GOOGLE_ANDROID_CLIENT_ID and GOOGLE_CLIENT_ID_ANDROID must match when both are set"
+    exit 1
+  fi
 }
 
 wait_for_container_health() {
