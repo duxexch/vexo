@@ -1,16 +1,23 @@
 import type { Express, Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import jwt from "jsonwebtoken";
 import { storage } from "../../../storage";
 import type { InsertUser } from "@shared/schema";
 import {
   authRateLimiter,
   sensitiveRateLimiter,
   registrationRateLimiter,
+  identifierAutoRegistrationLimiter,
 } from "../../middleware";
 import { emitSystemAlert } from "../../../lib/admin-alerts";
+import { JWT_USER_EXPIRY, JWT_USER_SECRET } from "../../../lib/auth-config";
+import { toSafeUser } from "../../../lib/safe-user";
 import {
+  createSession,
   getErrorMessage,
+  getSessionFingerprint,
+  setAuthCookie,
   validatePasswordStrength,
 } from "../helpers";
 import { isSafeEmailAddress, isSafePhoneNumber } from "../../../lib/input-security";
@@ -78,20 +85,41 @@ export function registerIdentifierRoutes(app: Express) {
   });
 
   // Create account from login attempt (auto-registration)
-  app.post("/api/auth/create-from-identifier", registrationRateLimiter, async (req: Request, res: Response) => {
+  app.post("/api/auth/create-from-identifier", registrationRateLimiter, identifierAutoRegistrationLimiter, async (req: Request, res: Response) => {
     try {
       const { identifier, type, password } = req.body;
 
-      if (!identifier || !type || !password) {
+      if (!identifier || !type || !password || typeof identifier !== "string" || typeof type !== "string" || typeof password !== "string") {
         return res.status(400).json({ error: "Identifier, type, and password are required" });
       }
 
+      const normalizedType = type.trim().toLowerCase();
+      if (![
+        "email",
+        "phone",
+        "account",
+      ].includes(normalizedType)) {
+        return res.status(400).json({ error: "Invalid identifier type" });
+      }
+
+      const normalizedIdentifier = identifier.trim();
+      if (!normalizedIdentifier) {
+        return res.status(400).json({ error: "Identifier, type, and password are required" });
+      }
+
+      const normalizedEmail = normalizedIdentifier.toLowerCase();
+      const normalizedPhone = normalizedIdentifier;
+      const normalizedAccountId = normalizedIdentifier;
+
       // Validate format based on type
-      if (type === "phone" && !isSafePhoneNumber(identifier.trim())) {
+      if (normalizedType === "phone" && !isSafePhoneNumber(normalizedPhone)) {
         return res.status(400).json({ error: "الرجاء إدخال رقم هاتف صحيح" });
       }
-      if (type === "email" && !isSafeEmailAddress(identifier.trim())) {
+      if (normalizedType === "email" && !isSafeEmailAddress(normalizedEmail)) {
         return res.status(400).json({ error: "الرجاء إدخال بريد إلكتروني صحيح" });
+      }
+      if (normalizedType === "account" && !/^[0-9]{8,12}$/.test(normalizedAccountId)) {
+        return res.status(400).json({ error: "الرجاء إدخال رقم حساب صحيح" });
       }
 
       const pwValidation = validatePasswordStrength(password);
@@ -101,10 +129,12 @@ export function registerIdentifierRoutes(app: Express) {
 
       // Check if already exists
       let existingUser = null;
-      if (type === "email") {
-        existingUser = await storage.getUserByEmail(identifier);
-      } else if (type === "phone") {
-        existingUser = await storage.getUserByPhone(identifier);
+      if (normalizedType === "email") {
+        existingUser = await storage.getUserByEmail(normalizedEmail);
+      } else if (normalizedType === "phone") {
+        existingUser = await storage.getUserByPhone(normalizedPhone);
+      } else if (normalizedType === "account") {
+        existingUser = await storage.getUserByAccountId(normalizedAccountId);
       }
 
       if (existingUser) {
@@ -112,10 +142,17 @@ export function registerIdentifierRoutes(app: Express) {
       }
 
       // Generate unique username and account ID
-      const accountId = await storage.generateUniqueAccountId();
-      const username = type === "email"
-        ? identifier.split("@")[0] + "_" + crypto.randomBytes(3).toString('hex')
-        : "user_" + crypto.randomBytes(5).toString('hex');
+      const accountId = normalizedType === "account"
+        ? normalizedAccountId
+        : await storage.generateUniqueAccountId();
+
+      const usernameBase = normalizedType === "email"
+        ? normalizedEmail.split("@")[0]
+        : normalizedType === "account"
+          ? `player_${normalizedAccountId}`
+          : "user";
+
+      const username = `${usernameBase.replace(/[^a-zA-Z0-9_]/g, "").substring(0, 20) || "user"}_${crypto.randomBytes(3).toString('hex')}`;
 
       const hashedPassword = await bcrypt.hash(password, 12);
 
@@ -127,23 +164,75 @@ export function registerIdentifierRoutes(app: Express) {
         status: "active",
         emailVerified: false,
         phoneVerified: false,
-        registrationType: type,
+        registrationType: normalizedType,
       };
 
-      if (type === "email") {
-        userData.email = identifier;
-      } else if (type === "phone") {
-        userData.phone = identifier;
+      if (normalizedType === "email") {
+        userData.email = normalizedEmail;
+      } else if (normalizedType === "phone") {
+        userData.phone = normalizedPhone;
       }
 
       const user = await storage.createUser(userData as InsertUser);
+
+      await storage.createAuditLog({
+        userId: user.id,
+        action: "settings_change",
+        entityType: "user",
+        entityId: user.id,
+        details: `Auto-registered from login attempt (${normalizedType})`,
+        ipAddress: req.ip,
+      });
+
+      // Notify admin about new user registration
+      emitSystemAlert({
+        title: 'New User Registered',
+        titleAr: 'مستخدم جديد مسجل',
+        message: `New auto-registration (${normalizedType}): ${user.username} (ID: ${user.id}) from IP ${req.ip || 'unknown'}`,
+        messageAr: `تسجيل تلقائي جديد (${normalizedType}): ${user.username} (رقم: ${user.id})`,
+        severity: 'info',
+        deepLink: '/admin/users',
+        entityType: 'user',
+        entityId: String(user.id),
+      }).catch(() => { });
+
+      if (normalizedType === "account") {
+        const token = jwt.sign(
+          {
+            id: user.id,
+            role: user.role,
+            username: user.username,
+            fp: getSessionFingerprint(req),
+          },
+          JWT_USER_SECRET,
+          { expiresIn: JWT_USER_EXPIRY },
+        );
+
+        setAuthCookie(res, token);
+        await createSession(user.id, token, req);
+
+        await storage.createAuditLog({
+          userId: user.id,
+          action: "login",
+          entityType: "user",
+          entityId: user.id,
+          details: "Login after account auto-registration",
+          ipAddress: req.ip,
+        });
+
+        return res.json({
+          user: toSafeUser(user),
+          token,
+          message: "Account created successfully.",
+        });
+      }
 
       const signupMethods = getSignupIdentifierMethods(user);
       if (signupMethods.length === 0) {
         return res.status(400).json({ error: "Registration failed. No valid verification method is configured." });
       }
 
-      const preferredMethod: IdentifierOtpMethod = type === "email" ? "email" : "phone";
+      const preferredMethod: IdentifierOtpMethod = normalizedType === "email" ? "email" : "phone";
       const selectedMethod = signupMethods.includes(preferredMethod)
         ? preferredMethod
         : signupMethods[0];
@@ -164,27 +253,6 @@ export function registerIdentifierRoutes(app: Express) {
         preferredMethod: selectedMethod,
         flow: "signup",
       });
-
-      await storage.createAuditLog({
-        userId: user.id,
-        action: "settings_change",
-        entityType: "user",
-        entityId: user.id,
-        details: "Auto-registered from login attempt (pending OTP verification)",
-        ipAddress: req.ip,
-      });
-
-      // Notify admin about new user registration
-      emitSystemAlert({
-        title: 'New User Registered',
-        titleAr: 'مستخدم جديد مسجل',
-        message: `New auto-registration (${type}): ${user.username} (ID: ${user.id}) from IP ${req.ip || 'unknown'}`,
-        messageAr: `تسجيل تلقائي جديد (${type}): ${user.username} (رقم: ${user.id})`,
-        severity: 'info',
-        deepLink: '/admin/users',
-        entityType: 'user',
-        entityId: String(user.id),
-      }).catch(() => { });
 
       res.json({
         requiresIdentifierOtp: true,

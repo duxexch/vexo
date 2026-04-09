@@ -61,6 +61,9 @@ const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>
 };
 
 const OAUTH_EVENT_STORAGE_KEY = "vex_oauth_event";
+const AUTO_CREATE_MAX_CLIENT_ATTEMPTS = 4;
+const AUTO_CREATE_ATTEMPTS_STORAGE_KEY = "vex_auto_create_attempts_v1";
+const AUTO_CREATE_CLIENT_ID_STORAGE_KEY = "vex_auto_create_client_id_v1";
 
 export default function LoginPage() {
   const [location, setLocation] = useLocation();
@@ -119,8 +122,9 @@ export default function LoginPage() {
 
   // Auto-registration state
   const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
-  const [pendingRegistration, setPendingRegistration] = useState<{ identifier: string; type: "email" | "phone"; password: string } | null>(null);
+  const [pendingRegistration, setPendingRegistration] = useState<{ identifier: string; type: "email" | "phone" | "account"; password: string } | null>(null);
   const [showAccountNotFoundModal, setShowAccountNotFoundModal] = useState(false);
+  const [autoCreateAttempts, setAutoCreateAttempts] = useState(0);
 
   // Mandatory identifier OTP challenge state
   const [showIdentifierOtpModal, setShowIdentifierOtpModal] = useState(false);
@@ -561,6 +565,67 @@ export default function LoginPage() {
     };
   }, [dir, location, refreshUser, setLocation, t, toast]);
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(AUTO_CREATE_ATTEMPTS_STORAGE_KEY);
+      const parsed = Number.parseInt(raw || "0", 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        setAutoCreateAttempts(Math.min(parsed, AUTO_CREATE_MAX_CLIENT_ATTEMPTS));
+      }
+    } catch {
+      // Ignore local storage read errors.
+    }
+  }, []);
+
+  const getOrCreateAutoCreateClientId = (): string => {
+    try {
+      const existing = localStorage.getItem(AUTO_CREATE_CLIENT_ID_STORAGE_KEY);
+      if (existing && /^[A-Za-z0-9_-]{16,128}$/.test(existing)) {
+        return existing;
+      }
+    } catch {
+      // Ignore storage access issues and continue with generated value.
+    }
+
+    const randomSuffix = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID().replace(/-/g, "")
+      : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+
+    const generated = `${Date.now().toString(36)}_${randomSuffix}`.substring(0, 64);
+
+    try {
+      localStorage.setItem(AUTO_CREATE_CLIENT_ID_STORAGE_KEY, generated);
+    } catch {
+      // Ignore storage write issues; request still carries this generated value.
+    }
+
+    return generated;
+  };
+
+  const isAutoCreateFeatureBlocked = autoCreateAttempts >= AUTO_CREATE_MAX_CLIENT_ATTEMPTS;
+
+  const recordAutoCreatePromptAttempt = (): number => {
+    const next = Math.min(autoCreateAttempts + 1, AUTO_CREATE_MAX_CLIENT_ATTEMPTS);
+    setAutoCreateAttempts(next);
+    try {
+      localStorage.setItem(AUTO_CREATE_ATTEMPTS_STORAGE_KEY, String(next));
+    } catch {
+      // Ignore storage write issues; in-memory attempt counter still applies.
+    }
+    return next;
+  };
+
+  const offerAutoCreatePrompt = (payload: { identifier: string; type: "email" | "phone" | "account"; password: string }): boolean => {
+    if (isAutoCreateFeatureBlocked) {
+      return false;
+    }
+
+    setPendingRegistration(payload);
+    setShowCreateAccountModal(true);
+    recordAutoCreatePromptAttempt();
+    return true;
+  };
+
   const checkTermsAgreed = () => {
     if (!agreedToTerms) {
       toast({
@@ -600,25 +665,6 @@ export default function LoginPage() {
       setShowTwoFactorModal(true);
       setTwoFactorChallengeToken(result.challengeToken);
       setTwoFactorCode("");
-    }
-  };
-
-  const checkIdentifierExists = async (
-    identifier: string,
-    type: "account" | "phone" | "email",
-  ): Promise<boolean | null> => {
-    try {
-      const res = await fetchWithCsrf("/api/auth/check-identifier", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, type }),
-      });
-      if (!res.ok) return null;
-      const data = await res.json().catch(() => ({} as Record<string, unknown>));
-      if (typeof data.exists !== "boolean") return null;
-      return data.exists;
-    } catch {
-      return null;
     }
   };
 
@@ -709,11 +755,19 @@ export default function LoginPage() {
     } catch (error: unknown) {
       const err = error as Error & { errorCode?: string };
       if (err.errorCode === "INVALID_CREDENTIALS" && accountLoginForm.accountId.trim()) {
-        const exists = await checkIdentifierExists(accountLoginForm.accountId.trim(), "account");
-        if (exists === false) {
-          setShowAccountNotFoundModal(true);
+        const offered = offerAutoCreatePrompt({
+          identifier: accountLoginForm.accountId.trim(),
+          type: "account",
+          password: accountLoginForm.password,
+        });
+
+        if (offered) {
           return;
         }
+
+        setShowAccountNotFoundModal(true);
+        toast({ title: t('common.error'), description: t('auth.useQuickTab'), variant: "destructive" });
+        return;
       }
 
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
@@ -739,16 +793,19 @@ export default function LoginPage() {
     } catch (error: unknown) {
       const err = error as Error & { errorCode?: string };
       if (err.errorCode === "INVALID_CREDENTIALS" && phoneLoginForm.phone.trim()) {
-        const exists = await checkIdentifierExists(phoneLoginForm.phone.trim(), "phone");
-        if (exists === false) {
-          setPendingRegistration({
-            identifier: phoneLoginForm.phone.trim(),
-            type: "phone",
-            password: phoneLoginForm.password,
-          });
-          setShowCreateAccountModal(true);
+        const offered = offerAutoCreatePrompt({
+          identifier: phoneLoginForm.phone.trim(),
+          type: "phone",
+          password: phoneLoginForm.password,
+        });
+
+        if (offered) {
           return;
         }
+
+        setActiveTab("one-click");
+        toast({ title: t('common.error'), description: t('auth.useQuickTab'), variant: "destructive" });
+        return;
       }
 
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
@@ -773,16 +830,19 @@ export default function LoginPage() {
     } catch (error: unknown) {
       const err = error as Error & { errorCode?: string };
       if (err.errorCode === "INVALID_CREDENTIALS" && emailLoginForm.username.includes("@")) {
-        const exists = await checkIdentifierExists(emailLoginForm.username.trim(), "email");
-        if (exists === false) {
-          setPendingRegistration({
-            identifier: emailLoginForm.username.trim(),
-            type: "email",
-            password: emailLoginForm.password,
-          });
-          setShowCreateAccountModal(true);
+        const offered = offerAutoCreatePrompt({
+          identifier: emailLoginForm.username.trim(),
+          type: "email",
+          password: emailLoginForm.password,
+        });
+
+        if (offered) {
           return;
         }
+
+        setActiveTab("one-click");
+        toast({ title: t('common.error'), description: t('auth.useQuickTab'), variant: "destructive" });
+        return;
       }
 
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
@@ -795,13 +855,45 @@ export default function LoginPage() {
     if (!pendingRegistration) return;
     setIsLoading(true);
     try {
+      const autoCreateClientId = getOrCreateAutoCreateClientId();
       const res = await fetchWithCsrf("/api/auth/create-from-identifier", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-VEX-Client-ID": autoCreateClientId,
+        },
         body: JSON.stringify(pendingRegistration),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await res.json().catch(() => ({} as Record<string, unknown>));
+      if (!res.ok) {
+        if (data.errorCode === "AUTO_CREATE_BLOCKED") {
+          const blockedFromAccountFlow = pendingRegistration?.type === "account";
+          setAutoCreateAttempts(AUTO_CREATE_MAX_CLIENT_ATTEMPTS);
+          try {
+            localStorage.setItem(AUTO_CREATE_ATTEMPTS_STORAGE_KEY, String(AUTO_CREATE_MAX_CLIENT_ATTEMPTS));
+          } catch {
+            // Ignore storage write issues; state is already updated in memory.
+          }
+          setShowCreateAccountModal(false);
+          setPendingRegistration(null);
+          setActiveTab("one-click");
+          if (blockedFromAccountFlow) {
+            setShowAccountNotFoundModal(true);
+          }
+          toast({ title: t('common.error'), description: t('auth.useQuickTab'), variant: "destructive" });
+          return;
+        }
+
+        throw new Error(typeof data.error === "string" ? data.error : t('common.error'));
+      }
+
+      if (data.user && typeof data.token === "string") {
+        confirmOneClickLogin(data.user as UserSchema, data.token);
+        setShowCreateAccountModal(false);
+        setPendingRegistration(null);
+        setLocation("/");
+        return;
+      }
 
       if (data.requiresIdentifierOtp === true && typeof data.challengeToken === "string") {
         setIdentifierOtpChallengeToken(data.challengeToken);
@@ -1608,7 +1700,11 @@ export default function LoginPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {pendingRegistration?.type === "email" ? <Mail className="w-5 h-5 text-primary" /> : <Smartphone className="w-5 h-5 text-primary" />}
+              {pendingRegistration?.type === "email"
+                ? <Mail className="w-5 h-5 text-primary" />
+                : pendingRegistration?.type === "phone"
+                  ? <Smartphone className="w-5 h-5 text-primary" />
+                  : <User className="w-5 h-5 text-primary" />}
               {t('auth.accountNotFound')}
             </DialogTitle>
             <DialogDescription>
@@ -1618,7 +1714,14 @@ export default function LoginPage() {
           <div className="space-y-4 py-4">
             <div className="p-4 bg-accent/10 rounded-md border border-accent/20">
               <p className="text-sm">
-                <span className="font-semibold">{pendingRegistration?.type === "email" ? t('auth.email') : t('auth.phone')}:</span>{" "}
+                <span className="font-semibold">
+                  {pendingRegistration?.type === "email"
+                    ? t('auth.email')
+                    : pendingRegistration?.type === "phone"
+                      ? t('auth.phone')
+                      : t('auth.accountId')}
+                  :
+                </span>{" "}
                 {pendingRegistration?.identifier}
               </p>
             </div>

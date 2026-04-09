@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import crypto from "crypto";
 import rateLimit from "express-rate-limit";
 import {
   AuthVerificationError,
@@ -38,6 +39,7 @@ const AUTH_RESET_REQUEST_MAX_PER_15M = readIntEnv("AUTH_RESET_REQUEST_MAX_PER_15
 const AUTH_RESET_IDENTIFIER_MAX_PER_HOUR = readIntEnv("AUTH_RESET_IDENTIFIER_MAX_PER_HOUR", 4, 1, 100);
 const AUTH_RESET_CONFIRM_MAX_PER_15M = readIntEnv("AUTH_RESET_CONFIRM_MAX_PER_15M", 8, 2, 200);
 const AUTH_RECOVERY_CONFIRM_MAX_PER_15M = readIntEnv("AUTH_RECOVERY_CONFIRM_MAX_PER_15M", 8, 2, 200);
+const AUTH_AUTO_REGISTER_MAX_PER_24H = readIntEnv("AUTH_AUTO_REGISTER_MAX_PER_24H", 4, 1, 20);
 
 function resolveResetFlowFromPath(path: string): ResetSecurityFlow {
   return path.includes("/account/recovery") ? "account-recovery-request" : "password-reset-request";
@@ -81,6 +83,32 @@ export const registrationRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
+});
+
+function getAutoRegistrationClientKey(req: Request): string {
+  const ip = getClientIpFromRequest(req);
+  const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : "unknown";
+
+  // Keep server-side abuse protection tied to network/device fingerprint,
+  // not user-controlled identifiers that can be regenerated client-side.
+  const stableClientSignature = `${ip}|${userAgent.substring(0, 160)}`;
+  return crypto.createHash("sha256").update(stableClientSignature).digest("hex").substring(0, 48);
+}
+
+export const identifierAutoRegistrationLimiter = rateLimit({
+  ...redisStoreOpts("identifier-autoreg"),
+  windowMs: 24 * 60 * 60 * 1000,
+  max: AUTH_AUTO_REGISTER_MAX_PER_24H,
+  keyGenerator: (req) => getAutoRegistrationClientKey(req),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+  handler: (_req: Request, res: Response) => {
+    return res.status(429).json({
+      error: "تم تعطيل ميزة إنشاء الحساب من بيانات تسجيل الدخول لهذا العميل مؤقتًا",
+      errorCode: "AUTO_CREATE_BLOCKED",
+    });
+  },
 });
 
 export const strictRateLimiter = rateLimit({
