@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { Bell, Mic, RefreshCw, ShieldAlert, Smartphone, Volume2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
@@ -10,10 +10,13 @@ import {
     isStartupPermissionSummaryReady,
     openNotificationSettings,
     requestRequiredStartupPermissions,
+    shouldAttemptAutoStartupNotificationPrompt,
     shouldShowNotificationSettingsHint,
     type PermissionResult,
     type PermissionSummary,
 } from "@/lib/startup-permissions";
+
+const AUTO_STARTUP_NOTIFICATION_PROMPT_KEY = "vex_startup_auto_notification_prompt_attempted_v2";
 
 type PermissionLine = {
     key: string;
@@ -30,6 +33,9 @@ function statusClassName(value: PermissionResult): string {
     if (value === "denied") {
         return "bg-rose-500/15 text-rose-300 border-rose-500/40";
     }
+    if (value === "prompt") {
+        return "bg-amber-500/15 text-amber-300 border-amber-500/40";
+    }
     return "bg-slate-500/15 text-slate-300 border-slate-500/30";
 }
 
@@ -40,12 +46,17 @@ function statusText(value: PermissionResult, t: (key: string) => string): string
     if (value === "denied") {
         return t("permissions.gate.status.denied");
     }
+    if (value === "prompt") {
+        return t("permissions.gate.status.prompt");
+    }
     return t("permissions.gate.status.unavailable");
 }
 
 export function StartupPermissionGate() {
     const { t, dir } = useI18n();
     const [summary, setSummary] = useState<PermissionSummary | null>(() => getStoredStartupPermissionSummary());
+    const hasAutoPromptedRef = useRef(false);
+
     const [isChecking, setIsChecking] = useState(false);
     const [isRequesting, setIsRequesting] = useState(false);
     const [hasError, setHasError] = useState(false);
@@ -57,7 +68,7 @@ export function StartupPermissionGate() {
     const needsNativeLocal = isNative && Capacitor.isPluginAvailable("LocalNotifications");
 
     const isReady = useMemo(() => isStartupPermissionSummaryReady(summary), [summary]);
-    const showSettingsShortcut = useMemo(() => shouldShowNotificationSettingsHint(summary), [summary]);
+    const showSettingsShortcut = useMemo(() => isNative || shouldShowNotificationSettingsHint(summary), [isNative, summary]);
 
     const refreshSummary = useCallback(async () => {
         setIsChecking(true);
@@ -90,6 +101,37 @@ export function StartupPermissionGate() {
             void refreshSummary();
         }
     }, [summary, refreshSummary]);
+
+    useEffect(() => {
+        if (hasAutoPromptedRef.current) {
+            return;
+        }
+
+        if (!shouldAttemptAutoStartupNotificationPrompt(summary)) {
+            return;
+        }
+
+        let alreadyAttempted = false;
+        try {
+            alreadyAttempted = sessionStorage.getItem(AUTO_STARTUP_NOTIFICATION_PROMPT_KEY) === "1";
+        } catch {
+            alreadyAttempted = false;
+        }
+
+        if (alreadyAttempted) {
+            hasAutoPromptedRef.current = true;
+            return;
+        }
+
+        hasAutoPromptedRef.current = true;
+        try {
+            sessionStorage.setItem(AUTO_STARTUP_NOTIFICATION_PROMPT_KEY, "1");
+        } catch {
+            // Ignore storage failures.
+        }
+
+        void requestNotifications();
+    }, [requestNotifications, summary]);
 
     useEffect(() => {
         const onVisible = () => {
@@ -190,6 +232,9 @@ export function StartupPermissionGate() {
                     {(needsMicrophone || needsNativeLocal) && (
                         <p className="text-xs text-slate-400">{t("permissions.gate.onDemandHint")}</p>
                     )}
+                    {isNative && (
+                        <p className="text-xs text-slate-400">{t("permissions.gate.overlayHint")}</p>
+                    )}
                     {hasError && <p className="text-xs text-rose-300">{t("permissions.gate.retryHint")}</p>}
                 </div>
 
@@ -221,7 +266,7 @@ export function StartupPermissionGate() {
                             onClick={() => void openNotificationSettings()}
                             data-testid="button-permissions-open-settings"
                         >
-                            {t(isNative ? "permissions.gate.openSettings" : "permissions.gate.openBrowserSettings")}
+                            {t(isNative ? "permissions.gate.openDeviceSettings" : "permissions.gate.openBrowserSettings")}
                         </Button>
                     ) : null}
                 </div>

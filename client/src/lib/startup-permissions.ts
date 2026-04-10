@@ -1,7 +1,7 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
-export type PermissionResult = "granted" | "denied" | "unavailable";
+export type PermissionResult = "granted" | "denied" | "prompt" | "unavailable";
 
 export type PermissionSummary = {
     notifications: PermissionResult;
@@ -78,7 +78,7 @@ function checkWebNotificationPermission(): PermissionResult {
         return "denied";
     }
 
-    return "denied";
+    return "prompt";
 }
 
 async function requestWebNotificationPermission(): Promise<PermissionResult> {
@@ -96,7 +96,15 @@ async function requestWebNotificationPermission(): Promise<PermissionResult> {
 
     try {
         const result = await Notification.requestPermission();
-        return result === "granted" ? "granted" : "denied";
+        if (result === "granted") {
+            return "granted";
+        }
+
+        if (result === "denied") {
+            return "denied";
+        }
+
+        return "prompt";
     } catch {
         return "denied";
     }
@@ -117,7 +125,7 @@ async function checkMicrophonePermission(): Promise<PermissionResult> {
                 return "denied";
             }
 
-            return "denied";
+            return "prompt";
         }
     } catch {
         // Continue with best-effort fallback.
@@ -129,6 +137,7 @@ async function checkMicrophonePermission(): Promise<PermissionResult> {
 function normalizeNativePermission(value: unknown): PermissionResult {
     if (value === "granted") return "granted";
     if (value === "denied") return "denied";
+    if (value === "prompt") return "prompt";
     return "unavailable";
 }
 
@@ -221,6 +230,14 @@ export function shouldShowNotificationSettingsHint(summary: PermissionSummary | 
     const webDenied = requiresWebNotificationPermission() && summary.notifications === "denied";
     const nativePushDenied = requiresNativePushPermission() && summary.nativePush === "denied";
     return webDenied || nativePushDenied;
+}
+
+export function shouldAttemptAutoStartupNotificationPrompt(summary: PermissionSummary | null): boolean {
+    if (!summary) {
+        return true;
+    }
+
+    return summary.notifications === "prompt" || summary.nativePush === "prompt";
 }
 
 export async function openAppSettings(): Promise<void> {

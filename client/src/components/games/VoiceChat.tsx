@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { useSettings } from "@/lib/settings";
 import { buildRtcConfiguration } from "@/lib/rtc-config";
+import { useToast } from "@/hooks/use-toast";
 import { Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff, Loader2 } from "lucide-react";
 
 interface VoiceChatProps {
@@ -28,6 +29,7 @@ export function VoiceChat({
 }: VoiceChatProps) {
   const { token } = useAuth();
   const { t } = useI18n();
+  const { toast } = useToast();
   const { settings } = useSettings();
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [isSpeakerMuted, setIsSpeakerMuted] = useState(false);
@@ -103,6 +105,16 @@ export function VoiceChat({
   }, [clearReconnectTimer, isEnabled]);
 
   const setupPeerConnection = useCallback(async (): Promise<RTCPeerConnection | null> => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast({
+        variant: "destructive",
+        title: t("challenge.voiceMicPermissionNeeded"),
+        description: t("challenge.voiceMicPermissionHint"),
+      });
+      setConnectionState("error");
+      return null;
+    }
+
     const streamConstraints: MediaStreamConstraints = {
       audio: {
         echoCancellation: { ideal: true },
@@ -120,6 +132,11 @@ export function VoiceChat({
       stream = await navigator.mediaDevices.getUserMedia(streamConstraints);
     } catch (error) {
       console.error("[VoiceChat] Failed to access microphone", error);
+      toast({
+        variant: "destructive",
+        title: t("challenge.voiceMicPermissionNeeded"),
+        description: t("challenge.voiceMicPermissionHint"),
+      });
       setConnectionState("error");
       return null;
     }
@@ -164,6 +181,11 @@ export function VoiceChat({
         case "disconnected":
         case "failed":
           if (!intentionalStopRef.current) {
+            toast({
+              variant: "destructive",
+              title: t("challenge.voiceErrorRetry"),
+              description: t("challenge.voiceRtcNetworkHint"),
+            });
             setConnectionState("error");
             scheduleReconnect();
           }
@@ -266,6 +288,13 @@ export function VoiceChat({
 
           case "auth_error":
           case "voice_error":
+            toast({
+              variant: "destructive",
+              title: t("challenge.voiceErrorRetry"),
+              description: typeof data.error === "string" && data.error.length > 0
+                ? data.error
+                : t("challenge.voiceRtcNetworkHint"),
+            });
             setConnectionState("error");
             if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
               ws.close();
@@ -363,6 +392,11 @@ export function VoiceChat({
 
     ws.onerror = () => {
       if (!intentionalStopRef.current) {
+        toast({
+          variant: "destructive",
+          title: t("challenge.voiceErrorRetry"),
+          description: t("challenge.voiceRtcNetworkHint"),
+        });
         setConnectionState("error");
       }
     };
@@ -379,7 +413,7 @@ export function VoiceChat({
     };
 
     startingRef.current = false;
-  }, [challengeId, clearReconnectTimer, isEnabled, processQueuedIceCandidates, safelySend, scheduleReconnect, setupPeerConnection, token]);
+  }, [challengeId, clearReconnectTimer, isEnabled, processQueuedIceCandidates, safelySend, scheduleReconnect, setupPeerConnection, t, toast, token]);
 
   useEffect(() => {
     if (isEnabled && connectionState === "disconnected") {
