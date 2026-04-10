@@ -4,6 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { ensureStartupPermissions } from "@/lib/startup-permissions";
 
 const UPDATE_POLL_INTERVAL_MS = 60_000;
 const UPDATE_BANNER_ID = "app-update-banner";
@@ -391,9 +392,16 @@ async function maybePromptNativeUpdate(release: ReleaseInfo): Promise<void> {
 
 if (!isRedirectingToCanonicalHost) {
   void startReleaseMonitoring();
+  void ensureStartupPermissions();
 }
 
 if (!isRedirectingToCanonicalHost && Capacitor.isNativePlatform()) {
+  void CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+    if (isActive) {
+      void ensureStartupPermissions();
+    }
+  });
+
   void CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
     if (!url || typeof url !== 'string') {
       return;

@@ -146,6 +146,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [location] = useLocation();
   const prevLocationRef = useRef(location);
 
+  const getNotificationMetadata = useCallback((notification: AppNotification): Record<string, unknown> | null => {
+    if (!notification.metadata) return null;
+    try {
+      const parsed = JSON.parse(notification.metadata) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return null;
+      }
+      return parsed as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     if (location === prevLocationRef.current) return;
     prevLocationRef.current = location;
@@ -166,10 +179,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const titleAr = notification.titleAr || notification.title;
     const messageAr = notification.messageAr || notification.message;
     const safeLink = normalizeSafeNotificationLink(notification.link);
+    const metadata = getNotificationMetadata(notification);
+    const metadataEvent = typeof metadata?.event === "string" ? metadata.event : null;
+    const chatSenderId = typeof metadata?.senderId === "string" ? metadata.senderId : null;
+    const urlParams = new URLSearchParams(window.location.search);
+    const openChatUser = urlParams.get("user");
+    const isUserInSameChatThread = location.startsWith("/chat")
+      && !!chatSenderId
+      && openChatUser === chatSenderId
+      && document.visibilityState === "visible";
 
     // Play sound based on priority first, then type
-    const soundKey = PRIORITY_SOUND_MAP[notification.priority] || NOTIFICATION_SOUND_MAP[notification.type] || 'notification';
-    playSound(soundKey);
+    const soundKey = metadataEvent === "chat_message"
+      ? "chat_incoming"
+      : (PRIORITY_SOUND_MAP[notification.priority] || NOTIFICATION_SOUND_MAP[notification.type] || 'notification');
+
+    if (!isUserInSameChatThread) {
+      playSound(soundKey);
+    }
+
+    if (isUserInSameChatThread) {
+      return;
+    }
 
     // Show professional popup notification (VexNotificationPopup)
     window.dispatchEvent(new CustomEvent("vex-show-popup", {
@@ -241,7 +272,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         navigator.vibrate(100);
       }
     }
-  }, []);
+  }, [getNotificationMetadata, location]);
 
   const isBadgeAssignmentNotification = useCallback((notification: AppNotification): boolean => {
     if (notification.type !== "success" || !notification.metadata) {

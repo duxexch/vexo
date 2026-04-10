@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Send, Check, CheckCheck, Loader2, AlertCircle, Search, Timer, ArrowLeft, Shield, Lock, Paperclip, Reply, Trash2, Pencil, Smile, X, CornerDownRight, Mic, MicOff, ChevronDown, Languages } from "lucide-react";
+import { MessageCircle, Send, Check, CheckCheck, Loader2, AlertCircle, Search, Timer, ArrowLeft, Shield, Lock, Paperclip, Reply, Trash2, Pencil, Smile, X, CornerDownRight, Mic, MicOff, ChevronDown, Languages, Palette } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,35 @@ interface DirectConversationUser {
   lastName: string | null;
   avatarUrl: string | null;
   accountId: string | null;
+}
+
+type BubbleStylePreset = "classic" | "vivid" | "compact";
+const BUBBLE_STYLE_STORAGE_KEY = "vex_chat_bubble_style";
+
+function getSavedBubbleStyle(): BubbleStylePreset {
+  const raw = typeof window !== "undefined" ? window.localStorage.getItem(BUBBLE_STYLE_STORAGE_KEY) : null;
+  if (raw === "classic" || raw === "vivid" || raw === "compact") {
+    return raw;
+  }
+  return "vivid";
+}
+
+function getBubbleClassNames(isMine: boolean, preset: BubbleStylePreset): string {
+  if (preset === "classic") {
+    return isMine
+      ? "bg-primary text-primary-foreground rounded-br-sm"
+      : "bg-muted rounded-bl-sm";
+  }
+
+  if (preset === "compact") {
+    return isMine
+      ? "bg-primary/95 text-primary-foreground rounded-lg border border-primary/30 px-2.5 py-1.5"
+      : "bg-card rounded-lg border border-border/60 px-2.5 py-1.5";
+  }
+
+  return isMine
+    ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-2xl rounded-br-sm shadow-md border border-primary/30"
+    : "bg-gradient-to-br from-card to-muted/80 rounded-2xl rounded-bl-sm border border-border/60 shadow-sm";
 }
 
 function formatMessageTime(dateValue: string | Date, t: (key: string, params?: Record<string, string | number>) => string) {
@@ -99,7 +128,8 @@ export default function ChatPage() {
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [langSearchQuery, setLangSearchQuery] = useState("");
   const [directConversationUser, setDirectConversationUser] = useState<DirectConversationUser | null>(null);
-  
+  const [bubbleStyle, setBubbleStyle] = useState<BubbleStylePreset>(() => getSavedBubbleStyle());
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -206,7 +236,7 @@ export default function ChatPage() {
     }
     // Auto scroll to bottom for new messages
     if (!showScrollDown || messages.length <= prevMessageCountRef.current + 1) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });  
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
     prevMessageCountRef.current = messages.length;
   }, [messages]);
@@ -214,6 +244,10 @@ export default function ChatPage() {
   useEffect(() => {
     refreshConversations();
   }, [refreshConversations]);
+
+  useEffect(() => {
+    window.localStorage.setItem(BUBBLE_STYLE_STORAGE_KEY, bubbleStyle);
+  }, [bubbleStyle]);
 
   // Mark incoming messages as read when visible
   useEffect(() => {
@@ -273,7 +307,7 @@ export default function ChatPage() {
 
   const handleSendMessage = () => {
     if (!activeConversation) return;
-    
+
     // Edit mode
     if (editingMsg) {
       if (messageInput.trim() && messageInput.trim() !== editingMsg.content) {
@@ -285,7 +319,7 @@ export default function ChatPage() {
     }
 
     if (!messageInput.trim()) return;
-    
+
     sendMessage(activeConversation, messageInput.trim(), "text", undefined, {
       isDisappearing: disappearingMode,
       disappearAfterRead: disappearingMode,
@@ -359,7 +393,7 @@ export default function ChatPage() {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
-      
+
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
@@ -367,7 +401,7 @@ export default function ChatPage() {
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         stream.getTracks().forEach(t => t.stop());
-        
+
         if (audioBlob.size > 0 && activeConversation) {
           // Convert to base64 and send
           const reader = new FileReader();
@@ -393,7 +427,7 @@ export default function ChatPage() {
           };
           reader.readAsDataURL(audioBlob);
         }
-        
+
         setRecordingTime(0);
         if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
       };
@@ -440,7 +474,7 @@ export default function ChatPage() {
   const getMessageDateGroups = () => {
     const groups: { date: string; messages: ChatMessage[] }[] = [];
     let currentDate = "";
-    
+
     messages.forEach((msg) => {
       const msgDate = format(new Date(msg.createdAt), "yyyy-MM-dd");
       if (msgDate !== currentDate) {
@@ -557,10 +591,10 @@ export default function ChatPage() {
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm text-muted-foreground truncate">
                             {conv.lastMessage?.messageType === "image" ? t("chat.photo") :
-                             conv.lastMessage?.messageType === "video" ? t("chat.video") :
-                             conv.lastMessage?.messageType === "voice" ? t("chat.voiceMsg") :
-                             conv.lastMessage?.messageType === "deleted" ? t("chat.deletedMessage") :
-                             conv.lastMessage?.content || ""}
+                              conv.lastMessage?.messageType === "video" ? t("chat.video") :
+                                conv.lastMessage?.messageType === "voice" ? t("chat.voiceMsg") :
+                                  conv.lastMessage?.messageType === "deleted" ? t("chat.deletedMessage") :
+                                    conv.lastMessage?.content || ""}
                           </p>
                           {conv.unreadCount > 0 && (
                             <Badge variant="default" className="h-5 min-w-5 text-xs justify-center shrink-0">
@@ -717,6 +751,26 @@ export default function ChatPage() {
                       ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+
+                {/* Bubble style presets */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Palette className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onClick={() => setBubbleStyle("vivid")} className={cn(bubbleStyle === "vivid" && "font-semibold")}>
+                      Vivid bubbles
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setBubbleStyle("classic")} className={cn(bubbleStyle === "classic" && "font-semibold")}>
+                      Classic bubbles
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setBubbleStyle("compact")} className={cn(bubbleStyle === "compact" && "font-semibold")}>
+                      Compact bubbles
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
@@ -772,7 +826,7 @@ export default function ChatPage() {
                       const repliedMsg = findReplyMessage(msg.replyToId ?? undefined);
                       const reactions = msg.reactions || {};
                       const reactionEntries = Object.entries(reactions);
-                      
+
                       // Show avatar for consecutive messages from same sender
                       const showAvatar = mi === 0 || group.messages[mi - 1]?.senderId !== msg.senderId;
 
@@ -788,8 +842,8 @@ export default function ChatPage() {
                             {repliedMsg && !isDeleted && (
                               <div className={cn(
                                 "text-xs rounded-t-lg px-3 py-1.5 border-s-2 mb-0.5",
-                                isMine 
-                                  ? "bg-primary/20 border-primary-foreground/40 text-primary-foreground/80" 
+                                isMine
+                                  ? "bg-primary/20 border-primary-foreground/40 text-primary-foreground/80"
                                   : "bg-muted/80 border-primary/50 text-muted-foreground"
                               )}>
                                 <div className="flex items-center gap-1">
@@ -803,10 +857,9 @@ export default function ChatPage() {
                             )}
 
                             <div className={cn(
-                              "rounded-2xl px-3 py-2 relative",
-                              isMine
-                                ? "bg-primary text-primary-foreground rounded-br-sm"
-                                : "bg-muted rounded-bl-sm",
+                              "relative",
+                              bubbleStyle === "compact" ? "text-[13px] leading-relaxed" : "px-3 py-2",
+                              getBubbleClassNames(isMine, bubbleStyle),
                               isDeleted && "opacity-60 italic"
                             )}>
                               {isDeleted ? (
@@ -887,8 +940,8 @@ export default function ChatPage() {
                                 {msg.isEdited && <span>{t('chat.edited')}</span>}
                                 <span>{formatMessageTime(msg.createdAt, t)}</span>
                                 {isMine && (
-                                  msg.isRead 
-                                    ? <CheckCheck className="h-3 w-3 text-blue-400" /> 
+                                  msg.isRead
+                                    ? <CheckCheck className="h-3 w-3 text-blue-400" />
                                     : <Check className="h-3 w-3" />
                                 )}
                               </div>
@@ -1102,7 +1155,7 @@ export default function ChatPage() {
                     hasAccess={hasAutoDelete}
                     isActive={hasAutoDelete}
                     deleteAfterMinutes={deleteAfterMinutes}
-                    onToggle={() => {}}
+                    onToggle={() => { }}
                     onPurchaseClick={() => setShowAutoDeletePurchase(true)}
                     onSettingsClick={() => setShowAutoDeleteSettings(true)}
                   />

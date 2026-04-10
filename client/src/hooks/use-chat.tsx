@@ -55,6 +55,14 @@ interface UseChatReturn extends ChatState {
   searchResults: ChatMessage[];
 }
 
+function sortConversationsByLastMessage(conversations: Conversation[]): Conversation[] {
+  return [...conversations].sort((a, b) => {
+    const aTime = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+    const bTime = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+    return bTime - aTime;
+  });
+}
+
 export function useChat(): UseChatReturn {
   const { token } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
@@ -106,9 +114,11 @@ export function useChat(): UseChatReturn {
       });
       if (response.ok) {
         const settings = await response.json();
+        const rawEnabled = settings?.chat_enabled ?? settings?.isEnabled;
+        const isEnabled = rawEnabled !== false && String(rawEnabled ?? "true") !== "false";
         setState((prev) => ({
           ...prev,
-          isChatEnabled: settings.isEnabled !== "false",
+          isChatEnabled: isEnabled,
         }));
       }
     } catch (error) {
@@ -169,38 +179,83 @@ export function useChat(): UseChatReturn {
                 prev.activeConversation === newMessage.senderId ||
                 prev.activeConversation === newMessage.receiverId;
 
+              const otherUserId = String(newMessage.senderId || "");
+              const existingConversationIndex = prev.conversations.findIndex((conv) => conv.otherUserId === otherUserId);
+
+              let nextConversations = prev.conversations;
+
+              if (existingConversationIndex >= 0) {
+                nextConversations = prev.conversations.map((conv, idx) => {
+                  if (idx !== existingConversationIndex) return conv;
+                  return {
+                    ...conv,
+                    lastMessage: newMessage,
+                    unreadCount: isActiveChat ? 0 : conv.unreadCount + 1,
+                  };
+                });
+              } else if (newMessage.sender && otherUserId) {
+                nextConversations = [
+                  {
+                    otherUserId,
+                    otherUser: {
+                      id: newMessage.sender.id,
+                      username: newMessage.sender.username,
+                      firstName: newMessage.sender.firstName ?? null,
+                      lastName: newMessage.sender.lastName ?? null,
+                      avatarUrl: newMessage.sender.avatarUrl ?? null,
+                      accountId: newMessage.sender.accountId ?? null,
+                    },
+                    lastMessage: newMessage,
+                    unreadCount: isActiveChat ? 0 : 1,
+                  },
+                  ...prev.conversations,
+                ];
+              }
+
+              nextConversations = sortConversationsByLastMessage(nextConversations);
+
               if (isActiveChat) {
                 return {
                   ...prev,
                   messages: [...prev.messages, newMessage],
-                  conversations: prev.conversations.map((conv) => {
-                    if (conv.otherUserId === newMessage.senderId || conv.otherUserId === newMessage.receiverId) {
-                      return { ...conv, lastMessage: newMessage };
-                    }
-                    return conv;
-                  }),
+                  conversations: nextConversations,
                 };
               }
 
-              // Not active chat - update unread count
-              const otherUserId = newMessage.senderId;
               return {
                 ...prev,
-                conversations: prev.conversations.map((conv) => {
-                  if (conv.otherUserId === otherUserId) {
-                    return { ...conv, lastMessage: newMessage, unreadCount: conv.unreadCount + 1 };
-                  }
-                  return conv;
-                }),
+                conversations: nextConversations,
               };
             });
             break;
 
           case "chat_message_sent":
+            let needsConversationRefresh = false;
             setState((prev) => {
               if (prev.messages.some(m => m.id === data.data.id)) return prev;
-              return { ...prev, messages: [...prev.messages, data.data] };
+
+              const sentMessage = data.data;
+              const otherUserId = String(sentMessage.receiverId || "");
+              if (!prev.conversations.some((conv) => conv.otherUserId === otherUserId)) {
+                needsConversationRefresh = true;
+              }
+              const nextConversations = sortConversationsByLastMessage(
+                prev.conversations.map((conv) =>
+                  conv.otherUserId === otherUserId
+                    ? { ...conv, lastMessage: sentMessage }
+                    : conv
+                )
+              );
+
+              return {
+                ...prev,
+                messages: [...prev.messages, sentMessage],
+                conversations: nextConversations,
+              };
             });
+            if (needsConversationRefresh) {
+              void fetchConversations();
+            }
             break;
 
           case "typing_indicator":
@@ -303,11 +358,15 @@ export function useChat(): UseChatReturn {
               ...prev,
               messages: prev.messages.map(msg => {
                 if (msg.id === data.data.messageId) {
+                  if (data.data.reactions && typeof data.data.reactions === "object") {
+                    return { ...msg, reactions: data.data.reactions };
+                  }
+
                   const reactions = { ...(msg.reactions || {}) };
                   const emoji = data.data.emoji;
                   const userId = data.data.userId;
                   if (!reactions[emoji]) reactions[emoji] = [];
-                  if (data.data.removed) {
+                  if (data.data.removed === true) {
                     reactions[emoji] = reactions[emoji].filter((id: string) => id !== userId);
                     if (reactions[emoji].length === 0) delete reactions[emoji];
                   } else {
@@ -348,7 +407,7 @@ export function useChat(): UseChatReturn {
             break;
 
           case "search_results":
-            setSearchResults(data.data.messages || []);
+            setSearchResults(data.data?.messages || data.data?.results || []);
             break;
         }
       } catch (error) {

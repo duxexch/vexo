@@ -7,6 +7,26 @@ import type { AuthenticatedSocket } from "../shared";
 import { clients } from "../shared";
 import { getCachedUserBlockLists, isChatEnabled } from "../../lib/redis";
 import { sanitizePlainText } from "../../lib/input-security";
+import { sendNotification } from "../notifications";
+
+function buildChatNotificationPreview(messageType: string, content: string): { en: string; ar: string } {
+  if (content && content.trim().length > 0) {
+    const preview = content.trim().slice(0, 120);
+    return { en: preview, ar: preview };
+  }
+
+  if (messageType === "image") {
+    return { en: "Sent a photo", ar: "أرسل صورة" };
+  }
+  if (messageType === "video") {
+    return { en: "Sent a video", ar: "أرسل فيديو" };
+  }
+  if (messageType === "voice") {
+    return { en: "Sent a voice message", ar: "أرسل رسالة صوتية" };
+  }
+
+  return { en: "Sent a message", ar: "أرسل رسالة" };
+}
 
 /**
  * Handle sending a new chat message.
@@ -145,6 +165,30 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
 
   // Confirm to sender
   ws.send(JSON.stringify({ type: "chat_message_sent", data: messageWithSender }));
+
+  const senderDisplayName = sender?.firstName || sender?.username || "User";
+  const preview = buildChatNotificationPreview(String(messageType), sanitizedContent);
+  const chatLinkUserId = encodeURIComponent(senderUserId);
+
+  // Durable notification record + web push fallback for offline recipients.
+  // This improves reliability when websocket delivery is missed or app is backgrounded.
+  void sendNotification(receiverId, {
+    type: "system",
+    priority: "normal",
+    title: `${senderDisplayName} sent you a message`,
+    titleAr: `رسالة جديدة من ${senderDisplayName}`,
+    message: preview.en,
+    messageAr: preview.ar,
+    link: `/chat?user=${chatLinkUserId}`,
+    metadata: JSON.stringify({
+      event: "chat_message",
+      senderId: senderUserId,
+      messageType: String(messageType || "text"),
+      messageId: message.id,
+    }),
+  }).catch(() => {
+    // Notification failures should not break the chat send flow.
+  });
 }
 
 /**

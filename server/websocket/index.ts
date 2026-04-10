@@ -29,6 +29,19 @@ const challengeMessageTypes = new Set([
   "send_gift",
 ]);
 
+const chatMessageTypes = new Set([
+  "chat_message",
+  "typing",
+  "get_chat_history",
+  "message_read",
+  "mark_chat_read",
+  "delete_message",
+  "edit_message",
+  "react_to_message",
+  "search_messages",
+  "send_message",
+]);
+
 // Re-export all public APIs so external imports from "./websocket" continue to work
 export { sendNotification, broadcastNotification, broadcastSystemEvent, broadcastAdminAlert, broadcastChallengeUpdate, broadcastToUser, getOnlineUsersCount, getActiveGameRoomsCount } from "./notifications";
 export type { AuthenticatedSocket, JwtPayload, GameRoomState } from "./shared";
@@ -99,7 +112,7 @@ export function setupWebSocket(server: Server) {
 
         if (type === 'auth' || type === 'authenticate' || type === 'admin_auth' || type === 'mark_read' || type === 'mark_all_read') {
           await handleAuth(ws, data);
-        } else if (type.startsWith('chat') || type === 'send_message' || type === 'typing') {
+        } else if (chatMessageTypes.has(type) || type.startsWith('chat')) {
           await handleChat(ws, data);
         } else if (type.startsWith('match') || type === 'find_match' || type === 'cancel_match') {
           await handleMatchmaking(ws, data);
