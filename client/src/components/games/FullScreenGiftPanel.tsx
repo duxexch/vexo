@@ -161,19 +161,24 @@ export function FullScreenGiftPanel({
       <div className="relative z-10 mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden bg-black/90 backdrop-blur-md animate-in slide-in-from-bottom duration-300">
 
         {/* ─── Header ─── */}
-        <div className="shrink-0 flex items-center justify-between border-b border-white/10 px-4 pt-4 pb-3">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <Gift className="h-5 w-5 text-primary" />
-            {isRTL ? "إرسال هدية" : "Send Gift"}
-          </h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            className="text-white/70 hover:text-white hover:bg-white/10 rounded-full"
-          >
-            <X className="h-5 w-5" />
-          </Button>
+        <div className="shrink-0 border-b border-white/10 px-4 pt-4 pb-3 bg-gradient-to-r from-primary/20 via-transparent to-amber-400/10">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <Gift className="h-5 w-5 text-primary" />
+              {isRTL ? "إرسال هدية" : "Send Gift"}
+            </h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="text-white/70 hover:text-white hover:bg-white/10 rounded-full"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+          <p className="mt-1 text-xs text-white/65">
+            {isRTL ? "اختر الهدية والمستلم ثم أرسل مباشرة داخل المباراة" : "Choose a gift and recipient, then send instantly in the live match"}
+          </p>
         </div>
 
         {/* ─── Player selection ─── */}
@@ -271,7 +276,7 @@ export function FullScreenGiftPanel({
                   <div className="flex items-center gap-0.5">
                     <Coins className="w-3 h-3 text-yellow-400" />
                     <span className="text-xs font-bold text-yellow-400">
-                      ${gift.price}
+                      {gift.price.toFixed(2)} VXC
                     </span>
                   </div>
 
@@ -295,6 +300,14 @@ export function FullScreenGiftPanel({
 
         {/* ─── Bottom: Send bar ─── */}
         <div className="shrink-0 border-t border-white/10 bg-black/55 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.9rem)] backdrop-blur-xl">
+          <div className="mb-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 flex items-center justify-between">
+            <span>
+              {isRTL ? "المستلم:" : "Recipient:"} <span className="font-semibold text-white">{effectivePlayer === player1Id ? (player1Name || "Player 1") : effectivePlayer === player2Id ? (player2Name || "Player 2") : (isRTL ? "غير محدد" : "Not selected")}</span>
+            </span>
+            <span>
+              {isRTL ? "الهدية:" : "Gift:"} <span className="font-semibold text-white">{selectedGift ? (isRTL ? selectedGift.nameAr : selectedGift.name) : (isRTL ? "غير محددة" : "Not selected")}</span>
+            </span>
+          </div>
           <Button
             onClick={handleSend}
             disabled={!selectedGift || !effectivePlayer || disabled || sending}
@@ -317,7 +330,7 @@ export function FullScreenGiftPanel({
                 {isRTL ? "إرسال" : "Send"}{" "}
                 {isRTL ? selectedGift.nameAr : selectedGift.name}{" "}
                 <Badge variant="secondary" className="ms-1 bg-white/20 text-white border-0">
-                  ${selectedGift.price}
+                  {selectedGift.price.toFixed(2)} VXC
                 </Badge>
               </>
             ) : (

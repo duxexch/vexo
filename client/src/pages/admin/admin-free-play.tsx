@@ -857,6 +857,66 @@ export default function AdminFreePlayPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
+                <Settings className="w-4 h-4" /> Referral Controls
+              </CardTitle>
+              <CardDescription>
+                Configure referral rewards in project currency and adjust the referral profit rate (%) from one place.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5 md:col-span-1">
+                  <Label>Referral Rewards Enabled</Label>
+                  <div className="flex items-center justify-between border rounded-md p-3">
+                    <p className="text-xs text-muted-foreground">Allow referral bonus crediting</p>
+                    <Switch checked={isOn("referral_reward_enabled")} onCheckedChange={() => toggleLocal("referral_reward_enabled")} />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Base Reward Amount (Project Coins)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={getSettingVal("referral_reward_amount", "5.00")}
+                    onChange={(e) => updateLocal("referral_reward_amount", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Referral Rate (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={getSettingVal("referral_reward_rate_percent", "100.00")}
+                    onChange={(e) => updateLocal("referral_reward_rate_percent", e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                <span className="text-muted-foreground">Effective reward per successful referral: </span>
+                <span className="font-semibold text-green-600">
+                  {formatProjectCoins(
+                    (Number.parseFloat(getSettingVal("referral_reward_amount", "0")) || 0)
+                    * ((Number.parseFloat(getSettingVal("referral_reward_rate_percent", "100")) || 0) / 100),
+                  )}
+                </span>
+              </div>
+
+              <div className="flex justify-end">
+                <Button onClick={handleSaveSettings} disabled={updateSettingsMut.isPending || settingsLoading}>
+                  <Save className="w-4 h-4 mr-2" />
+                  {updateSettingsMut.isPending ? "Saving..." : "Save Referral Controls"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
                 <Crown className="w-4 h-4 text-yellow-500" /> Referral Leaderboard
               </CardTitle>
               <CardDescription>Select a referrer to open deep analytics and update commission</CardDescription>

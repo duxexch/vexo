@@ -3,7 +3,8 @@ import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
 import { eq, desc, and, or } from "drizzle-orm";
-import { users, liveGameSessions } from "@shared/schema";
+import { users, liveGameSessions, gameplaySettings, referralRewardsLog } from "@shared/schema";
+import { sql } from "drizzle-orm";
 import { getBadgeEntitlementForUser } from "../../lib/user-badge-entitlements";
 
 export function registerStatsProfileRoutes(app: Express): void {
@@ -93,7 +94,51 @@ export function registerStatsProfileRoutes(app: Express): void {
       const userId = req.user!.id;
       const referrals = await db.select({ id: users.id, username: users.username, createdAt: users.createdAt })
         .from(users).where(eq(users.referredBy, userId)).orderBy(desc(users.createdAt)).limit(50);
-      res.json({ referralCount: referrals.length, referrals });
+
+      const [settingsRows, referralSummaryRows] = await Promise.all([
+        db.select({ key: gameplaySettings.key, value: gameplaySettings.value })
+          .from(gameplaySettings)
+          .where(or(
+            eq(gameplaySettings.key, "referral_reward_enabled"),
+            eq(gameplaySettings.key, "referral_reward_amount"),
+            eq(gameplaySettings.key, "referral_reward_rate_percent"),
+          )),
+        db.select({
+          totalRewards: sql<string>`COALESCE(SUM(${referralRewardsLog.rewardAmount}), '0')`,
+          rewardEvents: sql<number>`COUNT(*)`,
+        })
+          .from(referralRewardsLog)
+          .where(eq(referralRewardsLog.referrerId, userId)),
+      ]);
+
+      const settingsMap = settingsRows.reduce<Record<string, string>>((acc, row) => {
+        acc[row.key] = row.value;
+        return acc;
+      }, {});
+
+      const rewardEnabled = settingsMap.referral_reward_enabled !== "false";
+      const rewardAmount = Number.parseFloat(settingsMap.referral_reward_amount || "5");
+      const rewardRatePercent = Number.parseFloat(settingsMap.referral_reward_rate_percent || "100");
+      const rewardPerReferral = (Number.isFinite(rewardAmount) && Number.isFinite(rewardRatePercent))
+        ? (rewardAmount * (rewardRatePercent / 100))
+        : 0;
+      const referralSummary = referralSummaryRows[0];
+
+      res.json({
+        referralCount: referrals.length,
+        referrals,
+        reward: {
+          enabled: rewardEnabled,
+          baseAmount: Number.isFinite(rewardAmount) ? rewardAmount.toFixed(2) : "0.00",
+          ratePercent: Number.isFinite(rewardRatePercent) ? rewardRatePercent.toFixed(2) : "0.00",
+          rewardPerReferral: rewardPerReferral.toFixed(2),
+          currency: "project_coin",
+        },
+        earnings: {
+          totalRewards: Number(referralSummary?.totalRewards || 0).toFixed(2),
+          rewardEvents: Number(referralSummary?.rewardEvents || 0),
+        },
+      });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

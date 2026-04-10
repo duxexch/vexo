@@ -63,17 +63,22 @@ export function registerOneClickRoutes(app: Express) {
             await db.update(users).set({ referredBy: referrerId }).where(eq(users.id, user.id));
             // Give referral reward
             const [rewardSetting] = await db.select().from(gameplaySettings).where(eq(gameplaySettings.key, "referral_reward_amount"));
+            const [rateSetting] = await db.select().from(gameplaySettings).where(eq(gameplaySettings.key, "referral_reward_rate_percent"));
             const [enabledSetting] = await db.select().from(gameplaySettings).where(eq(gameplaySettings.key, "referral_reward_enabled"));
             const rewardAmount = rewardSetting ? parseFloat(rewardSetting.value) : 5;
+            const rewardRatePercent = rateSetting ? parseFloat(rateSetting.value) : 100;
             const isEnabled = enabledSetting ? enabledSetting.value === "true" : true;
-            if (isEnabled && rewardAmount > 0) {
+            const effectiveRewardAmount = Number.isFinite(rewardAmount) && Number.isFinite(rewardRatePercent)
+              ? rewardAmount * (rewardRatePercent / 100)
+              : 0;
+            if (isEnabled && effectiveRewardAmount > 0) {
               const referralReferenceId = createRewardReference("referral");
               // SECURITY: Atomic referral reward with transaction
               await db.transaction(async (tx) => {
                 await tx.insert(referralRewardsLog).values({
                   referrerId,
                   referredId: user.id,
-                  rewardAmount: rewardAmount.toFixed(2),
+                  rewardAmount: effectiveRewardAmount.toFixed(2),
                 });
 
                 await tx.execute(sql`
@@ -93,13 +98,13 @@ export function registerOneClickRoutes(app: Express) {
 
                 const balanceBefore = parseFloat(wallet.totalBalance || '0');
                 const earnedBefore = parseFloat(wallet.earnedBalance || '0');
-                const balanceAfter = (balanceBefore + rewardAmount).toFixed(2);
+                const balanceAfter = (balanceBefore + effectiveRewardAmount).toFixed(2);
 
                 await tx.update(projectCurrencyWallets)
                   .set({
-                    earnedBalance: (earnedBefore + rewardAmount).toFixed(2),
+                    earnedBalance: (earnedBefore + effectiveRewardAmount).toFixed(2),
                     totalBalance: balanceAfter,
-                    totalEarned: (parseFloat(wallet.totalEarned || '0') + rewardAmount).toFixed(2),
+                    totalEarned: (parseFloat(wallet.totalEarned || '0') + effectiveRewardAmount).toFixed(2),
                     updatedAt: new Date(),
                   })
                   .where(eq(projectCurrencyWallets.id, wallet.id));
@@ -108,7 +113,7 @@ export function registerOneClickRoutes(app: Express) {
                   userId: referrerId,
                   walletId: wallet.id,
                   type: 'bonus',
-                  amount: rewardAmount.toFixed(2),
+                  amount: effectiveRewardAmount.toFixed(2),
                   balanceBefore: balanceBefore.toFixed(2),
                   balanceAfter,
                   referenceId: referralReferenceId,

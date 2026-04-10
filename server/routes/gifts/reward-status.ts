@@ -59,6 +59,7 @@ export function registerRewardStatusRoutes(app: Express): void {
       const maxAdsPerDay = parseInt(settings['max_ads_per_day'] || '10');
       const adRewardAmount = parseFloat(settings['ad_reward_amount'] || '0.10');
       const referralRewardAmount = parseFloat(settings['referral_reward_amount'] || '5.00');
+      const referralRewardRatePercent = parseFloat(settings['referral_reward_rate_percent'] || '100.00');
       const freePlayEnabled = settings['free_play_enabled'] !== 'false';
 
       // --- Referral count ---
@@ -106,6 +107,10 @@ export function registerRewardStatusRoutes(app: Express): void {
         totalAdEarnings: parseFloat(adEarnings?.total || '0'),
         referrals: Number(refCount?.count || 0),
         referralReward: referralRewardAmount,
+        referralRewardRatePercent,
+        referralRewardPerInvite: Number.isFinite(referralRewardAmount) && Number.isFinite(referralRewardRatePercent)
+          ? Number((referralRewardAmount * (referralRewardRatePercent / 100)).toFixed(2))
+          : 0,
         totalReferralEarnings: parseFloat(refEarnings?.total || '0'),
         totalDailyEarnings: parseFloat(dailyEarnings?.total || '0'),
         freeGames,

@@ -41,6 +41,7 @@ export async function seedFreePlaySettings() {
     { key: 'ad_reward_amount', value: '0.10', description: 'Reward amount per ad watch (project coins)', descriptionAr: 'مبلغ المكافأة لكل إعلان (عملة المشروع)' },
     { key: 'max_ads_per_day', value: '10', description: 'Maximum ads a user can watch per day', descriptionAr: 'الحد الأقصى للإعلانات يومياً' },
     { key: 'referral_reward_amount', value: '5.00', description: 'Reward for each referral (project coins)', descriptionAr: 'مكافأة كل إحالة (عملة المشروع)' },
+    { key: 'referral_reward_rate_percent', value: '100.00', description: 'Referral reward rate (%) applied to referral reward amount', descriptionAr: 'نسبة مكافأة الإحالة (%) المطبقة على قيمة مكافأة الإحالة' },
     { key: 'freePlayLimit', value: '50', description: 'Maximum games per day (0 = unlimited)', descriptionAr: 'الحد الأقصى للألعاب يومياً (0 = بدون حد)' },
   ];
 

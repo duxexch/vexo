@@ -19,13 +19,23 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 
-const REFERRAL_REWARDS = [
-  { friends: 1, reward: "$1.00" },
-  { friends: 3, reward: "$3.00" },
-  { friends: 5, reward: "$5.00" },
-  { friends: 10, reward: "$15.00" },
-  { friends: 25, reward: "$50.00" },
-];
+type ReferralApiResponse = {
+  referralCount: number;
+  referrals: Array<{ id: string; username: string; createdAt: string }>;
+  reward?: {
+    enabled: boolean;
+    baseAmount: string;
+    ratePercent: string;
+    rewardPerReferral: string;
+    currency: "project_coin";
+  };
+  earnings?: {
+    totalRewards: string;
+    rewardEvents: number;
+  };
+};
+
+const REFERRAL_MILESTONE_COUNTS = [1, 3, 5, 10, 25];
 
 export default function ReferralPage() {
   const { user } = useAuth();
@@ -35,11 +45,11 @@ export default function ReferralPage() {
   const [copied, setCopied] = useState(false);
 
   // Fetch referral stats
-  const { data: referralData, isLoading } = useQuery({
+  const { data: referralData, isLoading } = useQuery<ReferralApiResponse>({
     queryKey: ["/api/me/referrals"],
     queryFn: async () => {
       const res = await fetch("/api/me/referrals", { headers });
-      if (!res.ok) return { referralCount: 0, referrals: [] };
+      if (!res.ok) return { referralCount: 0, referrals: [] } as ReferralApiResponse;
       return res.json();
     },
     enabled: !!user?.id,
@@ -48,6 +58,16 @@ export default function ReferralPage() {
   const referralCode = user?.accountId || user?.id?.slice(0, 8) || "VEXUSER";
   const referralLink = `${window.location.origin}/register?ref=${referralCode}`;
   const referralCount = referralData?.referralCount || 0;
+  const rewardEnabled = referralData?.reward?.enabled !== false;
+  const rewardPerReferral = Number.parseFloat(referralData?.reward?.rewardPerReferral || "0");
+  const totalReferralEarnings = Number.parseFloat(referralData?.earnings?.totalRewards || "0");
+
+  const referralMilestones = REFERRAL_MILESTONE_COUNTS.map((friends) => ({
+    friends,
+    reward: Number.isFinite(rewardPerReferral) ? rewardPerReferral * friends : 0,
+  }));
+
+  const formatProjectCoins = (amount: number) => `${amount.toFixed(2)} VXC`;
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -84,10 +104,7 @@ export default function ReferralPage() {
   };
 
   // Find current tier based on referral count
-  const currentTier = REFERRAL_REWARDS.reduce((prev, tier) => {
-    return referralCount >= tier.friends ? tier : prev;
-  }, REFERRAL_REWARDS[0]);
-  const nextTier = REFERRAL_REWARDS.find((t) => t.friends > referralCount);
+  const nextTier = referralMilestones.find((t) => t.friends > referralCount);
 
   if (isLoading) {
     return (
@@ -124,7 +141,7 @@ export default function ReferralPage() {
         <Card>
           <CardContent className="p-3 sm:p-4 text-center">
             <Gift className="h-5 w-5 mx-auto mb-1 text-amber-500" />
-            <p className="text-2xl font-bold">{currentTier?.reward || "$0"}</p>
+            <p className="text-2xl font-bold">{formatProjectCoins(totalReferralEarnings)}</p>
             <p className="text-xs text-muted-foreground">
               {t('referral.currentReward')}
             </p>
@@ -189,9 +206,9 @@ export default function ReferralPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {REFERRAL_REWARDS.map((tier, idx) => {
+            {referralMilestones.map((tier, idx) => {
               const isCompleted = referralCount >= tier.friends;
-              const isCurrent = !isCompleted && (idx === 0 || referralCount >= REFERRAL_REWARDS[idx - 1].friends);
+              const isCurrent = !isCompleted && (idx === 0 || referralCount >= referralMilestones[idx - 1].friends);
 
               return (
                 <div
@@ -226,17 +243,22 @@ export default function ReferralPage() {
                   <Badge variant={isCompleted ? "default" : "outline"} className={
                     isCompleted ? "" : isCurrent ? "border-amber-500/50 text-amber-500" : ""
                   }>
-                    {tier.reward}
+                    {formatProjectCoins(tier.reward)}
                   </Badge>
                 </div>
               );
             })}
           </div>
+          {!rewardEnabled && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {language === "ar" ? "مكافآت الإحالة معطلة حالياً من الإدارة." : "Referral rewards are currently disabled by admin settings."}
+            </p>
+          )}
         </CardContent>
       </Card>
 
       {/* Recent Referrals */}
-      {referralData?.referrals?.length > 0 && (
+      {(referralData?.referrals?.length ?? 0) > 0 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -246,7 +268,7 @@ export default function ReferralPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {referralData.referrals.map((ref: Record<string, unknown>, idx: number) => (
+              {(referralData?.referrals ?? []).map((ref: Record<string, unknown>, idx: number) => (
                 <div key={idx} className="flex items-center justify-between text-sm p-2 rounded bg-muted/30">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">

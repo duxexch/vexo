@@ -16,12 +16,14 @@ const FREE_PLAY_SETTING_KEYS = new Set([
   'ad_reward_amount',
   'max_ads_per_day',
   'referral_reward_amount',
+  'referral_reward_rate_percent',
   'freePlayLimit',
   'free_play_limit',
 ]);
 
 const REWARD_AMOUNT_KEYS = new Set(['ad_reward_amount', 'referral_reward_amount']);
 const NON_NEGATIVE_INTEGER_KEYS = new Set(['max_ads_per_day', 'freePlayLimit', 'free_play_limit']);
+const PERCENT_KEYS = new Set(['referral_reward_rate_percent']);
 
 function sanitizeSettingValue(key: string, rawValue: unknown): string {
   if (REWARD_AMOUNT_KEYS.has(key)) {
@@ -38,6 +40,14 @@ function sanitizeSettingValue(key: string, rawValue: unknown): string {
       throw new Error(`Invalid value for ${key}`);
     }
     return String(amount);
+  }
+
+  if (PERCENT_KEYS.has(key)) {
+    const percent = Number.parseFloat(String(rawValue));
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      throw new Error(`Invalid value for ${key}`);
+    }
+    return percent.toFixed(2);
   }
 
   if (rawValue === 'true' || rawValue === true) return 'true';

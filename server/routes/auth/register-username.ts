@@ -105,18 +105,26 @@ export function registerUsernameRegistrationRoutes(app: Express) {
         try {
           const [rewardSetting] = await db.select().from(gameplaySettings)
             .where(eq(gameplaySettings.key, 'referral_reward_amount')).limit(1);
+          const [rateSetting] = await db.select().from(gameplaySettings)
+            .where(eq(gameplaySettings.key, 'referral_reward_rate_percent')).limit(1);
           const rewardAmount = rewardSetting ? rewardSetting.value : '5.00';
+          const rewardRatePercent = rateSetting ? rateSetting.value : '100.00';
           const [enabledSetting] = await db.select().from(gameplaySettings)
             .where(eq(gameplaySettings.key, 'referral_reward_enabled')).limit(1);
           const isEnabled = !enabledSetting || enabledSetting.value !== 'false';
+          const baseRewardValue = Number.parseFloat(rewardAmount);
+          const rewardRateValue = Number.parseFloat(rewardRatePercent);
+          const effectiveRewardValue = Number.isFinite(baseRewardValue) && Number.isFinite(rewardRateValue)
+            ? (baseRewardValue * (rewardRateValue / 100))
+            : 0;
 
-          if (isEnabled && parseFloat(rewardAmount) > 0) {
+          if (isEnabled && effectiveRewardValue > 0) {
             const referralReferenceId = createRewardReference("referral");
             await db.transaction(async (tx) => {
               await tx.insert(referralRewardsLog).values({
                 referrerId: referredBy!,
                 referredId: user.id,
-                rewardAmount: rewardAmount,
+                rewardAmount: effectiveRewardValue.toFixed(2),
               });
 
               await tx.execute(sql`
@@ -134,7 +142,7 @@ export function registerUsernameRegistrationRoutes(app: Express) {
                 throw new Error('Referrer wallet not found');
               }
 
-              const rewardValue = parseFloat(rewardAmount);
+              const rewardValue = effectiveRewardValue;
               const balanceBefore = parseFloat(wallet.totalBalance || '0');
               const earnedBefore = parseFloat(wallet.earnedBalance || '0');
               const balanceAfter = (balanceBefore + rewardValue).toFixed(2);
@@ -167,10 +175,10 @@ export function registerUsernameRegistrationRoutes(app: Express) {
               priority: 'normal',
               title: 'Referral Bonus Earned!',
               titleAr: 'مكافأة إحالة!',
-              message: `You earned ${rewardAmount} project coins because your referral "${username.trim()}" joined!`,
-              messageAr: `حصلت على ${rewardAmount} من عملات المشروع لأن المُحال "${username.trim()}" انضم!`,
+              message: `You earned ${effectiveRewardValue.toFixed(2)} project coins because your referral "${username.trim()}" joined!`,
+              messageAr: `حصلت على ${effectiveRewardValue.toFixed(2)} من عملات المشروع لأن المُحال "${username.trim()}" انضم!`,
               link: '/wallet',
-              metadata: JSON.stringify({ action: 'referral_bonus', amount: rewardAmount, referredUsername: username.trim(), referenceId: referralReferenceId }),
+              metadata: JSON.stringify({ action: 'referral_bonus', amount: effectiveRewardValue.toFixed(2), referredUsername: username.trim(), referenceId: referralReferenceId }),
             }).catch(() => { });
           }
         } catch (rewardError) {
