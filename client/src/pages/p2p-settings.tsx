@@ -95,6 +95,54 @@ interface P2PBadge {
   criteria: Record<string, unknown>;
 }
 
+interface FreezeProgramOption {
+  id: string;
+  currencyCode: string;
+  benefitRatePercent: string;
+  baseReductionPercent: string;
+  maxReductionPercent: string;
+  minAmount: string;
+  maxAmount: string | null;
+  methods: Array<{
+    methodId: string;
+    methodName: string;
+    methodType: string;
+    countryCode: string;
+    minAmount: string;
+    maxAmount: string;
+  }>;
+}
+
+interface FreezeProgramRequest {
+  id: string;
+  currencyCode: string;
+  amount: string;
+  approvedAmount: string;
+  remainingAmount: string;
+  benefitRatePercentSnapshot: string;
+  status: "pending" | "approved" | "rejected" | "cancelled" | "exhausted";
+  paymentMethodName: string;
+  paymentMethodType: string;
+  paymentReference?: string | null;
+  payerName?: string | null;
+  requestNote?: string | null;
+  adminNote?: string | null;
+  rejectionReason?: string | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+  createdAt: string;
+}
+
+interface FreezeProgramHistoryPayload {
+  requests: FreezeProgramRequest[];
+  summary: Array<{
+    currencyCode: string;
+    activeApprovedAmount: string;
+    activeRemainingAmount: string;
+    estimatedMonthlyBenefit: string;
+  }>;
+}
+
 const PAYMENT_TYPES = [
   { value: "bank_transfer", label: "Bank Transfer", labelAr: "تحويل بنكي", icon: Building2 },
   { value: "e_wallet", label: "E-Wallet", labelAr: "محفظة إلكترونية", icon: Wallet },
@@ -372,6 +420,14 @@ export default function P2PSettingsPage() {
     bankName: "",
     holderName: "",
   });
+  const [freezeRequestForm, setFreezeRequestForm] = useState({
+    currencyCode: "",
+    countryPaymentMethodId: "",
+    amount: "",
+    payerName: "",
+    paymentReference: "",
+    requestNote: "",
+  });
 
   const { data: settings, isLoading: loadingSettings } = useQuery<P2PSettings>({
     queryKey: ['/api/p2p/settings'],
@@ -389,9 +445,37 @@ export default function P2PSettingsPage() {
     queryKey: ['/api/p2p/badges'],
   });
 
+  const { data: freezeOptions = [] } = useQuery<FreezeProgramOption[]>({
+    queryKey: ['/api/p2p/freeze-program/options'],
+  });
+
+  const { data: freezeHistory } = useQuery<FreezeProgramHistoryPayload>({
+    queryKey: ['/api/p2p/freeze-program/requests'],
+  });
+
   useEffect(() => {
     setP2PUsernameDraft(settings?.p2pUsername || "");
   }, [settings?.p2pUsername]);
+
+  useEffect(() => {
+    if (freezeOptions.length === 0) {
+      return;
+    }
+
+    setFreezeRequestForm((previous) => {
+      const currentOption = freezeOptions.find((option) => option.currencyCode === previous.currencyCode);
+      const nextOption = currentOption || freezeOptions[0];
+      const methodExists = nextOption.methods.some((method) => method.methodId === previous.countryPaymentMethodId);
+
+      return {
+        ...previous,
+        currencyCode: nextOption.currencyCode,
+        countryPaymentMethodId: methodExists
+          ? previous.countryPaymentMethodId
+          : (nextOption.methods[0]?.methodId || ""),
+      };
+    });
+  }, [freezeOptions]);
 
   const paymentCountryOptions = useMemo(() => {
     const defaultCountries = ["ALL", "EG", "SA", "AE", "US", "GB", "EU"];
@@ -477,6 +561,34 @@ export default function P2PSettingsPage() {
     }
   });
 
+  const submitFreezeRequestMutation = useMutation({
+    mutationFn: () => apiRequest('POST', '/api/p2p/freeze-program/requests', {
+      currencyCode: freezeRequestForm.currencyCode,
+      countryPaymentMethodId: freezeRequestForm.countryPaymentMethodId,
+      amount: Number(freezeRequestForm.amount || "0"),
+      payerName: freezeRequestForm.payerName || undefined,
+      paymentReference: freezeRequestForm.paymentReference || undefined,
+      requestNote: freezeRequestForm.requestNote || undefined,
+    }),
+    onSuccess: () => {
+      toast({
+        title: t('common.success'),
+        description: language === 'ar' ? 'تم إرسال طلب التجميد بنجاح' : 'Freeze request submitted successfully',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2p/freeze-program/requests'] });
+      setFreezeRequestForm((previous) => ({
+        ...previous,
+        amount: "",
+        payerName: "",
+        paymentReference: "",
+        requestNote: "",
+      }));
+    },
+    onError: (err: Error) => {
+      toast({ title: t('common.error'), description: err.message, variant: 'destructive' });
+    },
+  });
+
   const handleToggle = (key: "autoReplyEnabled" | "notifyOnTrade" | "notifyOnDispute" | "notifyOnMessage", value: boolean) => {
     updateSettingsMutation.mutate({ [key]: value });
   };
@@ -489,6 +601,21 @@ export default function P2PSettingsPage() {
     && isP2PUsernameDraftValid
     && isP2PUsernameChanged
     && !updateSettingsMutation.isPending;
+
+  const selectedFreezeOption = useMemo(() => {
+    return freezeOptions.find((option) => option.currencyCode === freezeRequestForm.currencyCode) || null;
+  }, [freezeOptions, freezeRequestForm.currencyCode]);
+
+  const selectedFreezeMethod = useMemo(() => {
+    return selectedFreezeOption?.methods.find((method) => method.methodId === freezeRequestForm.countryPaymentMethodId) || null;
+  }, [selectedFreezeOption, freezeRequestForm.countryPaymentMethodId]);
+
+  const canSubmitFreezeRequest = Boolean(
+    selectedFreezeOption
+    && selectedFreezeMethod
+    && Number(freezeRequestForm.amount) > 0
+    && !submitFreezeRequestMutation.isPending,
+  );
 
   if (loadingSettings) {
     return (
@@ -519,7 +646,7 @@ export default function P2PSettingsPage() {
       </div>
 
       <Tabs defaultValue="verification" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 rounded-xl bg-muted/50 p-2 sm:grid-cols-3 lg:grid-cols-5">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-2 rounded-xl bg-muted/50 p-2 sm:grid-cols-3 lg:grid-cols-6">
           <TabsTrigger
             value="verification"
             className="h-auto min-h-[48px] w-full gap-2 whitespace-normal rounded-lg border border-transparent px-2 py-2 text-center text-xs leading-tight sm:text-sm data-[state=active]:border-primary/30 data-[state=active]:text-primary data-[state=active]:shadow-sm"
@@ -554,6 +681,13 @@ export default function P2PSettingsPage() {
           >
             <Award className="h-4 w-4 shrink-0" />
             {t('p2p.settings.badges')}
+          </TabsTrigger>
+          <TabsTrigger
+            value="freeze-program"
+            className="h-auto min-h-[48px] w-full gap-2 whitespace-normal rounded-lg border border-transparent px-2 py-2 text-center text-xs leading-tight sm:text-sm data-[state=active]:border-primary/30 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+          >
+            <Clock className="h-4 w-4 shrink-0" />
+            {language === 'ar' ? 'برنامج التجميد' : 'Freeze Program'}
           </TabsTrigger>
         </TabsList>
 
@@ -833,6 +967,204 @@ export default function P2PSettingsPage() {
                 <div className="text-center py-8 text-muted-foreground">
                   <CreditCard className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>{t('p2p.settings.noPaymentMethods')}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="freeze-program" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>{language === 'ar' ? 'طلب تجميد الرصيد' : 'Request Balance Freeze'}</CardTitle>
+              <CardDescription>
+                {language === 'ar'
+                  ? 'يمكنك طلب تجميد مبلغ لتحسين سرعة فك التجميد عند إكمال صفقات الشراء.'
+                  : 'Submit a freeze request to speed up release time for completed buy trades.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {freezeOptions.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  {language === 'ar'
+                    ? 'برنامج التجميد غير متاح حالياً.'
+                    : 'Freeze program is currently unavailable.'}
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <Label>{language === 'ar' ? 'العملة' : 'Currency'}</Label>
+                      <Select
+                        value={freezeRequestForm.currencyCode}
+                        onValueChange={(value) => {
+                          const option = freezeOptions.find((item) => item.currencyCode === value);
+                          setFreezeRequestForm((previous) => ({
+                            ...previous,
+                            currencyCode: value,
+                            countryPaymentMethodId: option?.methods[0]?.methodId || "",
+                          }));
+                        }}
+                      >
+                        <SelectTrigger className="mt-2" data-testid="select-freeze-currency-user">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {freezeOptions.map((option) => (
+                            <SelectItem key={option.currencyCode} value={option.currencyCode}>
+                              {option.currencyCode}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label>{language === 'ar' ? 'طريقة الدفع' : 'Payment Method'}</Label>
+                      <Select
+                        value={freezeRequestForm.countryPaymentMethodId}
+                        onValueChange={(value) => setFreezeRequestForm((previous) => ({ ...previous, countryPaymentMethodId: value }))}
+                      >
+                        <SelectTrigger className="mt-2" data-testid="select-freeze-method-user">
+                          <SelectValue placeholder={language === 'ar' ? 'اختر الطريقة' : 'Select method'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(selectedFreezeOption?.methods || []).map((method) => (
+                            <SelectItem key={method.methodId} value={method.methodId}>
+                              {method.methodName} ({method.countryCode})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label>{language === 'ar' ? 'المبلغ' : 'Amount'}</Label>
+                      <Input
+                        type="number"
+                        step="0.00000001"
+                        className="mt-2"
+                        value={freezeRequestForm.amount}
+                        onChange={(event) => setFreezeRequestForm((previous) => ({ ...previous, amount: event.target.value }))}
+                        data-testid="input-freeze-request-amount"
+                      />
+                    </div>
+
+                    <div>
+                      <Label>{language === 'ar' ? 'اسم الدافع (اختياري)' : 'Payer Name (optional)'}</Label>
+                      <Input
+                        className="mt-2"
+                        value={freezeRequestForm.payerName}
+                        onChange={(event) => setFreezeRequestForm((previous) => ({ ...previous, payerName: event.target.value }))}
+                        data-testid="input-freeze-request-payer-name"
+                      />
+                    </div>
+
+                    <div>
+                      <Label>{language === 'ar' ? 'مرجع الدفع (اختياري)' : 'Payment Reference (optional)'}</Label>
+                      <Input
+                        className="mt-2"
+                        value={freezeRequestForm.paymentReference}
+                        onChange={(event) => setFreezeRequestForm((previous) => ({ ...previous, paymentReference: event.target.value }))}
+                        data-testid="input-freeze-request-reference"
+                      />
+                    </div>
+                  </div>
+
+                  {selectedFreezeOption ? (
+                    <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
+                      <p>
+                        {language === 'ar' ? 'نسبة الفائدة:' : 'Benefit rate:'} {selectedFreezeOption.benefitRatePercent}%
+                      </p>
+                      <p>
+                        {language === 'ar' ? 'الحد الأدنى:' : 'Minimum amount:'} {selectedFreezeOption.minAmount} {selectedFreezeOption.currencyCode}
+                      </p>
+                      {selectedFreezeOption.maxAmount ? (
+                        <p>
+                          {language === 'ar' ? 'الحد الأعلى:' : 'Maximum amount:'} {selectedFreezeOption.maxAmount} {selectedFreezeOption.currencyCode}
+                        </p>
+                      ) : null}
+                      <p>
+                        {language === 'ar' ? 'تقليل التجميد الأساسي:' : 'Base freeze reduction:'} {selectedFreezeOption.baseReductionPercent}%
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div>
+                    <Label>{language === 'ar' ? 'ملاحظات إضافية (اختياري)' : 'Additional Note (optional)'}</Label>
+                    <Textarea
+                      className="mt-2"
+                      value={freezeRequestForm.requestNote}
+                      onChange={(event) => setFreezeRequestForm((previous) => ({ ...previous, requestNote: event.target.value }))}
+                      data-testid="textarea-freeze-request-note"
+                    />
+                  </div>
+
+                  <Button
+                    onClick={() => submitFreezeRequestMutation.mutate()}
+                    disabled={!canSubmitFreezeRequest}
+                    data-testid="button-submit-freeze-request"
+                  >
+                    {submitFreezeRequestMutation.isPending
+                      ? (language === 'ar' ? 'جاري الإرسال...' : 'Submitting...')
+                      : (language === 'ar' ? 'إرسال طلب التجميد' : 'Submit Freeze Request')}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{language === 'ar' ? 'طلبات التجميد الخاصة بك' : 'Your Freeze Requests'}</CardTitle>
+              <CardDescription>
+                {language === 'ar'
+                  ? 'راجع حالة الطلبات والمبالغ النشطة وتأثيرها المتوقع.'
+                  : 'Review status, active amounts, and expected benefit impact.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(freezeHistory?.summary || []).length > 0 ? (
+                <div className="grid gap-3 md:grid-cols-3">
+                  {freezeHistory?.summary.map((summaryRow) => (
+                    <div key={summaryRow.currencyCode} className="rounded-md border p-3">
+                      <p className="text-sm font-semibold">{summaryRow.currencyCode}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {language === 'ar' ? 'متبقي نشط:' : 'Active remaining:'} {summaryRow.activeRemainingAmount}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {language === 'ar' ? 'فائدة شهرية تقديرية:' : 'Estimated monthly benefit:'} {summaryRow.estimatedMonthlyBenefit}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {(freezeHistory?.requests || []).length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {language === 'ar' ? 'لا توجد طلبات تجميد حتى الآن.' : 'No freeze requests yet.'}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {freezeHistory?.requests.map((request) => (
+                    <div key={request.id} className="rounded-md border p-3" data-testid={`freeze-request-card-${request.id}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-medium">{request.currencyCode} • {request.amount}</p>
+                        <Badge variant={request.status === 'approved' ? 'default' : request.status === 'pending' ? 'secondary' : 'destructive'}>
+                          {request.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {language === 'ar' ? 'المتبقي:' : 'Remaining:'} {request.remainingAmount} | {language === 'ar' ? 'الطريقة:' : 'Method:'} {request.paymentMethodName}
+                      </p>
+                      {request.adminNote ? (
+                        <p className="text-xs">{language === 'ar' ? 'ملاحظة الإدارة:' : 'Admin note:'} {request.adminNote}</p>
+                      ) : null}
+                      {request.rejectionReason ? (
+                        <p className="text-xs text-destructive">{language === 'ar' ? 'سبب الرفض:' : 'Rejection reason:'} {request.rejectionReason}</p>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>

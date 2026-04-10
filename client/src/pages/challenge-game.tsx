@@ -232,6 +232,7 @@ export default function ChallengeGamePage() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [messageInput, setMessageInput] = useState("");
   const [isMuted, setIsMuted] = useState(false);
+  const [isVoiceMicMuted, setIsVoiceMicMuted] = useState(false);
   const { play: playSound, setMuted: setSoundMuted } = useGameSounds();
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
   const [showResignDialog, setShowResignDialog] = useState(false);
@@ -1694,9 +1695,9 @@ export default function ChallengeGamePage() {
                 <VoiceChat
                   challengeId={challengeId!}
                   isEnabled={isVoiceEnabled}
-                  onToggle={() => setIsVoiceEnabled(!isVoiceEnabled)}
-                  isMuted={isMuted}
-                  onMuteToggle={() => setIsMuted(!isMuted)}
+                  onToggle={() => setIsVoiceEnabled((prev) => !prev)}
+                  isMicMuted={isVoiceMicMuted}
+                  onMicMuteToggle={() => setIsVoiceMicMuted((prev) => !prev)}
                 />
               )}
             </div>

@@ -7,6 +7,8 @@ import { eq, sql } from "drizzle-orm";
 import { sendNotification } from "../websocket";
 import { getErrorMessage } from "./helpers";
 import { sanitizeNullablePlainText } from "../lib/input-security";
+import { convertUsdAmountToCurrency, getDepositFxSnapshot } from "../lib/deposit-fx";
+import { normalizeCurrencyCode } from "../lib/p2p-currency-controls";
 
 type TransactionStatus = (typeof transactionStatusEnum.enumValues)[number];
 
@@ -103,14 +105,23 @@ export function registerTransactionAgentRoutes(app: Express): void {
         { en: 'Deposit', ar: 'إيداع' } :
         { en: 'Withdrawal', ar: 'سحب' };
 
+      const transactionAmountUsd = parseFloat(transaction.amount);
+      const userForCurrency = await storage.getUser(transaction.userId);
+      const walletCurrency = normalizeCurrencyCode(userForCurrency?.balanceCurrency) || "USD";
+      const fxSnapshot = await getDepositFxSnapshot([walletCurrency]);
+      const displayAmountQuote = convertUsdAmountToCurrency(transactionAmountUsd, walletCurrency, fxSnapshot.usdRateByCurrency);
+      const displayAmount = displayAmountQuote
+        ? `${displayAmountQuote.convertedAmount.toFixed(2)} ${walletCurrency}`
+        : `${transactionAmountUsd.toFixed(2)} USD`;
+
       if (status === 'approved' || status === 'completed') {
         await sendNotification(transaction.userId, {
           type: 'transaction',
           priority: 'high',
           title: `${txType.en} Approved`,
           titleAr: `تمت الموافقة على ${txType.ar}`,
-          message: `Your ${txType.en.toLowerCase()} of $${parseFloat(transaction.amount).toFixed(2)} has been approved successfully.`,
-          messageAr: `تمت الموافقة على ${txType.ar} بقيمة $${parseFloat(transaction.amount).toFixed(2)} بنجاح.`,
+          message: `Your ${txType.en.toLowerCase()} of ${displayAmount} has been approved successfully.`,
+          messageAr: `تمت الموافقة على ${txType.ar} بقيمة ${displayAmount} بنجاح.`,
           link: '/transactions',
           metadata: JSON.stringify({ transactionId: transaction.id, type: transaction.type, amount: transaction.amount }),
         }).catch(() => { });
@@ -120,8 +131,8 @@ export function registerTransactionAgentRoutes(app: Express): void {
           priority: 'high',
           title: `${txType.en} Rejected`,
           titleAr: `تم رفض ${txType.ar}`,
-          message: `Your ${txType.en.toLowerCase()} of $${parseFloat(transaction.amount).toFixed(2)} has been rejected.${safeAdminNote ? ' Reason: ' + safeAdminNote : ''}`,
-          messageAr: `تم رفض ${txType.ar} بقيمة $${parseFloat(transaction.amount).toFixed(2)}.${safeAdminNote ? ' السبب: ' + safeAdminNote : ''}`,
+          message: `Your ${txType.en.toLowerCase()} of ${displayAmount} has been rejected.${safeAdminNote ? ' Reason: ' + safeAdminNote : ''}`,
+          messageAr: `تم رفض ${txType.ar} بقيمة ${displayAmount}.${safeAdminNote ? ' السبب: ' + safeAdminNote : ''}`,
           link: '/transactions',
           metadata: JSON.stringify({ transactionId: transaction.id, type: transaction.type, amount: transaction.amount }),
         }).catch(() => { });

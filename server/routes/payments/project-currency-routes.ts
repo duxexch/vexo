@@ -7,6 +7,8 @@ import { db } from "../../db";
 import { gameplaySettings } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../../lib/payment-security";
+import { convertDepositAmountToUsd, convertUsdAmountToCurrency, getDepositFxSnapshot } from "../../lib/deposit-fx";
+import { normalizeCurrencyCode } from "../../lib/p2p-currency-controls";
 
 export function registerProjectCurrencyRoutes(app: Express): void {
 
@@ -94,8 +96,8 @@ export function registerProjectCurrencyRoutes(app: Express): void {
     async (req: AuthRequest, res: Response) => {
       try {
         const { amount } = req.body;
-        const parsedAmount = parseFloat(amount);
-        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        const amountInWalletCurrency = parseFloat(amount);
+        if (isNaN(amountInWalletCurrency) || amountInWalletCurrency <= 0) {
           return res.status(400).json({ error: "Invalid amount" });
         }
 
@@ -104,35 +106,67 @@ export function registerProjectCurrencyRoutes(app: Express): void {
           return res.status(400).json({ error: "Project currency is not enabled" });
         }
 
+        const user = await storage.getUser(req.user!.id);
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        const walletCurrency = normalizeCurrencyCode(user.balanceCurrency) || "USD";
+        const fxSnapshot = await getDepositFxSnapshot([walletCurrency]);
+        const walletToUsdQuote = convertDepositAmountToUsd(
+          amountInWalletCurrency,
+          walletCurrency,
+          fxSnapshot.usdRateByCurrency,
+        );
+        if (!walletToUsdQuote) {
+          return res.status(400).json({ error: `Exchange rate for ${walletCurrency} is unavailable` });
+        }
+
+        const amountUsd = walletToUsdQuote.creditedAmountUsd;
+        if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+          return res.status(400).json({ error: "Converted amount is invalid" });
+        }
+
         const minAmount = parseFloat(settings.minConversionAmount);
         const maxAmount = parseFloat(settings.maxConversionAmount);
-        if (parsedAmount < minAmount || parsedAmount > maxAmount) {
+        if (amountUsd < minAmount || amountUsd > maxAmount) {
+          const minInWallet = convertUsdAmountToCurrency(minAmount, walletCurrency, fxSnapshot.usdRateByCurrency);
+          const maxInWallet = convertUsdAmountToCurrency(maxAmount, walletCurrency, fxSnapshot.usdRateByCurrency);
+
+          const minLabel = minInWallet
+            ? `${minInWallet.convertedAmount.toFixed(2)} ${walletCurrency}`
+            : `${minAmount.toFixed(2)} USD`;
+          const maxLabel = maxInWallet
+            ? `${maxInWallet.convertedAmount.toFixed(2)} ${walletCurrency}`
+            : `${maxAmount.toFixed(2)} USD`;
+
           return res.status(400).json({
-            error: `Amount must be between $${minAmount.toFixed(2)} and $${maxAmount.toFixed(2)}`
+            error: `Amount must be between ${minLabel} and ${maxLabel}`,
           });
         }
 
-        const user = await storage.getUser(req.user!.id);
-        if (!user) return res.status(404).json({ error: "User not found" });
-        if (parseFloat(user.balance) < parsedAmount) {
+        if (parseFloat(user.balance) < amountUsd) {
           return res.status(400).json({ error: "Insufficient balance" });
         }
 
         const dailyUserLimit = parseFloat(settings.dailyConversionLimitPerUser);
         const userDailyTotal = parseFloat(await storage.getUserDailyConversionTotal(req.user!.id));
-        if (userDailyTotal + parsedAmount > dailyUserLimit) {
+        if (userDailyTotal + amountUsd > dailyUserLimit) {
+          const dailyLimitInWallet = convertUsdAmountToCurrency(dailyUserLimit, walletCurrency, fxSnapshot.usdRateByCurrency);
+          const dailyLimitLabel = dailyLimitInWallet
+            ? `${dailyLimitInWallet.convertedAmount.toFixed(2)} ${walletCurrency}`
+            : `${dailyUserLimit.toFixed(2)} USD`;
+
           return res.status(400).json({
-            error: `Daily conversion limit of $${dailyUserLimit.toFixed(2)} exceeded`
+            error: `Daily conversion limit of ${dailyLimitLabel} exceeded`,
           });
         }
 
         const dailyPlatformLimit = parseFloat(settings.totalPlatformDailyLimit);
         const platformDailyTotal = parseFloat(await storage.getPlatformDailyConversionTotal());
-        if (platformDailyTotal + parsedAmount > dailyPlatformLimit) {
+        if (platformDailyTotal + amountUsd > dailyPlatformLimit) {
           return res.status(400).json({ error: "Platform daily conversion limit reached. Try again tomorrow." });
         }
 
-        const result = await storage.convertToProjectCurrencyAtomic(req.user!.id, String(parsedAmount));
+        const result = await storage.convertToProjectCurrencyAtomic(req.user!.id, String(amountUsd));
         if (!result.success) return res.status(400).json({ error: result.error });
 
         const conversion = result.conversion!;
@@ -142,10 +176,16 @@ export function registerProjectCurrencyRoutes(app: Express): void {
           priority: 'normal',
           title: conversion.status === 'pending' ? 'Conversion Pending Approval' : 'Conversion Completed ✅',
           titleAr: conversion.status === 'pending' ? 'التحويل بانتظار الموافقة' : 'تم التحويل بنجاح ✅',
-          message: `$${parsedAmount.toFixed(2)} conversion ${conversion.status === 'pending' ? 'submitted for review' : 'completed'}. Net: ${conversion.netAmount} coins.`,
-          messageAr: `تحويل $${parsedAmount.toFixed(2)} ${conversion.status === 'pending' ? 'مقدم للمراجعة' : 'مكتمل'}. الصافي: ${conversion.netAmount} عملة.`,
+          message: `${amountInWalletCurrency.toFixed(2)} ${walletCurrency} conversion ${conversion.status === 'pending' ? 'submitted for review' : 'completed'}. Net: ${conversion.netAmount} coins.`,
+          messageAr: `تحويل ${amountInWalletCurrency.toFixed(2)} ${walletCurrency} ${conversion.status === 'pending' ? 'مقدم للمراجعة' : 'مكتمل'}. الصافي: ${conversion.netAmount} عملة.`,
           link: '/wallet',
-          metadata: JSON.stringify({ conversionId: conversion.id, amount: parsedAmount, status: conversion.status }),
+          metadata: JSON.stringify({
+            conversionId: conversion.id,
+            amountWalletCurrency: amountInWalletCurrency,
+            walletCurrency,
+            amountUsd,
+            status: conversion.status,
+          }),
         }).catch(() => { });
 
         res.json({
@@ -154,6 +194,9 @@ export function registerProjectCurrencyRoutes(app: Express): void {
             : "Conversion completed successfully",
           status: conversion.status,
           conversionId: conversion.id,
+          debitedAmount: amountInWalletCurrency.toFixed(2),
+          debitedCurrency: walletCurrency,
+          debitedAmountUsd: amountUsd.toFixed(2),
           creditedAmount: conversion.netAmount,
           commissionAmount: conversion.commissionAmount,
         });

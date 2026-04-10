@@ -4,6 +4,19 @@ import { and, eq, gte, lt, ne, or, sql } from "drizzle-orm";
 import { getBadgeEntitlementForUser, resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
 
 export type P2PVerificationLevel = "none" | "email" | "phone" | "kyc_basic" | "kyc_full";
+export type P2PVerificationRequirementKey = "identity" | "phone" | "email";
+
+export interface P2PVerificationRequirementsConfig {
+  requireIdentityVerification: boolean;
+  requirePhoneVerification: boolean;
+  requireEmailVerification: boolean;
+}
+
+export interface P2PVerificationRequirementResult {
+  passed: boolean;
+  missingRequirements: P2PVerificationRequirementKey[];
+  checkedRequirements: P2PVerificationRequirementsConfig;
+}
 
 const verificationRank: Record<P2PVerificationLevel, number> = {
   none: 0,
@@ -14,6 +27,70 @@ const verificationRank: Record<P2PVerificationLevel, number> = {
 };
 
 export const MIN_P2P_VERIFICATION_LEVEL: P2PVerificationLevel = "phone";
+
+export function resolveP2PVerificationRequirements(settings?: {
+  requireIdentityVerification?: boolean | null;
+  requirePhoneVerification?: boolean | null;
+  requireEmailVerification?: boolean | null;
+} | null): P2PVerificationRequirementsConfig {
+  return {
+    requireIdentityVerification: Boolean(settings?.requireIdentityVerification),
+    requirePhoneVerification: Boolean(settings?.requirePhoneVerification),
+    requireEmailVerification: Boolean(settings?.requireEmailVerification),
+  };
+}
+
+export function evaluateP2PVerificationRequirements(
+  user: Pick<User, "idVerificationStatus" | "phoneVerified" | "emailVerified">,
+  requirements: P2PVerificationRequirementsConfig,
+): P2PVerificationRequirementResult {
+  const missingRequirements: P2PVerificationRequirementKey[] = [];
+
+  if (requirements.requireIdentityVerification && user.idVerificationStatus !== "approved") {
+    missingRequirements.push("identity");
+  }
+
+  if (requirements.requirePhoneVerification && !user.phoneVerified) {
+    missingRequirements.push("phone");
+  }
+
+  if (requirements.requireEmailVerification && !user.emailVerified) {
+    missingRequirements.push("email");
+  }
+
+  return {
+    passed: missingRequirements.length === 0,
+    missingRequirements,
+    checkedRequirements: requirements,
+  };
+}
+
+export function getP2PVerificationRequirementsErrorMessage(
+  requirements: P2PVerificationRequirementsConfig,
+  missingRequirements?: P2PVerificationRequirementKey[],
+): string {
+  const activeRequirements: P2PVerificationRequirementKey[] = [];
+  if (requirements.requireIdentityVerification) activeRequirements.push("identity");
+  if (requirements.requirePhoneVerification) activeRequirements.push("phone");
+  if (requirements.requireEmailVerification) activeRequirements.push("email");
+
+  const requiredKeys = (missingRequirements && missingRequirements.length > 0)
+    ? missingRequirements
+    : activeRequirements;
+
+  if (requiredKeys.length === 0) {
+    return "P2P access is restricted until verification requirements are met.";
+  }
+
+  const requirementLabelByKey: Record<P2PVerificationRequirementKey, string> = {
+    identity: "identity verification",
+    phone: "phone verification",
+    email: "email verification",
+  };
+
+  const labels = requiredKeys.map((key) => requirementLabelByKey[key]);
+  return `P2P access requires: ${labels.join(", ")}.`;
+}
 
 function normalizeP2PVerificationLevel(level: unknown): P2PVerificationLevel {
   if (level === "kyc_full" || level === "kyc_basic" || level === "phone" || level === "email" || level === "none") {
@@ -231,16 +308,6 @@ export async function checkUserP2PTradingPermission(
     badgeEntitlements.maxP2PMonthlyLimit,
     hasProfile,
   );
-  const canTradeP2P = Boolean(profile?.canTradeP2P) || badgeEntitlements.grantsP2pPrivileges;
-
-  if (!canTradeP2P) {
-    return {
-      allowed: false,
-      reason: "Your account is not approved for P2P trading. Contact support or an administrator.",
-      monthlyLimit: effectiveMonthlyLimit,
-      monthlyUsed: 0,
-    };
-  }
 
   const monthlyUsed = await getUserCurrentMonthP2PTradeVolume(userId);
   const monthlyLimit = effectiveMonthlyLimit;

@@ -306,6 +306,8 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
   const { sectionCounts } = useNotificationStatus();
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const touchEndY = useRef<number | null>(null);
 
   const navItems: MenuItem[] = [
     { title: t('nav.p2p') || 'P2P', url: "/p2p", icon: ArrowLeftRight, key: "p2p" },
@@ -341,49 +343,50 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [location, setLocation, language]);
 
-  useEffect(() => {
+  const handleNavTouchStart = (e: React.TouchEvent<HTMLElement>) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    touchEndX.current = null;
+    touchEndY.current = null;
+  };
+
+  const handleNavTouchMove = (e: React.TouchEvent<HTMLElement>) => {
+    touchEndX.current = e.touches[0].clientX;
+    touchEndY.current = e.touches[0].clientY;
+  };
+
+  const handleNavTouchEnd = () => {
     const minSwipeDistance = 75;
+    if (!touchStartX.current || !touchEndX.current || !touchStartY.current || !touchEndY.current) {
+      return;
+    }
 
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartX.current = e.touches[0].clientX;
-      touchEndX.current = null;
-    };
+    const deltaX = touchStartX.current - touchEndX.current;
+    const deltaY = touchStartY.current - touchEndY.current;
+    const isHorizontalSwipe = Math.abs(deltaX) > minSwipeDistance && Math.abs(deltaX) > Math.abs(deltaY) * 1.2;
 
-    const handleTouchMove = (e: TouchEvent) => {
-      touchEndX.current = e.touches[0].clientX;
-    };
-
-    const handleTouchEnd = () => {
-      if (!touchStartX.current || !touchEndX.current) return;
-
-      const distance = touchStartX.current - touchEndX.current;
-      const isSwipe = Math.abs(distance) > minSwipeDistance;
-
-      if (isSwipe) {
-        if (distance > 0) {
-          navigateToIndex('right');
-        } else {
-          navigateToIndex('left');
-        }
+    if (isHorizontalSwipe) {
+      if (deltaX > 0) {
+        navigateToIndex('right');
+      } else {
+        navigateToIndex('left');
       }
+    }
 
-      touchStartX.current = null;
-      touchEndX.current = null;
-    };
-
-    document.addEventListener('touchstart', handleTouchStart);
-    document.addEventListener('touchmove', handleTouchMove);
-    document.addEventListener('touchend', handleTouchEnd);
-
-    return () => {
-      document.removeEventListener('touchstart', handleTouchStart);
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [location, setLocation, language]);
+    touchStartX.current = null;
+    touchEndX.current = null;
+    touchStartY.current = null;
+    touchEndY.current = null;
+  };
 
   return (
-    <nav className="fixed bottom-0 start-0 end-0 flex items-center justify-around gap-1 px-2 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t bg-background md:hidden z-50" aria-label="Main navigation">
+    <nav
+      className="fixed bottom-0 start-0 end-0 flex items-center justify-around gap-1 px-2 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t bg-background md:hidden z-50"
+      aria-label="Main navigation"
+      onTouchStart={handleNavTouchStart}
+      onTouchMove={handleNavTouchMove}
+      onTouchEnd={handleNavTouchEnd}
+    >
       {navItems.map((item) => {
         const isActive = location === item.url;
         const badgeCount = isActive ? 0 : (sectionCounts[item.key] || 0);

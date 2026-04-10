@@ -41,6 +41,15 @@ import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { ProjectCurrencyAmount, ProjectCurrencySymbol } from "@/components/ProjectCurrencySymbol";
 import { useBalance } from "@/hooks/useBalance";
 import { playSound } from "@/hooks/use-sound-effects";
+import {
+  convertUsdToWalletAmount,
+  convertWalletToUsdAmount,
+  formatWalletAmountFromUsd,
+  formatWalletNativeAmount,
+  getCurrencySymbol,
+  normalizeCurrencyCode,
+  type WalletCurrencyConfig,
+} from "@/lib/wallet-currency";
 import type { Transaction, ProjectCurrencyConversion, CountryPaymentMethod } from "@shared/schema";
 
 interface WalletStats {
@@ -76,7 +85,9 @@ interface DepositConfig {
   defaultDepositCurrency: string;
   disabledDepositCurrencies?: string[];
   balanceCurrency?: string;
+  isBalanceCurrencyLocked?: boolean;
   usdRateByCurrency?: Record<string, number>;
+  currencySymbolByCode?: Record<string, string>;
 }
 
 interface P2PWalletBalanceEntry {
@@ -184,6 +195,20 @@ export default function WalletPage() {
 
   const hasWithdrawalMethods = withdrawalPaymentMethods.length > 0;
 
+  const walletCurrencyConfig: WalletCurrencyConfig = useMemo(() => ({
+    balanceCurrency: depositConfig?.balanceCurrency || normalizeCurrencyCode(user?.balanceCurrency as string | undefined),
+    usdRateByCurrency: depositConfig?.usdRateByCurrency,
+    currencySymbolByCode: depositConfig?.currencySymbolByCode,
+  }), [depositConfig?.balanceCurrency, depositConfig?.currencySymbolByCode, depositConfig?.usdRateByCurrency, user?.balanceCurrency]);
+
+  const walletCurrencyCode = normalizeCurrencyCode(walletCurrencyConfig.balanceCurrency);
+  const walletCurrencySymbol = getCurrencySymbol(walletCurrencyCode, walletCurrencyConfig.currencySymbolByCode);
+  const availableWalletBalance = convertUsdToWalletAmount(user?.balance || "0", walletCurrencyConfig).amount;
+
+  const formatWalletAmount = (rawUsdAmount: string | number): string => {
+    return formatWalletAmountFromUsd(rawUsdAmount, walletCurrencyConfig, { withCode: true });
+  };
+
   useEffect(() => {
     if (!depositConfig) return;
 
@@ -211,18 +236,24 @@ export default function WalletPage() {
       return null;
     }
 
-    const estimatedCredit = Math.round(((parsedAmount / usdToDepositRate) + Number.EPSILON) * 100) / 100;
-    if (!Number.isFinite(estimatedCredit) || estimatedCredit <= 0) {
+    const depositToUsdAmount = parsedAmount / usdToDepositRate;
+    if (!Number.isFinite(depositToUsdAmount) || depositToUsdAmount <= 0) {
+      return null;
+    }
+
+    const walletConversion = convertUsdToWalletAmount(depositToUsdAmount, walletCurrencyConfig);
+    if (!Number.isFinite(walletConversion.amount) || walletConversion.amount <= 0) {
       return null;
     }
 
     return {
       usdToDepositRate,
-      estimatedCredit,
-      balanceCurrency: depositConfig.balanceCurrency || "USD",
+      estimatedCredit: walletConversion.amount,
+      balanceCurrency: walletCurrencyCode,
+      balanceCurrencySymbol: walletConversion.symbol,
       parsedAmount,
     };
-  }, [depositConfig?.balanceCurrency, depositConfig?.usdRateByCurrency, depositAmount, depositCurrency]);
+  }, [depositConfig?.usdRateByCurrency, depositAmount, depositCurrency, walletCurrencyCode, walletCurrencyConfig]);
 
   const { data: currencySettings } = useQuery<ProjectCurrencySettings>({
     queryKey: ['/api/project-currency/settings'],
@@ -255,6 +286,36 @@ export default function WalletPage() {
 
   const convertNowLabel = tOr("wallet.convertNow", `Convert to ${walletCurrencyName}`)
     .replace(/VEX\s*Coins?/gi, walletCurrencyName);
+
+  const projectRatePerWalletCurrency = useMemo(() => {
+    const projectRatePerUsd = Number(currencySettings?.exchangeRate || 0);
+    if (!Number.isFinite(projectRatePerUsd) || projectRatePerUsd <= 0) {
+      return 0;
+    }
+
+    const usdToWalletRate = Number(walletCurrencyConfig.usdRateByCurrency?.[walletCurrencyCode]);
+    if (!Number.isFinite(usdToWalletRate) || usdToWalletRate <= 0) {
+      return projectRatePerUsd;
+    }
+
+    return projectRatePerUsd / usdToWalletRate;
+  }, [currencySettings?.exchangeRate, walletCurrencyCode, walletCurrencyConfig.usdRateByCurrency]);
+
+  const convertMinWalletAmount = useMemo(() => {
+    if (!currencySettings?.minConversionAmount) {
+      return 0;
+    }
+
+    return convertUsdToWalletAmount(currencySettings.minConversionAmount, walletCurrencyConfig).amount;
+  }, [currencySettings?.minConversionAmount, walletCurrencyConfig]);
+
+  const convertMaxWalletAmount = useMemo(() => {
+    if (!currencySettings?.maxConversionAmount) {
+      return 0;
+    }
+
+    return convertUsdToWalletAmount(currencySettings.maxConversionAmount, walletCurrencyConfig).amount;
+  }, [currencySettings?.maxConversionAmount, walletCurrencyConfig]);
 
   const convertMutation = useMutation({
     mutationFn: (data: { amount: string }) =>
@@ -415,20 +476,20 @@ export default function WalletPage() {
           <CardContent className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">{t('wallet.totalDeposited')}</span>
-              <span className="font-medium text-green-500">${parseFloat(user?.totalDeposited || "0").toFixed(2)}</span>
+              <span className="font-medium text-green-500">{formatWalletAmount(user?.totalDeposited || "0")}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">{t('wallet.totalWithdrawn')}</span>
-              <span className="font-medium text-red-500">${parseFloat(user?.totalWithdrawn || "0").toFixed(2)}</span>
+              <span className="font-medium text-red-500">{formatWalletAmount(user?.totalWithdrawn || "0")}</span>
             </div>
             <Separator />
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">{t('wallet.totalWagered')}</span>
-              <span className="font-medium">${parseFloat(user?.totalWagered || "0").toFixed(2)}</span>
+              <span className="font-medium">{formatWalletAmount(user?.totalWagered || "0")}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">{t('wallet.totalWon')}</span>
-              <span className="font-medium text-primary">${parseFloat(user?.totalWon || "0").toFixed(2)}</span>
+              <span className="font-medium text-primary">{formatWalletAmount(user?.totalWon || "0")}</span>
             </div>
           </CardContent>
         </Card>
@@ -546,7 +607,7 @@ export default function WalletPage() {
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">{tOr('wallet.exchangeRate', 'Exchange Rate')}</div>
                   <div className="text-lg font-bold inline-flex items-center gap-1">
-                    <span>1 USD = {currencySettings.exchangeRate}</span>
+                    <span>1 {walletCurrencyCode} = {projectRatePerWalletCurrency.toFixed(4)}</span>
                     <ProjectCurrencySymbol className="text-lg" />
                   </div>
                 </div>
@@ -584,7 +645,7 @@ export default function WalletPage() {
                         <div>
                           <div className="font-medium">
                             <span className="inline-flex items-center gap-1">
-                              <span>${parseFloat(conv.baseCurrencyAmount).toFixed(2)} →</span>
+                              <span>{formatWalletAmount(conv.baseCurrencyAmount)} →</span>
                               <ProjectCurrencyAmount amount={conv.netAmount} symbolClassName="text-sm" />
                             </span>
                           </div>
@@ -643,7 +704,7 @@ export default function WalletPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className={`font-bold ${['deposit', 'win', 'bonus', 'reward', 'refund'].includes(tx.type) ? 'text-green-500' : 'text-red-500'}`}>
-                      {['deposit', 'win', 'bonus', 'reward', 'refund'].includes(tx.type) ? '+' : '-'}${parseFloat(tx.amount).toFixed(2)}
+                      {['deposit', 'win', 'bonus', 'reward', 'refund'].includes(tx.type) ? '+' : '-'}{formatWalletAmount(tx.amount)}
                     </span>
                     {getStatusBadge(tx.status)}
                   </div>
@@ -685,14 +746,14 @@ export default function WalletPage() {
                     className="text-xs"
                     onClick={() => setDepositAmount(String(amount))}
                   >
-                    ${amount}
+                    {formatWalletNativeAmount(amount, depositCurrency, depositConfig?.currencySymbolByCode, { withCode: true })}
                   </Button>
                 ))}
               </div>
             </div>
             <div>
               <Label>{language === 'ar' ? 'عملة الإيداع' : 'Deposit Currency'}</Label>
-              <Select value={depositCurrency} onValueChange={setDepositCurrency}>
+              <Select value={depositCurrency} onValueChange={setDepositCurrency} disabled={Boolean(depositConfig?.isBalanceCurrencyLocked)}>
                 <SelectTrigger className="mt-2" data-testid="select-deposit-currency">
                   <SelectValue />
                 </SelectTrigger>
@@ -702,13 +763,18 @@ export default function WalletPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {depositConfig?.isBalanceCurrencyLocked ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {tOr('wallet.lockedCurrencyNotice', `Wallet currency is locked to ${walletCurrencyCode}.`)}
+                </p>
+              ) : null}
               {depositFxPreview ? (
                 <div className="mt-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground space-y-1">
                   <div>
                     {tOr('wallet.exchangeRate', 'Exchange Rate')}: 1 USD = {depositFxPreview.usdToDepositRate.toFixed(6)} {depositCurrency}
                   </div>
                   <div className="font-medium text-foreground">
-                    {depositFxPreview.parsedAmount.toFixed(2)} {depositCurrency} ≈ {depositFxPreview.estimatedCredit.toFixed(2)} {depositFxPreview.balanceCurrency}
+                    {depositFxPreview.parsedAmount.toFixed(2)} {depositCurrency} ≈ {depositFxPreview.balanceCurrencySymbol}{depositFxPreview.estimatedCredit.toFixed(2)} {depositFxPreview.balanceCurrency}
                   </div>
                 </div>
               ) : null}
@@ -784,7 +850,7 @@ export default function WalletPage() {
           <div className="space-y-4">
             <div className="p-3 bg-muted rounded-lg text-sm">
               <span className="text-muted-foreground">{t('wallet.availableBalance')}: </span>
-              <span className="font-bold text-primary">${parseFloat(user?.balance || "0").toFixed(2)}</span>
+              <span className="font-bold text-primary">{walletCurrencySymbol}{availableWalletBalance.toFixed(2)} {walletCurrencyCode}</span>
             </div>
             <div>
               <Label>{t('wallet.amount')}</Label>
@@ -805,14 +871,14 @@ export default function WalletPage() {
                     className="text-xs"
                     onClick={() => setWithdrawAmount(String(amount))}
                   >
-                    ${amount}
+                    {formatWalletNativeAmount(amount, walletCurrencyCode, depositConfig?.currencySymbolByCode, { withCode: true })}
                   </Button>
                 ))}
                 <Button
-                  variant={withdrawAmount === String(parseFloat(user?.balance || "0").toFixed(2)) ? "default" : "outline"}
+                  variant={withdrawAmount === String(availableWalletBalance.toFixed(2)) ? "default" : "outline"}
                   size="sm"
                   className="text-xs"
-                  onClick={() => setWithdrawAmount(String(parseFloat(user?.balance || "0").toFixed(2)))}
+                  onClick={() => setWithdrawAmount(String(availableWalletBalance.toFixed(2)))}
                 >
                   {language === 'ar' ? 'الكل' : 'All'}
                 </Button>
@@ -842,7 +908,7 @@ export default function WalletPage() {
             <Button variant="outline" onClick={() => setShowWithdraw(false)}>{t('common.cancel')}</Button>
             <Button
               onClick={() => withdrawMutation.mutate({ amount: parseFloat(withdrawAmount), paymentMethodId: withdrawPaymentMethod })}
-              disabled={!withdrawAmount || !withdrawPaymentMethod || withdrawMutation.isPending || parseFloat(withdrawAmount) > parseFloat(user?.balance || "0")}
+              disabled={!withdrawAmount || !withdrawPaymentMethod || withdrawMutation.isPending || parseFloat(withdrawAmount) > availableWalletBalance}
               data-testid="button-confirm-withdraw"
             >
               {withdrawMutation.isPending && <RefreshCw className="h-4 w-4 me-2 animate-spin" />}
@@ -862,12 +928,12 @@ export default function WalletPage() {
               </DialogTitle>
               <DialogDescription className="space-y-1">
                 <p className="inline-flex items-center gap-1">
-                  <span>Convert your USD balance to</span>
+                  <span>Convert your {walletCurrencyCode} balance to</span>
                   <ProjectCurrencySymbol className="text-sm" />
                   <span>.</span>
                 </p>
                 <p className="inline-flex items-center gap-1">
-                  <span>Rate: 1 USD = {currencySettings.exchangeRate}</span>
+                  <span>Rate: 1 {walletCurrencyCode} = {projectRatePerWalletCurrency.toFixed(4)}</span>
                   <ProjectCurrencySymbol className="text-sm" />
                 </p>
                 {parseFloat(currencySettings.conversionCommissionRate) > 0 && (
@@ -878,35 +944,35 @@ export default function WalletPage() {
             <div className="space-y-4">
               <div className="p-3 bg-muted rounded-lg text-sm">
                 <span className="text-muted-foreground">Available Balance: </span>
-                <span className="font-bold text-primary">${parseFloat(user?.balance || "0").toFixed(2)}</span>
+                <span className="font-bold text-primary">{walletCurrencySymbol}{availableWalletBalance.toFixed(2)} {walletCurrencyCode}</span>
               </div>
               <div>
-                <Label>Amount (USD)</Label>
+                <Label>Amount ({walletCurrencyCode})</Label>
                 <Input
                   type="number"
                   step="0.01"
-                  min={currencySettings.minConversionAmount}
-                  max={currencySettings.maxConversionAmount}
+                  min={convertMinWalletAmount > 0 ? convertMinWalletAmount : undefined}
+                  max={convertMaxWalletAmount > 0 ? convertMaxWalletAmount : undefined}
                   value={convertAmount}
                   onChange={(e) => setConvertAmount(e.target.value)}
-                  placeholder={`Min: $${currencySettings.minConversionAmount}`}
+                  placeholder={`Min: ${walletCurrencySymbol}${convertMinWalletAmount.toFixed(2)} ${walletCurrencyCode}`}
                   className="mt-2"
                   data-testid="input-convert-amount"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Min: ${currencySettings.minConversionAmount} | Max: ${currencySettings.maxConversionAmount}
+                  Min: {walletCurrencySymbol}{convertMinWalletAmount.toFixed(2)} {walletCurrencyCode} | Max: {walletCurrencySymbol}{convertMaxWalletAmount.toFixed(2)} {walletCurrencyCode}
                 </p>
               </div>
               {convertAmount && parseFloat(convertAmount) > 0 && (
                 <div className="p-3 bg-primary/10 rounded-lg border border-primary/30">
                   <div className="flex justify-between text-sm mb-2">
                     <span>You pay:</span>
-                    <span className="font-medium">${parseFloat(convertAmount).toFixed(2)}</span>
+                    <span className="font-medium">{walletCurrencySymbol}{parseFloat(convertAmount).toFixed(2)} {walletCurrencyCode}</span>
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Gross amount:</span>
                     <ProjectCurrencyAmount
-                      amount={parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate)}
+                      amount={convertWalletToUsdAmount(convertAmount, walletCurrencyConfig) * parseFloat(currencySettings.exchangeRate)}
                       symbolClassName="text-sm"
                     />
                   </div>
@@ -916,7 +982,7 @@ export default function WalletPage() {
                       <span className="inline-flex items-center gap-1">
                         <span>-</span>
                         <ProjectCurrencyAmount
-                          amount={parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate) * parseFloat(currencySettings.conversionCommissionRate)}
+                          amount={convertWalletToUsdAmount(convertAmount, walletCurrencyConfig) * parseFloat(currencySettings.exchangeRate) * parseFloat(currencySettings.conversionCommissionRate)}
                           symbolClassName="text-sm"
                         />
                       </span>
@@ -926,7 +992,7 @@ export default function WalletPage() {
                   <div className="flex justify-between text-base font-bold text-primary">
                     <span>You receive:</span>
                     <ProjectCurrencyAmount
-                      amount={parseFloat(convertAmount) * parseFloat(currencySettings.exchangeRate) * (1 - parseFloat(currencySettings.conversionCommissionRate))}
+                      amount={convertWalletToUsdAmount(convertAmount, walletCurrencyConfig) * parseFloat(currencySettings.exchangeRate) * (1 - parseFloat(currencySettings.conversionCommissionRate))}
                       symbolClassName="text-base"
                     />
                   </div>
@@ -940,9 +1006,9 @@ export default function WalletPage() {
                 disabled={
                   !convertAmount ||
                   parseFloat(convertAmount) <= 0 ||
-                  parseFloat(convertAmount) < parseFloat(currencySettings.minConversionAmount) ||
-                  parseFloat(convertAmount) > parseFloat(currencySettings.maxConversionAmount) ||
-                  parseFloat(convertAmount) > parseFloat(user?.balance || "0") ||
+                  parseFloat(convertAmount) < convertMinWalletAmount ||
+                  parseFloat(convertAmount) > convertMaxWalletAmount ||
+                  parseFloat(convertAmount) > availableWalletBalance ||
                   convertMutation.isPending
                 }
                 data-testid="button-confirm-convert"

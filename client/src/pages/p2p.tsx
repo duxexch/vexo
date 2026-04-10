@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
@@ -81,8 +81,19 @@ interface P2PTradeMessage {
   message: string;
   isSystemMessage: boolean;
   isPrewritten: boolean;
+  attachmentUrl?: string | null;
+  attachmentType?: string | null;
   createdAt: string;
   sender?: { id: string; username: string; nickname?: string | null } | null;
+}
+
+interface TradeMessageDraft {
+  message: string;
+  image?: {
+    fileName: string;
+    fileData: string;
+    fileType: string;
+  };
 }
 
 interface OfferPaymentMethodOption {
@@ -91,6 +102,27 @@ interface OfferPaymentMethodOption {
   name: string;
   displayLabel?: string | null;
   isVerified: boolean;
+}
+
+interface CountryPaymentMethodOption {
+  id: string;
+  countryCode: string;
+  name: string;
+  type: "bank_transfer" | "e_wallet" | "crypto" | "card";
+  minAmount: string;
+  maxAmount: string;
+  isAvailable: boolean;
+  isActive: boolean;
+}
+
+interface P2PWalletBalanceEntry {
+  currency: string;
+  available: string;
+  frozen: string;
+  reservedOutgoing: string;
+  total: string;
+  nextReleaseAt: string | null;
+  freezeHours: number;
 }
 
 interface OfferEligibility {
@@ -189,12 +221,13 @@ const createOfferSchema = z.object({
   amount: z.string().min(1),
   price: z.string().min(1),
   currency: z.string().min(1),
+  fiatCurrency: z.string().min(1),
   minLimit: z.string().min(1),
   maxLimit: z.string().min(1),
   paymentMethodIds: z.array(z.string()).min(1),
   paymentTimeLimit: z.string().min(1),
-  terms: z.string().max(1200).optional(),
-  autoReply: z.string().max(500).optional(),
+  terms: z.string().trim().min(1).max(1200),
+  autoReply: z.string().trim().min(1).max(500),
 });
 
 type CreateOfferForm = z.infer<typeof createOfferSchema>;
@@ -283,6 +316,10 @@ function resolveLanguageLocale(languageCode?: string): string {
   }
 }
 
+function normalizeCurrencyCodeValue(rawCurrency?: string | null): string {
+  return String(rawCurrency || "").trim().toUpperCase();
+}
+
 function formatLocalizedDate(dateValue: string | Date, locale: string): string {
   const parsedDate = new Date(dateValue);
   if (Number.isNaN(parsedDate.getTime())) {
@@ -307,8 +344,205 @@ function formatLocalizedDateTime(dateValue: string | Date, locale: string): stri
   return parsedDate.toLocaleString(locale);
 }
 
+function TradeOfferDialog({
+  offer,
+  numberLocale,
+  isSubmitting,
+  onClose,
+  onConfirm,
+}: {
+  offer: P2POffer | null;
+  numberLocale: string;
+  isSubmitting: boolean;
+  onClose: () => void;
+  onConfirm: (payload: { offerId: string; amount: string; paymentMethod: string }) => void;
+}) {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  const [tradeAmount, setTradeAmount] = useState("");
+  const [tradePaymentMethod, setTradePaymentMethod] = useState("");
+
+  useEffect(() => {
+    if (!offer) {
+      setTradeAmount("");
+      setTradePaymentMethod("");
+      return;
+    }
+
+    const defaultAmount = offer.minLimit || offer.amount;
+    setTradeAmount(defaultAmount);
+    setTradePaymentMethod(offer.paymentMethods?.[0] || "");
+  }, [offer]);
+
+  const closeDialog = () => {
+    setTradeAmount("");
+    setTradePaymentMethod("");
+    onClose();
+  };
+
+  const submitTrade = () => {
+    if (!offer) {
+      return;
+    }
+
+    const parsedAmount = parseFloat(tradeAmount);
+    const minLimit = parseFloat(offer.minLimit);
+    const maxLimit = parseFloat(offer.maxLimit);
+
+    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+      toast({
+        title: t('common.error'),
+        description: t('transactions.enterAmount'),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (parsedAmount < minLimit || parsedAmount > maxLimit) {
+      toast({
+        title: t('common.error'),
+        description: `${t('p2p.limit')}: ${formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!tradePaymentMethod) {
+      toast({
+        title: t('common.error'),
+        description: t('p2p.paymentMethod'),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    onConfirm({
+      offerId: offer.id,
+      amount: tradeAmount,
+      paymentMethod: tradePaymentMethod,
+    });
+  };
+
+  const tradeAmountNumeric = Number(tradeAmount);
+  const selectedOfferPrice = Number(offer?.price ?? 0);
+  const previewHasValidAmount = Number.isFinite(tradeAmountNumeric) && tradeAmountNumeric > 0;
+  const previewTotalPrice = previewHasValidAmount && Number.isFinite(selectedOfferPrice)
+    ? tradeAmountNumeric * selectedOfferPrice
+    : 0;
+
+  return (
+    <Dialog
+      open={Boolean(offer)}
+      onOpenChange={(open) => {
+        if (!open) {
+          closeDialog();
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('p2p.trade')}</DialogTitle>
+          <DialogDescription>{t('p2p.tradeInitiatedDesc')}</DialogDescription>
+        </DialogHeader>
+
+        {offer && (
+          <div className="space-y-4">
+            <div className="rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">{offer.username}</span>
+                <Badge variant={offer.type === "buy" ? "default" : "secondary"}>
+                  {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                {formatAssetAmount(offer.amount, offer.currency, numberLocale)} @ {formatFixedFiat(offer.price, numberLocale)}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t('p2p.limit')}: {formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t('common.amount')}</Label>
+              <Input
+                type="number"
+                value={tradeAmount}
+                onChange={(e) => setTradeAmount(e.target.value)}
+                data-testid="input-trade-amount"
+              />
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-2" data-testid="trade-amount-preview">
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">{t('common.amount')}</span>
+                <span className="font-medium tabular-nums">
+                  {previewHasValidAmount
+                    ? formatAssetAmount(tradeAmountNumeric, offer.currency, numberLocale)
+                    : formatAssetAmount(0, offer.currency, numberLocale)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">{t('p2p.price')}</span>
+                <span className="font-medium tabular-nums">{formatFixedFiat(offer.price, numberLocale)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">{t('p2p.totalPrice')}</span>
+                <span className="font-semibold tabular-nums">
+                  {formatFixedFiat(previewTotalPrice, numberLocale)}
+                </span>
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">{t('p2p.limit')}</span>
+                <span className="font-medium tabular-nums">{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t('p2p.paymentMethod')}</Label>
+              <Select value={tradePaymentMethod} onValueChange={setTradePaymentMethod}>
+                <SelectTrigger data-testid="select-trade-payment-method">
+                  <SelectValue placeholder={t('p2p.paymentMethod')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {offer.paymentMethods.map((method) => (
+                    <SelectItem key={method} value={method}>{method}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {offer.terms && (
+              <div className="rounded-lg border border-amber-300/40 bg-amber-50/40 p-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p className="leading-6">{offer.terms}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={closeDialog}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            onClick={submitTrade}
+            disabled={isSubmitting}
+            data-testid="button-confirm-create-trade"
+          >
+            {isSubmitting ? t('common.loading') : t('common.confirm')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function MarketplaceTab() {
   const { t, language } = useI18n();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [countryFilter, setCountryFilter] = useState<string>("all");
@@ -318,8 +552,6 @@ function MarketplaceTab() {
   const [amountFilter, setAmountFilter] = useState("");
   const [showTopRatedOnly, setShowTopRatedOnly] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<P2POffer | null>(null);
-  const [tradeAmount, setTradeAmount] = useState("");
-  const [tradePaymentMethod, setTradePaymentMethod] = useState("");
   const numberLocale = resolveLanguageLocale(language);
 
   const { data: offerEligibility } = useQuery<OfferEligibility>({
@@ -421,6 +653,7 @@ function MarketplaceTab() {
     const shouldFilterByAmount = Number.isFinite(numericAmountFilter) && numericAmountFilter > 0;
 
     let next = offersByTypeCountryAndCurrency.filter((offer) => {
+      if (offer.userId === user?.id) return false;
       if (paymentFilter !== "all" && !offer.paymentMethods.includes(paymentFilter)) return false;
       if (showTopRatedOnly && offer.rating < 4.8) return false;
 
@@ -445,7 +678,7 @@ function MarketplaceTab() {
     }
 
     return next;
-  }, [offersByTypeCountryAndCurrency, paymentFilter, amountFilter, showTopRatedOnly, priceSort]);
+  }, [offersByTypeCountryAndCurrency, paymentFilter, amountFilter, showTopRatedOnly, priceSort, user?.id]);
 
   const createTradeMutation = useMutation({
     mutationFn: async (payload: { offerId: string; amount: string; paymentMethod: string }) => {
@@ -460,8 +693,6 @@ function MarketplaceTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/my-trades"] });
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/offers"] });
       setSelectedOffer(null);
-      setTradeAmount("");
-      setTradePaymentMethod("");
       toast({
         title: t('p2p.tradeInitiated'),
         description: t('p2p.tradeInitiatedDesc'),
@@ -477,65 +708,12 @@ function MarketplaceTab() {
   });
 
   const handleTrade = (offer: P2POffer) => {
-    const defaultAmount = offer.minLimit || offer.amount;
     setSelectedOffer(offer);
-    setTradeAmount(defaultAmount);
-    setTradePaymentMethod(offer.paymentMethods?.[0] || "");
   };
 
   const getActionLabel = (offer: P2POffer) => {
     return offer.type === "sell" ? t('p2p.buy') : t('p2p.sell');
   };
-
-  const submitTrade = () => {
-    if (!selectedOffer) {
-      return;
-    }
-
-    const parsedAmount = parseFloat(tradeAmount);
-    const minLimit = parseFloat(selectedOffer.minLimit);
-    const maxLimit = parseFloat(selectedOffer.maxLimit);
-
-    if (Number.isNaN(parsedAmount) || parsedAmount <= 0) {
-      toast({
-        title: t('common.error'),
-        description: t('transactions.enterAmount'),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (parsedAmount < minLimit || parsedAmount > maxLimit) {
-      toast({
-        title: t('common.error'),
-        description: `${t('p2p.limit')}: ${formatFiatRange(selectedOffer.minLimit, selectedOffer.maxLimit, numberLocale)}`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!tradePaymentMethod) {
-      toast({
-        title: t('common.error'),
-        description: t('p2p.paymentMethod'),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    createTradeMutation.mutate({
-      offerId: selectedOffer.id,
-      amount: tradeAmount,
-      paymentMethod: tradePaymentMethod,
-    });
-  };
-
-  const tradeAmountNumeric = Number(tradeAmount);
-  const selectedOfferPrice = Number(selectedOffer?.price ?? 0);
-  const previewHasValidAmount = Number.isFinite(tradeAmountNumeric) && tradeAmountNumeric > 0;
-  const previewTotalPrice = previewHasValidAmount && Number.isFinite(selectedOfferPrice)
-    ? tradeAmountNumeric * selectedOfferPrice
-    : 0;
 
   if (isLoading) {
     return (
@@ -828,129 +1006,32 @@ function MarketplaceTab() {
         </>
       )}
 
-      <Dialog
-        open={Boolean(selectedOffer)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedOffer(null);
-            setTradeAmount("");
-            setTradePaymentMethod("");
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('p2p.trade')}</DialogTitle>
-            <DialogDescription>{t('p2p.tradeInitiatedDesc')}</DialogDescription>
-          </DialogHeader>
-
-          {selectedOffer && (
-            <div className="space-y-4">
-              <div className="rounded-lg border p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{selectedOffer.username}</span>
-                  <Badge variant={selectedOffer.type === "buy" ? "default" : "secondary"}>
-                    {selectedOffer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {formatAssetAmount(selectedOffer.amount, selectedOffer.currency, numberLocale)} @ {formatFixedFiat(selectedOffer.price, numberLocale)}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {t('p2p.limit')}: {formatFiatRange(selectedOffer.minLimit, selectedOffer.maxLimit, numberLocale)}
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>{t('common.amount')}</Label>
-                <Input
-                  type="number"
-                  value={tradeAmount}
-                  onChange={(e) => setTradeAmount(e.target.value)}
-                  data-testid="input-trade-amount"
-                />
-              </div>
-
-              <div className="rounded-lg border p-3 space-y-2" data-testid="trade-amount-preview">
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="text-muted-foreground">{t('common.amount')}</span>
-                  <span className="font-medium tabular-nums">
-                    {previewHasValidAmount
-                      ? formatAssetAmount(tradeAmountNumeric, selectedOffer.currency, numberLocale)
-                      : formatAssetAmount(0, selectedOffer.currency, numberLocale)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="text-muted-foreground">{t('p2p.price')}</span>
-                  <span className="font-medium tabular-nums">{formatFixedFiat(selectedOffer.price, numberLocale)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="text-muted-foreground">{t('p2p.totalPrice')}</span>
-                  <span className="font-semibold tabular-nums">
-                    {formatFixedFiat(previewTotalPrice, numberLocale)}
-                  </span>
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="text-muted-foreground">{t('p2p.limit')}</span>
-                  <span className="font-medium tabular-nums">{formatFiatRange(selectedOffer.minLimit, selectedOffer.maxLimit, numberLocale)}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>{t('p2p.paymentMethod')}</Label>
-                <Select value={tradePaymentMethod} onValueChange={setTradePaymentMethod}>
-                  <SelectTrigger data-testid="select-trade-payment-method">
-                    <SelectValue placeholder={t('p2p.paymentMethod')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {selectedOffer.paymentMethods.map((method) => (
-                      <SelectItem key={method} value={method}>{method}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedOffer.terms && (
-                <div className="rounded-lg border border-amber-300/40 bg-amber-50/40 p-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <p className="leading-6">{selectedOffer.terms}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSelectedOffer(null);
-                setTradeAmount("");
-                setTradePaymentMethod("");
-              }}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={submitTrade}
-              disabled={createTradeMutation.isPending}
-              data-testid="button-confirm-create-trade"
-            >
-              {createTradeMutation.isPending ? t('common.loading') : t('common.confirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TradeOfferDialog
+        offer={selectedOffer}
+        numberLocale={numberLocale}
+        isSubmitting={createTradeMutation.isPending}
+        onClose={() => setSelectedOffer(null)}
+        onConfirm={(payload) => createTradeMutation.mutate(payload)}
+      />
     </div>
   );
 }
 
 function MyOffersTab() {
   const { t, language } = useI18n();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [createOfferStep, setCreateOfferStep] = useState<1 | 2 | 3>(1);
+  const [isAddPaymentDialogOpen, setIsAddPaymentDialogOpen] = useState(false);
+  const [selectedPaymentCountry, setSelectedPaymentCountry] = useState("ALL");
+  const [newPaymentMethodDraft, setNewPaymentMethodDraft] = useState({
+    countryPaymentMethodId: "",
+    accountNumber: "",
+    bankName: "",
+    holderName: "",
+    details: "",
+  });
   const numberLocale = resolveLanguageLocale(language);
 
   const { data: myOffers, isLoading } = useQuery<P2POffer[]>({
@@ -961,6 +1042,14 @@ function MyOffersTab() {
     queryKey: ["/api/p2p/offer-eligibility"],
   });
 
+  const { data: paymentCatalog = [] } = useQuery<CountryPaymentMethodOption[]>({
+    queryKey: ["/api/payment-methods"],
+  });
+
+  const { data: p2pWalletBalances = [] } = useQuery<P2PWalletBalanceEntry[]>({
+    queryKey: ["/api/p2p/wallet-balances"],
+  });
+
   const form = useForm<CreateOfferForm>({
     resolver: zodResolver(createOfferSchema),
     defaultValues: {
@@ -968,6 +1057,7 @@ function MyOffersTab() {
       amount: "",
       price: "",
       currency: "USD",
+      fiatCurrency: "USD",
       minLimit: "",
       maxLimit: "",
       paymentMethodIds: [],
@@ -978,6 +1068,77 @@ function MyOffersTab() {
   });
 
   const selectedOfferType = form.watch("type");
+  const selectedOfferCurrency = normalizeCurrencyCodeValue(form.watch("currency"));
+  const selectedFiatCurrency = normalizeCurrencyCodeValue(form.watch("fiatCurrency"));
+
+  const userWalletCurrency = normalizeCurrencyCodeValue((user as { balanceCurrency?: string } | null)?.balanceCurrency || "USD");
+  const userWalletTotalBalance = Number((user as { balance?: string | number } | null)?.balance || 0);
+
+  const selectedCurrencyFrozenBalance = useMemo(() => {
+    const matched = p2pWalletBalances.find((entry) => normalizeCurrencyCodeValue(entry.currency) === selectedOfferCurrency);
+    return matched ? Number(matched.frozen || 0) : 0;
+  }, [p2pWalletBalances, selectedOfferCurrency]);
+
+  const sellAvailableBalance = useMemo(() => {
+    if (selectedOfferType !== "sell") {
+      return 0;
+    }
+
+    if (!selectedOfferCurrency || selectedOfferCurrency !== userWalletCurrency) {
+      return 0;
+    }
+
+    return Math.max(0, userWalletTotalBalance - selectedCurrencyFrozenBalance);
+  }, [selectedCurrencyFrozenBalance, selectedOfferCurrency, selectedOfferType, userWalletCurrency, userWalletTotalBalance]);
+
+  const sellAmountNumeric = Number(form.watch("amount"));
+  const isSellAmountOverBalance = selectedOfferType === "sell"
+    && Number.isFinite(sellAmountNumeric)
+    && sellAmountNumeric > 0
+    && sellAmountNumeric > sellAvailableBalance;
+
+  const paymentCountryOptions = useMemo(() => {
+    const countryCodes = new Set<string>(["ALL"]);
+    for (const method of paymentCatalog) {
+      const normalizedCountryCode = normalizeCurrencyCodeValue(method.countryCode);
+      if (normalizedCountryCode) {
+        countryCodes.add(normalizedCountryCode);
+      }
+    }
+
+    return Array.from(countryCodes).sort((left, right) => {
+      if (left === "ALL") return -1;
+      if (right === "ALL") return 1;
+      return left.localeCompare(right);
+    });
+  }, [paymentCatalog]);
+
+  const availableCatalogMethods = useMemo(() => {
+    const normalizedCountryCode = normalizeCurrencyCodeValue(selectedPaymentCountry);
+    return paymentCatalog.filter((method) => {
+      const methodCountryCode = normalizeCurrencyCodeValue(method.countryCode);
+      if (normalizedCountryCode === "ALL") {
+        return true;
+      }
+
+      return methodCountryCode === normalizedCountryCode || methodCountryCode === "ALL";
+    });
+  }, [paymentCatalog, selectedPaymentCountry]);
+
+  const selectedCatalogMethod = useMemo(() => {
+    return availableCatalogMethods.find((method) => method.id === newPaymentMethodDraft.countryPaymentMethodId) || null;
+  }, [availableCatalogMethods, newPaymentMethodDraft.countryPaymentMethodId]);
+
+  useEffect(() => {
+    if (!newPaymentMethodDraft.countryPaymentMethodId) {
+      return;
+    }
+
+    const stillAvailable = availableCatalogMethods.some((method) => method.id === newPaymentMethodDraft.countryPaymentMethodId);
+    if (!stillAvailable) {
+      setNewPaymentMethodDraft((previous) => ({ ...previous, countryPaymentMethodId: "" }));
+    }
+  }, [availableCatalogMethods, newPaymentMethodDraft.countryPaymentMethodId]);
 
   const availableOfferCurrencies = useMemo(() => {
     const fallbackCurrencies = offerEligibility?.allowedCurrencies || ["USD", "USDT", "EUR", "GBP", "SAR", "AED", "EGP"];
@@ -988,6 +1149,10 @@ function MyOffersTab() {
       ? buyCurrencies
       : sellCurrencies;
   }, [offerEligibility?.allowedBuyCurrencies, offerEligibility?.allowedCurrencies, offerEligibility?.allowedSellCurrencies, selectedOfferType]);
+
+  const availableQuoteCurrencies = useMemo(() => {
+    return offerEligibility?.allowedCurrencies || ["USD", "USDT", "EUR", "GBP", "SAR", "AED", "EGP"];
+  }, [offerEligibility?.allowedCurrencies]);
 
   useEffect(() => {
     if (availableOfferCurrencies.length === 0) {
@@ -1000,14 +1165,25 @@ function MyOffersTab() {
     }
   }, [availableOfferCurrencies, form]);
 
+  useEffect(() => {
+    if (availableQuoteCurrencies.length === 0) {
+      return;
+    }
+
+    const currentFiatCurrency = form.getValues("fiatCurrency");
+    if (!availableQuoteCurrencies.includes(currentFiatCurrency)) {
+      form.setValue("fiatCurrency", availableQuoteCurrencies[0]);
+    }
+  }, [availableQuoteCurrencies, form]);
+
   const createOfferMutation = useMutation({
     mutationFn: async (data: CreateOfferForm) => {
       const res = await apiRequest("POST", "/api/p2p/offers", {
         ...data,
         paymentMethodIds: data.paymentMethodIds,
         paymentTimeLimit: Number(data.paymentTimeLimit),
-        terms: data.terms?.trim() || undefined,
-        autoReply: data.autoReply?.trim() || undefined,
+        terms: data.terms.trim(),
+        autoReply: data.autoReply.trim(),
       });
       return res.json();
     },
@@ -1016,10 +1192,48 @@ function MyOffersTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/offers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/offer-eligibility"] });
       setIsCreateDialogOpen(false);
+      setCreateOfferStep(1);
       form.reset();
       toast({
         title: t('common.success'),
         description: t('p2p.offerCreated'),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t('common.error'),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addPaymentMethodMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/p2p/payment-methods", {
+        countryPaymentMethodId: newPaymentMethodDraft.countryPaymentMethodId,
+        accountNumber: newPaymentMethodDraft.accountNumber,
+        bankName: newPaymentMethodDraft.bankName || undefined,
+        holderName: newPaymentMethodDraft.holderName || undefined,
+        details: newPaymentMethodDraft.details || undefined,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/payment-methods"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/offer-eligibility"] });
+      setIsAddPaymentDialogOpen(false);
+      setSelectedPaymentCountry("ALL");
+      setNewPaymentMethodDraft({
+        countryPaymentMethodId: "",
+        accountNumber: "",
+        bankName: "",
+        holderName: "",
+        details: "",
+      });
+      toast({
+        title: t('common.success'),
+        description: t('p2p.settings.paymentAdded'),
       });
     },
     onError: (error: Error) => {
@@ -1074,7 +1288,67 @@ function MyOffersTab() {
       return;
     }
 
+    if (data.type === "sell") {
+      const normalizedSellCurrency = normalizeCurrencyCodeValue(data.currency);
+      if (!normalizedSellCurrency || normalizedSellCurrency !== userWalletCurrency) {
+        toast({
+          title: t('common.error'),
+          description: `${t('wallet.availableBalance')}: ${formatAssetAmount(0, normalizedSellCurrency || userWalletCurrency || "USD", numberLocale)}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const requestedAmount = Number(data.amount);
+      if (Number.isFinite(requestedAmount) && requestedAmount > sellAvailableBalance) {
+        toast({
+          title: t('common.error'),
+          description: `${t('wallet.availableBalance')}: ${formatAssetAmount(sellAvailableBalance, normalizedSellCurrency, numberLocale)}`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     createOfferMutation.mutate(data);
+  };
+
+  const goToNextCreateOfferStep = async () => {
+    if (createOfferStep === 1) {
+      const isStepValid = await form.trigger(["type", "currency", "amount"]);
+      if (!isStepValid) {
+        return;
+      }
+
+      if (isSellAmountOverBalance) {
+        toast({
+          title: t('common.error'),
+          description: `${t('wallet.availableBalance')}: ${formatAssetAmount(sellAvailableBalance, selectedOfferCurrency || userWalletCurrency || "USD", numberLocale)}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setCreateOfferStep(2);
+      return;
+    }
+
+    if (createOfferStep === 2) {
+      const isStepValid = await form.trigger(["fiatCurrency", "price", "minLimit", "maxLimit", "paymentTimeLimit", "paymentMethodIds"]);
+      if (!isStepValid) {
+        return;
+      }
+
+      setCreateOfferStep(3);
+    }
+  };
+
+  const goToPreviousCreateOfferStep = () => {
+    if (createOfferStep === 1) {
+      return;
+    }
+
+    setCreateOfferStep((previous) => (previous === 3 ? 2 : 1));
   };
 
   const getStatusBadge = (status: string) => {
@@ -1161,7 +1435,13 @@ function MyOffersTab() {
             <h3 className="text-sm font-semibold sm:text-base">{t('p2p.yourOffers')}</h3>
           </div>
 
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <Dialog
+            open={isCreateDialogOpen}
+            onOpenChange={(open) => {
+              setIsCreateDialogOpen(open);
+              setCreateOfferStep(1);
+            }}
+          >
             <DialogTrigger asChild>
               <Button
                 className="h-8 bg-slate-900 text-[#f0c73f] hover:bg-slate-900/90"
@@ -1188,217 +1468,466 @@ function MyOffersTab() {
 
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('p2p.type')}</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-offer-type">
-                              <SelectValue placeholder={t('p2p.selectType')} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="buy">{t('p2p.buy')}</SelectItem>
-                            <SelectItem value="sell">{t('p2p.sell')}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('common.amount')}</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" placeholder="100" data-testid="input-offer-amount" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="currency"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('p2p.currency')}</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-offer-currency">
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {availableOfferCurrencies.map((supportedCurrency) => (
-                                <SelectItem key={supportedCurrency} value={supportedCurrency}>{supportedCurrency}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                    <span className={cn("font-medium", createOfferStep === 1 ? "text-foreground" : "text-muted-foreground")}>1/3</span>
+                    <span className={cn("font-medium", createOfferStep === 2 ? "text-foreground" : "text-muted-foreground")}>2/3</span>
+                    <span className={cn("font-medium", createOfferStep === 3 ? "text-foreground" : "text-muted-foreground")}>3/3</span>
                   </div>
-                  <FormField
-                    control={form.control}
-                    name="price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('p2p.price')} (USD)</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="number" step="0.01" placeholder="1.00" data-testid="input-offer-price" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="minLimit"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('p2p.minLimit')}</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" placeholder="10" data-testid="input-offer-min" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="maxLimit"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('p2p.maxLimit')}</FormLabel>
-                          <FormControl>
-                            <Input {...field} type="number" placeholder="1000" data-testid="input-offer-max" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="paymentTimeLimit"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('transactions.processingTime')}</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-offer-payment-time-limit">
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {(offerEligibility?.allowedPaymentTimeLimits || [15, 30, 45, 60]).map((minutes) => (
-                              <SelectItem key={minutes} value={String(minutes)}>{minutes}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="paymentMethodIds"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('p2p.paymentMethods')}</FormLabel>
 
-                        <div className="space-y-2 rounded-lg border p-3" data-testid="input-offer-payment-methods">
-                          {(offerEligibility?.paymentMethods || []).length === 0 && (
-                            <p className="text-sm text-muted-foreground">{t('p2p.settings.noPaymentMethods')}</p>
+                  {createOfferStep === 1 && (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name="type"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('p2p.type')}</FormLabel>
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-offer-type">
+                                  <SelectValue placeholder={t('p2p.selectType')} />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="buy">{t('p2p.buy')}</SelectItem>
+                                <SelectItem value="sell">{t('p2p.sell')}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {selectedOfferType === "sell" && (
+                        <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 space-y-2">
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="text-slate-300">{t('wallet.currentBalance')}</span>
+                            <span className="font-semibold text-slate-100">
+                              {formatAssetAmount(userWalletTotalBalance, userWalletCurrency || "USD", numberLocale)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="text-slate-300">{t('wallet.availableBalance')}</span>
+                            <span className="font-semibold text-emerald-300">
+                              {formatAssetAmount(sellAvailableBalance, selectedOfferCurrency || userWalletCurrency || "USD", numberLocale)}
+                            </span>
+                          </div>
+                          {selectedCurrencyFrozenBalance > 0 && (
+                            <div className="flex items-center justify-between gap-2 text-xs text-slate-400">
+                              <span>{t('wallet.pending')}</span>
+                              <span>{formatAssetAmount(selectedCurrencyFrozenBalance, selectedOfferCurrency || userWalletCurrency || "USD", numberLocale)}</span>
+                            </div>
                           )}
-
-                          {(offerEligibility?.paymentMethods || []).map((method) => {
-                            const checked = field.value?.includes(method.id) ?? false;
-                            return (
-                              <label key={method.id} className="flex items-center justify-between gap-3 rounded-md border p-2 cursor-pointer">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <Checkbox
-                                    checked={checked}
-                                    onCheckedChange={(value) => {
-                                      const currentValue = field.value || [];
-                                      if (value) {
-                                        field.onChange([...currentValue, method.id]);
-                                      } else {
-                                        field.onChange(currentValue.filter((paymentMethodId) => paymentMethodId !== method.id));
-                                      }
-                                    }}
-                                  />
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-medium truncate">{method.displayLabel?.trim() || method.name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {method.displayLabel?.trim() && method.displayLabel.trim() !== method.name
-                                        ? `${method.name} - ${method.type}`
-                                        : method.type}
-                                    </p>
-                                  </div>
-                                </div>
-                                {method.isVerified && <Badge variant="outline">{t('common.verified')}</Badge>}
-                              </label>
-                            );
-                          })}
                         </div>
+                      )}
 
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <FormField
+                          control={form.control}
+                          name="currency"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('p2p.currency')}</FormLabel>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-offer-currency">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {availableOfferCurrencies.map((supportedCurrency) => (
+                                    <SelectItem key={supportedCurrency} value={supportedCurrency}>{supportedCurrency}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                  <FormField
-                    control={form.control}
-                    name="terms"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('p2p.dispute.descriptionLabel')}</FormLabel>
-                        <FormControl>
-                          <Textarea {...field} rows={3} placeholder={t('p2p.dispute.additionalDetailsPlaceholder')} data-testid="input-offer-terms" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                        <FormField
+                          control={form.control}
+                          name="amount"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('common.amount')}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  placeholder="100"
+                                  max={selectedOfferType === "sell" ? String(sellAvailableBalance || "") : undefined}
+                                  data-testid="input-offer-amount"
+                                />
+                              </FormControl>
+                              {isSellAmountOverBalance && (
+                                <p className="text-xs text-destructive">
+                                  {t('wallet.availableBalance')}: {formatAssetAmount(sellAvailableBalance, selectedOfferCurrency || userWalletCurrency || "USD", numberLocale)}
+                                </p>
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </>
+                  )}
 
-                  <FormField
-                    control={form.control}
-                    name="autoReply"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('p2p.settings.autoReplyMessage')}</FormLabel>
-                        <FormControl>
-                          <Textarea {...field} rows={2} placeholder={t('p2p.settings.autoReplyPlaceholder')} data-testid="input-offer-auto-reply" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {createOfferStep === 2 && (
+                    <>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <FormField
+                          control={form.control}
+                          name="fiatCurrency"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('settings.currency')}</FormLabel>
+                              <Select value={field.value} onValueChange={field.onChange}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-offer-fiat-currency">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {availableQuoteCurrencies.map((supportedCurrency) => (
+                                    <SelectItem key={supportedCurrency} value={supportedCurrency}>{supportedCurrency}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="price"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('p2p.price')} ({selectedFiatCurrency || "USD"})</FormLabel>
+                              <FormControl>
+                                <Input {...field} type="number" step="0.01" placeholder="1.00" data-testid="input-offer-price" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="minLimit"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('p2p.minLimit')}</FormLabel>
+                              <FormControl>
+                                <Input {...field} type="number" placeholder="10" data-testid="input-offer-min" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="maxLimit"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('p2p.maxLimit')}</FormLabel>
+                              <FormControl>
+                                <Input {...field} type="number" placeholder="1000" data-testid="input-offer-max" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <FormField
+                        control={form.control}
+                        name="paymentTimeLimit"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('transactions.processingTime')}</FormLabel>
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-offer-payment-time-limit">
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {(offerEligibility?.allowedPaymentTimeLimits || [15, 30, 45, 60]).map((minutes) => (
+                                  <SelectItem key={minutes} value={String(minutes)}>{minutes}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="paymentMethodIds"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('p2p.paymentMethods')}</FormLabel>
+                            <div className="space-y-2 rounded-lg border p-3" data-testid="input-offer-payment-methods">
+                              {(offerEligibility?.paymentMethods || []).length === 0 && (
+                                <p className="text-sm text-muted-foreground">{t('p2p.settings.noPaymentMethods')}</p>
+                              )}
+
+                              {(offerEligibility?.paymentMethods || []).map((method) => {
+                                const checked = field.value?.includes(method.id) ?? false;
+                                return (
+                                  <label key={method.id} className="flex items-center justify-between gap-3 rounded-md border p-2 cursor-pointer">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <Checkbox
+                                        checked={checked}
+                                        onCheckedChange={(value) => {
+                                          const currentValue = field.value || [];
+                                          if (value) {
+                                            field.onChange([...currentValue, method.id]);
+                                          } else {
+                                            field.onChange(currentValue.filter((paymentMethodId) => paymentMethodId !== method.id));
+                                          }
+                                        }}
+                                      />
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-medium truncate">{method.displayLabel?.trim() || method.name}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {method.displayLabel?.trim() && method.displayLabel.trim() !== method.name
+                                            ? `${method.name} - ${method.type}`
+                                            : method.type}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    {method.isVerified && <Badge variant="outline">{t('common.verified')}</Badge>}
+                                  </label>
+                                );
+                              })}
+                            </div>
+
+                            <div className="flex justify-end">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setIsAddPaymentDialogOpen(true)}
+                                data-testid="button-open-inline-add-payment"
+                              >
+                                <Plus className="h-4 w-4 me-1" />
+                                {t('p2p.settings.addPayment')}
+                              </Button>
+                            </div>
+
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
+
+                  {createOfferStep === 3 && (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name="terms"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('p2p.dispute.descriptionLabel')}</FormLabel>
+                            <FormControl>
+                              <Textarea {...field} rows={3} placeholder={t('p2p.dispute.additionalDetailsPlaceholder')} data-testid="input-offer-terms" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="autoReply"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('p2p.settings.autoReplyMessage')}</FormLabel>
+                            <FormControl>
+                              <Textarea {...field} rows={2} placeholder={t('p2p.settings.autoReplyPlaceholder')} data-testid="input-offer-auto-reply" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
 
                   <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setIsCreateDialogOpen(false);
+                        setCreateOfferStep(1);
+                      }}
+                    >
                       {t('common.cancel')}
                     </Button>
-                    <Button
-                      type="submit"
-                      disabled={createOfferMutation.isPending || !offerEligibility?.canCreateOffer || availableOfferCurrencies.length === 0}
-                      data-testid="button-submit-offer"
-                    >
-                      {createOfferMutation.isPending ? t('common.loading') : t('common.submit')}
-                    </Button>
+
+                    {createOfferStep > 1 && (
+                      <Button type="button" variant="outline" onClick={goToPreviousCreateOfferStep}>
+                        {t('common.previous')}
+                      </Button>
+                    )}
+
+                    {createOfferStep < 3 && (
+                      <Button type="button" onClick={goToNextCreateOfferStep}>
+                        {t('common.next')}
+                      </Button>
+                    )}
+
+                    {createOfferStep === 3 && (
+                      <Button
+                        type="submit"
+                        disabled={
+                          createOfferMutation.isPending
+                          || !offerEligibility?.canCreateOffer
+                          || availableOfferCurrencies.length === 0
+                          || availableQuoteCurrencies.length === 0
+                          || isSellAmountOverBalance
+                        }
+                        data-testid="button-submit-offer"
+                      >
+                        {createOfferMutation.isPending ? t('common.loading') : t('common.submit')}
+                      </Button>
+                    )}
                   </DialogFooter>
                 </form>
               </Form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isAddPaymentDialogOpen} onOpenChange={setIsAddPaymentDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{t('p2p.settings.addPaymentMethod')}</DialogTitle>
+                <DialogDescription>{t('p2p.settings.addPaymentDesc')}</DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div>
+                  <Label>{t('p2p.country')}</Label>
+                  <Select value={selectedPaymentCountry} onValueChange={setSelectedPaymentCountry}>
+                    <SelectTrigger className="mt-2" data-testid="select-inline-payment-country">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {paymentCountryOptions.map((countryCode) => (
+                        <SelectItem key={countryCode} value={countryCode}>{countryCode}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>{t('p2p.paymentMethod')}</Label>
+                  <Select
+                    value={newPaymentMethodDraft.countryPaymentMethodId}
+                    onValueChange={(value) => {
+                      setNewPaymentMethodDraft((previous) => ({
+                        ...previous,
+                        countryPaymentMethodId: value,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="mt-2" data-testid="select-inline-payment-method">
+                      <SelectValue placeholder={t('p2p.paymentMethod')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableCatalogMethods.map((method) => (
+                        <SelectItem key={method.id} value={method.id}>{method.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedCatalogMethod?.type === 'bank_transfer' && (
+                  <div>
+                    <Label>{t('p2p.settings.bankName')}</Label>
+                    <Input
+                      className="mt-2"
+                      value={newPaymentMethodDraft.bankName}
+                      onChange={(event) => setNewPaymentMethodDraft((previous) => ({ ...previous, bankName: event.target.value }))}
+                      placeholder={t('p2p.settings.bankNamePlaceholder')}
+                      data-testid="input-inline-bank-name"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <Label>{t('p2p.settings.accountNumber')}</Label>
+                  <Input
+                    className="mt-2"
+                    value={newPaymentMethodDraft.accountNumber}
+                    onChange={(event) => setNewPaymentMethodDraft((previous) => ({ ...previous, accountNumber: event.target.value }))}
+                    placeholder={t('p2p.settings.accountNumberPlaceholder')}
+                    data-testid="input-inline-account-number"
+                  />
+                </div>
+
+                <div>
+                  <Label>{t('p2p.settings.holderName')}</Label>
+                  <Input
+                    className="mt-2"
+                    value={newPaymentMethodDraft.holderName}
+                    onChange={(event) => setNewPaymentMethodDraft((previous) => ({ ...previous, holderName: event.target.value }))}
+                    placeholder={t('p2p.settings.holderNamePlaceholder')}
+                    data-testid="input-inline-holder-name"
+                  />
+                </div>
+
+                <div>
+                  <Label>{t('p2p.dispute.additionalDetailsPlaceholder')}</Label>
+                  <Textarea
+                    className="mt-2"
+                    rows={3}
+                    value={newPaymentMethodDraft.details}
+                    onChange={(event) => setNewPaymentMethodDraft((previous) => ({ ...previous, details: event.target.value }))}
+                    placeholder={t('p2p.dispute.additionalDetailsPlaceholder')}
+                    data-testid="input-inline-payment-details"
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsAddPaymentDialogOpen(false);
+                    setSelectedPaymentCountry("ALL");
+                    setNewPaymentMethodDraft({
+                      countryPaymentMethodId: "",
+                      accountNumber: "",
+                      bankName: "",
+                      holderName: "",
+                      details: "",
+                    });
+                  }}
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => addPaymentMethodMutation.mutate()}
+                  disabled={
+                    addPaymentMethodMutation.isPending
+                    || !newPaymentMethodDraft.countryPaymentMethodId
+                    || !newPaymentMethodDraft.accountNumber.trim()
+                  }
+                  data-testid="button-inline-save-payment-method"
+                >
+                  {addPaymentMethodMutation.isPending ? t('common.loading') : t('common.save')}
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
@@ -1572,6 +2101,9 @@ function MyTradesTab() {
   const [outgoingMessage, setOutgoingMessage] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [cancelReason, setCancelReason] = useState("");
+  const [selectedImageDraft, setSelectedImageDraft] = useState<TradeMessageDraft["image"]>();
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const tradeImageInputRef = useRef<HTMLInputElement | null>(null);
   const numberLocale = resolveLanguageLocale(language);
 
   const { data: trades, isLoading } = useQuery<P2PTrade[]>({
@@ -1610,19 +2142,44 @@ function MyTradesTab() {
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (message: string) => {
+    mutationFn: async (draft: TradeMessageDraft) => {
       if (!activeTradeId) {
         throw new Error(t('common.error'));
       }
 
-      const res = await apiRequest("POST", `/api/p2p/trades/${activeTradeId}/messages`, { message });
+      let attachmentUrl: string | undefined;
+      let attachmentType: string | undefined;
+
+      if (draft.image) {
+        setIsUploadingImage(true);
+        try {
+          const uploadRes = await apiRequest("POST", "/api/upload", {
+            fileName: draft.image.fileName,
+            fileData: draft.image.fileData,
+            fileType: draft.image.fileType,
+          });
+          const uploadData = await uploadRes.json();
+          attachmentUrl = uploadData?.url || uploadData?.fileUrl;
+          attachmentType = draft.image.fileType;
+        } finally {
+          setIsUploadingImage(false);
+        }
+      }
+
+      const res = await apiRequest("POST", `/api/p2p/trades/${activeTradeId}/messages`, {
+        message: draft.message,
+        attachmentUrl,
+        attachmentType,
+      });
       return res.json();
     },
     onSuccess: () => {
       setOutgoingMessage("");
+      setSelectedImageDraft(undefined);
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId, "messages"] });
     },
     onError: (error: Error) => {
+      setIsUploadingImage(false);
       toast({
         title: t('common.error'),
         description: error.message,
@@ -1693,6 +2250,8 @@ function MyTradesTab() {
     setOutgoingMessage("");
     setPaymentReference("");
     setCancelReason("");
+    setSelectedImageDraft(undefined);
+    setIsUploadingImage(false);
   };
 
   const closeTradeRoom = () => {
@@ -1700,6 +2259,8 @@ function MyTradesTab() {
     setOutgoingMessage("");
     setPaymentReference("");
     setCancelReason("");
+    setSelectedImageDraft(undefined);
+    setIsUploadingImage(false);
   };
 
   const sortedTrades = useMemo(() => {
@@ -1731,11 +2292,52 @@ function MyTradesTab() {
 
   const submitTradeMessage = () => {
     const safeMessage = outgoingMessage.trim();
-    if (!safeMessage) {
+    if (!safeMessage && !selectedImageDraft) {
       return;
     }
 
-    sendMessageMutation.mutate(safeMessage);
+    sendMessageMutation.mutate({
+      message: safeMessage,
+      image: selectedImageDraft,
+    });
+  };
+
+  const handleTradeImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    if (!selectedFile) {
+      return;
+    }
+
+    if (!selectedFile.type.startsWith("image/")) {
+      toast({
+        title: t('common.error'),
+        description: t('support.image'),
+        variant: "destructive",
+      });
+      event.target.value = "";
+      return;
+    }
+
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      toast({
+        title: t('common.error'),
+        description: t('support.fileTooLarge'),
+        variant: "destructive",
+      });
+      event.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelectedImageDraft({
+        fileName: selectedFile.name,
+        fileData: String(reader.result || ""),
+        fileType: selectedFile.type,
+      });
+    };
+    reader.readAsDataURL(selectedFile);
+    event.target.value = "";
   };
 
   const getStatusBadge = (status: string) => {
@@ -1932,7 +2534,12 @@ function MyTradesTab() {
       )}
 
       <Dialog open={Boolean(activeTradeId)} onOpenChange={(open) => { if (!open) closeTradeRoom(); }}>
-        <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden border-slate-800 bg-slate-950 text-slate-100">
+        <DialogContent
+          className="max-w-5xl max-h-[92vh] overflow-hidden border-slate-800 bg-slate-950 text-slate-100"
+          onEscapeKeyDown={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+          onPointerDownOutside={(event) => event.preventDefault()}
+        >
           <DialogHeader className="border-b border-slate-800 pb-3">
             <DialogTitle className="flex items-center gap-2">
               {t('p2p.trade')} {activeTradeId ? `#${activeTradeId.slice(0, 8)}` : ""}
@@ -1997,7 +2604,19 @@ function MyTradesTab() {
                                     {message.sender?.username || message.sender?.nickname || t('p2p.trader')}
                                   </p>
                                 )}
-                                <p>{message.message}</p>
+                                {message.attachmentUrl && (
+                                  <a href={message.attachmentUrl} target="_blank" rel="noopener noreferrer" className="mb-1 block">
+                                    <img
+                                      src={message.attachmentUrl}
+                                      alt={t('support.image')}
+                                      className="max-h-52 w-full max-w-[260px] rounded-md object-cover"
+                                      loading="lazy"
+                                    />
+                                  </a>
+                                )}
+                                {message.message && message.message !== "[image]" && (
+                                  <p className="whitespace-pre-wrap break-words">{message.message}</p>
+                                )}
                                 <p className="text-[10px] opacity-70 mt-1">
                                   {formatLocalizedTime(message.createdAt, numberLocale)}
                                 </p>
@@ -2010,23 +2629,162 @@ function MyTradesTab() {
                   </ScrollArea>
                 </div>
 
-                {activeTrade.status !== "completed" && activeTrade.status !== "cancelled" && (
-                  <div className="flex gap-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2">
-                    <Input
-                      value={outgoingMessage}
-                      onChange={(e) => setOutgoingMessage(e.target.value)}
-                      placeholder={t('common.send')}
-                      className="border-slate-700 bg-slate-950 text-slate-100"
-                      data-testid="input-trade-room-message"
-                    />
-                    <Button
-                      onClick={submitTradeMessage}
-                      className="bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                      disabled={sendMessageMutation.isPending || outgoingMessage.trim().length === 0}
-                      data-testid="button-send-trade-room-message"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
+                {activeTrade.status !== "cancelled" && (
+                  <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {(["pending", "paid", "confirmed", "completed"] as const).map((step) => {
+                          const state = getTimelineStepState(activeTrade.status, step);
+                          return (
+                            <span
+                              key={step}
+                              className={cn(
+                                "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs",
+                                state === "done" && "border-emerald-600/40 bg-emerald-600/10 text-emerald-300",
+                                state === "current" && "border-[#f0c73f]/50 bg-[#f0c73f]/10 text-[#f6d97a]",
+                                state === "idle" && "border-slate-700 bg-slate-950 text-slate-400",
+                              )}
+                            >
+                              <span className={cn(
+                                "h-2 w-2 rounded-full",
+                                state === "done" && "bg-emerald-400",
+                                state === "current" && "bg-[#f0c73f]",
+                                state === "idle" && "bg-slate-600",
+                              )} />
+                              {getStatusBadge(step).props.children}
+                            </span>
+                          );
+                        })}
+                      </div>
+
+                      <div className="space-y-2">
+                        {activeTrade.isBuyer && activeTrade.status === "pending" && (
+                          <>
+                            <Input
+                              value={paymentReference}
+                              onChange={(e) => setPaymentReference(e.target.value)}
+                              placeholder={t('transactions.paymentReference')}
+                              className="border-slate-700 bg-slate-950 text-slate-100"
+                              data-testid="input-payment-reference"
+                            />
+                            <Button
+                              className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                              onClick={() => tradeActionMutation.mutate("pay")}
+                              disabled={tradeActionMutation.isPending}
+                              data-testid="button-trade-action-pay"
+                            >
+                              {t('p2p.tradeProcessing')}
+                            </Button>
+                          </>
+                        )}
+
+                        {activeTrade.isSeller && activeTrade.status === "paid" && (
+                          <Button
+                            className="w-full bg-[#f0c73f] text-slate-900 hover:bg-[#f5ce56]"
+                            onClick={() => tradeActionMutation.mutate("confirm")}
+                            disabled={tradeActionMutation.isPending}
+                            data-testid="button-trade-action-confirm"
+                          >
+                            {t('common.confirm')}
+                          </Button>
+                        )}
+
+                        {activeTrade.isSeller && activeTrade.status === "confirmed" && (
+                          <Button
+                            className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                            onClick={() => tradeActionMutation.mutate("complete")}
+                            disabled={tradeActionMutation.isPending}
+                            data-testid="button-trade-action-complete"
+                          >
+                            {t('p2p.tradeCompleted')}
+                          </Button>
+                        )}
+
+                        {((activeTrade.isBuyer && activeTrade.status === "pending")
+                          || (activeTrade.isSeller && (activeTrade.status === "pending" || activeTrade.status === "paid"))) && (
+                            <>
+                              <Input
+                                value={cancelReason}
+                                onChange={(e) => setCancelReason(e.target.value)}
+                                placeholder={t('p2p.dispute.reason')}
+                                className="border-slate-700 bg-slate-950 text-slate-100"
+                                data-testid="input-trade-cancel-reason"
+                              />
+                              <Button
+                                variant="destructive"
+                                className="w-full"
+                                onClick={() => tradeActionMutation.mutate("cancel")}
+                                disabled={tradeActionMutation.isPending}
+                                data-testid="button-trade-action-cancel"
+                              >
+                                {t('common.cancel')}
+                              </Button>
+                            </>
+                          )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTrade.status !== "cancelled" && (
+                  <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2">
+                    {selectedImageDraft && (
+                      <div className="relative flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 p-2">
+                        <img src={selectedImageDraft.fileData} alt={t('support.image')} className="h-14 w-14 rounded object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs text-slate-100">{selectedImageDraft.fileName}</p>
+                          <p className="text-[10px] text-slate-400">{t('support.image')}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-slate-300 hover:bg-slate-800"
+                          onClick={() => setSelectedImageDraft(undefined)}
+                        >
+                          {t('common.remove')}
+                        </Button>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <input
+                        ref={tradeImageInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleTradeImageSelect}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-slate-700 bg-slate-950 text-slate-100 hover:bg-slate-800"
+                        onClick={() => tradeImageInputRef.current?.click()}
+                        data-testid="button-trade-room-attach-image"
+                      >
+                        <Paperclip className="me-1 h-4 w-4" />
+                        {t('common.upload')}
+                      </Button>
+                      <Input
+                        value={outgoingMessage}
+                        onChange={(e) => setOutgoingMessage(e.target.value)}
+                        placeholder={t('common.send')}
+                        className="border-slate-700 bg-slate-950 text-slate-100"
+                        data-testid="input-trade-room-message"
+                      />
+                      <Button
+                        onClick={submitTradeMessage}
+                        className="bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                        disabled={
+                          sendMessageMutation.isPending
+                          || isUploadingImage
+                          || (outgoingMessage.trim().length === 0 && !selectedImageDraft)
+                        }
+                        data-testid="button-send-trade-room-message"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2062,77 +2820,6 @@ function MyTradesTab() {
                         <span className="font-medium">{formatLocalizedDateTime(activeTrade.expiresAt, numberLocale)}</span>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-slate-800 bg-slate-900/70 text-slate-100">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base">{t('common.actions')}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {activeTrade.isBuyer && activeTrade.status === "pending" && (
-                      <>
-                        <Input
-                          value={paymentReference}
-                          onChange={(e) => setPaymentReference(e.target.value)}
-                          placeholder={t('transactions.paymentReference')}
-                          className="border-slate-700 bg-slate-950 text-slate-100"
-                          data-testid="input-payment-reference"
-                        />
-                        <Button
-                          className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                          onClick={() => tradeActionMutation.mutate("pay")}
-                          disabled={tradeActionMutation.isPending}
-                          data-testid="button-trade-action-pay"
-                        >
-                          {t('p2p.tradeProcessing')}
-                        </Button>
-                      </>
-                    )}
-
-                    {activeTrade.isSeller && activeTrade.status === "paid" && (
-                      <Button
-                        className="w-full bg-[#f0c73f] text-slate-900 hover:bg-[#f5ce56]"
-                        onClick={() => tradeActionMutation.mutate("confirm")}
-                        disabled={tradeActionMutation.isPending}
-                        data-testid="button-trade-action-confirm"
-                      >
-                        {t('common.confirm')}
-                      </Button>
-                    )}
-
-                    {activeTrade.isSeller && activeTrade.status === "confirmed" && (
-                      <Button
-                        className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                        onClick={() => tradeActionMutation.mutate("complete")}
-                        disabled={tradeActionMutation.isPending}
-                        data-testid="button-trade-action-complete"
-                      >
-                        {t('p2p.tradeCompleted')}
-                      </Button>
-                    )}
-
-                    {((activeTrade.isBuyer && activeTrade.status === "pending")
-                      || (activeTrade.isSeller && (activeTrade.status === "pending" || activeTrade.status === "paid"))) && (
-                        <>
-                          <Input
-                            value={cancelReason}
-                            onChange={(e) => setCancelReason(e.target.value)}
-                            placeholder={t('p2p.dispute.reason')}
-                            className="border-slate-700 bg-slate-950 text-slate-100"
-                            data-testid="input-trade-cancel-reason"
-                          />
-                          <Button
-                            variant="destructive"
-                            className="w-full"
-                            onClick={() => tradeActionMutation.mutate("cancel")}
-                            disabled={tradeActionMutation.isPending}
-                            data-testid="button-trade-action-cancel"
-                          >
-                            {t('common.cancel')}
-                          </Button>
-                        </>
-                      )}
                   </CardContent>
                 </Card>
 

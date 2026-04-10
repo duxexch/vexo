@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,16 +14,18 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { useI18n } from '@/lib/i18n';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { 
+import {
   Gamepad2, Dices, Target, CircleDot, Trophy, Coins,
   Search, X, ChevronLeft, ChevronRight, Star, Zap,
   Wallet, TrendingUp, ArrowUpCircle, ArrowDownCircle,
   CreditCard, Crown, Clock, Megaphone, Pin, Eye,
   CheckCircle, History, DollarSign, Play, Maximize2, Minimize2,
-  MessageCircle, Send, ChevronDown, ChevronUp, Mic, MicOff, 
+  MessageCircle, Send, ChevronDown, ChevronUp, Mic, MicOff,
   Volume2, VolumeX, PhoneCall, PhoneOff
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { useSettings } from '@/lib/settings';
+import { buildRtcConfiguration } from '@/lib/rtc-config';
 import type { Game, Transaction, User, Announcement, GameplayEmoji, Advertisement, GameSection as GameSectionType } from '@shared/schema';
 import Autoplay from 'embla-carousel-autoplay';
 import DOMPurify from 'dompurify';
@@ -43,18 +45,18 @@ const GAME_CATEGORIES: { id: string; name: string; nameAr: string; icon: React.C
 const quickBetAmounts = ['1.00', '5.00', '10.00', '25.00', '50.00', '100.00'];
 
 // Game Section Component with manual expand/collapse (no auto-collapse)
-function GameSection({ 
-  title, 
+function GameSection({
+  title,
   titleAr,
-  games, 
+  games,
   onSelectGame,
   icon: Icon,
   iconColor,
   initiallyExpanded = false
-}: { 
-  title: string; 
+}: {
+  title: string;
   titleAr: string;
-  games: Game[]; 
+  games: Game[];
   onSelectGame: (game: Game) => void;
   icon: React.ComponentType<{ className?: string }>;
   iconColor: string;
@@ -77,9 +79,9 @@ function GameSection({
             {games.length}
           </Badge>
         </div>
-        <Button 
-          variant="ghost" 
-          size="sm" 
+        <Button
+          variant="ghost"
+          size="sm"
           className="gap-1"
           onClick={() => setIsExpanded(!isExpanded)}
           data-testid={`button-toggle-${title.toLowerCase().replace(/\s/g, '-')}`}
@@ -100,8 +102,8 @@ function GameSection({
       {isExpanded && (
         <div className="px-2 pb-3">
           {games.length > 0 ? (
-            <HorizontalGameScroll 
-              games={games} 
+            <HorizontalGameScroll
+              games={games}
               onSelectGame={onSelectGame}
             />
           ) : (
@@ -118,7 +120,7 @@ function GameSection({
 // Advertisement Carousel Component
 function AdvertisementCarousel() {
   const { language } = useI18n();
-  
+
   const { data: ads = [] } = useQuery<Advertisement[]>({
     queryKey: ['/api/advertisements'],
   });
@@ -141,14 +143,14 @@ function AdvertisementCarousel() {
             <CarouselItem key={ad.id}>
               <div className="relative aspect-[21/9] w-full">
                 {ad.type === 'image' && ad.assetUrl && (
-                  <a 
-                    href={ad.targetUrl || '#'} 
+                  <a
+                    href={ad.targetUrl || '#'}
                     target={ad.targetUrl ? '_blank' : undefined}
                     rel="noopener noreferrer"
                     className="block w-full h-full"
                   >
-                    <img 
-                      src={ad.assetUrl} 
+                    <img
+                      src={ad.assetUrl}
                       alt={language === 'ar' ? (ad.titleAr || ad.title) : ad.title}
                       loading="lazy"
                       className="w-full h-full object-cover rounded-lg"
@@ -165,9 +167,9 @@ function AdvertisementCarousel() {
                   />
                 )}
                 {ad.type === 'link' && ad.targetUrl && (
-                  <a 
-                    href={ad.targetUrl} 
-                    target="_blank" 
+                  <a
+                    href={ad.targetUrl}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center w-full h-full bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors"
                   >
@@ -178,7 +180,7 @@ function AdvertisementCarousel() {
                   </a>
                 )}
                 {ad.type === 'embed' && ad.embedCode && (
-                  <div 
+                  <div
                     className="w-full h-full rounded-lg overflow-hidden"
                     dangerouslySetInnerHTML={{ __html: sanitizeHtml(ad.embedCode) }}
                   />
@@ -198,7 +200,7 @@ function AdvertisementCarousel() {
 function MostPlayedSection({ onSelectGame }: { onSelectGame: (game: Game) => void }) {
   const { language } = useI18n();
   const [isExpanded, setIsExpanded] = useState(true);
-  
+
   const { data: mostPlayedGames = [], isLoading } = useQuery<Game[]>({
     queryKey: ['/api/games/most-played'],
   });
@@ -230,9 +232,9 @@ function MostPlayedSection({ onSelectGame }: { onSelectGame: (game: Game) => voi
             {mostPlayedGames.length}
           </Badge>
         </div>
-        <Button 
-          variant="ghost" 
-          size="sm" 
+        <Button
+          variant="ghost"
+          size="sm"
           className="gap-1"
           onClick={() => setIsExpanded(!isExpanded)}
           data-testid="button-toggle-most-played"
@@ -252,8 +254,8 @@ function MostPlayedSection({ onSelectGame }: { onSelectGame: (game: Game) => voi
       </div>
       {isExpanded && (
         <div className="px-2 pb-3">
-          <HorizontalGameScroll 
-            games={mostPlayedGames} 
+          <HorizontalGameScroll
+            games={mostPlayedGames}
             onSelectGame={onSelectGame}
           />
         </div>
@@ -263,21 +265,24 @@ function MostPlayedSection({ onSelectGame }: { onSelectGame: (game: Game) => voi
 }
 
 // Voice Chat Component for Multiplayer Games
-function VoiceChat({ 
+function VoiceChat({
   matchId,
   isActive,
-  onToggle 
-}: { 
+  onToggle
+}: {
   matchId: string;
   isActive: boolean;
   onToggle: () => void;
 }) {
   const { language } = useI18n();
   const { token } = useAuth();
+  const { settings } = useSettings();
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
-  
+
+  const rtcConfiguration = useMemo(() => buildRtcConfiguration(settings?.rtc), [settings?.rtc]);
+
   const localStreamRef = useRef<MediaStream | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
@@ -299,7 +304,7 @@ function VoiceChat({
   const processIceCandidateQueue = useCallback(async () => {
     const pc = peerConnectionRef.current;
     if (!pc || !hasRemoteDescriptionRef.current) return;
-    
+
     while (iceCandidateQueueRef.current.length > 0) {
       const candidate = iceCandidateQueueRef.current.shift();
       if (candidate) {
@@ -318,59 +323,54 @@ function VoiceChat({
       isAuthenticatedRef.current = false;
       hasRemoteDescriptionRef.current = false;
       iceCandidateQueueRef.current = [];
-      
+
       // Get user media
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       localStreamRef.current = stream;
-      
+
       // Create peer connection with STUN servers
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ]
-      });
+      const pc = new RTCPeerConnection(rtcConfiguration);
       peerConnectionRef.current = pc;
-      
+
       // Add local stream tracks
       stream.getTracks().forEach(track => {
         pc.addTrack(track, stream);
       });
-      
+
       // Handle remote stream
       pc.ontrack = (event) => {
         if (remoteAudioRef.current && event.streams[0]) {
           remoteAudioRef.current.srcObject = event.streams[0];
         }
       };
-      
+
       // Connect to WebSocket for signaling
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
       wsRef.current = ws;
-      
+
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: 'auth', token }));
       };
-      
+
       ws.onmessage = async (event) => {
         try {
           const data = JSON.parse(event.data);
-          
+
           if (data.type === 'auth_success') {
             isAuthenticatedRef.current = true;
             safeWsSend({ type: 'voice_join', matchId });
           }
-          
+
           if (data.type === 'auth_error') {
             console.error('Voice chat auth error:', data.error);
             setConnectionStatus('disconnected');
             return;
           }
-          
+
           const currentPc = peerConnectionRef.current;
           if (!currentPc) return;
-          
+
           if (data.type === 'voice_offer') {
             await currentPc.setRemoteDescription(new RTCSessionDescription(data.offer));
             hasRemoteDescriptionRef.current = true;
@@ -379,13 +379,13 @@ function VoiceChat({
             await currentPc.setLocalDescription(answer);
             safeWsSend({ type: 'voice_answer', matchId, answer });
           }
-          
+
           if (data.type === 'voice_answer') {
             await currentPc.setRemoteDescription(new RTCSessionDescription(data.answer));
             hasRemoteDescriptionRef.current = true;
             await processIceCandidateQueue();
           }
-          
+
           if (data.type === 'voice_ice_candidate') {
             const candidate = new RTCIceCandidate(data.candidate);
             if (hasRemoteDescriptionRef.current) {
@@ -394,14 +394,14 @@ function VoiceChat({
               iceCandidateQueueRef.current.push(candidate);
             }
           }
-          
+
           if (data.type === 'voice_peer_joined') {
             // Create and send offer when peer joins
             const offer = await currentPc.createOffer();
             await currentPc.setLocalDescription(offer);
             safeWsSend({ type: 'voice_offer', matchId, offer });
           }
-          
+
           if (data.type === 'voice_connected') {
             setConnectionStatus('connected');
           }
@@ -409,26 +409,26 @@ function VoiceChat({
           console.error('Error processing voice chat message:', error);
         }
       };
-      
+
       ws.onerror = () => {
         setConnectionStatus('disconnected');
       };
-      
+
       ws.onclose = () => {
         isAuthenticatedRef.current = false;
       };
-      
+
       // Handle ICE candidates
       pc.onicecandidate = (event) => {
         if (event.candidate && isAuthenticatedRef.current) {
-          safeWsSend({ 
-            type: 'voice_ice_candidate', 
-            matchId, 
-            candidate: event.candidate 
+          safeWsSend({
+            type: 'voice_ice_candidate',
+            matchId,
+            candidate: event.candidate
           });
         }
       };
-      
+
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'connected') {
           setConnectionStatus('connected');
@@ -436,12 +436,12 @@ function VoiceChat({
           setConnectionStatus('disconnected');
         }
       };
-      
+
     } catch (error) {
       console.error('Error starting voice chat:', error);
       setConnectionStatus('disconnected');
     }
-  }, [matchId, token, safeWsSend, processIceCandidateQueue]);
+  }, [matchId, token, safeWsSend, processIceCandidateQueue, rtcConfiguration]);
 
   const stopVoiceChat = useCallback(() => {
     try {
@@ -450,20 +450,20 @@ function VoiceChat({
         localStreamRef.current.getTracks().forEach(track => track.stop());
         localStreamRef.current = null;
       }
-      
+
       // Close peer connection
       if (peerConnectionRef.current) {
         peerConnectionRef.current.close();
         peerConnectionRef.current = null;
       }
-      
+
       // Close WebSocket safely
       if (wsRef.current) {
         safeWsSend({ type: 'voice_leave', matchId });
         wsRef.current.close();
         wsRef.current = null;
       }
-      
+
       // Reset state
       iceCandidateQueueRef.current = [];
       isAuthenticatedRef.current = false;
@@ -480,7 +480,7 @@ function VoiceChat({
     } else {
       stopVoiceChat();
     }
-    
+
     return () => {
       stopVoiceChat();
     };
@@ -506,24 +506,23 @@ function VoiceChat({
   return (
     <div className="flex items-center gap-2">
       <audio ref={remoteAudioRef} autoPlay />
-      
+
       {isActive ? (
         <>
           <div className="flex items-center gap-1">
-            <div className={`w-2 h-2 rounded-full ${
-              connectionStatus === 'connected' ? 'bg-green-500 animate-pulse' : 
-              connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 
-              'bg-red-500'
-            }`} />
+            <div className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500 animate-pulse' :
+                connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                  'bg-red-500'
+              }`} />
             <span className="text-xs text-muted-foreground">
-              {connectionStatus === 'connected' 
+              {connectionStatus === 'connected'
                 ? (language === 'ar' ? 'متصل' : 'Connected')
                 : connectionStatus === 'connecting'
-                ? (language === 'ar' ? 'جاري الاتصال...' : 'Connecting...')
-                : (language === 'ar' ? 'غير متصل' : 'Disconnected')}
+                  ? (language === 'ar' ? 'جاري الاتصال...' : 'Connecting...')
+                  : (language === 'ar' ? 'غير متصل' : 'Disconnected')}
             </span>
           </div>
-          
+
           <Button
             variant="ghost"
             size="icon"
@@ -533,7 +532,7 @@ function VoiceChat({
           >
             {isMuted ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4 text-green-500" />}
           </Button>
-          
+
           <Button
             variant="ghost"
             size="icon"
@@ -543,7 +542,7 @@ function VoiceChat({
           >
             {isSpeakerOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4 text-muted-foreground" />}
           </Button>
-          
+
           <Button
             variant="ghost"
             size="icon"
@@ -572,10 +571,10 @@ function VoiceChat({
 }
 
 // In-game Chat with Emoji Picker
-function InGameChat({ 
-  matchId, 
-  userBalance 
-}: { 
+function InGameChat({
+  matchId,
+  userBalance
+}: {
   matchId: string;
   userBalance: number;
 }) {
@@ -626,7 +625,7 @@ function InGameChat({
     if (userBalance < price) {
       toast({
         title: language === 'ar' ? 'رصيد غير كافي' : 'Insufficient Balance',
-        description: language === 'ar' 
+        description: language === 'ar'
           ? `تحتاج $${price.toFixed(2)} لإرسال هذا الإيموجي`
           : `You need $${price.toFixed(2)} to send this emoji`,
         variant: 'destructive',
@@ -785,7 +784,7 @@ function FullScreenGameplay({
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       // Exit fullscreen on unmount
       if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().catch(() => { });
       }
     };
   }, []);
@@ -793,15 +792,15 @@ function FullScreenGameplay({
   const userBalance = parseFloat(user?.balance || '0');
 
   return (
-    <div 
+    <div
       ref={containerRef}
       className={`${isFullScreen ? 'fixed inset-0 z-50 bg-background' : 'relative'} flex flex-col`}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b bg-background/95 backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="icon"
             onClick={handleExit}
             data-testid="button-exit-game"
@@ -814,10 +813,10 @@ function FullScreenGameplay({
         <div className="flex items-center gap-2">
           {matchId && (
             <>
-              <VoiceChat 
-                matchId={matchId} 
-                isActive={voiceChatActive} 
-                onToggle={() => setVoiceChatActive(!voiceChatActive)} 
+              <VoiceChat
+                matchId={matchId}
+                isActive={voiceChatActive}
+                onToggle={() => setVoiceChatActive(!voiceChatActive)}
               />
               <div className="w-px h-6 bg-border mx-1" />
               <Button
@@ -866,9 +865,9 @@ function FullScreenGameplay({
   );
 }
 
-function CrashGame({ isPlaying, result, betAmount, onPlay }: { 
-  isPlaying: boolean; 
-  result: Record<string, unknown>; 
+function CrashGame({ isPlaying, result, betAmount, onPlay }: {
+  isPlaying: boolean;
+  result: Record<string, unknown>;
   betAmount: string;
   onPlay: () => void;
 }) {
@@ -904,8 +903,8 @@ function CrashGame({ isPlaying, result, betAmount, onPlay }: {
           )}
         </div>
       </div>
-      <Button 
-        className="w-full" 
+      <Button
+        className="w-full"
         size="lg"
         onClick={onPlay}
         disabled={isPlaying}
@@ -937,7 +936,7 @@ function DiceGame({ isPlaying, result, betAmount, onPlay }: {
   return (
     <div className="space-y-4">
       <div className="flex gap-2 mb-4">
-        <Button 
+        <Button
           variant={prediction === 'under' ? 'default' : 'outline'}
           className="flex-1"
           onClick={() => setPrediction('under')}
@@ -945,7 +944,7 @@ function DiceGame({ isPlaying, result, betAmount, onPlay }: {
         >
           Under
         </Button>
-        <Button 
+        <Button
           variant={prediction === 'over' ? 'default' : 'outline'}
           className="flex-1"
           onClick={() => setPrediction('over')}
@@ -977,8 +976,8 @@ function DiceGame({ isPlaying, result, betAmount, onPlay }: {
         </div>
       </div>
 
-      <Button 
-        className="w-full" 
+      <Button
+        className="w-full"
         size="lg"
         onClick={() => onPlay(prediction, target)}
         disabled={isPlaying}
@@ -1007,7 +1006,7 @@ function WheelGame({ isPlaying, result, onPlay }: {
   return (
     <div className="space-y-4">
       <div className="aspect-square max-w-48 mx-auto relative">
-        <div 
+        <div
           className="w-full h-full rounded-full border-4 border-border bg-gradient-conic from-red-500 via-yellow-500 via-green-500 via-blue-500 to-red-500 transition-transform duration-[3000ms] ease-out"
           style={{ transform: `rotate(${rotation}deg)` }}
         />
@@ -1020,8 +1019,8 @@ function WheelGame({ isPlaying, result, onPlay }: {
           </div>
         )}
       </div>
-      <Button 
-        className="w-full" 
+      <Button
+        className="w-full"
         size="lg"
         onClick={onPlay}
         disabled={isPlaying}
@@ -1060,8 +1059,8 @@ function SlotsGame({ isPlaying, result, onPlay }: {
     <div className="space-y-4">
       <div className="flex justify-center gap-2">
         {reels.map((symbol, i) => (
-          <div 
-            key={i} 
+          <div
+            key={i}
             className="w-20 h-24 rounded-lg bg-gradient-to-b from-background to-muted border-2 flex items-center justify-center text-2xl font-bold"
           >
             {symbol}
@@ -1073,8 +1072,8 @@ function SlotsGame({ isPlaying, result, onPlay }: {
           {result.won ? `WIN ${result.multiplier}x` : 'TRY AGAIN'}
         </div>
       )}
-      <Button 
-        className="w-full" 
+      <Button
+        className="w-full"
         size="lg"
         onClick={onPlay}
         disabled={isPlaying}
@@ -1114,8 +1113,8 @@ function JackpotGame({ isPlaying, result, onPlay }: {
           {result.won ? (result.jackpot ? 'JACKPOT!' : `WIN ${result.multiplier}x`) : 'NOT THIS TIME'}
         </div>
       )}
-      <Button 
-        className="w-full" 
+      <Button
+        className="w-full"
         size="lg"
         onClick={onPlay}
         disabled={isPlaying}
@@ -1128,8 +1127,8 @@ function JackpotGame({ isPlaying, result, onPlay }: {
   );
 }
 
-function HorizontalGameScroll({ games, onSelectGame }: { 
-  games: Game[]; 
+function HorizontalGameScroll({ games, onSelectGame }: {
+  games: Game[];
   onSelectGame: (game: Game) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1189,8 +1188,8 @@ function HorizontalGameScroll({ games, onSelectGame }: {
           <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
         </Button>
       )}
-      
-      <div 
+
+      <div
         ref={scrollRef}
         className="flex gap-3 overflow-x-auto scrollbar-hide py-2 px-1"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
@@ -1309,19 +1308,19 @@ function AnnouncementsBanner() {
       >
         <CarouselContent>
           {sortedAnnouncements.map((announcement) => (
-            <CarouselItem 
-              key={announcement.id} 
+            <CarouselItem
+              key={announcement.id}
               className="md:basis-1/2 lg:basis-1/3"
             >
-              <Card 
+              <Card
                 className="cursor-pointer hover-elevate relative"
                 onClick={() => setSelectedAnnouncement(announcement)}
                 data-testid={`card-announcement-${announcement.id}`}
               >
                 {announcement.imageUrl && (
                   <div className="aspect-video w-full overflow-hidden rounded-t-lg">
-                    <img 
-                      src={announcement.imageUrl} 
+                    <img
+                      src={announcement.imageUrl}
                       alt={language === 'ar' && announcement.titleAr ? announcement.titleAr : announcement.title}
                       loading="lazy"
                       className="w-full h-full object-cover"
@@ -1351,8 +1350,8 @@ function AnnouncementsBanner() {
                     {language === 'ar' && announcement.contentAr ? announcement.contentAr : announcement.content}
                   </p>
                   <div className="flex items-center justify-between gap-2 mt-3">
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
                       className="text-xs"
                       data-testid={`button-read-more-${announcement.id}`}
@@ -1403,8 +1402,8 @@ function AnnouncementsBanner() {
           </DialogHeader>
           {selectedAnnouncement?.imageUrl && (
             <div className="aspect-video w-full overflow-hidden rounded-lg">
-              <img 
-                src={selectedAnnouncement.imageUrl} 
+              <img
+                src={selectedAnnouncement.imageUrl}
                 alt={language === 'ar' && selectedAnnouncement.titleAr ? selectedAnnouncement.titleAr : selectedAnnouncement.title}
                 loading="lazy"
                 className="w-full h-full object-cover"
@@ -1415,7 +1414,7 @@ function AnnouncementsBanner() {
             {selectedAnnouncement && (language === 'ar' && selectedAnnouncement.contentAr ? selectedAnnouncement.contentAr : selectedAnnouncement?.content)}
           </DialogDescription>
           {selectedAnnouncement?.link && (
-            <Button 
+            <Button
               className="w-full"
               onClick={() => window.open(selectedAnnouncement.link!, '_blank')}
               data-testid="button-announcement-link"
@@ -1513,7 +1512,7 @@ function RecentActivitySection() {
     queryKey: ['/api/transactions'],
   });
 
-  const { data: gameSessions, isLoading: sessionsLoading } = useQuery<Array<{ id?: string; gameName?: string; createdAt?: string; result?: string; won?: boolean; amount?: string; multiplier?: number; [key: string]: unknown }>>({
+  const { data: gameSessions, isLoading: sessionsLoading } = useQuery<Array<{ id?: string; gameName?: string; createdAt?: string; result?: string; won?: boolean; amount?: string; multiplier?: number;[key: string]: unknown }>>({
     queryKey: ['/api/game-sessions'],
   });
 
@@ -1589,8 +1588,8 @@ function RecentActivitySection() {
             ) : (
               <div className="space-y-2">
                 {recentTransactions.map((tx, index) => (
-                  <div 
-                    key={tx.id || index} 
+                  <div
+                    key={tx.id || index}
                     className="flex items-center justify-between gap-3 p-2 rounded-lg bg-muted/30"
                     data-testid={`row-transaction-${tx.id || index}`}
                   >
@@ -1624,8 +1623,8 @@ function RecentActivitySection() {
             ) : (
               <div className="space-y-2">
                 {recentSessions.map((session, index) => (
-                  <div 
-                    key={session.id || index} 
+                  <div
+                    key={session.id || index}
                     className="flex items-center justify-between gap-3 p-2 rounded-lg bg-muted/30"
                     data-testid={`row-session-${session.id || index}`}
                   >
@@ -1682,19 +1681,19 @@ export default function PlayPage() {
   const playMutation = useMutation({
     mutationFn: async ({ gameId, amount, extra }: { gameId: string; amount: string; extra?: Record<string, unknown> }) => {
       const res = await apiRequest('POST', '/api/games/play', { gameId, amount, ...extra });
-      return res.json() as Promise<{ won: boolean; winAmount: number; [key: string]: unknown }>;
+      return res.json() as Promise<{ won: boolean; winAmount: number;[key: string]: unknown }>;
     },
     onSuccess: (data) => {
       setLastResult(data);
       queryClient.invalidateQueries({ queryKey: ['/api/user'] });
       queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/game-sessions'] });
-      
+
       if (data.won) {
         toast({
           title: language === 'ar' ? 'مبروك!' : 'Congratulations!',
-          description: language === 'ar' 
-            ? `ربحت $${data.winAmount}` 
+          description: language === 'ar'
+            ? `ربحت $${data.winAmount}`
             : `You won $${data.winAmount}`,
         });
       }
@@ -1722,7 +1721,7 @@ export default function PlayPage() {
   };
 
   const getGamesByCategory = (categoryId: string) => {
-    return games?.filter(g => g.category === categoryId && 
+    return games?.filter(g => g.category === categoryId &&
       (searchQuery === "" || g.name.toLowerCase().includes(searchQuery.toLowerCase()))
     ) || [];
   };
@@ -1743,14 +1742,14 @@ export default function PlayPage() {
 
   const renderGameComponent = () => {
     if (!selectedGame) return null;
-    
+
     const commonProps = {
       isPlaying: playMutation.isPending,
       result: (lastResult ?? {}) as Record<string, unknown>,
       betAmount,
     };
 
-    switch(selectedGame.category) {
+    switch (selectedGame.category) {
       case 'crash':
         return <CrashGame {...commonProps} onPlay={() => handlePlay()} />;
       case 'dice':
@@ -1796,19 +1795,19 @@ export default function PlayPage() {
         <div className="space-y-4">
           {/* Advertisement Carousel */}
           <AdvertisementCarousel />
-          
+
           {/* Most Played Games Section */}
           <MostPlayedSection onSelectGame={(game) => {
             setSelectedGame(game);
             setLastResult(null);
           }} />
-          
+
           {/* All game categories with Show More/Hide buttons */}
           <div className="space-y-2">
             {GAME_CATEGORIES.map((category, index) => {
               const categoryGames = getGamesByCategory(category.id);
               if (categoryGames.length === 0 && searchQuery) return null;
-              
+
               return (
                 <GameSection
                   key={category.id}
@@ -1864,7 +1863,7 @@ export default function PlayPage() {
                     MAX
                   </Button>
                 </div>
-                
+
                 <div className="flex gap-2 flex-wrap">
                   {quickBetAmounts.map((amount) => (
                     <Button

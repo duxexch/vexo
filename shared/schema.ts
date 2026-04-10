@@ -83,6 +83,8 @@ export const users = pgTable("users", {
   phoneVerified: boolean("phone_verified").default(false),
   emailVerified: boolean("email_verified").default(false),
   balance: decimal("balance", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  balanceCurrency: text("balance_currency").notNull().default("USD"),
+  balanceCurrencyLockedAt: timestamp("balance_currency_locked_at"),
   totalDeposited: decimal("total_deposited", { precision: 15, scale: 2 }).notNull().default("0.00"),
   totalWithdrawn: decimal("total_withdrawn", { precision: 15, scale: 2 }).notNull().default("0.00"),
   totalWagered: decimal("total_wagered", { precision: 15, scale: 2 }).notNull().default("0.00"),
@@ -1182,6 +1184,7 @@ export const p2pOfferTypeEnum = pgEnum("p2p_offer_type", ["buy", "sell"]);
 export const p2pOfferStatusEnum = pgEnum("p2p_offer_status", ["active", "paused", "completed", "cancelled"]);
 export const p2pTradeStatusEnum = pgEnum("p2p_trade_status", ["pending", "paid", "confirmed", "completed", "cancelled", "disputed"]);
 export const p2pDisputeStatusEnum = pgEnum("p2p_dispute_status", ["open", "investigating", "resolved", "closed"]);
+export const p2pFreezeRequestStatusEnum = pgEnum("p2p_freeze_request_status", ["pending", "approved", "rejected", "cancelled", "exhausted"]);
 
 // ==================== P2P OFFERS ====================
 
@@ -1233,6 +1236,10 @@ export const p2pTrades = pgTable("p2p_trades", {
   paidAt: timestamp("paid_at"),
   confirmedAt: timestamp("confirmed_at"),
   completedAt: timestamp("completed_at"),
+  freezeHoursApplied: integer("freeze_hours_applied"),
+  freezeReductionPercent: decimal("freeze_reduction_percent", { precision: 5, scale: 2 }),
+  freezeUntil: timestamp("freeze_until"),
+  freezeBenefitSourceRequestId: varchar("freeze_benefit_source_request_id"),
   cancelledAt: timestamp("cancelled_at"),
   cancelReason: text("cancel_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1242,6 +1249,7 @@ export const p2pTrades = pgTable("p2p_trades", {
   index("idx_p2p_trades_buyer_id").on(table.buyerId),
   index("idx_p2p_trades_seller_id").on(table.sellerId),
   index("idx_p2p_trades_status").on(table.status),
+  index("idx_p2p_trades_freeze_until").on(table.freezeUntil),
   index("idx_p2p_trades_created_at").on(table.createdAt),
 ]);
 
@@ -1427,8 +1435,78 @@ export const p2pSettings = pgTable("p2p_settings", {
   autoExpireEnabled: boolean("auto_expire_enabled").notNull().default(true),
   // Status
   isEnabled: boolean("is_enabled").notNull().default(true),
+  requireIdentityVerification: boolean("require_identity_verification").notNull().default(false),
+  requirePhoneVerification: boolean("require_phone_verification").notNull().default(false),
+  requireEmailVerification: boolean("require_email_verification").notNull().default(false),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export const p2pFreezeProgramConfigs = pgTable("p2p_freeze_program_configs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  currencyCode: text("currency_code").notNull().unique(),
+  isEnabled: boolean("is_enabled").notNull().default(false),
+  benefitRatePercent: decimal("benefit_rate_percent", { precision: 6, scale: 3 }).notNull().default("0.000"),
+  baseReductionPercent: decimal("base_reduction_percent", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  maxReductionPercent: decimal("max_reduction_percent", { precision: 5, scale: 2 }).notNull().default("90.00"),
+  minAmount: decimal("min_amount", { precision: 15, scale: 8 }).notNull().default("10.00000000"),
+  maxAmount: decimal("max_amount", { precision: 15, scale: 8 }),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_p2p_freeze_program_configs_currency").on(table.currencyCode),
+  index("idx_p2p_freeze_program_configs_enabled").on(table.isEnabled),
+]);
+
+export const p2pFreezeProgramMethods = pgTable("p2p_freeze_program_methods", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  configId: varchar("config_id").notNull().references(() => p2pFreezeProgramConfigs.id, { onDelete: "cascade" }),
+  countryPaymentMethodId: varchar("country_payment_method_id").notNull().references(() => countryPaymentMethods.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_p2p_freeze_program_methods_config").on(table.configId),
+  index("idx_p2p_freeze_program_methods_method").on(table.countryPaymentMethodId),
+  uniqueIndex("uniq_p2p_freeze_program_method").on(table.configId, table.countryPaymentMethodId),
+]);
+
+export const p2pFreezeRequests = pgTable("p2p_freeze_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  currencyCode: text("currency_code").notNull(),
+  amount: decimal("amount", { precision: 15, scale: 8 }).notNull(),
+  approvedAmount: decimal("approved_amount", { precision: 15, scale: 8 }).notNull().default("0.00000000"),
+  remainingAmount: decimal("remaining_amount", { precision: 15, scale: 8 }).notNull().default("0.00000000"),
+  benefitRatePercentSnapshot: decimal("benefit_rate_percent_snapshot", { precision: 6, scale: 3 }).notNull().default("0.000"),
+  status: p2pFreezeRequestStatusEnum("status").notNull().default("pending"),
+  countryPaymentMethodId: varchar("country_payment_method_id").notNull().references(() => countryPaymentMethods.id),
+  payerName: text("payer_name"),
+  paymentReference: text("payment_reference"),
+  requestNote: text("request_note"),
+  adminNote: text("admin_note"),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_p2p_freeze_requests_user").on(table.userId),
+  index("idx_p2p_freeze_requests_status").on(table.status),
+  index("idx_p2p_freeze_requests_currency").on(table.currencyCode),
+  index("idx_p2p_freeze_requests_created_at").on(table.createdAt),
+]);
+
+export const p2pFreezeBenefitConsumptions = pgTable("p2p_freeze_benefit_consumptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestId: varchar("request_id").notNull().references(() => p2pFreezeRequests.id, { onDelete: "cascade" }),
+  tradeId: varchar("trade_id").notNull().references(() => p2pTrades.id),
+  amountCovered: decimal("amount_covered", { precision: 15, scale: 8 }).notNull(),
+  reductionPercent: decimal("reduction_percent", { precision: 5, scale: 2 }).notNull(),
+  freezeHoursApplied: integer("freeze_hours_applied").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_p2p_freeze_benefit_consumptions_request").on(table.requestId),
+  index("idx_p2p_freeze_benefit_consumptions_trade").on(table.tradeId),
+  uniqueIndex("uniq_p2p_freeze_benefit_trade").on(table.tradeId),
+]);
 
 // ==================== P2P TRADER PROFILES ====================
 
@@ -2437,6 +2515,10 @@ export const insertP2PTradeSchema = createInsertSchema(p2pTrades).omit({ id: tru
 export const insertP2PEscrowSchema = createInsertSchema(p2pEscrow).omit({ id: true });
 export const insertP2PDisputeSchema = createInsertSchema(p2pDisputes).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertP2PSettingsSchema = createInsertSchema(p2pSettings).omit({ id: true, updatedAt: true });
+export const insertP2PFreezeProgramConfigSchema = createInsertSchema(p2pFreezeProgramConfigs).omit({ id: true, updatedAt: true });
+export const insertP2PFreezeProgramMethodSchema = createInsertSchema(p2pFreezeProgramMethods).omit({ id: true, createdAt: true });
+export const insertP2PFreezeRequestSchema = createInsertSchema(p2pFreezeRequests).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertP2PFreezeBenefitConsumptionSchema = createInsertSchema(p2pFreezeBenefitConsumptions).omit({ id: true, createdAt: true });
 export const insertP2PTransactionLogSchema = createInsertSchema(p2pTransactionLogs).omit({ id: true, createdAt: true });
 export const insertP2PDisputeMessageSchema = createInsertSchema(p2pDisputeMessages).omit({ id: true, createdAt: true });
 export const insertP2PTradeMessageSchema = createInsertSchema(p2pTradeMessages).omit({ id: true, createdAt: true });
@@ -2542,6 +2624,18 @@ export type P2PDispute = typeof p2pDisputes.$inferSelect;
 
 export type InsertP2PSettings = z.infer<typeof insertP2PSettingsSchema>;
 export type P2PSettings = typeof p2pSettings.$inferSelect;
+
+export type InsertP2PFreezeProgramConfig = z.infer<typeof insertP2PFreezeProgramConfigSchema>;
+export type P2PFreezeProgramConfig = typeof p2pFreezeProgramConfigs.$inferSelect;
+
+export type InsertP2PFreezeProgramMethod = z.infer<typeof insertP2PFreezeProgramMethodSchema>;
+export type P2PFreezeProgramMethod = typeof p2pFreezeProgramMethods.$inferSelect;
+
+export type InsertP2PFreezeRequest = z.infer<typeof insertP2PFreezeRequestSchema>;
+export type P2PFreezeRequest = typeof p2pFreezeRequests.$inferSelect;
+
+export type InsertP2PFreezeBenefitConsumption = z.infer<typeof insertP2PFreezeBenefitConsumptionSchema>;
+export type P2PFreezeBenefitConsumption = typeof p2pFreezeBenefitConsumptions.$inferSelect;
 
 export type InsertP2PTransactionLog = z.infer<typeof insertP2PTransactionLogSchema>;
 export type P2PTransactionLog = typeof p2pTransactionLogs.$inferSelect;

@@ -1,7 +1,7 @@
 import type { Express, Response } from "express";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { countryPaymentMethods, p2pSettings, p2pTraderPaymentMethods, p2pTraderProfiles } from "@shared/schema";
+import { countryPaymentMethods, p2pOffers, p2pSettings, p2pTraderPaymentMethods, p2pTraderProfiles, p2pTrades } from "@shared/schema";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { sanitizePlainText } from "../../lib/input-security";
 import { ensureP2PUsername, getP2PUsernameMap } from "../../lib/p2p-username";
@@ -9,12 +9,14 @@ import { isCurrencyAllowedForOfferType, normalizeCurrencyCode, resolveP2PCurrenc
 import { and, eq, inArray } from "drizzle-orm";
 import { getBadgeEntitlementForUser, resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
 import {
+  computeFreezeUntilDate,
+  evaluateP2PVerificationRequirements,
   getErrorMessage,
   getEffectiveP2PVerificationLevel,
-  getP2PVerificationErrorMessage,
+  getP2PEscrowFreezeHours,
+  getP2PVerificationRequirementsErrorMessage,
   getUserCurrentMonthP2PTradeVolume,
-  hasRequiredP2PVerification,
-  MIN_P2P_VERIFICATION_LEVEL,
+  resolveP2PVerificationRequirements,
 } from "./helpers";
 
 const ALLOWED_PAYMENT_TIME_LIMITS = new Set([15, 30, 45, 60]);
@@ -65,6 +67,55 @@ function mapOfferForClient(offer: Record<string, unknown>, username: string, cou
   };
 }
 
+async function getFrozenIncomingSellBalance(userId: string, currencyCode: string): Promise<number> {
+  const normalizedCurrency = normalizeCurrencyCode(currencyCode);
+  if (!normalizedCurrency) {
+    return 0;
+  }
+
+  const freezeHours = await getP2PEscrowFreezeHours();
+  const now = new Date();
+
+  const completedIncomingTrades = await db
+    .select({
+      amount: p2pTrades.amount,
+      completedAt: p2pTrades.completedAt,
+      freezeUntil: p2pTrades.freezeUntil,
+      freezeHoursApplied: p2pTrades.freezeHoursApplied,
+    })
+    .from(p2pTrades)
+    .innerJoin(p2pOffers, eq(p2pTrades.offerId, p2pOffers.id))
+    .where(and(
+      eq(p2pTrades.buyerId, userId),
+      eq(p2pTrades.status, "completed"),
+      eq(p2pOffers.cryptoCurrency, normalizedCurrency),
+    ));
+
+  let frozenBalance = 0;
+  for (const trade of completedIncomingTrades) {
+    const freezeUntil = trade.freezeUntil
+      ? new Date(trade.freezeUntil)
+      : (trade.completedAt
+        ? computeFreezeUntilDate(new Date(trade.completedAt), Number(trade.freezeHoursApplied || freezeHours))
+        : null);
+
+    if (!freezeUntil) {
+      continue;
+    }
+
+    if (freezeUntil <= now) {
+      continue;
+    }
+
+    const amount = Number(trade.amount || 0);
+    if (Number.isFinite(amount) && amount > 0) {
+      frozenBalance += amount;
+    }
+  }
+
+  return frozenBalance;
+}
+
 /** GET /api/p2p/offers, POST /api/p2p/offers, GET /api/p2p/my-offers, DELETE /api/p2p/offers/:id */
 export function registerOfferRoutes(app: Express) {
 
@@ -103,6 +154,9 @@ export function registerOfferRoutes(app: Express) {
           )),
         db.select({
           isEnabled: p2pSettings.isEnabled,
+          requireIdentityVerification: p2pSettings.requireIdentityVerification,
+          requirePhoneVerification: p2pSettings.requirePhoneVerification,
+          requireEmailVerification: p2pSettings.requireEmailVerification,
           p2pBuyCurrencies: p2pSettings.p2pBuyCurrencies,
           p2pSellCurrencies: p2pSettings.p2pSellCurrencies,
           depositEnabledCurrencies: p2pSettings.depositEnabledCurrencies,
@@ -114,6 +168,8 @@ export function registerOfferRoutes(app: Express) {
       const profile = profileRows[0];
       const globalSettings = p2pSettingsRows[0];
       const currencyControls = resolveP2PCurrencyControls(globalSettings);
+      const verificationRequirements = resolveP2PVerificationRequirements(globalSettings);
+      const verificationCheck = evaluateP2PVerificationRequirements(user, verificationRequirements);
       const badgeEntitlements = await getBadgeEntitlementForUser(req.user!.id);
       const monthlyUsed = await getUserCurrentMonthP2PTradeVolume(req.user!.id);
       const baseMonthlyLimit = profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
@@ -125,14 +181,11 @@ export function registerOfferRoutes(app: Express) {
         Boolean(profile),
       );
       const monthlyLimitAvailable = monthlyLimit === null || monthlyUsed < monthlyLimit;
-      const canTradeP2P = Boolean(profile?.canTradeP2P) || badgeEntitlements.grantsP2pPrivileges;
-      const canCreateOffers = Boolean(profile?.canCreateOffers) || badgeEntitlements.grantsP2pPrivileges;
-
       const checks = {
         notBanned: !user.p2pBanned,
-        verificationPassed: hasRequiredP2PVerification(verificationLevel, MIN_P2P_VERIFICATION_LEVEL),
-        tradingPermissionGranted: canTradeP2P,
-        adPermissionGranted: canCreateOffers,
+        verificationPassed: verificationCheck.passed,
+        tradingPermissionGranted: true,
+        adPermissionGranted: true,
         monthlyLimitAvailable,
         hasActivePaymentMethods: paymentMethods.length > 0,
         p2pEnabled: globalSettings?.isEnabled ?? true,
@@ -146,13 +199,7 @@ export function registerOfferRoutes(app: Express) {
         reasons.push(user.p2pBanReason || "Your P2P access is currently restricted.");
       }
       if (!checks.verificationPassed) {
-        reasons.push(getP2PVerificationErrorMessage(MIN_P2P_VERIFICATION_LEVEL));
-      }
-      if (!checks.tradingPermissionGranted) {
-        reasons.push("Your account is not approved for P2P trading. Contact support or an administrator.");
-      }
-      if (!checks.adPermissionGranted) {
-        reasons.push("Your account is not approved to publish P2P ads. Contact support or an administrator.");
+        reasons.push(getP2PVerificationRequirementsErrorMessage(verificationRequirements, verificationCheck.missingRequirements));
       }
       if (!checks.monthlyLimitAvailable) {
         reasons.push(`Monthly P2P trading limit reached. Limit: ${monthlyLimit?.toFixed(2)}, used: ${monthlyUsed.toFixed(2)}.`);
@@ -165,6 +212,14 @@ export function registerOfferRoutes(app: Express) {
         reasons.push("No P2P currencies are currently enabled by admin settings.");
       }
 
+      const requiredVerificationLevel = verificationRequirements.requireIdentityVerification
+        ? "kyc_basic"
+        : verificationRequirements.requirePhoneVerification
+          ? "phone"
+          : verificationRequirements.requireEmailVerification
+            ? "email"
+            : "none";
+
       res.json({
         canCreateOffer: checks.notBanned
           && checks.verificationPassed
@@ -174,8 +229,9 @@ export function registerOfferRoutes(app: Express) {
           && checks.hasActivePaymentMethods
           && checks.p2pEnabled
           && currencyControls.allowedP2PCurrencies.length > 0,
-        requiredVerificationLevel: MIN_P2P_VERIFICATION_LEVEL,
+        requiredVerificationLevel,
         currentVerificationLevel: verificationLevel,
+        verificationRequirements,
         checks,
         reasons,
         monthlyTradeLimit: monthlyLimit,
@@ -302,6 +358,7 @@ export function registerOfferRoutes(app: Express) {
         amount,
         price,
         currency,
+        fiatCurrency,
         minLimit,
         maxLimit,
         paymentMethods,
@@ -328,17 +385,16 @@ export function registerOfferRoutes(app: Express) {
         });
       }
 
-      const verificationLevel = await getEffectiveP2PVerificationLevel(user);
-      if (!hasRequiredP2PVerification(verificationLevel, MIN_P2P_VERIFICATION_LEVEL)) {
+      const verificationRequirements = resolveP2PVerificationRequirements(globalSettings);
+      const verificationCheck = evaluateP2PVerificationRequirements(user, verificationRequirements);
+      if (!verificationCheck.passed) {
         return res.status(403).json({
-          error: getP2PVerificationErrorMessage(MIN_P2P_VERIFICATION_LEVEL),
+          error: getP2PVerificationRequirementsErrorMessage(verificationRequirements, verificationCheck.missingRequirements),
         });
       }
 
       const [profile] = await db
         .select({
-          canCreateOffers: p2pTraderProfiles.canCreateOffers,
-          canTradeP2P: p2pTraderProfiles.canTradeP2P,
           monthlyTradeLimit: p2pTraderProfiles.monthlyTradeLimit,
         })
         .from(p2pTraderProfiles)
@@ -346,21 +402,6 @@ export function registerOfferRoutes(app: Express) {
         .limit(1);
 
       const badgeEntitlements = await getBadgeEntitlementForUser(req.user!.id);
-      const canTradeP2P = Boolean(profile?.canTradeP2P) || badgeEntitlements.grantsP2pPrivileges;
-      const canCreateOffers = Boolean(profile?.canCreateOffers) || badgeEntitlements.grantsP2pPrivileges;
-
-      if (!canTradeP2P) {
-        return res.status(403).json({
-          error: "Your account is not approved for P2P trading. Contact support or an administrator.",
-        });
-      }
-
-      if (!canCreateOffers) {
-        return res.status(403).json({
-          error: "Your account is not authorized to publish P2P offers. Contact support or an administrator.",
-        });
-      }
-
       const baseMonthlyLimit = profile?.monthlyTradeLimit !== null && profile?.monthlyTradeLimit !== undefined
         ? Number(profile.monthlyTradeLimit)
         : null;
@@ -456,6 +497,33 @@ export function registerOfferRoutes(app: Express) {
         });
       }
 
+      const allowedQuoteCurrencies = currencyControls.allowedP2PCurrencies;
+      const normalizedFiatCurrency = normalizeCurrencyCode(fiatCurrency || normalizedCurrency);
+      if (!normalizedFiatCurrency || !allowedQuoteCurrencies.includes(normalizedFiatCurrency)) {
+        return res.status(400).json({
+          error: `Quote currency must be one of: ${allowedQuoteCurrencies.join(', ')}`,
+        });
+      }
+
+      if (type === "sell") {
+        const walletCurrency = normalizeCurrencyCode(user.balanceCurrency);
+        if (!walletCurrency || walletCurrency !== normalizedCurrency) {
+          return res.status(400).json({
+            error: `Sell offers must use your wallet currency: ${walletCurrency || "USD"}`,
+          });
+        }
+
+        const rawWalletBalance = Number(user.balance || 0);
+        const frozenIncoming = await getFrozenIncomingSellBalance(req.user!.id, normalizedCurrency);
+        const availableToSell = Math.max(0, rawWalletBalance - frozenIncoming);
+
+        if (parsedAmount > availableToSell) {
+          return res.status(400).json({
+            error: `Insufficient available balance for sell offer. Available: ${availableToSell.toFixed(8)} ${normalizedCurrency}`,
+          });
+        }
+      }
+
       const requestedPaymentMethodIds = Array.isArray(paymentMethodIds)
         ? paymentMethodIds.filter((methodId: unknown): methodId is string => typeof methodId === "string" && methodId.trim().length > 0)
         : [];
@@ -517,12 +585,20 @@ export function registerOfferRoutes(app: Express) {
         ? sanitizePlainText(autoReply, { maxLength: 500 })
         : null;
 
+      if (!safeTerms || safeTerms.trim().length === 0) {
+        return res.status(400).json({ error: "Offer terms are required" });
+      }
+
+      if (!safeAutoReply || safeAutoReply.trim().length === 0) {
+        return res.status(400).json({ error: "Auto reply is required" });
+      }
+
       const created = await storage.createP2POffer({
         userId: req.user!.id,
         type,
         status: 'active',
         cryptoCurrency: normalizedCurrency,
-        fiatCurrency: normalizedCurrency,
+        fiatCurrency: normalizedFiatCurrency,
         price: parsedPrice.toFixed(2),
         availableAmount: parsedAmount.toFixed(8),
         minLimit: parsedMinLimit.toFixed(2),

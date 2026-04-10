@@ -9,6 +9,7 @@ export interface DepositFxSnapshot {
     operationalCurrencies: string[];
     missingRateCurrencies: string[];
     usdRateByCurrency: Record<string, number>;
+    currencySymbolByCode: Record<string, string>;
 }
 
 function parseExchangeRate(rawRate: unknown): number | null {
@@ -42,6 +43,7 @@ export async function getDepositFxSnapshot(policyCurrencies: string[]): Promise<
             .select({
                 code: currencies.code,
                 exchangeRate: currencies.exchangeRate,
+                symbol: currencies.symbol,
             })
             .from(currencies)
             .where(
@@ -54,6 +56,9 @@ export async function getDepositFxSnapshot(policyCurrencies: string[]): Promise<
 
     const usdRateByCurrency: Record<string, number> = {
         [USD_CURRENCY_CODE]: 1,
+    };
+    const currencySymbolByCode: Record<string, string> = {
+        [USD_CURRENCY_CODE]: "$",
     };
 
     for (const row of rateRows) {
@@ -68,6 +73,11 @@ export async function getDepositFxSnapshot(policyCurrencies: string[]): Promise<
         }
 
         usdRateByCurrency[normalizedCode] = parsedRate;
+
+        const symbol = typeof row.symbol === "string" ? row.symbol.trim() : "";
+        if (symbol) {
+            currencySymbolByCode[normalizedCode] = symbol;
+        }
     }
 
     const operationalCurrencies = normalizedPolicyCurrencies.filter((currencyCode) => {
@@ -83,6 +93,7 @@ export async function getDepositFxSnapshot(policyCurrencies: string[]): Promise<
         operationalCurrencies,
         missingRateCurrencies,
         usdRateByCurrency,
+        currencySymbolByCode,
     };
 }
 
@@ -112,5 +123,34 @@ export function convertDepositAmountToUsd(amount: number, currencyCode: string, 
         creditedAmountUsd,
         usdToDepositRate,
         depositToUsdRate,
+    };
+}
+
+export function convertUsdAmountToCurrency(amountUsd: number, currencyCode: string, usdRateByCurrency: Record<string, number>): {
+    convertedAmount: number;
+    usdToCurrencyRate: number;
+    currencyToUsdRate: number;
+} | null {
+    if (!Number.isFinite(amountUsd) || amountUsd < 0) {
+        return null;
+    }
+
+    const normalizedCurrency = normalizeCurrencyCode(currencyCode);
+    if (!normalizedCurrency) {
+        return null;
+    }
+
+    const usdToCurrencyRate = usdRateByCurrency[normalizedCurrency];
+    if (!Number.isFinite(usdToCurrencyRate) || usdToCurrencyRate <= 0) {
+        return null;
+    }
+
+    const currencyToUsdRate = 1 / usdToCurrencyRate;
+    const convertedAmount = roundToCents(amountUsd * usdToCurrencyRate);
+
+    return {
+        convertedAmount,
+        usdToCurrencyRate,
+        currencyToUsdRate,
     };
 }

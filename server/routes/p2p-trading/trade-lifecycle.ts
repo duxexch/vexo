@@ -2,7 +2,11 @@ import type { Express, Response } from "express";
 import { storage } from "../../storage";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { sendNotification } from "../../websocket";
-import { computeFreezeUntilDate, createP2PTradeAuditLog, getErrorMessage, getP2PEscrowFreezeHours } from "./helpers";
+import { createP2PTradeAuditLog, getErrorMessage, getP2PEscrowFreezeHours } from "./helpers";
+import { applyP2PFreezeBenefitForCompletedTrade } from "../../lib/p2p-freeze-program";
+import { db } from "../../db";
+import { p2pOffers } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 function calculateCompletionRate(totalTrades: number, completedTrades: number): string {
   if (totalTrades <= 0) {
@@ -59,9 +63,25 @@ export function registerTradeLifecycleRoutes(app: Express) {
       }
 
       const tradeCompletedAt = trade.completedAt ? new Date(trade.completedAt) : new Date();
+      const [offerRow] = await db
+        .select({ cryptoCurrency: p2pOffers.cryptoCurrency })
+        .from(p2pOffers)
+        .where(eq(p2pOffers.id, trade.offerId))
+        .limit(1);
+
       const freezeHours = await getP2PEscrowFreezeHours();
-      const frozenUntil = computeFreezeUntilDate(tradeCompletedAt, freezeHours);
+      const freezeBenefitResult = await applyP2PFreezeBenefitForCompletedTrade({
+        tradeId: trade.id,
+        buyerId: trade.buyerId,
+        currencyCode: String(offerRow?.cryptoCurrency || "USD").toUpperCase(),
+        tradeAmount: Number(trade.amount || 0),
+        completedAt: tradeCompletedAt,
+        baseFreezeHours: freezeHours,
+      });
+      const frozenUntil = freezeBenefitResult.freezeUntil;
       const frozenUntilIso = frozenUntil.toISOString();
+      const appliedFreezeHours = freezeBenefitResult.freezeHoursApplied;
+      const appliedReductionPercent = freezeBenefitResult.freezeReductionPercent;
 
       await createP2PTradeAuditLog({
         tradeId: trade.id,
@@ -70,7 +90,8 @@ export function registerTradeLifecycleRoutes(app: Express) {
         description: `Trade completed by seller. Buyer amount is frozen until ${frozenUntilIso}.`,
         descriptionAr: `تم إكمال الصفقة بواسطة البائع. رصيد المشتري مجمد حتى ${frozenUntilIso}.`,
         metadata: {
-          freezeHours,
+          freezeHours: appliedFreezeHours,
+          freezeReductionPercent: appliedReductionPercent,
           frozenUntil: frozenUntilIso,
           currencyType: trade.currencyType,
           amount: trade.amount,
@@ -83,10 +104,11 @@ export function registerTradeLifecycleRoutes(app: Express) {
         tradeId: trade.id,
         userId: trade.buyerId,
         action: "escrow_released",
-        description: `Escrow released to buyer and locked for ${freezeHours} hour(s) until ${frozenUntilIso}.`,
-        descriptionAr: `تم تحرير الضمان للمشتري مع تجميده لمدة ${freezeHours} ساعة حتى ${frozenUntilIso}.`,
+        description: `Escrow released to buyer and locked for ${appliedFreezeHours} hour(s) until ${frozenUntilIso}.`,
+        descriptionAr: `تم تحرير الضمان للمشتري مع تجميده لمدة ${appliedFreezeHours} ساعة حتى ${frozenUntilIso}.`,
         metadata: {
-          freezeHours,
+          freezeHours: appliedFreezeHours,
+          freezeReductionPercent: appliedReductionPercent,
           frozenUntil: frozenUntilIso,
           escrowAmount: trade.escrowAmount,
           platformFee: trade.platformFee,
@@ -98,7 +120,7 @@ export function registerTradeLifecycleRoutes(app: Express) {
       await storage.createP2PTradeMessage({
         tradeId: trade.id,
         senderId: req.user!.id,
-        message: `Trade completed, funds released. Buyer balance is frozen until ${frozenUntilIso}.`,
+        message: `Trade completed, funds released. Buyer balance is frozen until ${frozenUntilIso} (${appliedFreezeHours}h${appliedReductionPercent > 0 ? `, ${appliedReductionPercent.toFixed(2)}% faster release` : ""}).`,
         isSystemMessage: true,
       });
 
@@ -133,7 +155,7 @@ export function registerTradeLifecycleRoutes(app: Express) {
         message: `Trade #${trade.id.slice(0, 8)} completed. Funds are credited and frozen until ${frozenUntilIso}.`,
         messageAr: `اكتملت الصفقة #${trade.id.slice(0, 8)}. تم إضافة الرصيد وسيبقى مجمداً حتى ${frozenUntilIso}.`,
         link: '/p2p',
-        metadata: JSON.stringify({ tradeId: trade.id, action: 'completed', freezeHours, frozenUntil: frozenUntilIso }),
+        metadata: JSON.stringify({ tradeId: trade.id, action: 'completed', freezeHours: appliedFreezeHours, freezeReductionPercent: appliedReductionPercent, frozenUntil: frozenUntilIso }),
       }, "trade-complete:buyer");
       await notifyWithLog(trade.sellerId, {
         type: 'success',

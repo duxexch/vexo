@@ -131,6 +131,17 @@ export function useChat(): UseChatReturn {
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ type: "auth", token }));
+      const activeConversationId = activeConversationRef.current;
+      if (activeConversationId) {
+        ws.send(
+          JSON.stringify({
+            type: "get_chat_history",
+            otherUserId: activeConversationId,
+            limit: 50,
+            offset: 0,
+          })
+        );
+      }
       setState((prev) => ({ ...prev, isConnected: true }));
       reconnectAttemptsRef.current = 0;
     };
@@ -427,6 +438,24 @@ export function useChat(): UseChatReturn {
             offset: 0,
           })
         );
+      } else if (token) {
+        try {
+          const response = await fetch(`/api/chat/${userId}/messages?limit=50&offset=0`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (response.ok) {
+            const fallbackMessages = await response.json();
+            setState((prev) => ({
+              ...prev,
+              messages: fallbackMessages,
+              hasMoreMessages: fallbackMessages.length >= 50,
+              loadingMore: false,
+            }));
+          }
+        } catch (error) {
+          console.error("Failed to fetch conversation history fallback:", error);
+        }
       }
 
       if (token) {

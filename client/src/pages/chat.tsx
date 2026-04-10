@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type { ChatMessage } from "@shared/schema";
 import { useChat } from "@/hooks/use-chat";
 import { useAuth } from "@/lib/auth";
@@ -23,6 +23,15 @@ import { MediaUploadButton, MediaPurchaseDialog, ChatMediaRenderer } from "@/com
 import { AutoDeleteToggle, AutoDeletePurchaseDialog, AutoDeleteSettingsDialog, AutoDeleteCountdown } from "@/components/chat-auto-delete";
 
 const QUICK_REACTIONS = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
+
+interface DirectConversationUser {
+  id: string;
+  username: string;
+  firstName: string | null;
+  lastName: string | null;
+  avatarUrl: string | null;
+  accountId: string | null;
+}
 
 function formatMessageTime(dateValue: string | Date, t: (key: string, params?: Record<string, string | number>) => string) {
   const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
@@ -53,7 +62,7 @@ function getInitials(user: { firstName?: string | null; lastName?: string | null
 
 export default function ChatPage() {
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const {
     conversations, activeConversation, messages, typingUsers,
     isConnected, isChatEnabled, onlineUsers, lastSeenMap,
@@ -89,20 +98,103 @@ export default function ChatPage() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [langSearchQuery, setLangSearchQuery] = useState("");
+  const [directConversationUser, setDirectConversationUser] = useState<DirectConversationUser | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const prevMessageCountRef = useRef(0);
   const messageInputRef = useRef<HTMLInputElement>(null);
+  const hasAutoSelectedConversationRef = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const { play: playSound } = useSoundEffects();
 
+  const preselectedConversationUserId = useMemo(() => {
+    const query = new URLSearchParams(window.location.search);
+    const targetUserId = query.get("user");
+    return targetUserId && targetUserId.trim().length > 0 ? targetUserId.trim() : null;
+  }, []);
+
   const activeUser = conversations.find((c) => c.otherUserId === activeConversation)?.otherUser;
+  const activeUserProfile = activeUser || (
+    activeConversation && preselectedConversationUserId && activeConversation === preselectedConversationUserId
+      ? directConversationUser
+      : null
+  );
   const isActiveUserOnline = activeConversation ? onlineUsers.has(activeConversation) : false;
   const activeUserLastSeen = activeConversation ? lastSeenMap.get(activeConversation) : null;
+
+  useEffect(() => {
+    if (!preselectedConversationUserId || hasAutoSelectedConversationRef.current) {
+      return;
+    }
+
+    setMobileShowMessages(true);
+    selectConversation(preselectedConversationUserId);
+    setReplyTo(null);
+    setEditingMsg(null);
+    hasAutoSelectedConversationRef.current = true;
+  }, [preselectedConversationUserId, selectConversation]);
+
+  useEffect(() => {
+    if (!preselectedConversationUserId || !token) {
+      return;
+    }
+
+    const existsInConversations = conversations.some((conv) => conv.otherUserId === preselectedConversationUserId);
+    if (existsInConversations) {
+      setDirectConversationUser(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadDirectConversationUser = async () => {
+      try {
+        const response = await fetch("/api/users/batch", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ userIds: [preselectedConversationUserId] }),
+        });
+
+        if (!response.ok) {
+          if (!cancelled) {
+            setDirectConversationUser(null);
+          }
+          return;
+        }
+
+        const users = await response.json() as Array<{ id: string; username: string; nickname?: string | null; profilePicture?: string | null }>;
+        const targetUser = users.find((entry) => entry.id === preselectedConversationUserId) || users[0];
+
+        if (!cancelled && targetUser) {
+          setDirectConversationUser({
+            id: targetUser.id,
+            username: targetUser.username,
+            firstName: targetUser.nickname || null,
+            lastName: null,
+            avatarUrl: targetUser.profilePicture || null,
+            accountId: null,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setDirectConversationUser(null);
+        }
+      }
+    };
+
+    void loadDirectConversationUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversations, preselectedConversationUserId, token]);
 
   // Auto scroll and sound on new messages
   useEffect(() => {
@@ -513,8 +605,8 @@ export default function ChatPage() {
               </Button>
               <div className="relative">
                 <Avatar className="h-10 w-10">
-                  <AvatarImage src={activeUser?.avatarUrl || undefined} />
-                  <AvatarFallback>{activeUser ? getInitials(activeUser) : "??"}</AvatarFallback>
+                  <AvatarImage src={activeUserProfile?.avatarUrl || undefined} />
+                  <AvatarFallback>{activeUserProfile ? getInitials(activeUserProfile) : "??"}</AvatarFallback>
                 </Avatar>
                 {isActiveUserOnline && (
                   <span className="absolute bottom-0 end-0 w-3 h-3 bg-emerald-500 border-2 border-background rounded-full" />
@@ -522,7 +614,7 @@ export default function ChatPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold flex items-center gap-2">
-                  {activeUser?.firstName || activeUser?.username}
+                  {activeUserProfile?.firstName || activeUserProfile?.username || `@${activeConversation}`}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 gap-1 text-emerald-500 border-emerald-500/30">
@@ -543,7 +635,7 @@ export default function ChatPage() {
                   ) : activeUserLastSeen ? (
                     formatLastSeen(activeUserLastSeen, t)
                   ) : (
-                    `@${activeUser?.username}`
+                    `@${activeUserProfile?.username || activeConversation}`
                   )}
                 </p>
               </div>
@@ -703,7 +795,7 @@ export default function ChatPage() {
                                 <div className="flex items-center gap-1">
                                   <CornerDownRight className="h-3 w-3" />
                                   <span className="font-medium truncate">
-                                    {repliedMsg.senderId === user?.id ? t('chat.you') : (activeUser?.firstName || activeUser?.username)}
+                                    {repliedMsg.senderId === user?.id ? t('chat.you') : (activeUserProfile?.firstName || activeUserProfile?.username || `@${activeConversation}`)}
                                   </span>
                                 </div>
                                 <p className="truncate opacity-80">{repliedMsg.content || t('chat.media')}</p>

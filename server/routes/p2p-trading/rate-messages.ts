@@ -156,28 +156,56 @@ export function registerRateMessageRoutes(app: Express) {
         return res.status(403).json({ error: "Not authorized to message in this trade" });
       }
 
-      if (trade.status === "completed" || trade.status === "cancelled") {
-        return res.status(400).json({ error: "Cannot message in closed trades" });
+      if (trade.status === "cancelled") {
+        return res.status(400).json({ error: "Cannot message in cancelled trades" });
       }
 
-      const { message, isPrewritten } = req.body;
+      const { message, isPrewritten, attachmentUrl, attachmentType } = req.body;
 
-      if (!message || message.trim().length === 0) {
-        return res.status(400).json({ error: "Message cannot be empty" });
+      const normalizedMessage = typeof message === "string" ? message.trim() : "";
+      const normalizedAttachmentUrl = typeof attachmentUrl === "string" ? attachmentUrl.trim() : "";
+      const normalizedAttachmentType = typeof attachmentType === "string" ? attachmentType.trim().toLowerCase() : "";
+
+      const hasMessage = normalizedMessage.length > 0;
+      const hasAttachment = normalizedAttachmentUrl.length > 0;
+
+      if (!hasMessage && !hasAttachment) {
+        return res.status(400).json({ error: "Message or image attachment is required" });
       }
 
-      if (message.length > 1000) {
+      if (hasMessage && normalizedMessage.length > 1000) {
         return res.status(400).json({ error: "Message too long" });
       }
 
+      let safeAttachmentUrl: string | undefined;
+      let safeAttachmentType: string | undefined;
+
+      if (hasAttachment) {
+        if (!normalizedAttachmentType.startsWith("image/")) {
+          return res.status(400).json({ error: "Only image attachments are allowed" });
+        }
+
+        if (!/^https?:\/\//.test(normalizedAttachmentUrl) && !normalizedAttachmentUrl.startsWith("/")) {
+          return res.status(400).json({ error: "Invalid attachment URL" });
+        }
+
+        safeAttachmentUrl = normalizedAttachmentUrl.slice(0, 2048);
+        safeAttachmentType = normalizedAttachmentType.slice(0, 128);
+      }
+
       // SECURITY: Strip HTML tags from message to prevent stored XSS
-      const safeMessage = sanitizePlainText(message, { maxLength: 1000 });
+      const safeMessage = hasMessage
+        ? sanitizePlainText(normalizedMessage, { maxLength: 1000 })
+        : "[image]";
+
       const newMessage = await storage.createP2PTradeMessage({
         tradeId: req.params.id,
         senderId: req.user!.id,
         message: safeMessage,
         isPrewritten: isPrewritten || false,
         isSystemMessage: false,
+        attachmentUrl: safeAttachmentUrl,
+        attachmentType: safeAttachmentType,
       });
 
       const sender = await storage.getUser(req.user!.id);
@@ -193,9 +221,12 @@ export function registerRateMessageRoutes(app: Express) {
       const shouldNotifyRecipient = recipientProfile?.notifyOnMessage ?? true;
       if (shouldNotifyRecipient) {
         const compactTradeId = trade.id.slice(0, 8);
-        const trimmedMessage = safeMessage.length > 140
-          ? `${safeMessage.slice(0, 137)}...`
-          : safeMessage;
+        const baseNotificationMessage = hasMessage
+          ? safeMessage
+          : "[Image attachment]";
+        const trimmedMessage = baseNotificationMessage.length > 140
+          ? `${baseNotificationMessage.slice(0, 137)}...`
+          : baseNotificationMessage;
 
         await notifyWithLog(recipientId, {
           type: 'p2p',

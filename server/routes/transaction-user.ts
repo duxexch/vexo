@@ -5,16 +5,24 @@ import { emitSystemAlert } from "../lib/admin-alerts";
 import { sendNotification } from "../websocket";
 import { db } from "../db";
 import { p2pSettings, users } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getErrorMessage } from "./helpers";
 import { sanitizePlainText } from "../lib/input-security";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../lib/payment-security";
 import { normalizeCurrencyCode, resolveP2PCurrencyControls } from "../lib/p2p-currency-controls";
-import { convertDepositAmountToUsd, getDepositFxSnapshot } from "../lib/deposit-fx";
+import { convertDepositAmountToUsd, convertUsdAmountToCurrency, getDepositFxSnapshot } from "../lib/deposit-fx";
 
 export function registerTransactionUserRoutes(app: Express): void {
-  app.get("/api/transactions/deposit-config", authMiddleware, async (_req: AuthRequest, res: Response) => {
+  app.get("/api/transactions/deposit-config", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+      const user = await storage.getUser(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const normalizedBalanceCurrency = normalizeCurrencyCode(user.balanceCurrency) || "USD";
+      const isBalanceCurrencyLocked = Boolean(user.balanceCurrencyLockedAt);
+
       const [settings] = await db
         .select({
           depositEnabledCurrencies: p2pSettings.depositEnabledCurrencies,
@@ -25,14 +33,29 @@ export function registerTransactionUserRoutes(app: Express): void {
         .limit(1);
 
       const currencyControls = resolveP2PCurrencyControls(settings);
-      const fxSnapshot = await getDepositFxSnapshot(currencyControls.depositEnabledCurrencies);
+      const policyCurrencies = isBalanceCurrencyLocked
+        ? [...currencyControls.depositEnabledCurrencies, normalizedBalanceCurrency]
+        : currencyControls.depositEnabledCurrencies;
+      const fxSnapshot = await getDepositFxSnapshot(policyCurrencies);
+
+      const allowedDepositCurrencies = isBalanceCurrencyLocked
+        ? fxSnapshot.operationalCurrencies.includes(normalizedBalanceCurrency)
+          ? [normalizedBalanceCurrency]
+          : []
+        : fxSnapshot.operationalCurrencies;
+
+      const defaultDepositCurrency = isBalanceCurrencyLocked
+        ? normalizedBalanceCurrency
+        : allowedDepositCurrencies[0] || "USD";
 
       res.json({
-        allowedDepositCurrencies: fxSnapshot.operationalCurrencies,
-        defaultDepositCurrency: fxSnapshot.operationalCurrencies[0] || "USD",
+        allowedDepositCurrencies,
+        defaultDepositCurrency,
         disabledDepositCurrencies: fxSnapshot.missingRateCurrencies,
-        balanceCurrency: "USD",
+        balanceCurrency: normalizedBalanceCurrency,
+        isBalanceCurrencyLocked,
         usdRateByCurrency: fxSnapshot.usdRateByCurrency,
+        currencySymbolByCode: fxSnapshot.currencySymbolByCode,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -113,8 +136,56 @@ export function registerTransactionUserRoutes(app: Express): void {
           return res.status(400).json({ error: "Converted amount must be between 0.01 and 1,000,000 USD" });
         }
 
+        const walletCreditQuote = convertUsdAmountToCurrency(creditedAmountUsd, normalizedDepositCurrency, fxSnapshot.usdRateByCurrency);
+        if (!walletCreditQuote) {
+          return res.status(400).json({ error: "Unable to map credited amount to wallet currency" });
+        }
+
         if (!paymentReference || typeof paymentReference !== 'string') {
           return res.status(400).json({ error: "Payment reference is required" });
+        }
+
+        const lockedWalletState = await db.transaction(async (tx) => {
+          const [lockedUser] = await tx.select({
+            id: users.id,
+            balanceCurrency: users.balanceCurrency,
+            balanceCurrencyLockedAt: users.balanceCurrencyLockedAt,
+          }).from(users)
+            .where(eq(users.id, user.id))
+            .for("update");
+
+          if (!lockedUser) {
+            throw Object.assign(new Error("User not found"), { statusCode: 404 });
+          }
+
+          const currentWalletCurrency = normalizeCurrencyCode(lockedUser.balanceCurrency) || "USD";
+          if (lockedUser.balanceCurrencyLockedAt) {
+            return {
+              balanceCurrency: currentWalletCurrency,
+              isLocked: true,
+            };
+          }
+
+          const lockAt = new Date();
+          await tx.update(users).set({
+            balanceCurrency: normalizedDepositCurrency,
+            balanceCurrencyLockedAt: lockAt,
+            updatedAt: lockAt,
+          }).where(and(
+            eq(users.id, user.id),
+            isNull(users.balanceCurrencyLockedAt),
+          ));
+
+          return {
+            balanceCurrency: normalizedDepositCurrency,
+            isLocked: true,
+          };
+        });
+
+        if (lockedWalletState.balanceCurrency !== normalizedDepositCurrency) {
+          return res.status(400).json({
+            error: `Wallet currency is locked to ${lockedWalletState.balanceCurrency}. Deposits must use the same currency.`,
+          });
         }
 
         // Sanitize string inputs to prevent stored XSS
@@ -129,7 +200,7 @@ export function registerTransactionUserRoutes(app: Express): void {
           balanceBefore: user.balance,
           balanceAfter: (parseFloat(user.balance) + creditedAmountUsd).toFixed(2),
           referenceId: String(paymentReference).slice(0, 200),
-          description: `${safePaymentMethod}${safeWalletNumber ? ` | Sender: ${safeWalletNumber}` : ''} | Deposit: ${totalAmount.toFixed(2)} ${normalizedDepositCurrency} | FX: 1 USD = ${conversionQuote.usdToDepositRate.toFixed(6)} ${normalizedDepositCurrency} | Credit: ${creditedAmountUsd.toFixed(2)} USD`,
+          description: `${safePaymentMethod}${safeWalletNumber ? ` | Sender: ${safeWalletNumber}` : ''} | Deposit: ${totalAmount.toFixed(2)} ${normalizedDepositCurrency} | FX: 1 USD = ${conversionQuote.usdToDepositRate.toFixed(6)} ${normalizedDepositCurrency} | Wallet Credit: ${walletCreditQuote.convertedAmount.toFixed(2)} ${normalizedDepositCurrency} | Base Credit: ${creditedAmountUsd.toFixed(2)} USD`,
         });
 
         await storage.createAuditLog({
@@ -140,7 +211,9 @@ export function registerTransactionUserRoutes(app: Express): void {
           details: JSON.stringify({
             requestedAmount: totalAmount,
             requestedCurrency: normalizedDepositCurrency,
+            walletCurrency: normalizedDepositCurrency,
             creditedAmountUsd,
+            creditedAmountWallet: walletCreditQuote.convertedAmount,
             usdToDepositRate: conversionQuote.usdToDepositRate,
             depositToUsdRate: conversionQuote.depositToUsdRate,
             paymentMethod,
@@ -201,9 +274,30 @@ export function registerTransactionUserRoutes(app: Express): void {
           return res.status(400).json({ error: "Amount is required" });
         }
 
-        const withdrawAmount = parseFloat(String(amount));
-        if (isNaN(withdrawAmount) || withdrawAmount <= 0 || withdrawAmount > 1000000) {
+        const withdrawAmountRequested = parseFloat(String(amount));
+        if (isNaN(withdrawAmountRequested) || withdrawAmountRequested <= 0 || withdrawAmountRequested > 1000000) {
           return res.status(400).json({ error: "Amount must be between 0.01 and 1,000,000" });
+        }
+
+        const userForCurrency = await storage.getUser(req.user!.id);
+        if (!userForCurrency) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        const walletCurrency = normalizeCurrencyCode(userForCurrency.balanceCurrency) || "USD";
+        const fxSnapshot = await getDepositFxSnapshot([walletCurrency]);
+        const withdrawConversion = convertDepositAmountToUsd(
+          withdrawAmountRequested,
+          walletCurrency,
+          fxSnapshot.usdRateByCurrency,
+        );
+        if (!withdrawConversion) {
+          return res.status(400).json({ error: `Exchange rate for ${walletCurrency} is unavailable` });
+        }
+
+        const withdrawAmountUsd = withdrawConversion.creditedAmountUsd;
+        if (!Number.isFinite(withdrawAmountUsd) || withdrawAmountUsd <= 0 || withdrawAmountUsd > 1000000) {
+          return res.status(400).json({ error: "Converted amount must be between 0.01 and 1,000,000 USD" });
         }
 
         const withdrawalMethods = (await storage.listCountryPaymentMethods()).filter(
@@ -246,11 +340,11 @@ export function registerTransactionUserRoutes(app: Express): void {
           if (!user) throw Object.assign(new Error("User not found"), { statusCode: 404 });
 
           const currentBalance = parseFloat(user.balance);
-          if (withdrawAmount > currentBalance) {
+          if (withdrawAmountUsd > currentBalance) {
             throw Object.assign(new Error("Insufficient balance"), { statusCode: 400 });
           }
 
-          const newBalance = (currentBalance - withdrawAmount).toFixed(2);
+          const newBalance = (currentBalance - withdrawAmountUsd).toFixed(2);
 
           // SECURITY: Atomically deduct balance (escrow) to prevent double-spend
           await tx.update(users).set({
@@ -265,10 +359,10 @@ export function registerTransactionUserRoutes(app: Express): void {
           userId: result.user.id,
           type: "withdrawal",
           status: "pending",
-          amount: withdrawAmount.toFixed(2),
+          amount: withdrawAmountUsd.toFixed(2),
           balanceBefore: result.user.balance,
           balanceAfter: result.newBalance,
-          description: `Withdrawal request via ${selectedMethod.name}`,
+          description: `Withdrawal request via ${selectedMethod.name} | Requested: ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} | Base: ${withdrawAmountUsd.toFixed(2)} USD`,
         });
 
         await storage.createAuditLog({
@@ -276,15 +370,22 @@ export function registerTransactionUserRoutes(app: Express): void {
           action: "withdrawal",
           entityType: "transaction",
           entityId: transaction.id,
-          details: JSON.stringify({ amount, paymentMethodId: selectedMethod.id, paymentMethod: selectedMethod.name }),
+          details: JSON.stringify({
+            amountRequested: withdrawAmountRequested,
+            amountRequestedCurrency: walletCurrency,
+            amountUsd: withdrawAmountUsd,
+            paymentMethodId: selectedMethod.id,
+            paymentMethod: selectedMethod.name,
+            usdToWalletRate: withdrawConversion.usdToDepositRate,
+          }),
         });
 
         // Emit admin alert for new withdrawal
         emitSystemAlert({
           title: 'New Withdrawal Request',
           titleAr: 'طلب سحب جديد',
-          message: `User ${result.user.username} requested a withdrawal of $${withdrawAmount.toFixed(2)}`,
-          messageAr: `طلب المستخدم ${result.user.username} سحب بقيمة $${withdrawAmount.toFixed(2)}`,
+          message: `User ${result.user.username} requested a withdrawal of ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} (~${withdrawAmountUsd.toFixed(2)} USD)`,
+          messageAr: `طلب المستخدم ${result.user.username} سحب بقيمة ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} (حوالي ${withdrawAmountUsd.toFixed(2)} USD)`,
           severity: 'warning',
           deepLink: '/admin/transactions',
           entityType: 'transaction',
@@ -297,10 +398,16 @@ export function registerTransactionUserRoutes(app: Express): void {
           priority: 'normal',
           title: 'Withdrawal Request Submitted',
           titleAr: 'تم إرسال طلب السحب',
-          message: `Your withdrawal request of $${withdrawAmount.toFixed(2)} has been submitted and is pending review. Amount has been held from your balance.`,
-          messageAr: `تم إرسال طلب السحب بقيمة $${withdrawAmount.toFixed(2)} وهو قيد المراجعة. تم حجز المبلغ من رصيدك.`,
+          message: `Your withdrawal request of ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} has been submitted and is pending review. Amount has been held from your balance.`,
+          messageAr: `تم إرسال طلب السحب بقيمة ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} وهو قيد المراجعة. تم حجز المبلغ من رصيدك.`,
           link: '/transactions',
-          metadata: JSON.stringify({ transactionId: transaction.id, type: 'withdrawal', amount: withdrawAmount }),
+          metadata: JSON.stringify({
+            transactionId: transaction.id,
+            type: 'withdrawal',
+            amountRequested: withdrawAmountRequested,
+            amountRequestedCurrency: walletCurrency,
+            amountUsd: withdrawAmountUsd,
+          }),
         }).catch(() => { });
 
         res.status(201).json(transaction);

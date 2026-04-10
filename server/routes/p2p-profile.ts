@@ -5,6 +5,9 @@ import { storage } from "../storage";
 import { db } from "../db";
 import {
     countryPaymentMethods,
+    p2pFreezeProgramConfigs,
+    p2pFreezeProgramMethods,
+    p2pFreezeRequests,
     p2pBadgeDefinitions,
     p2pSettings,
     p2pTraderBadges,
@@ -13,7 +16,7 @@ import {
     p2pTraderProfiles,
     p2pTrades,
 } from "@shared/schema";
-import { and, asc, desc, eq, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { sanitizePlainText } from "../lib/input-security";
 import {
     ensureP2PUsername,
@@ -40,6 +43,16 @@ function pickLargestMetricValue(...values: Array<string | number | null | undefi
     }
 
     return largest;
+}
+
+function estimateMonthlyBenefit(amount: string | number | null | undefined, ratePercent: string | number | null | undefined): string {
+    const baseAmount = toNumber(amount, 0);
+    const rate = toNumber(ratePercent, 0);
+    if (baseAmount <= 0 || rate <= 0) {
+        return "0.00000000";
+    }
+
+    return ((baseAmount * rate) / 100).toFixed(8);
 }
 
 function maskAccountNumber(accountNumber: string | null): string {
@@ -556,6 +569,236 @@ export function registerP2PProfileRoutes(app: Express): void {
             }
 
             res.json({ success: true });
+        } catch (error: unknown) {
+            res.status(500).json({ error: getErrorMessage(error) });
+        }
+    });
+
+    app.get("/api/p2p/freeze-program/options", authMiddleware, async (_req: AuthRequest, res: Response) => {
+        try {
+            const configs = await db
+                .select({
+                    id: p2pFreezeProgramConfigs.id,
+                    currencyCode: p2pFreezeProgramConfigs.currencyCode,
+                    benefitRatePercent: p2pFreezeProgramConfigs.benefitRatePercent,
+                    baseReductionPercent: p2pFreezeProgramConfigs.baseReductionPercent,
+                    maxReductionPercent: p2pFreezeProgramConfigs.maxReductionPercent,
+                    minAmount: p2pFreezeProgramConfigs.minAmount,
+                    maxAmount: p2pFreezeProgramConfigs.maxAmount,
+                })
+                .from(p2pFreezeProgramConfigs)
+                .where(eq(p2pFreezeProgramConfigs.isEnabled, true))
+                .orderBy(asc(p2pFreezeProgramConfigs.currencyCode));
+
+            if (configs.length === 0) {
+                return res.json([]);
+            }
+
+            const configIds = configs.map((config) => config.id);
+            const methodRows = await db
+                .select({
+                    configId: p2pFreezeProgramMethods.configId,
+                    methodId: countryPaymentMethods.id,
+                    methodName: countryPaymentMethods.name,
+                    methodType: countryPaymentMethods.type,
+                    countryCode: countryPaymentMethods.countryCode,
+                    minAmount: countryPaymentMethods.minAmount,
+                    maxAmount: countryPaymentMethods.maxAmount,
+                })
+                .from(p2pFreezeProgramMethods)
+                .innerJoin(countryPaymentMethods, eq(p2pFreezeProgramMethods.countryPaymentMethodId, countryPaymentMethods.id))
+                .where(and(
+                    inArray(p2pFreezeProgramMethods.configId, configIds),
+                    eq(countryPaymentMethods.isActive, true),
+                    eq(countryPaymentMethods.isAvailable, true),
+                ));
+
+            const methodsByConfigId = new Map<string, Array<typeof methodRows[number]>>();
+            for (const method of methodRows) {
+                const group = methodsByConfigId.get(method.configId) || [];
+                group.push(method);
+                methodsByConfigId.set(method.configId, group);
+            }
+
+            res.json(configs.map((config) => ({
+                ...config,
+                methods: methodsByConfigId.get(config.id) || [],
+            })));
+        } catch (error: unknown) {
+            res.status(500).json({ error: getErrorMessage(error) });
+        }
+    });
+
+    app.post("/api/p2p/freeze-program/requests", authMiddleware, async (req: AuthRequest, res: Response) => {
+        try {
+            const currencyCodeRaw = sanitizePlainText(String(req.body?.currencyCode || ""), { maxLength: 16 }).toUpperCase();
+            const countryPaymentMethodId = sanitizePlainText(String(req.body?.countryPaymentMethodId || ""), { maxLength: 64 });
+            const requestNote = req.body?.requestNote
+                ? sanitizePlainText(String(req.body.requestNote), { maxLength: 500 })
+                : null;
+            const paymentReference = req.body?.paymentReference
+                ? sanitizePlainText(String(req.body.paymentReference), { maxLength: 140 })
+                : null;
+            const payerName = req.body?.payerName
+                ? sanitizePlainText(String(req.body.payerName), { maxLength: 120 })
+                : null;
+            const amount = toNumber(req.body?.amount, 0);
+
+            if (!currencyCodeRaw) {
+                return res.status(400).json({ error: "currencyCode is required" });
+            }
+
+            if (!countryPaymentMethodId) {
+                return res.status(400).json({ error: "countryPaymentMethodId is required" });
+            }
+
+            if (!Number.isFinite(amount) || amount <= 0) {
+                return res.status(400).json({ error: "amount must be greater than 0" });
+            }
+
+            const [config] = await db
+                .select()
+                .from(p2pFreezeProgramConfigs)
+                .where(and(
+                    eq(p2pFreezeProgramConfigs.currencyCode, currencyCodeRaw),
+                    eq(p2pFreezeProgramConfigs.isEnabled, true),
+                ))
+                .limit(1);
+
+            if (!config) {
+                return res.status(400).json({ error: "Freeze benefit is not enabled for this currency" });
+            }
+
+            const minAmount = toNumber(config.minAmount, 0);
+            const maxAmount = config.maxAmount ? toNumber(config.maxAmount, 0) : null;
+            if (amount < minAmount) {
+                return res.status(400).json({ error: `Minimum amount is ${minAmount}` });
+            }
+            if (maxAmount !== null && amount > maxAmount) {
+                return res.status(400).json({ error: `Maximum amount is ${maxAmount}` });
+            }
+
+            const [allowedMethod] = await db
+                .select({
+                    methodId: countryPaymentMethods.id,
+                })
+                .from(p2pFreezeProgramMethods)
+                .innerJoin(countryPaymentMethods, eq(p2pFreezeProgramMethods.countryPaymentMethodId, countryPaymentMethods.id))
+                .where(and(
+                    eq(p2pFreezeProgramMethods.configId, config.id),
+                    eq(p2pFreezeProgramMethods.countryPaymentMethodId, countryPaymentMethodId),
+                    eq(countryPaymentMethods.isActive, true),
+                    eq(countryPaymentMethods.isAvailable, true),
+                ))
+                .limit(1);
+
+            if (!allowedMethod) {
+                return res.status(400).json({ error: "Selected payment method is not allowed for this currency" });
+            }
+
+            const [pendingRequest] = await db
+                .select({ id: p2pFreezeRequests.id })
+                .from(p2pFreezeRequests)
+                .where(and(
+                    eq(p2pFreezeRequests.userId, req.user!.id),
+                    eq(p2pFreezeRequests.currencyCode, currencyCodeRaw),
+                    eq(p2pFreezeRequests.status, "pending"),
+                ))
+                .limit(1);
+
+            if (pendingRequest) {
+                return res.status(409).json({ error: "You already have a pending freeze request for this currency" });
+            }
+
+            const [created] = await db
+                .insert(p2pFreezeRequests)
+                .values({
+                    userId: req.user!.id,
+                    currencyCode: currencyCodeRaw,
+                    amount: amount.toFixed(8),
+                    approvedAmount: "0.00000000",
+                    remainingAmount: "0.00000000",
+                    benefitRatePercentSnapshot: String(config.benefitRatePercent ?? "0.000"),
+                    status: "pending",
+                    countryPaymentMethodId,
+                    payerName,
+                    paymentReference,
+                    requestNote,
+                    updatedAt: new Date(),
+                })
+                .returning();
+
+            res.status(201).json(created);
+        } catch (error: unknown) {
+            res.status(500).json({ error: getErrorMessage(error) });
+        }
+    });
+
+    app.get("/api/p2p/freeze-program/requests", authMiddleware, async (req: AuthRequest, res: Response) => {
+        try {
+            const requests = await db
+                .select({
+                    id: p2pFreezeRequests.id,
+                    currencyCode: p2pFreezeRequests.currencyCode,
+                    amount: p2pFreezeRequests.amount,
+                    approvedAmount: p2pFreezeRequests.approvedAmount,
+                    remainingAmount: p2pFreezeRequests.remainingAmount,
+                    benefitRatePercentSnapshot: p2pFreezeRequests.benefitRatePercentSnapshot,
+                    status: p2pFreezeRequests.status,
+                    countryPaymentMethodId: p2pFreezeRequests.countryPaymentMethodId,
+                    paymentMethodName: countryPaymentMethods.name,
+                    paymentMethodType: countryPaymentMethods.type,
+                    paymentReference: p2pFreezeRequests.paymentReference,
+                    payerName: p2pFreezeRequests.payerName,
+                    requestNote: p2pFreezeRequests.requestNote,
+                    adminNote: p2pFreezeRequests.adminNote,
+                    rejectionReason: p2pFreezeRequests.rejectionReason,
+                    approvedAt: p2pFreezeRequests.approvedAt,
+                    rejectedAt: p2pFreezeRequests.rejectedAt,
+                    createdAt: p2pFreezeRequests.createdAt,
+                    updatedAt: p2pFreezeRequests.updatedAt,
+                })
+                .from(p2pFreezeRequests)
+                .innerJoin(countryPaymentMethods, eq(p2pFreezeRequests.countryPaymentMethodId, countryPaymentMethods.id))
+                .where(eq(p2pFreezeRequests.userId, req.user!.id))
+                .orderBy(desc(p2pFreezeRequests.createdAt))
+                .limit(100);
+
+            const summaryByCurrency = new Map<string, {
+                currencyCode: string;
+                activeApprovedAmount: number;
+                activeRemainingAmount: number;
+                estimatedMonthlyBenefit: number;
+            }>();
+
+            for (const request of requests) {
+                if (request.status !== "approved" && request.status !== "exhausted") {
+                    continue;
+                }
+
+                const key = request.currencyCode;
+                const active = summaryByCurrency.get(key) || {
+                    currencyCode: key,
+                    activeApprovedAmount: 0,
+                    activeRemainingAmount: 0,
+                    estimatedMonthlyBenefit: 0,
+                };
+
+                active.activeApprovedAmount += toNumber(request.approvedAmount, 0);
+                active.activeRemainingAmount += toNumber(request.remainingAmount, 0);
+                active.estimatedMonthlyBenefit += toNumber(estimateMonthlyBenefit(request.remainingAmount, request.benefitRatePercentSnapshot), 0);
+                summaryByCurrency.set(key, active);
+            }
+
+            res.json({
+                requests,
+                summary: Array.from(summaryByCurrency.values()).map((item) => ({
+                    ...item,
+                    activeApprovedAmount: item.activeApprovedAmount.toFixed(8),
+                    activeRemainingAmount: item.activeRemainingAmount.toFixed(8),
+                    estimatedMonthlyBenefit: item.estimatedMonthlyBenefit.toFixed(8),
+                })),
+            });
         } catch (error: unknown) {
             res.status(500).json({ error: getErrorMessage(error) });
         }

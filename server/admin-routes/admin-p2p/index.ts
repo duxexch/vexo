@@ -14,6 +14,7 @@ import { registerDisputeListingRoutes } from "./dispute-listing";
 import { registerDisputeActionRoutes } from "./dispute-actions";
 import { registerP2pSettingsRoutes } from "./settings";
 import { registerP2pAnalyticsRoutes } from "./analytics";
+import { registerP2pFreezeProgramAdminRoutes } from "./freeze-program";
 import { getP2PUsernameMap } from "../../lib/p2p-username";
 import { getBadgeEntitlementsForUsers, resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
 
@@ -648,4 +649,5 @@ export function registerAdminP2pRoutes(app: Express) {
   registerDisputeActionRoutes(app);
   registerP2pSettingsRoutes(app);
   registerP2pAnalyticsRoutes(app);
+  registerP2pFreezeProgramAdminRoutes(app);
 }

@@ -1,0 +1,19 @@
+port: 7880
+bind_addresses:
+  - 0.0.0.0
+
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: true
+
+# Room cleanup defaults tuned for game voice sessions.
+room:
+  empty_timeout: 20
+  departure_timeout: 12
+
+# Optional: enable if you have Redis for multi-node LiveKit.
+# redis:
+#   address: vex-redis:6379
+#   username: ""
+#   password: ""

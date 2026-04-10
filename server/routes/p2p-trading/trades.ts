@@ -9,13 +9,12 @@ import {
   computeFreezeUntilDate,
   checkUserP2PTradingPermission,
   createP2PTradeAuditLog,
+  evaluateP2PVerificationRequirements,
   getErrorMessage,
   getP2PEscrowFreezeHours,
   calculateP2PFee,
-  getEffectiveP2PVerificationLevel,
-  getP2PVerificationErrorMessage,
-  hasRequiredP2PVerification,
-  MIN_P2P_VERIFICATION_LEVEL,
+  getP2PVerificationRequirementsErrorMessage,
+  resolveP2PVerificationRequirements,
 } from "./helpers";
 import { isCurrencyAllowedForOfferType, normalizeCurrencyCode, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../../lib/payment-security";
@@ -87,6 +86,8 @@ export function registerTradeRoutes(app: Express) {
           amount: p2pTrades.amount,
           status: p2pTrades.status,
           completedAt: p2pTrades.completedAt,
+          freezeUntil: p2pTrades.freezeUntil,
+          freezeHoursApplied: p2pTrades.freezeHoursApplied,
           confirmedAt: p2pTrades.confirmedAt,
           offerCurrency: p2pOffers.cryptoCurrency,
         })
@@ -139,8 +140,12 @@ export function registerTradeRoutes(app: Express) {
 
         if (isBuyer) {
           if (trade.status === "completed") {
-            const completedAt = trade.completedAt ? new Date(trade.completedAt) : now;
-            const freezeUntil = computeFreezeUntilDate(completedAt, freezeHours);
+            const freezeUntil = trade.freezeUntil
+              ? new Date(trade.freezeUntil)
+              : computeFreezeUntilDate(
+                trade.completedAt ? new Date(trade.completedAt) : now,
+                Number(trade.freezeHoursApplied || freezeHours),
+              );
 
             if (freezeUntil > now) {
               state.frozen += amount;
@@ -212,10 +217,28 @@ export function registerTradeRoutes(app: Express) {
           });
         }
 
-        const requesterVerificationLevel = await getEffectiveP2PVerificationLevel(requestingUser);
-        if (!hasRequiredP2PVerification(requesterVerificationLevel, MIN_P2P_VERIFICATION_LEVEL)) {
+        const [settings] = await db.select().from(p2pSettings).limit(1);
+        const currencyControls = resolveP2PCurrencyControls(settings);
+        const verificationRequirements = resolveP2PVerificationRequirements(settings);
+
+        if (settings) {
+          if (!settings.isEnabled) {
+            return res.status(403).json({ error: "P2P trading is currently disabled" });
+          }
+
+          const minTradeAmount = parseFloat(settings.minTradeAmount);
+          const maxTradeAmount = parseFloat(settings.maxTradeAmount);
+          const requestedAmount = parseFloat(amount);
+
+          if (requestedAmount < minTradeAmount || requestedAmount > maxTradeAmount) {
+            return res.status(400).json({ error: `Trade amount must be between ${minTradeAmount} and ${maxTradeAmount}` });
+          }
+        }
+
+        const requesterVerificationCheck = evaluateP2PVerificationRequirements(requestingUser, verificationRequirements);
+        if (!requesterVerificationCheck.passed) {
           return res.status(403).json({
-            error: getP2PVerificationErrorMessage(MIN_P2P_VERIFICATION_LEVEL),
+            error: getP2PVerificationRequirementsErrorMessage(verificationRequirements, requesterVerificationCheck.missingRequirements),
           });
         }
 
@@ -237,22 +260,6 @@ export function registerTradeRoutes(app: Express) {
         }
 
         const requestedPaymentMethod = paymentMethod.trim();
-
-        const [settings] = await db.select().from(p2pSettings).limit(1);
-        const currencyControls = resolveP2PCurrencyControls(settings);
-        if (settings) {
-          if (!settings.isEnabled) {
-            return res.status(403).json({ error: "P2P trading is currently disabled" });
-          }
-
-          const minTradeAmount = parseFloat(settings.minTradeAmount);
-          const maxTradeAmount = parseFloat(settings.maxTradeAmount);
-          const requestedAmount = parseFloat(amount);
-
-          if (requestedAmount < minTradeAmount || requestedAmount > maxTradeAmount) {
-            return res.status(400).json({ error: `Trade amount must be between ${minTradeAmount} and ${maxTradeAmount}` });
-          }
-        }
 
         if (currencyType === 'project') {
           const settings = await storage.getProjectCurrencySettings();
@@ -284,8 +291,8 @@ export function registerTradeRoutes(app: Express) {
           return res.status(400).json({ error: "Offer is no longer available" });
         }
 
-        const ownerVerificationLevel = await getEffectiveP2PVerificationLevel(offerOwner);
-        if (!hasRequiredP2PVerification(ownerVerificationLevel, MIN_P2P_VERIFICATION_LEVEL)) {
+        const ownerVerificationCheck = evaluateP2PVerificationRequirements(offerOwner, verificationRequirements);
+        if (!ownerVerificationCheck.passed) {
           return res.status(400).json({ error: "Offer is no longer available" });
         }
 

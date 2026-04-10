@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -150,10 +150,65 @@ interface P2PSettings {
   paymentTimeoutMinutes: number;
   autoExpireEnabled: boolean;
   isEnabled: boolean;
+  requireIdentityVerification: boolean;
+  requirePhoneVerification: boolean;
+  requireEmailVerification: boolean;
   p2pBuyCurrencies: string[];
   p2pSellCurrencies: string[];
   depositEnabledCurrencies: string[];
   updatedAt: string;
+}
+
+interface FreezeProgramMethodOption {
+  id: string;
+  name: string;
+  type: string;
+  countryCode: string;
+  minAmount: string;
+  maxAmount: string;
+  isActive: boolean;
+  isAvailable: boolean;
+}
+
+interface FreezeProgramConfig {
+  id: string;
+  currencyCode: string;
+  isEnabled: boolean;
+  benefitRatePercent: string;
+  baseReductionPercent: string;
+  maxReductionPercent: string;
+  minAmount: string;
+  maxAmount: string | null;
+  methods: Array<{
+    countryPaymentMethodId: string;
+    methodName: string;
+    countryCode: string;
+    methodType: string;
+  }>;
+}
+
+interface FreezeProgramRequest {
+  id: string;
+  userId: string;
+  username: string;
+  currencyCode: string;
+  amount: string;
+  approvedAmount: string;
+  remainingAmount: string;
+  benefitRatePercentSnapshot: string;
+  status: "pending" | "approved" | "rejected" | "cancelled" | "exhausted";
+  paymentMethodName: string;
+  payerName?: string | null;
+  paymentReference?: string | null;
+  requestNote?: string | null;
+  adminNote?: string | null;
+  rejectionReason?: string | null;
+  createdAt: string;
+}
+
+interface FreezeProgramPayload {
+  configs: FreezeProgramConfig[];
+  paymentMethods: FreezeProgramMethodOption[];
 }
 
 function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
@@ -163,6 +218,17 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
   const [buyCurrenciesDraft, setBuyCurrenciesDraft] = useState(defaultCurrencyCodes.join(", "));
   const [sellCurrenciesDraft, setSellCurrenciesDraft] = useState(defaultCurrencyCodes.join(", "));
   const [depositCurrenciesDraft, setDepositCurrenciesDraft] = useState(defaultCurrencyCodes.join(", "));
+  const [selectedFreezeCurrency, setSelectedFreezeCurrency] = useState(defaultCurrencyCodes[0]);
+  const [freezeRequestFilter, setFreezeRequestFilter] = useState<"all" | "pending" | "approved" | "rejected" | "exhausted" | "cancelled">("pending");
+  const [freezeDraft, setFreezeDraft] = useState({
+    isEnabled: false,
+    benefitRatePercent: "0",
+    baseReductionPercent: "50",
+    maxReductionPercent: "90",
+    minAmount: "10",
+    maxAmount: "",
+    allowedPaymentMethodIds: [] as string[],
+  });
 
   const { data: settings, isLoading } = useQuery<P2PSettings>({
     queryKey: ["/api/admin/p2p/settings"],
@@ -172,6 +238,16 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
   const { data: analytics } = useQuery({
     queryKey: ["/api/admin/p2p/analytics"],
     queryFn: () => adminFetch("/api/admin/p2p/analytics"),
+  });
+
+  const { data: freezeProgramData } = useQuery<FreezeProgramPayload>({
+    queryKey: ["/api/admin/p2p/freeze-program"],
+    queryFn: () => adminFetch("/api/admin/p2p/freeze-program"),
+  });
+
+  const { data: freezeRequests = [] } = useQuery<FreezeProgramRequest[]>({
+    queryKey: ["/api/admin/p2p/freeze-program/requests", freezeRequestFilter],
+    queryFn: () => adminFetch(`/api/admin/p2p/freeze-program/requests?status=${freezeRequestFilter}`),
   });
 
   const updateSettingsMutation = useMutation({
@@ -202,6 +278,54 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
     },
   });
 
+  const updateFreezeProgramMutation = useMutation({
+    mutationFn: async () => {
+      return adminFetch(`/api/admin/p2p/freeze-program/configs/${selectedFreezeCurrency}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          isEnabled: freezeDraft.isEnabled,
+          benefitRatePercent: Number(freezeDraft.benefitRatePercent || "0"),
+          baseReductionPercent: Number(freezeDraft.baseReductionPercent || "0"),
+          maxReductionPercent: Number(freezeDraft.maxReductionPercent || "0"),
+          minAmount: Number(freezeDraft.minAmount || "0"),
+          maxAmount: freezeDraft.maxAmount.trim().length > 0 ? Number(freezeDraft.maxAmount) : null,
+          allowedPaymentMethodIds: freezeDraft.allowedPaymentMethodIds,
+        }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/freeze-program"] });
+      toast({ title: "Freeze Program Saved", description: "Currency freeze program settings were updated" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update freeze program settings", variant: "destructive" });
+    },
+  });
+
+  const reviewFreezeRequestMutation = useMutation({
+    mutationFn: async ({
+      requestId,
+      decision,
+      rejectionReason,
+    }: {
+      requestId: string;
+      decision: "approve" | "reject";
+      rejectionReason?: string;
+    }) => {
+      return adminFetch(`/api/admin/p2p/freeze-program/requests/${requestId}/decision`, {
+        method: "POST",
+        body: JSON.stringify({ decision, rejectionReason }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/freeze-program/requests"] });
+      toast({ title: "Request Updated", description: "Freeze request status has been updated" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update freeze request", variant: "destructive" });
+    },
+  });
+
   useEffect(() => {
     if (!settings) return;
 
@@ -212,6 +336,44 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
     setSellCurrenciesDraft(normalizeList(settings.p2pSellCurrencies));
     setDepositCurrenciesDraft(normalizeList(settings.depositEnabledCurrencies));
   }, [settings]);
+
+  useEffect(() => {
+    const configs = freezeProgramData?.configs || [];
+    if (configs.length === 0) {
+      return;
+    }
+
+    const activeCurrencyExists = configs.some((config) => config.currencyCode === selectedFreezeCurrency);
+    if (!activeCurrencyExists) {
+      setSelectedFreezeCurrency(configs[0].currencyCode);
+    }
+  }, [freezeProgramData?.configs, selectedFreezeCurrency]);
+
+  useEffect(() => {
+    const selectedConfig = (freezeProgramData?.configs || []).find((config) => config.currencyCode === selectedFreezeCurrency);
+    if (!selectedConfig) {
+      setFreezeDraft({
+        isEnabled: false,
+        benefitRatePercent: "0",
+        baseReductionPercent: "50",
+        maxReductionPercent: "90",
+        minAmount: "10",
+        maxAmount: "",
+        allowedPaymentMethodIds: [],
+      });
+      return;
+    }
+
+    setFreezeDraft({
+      isEnabled: selectedConfig.isEnabled,
+      benefitRatePercent: String(selectedConfig.benefitRatePercent || "0"),
+      baseReductionPercent: String(selectedConfig.baseReductionPercent || "50"),
+      maxReductionPercent: String(selectedConfig.maxReductionPercent || "90"),
+      minAmount: String(selectedConfig.minAmount || "10"),
+      maxAmount: selectedConfig.maxAmount ? String(selectedConfig.maxAmount) : "",
+      allowedPaymentMethodIds: selectedConfig.methods.map((method) => method.countryPaymentMethodId),
+    });
+  }, [freezeProgramData?.configs, selectedFreezeCurrency]);
 
   const handleUpdateSetting = (key: keyof P2PSettings, value: string | number | boolean | string[] | null) => {
     updateSettingsMutation.mutate({ [key]: value });
@@ -231,6 +393,27 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
     draftValue: string,
   ) => {
     handleUpdateSetting(key, parseCurrencyList(draftValue));
+  };
+
+  const freezeConfigCurrencies = useMemo(() => {
+    const currenciesFromConfigs = (freezeProgramData?.configs || []).map((config) => config.currencyCode);
+    return Array.from(new Set([...defaultCurrencyCodes, ...currenciesFromConfigs])).sort();
+  }, [freezeProgramData?.configs]);
+
+  const availableFreezePaymentMethods = useMemo(() => {
+    return (freezeProgramData?.paymentMethods || []).filter((method) => method.isActive && method.isAvailable);
+  }, [freezeProgramData?.paymentMethods]);
+
+  const toggleFreezeMethod = (methodId: string) => {
+    setFreezeDraft((previous) => {
+      const exists = previous.allowedPaymentMethodIds.includes(methodId);
+      return {
+        ...previous,
+        allowedPaymentMethodIds: exists
+          ? previous.allowedPaymentMethodIds.filter((id) => id !== methodId)
+          : [...previous.allowedPaymentMethodIds, methodId],
+      };
+    });
   };
 
   if (isLoading) {
@@ -519,6 +702,57 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                   data-testid="switch-p2p-enabled"
                 />
               </div>
+
+              <div className="border-t pt-4 space-y-4">
+                <div>
+                  <Label className="text-base">Verification Requirements</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Control which verification checks are required before users can trade or post P2P ads.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Require Identity Verification</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Users must have approved identity verification.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings?.requireIdentityVerification ?? false}
+                    onCheckedChange={(checked) => handleUpdateSetting("requireIdentityVerification", checked)}
+                    data-testid="switch-p2p-require-identity-verification"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Require Phone Verification</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Users must verify their phone number.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings?.requirePhoneVerification ?? false}
+                    onCheckedChange={(checked) => handleUpdateSetting("requirePhoneVerification", checked)}
+                    data-testid="switch-p2p-require-phone-verification"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Require Email Verification</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Users must verify their email address.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings?.requireEmailVerification ?? false}
+                    onCheckedChange={(checked) => handleUpdateSetting("requireEmailVerification", checked)}
+                    data-testid="switch-p2p-require-email-verification"
+                  />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -593,6 +827,227 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           </div>
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Freeze Benefit Program
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Currency</Label>
+                <Select value={selectedFreezeCurrency} onValueChange={setSelectedFreezeCurrency}>
+                  <SelectTrigger data-testid="select-freeze-currency">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {freezeConfigCurrencies.map((currencyCode) => (
+                      <SelectItem key={currencyCode} value={currencyCode}>{currencyCode}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-end justify-between rounded-md border p-3">
+                <div>
+                  <Label>Enabled</Label>
+                  <p className="text-xs text-muted-foreground">Allow users to request freeze benefit for this currency.</p>
+                </div>
+                <Switch
+                  checked={freezeDraft.isEnabled}
+                  onCheckedChange={(checked) => setFreezeDraft((previous) => ({ ...previous, isEnabled: checked }))}
+                  data-testid="switch-freeze-program-enabled"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Benefit Rate %</Label>
+                <Input
+                  type="number"
+                  step="0.001"
+                  value={freezeDraft.benefitRatePercent}
+                  onChange={(event) => setFreezeDraft((previous) => ({ ...previous, benefitRatePercent: event.target.value }))}
+                  data-testid="input-freeze-benefit-rate"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Base Reduction %</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={freezeDraft.baseReductionPercent}
+                  onChange={(event) => setFreezeDraft((previous) => ({ ...previous, baseReductionPercent: event.target.value }))}
+                  data-testid="input-freeze-base-reduction"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Max Reduction %</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={freezeDraft.maxReductionPercent}
+                  onChange={(event) => setFreezeDraft((previous) => ({ ...previous, maxReductionPercent: event.target.value }))}
+                  data-testid="input-freeze-max-reduction"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Minimum Amount</Label>
+                <Input
+                  type="number"
+                  step="0.00000001"
+                  value={freezeDraft.minAmount}
+                  onChange={(event) => setFreezeDraft((previous) => ({ ...previous, minAmount: event.target.value }))}
+                  data-testid="input-freeze-min-amount"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Maximum Amount (optional)</Label>
+                <Input
+                  type="number"
+                  step="0.00000001"
+                  value={freezeDraft.maxAmount}
+                  onChange={(event) => setFreezeDraft((previous) => ({ ...previous, maxAmount: event.target.value }))}
+                  data-testid="input-freeze-max-amount"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Allowed Payment Methods</Label>
+              <div className="max-h-44 space-y-2 overflow-auto rounded-md border p-2">
+                {availableFreezePaymentMethods.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No active payment methods available.</p>
+                ) : (
+                  availableFreezePaymentMethods.map((method) => {
+                    const isSelected = freezeDraft.allowedPaymentMethodIds.includes(method.id);
+                    return (
+                      <button
+                        key={method.id}
+                        type="button"
+                        className={`w-full rounded-md border px-3 py-2 text-start text-sm ${isSelected ? "border-primary bg-primary/5" : "border-border"}`}
+                        onClick={() => toggleFreezeMethod(method.id)}
+                        data-testid={`freeze-method-${method.id}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{method.name}</span>
+                          <Badge variant="outline">{method.countryCode}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{method.type}</p>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <Button
+              onClick={() => updateFreezeProgramMutation.mutate()}
+              disabled={updateFreezeProgramMutation.isPending}
+              data-testid="button-save-freeze-program"
+            >
+              Save Freeze Program
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Freeze Requests Review
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Status Filter</Label>
+              <Select
+                value={freezeRequestFilter}
+                onValueChange={(value) => setFreezeRequestFilter(value as typeof freezeRequestFilter)}
+              >
+                <SelectTrigger data-testid="select-freeze-request-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="exhausted">Exhausted</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="max-h-[420px] space-y-3 overflow-auto">
+              {freezeRequests.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No freeze requests found.</p>
+              ) : (
+                freezeRequests.map((request) => (
+                  <div key={request.id} className="rounded-md border p-3 space-y-2" data-testid={`freeze-request-${request.id}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-medium">{request.username} • {request.currencyCode}</div>
+                      <Badge variant={request.status === "approved" ? "default" : request.status === "pending" ? "secondary" : "destructive"}>
+                        {request.status}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Requested: {request.amount} | Approved: {request.approvedAmount} | Remaining: {request.remainingAmount}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Method: {request.paymentMethodName}
+                      {request.paymentReference ? ` • Ref: ${request.paymentReference}` : ""}
+                      {request.payerName ? ` • Payer: ${request.payerName}` : ""}
+                    </div>
+                    {request.requestNote ? (
+                      <p className="text-xs">User note: {request.requestNote}</p>
+                    ) : null}
+                    {request.rejectionReason ? (
+                      <p className="text-xs text-destructive">Reason: {request.rejectionReason}</p>
+                    ) : null}
+
+                    {request.status === "pending" ? (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => reviewFreezeRequestMutation.mutate({ requestId: request.id, decision: "approve" })}
+                          disabled={reviewFreezeRequestMutation.isPending}
+                          data-testid={`button-approve-freeze-${request.id}`}
+                        >
+                          <Check className="h-4 w-4 me-1" />
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => {
+                            const reason = window.prompt("Rejection reason") || "";
+                            reviewFreezeRequestMutation.mutate({
+                              requestId: request.id,
+                              decision: "reject",
+                              rejectionReason: reason,
+                            });
+                          }}
+                          disabled={reviewFreezeRequestMutation.isPending}
+                          data-testid={`button-reject-freeze-${request.id}`}
+                        >
+                          <X className="h-4 w-4 me-1" />
+                          Reject
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

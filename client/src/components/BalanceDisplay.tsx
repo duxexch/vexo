@@ -1,7 +1,10 @@
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/lib/i18n";
 import { useBalance } from "@/hooks/useBalance";
 import { Button } from "@/components/ui/button";
+import { financialQueryOptions } from "@/lib/queryClient";
+import { formatWalletAmountFromUsd } from "@/lib/wallet-currency";
 import { Eye, EyeOff, Wallet } from "lucide-react";
 
 interface BalanceDisplayProps {
@@ -13,6 +16,12 @@ interface BalanceDisplayProps {
   showDeposit?: boolean;
 }
 
+interface DepositConfigForBalance {
+  balanceCurrency?: string;
+  usdRateByCurrency?: Record<string, number>;
+  currencySymbolByCode?: Record<string, string>;
+}
+
 export function BalanceDisplay({
   balance,
   variant = "header",
@@ -21,7 +30,18 @@ export function BalanceDisplay({
   const { t } = useI18n();
   const { isHidden, toggle } = useBalance();
 
-  const formatted = isHidden ? "******" : `$${parseFloat(balance || "0").toFixed(2)}`;
+  const { data: depositConfig } = useQuery<DepositConfigForBalance>({
+    queryKey: ["/api/transactions/deposit-config"],
+    ...financialQueryOptions,
+  });
+
+  const formatted = isHidden
+    ? "******"
+    : formatWalletAmountFromUsd(balance || "0", {
+      balanceCurrency: depositConfig?.balanceCurrency,
+      usdRateByCurrency: depositConfig?.usdRateByCurrency,
+      currencySymbolByCode: depositConfig?.currencySymbolByCode,
+    }, { withCode: true });
 
   if (variant === "sidebar") {
     return (

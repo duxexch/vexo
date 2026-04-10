@@ -1,8 +1,10 @@
 import { createContext, useContext } from "react";
 import { useQuery } from "@tanstack/react-query";
+import type { PublicRtcSettings } from "@/lib/rtc-config";
 
 interface PublicSettings {
   sections: Record<string, boolean>;
+  rtc?: PublicRtcSettings;
 }
 
 interface SettingsContextType {
@@ -34,9 +36,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <SettingsContext.Provider value={{ 
-      settings: settings || null, 
-      isLoading, 
+    <SettingsContext.Provider value={{
+      settings: settings || null,
+      isLoading,
       isSectionEnabled
     }}>
       {children}

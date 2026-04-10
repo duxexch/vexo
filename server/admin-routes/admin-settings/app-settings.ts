@@ -3,6 +3,7 @@ import { featureFlags, themes, appSettings, insertAppSettingSchema } from "@shar
 import { db } from "../../db";
 import { eq, inArray } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
+import { getPublicRtcSettingsFromEnv } from "../../lib/public-rtc";
 import fs from "fs";
 import path from "path";
 
@@ -52,7 +53,8 @@ export function registerAppSettingsRoutes(app: Express) {
 
       res.json({
         sections: enabledSections,
-        theme: activeTheme[0] || null
+        theme: activeTheme[0] || null,
+        rtc: getPublicRtcSettingsFromEnv(),
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
