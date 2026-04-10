@@ -17,6 +17,7 @@ const PushNotifications = registerPlugin<any>("PushNotifications");
 const LocalNotifications = registerPlugin<any>("LocalNotifications");
 
 let ensureInFlight: Promise<PermissionSummary> | null = null;
+let requestInFlight: Promise<PermissionSummary> | null = null;
 
 function saveSummary(summary: PermissionSummary): void {
     try {
@@ -64,7 +65,23 @@ function requiresNativeLocalNotificationsPermission(): boolean {
     return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("LocalNotifications");
 }
 
-async function ensureWebNotificationPermission(): Promise<PermissionResult> {
+function checkWebNotificationPermission(): PermissionResult {
+    if (!requiresWebNotificationPermission()) {
+        return "unavailable";
+    }
+
+    if (Notification.permission === "granted") {
+        return "granted";
+    }
+
+    if (Notification.permission === "denied") {
+        return "denied";
+    }
+
+    return "denied";
+}
+
+async function requestWebNotificationPermission(): Promise<PermissionResult> {
     if (!requiresWebNotificationPermission()) {
         return "unavailable";
     }
@@ -85,7 +102,7 @@ async function ensureWebNotificationPermission(): Promise<PermissionResult> {
     }
 }
 
-async function ensureMicrophonePermission(): Promise<PermissionResult> {
+async function checkMicrophonePermission(): Promise<PermissionResult> {
     if (!requiresMicrophonePermission()) {
         return "unavailable";
     }
@@ -99,18 +116,14 @@ async function ensureMicrophonePermission(): Promise<PermissionResult> {
             if (status.state === "denied") {
                 return "denied";
             }
+
+            return "denied";
         }
     } catch {
-        // Continue to active request fallback.
+        // Continue with best-effort fallback.
     }
 
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach((track) => track.stop());
-        return "granted";
-    } catch {
-        return "denied";
-    }
+    return "unavailable";
 }
 
 function normalizeNativePermission(value: unknown): PermissionResult {
@@ -119,7 +132,20 @@ function normalizeNativePermission(value: unknown): PermissionResult {
     return "unavailable";
 }
 
-async function ensureNativePushPermission(): Promise<PermissionResult> {
+async function checkNativePushPermission(): Promise<PermissionResult> {
+    if (!requiresNativePushPermission()) {
+        return "unavailable";
+    }
+
+    try {
+        const current = await PushNotifications.checkPermissions?.();
+        return normalizeNativePermission(current?.receive);
+    } catch {
+        return "denied";
+    }
+}
+
+async function requestNativePushPermission(): Promise<PermissionResult> {
     if (!requiresNativePushPermission()) {
         return "unavailable";
     }
@@ -127,7 +153,6 @@ async function ensureNativePushPermission(): Promise<PermissionResult> {
     try {
         const current = await PushNotifications.checkPermissions?.();
         const currentResult = normalizeNativePermission(current?.receive);
-
         if (currentResult === "granted") {
             await PushNotifications.register?.();
             return "granted";
@@ -138,13 +163,27 @@ async function ensureNativePushPermission(): Promise<PermissionResult> {
         if (requestedResult === "granted") {
             await PushNotifications.register?.();
         }
+
         return requestedResult;
     } catch {
         return "denied";
     }
 }
 
-async function ensureNativeLocalNotificationsPermission(): Promise<PermissionResult> {
+async function checkNativeLocalNotificationsPermission(): Promise<PermissionResult> {
+    if (!requiresNativeLocalNotificationsPermission()) {
+        return "unavailable";
+    }
+
+    try {
+        const current = await LocalNotifications.checkPermissions?.();
+        return normalizeNativePermission(current?.display);
+    } catch {
+        return "denied";
+    }
+}
+
+async function requestNativeLocalNotificationsPermission(): Promise<PermissionResult> {
     if (!requiresNativeLocalNotificationsPermission()) {
         return "unavailable";
     }
@@ -168,13 +207,20 @@ export function isStartupPermissionSummaryReady(summary: PermissionSummary | nul
         return false;
     }
 
-    const notificationsReady = !requiresWebNotificationPermission() || summary.notifications === "granted";
-    const microphoneReady = !requiresMicrophonePermission() || summary.microphone === "granted";
+    const webNotificationsReady = !requiresWebNotificationPermission() || summary.notifications === "granted";
     const nativePushReady = !requiresNativePushPermission() || summary.nativePush === "granted";
-    const nativeLocalReady =
-        !requiresNativeLocalNotificationsPermission() || summary.nativeLocalNotifications === "granted";
 
-    return notificationsReady && microphoneReady && nativePushReady && nativeLocalReady;
+    return webNotificationsReady && nativePushReady;
+}
+
+export function shouldShowNotificationSettingsHint(summary: PermissionSummary | null): boolean {
+    if (!summary) {
+        return false;
+    }
+
+    const webDenied = requiresWebNotificationPermission() && summary.notifications === "denied";
+    const nativePushDenied = requiresNativePushPermission() && summary.nativePush === "denied";
+    return webDenied || nativePushDenied;
 }
 
 export async function openAppSettings(): Promise<void> {
@@ -198,12 +244,55 @@ export async function openAppSettings(): Promise<void> {
     }
 }
 
-async function ensureStartupPermissionsInternal(): Promise<PermissionSummary> {
+export async function openNotificationSettings(): Promise<void> {
+    if (Capacitor.isNativePlatform()) {
+        await openAppSettings();
+        return;
+    }
+
+    const userAgent = navigator.userAgent.toLowerCase();
+    const targets: string[] = [];
+
+    if (userAgent.includes("edg/")) {
+        targets.push("edge://settings/content/notifications");
+    }
+    if (userAgent.includes("chrome/")) {
+        targets.push("chrome://settings/content/notifications");
+    }
+    if (userAgent.includes("firefox/")) {
+        targets.push("about:preferences#privacy");
+    }
+
+    for (const url of targets) {
+        try {
+            const opened = window.open(url, "_blank", "noopener,noreferrer");
+            if (opened) {
+                return;
+            }
+        } catch {
+            // Continue to fallback.
+        }
+    }
+
+    window.open("https://support.google.com/chrome/answer/3220216", "_blank", "noopener,noreferrer");
+}
+
+type CollectOptions = {
+    requestNotificationPermission?: boolean;
+};
+
+async function collectPermissionSummary(options: CollectOptions = {}): Promise<PermissionSummary> {
+    const requestNotificationPermission = options.requestNotificationPermission === true;
+
     const [notifications, microphone, nativePush, nativeLocalNotifications] = await Promise.all([
-        ensureWebNotificationPermission(),
-        ensureMicrophonePermission(),
-        ensureNativePushPermission(),
-        ensureNativeLocalNotificationsPermission(),
+        requestNotificationPermission
+            ? requestWebNotificationPermission()
+            : Promise.resolve(checkWebNotificationPermission()),
+        checkMicrophonePermission(),
+        requestNotificationPermission ? requestNativePushPermission() : checkNativePushPermission(),
+        requestNotificationPermission
+            ? requestNativeLocalNotificationsPermission()
+            : checkNativeLocalNotificationsPermission(),
     ]);
 
     const summary: PermissionSummary = {
@@ -223,9 +312,21 @@ export async function ensureStartupPermissions(): Promise<PermissionSummary> {
         return ensureInFlight;
     }
 
-    ensureInFlight = ensureStartupPermissionsInternal().finally(() => {
+    ensureInFlight = collectPermissionSummary({ requestNotificationPermission: false }).finally(() => {
         ensureInFlight = null;
     });
 
     return ensureInFlight;
+}
+
+export async function requestRequiredStartupPermissions(): Promise<PermissionSummary> {
+    if (requestInFlight) {
+        return requestInFlight;
+    }
+
+    requestInFlight = collectPermissionSummary({ requestNotificationPermission: true }).finally(() => {
+        requestInFlight = null;
+    });
+
+    return requestInFlight;
 }

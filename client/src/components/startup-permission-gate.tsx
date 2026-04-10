@@ -8,7 +8,9 @@ import {
     ensureStartupPermissions,
     getStoredStartupPermissionSummary,
     isStartupPermissionSummaryReady,
-    openAppSettings,
+    openNotificationSettings,
+    requestRequiredStartupPermissions,
+    shouldShowNotificationSettingsHint,
     type PermissionResult,
     type PermissionSummary,
 } from "@/lib/startup-permissions";
@@ -45,6 +47,7 @@ export function StartupPermissionGate() {
     const { t, dir } = useI18n();
     const [summary, setSummary] = useState<PermissionSummary | null>(() => getStoredStartupPermissionSummary());
     const [isChecking, setIsChecking] = useState(false);
+    const [isRequesting, setIsRequesting] = useState(false);
     const [hasError, setHasError] = useState(false);
 
     const isNative = Capacitor.isNativePlatform();
@@ -54,6 +57,7 @@ export function StartupPermissionGate() {
     const needsNativeLocal = isNative && Capacitor.isPluginAvailable("LocalNotifications");
 
     const isReady = useMemo(() => isStartupPermissionSummaryReady(summary), [summary]);
+    const showSettingsShortcut = useMemo(() => shouldShowNotificationSettingsHint(summary), [summary]);
 
     const refreshSummary = useCallback(async () => {
         setIsChecking(true);
@@ -68,11 +72,24 @@ export function StartupPermissionGate() {
         }
     }, []);
 
+    const requestNotifications = useCallback(async () => {
+        setIsRequesting(true);
+        setHasError(false);
+        try {
+            const next = await requestRequiredStartupPermissions();
+            setSummary(next);
+        } catch {
+            setHasError(true);
+        } finally {
+            setIsRequesting(false);
+        }
+    }, []);
+
     useEffect(() => {
-        if (!summary || !isReady) {
+        if (!summary) {
             void refreshSummary();
         }
-    }, [summary, isReady, refreshSummary]);
+    }, [summary, refreshSummary]);
 
     useEffect(() => {
         const onVisible = () => {
@@ -109,7 +126,7 @@ export function StartupPermissionGate() {
             key: "microphone",
             label: t("permissions.gate.microphone"),
             value: fallbackSummary.microphone,
-            required: needsMicrophone,
+            required: false,
             icon: Mic,
         },
         {
@@ -123,7 +140,7 @@ export function StartupPermissionGate() {
             key: "nativeLocalNotifications",
             label: t("permissions.gate.nativeLocalNotifications"),
             value: fallbackSummary.nativeLocalNotifications,
-            required: needsNativeLocal,
+            required: false,
             icon: Volume2,
         },
     ];
@@ -156,6 +173,11 @@ export function StartupPermissionGate() {
                                             {t("permissions.gate.required")}
                                         </Badge>
                                     )}
+                                    {!line.required && (line.key === "microphone" || line.key === "nativeLocalNotifications") && (
+                                        <Badge variant="outline" className="text-[10px] border-slate-500/40 text-slate-300 bg-slate-500/10">
+                                            {t("permissions.gate.onDemand")}
+                                        </Badge>
+                                    )}
                                 </div>
                                 <Badge variant="outline" className={`text-xs ${statusClassName(line.value)}`}>
                                     {statusText(line.value, t)}
@@ -165,13 +187,25 @@ export function StartupPermissionGate() {
                     })}
 
                     <p className="text-xs text-slate-400">{t(isNative ? "permissions.gate.hintNative" : "permissions.gate.hintWeb")}</p>
+                    {(needsMicrophone || needsNativeLocal) && (
+                        <p className="text-xs text-slate-400">{t("permissions.gate.onDemandHint")}</p>
+                    )}
                     {hasError && <p className="text-xs text-rose-300">{t("permissions.gate.retryHint")}</p>}
                 </div>
 
                 <div className="p-5 sm:p-6 border-t border-slate-700/70 flex flex-col sm:flex-row gap-2.5">
                     <Button
+                        className="w-full sm:flex-1"
+                        onClick={() => void requestNotifications()}
+                        disabled={isRequesting}
+                        data-testid="button-permissions-allow"
+                    >
+                        {isRequesting ? t("common.loading") : t("permissions.gate.allowNotifications")}
+                    </Button>
+
+                    <Button
                         variant="outline"
-                        className="w-full sm:flex-1 border-slate-600 text-slate-100"
+                        className="w-full sm:w-auto border-slate-600 text-slate-100"
                         onClick={() => void refreshSummary()}
                         disabled={isChecking}
                         data-testid="button-permissions-recheck"
@@ -180,13 +214,14 @@ export function StartupPermissionGate() {
                         {isChecking ? t("common.loading") : t("permissions.gate.recheck")}
                     </Button>
 
-                    {isNative ? (
+                    {showSettingsShortcut ? (
                         <Button
-                            className="w-full sm:flex-1"
-                            onClick={() => void openAppSettings()}
+                            variant="outline"
+                            className="w-full sm:w-auto border-slate-600 text-slate-100"
+                            onClick={() => void openNotificationSettings()}
                             data-testid="button-permissions-open-settings"
                         >
-                            {t("permissions.gate.openSettings")}
+                            {t(isNative ? "permissions.gate.openSettings" : "permissions.gate.openBrowserSettings")}
                         </Button>
                     ) : null}
                 </div>
