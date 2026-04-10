@@ -213,17 +213,15 @@ export default function ReferralPage() {
               return (
                 <div
                   key={idx}
-                  className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                    isCompleted
+                  className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${isCompleted
                       ? "border-primary/30 bg-primary/5"
                       : isCurrent
                         ? "border-amber-500/30 bg-amber-500/5"
                         : "border-muted bg-muted/20 opacity-60"
-                  }`}
+                    }`}
                 >
-                  <div className={`p-2 rounded-full ${
-                    isCompleted ? "bg-primary/10" : isCurrent ? "bg-amber-500/10" : "bg-muted"
-                  }`}>
+                  <div className={`p-2 rounded-full ${isCompleted ? "bg-primary/10" : isCurrent ? "bg-amber-500/10" : "bg-muted"
+                    }`}>
                     {isCompleted ? (
                       <CheckCircle className="h-5 w-5 text-primary" />
                     ) : (

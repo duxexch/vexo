@@ -23,7 +23,7 @@ export async function seedGiftCatalog() {
       addedCount++;
     }
   }
-  
+
   if (addedCount > 0) {
     console.log(`[Seed] Added ${addedCount} gifts to catalog`);
   } else {
