@@ -13,6 +13,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 COMPOSE_FILE="docker-compose.prod.yml"
+VOICE_COMPOSE_FILE="deploy/docker-compose.voice.yml"
 ENV_TEMPLATE_FILE=".env.production"
 ENV_FALLBACK_FILE=".env.example"
 ENV_FILE=".env"
@@ -23,6 +24,7 @@ TRAEFIK_NETWORK_OVERRIDE=""
 PULL_LATEST="false"
 NO_BUILD="false"
 SKIP_SYSCTL="false"
+SKIP_VOICE="false"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -56,9 +58,11 @@ Options:
   --traefik-container <name>  Explicit Traefik container name (optional)
   --env-file <path>           Env file path (default: .env)
   --compose-file <path>       Compose file path (default: docker-compose.prod.yml)
+  --voice-compose-file <path> Voice compose file path (default: deploy/docker-compose.voice.yml)
   --pull-latest               Pull latest code from origin/main before deploy
   --no-build                  Skip --build for app service
   --skip-sysctl               Skip host sysctl persistence setup
+  --skip-voice                Skip voice stack bootstrap (livekit/coturn)
   -h, --help                  Show this help
 
 Examples:
@@ -90,6 +94,10 @@ while [[ $# -gt 0 ]]; do
       COMPOSE_FILE="$2"
       shift 2
       ;;
+    --voice-compose-file)
+      VOICE_COMPOSE_FILE="$2"
+      shift 2
+      ;;
     --pull-latest)
       PULL_LATEST="true"
       shift
@@ -100,6 +108,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-sysctl)
       SKIP_SYSCTL="true"
+      shift
+      ;;
+    --skip-voice)
+      SKIP_VOICE="true"
       shift
       ;;
     -h|--help)
@@ -270,6 +282,32 @@ validate_compose_social_env_wiring() {
     log_error "Add Google native env passthrough keys under app.environment in $COMPOSE_FILE"
     exit 1
   fi
+}
+
+voice_env_is_ready() {
+  local required_voice_keys=(
+    LIVEKIT_KEYS
+    TURN_EXTERNAL_IP
+    TURN_REALM
+    TURN_USERNAME
+    TURN_PASSWORD
+  )
+
+  local key
+  for key in "${required_voice_keys[@]}"; do
+    local value
+    value="$(read_env "$key")"
+    if [[ -z "$value" ]]; then
+      log_warn "Voice env key is missing: $key"
+      return 1
+    fi
+    if is_placeholder_value "$value"; then
+      log_warn "Voice env key has placeholder value: $key"
+      return 1
+    fi
+  done
+
+  return 0
 }
 
 wait_for_container_health() {
@@ -559,6 +597,7 @@ ensure_network "$TRAEFIK_NETWORK"
 ensure_runtime_dirs
 
 compose_cmd=(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
+voice_compose_cmd=(docker compose -f "$VOICE_COMPOSE_FILE" --env-file "$ENV_FILE")
 
 log_info "Starting dependency services"
 "${compose_cmd[@]}" up -d db redis minio ai-agent
@@ -622,6 +661,35 @@ if ! wait_for_http_code_200 "http://127.0.0.1:3001/api/health" 120; then
   exit 1
 fi
 
+if [[ "$SKIP_VOICE" == "true" ]]; then
+  log_warn "Voice stack bootstrap skipped by flag (--skip-voice)"
+elif [[ ! -f "$VOICE_COMPOSE_FILE" ]]; then
+  log_warn "Voice compose file not found: $VOICE_COMPOSE_FILE"
+  log_warn "Skipping voice stack bootstrap"
+elif ! voice_env_is_ready; then
+  log_warn "Skipping voice stack bootstrap due to missing/placeholder voice env"
+else
+  # Cleanup legacy project label to avoid container-name conflicts during migration.
+  docker compose -p deploy -f "$VOICE_COMPOSE_FILE" --env-file "$ENV_FILE" down >/dev/null 2>&1 || true
+
+  log_info "Starting voice services (livekit/coturn)"
+  "${voice_compose_cmd[@]}" up -d livekit coturn
+
+  if ! wait_for_container_health vex-livekit 120; then
+    log_error "LiveKit container did not become running in time"
+    docker logs --tail 120 vex-livekit || true
+    exit 1
+  fi
+
+  if ! wait_for_container_health vex-coturn 120; then
+    log_error "coturn container did not become running in time"
+    docker logs --tail 120 vex-coturn || true
+    exit 1
+  fi
+
+  log_success "Voice stack is running"
+fi
+
 if traefik_container_exists; then
   if ! wait_for_http_code_200 "https://127.0.0.1/api/health" 120 "$DOMAIN"; then
     log_error "Traefik route check failed for domain: $DOMAIN"
@@ -634,6 +702,7 @@ echo ""
 echo "Runbook summary:"
 echo "- Env file: $ENV_FILE"
 echo "- Compose file: $COMPOSE_FILE"
+echo "- Voice compose file: $VOICE_COMPOSE_FILE"
 echo "- Traefik network: $TRAEFIK_NETWORK"
 echo "- Domain: $DOMAIN"
 echo ""
