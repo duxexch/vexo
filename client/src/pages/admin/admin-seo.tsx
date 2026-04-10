@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { useI18n } from "@/lib/i18n";
-import { 
-  Search, 
-  Globe, 
-  Share2, 
-  FileText, 
-  Code, 
+import { languages, useI18n } from "@/lib/i18n";
+import {
+  Search,
+  Globe,
+  Share2,
+  FileText,
+  Code,
   BarChart3,
   Link,
   Save,
@@ -63,6 +63,7 @@ interface SeoSettings {
   jsonLdEnabled: boolean;
   organizationName: string;
   organizationLogo: string;
+  localeOverrides?: Record<string, Record<string, string>>;
 }
 
 const defaultSeoSettings: SeoSettings = {
@@ -84,6 +85,7 @@ const defaultSeoSettings: SeoSettings = {
   jsonLdEnabled: false,
   organizationName: "",
   organizationLogo: "",
+  localeOverrides: {},
 };
 
 export default function AdminSeoPage() {
@@ -99,11 +101,13 @@ export default function AdminSeoPage() {
     queryFn: () => adminFetch("/api/admin/seo-settings"),
   });
 
-  useState(() => {
+  useEffect(() => {
     if (seoData) {
       setSettings({ ...defaultSeoSettings, ...seoData });
     }
-  });
+  }, [seoData]);
+
+  const coveredLanguageCount = languages.length;
 
   const saveMutation = useMutation({
     mutationFn: async (data: Partial<SeoSettings>) => {
@@ -130,7 +134,7 @@ export default function AdminSeoPage() {
 
   const handleSave = (section: string) => {
     let dataToSave: Partial<SeoSettings> = {};
-    
+
     switch (section) {
       case "meta":
         dataToSave = {
@@ -173,7 +177,7 @@ export default function AdminSeoPage() {
       default:
         dataToSave = settings;
     }
-    
+
     saveMutation.mutate(dataToSave);
   };
 
@@ -202,10 +206,18 @@ export default function AdminSeoPage() {
           {isArabic ? "إدارة SEO" : "SEO Management"}
         </h1>
         <p className="text-muted-foreground">
-          {isArabic 
-            ? "إدارة إعدادات محركات البحث والبيانات الوصفية" 
+          {isArabic
+            ? "إدارة إعدادات محركات البحث والبيانات الوصفية"
             : "Manage search engine optimization and metadata settings"}
         </p>
+        <div className="mt-3 inline-flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+          <Globe className="h-4 w-4 text-primary" />
+          <span>
+            {isArabic
+              ? `تغطية اللغات: ${coveredLanguageCount}/${coveredLanguageCount} (Fallback تلقائي مفعل لكل اللغات)`
+              : `Language coverage: ${coveredLanguageCount}/${coveredLanguageCount} (automatic fallback enabled for all languages)`}
+          </span>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -240,8 +252,8 @@ export default function AdminSeoPage() {
                 {isArabic ? "العلامات الوصفية" : "Meta Tags"}
               </CardTitle>
               <CardDescription>
-                {isArabic 
-                  ? "تكوين العنوان والوصف والكلمات المفتاحية للموقع" 
+                {isArabic
+                  ? "تكوين العنوان والوصف والكلمات المفتاحية للموقع"
                   : "Configure site title, description, and keywords for search engines"}
               </CardDescription>
             </CardHeader>
@@ -271,7 +283,7 @@ export default function AdminSeoPage() {
                   data-testid="input-site-description"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {isArabic ? "الحد الأمثل: 150-160 حرف" : "Optimal length: 150-160 characters"} 
+                  {isArabic ? "الحد الأمثل: 150-160 حرف" : "Optimal length: 150-160 characters"}
                   ({settings.siteDescription.length}/160)
                 </p>
               </div>
@@ -292,8 +304,8 @@ export default function AdminSeoPage() {
               </div>
 
               <div className="flex justify-end pt-4">
-                <Button 
-                  onClick={() => handleSave("meta")} 
+                <Button
+                  onClick={() => handleSave("meta")}
                   disabled={saveMutation.isPending}
                   data-testid="button-save-meta"
                 >
@@ -339,8 +351,8 @@ export default function AdminSeoPage() {
                 {isArabic ? "إعدادات Open Graph" : "Open Graph Settings"}
               </CardTitle>
               <CardDescription>
-                {isArabic 
-                  ? "تحكم في كيفية ظهور موقعك عند مشاركته على وسائل التواصل الاجتماعي" 
+                {isArabic
+                  ? "تحكم في كيفية ظهور موقعك عند مشاركته على وسائل التواصل الاجتماعي"
                   : "Control how your site appears when shared on social media"}
               </CardDescription>
             </CardHeader>
@@ -397,8 +409,8 @@ export default function AdminSeoPage() {
               </div>
 
               <div className="flex justify-end pt-4">
-                <Button 
-                  onClick={() => handleSave("og")} 
+                <Button
+                  onClick={() => handleSave("og")}
                   disabled={saveMutation.isPending}
                   data-testid="button-save-og"
                 >
@@ -424,9 +436,9 @@ export default function AdminSeoPage() {
               <div className="border rounded-lg overflow-hidden max-w-md">
                 <div className="h-40 bg-muted flex items-center justify-center">
                   {settings.ogImage ? (
-                    <img 
-                      src={settings.ogImage} 
-                      alt="OG Preview" 
+                    <img
+                      src={settings.ogImage}
+                      alt="OG Preview"
                       loading="lazy"
                       className="w-full h-full object-cover"
                     />
@@ -460,8 +472,8 @@ export default function AdminSeoPage() {
                 {isArabic ? "عنوان URL الأساسي" : "Canonical URL"}
               </CardTitle>
               <CardDescription>
-                {isArabic 
-                  ? "حدد عنوان URL الأساسي لتجنب مشاكل المحتوى المكرر" 
+                {isArabic
+                  ? "حدد عنوان URL الأساسي لتجنب مشاكل المحتوى المكرر"
                   : "Set the canonical URL to avoid duplicate content issues"}
               </CardDescription>
             </CardHeader>
@@ -486,8 +498,8 @@ export default function AdminSeoPage() {
                 {isArabic ? "إعدادات Robots.txt" : "Robots.txt Settings"}
               </CardTitle>
               <CardDescription>
-                {isArabic 
-                  ? "تحكم في كيفية فهرسة محركات البحث لموقعك" 
+                {isArabic
+                  ? "تحكم في كيفية فهرسة محركات البحث لموقعك"
                   : "Control how search engines crawl and index your site"}
               </CardDescription>
             </CardHeader>
@@ -504,8 +516,8 @@ export default function AdminSeoPage() {
                   data-testid="input-robots-content"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {isArabic 
-                    ? "القيم الشائعة: index/noindex, follow/nofollow" 
+                  {isArabic
+                    ? "القيم الشائعة: index/noindex, follow/nofollow"
                     : "Common values: index/noindex, follow/nofollow"}
                 </p>
               </div>
@@ -531,8 +543,8 @@ export default function AdminSeoPage() {
                 {isArabic ? "إعدادات خريطة الموقع" : "Sitemap Settings"}
               </CardTitle>
               <CardDescription>
-                {isArabic 
-                  ? "تكوين إنشاء خريطة الموقع التلقائية" 
+                {isArabic
+                  ? "تكوين إنشاء خريطة الموقع التلقائية"
                   : "Configure automatic sitemap generation"}
               </CardDescription>
             </CardHeader>
@@ -541,8 +553,8 @@ export default function AdminSeoPage() {
                 <div>
                   <Label className="text-base">{isArabic ? "تفعيل خريطة الموقع" : "Enable Sitemap"}</Label>
                   <p className="text-sm text-muted-foreground">
-                    {isArabic 
-                      ? "إنشاء ملف sitemap.xml تلقائياً" 
+                    {isArabic
+                      ? "إنشاء ملف sitemap.xml تلقائياً"
                       : "Automatically generate sitemap.xml file"}
                   </p>
                 </div>
@@ -554,8 +566,8 @@ export default function AdminSeoPage() {
               </div>
 
               <div className="flex justify-end pt-4">
-                <Button 
-                  onClick={() => handleSave("technical")} 
+                <Button
+                  onClick={() => handleSave("technical")}
                   disabled={saveMutation.isPending}
                   data-testid="button-save-technical"
                 >
@@ -579,8 +591,8 @@ export default function AdminSeoPage() {
                 {isArabic ? "Google Analytics" : "Google Analytics"}
               </CardTitle>
               <CardDescription>
-                {isArabic 
-                  ? "ربط موقعك بـ Google Analytics لتتبع الزوار" 
+                {isArabic
+                  ? "ربط موقعك بـ Google Analytics لتتبع الزوار"
                   : "Connect your site to Google Analytics for visitor tracking"}
               </CardDescription>
             </CardHeader>
@@ -595,8 +607,8 @@ export default function AdminSeoPage() {
                   data-testid="input-google-analytics-id"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {isArabic 
-                    ? "معرف GA4 (G-XXXX) أو Universal Analytics (UA-XXXX)" 
+                  {isArabic
+                    ? "معرف GA4 (G-XXXX) أو Universal Analytics (UA-XXXX)"
                     : "GA4 ID (G-XXXX) or Universal Analytics ID (UA-XXXX)"}
                 </p>
               </div>
@@ -610,8 +622,8 @@ export default function AdminSeoPage() {
                 {isArabic ? "Facebook Pixel" : "Facebook Pixel"}
               </CardTitle>
               <CardDescription>
-                {isArabic 
-                  ? "تتبع التحويلات وإنشاء جماهير مخصصة" 
+                {isArabic
+                  ? "تتبع التحويلات وإنشاء جماهير مخصصة"
                   : "Track conversions and create custom audiences"}
               </CardDescription>
             </CardHeader>
@@ -636,8 +648,8 @@ export default function AdminSeoPage() {
                 {isArabic ? "روابط وسائل التواصل الاجتماعي" : "Social Media Links"}
               </CardTitle>
               <CardDescription>
-                {isArabic 
-                  ? "أضف روابط حساباتك على وسائل التواصل الاجتماعي" 
+                {isArabic
+                  ? "أضف روابط حساباتك على وسائل التواصل الاجتماعي"
                   : "Add links to your social media accounts"}
               </CardDescription>
             </CardHeader>
@@ -685,8 +697,8 @@ export default function AdminSeoPage() {
               </div>
 
               <div className="flex justify-end pt-4">
-                <Button 
-                  onClick={() => handleSave("analytics")} 
+                <Button
+                  onClick={() => handleSave("analytics")}
                   disabled={saveMutation.isPending}
                   data-testid="button-save-analytics"
                 >
@@ -710,8 +722,8 @@ export default function AdminSeoPage() {
                 {isArabic ? "البيانات المنظمة JSON-LD" : "JSON-LD Structured Data"}
               </CardTitle>
               <CardDescription>
-                {isArabic 
-                  ? "تحسين ظهور موقعك في نتائج البحث باستخدام البيانات المنظمة" 
+                {isArabic
+                  ? "تحسين ظهور موقعك في نتائج البحث باستخدام البيانات المنظمة"
                   : "Enhance your search appearance with structured data markup"}
               </CardDescription>
             </CardHeader>
@@ -720,8 +732,8 @@ export default function AdminSeoPage() {
                 <div>
                   <Label className="text-base">{isArabic ? "تفعيل JSON-LD" : "Enable JSON-LD"}</Label>
                   <p className="text-sm text-muted-foreground">
-                    {isArabic 
-                      ? "إضافة بيانات منظمة لمحركات البحث" 
+                    {isArabic
+                      ? "إضافة بيانات منظمة لمحركات البحث"
                       : "Add structured data markup for search engines"}
                   </p>
                 </div>
@@ -764,26 +776,26 @@ export default function AdminSeoPage() {
                   </CardHeader>
                   <CardContent className="py-3">
                     <pre className="text-xs bg-background p-3 rounded overflow-x-auto">
-{JSON.stringify({
-  "@context": "https://schema.org",
-  "@type": "Organization",
-  "name": settings.organizationName || "Your Organization",
-  "url": settings.canonicalUrl || "https://yoursite.com",
-  "logo": settings.organizationLogo || "https://yoursite.com/logo.png",
-  "sameAs": [
-    settings.facebookUrl,
-    settings.instagramUrl,
-    settings.twitterHandle ? `https://twitter.com/${settings.twitterHandle.replace('@', '')}` : null
-  ].filter(Boolean)
-}, null, 2)}
+                      {JSON.stringify({
+                        "@context": "https://schema.org",
+                        "@type": "Organization",
+                        "name": settings.organizationName || "Your Organization",
+                        "url": settings.canonicalUrl || "https://yoursite.com",
+                        "logo": settings.organizationLogo || "https://yoursite.com/logo.png",
+                        "sameAs": [
+                          settings.facebookUrl,
+                          settings.instagramUrl,
+                          settings.twitterHandle ? `https://twitter.com/${settings.twitterHandle.replace('@', '')}` : null
+                        ].filter(Boolean)
+                      }, null, 2)}
                     </pre>
                   </CardContent>
                 </Card>
               )}
 
               <div className="flex justify-end pt-4">
-                <Button 
-                  onClick={() => handleSave("jsonld")} 
+                <Button
+                  onClick={() => handleSave("jsonld")}
                   disabled={saveMutation.isPending}
                   data-testid="button-save-jsonld"
                 >

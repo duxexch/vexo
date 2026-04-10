@@ -4,8 +4,135 @@ import { db } from "../../db";
 import { eq, inArray } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 import { getPublicRtcSettingsFromEnv } from "../../lib/public-rtc";
+import { invalidateRuntimeSeoCache } from "../../static";
 import fs from "fs";
 import path from "path";
+
+const SEO_SETTINGS_KEYS = [
+  "seo_site_title",
+  "seo_site_description",
+  "seo_site_keywords",
+  "seo_og_title",
+  "seo_og_description",
+  "seo_og_image",
+  "seo_og_type",
+  "seo_canonical_url",
+  "seo_robots_content",
+  "seo_enable_sitemap",
+  "seo_google_analytics_id",
+  "seo_facebook_pixel_id",
+  "seo_twitter_handle",
+  "seo_facebook_url",
+  "seo_instagram_url",
+  "seo_json_ld_enabled",
+  "seo_organization_name",
+  "seo_organization_logo",
+  "seo_locale_overrides",
+] as const;
+
+type SeoSettingsResponse = {
+  siteTitle: string;
+  siteDescription: string;
+  siteKeywords: string;
+  ogTitle: string;
+  ogDescription: string;
+  ogImage: string;
+  ogType: string;
+  canonicalUrl: string;
+  robotsContent: string;
+  enableSitemap: boolean;
+  googleAnalyticsId: string;
+  facebookPixelId: string;
+  twitterHandle: string;
+  facebookUrl: string;
+  instagramUrl: string;
+  jsonLdEnabled: boolean;
+  organizationName: string;
+  organizationLogo: string;
+  localeOverrides: Record<string, Record<string, string>>;
+};
+
+const DEFAULT_SEO_SETTINGS: SeoSettingsResponse = {
+  siteTitle: "",
+  siteDescription: "",
+  siteKeywords: "",
+  ogTitle: "",
+  ogDescription: "",
+  ogImage: "",
+  ogType: "website",
+  canonicalUrl: "https://vixo.click/",
+  robotsContent: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+  enableSitemap: true,
+  googleAnalyticsId: "",
+  facebookPixelId: "",
+  twitterHandle: "",
+  facebookUrl: "",
+  instagramUrl: "",
+  jsonLdEnabled: true,
+  organizationName: "VEX",
+  organizationLogo: "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+  localeOverrides: {},
+};
+
+function parseLocaleOverrides(raw: string | null | undefined): Record<string, Record<string, string>> {
+  if (!raw) return {};
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    const normalized: Record<string, Record<string, string>> = {};
+    for (const [locale, value] of Object.entries(parsed)) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+
+      const localeMap: Record<string, string> = {};
+      for (const [field, fieldValue] of Object.entries(value as Record<string, unknown>)) {
+        if (typeof fieldValue === "string") {
+          localeMap[field] = fieldValue;
+        }
+      }
+
+      if (Object.keys(localeMap).length > 0) {
+        normalized[locale.toLowerCase()] = localeMap;
+      }
+    }
+
+    return normalized;
+  } catch {
+    return {};
+  }
+}
+
+function buildSeoSettingsResponse(settingsRows: Array<{ key: string; value: string | null }>): SeoSettingsResponse {
+  const map = settingsRows.reduce<Record<string, string>>((acc, row) => {
+    if (row.value !== null) {
+      acc[row.key] = row.value;
+    }
+    return acc;
+  }, {});
+
+  return {
+    siteTitle: map.seo_site_title ?? DEFAULT_SEO_SETTINGS.siteTitle,
+    siteDescription: map.seo_site_description ?? DEFAULT_SEO_SETTINGS.siteDescription,
+    siteKeywords: map.seo_site_keywords ?? DEFAULT_SEO_SETTINGS.siteKeywords,
+    ogTitle: map.seo_og_title ?? DEFAULT_SEO_SETTINGS.ogTitle,
+    ogDescription: map.seo_og_description ?? DEFAULT_SEO_SETTINGS.ogDescription,
+    ogImage: map.seo_og_image ?? DEFAULT_SEO_SETTINGS.ogImage,
+    ogType: map.seo_og_type ?? DEFAULT_SEO_SETTINGS.ogType,
+    canonicalUrl: map.seo_canonical_url ?? DEFAULT_SEO_SETTINGS.canonicalUrl,
+    robotsContent: map.seo_robots_content ?? DEFAULT_SEO_SETTINGS.robotsContent,
+    enableSitemap: (map.seo_enable_sitemap ?? "true") !== "false",
+    googleAnalyticsId: map.seo_google_analytics_id ?? DEFAULT_SEO_SETTINGS.googleAnalyticsId,
+    facebookPixelId: map.seo_facebook_pixel_id ?? DEFAULT_SEO_SETTINGS.facebookPixelId,
+    twitterHandle: map.seo_twitter_handle ?? DEFAULT_SEO_SETTINGS.twitterHandle,
+    facebookUrl: map.seo_facebook_url ?? DEFAULT_SEO_SETTINGS.facebookUrl,
+    instagramUrl: map.seo_instagram_url ?? DEFAULT_SEO_SETTINGS.instagramUrl,
+    jsonLdEnabled: (map.seo_json_ld_enabled ?? "true") !== "false",
+    organizationName: map.seo_organization_name ?? DEFAULT_SEO_SETTINGS.organizationName,
+    organizationLogo: map.seo_organization_logo ?? DEFAULT_SEO_SETTINGS.organizationLogo,
+    localeOverrides: parseLocaleOverrides(map.seo_locale_overrides),
+  };
+}
 
 function resolveAdminAabFilePath(): string | null {
   const rootPath = process.cwd();
@@ -37,6 +164,102 @@ function resolveAdminAabFilePath(): string | null {
 }
 
 export function registerAppSettingsRoutes(app: Express) {
+
+  app.get("/api/admin/seo-settings", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
+    try {
+      const rows = await db.select({ key: appSettings.key, value: appSettings.value })
+        .from(appSettings)
+        .where(inArray(appSettings.key, [...SEO_SETTINGS_KEYS]));
+
+      res.json(buildSeoSettingsResponse(rows));
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/admin/seo-settings", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const payload = (req.body ?? {}) as Record<string, unknown>;
+      const updates: Record<string, string> = {};
+
+      const setString = (field: keyof Record<string, unknown>, key: string, maxLen: number) => {
+        const value = payload[field];
+        if (typeof value === "string") {
+          updates[key] = value.trim().slice(0, maxLen);
+        }
+      };
+
+      setString("siteTitle", "seo_site_title", 180);
+      setString("siteDescription", "seo_site_description", 320);
+      setString("siteKeywords", "seo_site_keywords", 1000);
+      setString("ogTitle", "seo_og_title", 180);
+      setString("ogDescription", "seo_og_description", 320);
+      setString("ogImage", "seo_og_image", 500);
+      setString("ogType", "seo_og_type", 32);
+      setString("canonicalUrl", "seo_canonical_url", 500);
+      setString("robotsContent", "seo_robots_content", 500);
+      setString("googleAnalyticsId", "seo_google_analytics_id", 80);
+      setString("facebookPixelId", "seo_facebook_pixel_id", 80);
+      setString("twitterHandle", "seo_twitter_handle", 80);
+      setString("facebookUrl", "seo_facebook_url", 500);
+      setString("instagramUrl", "seo_instagram_url", 500);
+      setString("organizationName", "seo_organization_name", 180);
+      setString("organizationLogo", "seo_organization_logo", 500);
+
+      if (typeof payload.enableSitemap === "boolean") {
+        updates.seo_enable_sitemap = payload.enableSitemap ? "true" : "false";
+      }
+
+      if (typeof payload.jsonLdEnabled === "boolean") {
+        updates.seo_json_ld_enabled = payload.jsonLdEnabled ? "true" : "false";
+      }
+
+      if (payload.localeOverrides && typeof payload.localeOverrides === "object" && !Array.isArray(payload.localeOverrides)) {
+        updates.seo_locale_overrides = JSON.stringify(payload.localeOverrides);
+      }
+
+      const updateEntries = Object.entries(updates);
+      if (updateEntries.length === 0) {
+        return res.status(400).json({ error: "No valid SEO settings to update" });
+      }
+
+      for (const [key, value] of updateEntries) {
+        const [existing] = await db.select({ id: appSettings.id }).from(appSettings).where(eq(appSettings.key, key)).limit(1);
+
+        if (existing) {
+          await db.update(appSettings)
+            .set({
+              value,
+              category: "seo",
+              updatedBy: req.admin!.id,
+              updatedAt: new Date(),
+            })
+            .where(eq(appSettings.key, key));
+        } else {
+          await db.insert(appSettings).values({
+            key,
+            value,
+            category: "seo",
+            updatedBy: req.admin!.id,
+          });
+        }
+      }
+
+      await logAdminAction(req.admin!.id, "settings_update", "seo_settings", "global", {
+        metadata: JSON.stringify({ updatedKeys: updateEntries.map(([key]) => key) }),
+      }, req);
+
+      invalidateRuntimeSeoCache();
+
+      const rows = await db.select({ key: appSettings.key, value: appSettings.value })
+        .from(appSettings)
+        .where(inArray(appSettings.key, [...SEO_SETTINGS_KEYS]));
+
+      return res.json(buildSeoSettingsResponse(rows));
+    } catch (error: unknown) {
+      return res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
 
   // Public settings for user app
   app.get("/api/settings/public", async (req: Request, res: Response) => {

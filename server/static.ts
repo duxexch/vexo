@@ -4,6 +4,9 @@ import escapeHtml from "escape-html";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { db } from "./db";
+import { appSettings } from "@shared/schema";
+import { inArray } from "drizzle-orm";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -131,6 +134,135 @@ const SEO_PAGES: Record<string, { title: string; description: string; keywords: 
   },
 };
 
+type SeoLocaleField = "siteTitle" | "siteDescription" | "siteKeywords" | "ogTitle" | "ogDescription";
+type SeoLocaleOverrides = Record<string, Partial<Record<SeoLocaleField, string>>>;
+
+type RuntimeSeoSettings = {
+  siteTitle: string;
+  siteDescription: string;
+  siteKeywords: string;
+  ogTitle: string;
+  ogDescription: string;
+  canonicalUrl: string;
+  robotsContent: string;
+  enableSitemap: boolean;
+  localeOverrides: SeoLocaleOverrides;
+};
+
+const RUNTIME_SEO_SETTING_KEYS = [
+  "seo_site_title",
+  "seo_site_description",
+  "seo_site_keywords",
+  "seo_og_title",
+  "seo_og_description",
+  "seo_canonical_url",
+  "seo_robots_content",
+  "seo_enable_sitemap",
+  "seo_locale_overrides",
+] as const;
+
+const RUNTIME_SEO_DEFAULTS: RuntimeSeoSettings = {
+  siteTitle: SEO_PAGES["/"]?.title || "VEX",
+  siteDescription: SEO_PAGES["/"]?.description || "VEX",
+  siteKeywords: SEO_PAGES["/"]?.keywords || "VEX",
+  ogTitle: SEO_PAGES["/"]?.title || "VEX",
+  ogDescription: SEO_PAGES["/"]?.description || "VEX",
+  canonicalUrl: "https://vixo.click/",
+  robotsContent: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+  enableSitemap: true,
+  localeOverrides: {},
+};
+
+const RTL_LANG_PREFIXES = ["ar", "fa", "ur", "he", "ps", "sd", "ug", "yi"];
+
+let runtimeSeoCache: { value: RuntimeSeoSettings; expiresAt: number } | null = null;
+
+export function invalidateRuntimeSeoCache(): void {
+  runtimeSeoCache = null;
+}
+
+function parseLocaleOverrides(raw: string | null | undefined): SeoLocaleOverrides {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    const out: SeoLocaleOverrides = {};
+    for (const [locale, localeValue] of Object.entries(parsed)) {
+      if (!localeValue || typeof localeValue !== "object" || Array.isArray(localeValue)) continue;
+      const localeData = localeValue as Record<string, unknown>;
+
+      const normalized: Partial<Record<SeoLocaleField, string>> = {};
+      for (const field of ["siteTitle", "siteDescription", "siteKeywords", "ogTitle", "ogDescription"] as const) {
+        if (typeof localeData[field] === "string") {
+          normalized[field] = localeData[field] as string;
+        }
+      }
+
+      if (Object.keys(normalized).length > 0) {
+        out[locale.toLowerCase()] = normalized;
+      }
+    }
+
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+async function getRuntimeSeoSettings(forceRefresh = false): Promise<RuntimeSeoSettings> {
+  if (!forceRefresh && runtimeSeoCache && runtimeSeoCache.expiresAt > Date.now()) {
+    return runtimeSeoCache.value;
+  }
+
+  const rows = await db.select({ key: appSettings.key, value: appSettings.value })
+    .from(appSettings)
+    .where(inArray(appSettings.key, [...RUNTIME_SEO_SETTING_KEYS]));
+
+  const map = rows.reduce<Record<string, string>>((acc, row) => {
+    if (row.value !== null) acc[row.key] = row.value;
+    return acc;
+  }, {});
+
+  const value: RuntimeSeoSettings = {
+    siteTitle: map.seo_site_title || RUNTIME_SEO_DEFAULTS.siteTitle,
+    siteDescription: map.seo_site_description || RUNTIME_SEO_DEFAULTS.siteDescription,
+    siteKeywords: map.seo_site_keywords || RUNTIME_SEO_DEFAULTS.siteKeywords,
+    ogTitle: map.seo_og_title || RUNTIME_SEO_DEFAULTS.ogTitle,
+    ogDescription: map.seo_og_description || RUNTIME_SEO_DEFAULTS.ogDescription,
+    canonicalUrl: map.seo_canonical_url || RUNTIME_SEO_DEFAULTS.canonicalUrl,
+    robotsContent: map.seo_robots_content || RUNTIME_SEO_DEFAULTS.robotsContent,
+    enableSitemap: (map.seo_enable_sitemap || "true") !== "false",
+    localeOverrides: parseLocaleOverrides(map.seo_locale_overrides),
+  };
+
+  runtimeSeoCache = {
+    value,
+    expiresAt: Date.now() + 60_000,
+  };
+
+  return value;
+}
+
+function getPreferredLocale(req: Request): string {
+  const langQuery = typeof req.query.lang === "string" ? req.query.lang : "";
+  const hlQuery = typeof req.query.hl === "string" ? req.query.hl : "";
+  const fromQuery = (langQuery || hlQuery).trim().toLowerCase();
+  if (fromQuery) return fromQuery;
+
+  const acceptLanguageHeader = typeof req.headers["accept-language"] === "string" ? req.headers["accept-language"] : "";
+  const first = acceptLanguageHeader.split(",")[0]?.trim().toLowerCase();
+  return first || "ar";
+}
+
+function getLocaleValue(overrides: SeoLocaleOverrides, locale: string, field: SeoLocaleField): string | undefined {
+  const exact = overrides[locale]?.[field];
+  if (exact) return exact;
+
+  const base = locale.split("-")[0];
+  return overrides[base]?.[field];
+}
+
 export function serveStatic(app: Express) {
   const distPath = path.resolve(__dirname, "..", "dist", "public");
   if (!fs.existsSync(distPath)) {
@@ -212,42 +344,69 @@ export function serveStatic(app: Express) {
     }
   });
 
-  app.get("/sitemap.xml", publicStaticLimiter, (_req, res) => {
-    const sitemapPath = path.join(distPath, "sitemap.xml");
-    if (fs.existsSync(sitemapPath)) {
-      res.set({
-        "Content-Type": "application/xml; charset=utf-8",
-        "Cache-Control": "public, max-age=900",
-      });
-      res.sendFile(sitemapPath);
-    } else {
-      res.status(404).type("text/plain").send("sitemap.xml not found");
+  app.get("/sitemap.xml", publicStaticLimiter, async (_req, res) => {
+    try {
+      const runtimeSeo = await getRuntimeSeoSettings();
+      if (!runtimeSeo.enableSitemap) {
+        return res.status(404).type("text/plain").send("sitemap.xml disabled");
+      }
+
+      const sitemapPath = path.join(distPath, "sitemap.xml");
+      if (fs.existsSync(sitemapPath)) {
+        res.set({
+          "Content-Type": "application/xml; charset=utf-8",
+          "Cache-Control": "public, max-age=900",
+        });
+        return res.sendFile(sitemapPath);
+      }
+
+      return res.status(404).type("text/plain").send("sitemap.xml not found");
+    } catch {
+      return res.status(500).type("text/plain").send("sitemap.xml unavailable");
     }
   });
 
-  app.get("/sitemap-index.xml", publicStaticLimiter, (_req, res) => {
-    const sitemapIndexPath = path.join(distPath, "sitemap-index.xml");
-    if (fs.existsSync(sitemapIndexPath)) {
-      res.set({
-        "Content-Type": "application/xml; charset=utf-8",
-        "Cache-Control": "public, max-age=900",
-      });
-      res.sendFile(sitemapIndexPath);
-    } else {
-      res.status(404).type("text/plain").send("sitemap-index.xml not found");
+  app.get("/sitemap-index.xml", publicStaticLimiter, async (_req, res) => {
+    try {
+      const runtimeSeo = await getRuntimeSeoSettings();
+      if (!runtimeSeo.enableSitemap) {
+        return res.status(404).type("text/plain").send("sitemap-index.xml disabled");
+      }
+
+      const sitemapIndexPath = path.join(distPath, "sitemap-index.xml");
+      if (fs.existsSync(sitemapIndexPath)) {
+        res.set({
+          "Content-Type": "application/xml; charset=utf-8",
+          "Cache-Control": "public, max-age=900",
+        });
+        return res.sendFile(sitemapIndexPath);
+      }
+
+      return res.status(404).type("text/plain").send("sitemap-index.xml not found");
+    } catch {
+      return res.status(500).type("text/plain").send("sitemap-index.xml unavailable");
     }
   });
 
-  app.get("/sitemap-core.xml", publicStaticLimiter, (_req, res) => {
-    const sitemapCorePath = path.join(distPath, "sitemap-core.xml");
-    if (fs.existsSync(sitemapCorePath)) {
-      res.set({
-        "Content-Type": "application/xml; charset=utf-8",
-        "Cache-Control": "public, max-age=900",
-      });
-      res.sendFile(sitemapCorePath);
-    } else {
-      res.status(404).type("text/plain").send("sitemap-core.xml not found");
+  app.get("/sitemap-core.xml", publicStaticLimiter, async (_req, res) => {
+    try {
+      const runtimeSeo = await getRuntimeSeoSettings();
+      if (!runtimeSeo.enableSitemap) {
+        return res.status(404).type("text/plain").send("sitemap-core.xml disabled");
+      }
+
+      const sitemapCorePath = path.join(distPath, "sitemap-core.xml");
+      if (fs.existsSync(sitemapCorePath)) {
+        res.set({
+          "Content-Type": "application/xml; charset=utf-8",
+          "Cache-Control": "public, max-age=900",
+        });
+        return res.sendFile(sitemapCorePath);
+      }
+
+      return res.status(404).type("text/plain").send("sitemap-core.xml not found");
+    } catch {
+      return res.status(500).type("text/plain").send("sitemap-core.xml unavailable");
     }
   });
 
@@ -282,6 +441,7 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath, {
     maxAge: "1h",
     etag: true,
+    index: false,
   }));
 
   // Digital Asset Links for TWA (Android app verification)
@@ -315,20 +475,56 @@ export function serveStatic(app: Express) {
 
   // fall through to index.html if the file doesn't exist (SPA)
   // Inject SEO meta tags for crawler-friendly rendering
-  app.use("*", publicHtmlLimiter, (req, res) => {
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  app.use("*", publicHtmlLimiter, async (req, res) => {
+    try {
+      const forceSeoRefresh = req.query.seo_refresh === "1" || req.query.seo_refresh === "true";
+      const runtimeSeo = await getRuntimeSeoSettings(forceSeoRefresh);
+      const locale = getPreferredLocale(req);
+      const localeBase = locale.split("-")[0];
+      const isRtlLocale = RTL_LANG_PREFIXES.includes(localeBase);
 
-    const indexPath = path.resolve(distPath, "index.html");
-    let html = fs.readFileSync(indexPath, "utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("X-Robots-Tag", runtimeSeo.robotsContent);
 
-    // Get SEO data for the current path
-    const pagePath = req.originalUrl.split("?")[0].replace(/\/$/, "") || "/";
-    const seo = SEO_PAGES[pagePath];
+      const indexPath = path.resolve(distPath, "index.html");
+      let html = fs.readFileSync(indexPath, "utf-8");
 
-    if (seo) {
-      const escapedTitle = escapeHtmlAttribute(seo.title);
-      const escapedDescription = escapeHtmlAttribute(seo.description);
-      const escapedKeywords = escapeHtmlAttribute(seo.keywords);
+      // Get SEO data for the current path
+      const pagePath = req.originalUrl.split("?")[0].replace(/\/$/, "") || "/";
+      const routeSeo = SEO_PAGES[pagePath];
+
+      const defaultCanonical = `https://vixo.click${pagePath === "/" ? "/" : pagePath}`;
+      const canonicalUrl = routeSeo?.canonicalUrl || runtimeSeo.canonicalUrl || defaultCanonical;
+
+      const title = getLocaleValue(runtimeSeo.localeOverrides, locale, "siteTitle")
+        || routeSeo?.title
+        || runtimeSeo.siteTitle
+        || RUNTIME_SEO_DEFAULTS.siteTitle;
+      const description = getLocaleValue(runtimeSeo.localeOverrides, locale, "siteDescription")
+        || routeSeo?.description
+        || runtimeSeo.siteDescription
+        || RUNTIME_SEO_DEFAULTS.siteDescription;
+      const keywords = getLocaleValue(runtimeSeo.localeOverrides, locale, "siteKeywords")
+        || routeSeo?.keywords
+        || runtimeSeo.siteKeywords
+        || RUNTIME_SEO_DEFAULTS.siteKeywords;
+      const ogTitle = getLocaleValue(runtimeSeo.localeOverrides, locale, "ogTitle") || runtimeSeo.ogTitle || title;
+      const ogDescription = getLocaleValue(runtimeSeo.localeOverrides, locale, "ogDescription") || runtimeSeo.ogDescription || description;
+
+      const escapedTitle = escapeHtmlAttribute(title);
+      const escapedDescription = escapeHtmlAttribute(description);
+      const escapedKeywords = escapeHtmlAttribute(keywords);
+      const escapedOgTitle = escapeHtmlAttribute(ogTitle);
+      const escapedOgDescription = escapeHtmlAttribute(ogDescription);
+      const escapedUrl = escapeHtmlAttribute(canonicalUrl);
+      const escapedRobots = escapeHtmlAttribute(runtimeSeo.robotsContent);
+
+      html = html.replace(/<html\b([^>]*)>/i, (_match, attrs: string) => {
+        const withoutLangDir = attrs
+          .replace(/\s+lang="[^"]*"/i, "")
+          .replace(/\s+dir="[^"]*"/i, "");
+        return `<html lang="${escapeHtmlAttribute(locale)}" dir="${isRtlLocale ? "rtl" : "ltr"}"${withoutLangDir}>`;
+      });
 
       // Replace title
       html = html.replace(/<title>[^<]*<\/title>/, `<title>${escapedTitle}</title>`);
@@ -345,28 +541,33 @@ export function serveStatic(app: Express) {
         `<meta name="keywords" content="${escapedKeywords}"`
       );
 
+      // Replace robots meta from runtime settings
+      html = html.replace(
+        /<meta name="robots" content="[^"]*"/,
+        `<meta name="robots" content="${escapedRobots}"`
+      );
+
       // Replace OG tags
       html = html.replace(
         /<meta property="og:title" content="[^"]*"/,
-        `<meta property="og:title" content="${escapedTitle}"`
+        `<meta property="og:title" content="${escapedOgTitle}"`
       );
       html = html.replace(
         /<meta property="og:description" content="[^"]*"/,
-        `<meta property="og:description" content="${escapedDescription}"`
+        `<meta property="og:description" content="${escapedOgDescription}"`
       );
 
       // Replace Twitter tags
       html = html.replace(
         /<meta name="twitter:title" content="[^"]*"/,
-        `<meta name="twitter:title" content="${escapedTitle}"`
+        `<meta name="twitter:title" content="${escapedOgTitle}"`
       );
       html = html.replace(
         /<meta name="twitter:description" content="[^"]*"/,
-        `<meta name="twitter:description" content="${escapedDescription}"`
+        `<meta name="twitter:description" content="${escapedOgDescription}"`
       );
 
-      // Update canonical URL from static SEO config to avoid reflecting request-derived paths
-      const escapedUrl = escapeHtmlAttribute(seo.canonicalUrl);
+      // Update canonical URL
       html = html.replace(
         /<link rel="canonical" href="[^"]*"/,
         `<link rel="canonical" href="${escapedUrl}"`
@@ -375,8 +576,10 @@ export function serveStatic(app: Express) {
         /<meta property="og:url" content="[^"]*"/,
         `<meta property="og:url" content="${escapedUrl}"`
       );
-    }
 
-    res.status(200).set({ "Content-Type": "text/html" }).end(html);
+      res.status(200).set({ "Content-Type": "text/html" }).end(html);
+    } catch {
+      res.status(500).set({ "Content-Type": "text/plain" }).end("SEO rendering error");
+    }
   });
 }
