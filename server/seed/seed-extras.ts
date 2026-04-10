@@ -38,9 +38,9 @@ export async function seedFreePlaySettings() {
     { key: 'daily_bonus_enabled', value: 'true', description: 'Enable/disable daily bonus claims', descriptionAr: 'تفعيل/تعطيل المكافأة اليومية' },
     { key: 'ad_reward_enabled', value: 'true', description: 'Enable/disable ad watching rewards', descriptionAr: 'تفعيل/تعطيل مكافآت مشاهدة الإعلانات' },
     { key: 'referral_reward_enabled', value: 'true', description: 'Enable/disable referral rewards', descriptionAr: 'تفعيل/تعطيل مكافآت الإحالة' },
-    { key: 'ad_reward_amount', value: '0.10', description: 'Reward amount per ad watch ($)', descriptionAr: 'مبلغ المكافأة لكل إعلان ($)' },
+    { key: 'ad_reward_amount', value: '0.10', description: 'Reward amount per ad watch (project coins)', descriptionAr: 'مبلغ المكافأة لكل إعلان (عملة المشروع)' },
     { key: 'max_ads_per_day', value: '10', description: 'Maximum ads a user can watch per day', descriptionAr: 'الحد الأقصى للإعلانات يومياً' },
-    { key: 'referral_reward_amount', value: '5.00', description: 'Reward for each referral ($)', descriptionAr: 'مكافأة كل إحالة ($)' },
+    { key: 'referral_reward_amount', value: '5.00', description: 'Reward for each referral (project coins)', descriptionAr: 'مكافأة كل إحالة (عملة المشروع)' },
     { key: 'freePlayLimit', value: '50', description: 'Maximum games per day (0 = unlimited)', descriptionAr: 'الحد الأقصى للألعاب يومياً (0 = بدون حد)' },
   ];
 

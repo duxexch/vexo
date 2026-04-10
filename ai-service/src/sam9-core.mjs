@@ -11,6 +11,8 @@ const SHARED_TOKEN = process.env.AI_AGENT_SHARED_TOKEN || '';
 const PRIVACY_SALT = process.env.AI_AGENT_PRIVACY_SALT || process.env.AI_AGENT_SHARED_TOKEN || 'sam9-privacy-salt';
 const MAX_RAW_EVENTS = Math.max(500, Number(process.env.AI_AGENT_MAX_RAW_EVENTS || 5000));
 const MAX_PROJECT_SNAPSHOTS = Math.max(50, Number(process.env.AI_AGENT_MAX_PROJECT_SNAPSHOTS || 300));
+const MAX_ADMIN_THREADS = Math.max(20, Number(process.env.AI_AGENT_MAX_ADMIN_THREADS || 200));
+const MAX_ADMIN_MESSAGES = Math.max(8, Number(process.env.AI_AGENT_MAX_ADMIN_MESSAGES || 40));
 
 const DEFENSIVE_MOVE_TYPES = new Set(['pass', 'draw', 'decline_double', 'offer_draw', 'respond_draw']);
 const AGGRESSIVE_MOVE_TYPES = new Set(['move', 'play', 'playCard', 'double', 'bid', 'choose', 'setTrump']);
@@ -287,6 +289,7 @@ function defaultModel() {
       eventCounts: Object.create(null),
       botDecisions: 0,
       adminChats: 0,
+      adminIntentStats: Object.create(null),
       supportChats: 0,
       selfTuneRuns: 0,
       lastSelfTuneAt: null,
@@ -296,6 +299,7 @@ function defaultModel() {
     games: Object.create(null),
     sessions: Object.create(null),
     supportDesk: Object.create(null),
+    adminDesk: Object.create(null),
     projectSnapshots: [],
     rawEvents: [],
     analytics: {
@@ -353,6 +357,7 @@ function migrateModel(parsed) {
     games: isPlainObject(parsed?.games) ? parsed.games : Object.create(null),
     sessions: isPlainObject(parsed?.sessions) ? parsed.sessions : Object.create(null),
     supportDesk: isPlainObject(parsed?.supportDesk) ? parsed.supportDesk : Object.create(null),
+    adminDesk: isPlainObject(parsed?.adminDesk) ? parsed.adminDesk : Object.create(null),
     projectSnapshots: Array.isArray(parsed?.projectSnapshots) ? parsed.projectSnapshots : [],
     rawEvents: Array.isArray(parsed?.rawEvents) ? parsed.rawEvents : [],
   };
@@ -370,12 +375,352 @@ function migrateModel(parsed) {
   if (!isPlainObject(merged.supportDesk)) {
     merged.supportDesk = Object.create(null);
   }
+  if (!isPlainObject(merged.adminDesk)) {
+    merged.adminDesk = Object.create(null);
+  }
+
+  pruneAdminDeskStore(merged.adminDesk);
 
   return merged;
 }
 
 function hasArabicChars(text) {
   return /[\u0600-\u06FF]/.test(String(text || ''));
+}
+
+function normalizeAdminMode(mode) {
+  const safe = normalizeMapKey(mode, 'auto');
+  if (safe === 'auto') return 'auto';
+  if (safe === 'pm') return 'pm';
+  if (safe === 'developer' || safe === 'dev') return 'developer';
+  if (safe === 'ops') return 'ops';
+  if (safe === 'analytics') return 'analytics';
+  return 'auto';
+}
+
+function pruneAdminDeskStore(store) {
+  if (!isPlainObject(store)) return;
+
+  const entries = Object.entries(store)
+    .filter(([, value]) => isPlainObject(value))
+    .map(([key, value]) => {
+      const messages = Array.isArray(value.messages)
+        ? value.messages
+          .filter((item) => isPlainObject(item) && typeof item.text === 'string')
+          .slice(-MAX_ADMIN_MESSAGES)
+          .map((item) => ({
+            at: String(item.at || nowIso()),
+            role: item.role === 'agent' ? 'agent' : 'admin',
+            text: redactString(String(item.text || '')),
+            intent: normalizeMapKey(item.intent, 'general'),
+          }))
+        : [];
+
+      const normalized = {
+        key,
+        threadId: normalizeMapKey(value.threadId, 'main'),
+        adminId: String(value.adminId || 'anon_admin'),
+        createdAt: String(value.createdAt || nowIso()),
+        updatedAt: String(value.updatedAt || nowIso()),
+        turnCount: Math.max(0, Math.floor(toNumber(value.turnCount, messages.length))),
+        mode: normalizeAdminMode(value.mode),
+        lastIntent: normalizeMapKey(value.lastIntent, 'general'),
+        messages,
+      };
+
+      return [key, normalized];
+    });
+
+  entries.sort((a, b) => Date.parse(String(a[1].updatedAt || '0')) - Date.parse(String(b[1].updatedAt || '0')));
+  const kept = entries.slice(-MAX_ADMIN_THREADS);
+
+  const nextStore = Object.create(null);
+  for (const [key, value] of kept) {
+    nextStore[key] = value;
+  }
+
+  for (const key of Object.keys(store)) {
+    delete store[key];
+  }
+  Object.assign(store, nextStore);
+}
+
+function getAdminDeskStore() {
+  if (!isPlainObject(model.adminDesk)) {
+    model.adminDesk = Object.create(null);
+  }
+  return model.adminDesk;
+}
+
+function getAdminIntentStatsStore() {
+  if (!isPlainObject(model.summary)) {
+    model.summary = defaultModel().summary;
+  }
+  if (!isPlainObject(model.summary.adminIntentStats)) {
+    model.summary.adminIntentStats = Object.create(null);
+  }
+  return model.summary.adminIntentStats;
+}
+
+function ensureAdminIntentStat(intent) {
+  const store = getAdminIntentStatsStore();
+  const key = normalizeMapKey(intent, 'general');
+  if (!isPlainObject(store[key])) {
+    store[key] = {
+      intent: key,
+      total: 0,
+      withAction: 0,
+      actionSuccess: 0,
+      actionFailure: 0,
+      lastAt: null,
+    };
+  }
+  return store[key];
+}
+
+function recordAdminIntentOutcome(intent, actionResult) {
+  const stat = ensureAdminIntentStat(intent);
+  stat.total = toNumber(stat.total, 0) + 1;
+
+  if (actionResult) {
+    stat.withAction = toNumber(stat.withAction, 0) + 1;
+    if (actionResult.executed) {
+      stat.actionSuccess = toNumber(stat.actionSuccess, 0) + 1;
+    } else {
+      stat.actionFailure = toNumber(stat.actionFailure, 0) + 1;
+    }
+  }
+
+  stat.lastAt = nowIso();
+}
+
+function buildAdminIntentRates() {
+  const store = getAdminIntentStatsStore();
+  const rows = Object.values(store)
+    .filter((row) => isPlainObject(row))
+    .map((row) => {
+      const total = Math.max(0, toNumber(row.total, 0));
+      const withAction = Math.max(0, toNumber(row.withAction, 0));
+      const actionSuccess = Math.max(0, toNumber(row.actionSuccess, 0));
+      const actionFailure = Math.max(0, toNumber(row.actionFailure, 0));
+      const actionAttemptRate = total > 0 ? (withAction / total) * 100 : 0;
+      const actionSuccessRate = withAction > 0 ? (actionSuccess / withAction) * 100 : 0;
+
+      return {
+        intent: normalizeMapKey(row.intent, 'general'),
+        total,
+        withAction,
+        actionSuccess,
+        actionFailure,
+        actionAttemptRate: Number(actionAttemptRate.toFixed(2)),
+        actionSuccessRate: Number(actionSuccessRate.toFixed(2)),
+        lastAt: row.lastAt || null,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  return {
+    rows,
+    top: rows.slice(0, 8),
+  };
+}
+
+function getOrCreateAdminConversation(threadId, adminId, mode = 'auto') {
+  const store = getAdminDeskStore();
+  pruneAdminDeskStore(store);
+
+  const safeThreadId = normalizeMapKey(threadId, 'main');
+  const safeAdminId = hashStable(adminId || 'admin');
+  const key = `${safeThreadId}:${safeAdminId}`;
+
+  if (!isPlainObject(store[key])) {
+    store[key] = {
+      key,
+      threadId: safeThreadId,
+      adminId: safeAdminId,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      turnCount: 0,
+      mode: normalizeAdminMode(mode),
+      lastIntent: 'general',
+      messages: [],
+    };
+  }
+
+  store[key].mode = normalizeAdminMode(mode || store[key].mode || 'auto');
+  store[key].updatedAt = nowIso();
+  return store[key];
+}
+
+function appendAdminConversationMessage(conversation, role, text, intent = 'general') {
+  if (!isPlainObject(conversation)) return;
+
+  if (!Array.isArray(conversation.messages)) {
+    conversation.messages = [];
+  }
+
+  const cleanText = redactString(String(text || ''));
+  if (!cleanText) return;
+
+  conversation.messages.push({
+    at: nowIso(),
+    role: role === 'agent' ? 'agent' : 'admin',
+    text: cleanText,
+    intent: normalizeMapKey(intent, 'general'),
+  });
+
+  if (conversation.messages.length > MAX_ADMIN_MESSAGES) {
+    conversation.messages = conversation.messages.slice(-MAX_ADMIN_MESSAGES);
+  }
+
+  if (role !== 'agent') {
+    conversation.turnCount = toNumber(conversation.turnCount, 0) + 1;
+    conversation.lastIntent = normalizeMapKey(intent, 'general');
+  }
+  conversation.updatedAt = nowIso();
+}
+
+function detectAdminIntent(message, mode = 'auto') {
+  const lower = String(message || '').toLowerCase();
+  const normalizedMode = normalizeAdminMode(mode);
+
+  if (!lower) {
+    return { intent: 'general', confidence: 0.55 };
+  }
+
+  if (normalizedMode === 'pm') {
+    return { intent: 'project_management', confidence: 0.92 };
+  }
+  if (normalizedMode === 'developer') {
+    return { intent: 'developer_advice', confidence: 0.9 };
+  }
+  if (normalizedMode === 'analytics') {
+    return { intent: 'trend_analysis', confidence: 0.9 };
+  }
+
+  if (/\b(start|run|enable|stop|disable|restart)\b/i.test(lower) || /تشغيل|ايقاف|إيقاف|تعطيل|اعادة تشغيل|إعادة تشغيل/.test(lower)) {
+    return { intent: 'runtime_control', confidence: 0.9 };
+  }
+  if (/\b(self\s*tune|retune|tune now|retrain|optimize strategy)\b/i.test(lower) || /ضبط ذاتي|اعادة ضبط|إعادة ضبط|تحديث الاستراتيجية/.test(lower)) {
+    return { intent: 'self_tune', confidence: 0.88 };
+  }
+  if (lower.includes('capabilities') || lower.includes('قدرات')) {
+    return { intent: 'capabilities', confidence: 0.95 };
+  }
+  if (lower.includes('report') || lower.includes('تقرير') || lower.includes('ملخص')) {
+    return { intent: 'report', confidence: 0.95 };
+  }
+  if (lower.includes('trend') || lower.includes('تحليل') || lower.includes('analysis') || lower.includes('data')) {
+    return { intent: 'trend_analysis', confidence: 0.86 };
+  }
+  if (lower.includes('risk') || lower.includes('مخاطر') || lower.includes('anomaly') || lower.includes('شذوذ')) {
+    return { intent: 'risk_diagnostics', confidence: 0.83 };
+  }
+  if (/\b(sprint|roadmap|milestone|release|plan|project manager|risk register)\b/i.test(lower) || /سبرنت|خارطة طريق|اصدار|إصدار|خطة|مدير مشروع|مخاطر المشروع/.test(lower)) {
+    return { intent: 'project_management', confidence: 0.86 };
+  }
+  if (/\b(refactor|code|typescript|api|database|db|schema|bug|fix|performance)\b/i.test(lower) || /كود|برمجي|تايب سكريبت|قاعدة البيانات|مشكلة|اصلاح|إصلاح|اداء/.test(lower)) {
+    return { intent: 'developer_advice', confidence: 0.84 };
+  }
+
+  return { intent: 'general', confidence: 0.64 };
+}
+
+function buildAdminThreadSummary(conversation) {
+  const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
+  const recentAdmin = messages
+    .filter((item) => item.role === 'admin')
+    .slice(-3)
+    .map((item) => item.text)
+    .join(' | ');
+
+  return {
+    threadId: String(conversation?.threadId || 'main'),
+    mode: normalizeAdminMode(conversation?.mode || 'auto'),
+    turnCount: toNumber(conversation?.turnCount, 0),
+    lastIntent: normalizeMapKey(conversation?.lastIntent, 'general'),
+    recentAdminMessages: recentAdmin,
+  };
+}
+
+function buildProjectManagerAdvice(summary, insights, arabic = false) {
+  if (arabic) {
+    return [
+      `1) الهدف الحالي: تثبيت جودة الأداء ضمن نطاق توازن المخاطر ${insights.riskLevel}.`,
+      `2) خطة 7 أيام: متابعة الألعاب الأعلى نشاطًا (${insights.topGames || 'غير متاح'}) مع تقرير يومي.`,
+      `3) أولوية التنفيذ: مراجعة حالات التصعيد والدعم قبل أي تغييرات استراتيجية كبيرة.`,
+      `4) مؤشر نجاح فوري: الحفاظ على معدل فوز الذكاء عند ${summary.performance.aiWinRate}% بدون ارتفاع مفاجئ في المخاطر.`,
+    ].join('\n');
+  }
+
+  return [
+    `1) Current objective: keep performance stable within ${insights.riskLevel} risk balance.`,
+    `2) 7-day plan: monitor top active games (${insights.topGames || 'n/a'}) with daily summary checkpoints.`,
+    '3) Execution priority: review support escalation quality before major strategy shifts.',
+    `4) Fast success gate: keep AI win rate near ${summary.performance.aiWinRate}% without risk spikes.`,
+  ].join('\n');
+}
+
+function buildDeveloperAdvice(summary, arabic = false) {
+  if (arabic) {
+    return [
+      '1) عزز intent routing في admin chat مع ناتج structured JSON ثابت.',
+      '2) أضف smoke tests لمحادثات PM/Developer intents لتقليل regressions.',
+      `3) راقب avgThinkMs=${summary.performance.avgThinkMs} و avgDecisionConfidence=${summary.performance.avgDecisionConfidence}.`,
+      '4) أضف event tags موحدة لكل action تنفيذي (runtime/self-tune/report).',
+    ].join('\n');
+  }
+
+  return [
+    '1) Strengthen admin intent routing with stable structured output contracts.',
+    '2) Add smoke tests for PM/developer intents to reduce regressions.',
+    `3) Track avgThinkMs=${summary.performance.avgThinkMs} and avgDecisionConfidence=${summary.performance.avgDecisionConfidence}.`,
+    '4) Add consistent event tags for runtime/self-tune/report execution actions.',
+  ].join('\n');
+}
+
+function tryExecuteAdminAction(intent, message, requestedBy) {
+  const lower = String(message || '').toLowerCase();
+
+  if (intent === 'runtime_control') {
+    if (/\b(stop|disable|shutdown|off)\b/i.test(lower) || /ايقاف|إيقاف|تعطيل|اغلاق|إغلاق/.test(lower)) {
+      const runtime = setRuntimeEnabled(false, requestedBy, 'admin chat runtime stop', 'admin_chat');
+      return {
+        executed: true,
+        action: 'runtime_stop',
+        result: runtime,
+      };
+    }
+
+    if (/\b(start|run|enable|resume|on)\b/i.test(lower) || /تشغيل|استئناف|تفعيل/.test(lower)) {
+      const runtime = setRuntimeEnabled(true, requestedBy, 'admin chat runtime start', 'admin_chat');
+      return {
+        executed: true,
+        action: 'runtime_start',
+        result: runtime,
+      };
+    }
+
+    return {
+      executed: false,
+      action: 'runtime_control',
+      result: null,
+      note: 'runtime_action_ambiguous',
+    };
+  }
+
+  if (intent === 'self_tune') {
+    const tunedStrategies = runGlobalSelfTune('admin-chat-command');
+    return {
+      executed: true,
+      action: 'self_tune',
+      result: {
+        tunedStrategies,
+      },
+    };
+  }
+
+  return null;
 }
 
 function getSupportDeskStore() {
@@ -1192,6 +1537,7 @@ function summarizeModel() {
       selfTuneRuns: model.summary.selfTuneRuns,
       lastSelfTuneAt: model.summary.lastSelfTuneAt,
       activeStrategies: strategyList.length,
+      activeAdminThreads: Object.keys(model.adminDesk || {}).length,
       trackedUsers: Object.keys(model.users || {}).length,
       trackedGames: Object.keys(model.games || {}).length,
     },
@@ -1206,6 +1552,7 @@ function summarizeModel() {
       avgConsideredMoves: decisions.avgConsideredMoves,
     },
     eventCounts: model.summary.eventCounts,
+    adminIntentStats: buildAdminIntentRates(),
     recentProjectSnapshots: (model.projectSnapshots || []).slice(-5),
     topStrategies,
   };
@@ -1249,6 +1596,13 @@ function getCapabilities() {
         chat: '/v1/support/chat',
       },
       features: ['human-style triage', 'structured incident collection', 'controlled escalation'],
+    },
+    adminDesk: {
+      enabled: true,
+      endpoints: {
+        chat: '/v1/admin/chat',
+      },
+      features: ['thread memory', 'intent routing', 'pm/developer advisor modes', 'runtime and self-tune actions'],
     },
   };
 }
@@ -1400,33 +1754,121 @@ function buildFastInsights() {
   };
 }
 
-function buildChatReply(message) {
+function buildChatReply(message, options = {}) {
   const text = String(message || '').trim();
   const lower = text.toLowerCase();
+  const requestedBy = redactString(String(options.requestedBy || 'admin')) || 'admin';
+  const contextMode = normalizeAdminMode(options.contextMode || 'auto');
+  const threadId = normalizeMapKey(options.threadId, 'main');
+  const conversation = getOrCreateAdminConversation(threadId, requestedBy, contextMode);
+  const detectedIntent = detectAdminIntent(text, contextMode);
+
+  appendAdminConversationMessage(conversation, 'admin', text || '[empty]', detectedIntent.intent);
+
   const summary = summarizeModel();
   const insights = buildFastInsights();
+  const arabic = hasArabicChars(text);
+  const actionResult = tryExecuteAdminAction(detectedIntent.intent, text, requestedBy);
+
+  const thread = buildAdminThreadSummary(conversation);
+
+  const finalize = (payload) => {
+    recordAdminIntentOutcome(detectedIntent.intent, actionResult);
+
+    const response = {
+      ...payload,
+      intent: detectedIntent.intent,
+      intentConfidence: detectedIntent.confidence,
+      thread,
+      actions: actionResult ? [actionResult] : [],
+    };
+
+    appendAdminConversationMessage(conversation, 'agent', response.reply || 'ok', detectedIntent.intent);
+    return response;
+  };
 
   if (!text) {
-    return {
+    return finalize({
       reply: `${AGENT_NAME} is online. Ask for performance report, trends, or strategy diagnostics.`,
       summary,
       insights,
-    };
+    });
+  }
+
+  if (actionResult?.executed && actionResult.action === 'runtime_stop') {
+    return finalize({
+      reply: arabic
+        ? `${AGENT_NAME}: تم إيقاف runtime بنجاح عبر أمر المحادثة الإدارية.`
+        : `${AGENT_NAME}: runtime has been stopped successfully by admin chat command.`,
+      summary,
+      insights,
+      runtime: actionResult.result,
+    });
+  }
+
+  if (actionResult?.executed && actionResult.action === 'runtime_start') {
+    return finalize({
+      reply: arabic
+        ? `${AGENT_NAME}: تم تشغيل runtime بنجاح عبر أمر المحادثة الإدارية.`
+        : `${AGENT_NAME}: runtime has been started successfully by admin chat command.`,
+      summary,
+      insights,
+      runtime: actionResult.result,
+    });
+  }
+
+  if (actionResult?.executed && actionResult.action === 'self_tune') {
+    return finalize({
+      reply: arabic
+        ? `${AGENT_NAME}: تم تنفيذ self-tune الآن. عدد الاستراتيجيات المعدلة: ${toNumber(actionResult.result?.tunedStrategies, 0)}.`
+        : `${AGENT_NAME}: self-tune executed now. Tuned strategies: ${toNumber(actionResult.result?.tunedStrategies, 0)}.`,
+      summary,
+      insights,
+      selfTune: actionResult.result,
+    });
+  }
+
+  if (detectedIntent.intent === 'project_management') {
+    return finalize({
+      reply: arabic
+        ? `${AGENT_NAME} وضع مدير المشروع:\n${buildProjectManagerAdvice(summary, insights, true)}`
+        : `${AGENT_NAME} project-manager mode:\n${buildProjectManagerAdvice(summary, insights, false)}`,
+      summary,
+      insights,
+      recommendations: {
+        track: 'project-management',
+        plan: buildProjectManagerAdvice(summary, insights, arabic),
+      },
+    });
+  }
+
+  if (detectedIntent.intent === 'developer_advice') {
+    return finalize({
+      reply: arabic
+        ? `${AGENT_NAME} وضع المطور:\n${buildDeveloperAdvice(summary, true)}`
+        : `${AGENT_NAME} developer-advisor mode:\n${buildDeveloperAdvice(summary, false)}`,
+      summary,
+      insights,
+      recommendations: {
+        track: 'developer-advice',
+        plan: buildDeveloperAdvice(summary, arabic),
+      },
+    });
   }
 
   if (lower.includes('capabilities') || lower.includes('قدرات')) {
     const caps = getCapabilities();
-    return {
+    return finalize({
       reply: `${AGENT_NAME} capabilities: autonomous self-tuning, privacy-safe event learning, analytics query engine (day/game/difficulty), and production-ready monitoring summaries.`,
       summary,
       insights,
       capabilities: caps,
-    };
+    });
   }
 
   if (lower.includes('trend') || lower.includes('تحليل') || lower.includes('analysis') || lower.includes('data')) {
     const gameQuery = queryAnalytics({ groupBy: 'game', metric: 'results' });
-    return {
+    return finalize({
       reply: `${AGENT_NAME} trend analysis ready. Top active games: ${insights.topGames || 'n/a'}. Current risk profile is ${insights.riskLevel}.`,
       summary,
       insights,
@@ -1434,33 +1876,33 @@ function buildChatReply(message) {
         columns: gameQuery.columns,
         rows: gameQuery.rows.slice(0, 8),
       },
-    };
+    });
   }
 
   if (lower.includes('report') || lower.includes('تقرير') || lower.includes('ملخص')) {
-    return {
+    return finalize({
       reply:
         `${AGENT_NAME} report: ${summary.learning.totalEvents} learned events, ` +
         `${summary.performance.totalGames} tracked games, ` +
         `AI win rate ${summary.performance.aiWinRate}%, active strategies ${summary.learning.activeStrategies}.`,
       summary,
       insights,
-    };
+    });
   }
 
   if (lower.includes('risk') || lower.includes('مخاطر') || lower.includes('anomaly') || lower.includes('شذوذ')) {
-    return {
+    return finalize({
       reply: `${AGENT_NAME} risk profile is ${insights.riskLevel}. Recommendation: ${insights.recommendation}`,
       summary,
       insights,
-    };
+    });
   }
 
-  return {
+  return finalize({
     reply: `${AGENT_NAME} received your request. Supported intents: report, capabilities, trend analysis, risk diagnostics, and structured analytics queries.`,
     summary,
     insights,
-  };
+  });
 }
 
 function authorize(req, res, next) {
@@ -1645,12 +2087,24 @@ export async function startSam9Service() {
   app.post('/v1/admin/chat', authorize, (req, res) => {
     try {
       model.summary.adminChats += 1;
-      const message = redactString(String(req.body?.message || ''));
-      const answer = buildChatReply(message);
+      const body = isPlainObject(req.body) ? sanitizeDeep(req.body) : {};
+      const message = redactString(String(body.message || ''));
+      const threadId = normalizeMapKey(body.threadId, 'main');
+      const contextMode = normalizeAdminMode(body.contextMode || 'auto');
+      const requestedBy = redactString(String(body.requestedBy || 'admin')) || 'admin';
+      const answer = buildChatReply(message, {
+        threadId,
+        contextMode,
+        requestedBy,
+      });
       trackRawEvent('admin_chat', {
+        threadId,
+        intent: answer.intent || 'general',
+        contextMode,
         messageLength: message.length,
         hasDigits: /\d/.test(message),
         hasArabic: /[\u0600-\u06FF]/.test(message),
+        actionCount: Array.isArray(answer.actions) ? answer.actions.length : 0,
       });
       scheduleFlush();
       res.json({

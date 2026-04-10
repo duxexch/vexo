@@ -183,11 +183,11 @@ export function registerJoinRoute(app: Express) {
             purchasedBalance -= remaining;
           }
 
-          const newTotal = (earnedBalance + purchasedBalance).toFixed(8);
+          const newTotal = (earnedBalance + purchasedBalance).toFixed(2);
           await tx.update(projectCurrencyWallets)
             .set({
-              earnedBalance: earnedBalance.toFixed(8),
-              purchasedBalance: purchasedBalance.toFixed(8),
+              earnedBalance: earnedBalance.toFixed(2),
+              purchasedBalance: purchasedBalance.toFixed(2),
               totalBalance: newTotal,
               updatedAt: new Date()
             })

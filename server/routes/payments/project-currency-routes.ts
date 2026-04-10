@@ -30,15 +30,9 @@ export function registerProjectCurrencyRoutes(app: Express): void {
 
   app.get("/api/project-currency/play-gift-policy", async (_req: Request, res: Response) => {
     try {
-      const [setting] = await db.select({ value: gameplaySettings.value })
-        .from(gameplaySettings)
-        .where(eq(gameplaySettings.key, "play_gift_currency_mode"))
-        .limit(1);
-
-      const mode = setting?.value === "mixed" ? "mixed" : "project_only";
       res.json({
-        mode,
-        projectOnly: mode === "project_only",
+        mode: "project_only",
+        projectOnly: true,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

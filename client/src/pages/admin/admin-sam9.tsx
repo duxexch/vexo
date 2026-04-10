@@ -111,6 +111,9 @@ interface AiAgentConversationMessage {
   role: "admin" | "agent";
   message: string;
   at: string;
+  intent?: string;
+  intentConfidence?: number | null;
+  actions?: string[];
 }
 
 interface AiAgentChatPayload {
@@ -118,7 +121,14 @@ interface AiAgentChatPayload {
   generatedAt?: string;
   reply?: string;
   summary?: Record<string, unknown> | null;
+  intent?: string | null;
+  intentConfidence?: number | null;
+  thread?: Record<string, unknown> | null;
+  actions?: Array<Record<string, unknown>>;
+  recommendations?: Record<string, unknown> | null;
 }
+
+type AiAdminContextMode = "auto" | "pm" | "developer" | "ops" | "analytics";
 
 interface AiAgentRuntimePayload {
   source?: string;
@@ -169,6 +179,14 @@ const AI_QUERY_COLUMN_LABELS: Record<string, string> = {
   abandonRate: "Abandon Rate %",
   lastUpdated: "Last Updated",
 };
+
+const AI_CHAT_CONTEXT_MODES: Array<{ value: AiAdminContextMode; label: string }> = [
+  { value: "auto", label: "AUTO" },
+  { value: "pm", label: "PM" },
+  { value: "developer", label: "DEV" },
+  { value: "ops", label: "OPS" },
+  { value: "analytics", label: "ANALYTICS" },
+];
 
 async function adminFetch(url: string, options: RequestInit = {}) {
   const res = await fetch(url, {
@@ -223,6 +241,8 @@ export default function AdminSam9Page() {
 
   const [aiAgentPrompt, setAiAgentPrompt] = useState("");
   const [aiAgentConversation, setAiAgentConversation] = useState<AiAgentConversationMessage[]>([]);
+  const [aiAgentContextMode, setAiAgentContextMode] = useState<AiAdminContextMode>("auto");
+  const aiAgentThreadId = useMemo(() => `admin-sam9-${Date.now().toString(36)}`, []);
 
   const [aiDataQueryGroupBy, setAiDataQueryGroupBy] = useState<AiQueryGroupBy>("game");
   const [aiDataQueryGameType, setAiDataQueryGameType] = useState("");
@@ -271,15 +291,23 @@ export default function AdminSam9Page() {
   });
 
   const aiAgentChatMutation = useMutation({
-    mutationFn: (message: string) =>
+    mutationFn: ({ message, contextMode }: { message: string; contextMode: AiAdminContextMode }) =>
       adminFetch("/api/admin/ai-agent/chat", {
         method: "POST",
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({
+          message,
+          contextMode,
+          threadId: aiAgentThreadId,
+        }),
       }) as Promise<AiAgentChatPayload>,
     onSuccess: (data: AiAgentChatPayload) => {
       const reply = typeof data?.reply === "string" && data.reply.trim().length > 0
         ? data.reply
         : "تم استلام الرد بدون محتوى.";
+
+      const actionNames = Array.isArray(data?.actions)
+        ? data.actions.map((item) => String(item?.action || "")).filter((value) => value.length > 0)
+        : [];
 
       setAiAgentConversation((prev) => [
         ...prev,
@@ -288,6 +316,9 @@ export default function AdminSam9Page() {
           role: "agent",
           message: reply,
           at: data?.generatedAt || new Date().toISOString(),
+          intent: typeof data?.intent === "string" ? data.intent : undefined,
+          intentConfidence: typeof data?.intentConfidence === "number" ? data.intentConfidence : null,
+          actions: actionNames,
         },
       ]);
 
@@ -463,7 +494,10 @@ export default function AdminSam9Page() {
     ]);
 
     setAiAgentPrompt("");
-    aiAgentChatMutation.mutate(prompt);
+    aiAgentChatMutation.mutate({
+      message: prompt,
+      contextMode: aiAgentContextMode,
+    });
   };
 
   const currentRuntimeEnabled = aiAgentRuntime?.runtime?.enabled === true;
@@ -870,6 +904,24 @@ export default function AdminSam9Page() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="rounded-md border p-2">
+              <p className="text-[11px] text-muted-foreground mb-2">Context Mode</p>
+              <div className="flex flex-wrap gap-1.5">
+                {AI_CHAT_CONTEXT_MODES.map((mode) => (
+                  <Button
+                    key={mode.value}
+                    type="button"
+                    variant={aiAgentContextMode === mode.value ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 text-[10px]"
+                    onClick={() => setAiAgentContextMode(mode.value)}
+                  >
+                    {mode.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
             <ScrollArea className="h-[320px] rounded-md border p-3">
               <div className="space-y-2">
                 {aiAgentConversation.length === 0 && (
@@ -888,6 +940,13 @@ export default function AdminSam9Page() {
                     )}
                   >
                     <p className="whitespace-pre-wrap">{item.message}</p>
+                    {item.role === "agent" && (item.intent || (item.actions && item.actions.length > 0)) && (
+                      <p className="mt-1 text-[10px] opacity-80 break-all">
+                        intent={item.intent || "-"}
+                        {typeof item.intentConfidence === "number" ? ` (${item.intentConfidence.toFixed(2)})` : ""}
+                        {Array.isArray(item.actions) && item.actions.length > 0 ? ` | actions=${item.actions.join(",")}` : ""}
+                      </p>
+                    )}
                     <p className="mt-1 text-[10px] opacity-70">{new Date(item.at).toLocaleTimeString("ar-EG")}</p>
                   </div>
                 ))}

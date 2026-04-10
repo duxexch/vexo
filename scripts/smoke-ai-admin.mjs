@@ -120,6 +120,69 @@ async function waitForHealthy(baseUrl, token, timeoutMs) {
   return false;
 }
 
+async function runIntentCheck({
+  baseUrl,
+  token,
+  timeoutMs,
+  threadId,
+  contextMode,
+  message,
+  expectedIntent,
+  expectedAction,
+}) {
+  const chat = await requestJson({
+    baseUrl,
+    path: "/api/admin/ai-agent/chat",
+    token,
+    method: "POST",
+    body: {
+      message,
+      threadId,
+      contextMode,
+    },
+    timeoutMs,
+  });
+
+  if (!chat.ok || chat.json?.source !== "ai-service") {
+    fail("Intent chat did not return ai-service response", { expectedIntent, chat });
+  }
+
+  if (String(chat.json?.intent || "") !== expectedIntent) {
+    fail("Intent mismatch", {
+      expectedIntent,
+      actualIntent: chat.json?.intent,
+      message,
+      contextMode,
+    });
+  }
+
+  if (expectedAction) {
+    const actions = Array.isArray(chat.json?.actions) ? chat.json.actions : [];
+    const hasExpectedAction = actions.some((item) => item && item.action === expectedAction);
+    if (!hasExpectedAction) {
+      fail("Expected action not found in chat response", {
+        expectedAction,
+        actions,
+        intent: chat.json?.intent,
+      });
+    }
+  }
+
+  return {
+    message,
+    contextMode,
+    intent: String(chat.json?.intent || ""),
+    intentConfidence: typeof chat.json?.intentConfidence === "number"
+      ? chat.json.intentConfidence
+      : null,
+    actionCount: Array.isArray(chat.json?.actions) ? chat.json.actions.length : 0,
+    actions: Array.isArray(chat.json?.actions)
+      ? chat.json.actions.map((item) => String(item?.action || "")).filter(Boolean)
+      : [],
+    replyPreview: String(chat.json?.reply || "").slice(0, 120),
+  };
+}
+
 async function main() {
   const options = parseArgs(process.argv);
   if (!options.password) {
@@ -167,12 +230,66 @@ async function main() {
     path: "/api/admin/ai-agent/chat",
     token,
     method: "POST",
-    body: { message: options.chatMessage },
+    body: {
+      message: options.chatMessage,
+      threadId: "smoke-general-thread",
+      contextMode: "auto",
+    },
     timeoutMs: options.timeoutMs,
   });
   if (!chat.ok || typeof chat.json?.source !== "string") {
     fail("Chat endpoint failed", chat);
   }
+
+  const intentChecks = [];
+  intentChecks.push(await runIntentCheck({
+    baseUrl: options.baseUrl,
+    token,
+    timeoutMs: options.timeoutMs,
+    threadId: "smoke-pm-thread",
+    contextMode: "pm",
+    message: "Build a sprint roadmap for SAM9",
+    expectedIntent: "project_management",
+  }));
+  intentChecks.push(await runIntentCheck({
+    baseUrl: options.baseUrl,
+    token,
+    timeoutMs: options.timeoutMs,
+    threadId: "smoke-dev-thread",
+    contextMode: "developer",
+    message: "Give me TypeScript refactor advice",
+    expectedIntent: "developer_advice",
+  }));
+  intentChecks.push(await runIntentCheck({
+    baseUrl: options.baseUrl,
+    token,
+    timeoutMs: options.timeoutMs,
+    threadId: "smoke-runtime-thread",
+    contextMode: "auto",
+    message: "stop runtime now",
+    expectedIntent: "runtime_control",
+    expectedAction: "runtime_stop",
+  }));
+  intentChecks.push(await runIntentCheck({
+    baseUrl: options.baseUrl,
+    token,
+    timeoutMs: options.timeoutMs,
+    threadId: "smoke-runtime-thread",
+    contextMode: "auto",
+    message: "start runtime now",
+    expectedIntent: "runtime_control",
+    expectedAction: "runtime_start",
+  }));
+  intentChecks.push(await runIntentCheck({
+    baseUrl: options.baseUrl,
+    token,
+    timeoutMs: options.timeoutMs,
+    threadId: "smoke-tune-thread",
+    contextMode: "auto",
+    message: "run self tune now",
+    expectedIntent: "self_tune",
+    expectedAction: "self_tune",
+  }));
 
   const snapshot = await requestJson({
     baseUrl: options.baseUrl,
@@ -204,6 +321,7 @@ async function main() {
       source: chat.json?.source,
       replyPreview: String(chat.json?.reply || "").slice(0, 120),
     },
+    intentChecks,
     snapshot: "ok",
     fallback: {
       attempted: false,
@@ -246,7 +364,11 @@ async function main() {
             path: "/api/admin/ai-agent/chat",
             token,
             method: "POST",
-            body: { message: "fallback check" },
+            body: {
+              message: "fallback check",
+              threadId: "smoke-fallback-thread",
+              contextMode: "auto",
+            },
             timeoutMs: options.timeoutMs,
           });
           if (!fallbackChat.ok || fallbackChat.json?.source !== "local-fallback") {

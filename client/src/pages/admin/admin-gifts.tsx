@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ProjectCurrencyAmount } from "@/components/ProjectCurrencySymbol";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -80,7 +81,7 @@ export default function AdminGiftsPage() {
     const [form, setForm] = useState<GiftFormState>({
         name: "",
         nameAr: "",
-        price: "0.50",
+        price: "5.00",
         iconUrl: "",
         category: "general",
         animationType: "float",
@@ -131,7 +132,7 @@ export default function AdminGiftsPage() {
             setForm({
                 name: "",
                 nameAr: "",
-                price: "0.50",
+                price: "5.00",
                 iconUrl: "",
                 category: "general",
                 animationType: "float",
@@ -170,7 +171,7 @@ export default function AdminGiftsPage() {
 
         const parsedPrice = Number(form.price);
         if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
-            toast({ title: "Error", description: "Gift price must be greater than zero", variant: "destructive" });
+            toast({ title: "Error", description: "Gift price in project currency must be greater than zero", variant: "destructive" });
             return;
         }
 
@@ -187,7 +188,7 @@ export default function AdminGiftsPage() {
                         <Gift className="h-7 w-7 text-primary" />
                         Gift Catalog
                     </h1>
-                    <p className="text-muted-foreground">Manage game gifts, upload icon images, and set prices.</p>
+                    <p className="text-muted-foreground">Manage game gifts, upload icon images, and set prices in project currency.</p>
                 </div>
                 <Badge variant="outline">{gifts.length} gifts</Badge>
             </div>
@@ -198,7 +199,7 @@ export default function AdminGiftsPage() {
                         <Plus className="h-5 w-5" />
                         Add New Gift
                     </CardTitle>
-                    <CardDescription>Upload icon from your local device, set price, then save.</CardDescription>
+                    <CardDescription>Upload icon from your local device, set project-currency price, then save.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -221,7 +222,7 @@ export default function AdminGiftsPage() {
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="gift-price">Price (USD)</Label>
+                            <Label htmlFor="gift-price">Price (Project Currency)</Label>
                             <Input
                                 id="gift-price"
                                 type="number"
@@ -345,7 +346,9 @@ export default function AdminGiftsPage() {
                                                 </TableCell>
                                                 <TableCell className="font-medium">{gift.name}</TableCell>
                                                 <TableCell>{gift.nameAr || "-"}</TableCell>
-                                                <TableCell>${Number(gift.price || 0).toFixed(2)}</TableCell>
+                                                <TableCell>
+                                                    <ProjectCurrencyAmount amount={gift.price || 0} fractionDigits={2} />
+                                                </TableCell>
                                                 <TableCell>{gift.category || "general"}</TableCell>
                                                 <TableCell>{gift.animationType || "float"}</TableCell>
                                                 <TableCell>

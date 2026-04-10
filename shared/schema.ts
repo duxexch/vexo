@@ -2876,6 +2876,35 @@ export const insertAdvertisementSchema = createInsertSchema(advertisements).omit
 export type InsertAdvertisement = z.infer<typeof insertAdvertisementSchema>;
 export type Advertisement = typeof advertisements.$inferSelect;
 
+export const freePlayAdEventTypeEnum = pgEnum("free_play_ad_event_type", ["view", "click", "reward_claim"]);
+
+export const freePlayAdEvents = pgTable("free_play_ad_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  advertisementId: varchar("advertisement_id").references(() => advertisements.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  eventType: freePlayAdEventTypeEnum("event_type").notNull(),
+  rewardAmount: decimal("reward_amount", { precision: 10, scale: 2 }),
+  source: text("source"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_free_play_ad_events_ad_id").on(table.advertisementId),
+  index("idx_free_play_ad_events_user_id").on(table.userId),
+  index("idx_free_play_ad_events_type").on(table.eventType),
+  index("idx_free_play_ad_events_created_at").on(table.createdAt),
+]);
+
+export const freePlayAdEventsRelations = relations(freePlayAdEvents, ({ one }) => ({
+  advertisement: one(advertisements, { fields: [freePlayAdEvents.advertisementId], references: [advertisements.id] }),
+  user: one(users, { fields: [freePlayAdEvents.userId], references: [users.id] }),
+}));
+
+export const insertFreePlayAdEventSchema = createInsertSchema(freePlayAdEvents).omit({ id: true, createdAt: true });
+export type InsertFreePlayAdEvent = z.infer<typeof insertFreePlayAdEventSchema>;
+export type FreePlayAdEvent = typeof freePlayAdEvents.$inferSelect;
+
 // ==================== SOCIAL PLATFORMS (OAuth & OTP Settings) ====================
 
 export const socialPlatformTypeEnum = pgEnum("social_platform_type", ["oauth", "otp", "both"]);

@@ -378,14 +378,34 @@ export interface AiAgentAdminChatResponse {
     generatedAt?: string;
     reply?: string;
     summary?: Record<string, unknown>;
+    intent?: string;
+    intentConfidence?: number;
+    thread?: Record<string, unknown>;
+    actions?: Array<Record<string, unknown>>;
+    recommendations?: Record<string, unknown>;
 }
 
-export async function chatWithAiAgentAdmin(message: string): Promise<AiAgentAdminChatResponse | null> {
+export async function chatWithAiAgentAdmin(params: string | {
+    message: string;
+    threadId?: string;
+    contextMode?: string;
+    requestedBy?: string;
+}): Promise<AiAgentAdminChatResponse | null> {
+    const message = typeof params === 'string' ? params : params.message;
+    const threadId = typeof params === 'string' ? undefined : params.threadId;
+    const contextMode = typeof params === 'string' ? undefined : params.contextMode;
+    const requestedBy = typeof params === 'string' ? undefined : params.requestedBy;
+
     return requestAiAgentJson<AiAgentAdminChatResponse>(
         '/v1/admin/chat',
         {
             method: 'POST',
-            body: JSON.stringify({ message: sanitizeString(message) }),
+            body: JSON.stringify({
+                message: sanitizeString(message),
+                threadId: threadId ? anonymizeIdentifier(threadId) : undefined,
+                contextMode: contextMode ? sanitizeString(contextMode).toLowerCase() : undefined,
+                requestedBy: requestedBy ? sanitizeString(requestedBy) : undefined,
+            }),
         },
         { timeoutMs: Math.max(600, AI_AGENT_TIMEOUT_MS) },
     );

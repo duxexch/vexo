@@ -1,7 +1,7 @@
 import type { Express, Response } from "express";
-import { challenges, users } from "@shared/schema";
+import { challenges, projectCurrencyLedger, projectCurrencyWallets, users } from "@shared/schema";
 import { db } from "../../db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { sendNotification } from "../../websocket";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 
@@ -25,69 +25,84 @@ export function registerChallengeCancelRoutes(app: Express) {
         const betAmount = parseFloat(challenge.betAmount || '0');
         const currencyType = challenge.currencyType || 'usd';
 
-        // Full refund to player 1
+        const participants = [
+          challenge.player1Id,
+          challenge.player2Id,
+          challenge.player3Id,
+          challenge.player4Id,
+        ].filter((value): value is string => Boolean(value));
+
         if (betAmount > 0) {
           if (currencyType === 'project') {
-            await tx.execute(sql`
-              UPDATE project_currency_wallets 
-              SET earned_balance = (CAST(earned_balance AS DECIMAL(18,8)) + ${betAmount})::text,
-                  total_balance = (CAST(total_balance AS DECIMAL(18,8)) + ${betAmount})::text,
-                  updated_at = NOW()
-              WHERE user_id = ${challenge.player1Id}
-            `);
-          } else {
-            await tx.update(users)
-              .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${betAmount})::text` })
-              .where(eq(users.id, challenge.player1Id));
-          }
-        }
+            for (const playerId of participants) {
+              const refundReferenceId = `challenge_cancel_refund:${id}:${playerId}`;
 
-        // If player2 already joined, refund them too
-        if (challenge.player2Id && betAmount > 0) {
-          if (currencyType === 'project') {
-            await tx.execute(sql`
-              UPDATE project_currency_wallets 
-              SET earned_balance = (CAST(earned_balance AS DECIMAL(18,8)) + ${betAmount})::text,
-                  total_balance = (CAST(total_balance AS DECIMAL(18,8)) + ${betAmount})::text,
-                  updated_at = NOW()
-              WHERE user_id = ${challenge.player2Id}
-            `);
-          } else {
-            await tx.update(users)
-              .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${betAmount})::text` })
-              .where(eq(users.id, challenge.player2Id!));
-          }
-        }
+              const [existingRefund] = await tx.select({ id: projectCurrencyLedger.id })
+                .from(projectCurrencyLedger)
+                .where(and(
+                  eq(projectCurrencyLedger.userId, playerId),
+                  eq(projectCurrencyLedger.referenceId, refundReferenceId),
+                  eq(projectCurrencyLedger.referenceType, "challenge_cancel_refund"),
+                ))
+                .for('update')
+                .limit(1);
 
-        // Refund player3 and player4 for 4-player challenges
-        if (challenge.player3Id && betAmount > 0) {
-          if (currencyType === 'project') {
-            await tx.execute(sql`
-              UPDATE project_currency_wallets 
-              SET earned_balance = (CAST(earned_balance AS DECIMAL(18,8)) + ${betAmount})::text,
-                  total_balance = (CAST(total_balance AS DECIMAL(18,8)) + ${betAmount})::text,
-                  updated_at = NOW()
-              WHERE user_id = ${challenge.player3Id}
-            `);
+              if (existingRefund) {
+                continue;
+              }
+
+              await tx.execute(sql`
+                INSERT INTO project_currency_wallets (user_id)
+                VALUES (${playerId})
+                ON CONFLICT (user_id) DO NOTHING
+              `);
+
+              const [wallet] = await tx.select()
+                .from(projectCurrencyWallets)
+                .where(eq(projectCurrencyWallets.userId, playerId))
+                .for('update')
+                .limit(1);
+
+              if (!wallet) {
+                throw new Error(`Project currency wallet not found for user ${playerId}`);
+              }
+
+              const earnedBefore = parseFloat(wallet.earnedBalance || "0");
+              const balanceBefore = parseFloat(wallet.totalBalance || "0");
+              const earnedAfter = (earnedBefore + betAmount).toFixed(2);
+              const balanceAfter = (balanceBefore + betAmount).toFixed(2);
+
+              await tx.update(projectCurrencyWallets)
+                .set({
+                  earnedBalance: earnedAfter,
+                  totalBalance: balanceAfter,
+                  updatedAt: new Date(),
+                })
+                .where(eq(projectCurrencyWallets.id, wallet.id));
+
+              await tx.insert(projectCurrencyLedger).values({
+                userId: playerId,
+                walletId: wallet.id,
+                type: "refund",
+                amount: betAmount.toFixed(2),
+                balanceBefore: balanceBefore.toFixed(2),
+                balanceAfter,
+                referenceId: refundReferenceId,
+                referenceType: "challenge_cancel_refund",
+                description: `Admin challenge cancellation refund for challenge ${id}`,
+                metadata: JSON.stringify({
+                  challengeId: id,
+                  adminId: req.admin!.id,
+                  reason: reason || "admin_force_cancel",
+                }),
+              });
+            }
           } else {
-            await tx.update(users)
-              .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${betAmount})::text` })
-              .where(eq(users.id, challenge.player3Id));
-          }
-        }
-        if (challenge.player4Id && betAmount > 0) {
-          if (currencyType === 'project') {
-            await tx.execute(sql`
-              UPDATE project_currency_wallets 
-              SET earned_balance = (CAST(earned_balance AS DECIMAL(18,8)) + ${betAmount})::text,
-                  total_balance = (CAST(total_balance AS DECIMAL(18,8)) + ${betAmount})::text,
-                  updated_at = NOW()
-              WHERE user_id = ${challenge.player4Id}
-            `);
-          } else {
-            await tx.update(users)
-              .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${betAmount})::text` })
-              .where(eq(users.id, challenge.player4Id));
+            for (const playerId of participants) {
+              await tx.update(users)
+                .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${betAmount})::text` })
+                .where(eq(users.id, playerId));
+            }
           }
         }
 

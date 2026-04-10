@@ -72,8 +72,9 @@ interface CurrencyStats {
 }
 
 interface PlayGiftPolicy {
-  mode: "project_only" | "mixed";
+  mode: "project_only";
   projectOnly: boolean;
+  locked?: boolean;
 }
 
 interface DepositFxCurrency {
@@ -241,14 +242,14 @@ export default function AdminCurrencyPage() {
   });
 
   const updatePlayGiftPolicyMutation = useMutation({
-    mutationFn: async (mode: "project_only" | "mixed") => {
+    mutationFn: async () => {
       const res = await fetch("/api/admin/project-currency/play-gift-policy", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           "x-admin-token": adminToken(),
         },
-        body: JSON.stringify({ mode }),
+        body: JSON.stringify({ mode: "project_only" }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: "Failed to update policy" }));
@@ -259,8 +260,8 @@ export default function AdminCurrencyPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/play-gift-policy"] });
       toast({
-        title: "Policy updated",
-        description: "Games and gift purchases currency mode was updated successfully.",
+        title: "Policy enforced",
+        description: "Games and gift purchases are locked to project currency only.",
       });
     },
     onError: (error: Error) => {
@@ -620,14 +621,14 @@ export default function AdminCurrencyPage() {
                   <div>
                     <Label>Gameplay & Gifts Currency Mode</Label>
                     <p className="text-xs text-muted-foreground">
-                      Choose whether to force project currency only, or allow mixed mode (real money + project currency).
+                      Gameplay and gift purchases are locked to project currency only.
                     </p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <Button
                       type="button"
-                      variant={(playGiftPolicy?.projectOnly ?? true) ? "default" : "outline"}
-                      onClick={() => updatePlayGiftPolicyMutation.mutate("project_only")}
+                      variant="default"
+                      onClick={() => updatePlayGiftPolicyMutation.mutate()}
                       disabled={updatePlayGiftPolicyMutation.isPending}
                       data-testid="button-project-only-play-gifts"
                     >
@@ -635,16 +636,15 @@ export default function AdminCurrencyPage() {
                     </Button>
                     <Button
                       type="button"
-                      variant={(playGiftPolicy?.projectOnly ?? true) ? "outline" : "default"}
-                      onClick={() => updatePlayGiftPolicyMutation.mutate("mixed")}
-                      disabled={updatePlayGiftPolicyMutation.isPending}
-                      data-testid="button-mixed-play-gifts"
+                      variant="outline"
+                      disabled
+                      data-testid="button-mixed-play-gifts-disabled"
                     >
-                      Allow Real Currency (Mixed)
+                      Mixed Mode Disabled
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Current mode: {(playGiftPolicy?.projectOnly ?? true) ? "Project only" : "Mixed"}
+                    Current mode: Project only {(playGiftPolicy?.locked ? "(locked)" : "")}
                   </p>
                 </div>
 

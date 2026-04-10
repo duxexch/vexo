@@ -16,6 +16,16 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 
+const CHAT_BUBBLE_PREF_KEY = "vex_game_chat_bubble_enabled";
+
+function readChatBubblePreference(): boolean {
+  if (typeof window === "undefined") return true;
+  const value = window.localStorage.getItem(CHAT_BUBBLE_PREF_KEY);
+  if (value === "0") return false;
+  if (value === "1") return true;
+  return true;
+}
+
 interface Message {
   id: string;
   senderId: string;
@@ -110,6 +120,7 @@ export function GameChat({
   const [showHistory, setShowHistory] = useState(false);
   const [showQuickPanel, setShowQuickPanel] = useState(false);
   const [activeBubbles, setActiveBubbles] = useState<Message[]>([]);
+  const [chatBubbleEnabled, setChatBubbleEnabled] = useState<boolean>(() => readChatBubblePreference());
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -140,12 +151,35 @@ export function GameChat({
 
   // Watch for new messages → add them as floating bubbles
   useEffect(() => {
+    if (!chatBubbleEnabled) return;
     if (messages.length > lastProcessedRef.current) {
       const newMsgs = messages.slice(lastProcessedRef.current);
       setActiveBubbles(prev => [...prev, ...newMsgs].slice(-3)); // keep stack compact so it stays out of board area
       lastProcessedRef.current = messages.length;
     }
-  }, [messages]);
+  }, [messages, chatBubbleEnabled]);
+
+  useEffect(() => {
+    if (!chatBubbleEnabled) {
+      setActiveBubbles([]);
+      return;
+    }
+    if (messages.length > 0) {
+      const last = messages[messages.length - 1];
+      setActiveBubbles([last]);
+      lastProcessedRef.current = messages.length;
+    }
+  }, [chatBubbleEnabled, messages]);
+
+  const toggleChatBubble = useCallback(() => {
+    setChatBubbleEnabled((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(CHAT_BUBBLE_PREF_KEY, next ? "1" : "0");
+      }
+      return next;
+    });
+  }, []);
 
   // Auto-scroll history
   useEffect(() => {
@@ -189,16 +223,18 @@ export function GameChat({
   return (
     <>
       {/* Floating bubbles overlay — positioned at bottom of game area */}
-      <div className="absolute bottom-12 left-2 right-2 z-30 pointer-events-none flex flex-col gap-1.5 max-h-[84px] overflow-hidden">
-        {activeBubbles.map((msg) => (
-          <FloatingBubble
-            key={msg.id}
-            msg={msg}
-            isOwn={msg.senderId === userId}
-            onExpire={() => handleBubbleExpire(msg.id)}
-          />
-        ))}
-      </div>
+      {chatBubbleEnabled && (
+        <div className="absolute bottom-12 left-2 right-2 z-30 pointer-events-none flex flex-col gap-1.5 max-h-[84px] overflow-hidden">
+          {activeBubbles.map((msg) => (
+            <FloatingBubble
+              key={msg.id}
+              msg={msg}
+              isOwn={msg.senderId === userId}
+              onExpire={() => handleBubbleExpire(msg.id)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Quick messages floating strip */}
       {showQuickPanel && (
@@ -363,6 +399,18 @@ export function GameChat({
 
       {/* Bottom control bar — chat/quick message buttons */}
       <div className="absolute bottom-0 left-0 right-0 z-30 flex items-center justify-center gap-2 p-2 bg-background/80 backdrop-blur-sm">
+        <Button
+          variant={chatBubbleEnabled ? "default" : "outline"}
+          size="sm"
+          className="h-9 w-9 rounded-full p-0 shadow-md"
+          onClick={toggleChatBubble}
+          disabled={disabled}
+          title={language === "ar" ? "فقاعة الدردشة" : "Chat Bubble"}
+          data-testid="button-toggle-chat-bubble"
+        >
+          <MessageCircle className="h-4 w-4" />
+          <span className="sr-only">{language === "ar" ? "فقاعة الدردشة" : "Chat Bubble"}</span>
+        </Button>
         <Button
           variant={showQuickPanel ? "default" : "outline"}
           size="sm"

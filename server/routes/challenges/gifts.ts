@@ -1,7 +1,7 @@
 import type { Express, Response } from "express";
 import { db } from "../../db";
-import { eq, and, desc } from "drizzle-orm";
-import { challenges as challengesTable, users } from "@shared/schema";
+import { eq, and, desc, sql } from "drizzle-orm";
+import { challenges as challengesTable, projectCurrencyWallets, projectCurrencyLedger } from "@shared/schema";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { broadcastToUser } from "../../websocket";
 import { sendNotification } from "../../websocket";
@@ -57,21 +57,72 @@ export function registerGiftsRoutes(app: Express) {
       if (!gift || !gift.isActive) return res.status(404).json({ error: "Gift not found" });
 
       const totalCost = parseFloat(gift.price) * qty;
+      const userId = req.user!.id;
 
-      // SECURITY: Atomic transaction — lock user row, check balance, deduct, update inventory
+      // SECURITY: Atomic transaction — lock project wallet, deduct balance, then update inventory
       const result = await db.transaction(async (tx) => {
-        const [buyer] = await tx.select().from(users).where(eq(users.id, req.user!.id)).for('update');
-        if (!buyer || parseFloat(buyer.balance) < totalCost) {
-          throw new Error("Insufficient balance");
+        await tx.execute(sql`
+          INSERT INTO project_currency_wallets (user_id)
+          VALUES (${userId})
+          ON CONFLICT (user_id) DO NOTHING
+        `);
+
+        const [wallet] = await tx.select()
+          .from(projectCurrencyWallets)
+          .where(eq(projectCurrencyWallets.userId, userId))
+          .for('update');
+
+        if (!wallet) {
+          throw new Error("Project currency wallet not found");
         }
 
-        const newBalance = (parseFloat(buyer.balance) - totalCost).toFixed(8);
-        await tx.update(users).set({ balance: newBalance, updatedAt: new Date() }).where(eq(users.id, req.user!.id));
+        let earnedBalance = parseFloat(wallet.earnedBalance);
+        let purchasedBalance = parseFloat(wallet.purchasedBalance);
+        const walletTotal = earnedBalance + purchasedBalance;
+        if (walletTotal < totalCost) {
+          throw new Error("Insufficient project currency balance");
+        }
+
+        let remaining = totalCost;
+        if (earnedBalance >= remaining) {
+          earnedBalance -= remaining;
+          remaining = 0;
+        } else {
+          remaining -= earnedBalance;
+          earnedBalance = 0;
+          purchasedBalance -= remaining;
+        }
+
+        const balanceBefore = parseFloat(wallet.totalBalance || "0");
+        const newBalance = (earnedBalance + purchasedBalance).toFixed(2);
+
+        await tx.update(projectCurrencyWallets)
+          .set({
+            earnedBalance: earnedBalance.toFixed(2),
+            purchasedBalance: purchasedBalance.toFixed(2),
+            totalBalance: newBalance,
+            totalSpent: (parseFloat(wallet.totalSpent || "0") + totalCost).toFixed(2),
+            updatedAt: new Date(),
+          })
+          .where(eq(projectCurrencyWallets.id, wallet.id));
+
+        await tx.insert(projectCurrencyLedger).values({
+          userId,
+          walletId: wallet.id,
+          type: "admin_adjustment",
+          amount: (-totalCost).toFixed(2),
+          balanceBefore: balanceBefore.toFixed(2),
+          balanceAfter: newBalance,
+          referenceId: `gift_purchase:${userId}:${giftId}:${Date.now()}`,
+          referenceType: "gift_purchase",
+          description: `Purchased ${qty}x ${gift.name} using project currency`,
+        });
 
         // Add to inventory (upsert)
         const [existing] = await tx.select()
           .from(userGiftInventory)
-          .where(and(eq(userGiftInventory.userId, req.user!.id), eq(userGiftInventory.giftId, giftId)));
+          .where(and(eq(userGiftInventory.userId, userId), eq(userGiftInventory.giftId, giftId)))
+          .for('update');
 
         if (existing) {
           await tx.update(userGiftInventory)
@@ -79,7 +130,7 @@ export function registerGiftsRoutes(app: Express) {
             .where(eq(userGiftInventory.id, existing.id));
         } else {
           await tx.insert(userGiftInventory).values({
-            userId: req.user!.id,
+            userId,
             giftId,
             quantity: qty,
           });
@@ -88,12 +139,13 @@ export function registerGiftsRoutes(app: Express) {
         return { newBalance };
       });
 
-      res.json({ success: true, totalCost, newBalance: result.newBalance });
+      res.json({ success: true, totalCost: totalCost.toFixed(2), newBalance: result.newBalance });
     } catch (error: unknown) {
-      if (getErrorMessage(error) === "Insufficient balance") {
-        return res.status(400).json({ error: "Insufficient balance" });
+      const message = getErrorMessage(error);
+      if (message.includes("Insufficient") || message.includes("wallet")) {
+        return res.status(400).json({ error: message });
       }
-      res.status(500).json({ error: getErrorMessage(error) });
+      res.status(500).json({ error: message });
     }
   });
 

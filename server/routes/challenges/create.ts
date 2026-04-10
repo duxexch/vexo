@@ -6,6 +6,7 @@ import { eq, and, or, sql, gte, ilike } from "drizzle-orm";
 import {
   users,
   projectCurrencyWallets,
+  projectCurrencyLedger,
   challenges as challengesTable,
   gameplaySettings,
   gameMatches,
@@ -481,6 +482,16 @@ export function registerCreateRoute(app: Express) {
       const sam9BotUser = isSam9Challenge ? await ensureSam9BotUser() : null;
 
       const { challenge: dbChallenge, sessionId: sam9SessionId } = await db.transaction(async (tx) => {
+        const projectStakeLedgerRows: Array<{
+          userId: string;
+          walletId: string;
+          amount: string;
+          balanceBefore: string;
+          balanceAfter: string;
+          description: string;
+          metadata: string;
+        }> = [];
+
         if (effectiveCurrencyType === 'project') {
           // Check if project currency is enabled for games
           const settings = await storage.getProjectCurrencySettings();
@@ -517,15 +528,31 @@ export function registerCreateRoute(app: Express) {
             purchasedBalance -= remaining;
           }
 
-          const newTotal = (earnedBalance + purchasedBalance).toFixed(8);
+          const balanceBefore = totalBalance.toFixed(2);
+          const newTotal = (earnedBalance + purchasedBalance).toFixed(2);
           await tx.update(projectCurrencyWallets)
             .set({
-              earnedBalance: earnedBalance.toFixed(8),
-              purchasedBalance: purchasedBalance.toFixed(8),
+              earnedBalance: earnedBalance.toFixed(2),
+              purchasedBalance: purchasedBalance.toFixed(2),
               totalBalance: newTotal,
               updatedAt: new Date()
             })
             .where(eq(projectCurrencyWallets.userId, userId));
+
+          projectStakeLedgerRows.push({
+            userId,
+            walletId: wallet.id,
+            amount: (-stakeChargeAmount).toFixed(2),
+            balanceBefore,
+            balanceAfter: newTotal,
+            description: `Challenge create stake for ${normalizedGameType}`,
+            metadata: JSON.stringify({
+              source: "challenge_create",
+              gameType: normalizedGameType,
+              role: "creator",
+              stakeAmount: stakeChargeAmount.toFixed(2),
+            }),
+          });
 
           if (shouldDeductSam9CounterStake && sam9BotUser) {
             let [sam9Wallet] = await tx.select()
@@ -567,15 +594,31 @@ export function registerCreateRoute(app: Express) {
               sam9PurchasedBalance -= sam9Remaining;
             }
 
-            const sam9NewTotal = (sam9EarnedBalance + sam9PurchasedBalance).toFixed(8);
+            const sam9BalanceBefore = sam9TotalBalance.toFixed(2);
+            const sam9NewTotal = (sam9EarnedBalance + sam9PurchasedBalance).toFixed(2);
             await tx.update(projectCurrencyWallets)
               .set({
-                earnedBalance: sam9EarnedBalance.toFixed(8),
-                purchasedBalance: sam9PurchasedBalance.toFixed(8),
+                earnedBalance: sam9EarnedBalance.toFixed(2),
+                purchasedBalance: sam9PurchasedBalance.toFixed(2),
                 totalBalance: sam9NewTotal,
                 updatedAt: new Date(),
               })
               .where(eq(projectCurrencyWallets.userId, sam9BotUser.id));
+
+            projectStakeLedgerRows.push({
+              userId: sam9BotUser.id,
+              walletId: sam9Wallet.id,
+              amount: (-stakeChargeAmount).toFixed(2),
+              balanceBefore: sam9BalanceBefore,
+              balanceAfter: sam9NewTotal,
+              description: `SAM9 counter stake for challenge create ${normalizedGameType}`,
+              metadata: JSON.stringify({
+                source: "challenge_create",
+                gameType: normalizedGameType,
+                role: "sam9_counter",
+                stakeAmount: stakeChargeAmount.toFixed(2),
+              }),
+            });
           }
         } else {
           // Check and deduct USD balance
@@ -648,6 +691,23 @@ export function registerCreateRoute(app: Express) {
           player3Score: 0,
           player4Score: 0,
         }).returning();
+
+        if (effectiveCurrencyType === 'project' && projectStakeLedgerRows.length > 0) {
+          for (const row of projectStakeLedgerRows) {
+            await tx.insert(projectCurrencyLedger).values({
+              userId: row.userId,
+              walletId: row.walletId,
+              type: 'game_stake',
+              amount: row.amount,
+              balanceBefore: row.balanceBefore,
+              balanceAfter: row.balanceAfter,
+              referenceId: `challenge_create_stake:${createdChallenge.id}:${row.userId}`,
+              referenceType: 'challenge_create_stake',
+              description: row.description,
+              metadata: row.metadata,
+            });
+          }
+        }
 
         let sessionId: string | null = null;
 

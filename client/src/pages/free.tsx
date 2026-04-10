@@ -28,6 +28,13 @@ import {
   Gamepad2
 } from "lucide-react";
 
+interface AdvertisementCampaign {
+  id: string;
+  title: string;
+  titleAr?: string | null;
+  type: "image" | "video" | "link" | "embed";
+}
+
 interface FreeRewardsData {
   enabled: boolean;
   dailyBonus: {
@@ -70,7 +77,32 @@ export default function FreePage() {
     queryKey: ['/api/free/rewards'],
   });
 
+  const { data: adCampaigns = [] } = useQuery<AdvertisementCampaign[]>({
+    queryKey: ['/api/advertisements'],
+  });
+
   const formatCoins = (amount: number): string => `${amount.toFixed(2)} ${isAr ? 'عملة' : 'coins'}`;
+
+  const rewards = freeRewards || {
+    enabled: true,
+    dailyBonus: { available: true, claimed: false, amount: 0.50, streak: 0, nextDay: 1, nextClaim: null },
+    adsWatched: 0,
+    maxAdsPerDay: 10,
+    adReward: 0.10,
+    totalAdEarnings: 0,
+    referrals: 0,
+    referralReward: 5.00,
+    totalReferralEarnings: 0,
+    totalDailyEarnings: 0,
+    freeGames: [],
+    freePlayLimit: 0,
+    todayGamesPlayed: 0,
+    referralCode: '',
+  };
+
+  const selectedAdId = adCampaigns.length > 0
+    ? adCampaigns[Math.max(rewards.adsWatched, 0) % adCampaigns.length]?.id || adCampaigns[0]?.id
+    : null;
 
   const claimDailyMutation = useMutation({
     mutationFn: () => apiRequest('POST', '/api/free/claim-daily'),
@@ -96,7 +128,10 @@ export default function FreePage() {
   });
 
   const watchAdMutation = useMutation({
-    mutationFn: () => apiRequest('POST', '/api/free/watch-ad'),
+    mutationFn: () => apiRequest('POST', '/api/free/watch-ad', {
+      adId: selectedAdId,
+      source: 'free_rewards_page',
+    }),
     onSuccess: async (res: Response) => {
       const data = typeof res?.json === 'function' ? await res.json() : res;
       const amount = data?.amount || 0;
@@ -157,23 +192,6 @@ export default function FreePage() {
     } else {
       setShowShareDialog(true);
     }
-  };
-
-  const rewards = freeRewards || {
-    enabled: true,
-    dailyBonus: { available: true, claimed: false, amount: 0.50, streak: 0, nextDay: 1, nextClaim: null },
-    adsWatched: 0,
-    maxAdsPerDay: 10,
-    adReward: 0.10,
-    totalAdEarnings: 0,
-    referrals: 0,
-    referralReward: 5.00,
-    totalReferralEarnings: 0,
-    totalDailyEarnings: 0,
-    freeGames: [],
-    freePlayLimit: 0,
-    todayGamesPlayed: 0,
-    referralCode: '',
   };
 
   const totalEarnings = (rewards.totalDailyEarnings + rewards.totalAdEarnings + rewards.totalReferralEarnings).toFixed(2);

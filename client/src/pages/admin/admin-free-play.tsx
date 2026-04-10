@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   Gift,
@@ -17,12 +20,22 @@ import {
   Save,
   RefreshCw,
   Clock,
-  DollarSign,
+  Coins,
   Calendar,
   Crown,
   Gamepad2,
   Settings,
   BarChart3,
+  Upload,
+  Image as ImageIcon,
+  Video,
+  MousePointerClick,
+  Eye,
+  Medal,
+  Pencil,
+  Plus,
+  Trash2,
+  Trophy,
 } from "lucide-react";
 
 function getAdminToken() {
@@ -52,10 +65,220 @@ async function adminPut(url: string, body: Record<string, unknown>) {
   return res.json();
 }
 
+async function adminPost(url: string, body: Record<string, unknown>) {
+  const token = getAdminToken();
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-token": token || "",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({ error: "Request failed" }));
+    throw new Error(payload.error || "Request failed");
+  }
+  return res.json();
+}
+
+async function adminPatch(url: string, body: Record<string, unknown>) {
+  const token = getAdminToken();
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-token": token || "",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({ error: "Request failed" }));
+    throw new Error(payload.error || "Request failed");
+  }
+  return res.json();
+}
+
+async function adminDelete(url: string) {
+  const token = getAdminToken();
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { "x-admin-token": token || "" },
+  });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({ error: "Request failed" }));
+    throw new Error(payload.error || "Request failed");
+  }
+  return res.json();
+}
+
+interface FreePlayLeaderboardRow {
+  user_id: string;
+  username?: string;
+  nickname?: string | null;
+  last_active_at?: string | null;
+  activity_count?: number;
+  total_rewards?: string;
+  successful_referrals?: number;
+  invited_total?: number;
+  invited_active?: number;
+  games_played?: number;
+  games_won?: number;
+  total_earnings?: string;
+  last_activity_at?: string | null;
+}
+
+interface FreePlayLeaderboardResponse {
+  section: "daily" | "ads" | "referral" | "games";
+  windowDays: number;
+  rows: FreePlayLeaderboardRow[];
+}
+
+interface ReferrerDetailsResponse {
+  referrer: {
+    id: string;
+    username: string;
+    nickname?: string | null;
+    status: string;
+    isOnline: boolean;
+    lastActiveAt?: string | null;
+  };
+  affiliate: {
+    id: string;
+    affiliateCode: string;
+    referralLink: string;
+    commissionRate: string;
+    isActive: boolean;
+  } | null;
+  summary: {
+    invitedTotal: number;
+    invitedActive: number;
+    invitedInactive: number;
+    totalInvitedDeposits: string;
+    totalInvitedEarnings: string;
+    totalInvitedGames: number;
+    totalCommissions: string;
+    commissionEvents: number;
+    lastCommissionAt?: string | null;
+  };
+  invitedUsers: Array<{
+    id: string;
+    username: string;
+    nickname?: string | null;
+    status: string;
+    is_online: boolean;
+    last_active_at?: string | null;
+    total_deposited: string;
+    total_earnings: string;
+    total_won: string;
+    games_played: number;
+    created_at: string;
+    commission_generated: string;
+  }>;
+}
+
+interface FreePlayAdsCampaign {
+  id: string;
+  title: string;
+  title_ar?: string | null;
+  type: "image" | "video" | "link" | "embed";
+  asset_url?: string | null;
+  target_url?: string | null;
+  embed_code?: string | null;
+  display_duration: number;
+  sort_order: number;
+  is_active: boolean;
+  tracked_views: number;
+  tracked_clicks: number;
+  reward_claims: number;
+  reward_total: string;
+}
+
+interface FreePlayAdsCampaignsResponse {
+  windowDays: number;
+  campaigns: FreePlayAdsCampaign[];
+}
+
+interface FreePlayAdsAnalyticsResponse {
+  windowDays: number;
+  totals: {
+    views: number;
+    clicks: number;
+    rewardClaims: number;
+    uniqueUsers: number;
+    rewardTotal: string;
+    clickThroughRate: string;
+    totalCampaigns: number;
+    activeCampaigns: number;
+  };
+  topCampaigns: Array<{
+    id: string;
+    title: string;
+    type: string;
+    views: number;
+    clicks: number;
+    reward_claims: number;
+    reward_total: string;
+  }>;
+}
+
+interface FreePlayAdFormState {
+  title: string;
+  titleAr: string;
+  type: "image" | "video" | "link" | "embed";
+  assetUrl: string;
+  targetUrl: string;
+  embedCode: string;
+  displayDuration: string;
+  sortOrder: string;
+  isActive: boolean;
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const base64 = result.includes(",") ? result.split(",")[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatDateTime(value?: string | null): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
+}
+
 export default function AdminFreePlayPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("settings");
+  const [activeTab, setActiveTab] = useState("daily");
+  const [leaderboardWindowDays, setLeaderboardWindowDays] = useState("30");
+  const [leaderboardLimit, setLeaderboardLimit] = useState("20");
+  const [selectedReferrerId, setSelectedReferrerId] = useState("");
+  const [referrerCommissionRate, setReferrerCommissionRate] = useState("5.00");
+  const [isCampaignDialogOpen, setIsCampaignDialogOpen] = useState(false);
+  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
+  const [adAssetUploading, setAdAssetUploading] = useState(false);
+  const [adForm, setAdForm] = useState<FreePlayAdFormState>({
+    title: "",
+    titleAr: "",
+    type: "image",
+    assetUrl: "",
+    targetUrl: "",
+    embedCode: "",
+    displayDuration: "5000",
+    sortOrder: "0",
+    isActive: true,
+  });
+
+  const windowDaysValue = Math.max(parseInt(leaderboardWindowDays, 10) || 30, 1);
+  const limitValue = Math.max(parseInt(leaderboardLimit, 10) || 20, 1);
 
   // Queries
   const { data: settings, isLoading: settingsLoading } = useQuery({
@@ -78,6 +301,48 @@ export default function AdminFreePlayPage() {
     queryKey: ["/api/admin/free-play/top-referrers"],
     queryFn: () => adminFetch("/api/admin/free-play/top-referrers"),
   });
+
+  const { data: dailyLeaderboard, isLoading: dailyLeaderboardLoading } = useQuery<FreePlayLeaderboardResponse>({
+    queryKey: ["/api/admin/free-play/leaderboard", "daily", windowDaysValue, limitValue],
+    queryFn: () => adminFetch(`/api/admin/free-play/leaderboard?section=daily&windowDays=${windowDaysValue}&limit=${limitValue}`),
+  });
+
+  const { data: adsLeaderboard, isLoading: adsLeaderboardLoading } = useQuery<FreePlayLeaderboardResponse>({
+    queryKey: ["/api/admin/free-play/leaderboard", "ads", windowDaysValue, limitValue],
+    queryFn: () => adminFetch(`/api/admin/free-play/leaderboard?section=ads&windowDays=${windowDaysValue}&limit=${limitValue}`),
+  });
+
+  const { data: referralLeaderboard, isLoading: referralLeaderboardLoading } = useQuery<FreePlayLeaderboardResponse>({
+    queryKey: ["/api/admin/free-play/leaderboard", "referral", windowDaysValue, limitValue],
+    queryFn: () => adminFetch(`/api/admin/free-play/leaderboard?section=referral&windowDays=${windowDaysValue}&limit=${limitValue}`),
+  });
+
+  const { data: gamesLeaderboard, isLoading: gamesLeaderboardLoading } = useQuery<FreePlayLeaderboardResponse>({
+    queryKey: ["/api/admin/free-play/leaderboard", "games", windowDaysValue, limitValue],
+    queryFn: () => adminFetch(`/api/admin/free-play/leaderboard?section=games&windowDays=${windowDaysValue}&limit=${limitValue}`),
+  });
+
+  const { data: referrerDetails, isLoading: referrerDetailsLoading } = useQuery<ReferrerDetailsResponse>({
+    queryKey: ["/api/admin/free-play/referrals", selectedReferrerId],
+    queryFn: () => adminFetch(`/api/admin/free-play/referrals/${selectedReferrerId}/details?limit=100`),
+    enabled: selectedReferrerId.length > 0,
+  });
+
+  const { data: adsCampaigns, isLoading: adsCampaignsLoading } = useQuery<FreePlayAdsCampaignsResponse>({
+    queryKey: ["/api/admin/free-play/ads/campaigns", windowDaysValue],
+    queryFn: () => adminFetch(`/api/admin/free-play/ads/campaigns?windowDays=${windowDaysValue}`),
+  });
+
+  const { data: adsAnalytics, isLoading: adsAnalyticsLoading } = useQuery<FreePlayAdsAnalyticsResponse>({
+    queryKey: ["/api/admin/free-play/ads/analytics", windowDaysValue],
+    queryFn: () => adminFetch(`/api/admin/free-play/ads/analytics?windowDays=${windowDaysValue}`),
+  });
+
+  useEffect(() => {
+    if (referrerDetails?.affiliate?.commissionRate) {
+      setReferrerCommissionRate(String(referrerDetails.affiliate.commissionRate));
+    }
+  }, [referrerDetails?.affiliate?.commissionRate]);
 
   // Local state for settings form
   const [localSettings, setLocalSettings] = useState<Record<string, string>>({});
@@ -105,6 +370,73 @@ export default function AdminFreePlayPage() {
     },
   });
 
+  const updateCommissionMut = useMutation({
+    mutationFn: (payload: { userId: string; commissionRate: string }) =>
+      adminPut(`/api/admin/free-play/referrals/${payload.userId}/commission`, {
+        commissionRate: payload.commissionRate,
+      }),
+    onSuccess: () => {
+      toast({ title: "Referral commission updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/referrals", selectedReferrerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/leaderboard", "referral", windowDaysValue, limitValue] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to update commission", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const createCampaignMut = useMutation({
+    mutationFn: (payload: Record<string, unknown>) => adminPost("/api/admin/free-play/ads/campaigns", payload),
+    onSuccess: () => {
+      toast({ title: "Ad campaign created" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/ads/campaigns", windowDaysValue] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/ads/analytics", windowDaysValue] });
+      setIsCampaignDialogOpen(false);
+      setEditingCampaignId(null);
+      setAdForm({
+        title: "",
+        titleAr: "",
+        type: "image",
+        assetUrl: "",
+        targetUrl: "",
+        embedCode: "",
+        displayDuration: "5000",
+        sortOrder: "0",
+        isActive: true,
+      });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to create campaign", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateCampaignMut = useMutation({
+    mutationFn: (payload: { id: string; body: Record<string, unknown> }) =>
+      adminPatch(`/api/admin/free-play/ads/campaigns/${payload.id}`, payload.body),
+    onSuccess: () => {
+      toast({ title: "Ad campaign updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/ads/campaigns", windowDaysValue] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/ads/analytics", windowDaysValue] });
+      setIsCampaignDialogOpen(false);
+      setEditingCampaignId(null);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to update campaign", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteCampaignMut = useMutation({
+    mutationFn: (campaignId: string) => adminDelete(`/api/admin/free-play/ads/campaigns/${campaignId}`),
+    onSuccess: () => {
+      toast({ title: "Ad campaign deleted" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/ads/campaigns", windowDaysValue] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/ads/analytics", windowDaysValue] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to delete campaign", description: err.message, variant: "destructive" });
+    },
+  });
+
   const handleSaveSettings = () => {
     updateSettingsMut.mutate(localSettings);
   };
@@ -123,9 +455,104 @@ export default function AdminFreePlayPage() {
   const getSettingVal = (key: string, fallback = "0") => localSettings[key] ?? fallback;
   const isOn = (key: string) => getSettingVal(key, "true") === "true";
 
-  const formatCurrency = (n: number | string) => {
+  const formatProjectCoins = (n: number | string) => {
     const num = typeof n === "string" ? parseFloat(n) : n;
-    return `$${num.toFixed(2)}`;
+    return `${num.toFixed(2)} coins`;
+  };
+
+  const selectReferrer = (userId: string, commission?: string) => {
+    setSelectedReferrerId(userId);
+    setReferrerCommissionRate(commission || "5.00");
+  };
+
+  const handleCommissionSave = () => {
+    if (!selectedReferrerId) {
+      toast({ title: "Select a referrer first", variant: "destructive" });
+      return;
+    }
+
+    updateCommissionMut.mutate({ userId: selectedReferrerId, commissionRate: referrerCommissionRate });
+  };
+
+  const handleCampaignAssetUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setAdAssetUploading(true);
+      const base64 = await fileToBase64(file);
+      const payload = await adminPost("/api/admin/free-play/ads/upload-asset", {
+        data: base64,
+        mimeType: file.type,
+        fileName: file.name,
+      });
+
+      const assetUrl = String(payload?.assetUrl || "");
+      setAdForm((prev) => ({ ...prev, assetUrl }));
+      toast({ title: "Asset uploaded" });
+    } catch (err) {
+      toast({
+        title: "Asset upload failed",
+        description: err instanceof Error ? err.message : "Upload failed",
+        variant: "destructive",
+      });
+    } finally {
+      setAdAssetUploading(false);
+      event.target.value = "";
+    }
+  };
+
+  const openCreateCampaign = () => {
+    setEditingCampaignId(null);
+    setAdForm({
+      title: "",
+      titleAr: "",
+      type: "image",
+      assetUrl: "",
+      targetUrl: "",
+      embedCode: "",
+      displayDuration: "5000",
+      sortOrder: "0",
+      isActive: true,
+    });
+    setIsCampaignDialogOpen(true);
+  };
+
+  const openEditCampaign = (campaign: FreePlayAdsCampaign) => {
+    setEditingCampaignId(campaign.id);
+    setAdForm({
+      title: campaign.title,
+      titleAr: campaign.title_ar || "",
+      type: campaign.type,
+      assetUrl: campaign.asset_url || "",
+      targetUrl: campaign.target_url || "",
+      embedCode: campaign.embed_code || "",
+      displayDuration: String(campaign.display_duration || 5000),
+      sortOrder: String(campaign.sort_order || 0),
+      isActive: campaign.is_active,
+    });
+    setIsCampaignDialogOpen(true);
+  };
+
+  const saveCampaign = () => {
+    const payload: Record<string, unknown> = {
+      title: adForm.title,
+      titleAr: adForm.titleAr,
+      type: adForm.type,
+      assetUrl: adForm.assetUrl,
+      targetUrl: adForm.targetUrl,
+      embedCode: adForm.embedCode,
+      displayDuration: Number.parseInt(adForm.displayDuration, 10),
+      sortOrder: Number.parseInt(adForm.sortOrder, 10),
+      isActive: adForm.isActive,
+    };
+
+    if (editingCampaignId) {
+      updateCampaignMut.mutate({ id: editingCampaignId, body: payload });
+      return;
+    }
+
+    createCampaignMut.mutate(payload);
   };
 
   return (
@@ -138,7 +565,7 @@ export default function AdminFreePlayPage() {
             Free Play Management
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Control daily bonuses, ad rewards, referral system, and free play limits
+            All rewards here use project currency only and are credited to users' project wallets
           </p>
         </div>
         <Button
@@ -164,7 +591,7 @@ export default function AdminFreePlayPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">Daily Bonus Today</p>
                   <p className="text-lg font-bold">{stats.dailyBonus.today.claims}</p>
-                  <p className="text-xs text-muted-foreground">{formatCurrency(stats.dailyBonus.today.total)}</p>
+                  <p className="text-xs text-muted-foreground">{formatProjectCoins(stats.dailyBonus.today.total)}</p>
                 </div>
               </div>
             </CardContent>
@@ -178,7 +605,7 @@ export default function AdminFreePlayPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">Ad Watches Today</p>
                   <p className="text-lg font-bold">{stats.adWatches.today.watches}</p>
-                  <p className="text-xs text-muted-foreground">{formatCurrency(stats.adWatches.today.total)}</p>
+                  <p className="text-xs text-muted-foreground">{formatProjectCoins(stats.adWatches.today.total)}</p>
                 </div>
               </div>
             </CardContent>
@@ -192,7 +619,7 @@ export default function AdminFreePlayPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">Referrals Today</p>
                   <p className="text-lg font-bold">{stats.referrals.today.count}</p>
-                  <p className="text-xs text-muted-foreground">{formatCurrency(stats.referrals.today.total)}</p>
+                  <p className="text-xs text-muted-foreground">{formatProjectCoins(stats.referrals.today.total)}</p>
                 </div>
               </div>
             </CardContent>
@@ -201,11 +628,11 @@ export default function AdminFreePlayPage() {
             <CardContent className="pt-4 pb-3">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-lg bg-purple-500/10">
-                  <DollarSign className="w-5 h-5 text-purple-500" />
+                  <Coins className="w-5 h-5 text-purple-500" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">All-Time Distributed</p>
-                  <p className="text-lg font-bold">{formatCurrency(stats.totals.allRewardsDistributed)}</p>
+                  <p className="text-lg font-bold">{formatProjectCoins(stats.totals.allRewardsDistributed)}</p>
                   <p className="text-xs text-muted-foreground">{stats.totals.activeReferrers} active referrers</p>
                 </div>
               </div>
@@ -215,353 +642,486 @@ export default function AdminFreePlayPage() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-4 w-full max-w-lg">
-          <TabsTrigger value="settings" className="flex items-center gap-1">
-            <Settings className="w-4 h-4" /> Settings
-          </TabsTrigger>
-          <TabsTrigger value="stats" className="flex items-center gap-1">
-            <BarChart3 className="w-4 h-4" /> Statistics
-          </TabsTrigger>
-          <TabsTrigger value="activity" className="flex items-center gap-1">
-            <Activity className="w-4 h-4" /> Activity
-          </TabsTrigger>
-          <TabsTrigger value="referrers" className="flex items-center gap-1">
-            <Crown className="w-4 h-4" /> Top Referrers
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <TabsList className="grid grid-cols-4 w-full md:max-w-xl">
+            <TabsTrigger value="daily" className="flex items-center gap-1">
+              <Calendar className="w-4 h-4" /> Daily
+            </TabsTrigger>
+            <TabsTrigger value="ads" className="flex items-center gap-1">
+              <Tv className="w-4 h-4" /> Ads
+            </TabsTrigger>
+            <TabsTrigger value="referral" className="flex items-center gap-1">
+              <Users className="w-4 h-4" /> Referral
+            </TabsTrigger>
+            <TabsTrigger value="games" className="flex items-center gap-1">
+              <Gamepad2 className="w-4 h-4" /> Games
+            </TabsTrigger>
+          </TabsList>
 
-        {/* ====== SETTINGS TAB ====== */}
-        <TabsContent value="settings" className="mt-4 space-y-4">
-          {settingsLoading ? (
-            <div className="text-center text-muted-foreground py-10">Loading settings...</div>
-          ) : (
-            <>
-              {/* Toggle Switches */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Feature Toggles</CardTitle>
-                  <CardDescription>Enable or disable free play features</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm font-medium">Free Play System</Label>
-                      <p className="text-xs text-muted-foreground">Master toggle for the entire free play section</p>
-                    </div>
-                    <Switch checked={isOn("free_play_enabled")} onCheckedChange={() => toggleLocal("free_play_enabled")} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm font-medium">Daily Bonus</Label>
-                      <p className="text-xs text-muted-foreground">Allow users to claim daily rewards</p>
-                    </div>
+          <div className="flex items-center gap-2">
+            <Input
+              className="w-24"
+              type="number"
+              min="1"
+              value={leaderboardWindowDays}
+              onChange={(e) => setLeaderboardWindowDays(e.target.value)}
+              placeholder="Days"
+            />
+            <Input
+              className="w-24"
+              type="number"
+              min="1"
+              value={leaderboardLimit}
+              onChange={(e) => setLeaderboardLimit(e.target.value)}
+              placeholder="Limit"
+            />
+          </div>
+        </div>
+
+        <TabsContent value="daily" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Daily Rewards Controls</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Daily Bonus Enabled</Label>
+                  <div className="flex items-center justify-between border rounded-md p-3">
+                    <p className="text-xs text-muted-foreground">Allow users to claim daily bonus</p>
                     <Switch checked={isOn("daily_bonus_enabled")} onCheckedChange={() => toggleLocal("daily_bonus_enabled")} />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm font-medium">Ad Rewards</Label>
-                      <p className="text-xs text-muted-foreground">Allow users to earn by watching ads</p>
-                    </div>
-                    <Switch checked={isOn("ad_reward_enabled")} onCheckedChange={() => toggleLocal("ad_reward_enabled")} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm font-medium">Referral Rewards</Label>
-                      <p className="text-xs text-muted-foreground">Give rewards when referred users register</p>
-                    </div>
-                    <Switch checked={isOn("referral_reward_enabled")} onCheckedChange={() => toggleLocal("referral_reward_enabled")} />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Amount Settings */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Reward Amounts</CardTitle>
-                  <CardDescription>Configure reward values and limits</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-sm">Ad Reward Amount ($)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={getSettingVal("ad_reward_amount", "0.10")}
-                        onChange={(e) => updateLocal("ad_reward_amount", e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">Amount earned per ad watched</p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-sm">Max Ads Per Day</Label>
-                      <Input
-                        type="number"
-                        step="1"
-                        min="0"
-                        value={getSettingVal("max_ads_per_day", "10")}
-                        onChange={(e) => updateLocal("max_ads_per_day", e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">Maximum ad watches allowed per day</p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-sm">Referral Reward ($)</Label>
-                      <Input
-                        type="number"
-                        step="0.50"
-                        min="0"
-                        value={getSettingVal("referral_reward_amount", "5.00")}
-                        onChange={(e) => updateLocal("referral_reward_amount", e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">Amount given to referrer on new signup</p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-sm">Free Play Daily Limit</Label>
-                      <Input
-                        type="number"
-                        step="1"
-                        min="0"
-                        value={getSettingVal("freePlayLimit", "50")}
-                        onChange={(e) => updateLocal("freePlayLimit", e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">Max free games per user per day (0 = unlimited)</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Daily Reward Amount (Project Coins)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={getSettingVal("daily_bonus_amount", "0.10")}
+                    onChange={(e) => updateLocal("daily_bonus_amount", e.target.value)}
+                  />
+                </div>
+              </div>
               <div className="flex justify-end">
-                <Button onClick={handleSaveSettings} disabled={updateSettingsMut.isPending}>
+                <Button onClick={handleSaveSettings} disabled={updateSettingsMut.isPending || settingsLoading}>
                   <Save className="w-4 h-4 mr-2" />
-                  {updateSettingsMut.isPending ? "Saving..." : "Save Settings"}
+                  {updateSettingsMut.isPending ? "Saving..." : "Save Daily Controls"}
                 </Button>
               </div>
-            </>
-          )}
-        </TabsContent>
+            </CardContent>
+          </Card>
 
-        {/* ====== STATISTICS TAB ====== */}
-        <TabsContent value="stats" className="mt-4 space-y-4">
-          {statsLoading ? (
-            <div className="text-center text-muted-foreground py-10">Loading statistics...</div>
-          ) : stats ? (
-            <>
-              {/* Daily Bonus Stats */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-yellow-500" /> Daily Bonus Statistics
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Today</p>
-                      <p className="text-xl font-bold">{stats.dailyBonus.today.claims}</p>
-                      <p className="text-xs text-green-500">{formatCurrency(stats.dailyBonus.today.total)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">This Week</p>
-                      <p className="text-xl font-bold">{stats.dailyBonus.week.claims}</p>
-                      <p className="text-xs text-green-500">{formatCurrency(stats.dailyBonus.week.total)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">All Time</p>
-                      <p className="text-xl font-bold">{stats.dailyBonus.allTime.claims}</p>
-                      <p className="text-xs text-green-500">{formatCurrency(stats.dailyBonus.allTime.total)}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Ad Watch Stats */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Tv className="w-4 h-4 text-blue-500" /> Ad Watch Statistics
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Today</p>
-                      <p className="text-xl font-bold">{stats.adWatches.today.watches}</p>
-                      <p className="text-xs text-green-500">{formatCurrency(stats.adWatches.today.total)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">This Week</p>
-                      <p className="text-xl font-bold">{stats.adWatches.week.watches}</p>
-                      <p className="text-xs text-green-500">{formatCurrency(stats.adWatches.week.total)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">All Time</p>
-                      <p className="text-xl font-bold">{stats.adWatches.allTime.watches}</p>
-                      <p className="text-xs text-green-500">{formatCurrency(stats.adWatches.allTime.total)}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Referral Stats */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Users className="w-4 h-4 text-green-500" /> Referral Statistics
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Today</p>
-                      <p className="text-xl font-bold">{stats.referrals.today.count}</p>
-                      <p className="text-xs text-green-500">{formatCurrency(stats.referrals.today.total)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">This Week</p>
-                      <p className="text-xl font-bold">{stats.referrals.week.count}</p>
-                      <p className="text-xs text-green-500">{formatCurrency(stats.referrals.week.total)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">All Time</p>
-                      <p className="text-xl font-bold">{stats.referrals.allTime.count}</p>
-                      <p className="text-xs text-green-500">{formatCurrency(stats.referrals.allTime.total)}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Summary */}
-              <Card className="border-primary/30 bg-primary/5">
-                <CardContent className="pt-4 pb-3">
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Total Rewards Distributed</p>
-                      <p className="text-2xl font-bold text-primary">{formatCurrency(stats.totals.allRewardsDistributed)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Games Today</p>
-                      <p className="text-2xl font-bold">{stats.totals.gamesToday}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Active Referrers</p>
-                      <p className="text-2xl font-bold">{stats.totals.activeReferrers}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          ) : (
-            <div className="text-center text-muted-foreground py-10">No statistics available</div>
-          )}
-        </TabsContent>
-
-        {/* ====== ACTIVITY TAB ====== */}
-        <TabsContent value="activity" className="mt-4">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Activity className="w-4 h-4" /> Recent Activity
+                <Trophy className="w-4 h-4 text-yellow-500" /> Daily Activity Leaderboard
               </CardTitle>
-              <CardDescription>Latest free play rewards and actions</CardDescription>
+              <CardDescription>Top users by daily free rewards claims in selected window</CardDescription>
             </CardHeader>
             <CardContent>
-              {activityLoading ? (
-                <div className="text-center text-muted-foreground py-6">Loading activity...</div>
-              ) : activity && activity.length > 0 ? (
-                <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                  {activity.map((item: { type: string; username?: string; details?: string; amount: string | number; date: string }, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg border bg-card/50 hover:bg-card">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-1.5 rounded-md ${
-                          item.type === 'daily_bonus' ? 'bg-yellow-500/10' :
-                          item.type === 'ad_watch' ? 'bg-blue-500/10' :
-                          'bg-green-500/10'
-                        }`}>
-                          {item.type === 'daily_bonus' ? (
-                            <Calendar className="w-4 h-4 text-yellow-500" />
-                          ) : item.type === 'ad_watch' ? (
-                            <Tv className="w-4 h-4 text-blue-500" />
-                          ) : (
-                            <Users className="w-4 h-4 text-green-500" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">{item.username}</p>
-                          <p className="text-xs text-muted-foreground">{item.details}</p>
-                        </div>
+              {dailyLeaderboardLoading ? (
+                <div className="text-center text-muted-foreground py-6">Loading daily leaderboard...</div>
+              ) : dailyLeaderboard?.rows?.length ? (
+                <div className="space-y-2">
+                  {dailyLeaderboard.rows.map((row, idx) => (
+                    <div key={String(row.user_id)} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="text-sm font-semibold">#{idx + 1} {row.nickname || row.username}</p>
+                        <p className="text-xs text-muted-foreground">@{row.username}</p>
                       </div>
                       <div className="text-right">
-                        <Badge variant={
-                          item.type === 'daily_bonus' ? 'default' :
-                          item.type === 'ad_watch' ? 'secondary' :
-                          'outline'
-                        }>
-                          {item.type === 'daily_bonus' ? 'Daily' :
-                           item.type === 'ad_watch' ? 'Ad' : 'Referral'}
-                        </Badge>
-                        <p className="text-sm font-bold text-green-500 mt-0.5">
-                          +{formatCurrency(item.amount)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(item.date).toLocaleString()}
-                        </p>
+                        <p className="text-sm font-semibold">{row.activity_count || 0} claims</p>
+                        <p className="text-xs text-green-500">{formatProjectCoins(row.total_rewards || 0)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-muted-foreground py-6">
-                  No recent activity
-                </div>
+                <div className="text-center text-muted-foreground py-6">No data in this range</div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* ====== TOP REFERRERS TAB ====== */}
-        <TabsContent value="referrers" className="mt-4">
+        <TabsContent value="ads" className="mt-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <p className="text-xs text-muted-foreground">Total Impressions</p>
+                <p className="text-2xl font-bold">{adsAnalytics?.totals?.views || 0}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <p className="text-xs text-muted-foreground">Total Clicks</p>
+                <p className="text-2xl font-bold">{adsAnalytics?.totals?.clicks || 0}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <p className="text-xs text-muted-foreground">Average CTR</p>
+                <p className="text-2xl font-bold">{adsAnalytics?.totals?.clickThroughRate || "0.00"}%</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Tv className="w-4 h-4 text-blue-500" /> Ads Campaign Management
+                </CardTitle>
+                <CardDescription>Create image/video/link campaigns and monitor performance</CardDescription>
+              </div>
+              <Button onClick={openCreateCampaign}>
+                <Plus className="w-4 h-4 mr-2" /> New Campaign
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {adsCampaignsLoading || adsAnalyticsLoading ? (
+                <div className="text-center text-muted-foreground py-6">Loading campaigns...</div>
+              ) : adsCampaigns?.campaigns?.length ? (
+                <div className="space-y-2">
+                  {adsCampaigns.campaigns.map((campaign) => {
+                    return (
+                      <div key={campaign.id} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold">{campaign.title}</p>
+                            <p className="text-xs text-muted-foreground">{campaign.type.toUpperCase()} • {campaign.target_url || "No target URL"}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={campaign.is_active ? "default" : "outline"}>{campaign.is_active ? "Active" : "Inactive"}</Badge>
+                            <Button size="sm" variant="outline" onClick={() => openEditCampaign(campaign)}>
+                              <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => deleteCampaignMut.mutate(campaign.id)}
+                              disabled={deleteCampaignMut.isPending}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                          <div className="p-2 rounded bg-muted/40">Impressions: <span className="font-semibold">{campaign.tracked_views || 0}</span></div>
+                          <div className="p-2 rounded bg-muted/40">Clicks: <span className="font-semibold">{campaign.tracked_clicks || 0}</span></div>
+                          <div className="p-2 rounded bg-muted/40">Claims: <span className="font-semibold">{campaign.reward_claims || 0}</span></div>
+                          <div className="p-2 rounded bg-muted/40">CTR: <span className="font-semibold">{campaign.tracked_views > 0 ? ((campaign.tracked_clicks / campaign.tracked_views) * 100).toFixed(2) : "0.00"}%</span></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-6">No campaigns found</div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Crown className="w-4 h-4 text-yellow-500" /> Top Referrers
+                <Trophy className="w-4 h-4 text-blue-500" /> Ads Activity Leaderboard
               </CardTitle>
-              <CardDescription>Users who brought the most new players</CardDescription>
             </CardHeader>
             <CardContent>
-              {topReferrers && topReferrers.length > 0 ? (
+              {adsLeaderboardLoading ? (
+                <div className="text-center text-muted-foreground py-6">Loading ads leaderboard...</div>
+              ) : adsLeaderboard?.rows?.length ? (
                 <div className="space-y-2">
-                  {topReferrers.map((r: { userId: string; nickname?: string; username?: string; referralCount?: number; totalEarned?: string | number }, idx: number) => (
-                    <div key={r.userId} className="flex items-center justify-between p-3 rounded-lg border bg-card/50 hover:bg-card">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                          idx === 0 ? 'bg-yellow-500/20 text-yellow-500' :
-                          idx === 1 ? 'bg-gray-400/20 text-gray-400' :
-                          idx === 2 ? 'bg-orange-500/20 text-orange-500' :
-                          'bg-muted text-muted-foreground'
-                        }`}>
-                          #{idx + 1}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">{r.nickname || r.username}</p>
-                          <p className="text-xs text-muted-foreground">@{r.username}</p>
-                        </div>
+                  {adsLeaderboard.rows.map((row, idx) => (
+                    <div key={String(row.user_id)} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="text-sm font-semibold">#{idx + 1} {row.nickname || row.username}</p>
+                        <p className="text-xs text-muted-foreground">@{row.username}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold">{r.referralCount} referrals</p>
-                        <p className="text-xs text-green-500">{formatCurrency(r.totalEarned || 0)} earned</p>
+                        <p className="text-sm font-semibold">{row.activity_count || 0} ad interactions</p>
+                        <p className="text-xs text-green-500">{formatProjectCoins(row.total_rewards || 0)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-muted-foreground py-6">
-                  No referrers yet
+                <div className="text-center text-muted-foreground py-6">No ads activity data</div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="referral" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Crown className="w-4 h-4 text-yellow-500" /> Referral Leaderboard
+              </CardTitle>
+              <CardDescription>Select a referrer to open deep analytics and update commission</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {referralLeaderboardLoading ? (
+                <div className="text-center text-muted-foreground py-6">Loading referral leaderboard...</div>
+              ) : referralLeaderboard?.rows?.length ? (
+                <div className="space-y-2">
+                  {referralLeaderboard.rows.map((row, idx) => (
+                    <div key={String(row.user_id)} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="text-sm font-semibold">#{idx + 1} {row.nickname || row.username}</p>
+                        <p className="text-xs text-muted-foreground">@{row.username}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">{row.activity_count || 0} referrals</p>
+                          <p className="text-xs text-green-500">{formatProjectCoins(row.total_rewards || 0)}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant={selectedReferrerId === String(row.user_id) ? "default" : "outline"}
+                          onClick={() => selectReferrer(String(row.user_id))}
+                        >
+                          Inspect
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-6">No referral data</div>
+              )}
+            </CardContent>
+          </Card>
+
+          {!!selectedReferrerId && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Referrer Deep Analytics</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {referrerDetailsLoading ? (
+                  <div className="text-center text-muted-foreground py-6">Loading referrer details...</div>
+                ) : referrerDetails ? (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                      <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Invited</p><p className="text-xl font-bold">{referrerDetails.summary.invitedTotal}</p></div>
+                      <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Active</p><p className="text-xl font-bold">{referrerDetails.summary.invitedActive}</p></div>
+                      <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Deposits</p><p className="text-xl font-bold">{formatProjectCoins(referrerDetails.summary.totalInvitedDeposits)}</p></div>
+                      <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Earnings</p><p className="text-xl font-bold">{formatProjectCoins(referrerDetails.summary.totalInvitedEarnings)}</p></div>
+                      <div className="p-3 rounded border"><p className="text-xs text-muted-foreground">Commission</p><p className="text-xl font-bold">{formatProjectCoins(referrerDetails.summary.totalCommissions)}</p></div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                      <div className="space-y-1.5">
+                        <Label>Commission Rate (%)</Label>
+                        <Input value={referrerCommissionRate} onChange={(e) => setReferrerCommissionRate(e.target.value)} type="number" min="0" max="100" step="0.01" />
+                      </div>
+                      <div className="md:col-span-2 flex justify-end">
+                        <Button onClick={handleCommissionSave} disabled={updateCommissionMut.isPending}>
+                          {updateCommissionMut.isPending ? "Updating..." : "Update Commission"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 max-h-[380px] overflow-auto">
+                      {referrerDetails.invitedUsers.map((invited) => (
+                        <div key={invited.id} className="border rounded-lg p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <p className="text-sm font-semibold">{invited.nickname || invited.username}</p>
+                              <p className="text-xs text-muted-foreground">@{invited.username}</p>
+                            </div>
+                            <Badge variant={invited.status === "active" ? "default" : "outline"}>{invited.status === "active" ? "Active" : "Inactive"}</Badge>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mt-2">
+                            <div className="p-2 rounded bg-muted/40">Deposits: <span className="font-semibold">{formatProjectCoins(invited.total_deposited)}</span></div>
+                            <div className="p-2 rounded bg-muted/40">Earnings: <span className="font-semibold">{formatProjectCoins(invited.total_earnings)}</span></div>
+                            <div className="p-2 rounded bg-muted/40">Commission: <span className="font-semibold">{formatProjectCoins(invited.commission_generated)}</span></div>
+                            <div className="p-2 rounded bg-muted/40">Last active: <span className="font-semibold">{formatDateTime(invited.last_active_at)}</span></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center text-muted-foreground py-6">No details found for selected referrer</div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {!selectedReferrerId && topReferrers?.length ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Quick Referrers Snapshot</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {topReferrers.map((r: { userId: string; nickname?: string; username?: string; referralCount?: number; totalRewards?: string | number }, idx: number) => (
+                  <div key={r.userId} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <p className="text-sm font-semibold">#{idx + 1} {r.nickname || r.username}</p>
+                      <p className="text-xs text-muted-foreground">@{r.username}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold">{r.referralCount || 0} referrals</p>
+                      <p className="text-xs text-green-500">{formatProjectCoins(r.totalRewards || 0)}</p>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="games" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-purple-500" /> Games Activity Leaderboard
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {gamesLeaderboardLoading ? (
+                <div className="text-center text-muted-foreground py-6">Loading games leaderboard...</div>
+              ) : gamesLeaderboard?.rows?.length ? (
+                <div className="space-y-2">
+                  {gamesLeaderboard.rows.map((row, idx) => (
+                    <div key={String(row.user_id)} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="text-sm font-semibold">#{idx + 1} {row.nickname || row.username}</p>
+                        <p className="text-xs text-muted-foreground">@{row.username}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">{row.activity_count || 0} game actions</p>
+                        <p className="text-xs text-green-500">{formatProjectCoins(row.total_earnings || 0)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-6">No game activity data</div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Activity className="w-4 h-4" /> Recent Free Rewards Activity
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {activityLoading ? (
+                <div className="text-center text-muted-foreground py-6">Loading activity...</div>
+              ) : activity?.length ? (
+                <div className="space-y-2 max-h-[420px] overflow-auto">
+                  {activity.map((item: { type: string; username?: string; details?: string; amount: string | number; date: string }, idx: number) => (
+                    <div key={`${item.type}-${item.date}-${idx}`} className="flex items-center justify-between p-2 rounded-lg border">
+                      <div>
+                        <p className="text-sm font-medium">{item.username || "Unknown user"}</p>
+                        <p className="text-xs text-muted-foreground">{item.details || "No details"}</p>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline" className="mb-1">{item.type}</Badge>
+                        <p className="text-xs text-green-500">+{formatProjectCoins(item.amount)}</p>
+                        <p className="text-xs text-muted-foreground">{formatDateTime(item.date)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-muted-foreground py-6">No recent activity</div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={isCampaignDialogOpen} onOpenChange={setIsCampaignDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{editingCampaignId ? "Edit Ad Campaign" : "Create Ad Campaign"}</DialogTitle>
+            <DialogDescription>Manage ad metadata, media asset, target URL, and ordering.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Title (EN)</Label>
+                <Input value={adForm.title} onChange={(e) => setAdForm((prev) => ({ ...prev, title: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Title (AR)</Label>
+                <Input value={adForm.titleAr} onChange={(e) => setAdForm((prev) => ({ ...prev, titleAr: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Type</Label>
+                <Select value={adForm.type} onValueChange={(value: "image" | "video" | "link" | "embed") => setAdForm((prev) => ({ ...prev, type: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="image">Image</SelectItem>
+                    <SelectItem value="video">Video</SelectItem>
+                    <SelectItem value="link">Link</SelectItem>
+                    <SelectItem value="embed">Embed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Target URL</Label>
+                <Input value={adForm.targetUrl} onChange={(e) => setAdForm((prev) => ({ ...prev, targetUrl: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Asset URL</Label>
+              <Input value={adForm.assetUrl} onChange={(e) => setAdForm((prev) => ({ ...prev, assetUrl: e.target.value }))} />
+              <div className="flex items-center gap-2">
+                <Input type="file" accept="image/*,video/*" onChange={handleCampaignAssetUpload} disabled={adAssetUploading} />
+                <Button variant="outline" disabled={adAssetUploading}>{adAssetUploading ? "Uploading..." : "Upload"}</Button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Embed Code</Label>
+              <Textarea rows={4} value={adForm.embedCode} onChange={(e) => setAdForm((prev) => ({ ...prev, embedCode: e.target.value }))} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label>Display Duration (ms)</Label>
+                <Input type="number" value={adForm.displayDuration} onChange={(e) => setAdForm((prev) => ({ ...prev, displayDuration: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Sort Order</Label>
+                <Input type="number" value={adForm.sortOrder} onChange={(e) => setAdForm((prev) => ({ ...prev, sortOrder: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <div className="flex items-center h-10 px-3 border rounded-md justify-between">
+                  <span className="text-sm">Active</span>
+                  <Switch checked={adForm.isActive} onCheckedChange={(checked) => setAdForm((prev) => ({ ...prev, isActive: checked }))} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCampaignDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={saveCampaign}
+              disabled={createCampaignMut.isPending || updateCampaignMut.isPending}
+            >
+              {editingCampaignId ? "Save Changes" : "Create Campaign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

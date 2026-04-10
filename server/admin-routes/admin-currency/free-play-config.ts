@@ -8,25 +8,62 @@ import { db } from "../../db";
 import { eq, desc, sql, gte } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 
+const FREE_PLAY_SETTING_KEYS = new Set([
+  'free_play_enabled',
+  'daily_bonus_enabled',
+  'ad_reward_enabled',
+  'referral_reward_enabled',
+  'ad_reward_amount',
+  'max_ads_per_day',
+  'referral_reward_amount',
+  'freePlayLimit',
+  'free_play_limit',
+]);
+
+const REWARD_AMOUNT_KEYS = new Set(['ad_reward_amount', 'referral_reward_amount']);
+const NON_NEGATIVE_INTEGER_KEYS = new Set(['max_ads_per_day', 'freePlayLimit', 'free_play_limit']);
+
+function sanitizeSettingValue(key: string, rawValue: unknown): string {
+  if (REWARD_AMOUNT_KEYS.has(key)) {
+    const amount = Number.parseFloat(String(rawValue));
+    if (!Number.isFinite(amount) || amount < 0 || amount > 1000000) {
+      throw new Error(`Invalid value for ${key}`);
+    }
+    return amount.toFixed(2);
+  }
+
+  if (NON_NEGATIVE_INTEGER_KEYS.has(key)) {
+    const amount = Number.parseInt(String(rawValue), 10);
+    if (!Number.isFinite(amount) || amount < 0 || amount > 1000000) {
+      throw new Error(`Invalid value for ${key}`);
+    }
+    return String(amount);
+  }
+
+  if (rawValue === 'true' || rawValue === true) return 'true';
+  if (rawValue === 'false' || rawValue === false) return 'false';
+  return String(rawValue);
+}
+
 export function registerFreePlayConfigRoutes(app: Express) {
 
   app.get("/api/admin/free-play/settings", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
-      const freePlayKeys = [
-        'free_play_enabled', 'daily_bonus_enabled', 'ad_reward_enabled',
-        'referral_reward_enabled', 'ad_reward_amount', 'max_ads_per_day',
-        'referral_reward_amount', 'freePlayLimit', 'free_play_limit'
-      ];
       const allSettings = await db.select().from(gameplaySettings);
       const freePlaySettings: Record<string, any> = {};
       for (const row of allSettings) {
-        if (freePlayKeys.includes(row.key)) {
+        if (FREE_PLAY_SETTING_KEYS.has(row.key)) {
+          const normalizedDescription = row.description?.replace(/\(\$\)/g, '(project coins)');
+
+          const normalizedDescriptionAr = row.descriptionAr?.replace(/\(\$\)/g, '(عملة المشروع)');
+
           freePlaySettings[row.key] = {
             id: row.id,
             key: row.key,
             value: row.value,
-            description: row.description,
-            descriptionAr: row.descriptionAr,
+            description: normalizedDescription,
+            descriptionAr: normalizedDescriptionAr,
+            currencyType: REWARD_AMOUNT_KEYS.has(row.key) ? 'project_coin' : null,
           };
         }
       }
@@ -43,18 +80,29 @@ export function registerFreePlayConfigRoutes(app: Express) {
         return res.status(400).json({ error: "settings object required" });
       }
 
+      const unknownKeys = Object.keys(settings).filter((key) => !FREE_PLAY_SETTING_KEYS.has(key));
+      if (unknownKeys.length > 0) {
+        return res.status(400).json({ error: `Unsupported setting keys: ${unknownKeys.join(', ')}` });
+      }
+
       for (const [key, value] of Object.entries(settings)) {
+        const normalizedValue = sanitizeSettingValue(key, value);
+
         const [existing] = await db.select().from(gameplaySettings)
           .where(eq(gameplaySettings.key, key)).limit(1);
         if (existing) {
           await db.update(gameplaySettings)
-            .set({ value: String(value), updatedBy: req.admin!.id, updatedAt: new Date() })
+            .set({ value: normalizedValue, updatedBy: req.admin!.id, updatedAt: new Date() })
             .where(eq(gameplaySettings.key, key));
         } else {
+          const description = REWARD_AMOUNT_KEYS.has(key)
+            ? `Free play setting (project coins): ${key}`
+            : `Free play setting: ${key}`;
+
           await db.insert(gameplaySettings).values({
             key,
-            value: String(value),
-            description: `Free play setting: ${key}`,
+            value: normalizedValue,
+            description,
             updatedBy: req.admin!.id,
           });
         }

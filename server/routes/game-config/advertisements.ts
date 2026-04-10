@@ -1,11 +1,16 @@
 import type { Express, Request, Response } from "express";
-import { AuthRequest, adminTokenMiddleware } from "../middleware";
+import { AuthRequest, adminTokenMiddleware, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
 import { eq, and, or, sql } from "drizzle-orm";
-import { advertisements, insertAdvertisementSchema } from "@shared/schema";
+import { advertisements, freePlayAdEvents, insertAdvertisementSchema } from "@shared/schema";
 
 export function registerAdvertisementsRoutes(app: Express): void {
+
+  const getRequestIp = (req: Request): string | null => {
+    const fromHeader = String(req.headers["x-forwarded-for"] || "").split(",")[0]?.trim();
+    return fromHeader || req.ip || null;
+  };
 
   // ==================== ADVERTISEMENTS API ====================
 
@@ -29,6 +34,72 @@ export function registerAdvertisementsRoutes(app: Express): void {
       res.json(ads);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/advertisements/:id/view", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const id = String(req.params.id || "").trim();
+      if (!id) {
+        return res.status(400).json({ error: "Advertisement id is required" });
+      }
+
+      const [ad] = await db.select({ id: advertisements.id })
+        .from(advertisements)
+        .where(eq(advertisements.id, id))
+        .limit(1);
+
+      if (!ad) {
+        return res.status(404).json({ error: "Advertisement not found" });
+      }
+
+      await db.insert(freePlayAdEvents).values({
+        advertisementId: id,
+        userId: req.user!.id,
+        eventType: "view",
+        source: String(req.body?.source || "play_carousel").slice(0, 64),
+        ipAddress: getRequestIp(req),
+        userAgent: String(req.headers["user-agent"] || "").slice(0, 512),
+      });
+
+      return res.json({ success: true });
+    } catch (error: unknown) {
+      return res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/advertisements/:id/click", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const id = String(req.params.id || "").trim();
+      if (!id) {
+        return res.status(400).json({ error: "Advertisement id is required" });
+      }
+
+      const [ad] = await db.select({ id: advertisements.id, targetUrl: advertisements.targetUrl })
+        .from(advertisements)
+        .where(eq(advertisements.id, id))
+        .limit(1);
+
+      if (!ad) {
+        return res.status(404).json({ error: "Advertisement not found" });
+      }
+
+      if (!ad.targetUrl) {
+        return res.status(400).json({ error: "Advertisement has no target URL" });
+      }
+
+      await db.insert(freePlayAdEvents).values({
+        advertisementId: id,
+        userId: req.user!.id,
+        eventType: "click",
+        source: String(req.body?.source || "play_carousel").slice(0, 64),
+        ipAddress: getRequestIp(req),
+        userAgent: String(req.headers["user-agent"] || "").slice(0, 512),
+      });
+
+      return res.json({ success: true, targetUrl: ad.targetUrl });
+    } catch (error: unknown) {
+      return res.status(500).json({ error: getErrorMessage(error) });
     }
   });
 

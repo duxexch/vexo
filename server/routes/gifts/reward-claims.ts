@@ -4,6 +4,8 @@ import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
 import { eq, and, or, sql, desc, gte } from "drizzle-orm";
 import {
+  advertisements,
+  freePlayAdEvents,
   gameplaySettings,
   dailyRewards, adWatchLog,
   projectCurrencyWallets, projectCurrencyLedger,
@@ -140,9 +142,22 @@ export function registerRewardClaimRoutes(app: Express): void {
   app.post("/api/free/watch-ad", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.id;
+      const adIdRaw = req.body?.adId;
+      const adId = typeof adIdRaw === "string" && adIdRaw.trim() ? adIdRaw.trim() : null;
       const now = new Date();
       const todayStart = new Date(now);
       todayStart.setHours(0, 0, 0, 0);
+
+      if (adId) {
+        const [ad] = await db.select({ id: advertisements.id, isActive: advertisements.isActive })
+          .from(advertisements)
+          .where(eq(advertisements.id, adId))
+          .limit(1);
+
+        if (!ad || !ad.isActive) {
+          return res.status(400).json({ error: "Invalid or inactive ad campaign" });
+        }
+      }
 
       // Check settings
       const enabledSetting = await db.select().from(gameplaySettings)
@@ -177,6 +192,17 @@ export function registerRewardClaimRoutes(app: Express): void {
         await tx.insert(adWatchLog).values({
           userId,
           rewardAmount: rewardAmt,
+        });
+
+        await tx.insert(freePlayAdEvents).values({
+          advertisementId: adId,
+          userId,
+          eventType: "reward_claim",
+          rewardAmount: rewardAmt,
+          source: "free_watch_ad",
+          ipAddress: String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0]?.trim() || null,
+          userAgent: String(req.headers["user-agent"] || "").slice(0, 512),
+          metadata: adId ? JSON.stringify({ adId }) : null,
         });
 
         await tx.execute(sql`

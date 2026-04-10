@@ -5,7 +5,6 @@ import { registerCreateRoute } from "./create";
 import { registerJoinRoute } from "./join";
 import { registerWithdrawRoutes } from "./withdraw";
 import { registerDetailsRoutes } from "./details";
-import { registerGiftsRoutes } from "./gifts";
 import { registerSessionsPointsRoutes } from "./sessions-points";
 
 export function registerChallengesRoutes(app: Express): void {
@@ -15,6 +14,5 @@ export function registerChallengesRoutes(app: Express): void {
   registerJoinRoute(app);
   registerWithdrawRoutes(app);
   registerDetailsRoutes(app);
-  registerGiftsRoutes(app);
   registerSessionsPointsRoutes(app);
 }

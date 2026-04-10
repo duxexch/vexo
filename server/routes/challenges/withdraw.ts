@@ -2,7 +2,7 @@ import type { Express, Response } from "express";
 import { storage } from "../../storage";
 import { db } from "../../db";
 import { eq, and, sql } from "drizzle-orm";
-import { users, projectCurrencyWallets, challenges as challengesTable, liveGameSessions, transactions } from "@shared/schema";
+import { users, projectCurrencyWallets, projectCurrencyLedger, challenges as challengesTable, liveGameSessions, transactions } from "@shared/schema";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { broadcastChallengeUpdate } from "../../websocket";
 import { sendNotification } from "../../websocket";
@@ -36,21 +36,57 @@ export function registerWithdrawRoutes(app: Express) {
                 const betAmount = parseFloat(dbChallenge.betAmount || "0");
                 const currencyType = dbChallenge.currencyType || "usd";
 
-                const refundUserStake = async (targetUserId: string, amount: number) => {
+                const refundUserStake = async (targetUserId: string, amount: number, refundReason: string) => {
                     if (amount <= 0) return;
 
                     if (currencyType === "project") {
+                        const refundReferenceId = `challenge_withdraw_refund:${challengeId}:${refundReason}:${targetUserId}`;
+                        const [existingRefund] = await tx.select({ id: projectCurrencyLedger.id })
+                            .from(projectCurrencyLedger)
+                            .where(and(
+                                eq(projectCurrencyLedger.userId, targetUserId),
+                                eq(projectCurrencyLedger.referenceId, refundReferenceId),
+                                eq(projectCurrencyLedger.referenceType, "challenge_withdraw_refund"),
+                            ))
+                            .for("update")
+                            .limit(1);
+
+                        if (existingRefund) return;
+
                         const [wallet] = await tx.select().from(projectCurrencyWallets)
                             .where(eq(projectCurrencyWallets.userId, targetUserId))
                             .for("update");
-                        if (!wallet) return;
 
-                        const newEarned = (parseFloat(wallet.earnedBalance) + amount).toFixed(8);
-                        const newTotal = (parseFloat(wallet.totalBalance) + amount).toFixed(8);
+                        if (!wallet) {
+                            throw new Error(`Project currency wallet not found for user ${targetUserId}`);
+                        }
+
+                        const balanceBefore = parseFloat(wallet.totalBalance);
+                        const earnedBefore = parseFloat(wallet.earnedBalance);
+                        const newEarned = (earnedBefore + amount).toFixed(2);
+                        const newTotal = (balanceBefore + amount).toFixed(2);
 
                         await tx.update(projectCurrencyWallets)
                             .set({ earnedBalance: newEarned, totalBalance: newTotal, updatedAt: new Date() })
                             .where(eq(projectCurrencyWallets.userId, targetUserId));
+
+                        await tx.insert(projectCurrencyLedger).values({
+                            userId: targetUserId,
+                            walletId: wallet.id,
+                            type: "refund",
+                            amount: amount.toFixed(2),
+                            balanceBefore: balanceBefore.toFixed(2),
+                            balanceAfter: newTotal,
+                            referenceId: refundReferenceId,
+                            referenceType: "challenge_withdraw_refund",
+                            description: `Challenge withdrawal refund (${refundReason}) for ${challengeId}`,
+                            metadata: JSON.stringify({
+                                challengeId,
+                                reason: refundReason,
+                                currencyType,
+                            }),
+                        });
+
                         return;
                     }
 
@@ -97,7 +133,7 @@ export function registerWithdrawRoutes(app: Express) {
                             throw new Error("Only challenge creator can cancel before start");
                         }
 
-                        await refundUserStake(userId, betAmount);
+                        await refundUserStake(userId, betAmount, "waiting_seat_exit");
 
                         const [updatedChallenge] = await tx.update(challengesTable)
                             .set(seatUpdate)
@@ -143,7 +179,7 @@ export function registerWithdrawRoutes(app: Express) {
                     }
 
                     for (const participantId of paidParticipantIds) {
-                        await refundUserStake(participantId, betAmount);
+                        await refundUserStake(participantId, betAmount, "waiting_creator_cancel");
                     }
 
                     const [cancelled] = await tx.update(challengesTable)
@@ -187,11 +223,11 @@ export function registerWithdrawRoutes(app: Express) {
                 const otherPlayerIds = allPlayerIds.filter((id) => id !== userId) as string[];
 
                 if (withdrawerRefund > 0) {
-                    await refundUserStake(userId, withdrawerRefund);
+                    await refundUserStake(userId, withdrawerRefund, "active_withdrawer_partial");
                 }
 
                 for (const otherPlayerId of otherPlayerIds) {
-                    await refundUserStake(otherPlayerId, betAmount);
+                    await refundUserStake(otherPlayerId, betAmount, "active_opponent_full");
                 }
 
                 const [cancelled] = await tx.update(challengesTable)

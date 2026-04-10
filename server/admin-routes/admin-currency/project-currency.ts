@@ -34,17 +34,10 @@ export function registerAdminProjectCurrencyRoutes(app: Express) {
 
   app.get("/api/admin/project-currency/play-gift-policy", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
     try {
-      const [setting] = await db.execute(sql`
-        SELECT value
-        FROM gameplay_settings
-        WHERE key = 'play_gift_currency_mode'
-        LIMIT 1
-      `).then((r) => r.rows as Array<{ value: string }>);
-
-      const mode = setting?.value === "mixed" ? "mixed" : "project_only";
       res.json({
-        mode,
-        projectOnly: mode === "project_only",
+        mode: "project_only",
+        projectOnly: true,
+        locked: true,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -53,15 +46,20 @@ export function registerAdminProjectCurrencyRoutes(app: Express) {
 
   app.put("/api/admin/project-currency/play-gift-policy", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
-      const requestedMode = req.body?.mode === "mixed" ? "mixed" : "project_only";
+      const requestedMode = String(req.body?.mode ?? "project_only").trim();
+      if (requestedMode && requestedMode !== "project_only") {
+        return res.status(400).json({
+          error: "Mixed mode is disabled. Games and gifts must use project currency only.",
+        });
+      }
 
       await db.execute(sql`
         INSERT INTO gameplay_settings (key, value, description, description_ar, updated_by, updated_at)
         VALUES (
           'play_gift_currency_mode',
-          ${requestedMode},
-          'Currency mode for games and gift purchases (project_only|mixed)',
-          'وضع العملة للعب وشراء الهدايا (project_only|mixed)',
+          'project_only',
+          'Currency mode for games and gift purchases (project_only)',
+          'وضع العملة للعب وشراء الهدايا (project_only)',
           ${req.admin!.id},
           NOW()
         )
@@ -79,14 +77,15 @@ export function registerAdminProjectCurrencyRoutes(app: Express) {
         "update",
         "play_gift_currency_mode",
         "play_gift_currency_mode",
-        { newValue: requestedMode },
+        { newValue: "project_only" },
         req,
       );
 
       res.json({
         success: true,
-        mode: requestedMode,
-        projectOnly: requestedMode === "project_only",
+        mode: "project_only",
+        projectOnly: true,
+        locked: true,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

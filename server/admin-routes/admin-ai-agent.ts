@@ -269,9 +269,17 @@ export function registerAdminAiAgentRoutes(app: Express) {
                 return res.status(400).json({ error: 'message is required' });
             }
 
+            const rawThreadId = typeof req.body?.threadId === 'string' ? req.body.threadId.trim() : '';
+            const rawContextMode = typeof req.body?.contextMode === 'string' ? req.body.contextMode.trim().toLowerCase() : '';
+            const threadId = rawThreadId || `admin-main-${String(req.admin?.id || 'session')}`;
+            const contextMode = rawContextMode || 'auto';
+            const requestedBy = req.admin?.id ? `admin:${String(req.admin.id)}` : 'admin';
+
             void sendAiAgentLearningEvent('project_snapshot', {
                 source: 'admin_chat_prompt',
                 adminId: req.admin?.id,
+                threadId,
+                contextMode,
                 promptMeta: {
                     length: message.length,
                     hasDigits: /\d/.test(message),
@@ -281,13 +289,23 @@ export function registerAdminAiAgentRoutes(app: Express) {
                 capturedAt: new Date().toISOString(),
             });
 
-            const externalReply = await chatWithAiAgentAdmin(message);
+            const externalReply = await chatWithAiAgentAdmin({
+                message,
+                threadId,
+                contextMode,
+                requestedBy,
+            });
             if (externalReply?.reply) {
                 return res.json({
                     source: 'ai-service',
                     generatedAt: externalReply.generatedAt || new Date().toISOString(),
                     reply: externalReply.reply,
                     summary: externalReply.summary || null,
+                    intent: typeof externalReply.intent === 'string' ? externalReply.intent : null,
+                    intentConfidence: typeof externalReply.intentConfidence === 'number' ? externalReply.intentConfidence : null,
+                    thread: externalReply.thread || null,
+                    actions: Array.isArray(externalReply.actions) ? externalReply.actions : [],
+                    recommendations: externalReply.recommendations || null,
                 });
             }
 

@@ -5,12 +5,22 @@ import { storage } from "../../storage";
 import { db } from "../../db";
 import { eq, and, sql } from "drizzle-orm";
 import {
-  users, transactions, gameplaySettings, projectCurrencyWallets, projectCurrencyLedger,
+  projectCurrencyWallets, projectCurrencyLedger,
 } from "@shared/schema";
 
 export function registerGiftPurchaseRoutes(app: Express): void {
 
   // ==================== GIFT CATALOG & PURCHASE ====================
+
+  // Backward-compatible alias while consolidating gift routes under the gifts module.
+  app.get("/api/gifts/catalog", authMiddleware, async (_req: AuthRequest, res: Response) => {
+    try {
+      const gifts = await storage.listGiftCatalog(true);
+      res.json(gifts);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
 
   app.get("/api/gifts", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -61,19 +71,12 @@ export function registerGiftPurchaseRoutes(app: Express): void {
 
       const totalCost = parseFloat(gift.price) * parsedQuantity;
       const userId = req.user!.id;
-      const [currencyModeSetting] = await db.select({ value: gameplaySettings.value })
-        .from(gameplaySettings)
-        .where(eq(gameplaySettings.key, 'play_gift_currency_mode'))
-        .limit(1);
-      const enforceProjectOnly = !currencyModeSetting || currencyModeSetting.value !== 'mixed';
 
-      if (enforceProjectOnly) {
-        const settings = await storage.getProjectCurrencySettings();
-        if (!settings?.isActive || !settings?.useInGames) {
-          return res.status(400).json({
-            error: "Project currency is required for gift purchases but is currently unavailable.",
-          });
-        }
+      const settings = await storage.getProjectCurrencySettings();
+      if (!settings?.isActive || !settings?.useInGames) {
+        return res.status(400).json({
+          error: "Project currency is required for gift purchases but is currently unavailable.",
+        });
       }
 
       const senderReferenceToken = String(
@@ -88,24 +91,7 @@ export function registerGiftPurchaseRoutes(app: Express): void {
 
       // Atomic transaction for purchase
       await db.transaction(async (tx) => {
-        if (purchaseReferenceId && !enforceProjectOnly) {
-          const [existingPurchase] = await tx.select({ id: transactions.id })
-            .from(transactions)
-            .where(and(
-              eq(transactions.referenceId, purchaseReferenceId),
-              eq(transactions.userId, userId),
-              eq(transactions.type, "gift_sent"),
-              eq(transactions.status, "completed"),
-            ))
-            .for('update')
-            .limit(1);
-
-          if (existingPurchase) {
-            return;
-          }
-        }
-
-        if (purchaseReferenceId && enforceProjectOnly) {
+        if (purchaseReferenceId) {
           const [existingLedger] = await tx.select({ id: projectCurrencyLedger.id })
             .from(projectCurrencyLedger)
             .where(and(
@@ -120,105 +106,63 @@ export function registerGiftPurchaseRoutes(app: Express): void {
           }
         }
 
-        if (enforceProjectOnly) {
-          await tx.execute(sql`
-            INSERT INTO project_currency_wallets (user_id)
-            VALUES (${userId})
-            ON CONFLICT (user_id) DO NOTHING
-          `);
+        await tx.execute(sql`
+          INSERT INTO project_currency_wallets (user_id)
+          VALUES (${userId})
+          ON CONFLICT (user_id) DO NOTHING
+        `);
 
-          const [wallet] = await tx.select()
-            .from(projectCurrencyWallets)
-            .where(eq(projectCurrencyWallets.userId, userId))
-            .for('update');
-
-          if (!wallet) {
-            throw new Error('Project currency wallet not found');
-          }
-
-          let earnedBalance = parseFloat(wallet.earnedBalance);
-          let purchasedBalance = parseFloat(wallet.purchasedBalance);
-          const totalBalance = earnedBalance + purchasedBalance;
-          if (totalBalance < totalCost) {
-            throw new Error("Insufficient project currency balance");
-          }
-
-          let remaining = totalCost;
-          if (earnedBalance >= remaining) {
-            earnedBalance -= remaining;
-            remaining = 0;
-          } else {
-            remaining -= earnedBalance;
-            earnedBalance = 0;
-            purchasedBalance -= remaining;
-          }
-
-          const balanceBefore = parseFloat(wallet.totalBalance || '0');
-          const balanceAfter = (earnedBalance + purchasedBalance).toFixed(2);
-
-          await tx.update(projectCurrencyWallets)
-            .set({
-              earnedBalance: earnedBalance.toFixed(2),
-              purchasedBalance: purchasedBalance.toFixed(2),
-              totalBalance: balanceAfter,
-              totalSpent: (parseFloat(wallet.totalSpent || '0') + totalCost).toFixed(2),
-              updatedAt: new Date(),
-            })
-            .where(eq(projectCurrencyWallets.id, wallet.id));
-
-          await tx.insert(projectCurrencyLedger).values({
-            userId,
-            walletId: wallet.id,
-            type: 'admin_adjustment',
-            amount: (-totalCost).toFixed(2),
-            balanceBefore: balanceBefore.toFixed(2),
-            balanceAfter,
-            referenceId: purchaseReferenceId,
-            referenceType: 'gift_purchase',
-            description: `Purchased ${parsedQuantity}x ${gift.name} using project currency`,
-          });
-
-          const { userGiftInventory } = await import("@shared/schema");
-          const [existing] = await tx.select().from(userGiftInventory)
-            .where(and(
-              eq(userGiftInventory.userId, userId),
-              eq(userGiftInventory.giftId, giftId)
-            ))
-            .for('update');
-
-          if (existing) {
-            await tx.update(userGiftInventory)
-              .set({
-                quantity: sql`${userGiftInventory.quantity} + ${parsedQuantity}`,
-                updatedAt: new Date()
-              })
-              .where(eq(userGiftInventory.id, existing.id));
-          } else {
-            await tx.insert(userGiftInventory)
-              .values({ userId, giftId, quantity: parsedQuantity });
-          }
-
-          return;
-        }
-
-        const [user] = await tx.select()
-          .from(users)
-          .where(eq(users.id, userId))
+        const [wallet] = await tx.select()
+          .from(projectCurrencyWallets)
+          .where(eq(projectCurrencyWallets.userId, userId))
           .for('update');
 
-        if (!user || parseFloat(user.balance) < totalCost) {
-          throw new Error("Insufficient balance");
+        if (!wallet) {
+          throw new Error('Project currency wallet not found');
         }
 
-        // Deduct balance
-        const balanceBefore = parseFloat(user.balance);
-        const balanceAfter = (balanceBefore - totalCost).toFixed(2);
+        let earnedBalance = parseFloat(wallet.earnedBalance);
+        let purchasedBalance = parseFloat(wallet.purchasedBalance);
+        const totalBalance = earnedBalance + purchasedBalance;
+        if (totalBalance < totalCost) {
+          throw new Error("Insufficient project currency balance");
+        }
 
-        await tx.update(users)
-          .set({ balance: balanceAfter, updatedAt: new Date() })
-          .where(eq(users.id, userId));
+        let remaining = totalCost;
+        if (earnedBalance >= remaining) {
+          earnedBalance -= remaining;
+          remaining = 0;
+        } else {
+          remaining -= earnedBalance;
+          earnedBalance = 0;
+          purchasedBalance -= remaining;
+        }
 
-        // Add to inventory (using table directly in transaction with row locking)
+        const balanceBefore = parseFloat(wallet.totalBalance || '0');
+        const balanceAfter = (earnedBalance + purchasedBalance).toFixed(2);
+
+        await tx.update(projectCurrencyWallets)
+          .set({
+            earnedBalance: earnedBalance.toFixed(2),
+            purchasedBalance: purchasedBalance.toFixed(2),
+            totalBalance: balanceAfter,
+            totalSpent: (parseFloat(wallet.totalSpent || '0') + totalCost).toFixed(2),
+            updatedAt: new Date(),
+          })
+          .where(eq(projectCurrencyWallets.id, wallet.id));
+
+        await tx.insert(projectCurrencyLedger).values({
+          userId,
+          walletId: wallet.id,
+          type: 'admin_adjustment',
+          amount: (-totalCost).toFixed(2),
+          balanceBefore: balanceBefore.toFixed(2),
+          balanceAfter,
+          referenceId: purchaseReferenceId,
+          referenceType: 'gift_purchase',
+          description: `Purchased ${parsedQuantity}x ${gift.name} using project currency`,
+        });
+
         const { userGiftInventory } = await import("@shared/schema");
         const [existing] = await tx.select().from(userGiftInventory)
           .where(and(
@@ -228,7 +172,6 @@ export function registerGiftPurchaseRoutes(app: Express): void {
           .for('update');
 
         if (existing) {
-          // Use atomic SQL increment to prevent race conditions
           await tx.update(userGiftInventory)
             .set({
               quantity: sql`${userGiftInventory.quantity} + ${parsedQuantity}`,
@@ -239,19 +182,6 @@ export function registerGiftPurchaseRoutes(app: Express): void {
           await tx.insert(userGiftInventory)
             .values({ userId, giftId, quantity: parsedQuantity });
         }
-
-        // Create transaction record
-        await tx.insert(transactions).values({
-          userId,
-          type: "gift_sent",
-          amount: totalCost.toFixed(2),
-          status: "completed",
-          balanceBefore: balanceBefore.toFixed(2),
-          balanceAfter,
-          description: `Purchased ${parsedQuantity}x ${gift.name}`,
-          referenceId: purchaseReferenceId,
-          processedAt: new Date(),
-        });
       });
 
       res.json({

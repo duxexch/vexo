@@ -120,10 +120,39 @@ function GameSection({
 // Advertisement Carousel Component
 function AdvertisementCarousel() {
   const { language } = useI18n();
+  const trackedViewIdsRef = useRef<Set<string>>(new Set());
 
   const { data: ads = [] } = useQuery<Advertisement[]>({
     queryKey: ['/api/advertisements'],
   });
+
+  useEffect(() => {
+    if (!ads.length) return;
+
+    for (const ad of ads) {
+      if (trackedViewIdsRef.current.has(ad.id)) {
+        continue;
+      }
+
+      trackedViewIdsRef.current.add(ad.id);
+      apiRequest('POST', `/api/advertisements/${ad.id}/view`, { source: 'play_carousel' }).catch(() => undefined);
+    }
+  }, [ads]);
+
+  const handleAdClick = useCallback(async (ad: Advertisement) => {
+    if (!ad.targetUrl) {
+      return;
+    }
+
+    try {
+      const res = await apiRequest('POST', `/api/advertisements/${ad.id}/click`, { source: 'play_carousel' });
+      const payload = typeof res?.json === 'function' ? await res.json() : null;
+      const target = typeof payload?.targetUrl === 'string' && payload.targetUrl ? payload.targetUrl : ad.targetUrl;
+      window.open(target, '_blank', 'noopener,noreferrer');
+    } catch {
+      window.open(ad.targetUrl, '_blank', 'noopener,noreferrer');
+    }
+  }, []);
 
   const autoplayPlugin = useRef(
     Autoplay({ delay: 5000, stopOnInteraction: false })
@@ -143,11 +172,10 @@ function AdvertisementCarousel() {
             <CarouselItem key={ad.id}>
               <div className="relative aspect-[21/9] w-full">
                 {ad.type === 'image' && ad.assetUrl && (
-                  <a
-                    href={ad.targetUrl || '#'}
-                    target={ad.targetUrl ? '_blank' : undefined}
-                    rel="noopener noreferrer"
-                    className="block w-full h-full"
+                  <button
+                    type="button"
+                    onClick={() => handleAdClick(ad)}
+                    className="block w-full h-full text-start"
                   >
                     <img
                       src={ad.assetUrl}
@@ -155,7 +183,7 @@ function AdvertisementCarousel() {
                       loading="lazy"
                       className="w-full h-full object-cover rounded-lg"
                     />
-                  </a>
+                  </button>
                 )}
                 {ad.type === 'video' && ad.assetUrl && (
                   <video
@@ -167,17 +195,16 @@ function AdvertisementCarousel() {
                   />
                 )}
                 {ad.type === 'link' && ad.targetUrl && (
-                  <a
-                    href={ad.targetUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => handleAdClick(ad)}
                     className="flex items-center justify-center w-full h-full bg-primary/10 rounded-lg hover:bg-primary/20 transition-colors"
                   >
                     <div className="text-center p-4">
                       <Megaphone className="w-12 h-12 mx-auto mb-2 text-primary" />
                       <p className="font-medium">{language === 'ar' ? (ad.titleAr || ad.title) : ad.title}</p>
                     </div>
-                  </a>
+                  </button>
                 )}
                 {ad.type === 'embed' && ad.embedCode && (
                   <div
