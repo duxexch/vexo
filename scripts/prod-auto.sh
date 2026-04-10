@@ -14,6 +14,7 @@ cd "$PROJECT_ROOT"
 
 COMPOSE_FILE="docker-compose.prod.yml"
 VOICE_COMPOSE_FILE="deploy/docker-compose.voice.yml"
+VOICE_PROJECT_NAME="vex"
 ENV_TEMPLATE_FILE=".env.production"
 ENV_FALLBACK_FILE=".env.example"
 ENV_FILE=".env"
@@ -59,6 +60,7 @@ Options:
   --env-file <path>           Env file path (default: .env)
   --compose-file <path>       Compose file path (default: docker-compose.prod.yml)
   --voice-compose-file <path> Voice compose file path (default: deploy/docker-compose.voice.yml)
+  --voice-project <name>      Voice compose project name (default: vex)
   --pull-latest               Pull latest code from origin/main before deploy
   --no-build                  Skip --build for app service
   --skip-sysctl               Skip host sysctl persistence setup
@@ -96,6 +98,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --voice-compose-file)
       VOICE_COMPOSE_FILE="$2"
+      shift 2
+      ;;
+    --voice-project)
+      VOICE_PROJECT_NAME="$2"
       shift 2
       ;;
     --pull-latest)
@@ -597,7 +603,7 @@ ensure_network "$TRAEFIK_NETWORK"
 ensure_runtime_dirs
 
 compose_cmd=(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
-voice_compose_cmd=(docker compose -f "$VOICE_COMPOSE_FILE" --env-file "$ENV_FILE")
+voice_compose_cmd=(docker compose -p "$VOICE_PROJECT_NAME" -f "$VOICE_COMPOSE_FILE" --env-file "$ENV_FILE")
 
 log_info "Starting dependency services"
 "${compose_cmd[@]}" up -d db redis minio ai-agent
@@ -669,8 +675,9 @@ elif [[ ! -f "$VOICE_COMPOSE_FILE" ]]; then
 elif ! voice_env_is_ready; then
   log_warn "Skipping voice stack bootstrap due to missing/placeholder voice env"
 else
-  # Cleanup legacy project label to avoid container-name conflicts during migration.
+  # Cleanup old project labels to avoid container-name conflicts during migration.
   docker compose -p deploy -f "$VOICE_COMPOSE_FILE" --env-file "$ENV_FILE" down >/dev/null 2>&1 || true
+  docker compose -p "$VOICE_PROJECT_NAME" -f "$VOICE_COMPOSE_FILE" --env-file "$ENV_FILE" down >/dev/null 2>&1 || true
 
   log_info "Starting voice services (livekit/coturn)"
   "${voice_compose_cmd[@]}" up -d livekit coturn
@@ -703,6 +710,7 @@ echo "Runbook summary:"
 echo "- Env file: $ENV_FILE"
 echo "- Compose file: $COMPOSE_FILE"
 echo "- Voice compose file: $VOICE_COMPOSE_FILE"
+echo "- Voice project: $VOICE_PROJECT_NAME"
 echo "- Traefik network: $TRAEFIK_NETWORK"
 echo "- Domain: $DOMAIN"
 echo ""

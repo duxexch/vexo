@@ -1,9 +1,3 @@
-# Voice stack for low-latency game voice: LiveKit + coturn
-# Usage:
-#   docker compose -f deploy/docker-compose.voice.yml --env-file .env up -d
-
-name: vex
-
 services:
   livekit:
     image: livekit/livekit-server:v1.9
