@@ -234,7 +234,6 @@ export default function ChallengeGamePage() {
   const [isMuted, setIsMuted] = useState(false);
   const [isVoiceMicMuted, setIsVoiceMicMuted] = useState(false);
   const { play: playSound, setMuted: setSoundMuted } = useGameSounds();
-  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
   const [showResignDialog, setShowResignDialog] = useState(false);
   const [spectators, setSpectators] = useState<SpectatorInfo[]>([]);
   const [receivedGifts, setReceivedGifts] = useState<GiftInfo[]>([]);
@@ -260,6 +259,8 @@ export default function ChallengeGamePage() {
     seconds?: number;
     startedAtMs?: number;
   } | null>(null);
+  const [voicePeerMutedMap, setVoicePeerMutedMap] = useState<Record<string, boolean>>({});
+  const [connectedVoicePeers, setConnectedVoicePeers] = useState<string[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const authReadyRef = useRef(false);
@@ -330,6 +331,11 @@ export default function ChallengeGamePage() {
   const hasActivePaymentMethod = activePaymentMethods.some(
     (method) => method.isActive && (method.isAvailable ?? true),
   );
+
+  const { data: supports = [] } = useQuery<Array<{ playerId: string; amount: string }>>({
+    queryKey: [`/api/challenges/${challengeId}/supports`],
+    enabled: !!challengeId,
+  });
 
   const quickConvertMutation = useMutation({
     mutationFn: (amount: string) => apiRequestWithPaymentToken("POST", "/api/project-currency/convert", { amount }, "convert"),
@@ -1427,8 +1433,6 @@ export default function ChallengeGamePage() {
   const elapsedSinceSyncSec = Math.floor((Date.now() - lastSyncRef.current) / 1000);
   const isMyTurnForTimer = gameSession?.currentTurn === user?.id;
   const fallbackTimeLimit = challenge?.timeLimit ?? 0;
-  const requiredPlayers = Number(challenge?.requiredPlayers ?? 2);
-  const isHeadToHeadChallenge = requiredPlayers === 2;
   const isPlayerOne = challenge?.player1Id === user?.id;
   const serverMyTime = isPlayerOne
     ? (gameSession?.player1TimeRemaining ?? fallbackTimeLimit)
@@ -1644,6 +1648,76 @@ export default function ChallengeGamePage() {
     }
   }
 
+  const supportSummaryByPlayer = useMemo(() => {
+    const map = new Map<string, { count: number; totalAmount: number }>();
+    for (const support of supports) {
+      if (!support?.playerId) continue;
+      const existing = map.get(support.playerId) || { count: 0, totalAmount: 0 };
+      const numericAmount = Number.parseFloat(String(support.amount || 0));
+      map.set(support.playerId, {
+        count: existing.count + 1,
+        totalAmount: existing.totalAmount + (Number.isFinite(numericAmount) ? numericAmount : 0),
+      });
+    }
+    return map;
+  }, [supports]);
+
+  const giftSummaryByPlayer = useMemo(() => {
+    const map = new Map<string, { count: number; totalAmount: number }>();
+    for (const gift of receivedGifts) {
+      const recipientId = typeof gift.recipientId === "string" ? gift.recipientId : "";
+      if (!recipientId) continue;
+      const existing = map.get(recipientId) || { count: 0, totalAmount: 0 };
+      const giftAmount = Number.parseFloat(String(gift.amount || 0));
+      map.set(recipientId, {
+        count: existing.count + 1,
+        totalAmount: existing.totalAmount + (Number.isFinite(giftAmount) ? giftAmount : 0),
+      });
+    }
+    return map;
+  }, [receivedGifts]);
+
+  const participantCards = useMemo(() => {
+    const rawList = [
+      { id: challenge.player1Id, seat: 1, player: challenge.player1 },
+      { id: challenge.player2Id, seat: 2, player: challenge.player2 },
+      { id: challenge.player3Id, seat: 3, player: challenge.player3 },
+      { id: challenge.player4Id, seat: 4, player: challenge.player4 },
+    ];
+
+    const list = rawList.flatMap((entry) => (entry.id ? [{ ...entry, id: entry.id }] : []));
+
+    return list.map((entry) => {
+      const supportSummary = supportSummaryByPlayer.get(entry.id) || { count: 0, totalAmount: 0 };
+      const giftSummary = giftSummaryByPlayer.get(entry.id) || { count: 0, totalAmount: 0 };
+      const scoreValue = challenge.gameType === "domino" ? (dominoScoreLookup.get(entry.id) ?? 0) : 0;
+      const timeRemaining = entry.seat === 1 ? player1TimeRemaining : player2TimeRemaining;
+
+      return {
+        id: entry.id,
+        seat: entry.seat,
+        username: entry.player?.username || `${language === "ar" ? "لاعب" : "Player"} ${entry.seat}`,
+        avatarUrl: entry.player?.avatarUrl,
+        scoreValue,
+        timeRemaining,
+        giftCount: giftSummary.count,
+        giftTotal: giftSummary.totalAmount,
+        supportCount: supportSummary.count,
+        supportTotal: supportSummary.totalAmount,
+        isCurrentUser: entry.id === user?.id,
+        isMutedForViewer: Boolean(voicePeerMutedMap[entry.id]),
+        isConnectedToVoice: connectedVoicePeers.includes(entry.id),
+      };
+    });
+  }, [challenge.gameType, challenge.player1, challenge.player1Id, challenge.player2, challenge.player2Id, challenge.player3, challenge.player3Id, challenge.player4, challenge.player4Id, connectedVoicePeers, dominoScoreLookup, giftSummaryByPlayer, language, player1TimeRemaining, player2TimeRemaining, supportSummaryByPlayer, user?.id, voicePeerMutedMap]);
+
+  const togglePeerListening = useCallback((peerUserId: string) => {
+    setVoicePeerMutedMap((previous) => ({
+      ...previous,
+      [peerUserId]: !previous[peerUserId],
+    }));
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Reconnection overlay */}
@@ -1691,14 +1765,17 @@ export default function ChallengeGamePage() {
                 <span className="text-sm">{gameSession?.spectatorCount || 0}</span>
               </div>
 
-              {isPlayer && isHeadToHeadChallenge && (
+              {isPlayer && (
                 <VoiceChat
                   challengeId={challengeId!}
-                  isEnabled={isVoiceEnabled}
-                  onToggle={() => setIsVoiceEnabled((prev) => !prev)}
+                  isEnabled={true}
+                  onToggle={() => { }}
                   isMicMuted={isVoiceMicMuted}
                   onMicMuteToggle={() => setIsVoiceMicMuted((prev) => !prev)}
                   role="player"
+                  showInlineControls={false}
+                  peerAudioMutedOverride={voicePeerMutedMap}
+                  onConnectedPeersChange={setConnectedVoicePeers}
                 />
               )}
             </div>
@@ -1774,6 +1851,86 @@ export default function ChallengeGamePage() {
                   </div>
                 </div>
               )}
+
+              <div className={`${boardShellWidthClass} mb-3`}>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {participantCards.map((participant) => (
+                    <div
+                      key={`participant-play-card-${participant.id}`}
+                      className="rounded-xl border bg-card px-3 py-2"
+                      data-testid={`participant-play-card-${participant.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Avatar className="h-9 w-9">
+                            <AvatarImage src={participant.avatarUrl} />
+                            <AvatarFallback>{participant.username?.[0]?.toUpperCase()}</AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold">{participant.username}</p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {language === "ar" ? `المقعد ${participant.seat}` : `Seat ${participant.seat}`}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          {participant.isCurrentUser ? (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant={isVoiceMicMuted ? "destructive" : "outline"}
+                              className="h-8 w-8"
+                              onClick={() => setIsVoiceMicMuted((prev) => !prev)}
+                              data-testid={`participant-self-mic-${participant.id}`}
+                            >
+                              {isVoiceMicMuted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant={participant.isMutedForViewer ? "destructive" : "outline"}
+                              className="h-8 w-8"
+                              disabled={!participant.isConnectedToVoice}
+                              onClick={() => togglePeerListening(participant.id)}
+                              data-testid={`participant-peer-listen-${participant.id}`}
+                            >
+                              {participant.isMutedForViewer ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                        <Badge variant="outline" className="font-mono">
+                          {isDominoGame
+                            ? `${t("domino.score")}: ${participant.scoreValue}`
+                            : `${language === "ar" ? "الوقت" : "Time"}: ${formatTime(participant.timeRemaining)}`}
+                        </Badge>
+                      </div>
+
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                        <div className="rounded-md border border-primary/20 bg-primary/5 px-2 py-1.5">
+                          <p className="text-muted-foreground">{language === "ar" ? "الهدايا" : "Gifts"}</p>
+                          <p className="font-semibold">
+                            {participant.giftCount}
+                            {participant.giftTotal > 0 ? ` · ${participant.giftTotal.toFixed(2)}` : ""}
+                          </p>
+                        </div>
+                        <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1.5">
+                          <p className="text-muted-foreground">{language === "ar" ? "الدعم" : "Support"}</p>
+                          <p className="font-semibold">
+                            {participant.supportCount}
+                            {participant.supportTotal > 0 ? ` · ${participant.supportTotal.toFixed(2)}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {!isDominoGame && (
                 <div className={`${boardShellWidthClass} mb-4`}>
                   <div className="flex items-center justify-between p-3 bg-card rounded-lg border">

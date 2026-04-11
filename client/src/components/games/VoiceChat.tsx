@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { useSettings } from "@/lib/settings";
@@ -11,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { openAppSettings, openMicrophoneSettings } from "@/lib/startup-permissions";
 import { Capacitor } from "@capacitor/core";
-import { Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff, Loader2 } from "lucide-react";
+import { Mic, MicOff, Loader2 } from "lucide-react";
 
 interface VoiceChatProps {
   challengeId: string;
@@ -20,6 +19,9 @@ interface VoiceChatProps {
   isMicMuted: boolean;
   onMicMuteToggle: () => void;
   role?: "player" | "spectator";
+  showInlineControls?: boolean;
+  peerAudioMutedOverride?: Record<string, boolean>;
+  onConnectedPeersChange?: (peerUserIds: string[]) => void;
 }
 
 type ConnectionState = "disconnected" | "connecting" | "connected" | "error";
@@ -40,18 +42,24 @@ type VoiceWsMessage = {
 export function VoiceChat({
   challengeId,
   isEnabled,
-  onToggle,
+  onToggle: _onToggle,
   isMicMuted,
   onMicMuteToggle,
   role = "player",
+  showInlineControls = true,
+  peerAudioMutedOverride,
+  onConnectedPeersChange,
 }: VoiceChatProps) {
   const { token } = useAuth();
   const { t } = useI18n();
   const { toast } = useToast();
   const { settings } = useSettings();
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
-  const [isSpeakerMuted, setIsSpeakerMuted] = useState(false);
+  const [peerOrder, setPeerOrder] = useState<string[]>([]);
+  const [peerRoles, setPeerRoles] = useState<Record<string, VoicePeerRole>>({});
+  const [peerAudioMuted, setPeerAudioMuted] = useState<Record<string, boolean>>({});
   const isSpectatorRole = role === "spectator";
+  const effectivePeerAudioMuted = peerAudioMutedOverride ?? peerAudioMuted;
 
   const rtcConfiguration = useMemo(
     () => buildRtcConfiguration(settings?.rtc),
@@ -63,8 +71,8 @@ export function VoiceChat({
   const remoteDescriptionPeersRef = useRef<Set<string>>(new Set());
   const iceCandidateQueueRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
-  const remoteMixStreamRef = useRef<MediaStream>(new MediaStream());
-  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
+  const remoteAudioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const joinAckTimerRef = useRef<number | null>(null);
@@ -87,13 +95,61 @@ export function VoiceChat({
     }
   }, []);
 
-  const cleanupEndedRemoteTracks = useCallback(() => {
-    const stream = remoteMixStreamRef.current;
-    stream.getTracks().forEach((track) => {
-      if (track.readyState === "ended") {
-        stream.removeTrack(track);
+  const syncPeerAudioElement = useCallback((peerUserId: string) => {
+    const element = remoteAudioElementsRef.current.get(peerUserId);
+    const stream = remoteStreamsRef.current.get(peerUserId);
+    if (!element || !stream) {
+      return;
+    }
+
+    if (element.srcObject !== stream) {
+      element.srcObject = stream;
+    }
+
+    const muted = !!effectivePeerAudioMuted[peerUserId];
+    element.muted = muted;
+    element.volume = muted ? 0 : 1;
+
+    if (!muted) {
+      void element.play().catch(() => {
+        // Autoplay may be blocked on some browsers.
+      });
+    }
+  }, [effectivePeerAudioMuted]);
+
+  const upsertPeer = useCallback((peerUserId: string, peerRole?: VoicePeerRole) => {
+    setPeerOrder((previous) => (previous.includes(peerUserId) ? previous : [...previous, peerUserId]));
+    if (peerRole) {
+      setPeerRoles((previous) => ({ ...previous, [peerUserId]: peerRole }));
+    }
+    setPeerAudioMuted((previous) => {
+      if (Object.prototype.hasOwnProperty.call(previous, peerUserId)) {
+        return previous;
       }
+      return { ...previous, [peerUserId]: false };
     });
+  }, []);
+
+  const removePeer = useCallback((peerUserId: string) => {
+    setPeerOrder((previous) => previous.filter((id) => id !== peerUserId));
+    setPeerRoles((previous) => {
+      if (!Object.prototype.hasOwnProperty.call(previous, peerUserId)) {
+        return previous;
+      }
+
+      const { [peerUserId]: _removed, ...next } = previous;
+      return next;
+    });
+    setPeerAudioMuted((previous) => {
+      if (!Object.prototype.hasOwnProperty.call(previous, peerUserId)) {
+        return previous;
+      }
+
+      const { [peerUserId]: _removed, ...next } = previous;
+      return next;
+    });
+    remoteStreamsRef.current.delete(peerUserId);
+    remoteAudioElementsRef.current.delete(peerUserId);
   }, []);
 
   const closePeerConnection = useCallback((peerUserId: string) => {
@@ -106,8 +162,8 @@ export function VoiceChat({
     makingOfferPeersRef.current.delete(peerUserId);
     remoteDescriptionPeersRef.current.delete(peerUserId);
     iceCandidateQueueRef.current.delete(peerUserId);
-    cleanupEndedRemoteTracks();
-  }, [cleanupEndedRemoteTracks]);
+    removePeer(peerUserId);
+  }, [removePeer]);
 
   const closeAllPeerConnections = useCallback(() => {
     Array.from(peerConnectionsRef.current.keys()).forEach((peerUserId) => {
@@ -275,6 +331,8 @@ export function VoiceChat({
       return existing;
     }
 
+    upsertPeer(peerUserId);
+
     const pc = new RTCPeerConnection(rtcConfiguration);
     peerConnectionsRef.current.set(peerUserId, pc);
 
@@ -300,24 +358,18 @@ export function VoiceChat({
     };
 
     pc.ontrack = (event) => {
-      event.streams.forEach((stream) => {
-        stream.getAudioTracks().forEach((track) => {
-          const exists = remoteMixStreamRef.current.getAudioTracks().some((existingTrack) => existingTrack.id === track.id);
-          if (!exists) {
-            remoteMixStreamRef.current.addTrack(track);
-            track.onended = () => {
-              cleanupEndedRemoteTracks();
-            };
-          }
-        });
-      });
-
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remoteMixStreamRef.current;
-        void remoteAudioRef.current.play().catch(() => {
-          // Autoplay can be blocked on some browsers; user interaction already exists via toggle.
-        });
+      const [firstStream] = event.streams;
+      if (firstStream) {
+        remoteStreamsRef.current.set(peerUserId, firstStream);
+      } else if (event.track) {
+        const fallbackStream = remoteStreamsRef.current.get(peerUserId) || new MediaStream();
+        if (!fallbackStream.getTracks().some((track) => track.id === event.track.id)) {
+          fallbackStream.addTrack(event.track);
+        }
+        remoteStreamsRef.current.set(peerUserId, fallbackStream);
       }
+
+      syncPeerAudioElement(peerUserId);
     };
 
     pc.onconnectionstatechange = () => {
@@ -332,7 +384,7 @@ export function VoiceChat({
     };
 
     return pc;
-  }, [challengeId, cleanupEndedRemoteTracks, clearReconnectTimer, closePeerConnection, isMicMuted, rtcConfiguration, safelySend]);
+  }, [challengeId, clearReconnectTimer, closePeerConnection, isMicMuted, rtcConfiguration, safelySend, syncPeerAudioElement, upsertPeer]);
 
   const initiateOfferToPeer = useCallback(async (peerUserId: string) => {
     const pc = createPeerConnection(peerUserId);
@@ -382,9 +434,11 @@ export function VoiceChat({
       localStreamRef.current = null;
     }
 
-    remoteMixStreamRef.current.getTracks().forEach((track) => {
-      remoteMixStreamRef.current.removeTrack(track);
-    });
+    remoteStreamsRef.current.clear();
+    remoteAudioElementsRef.current.clear();
+    setPeerOrder([]);
+    setPeerRoles({});
+    setPeerAudioMuted({});
 
     isAuthenticatedRef.current = false;
     startingRef.current = false;
@@ -484,6 +538,7 @@ export function VoiceChat({
               if (!peer?.userId) {
                 continue;
               }
+              upsertPeer(peer.userId, peer.role);
               await initiateOfferToPeer(peer.userId);
             }
             break;
@@ -494,6 +549,7 @@ export function VoiceChat({
               break;
             }
 
+            upsertPeer(peerUserId);
             await initiateOfferToPeer(peerUserId);
             break;
           }
@@ -504,6 +560,7 @@ export function VoiceChat({
               break;
             }
 
+            upsertPeer(fromUserId);
             const currentPc = createPeerConnection(fromUserId);
             const offerDescription = new RTCSessionDescription(data.offer);
             const isOfferCollision = makingOfferPeersRef.current.has(fromUserId) || currentPc.signalingState !== "stable";
@@ -538,6 +595,7 @@ export function VoiceChat({
               break;
             }
 
+            upsertPeer(fromUserId);
             const currentPc = peerConnectionsRef.current.get(fromUserId);
             if (!currentPc) {
               break;
@@ -554,6 +612,7 @@ export function VoiceChat({
             const candidateInit = data.candidate as RTCIceCandidateInit;
             if (!fromUserId || !candidateInit) break;
 
+            upsertPeer(fromUserId);
             const currentPc = peerConnectionsRef.current.get(fromUserId) || createPeerConnection(fromUserId);
 
             if (remoteDescriptionPeersRef.current.has(fromUserId)) {
@@ -625,6 +684,7 @@ export function VoiceChat({
     t,
     toast,
     token,
+    upsertPeer,
   ]);
 
   useEffect(() => {
@@ -645,11 +705,37 @@ export function VoiceChat({
   }, [isMicMuted, isSpectatorRole]);
 
   useEffect(() => {
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.muted = isSpeakerMuted;
-      remoteAudioRef.current.volume = isSpeakerMuted ? 0 : 1;
+    peerOrder.forEach((peerUserId) => {
+      syncPeerAudioElement(peerUserId);
+    });
+  }, [effectivePeerAudioMuted, peerOrder, syncPeerAudioElement]);
+
+  useEffect(() => {
+    if (onConnectedPeersChange) {
+      onConnectedPeersChange(peerOrder);
     }
-  }, [isSpeakerMuted]);
+  }, [onConnectedPeersChange, peerOrder]);
+
+  const bindPeerAudioElement = useCallback((peerUserId: string, element: HTMLAudioElement | null) => {
+    if (element) {
+      remoteAudioElementsRef.current.set(peerUserId, element);
+      syncPeerAudioElement(peerUserId);
+      return;
+    }
+
+    remoteAudioElementsRef.current.delete(peerUserId);
+  }, [syncPeerAudioElement]);
+
+  const togglePeerAudioMute = useCallback((peerUserId: string) => {
+    if (peerAudioMutedOverride) {
+      return;
+    }
+
+    setPeerAudioMuted((previous) => ({
+      ...previous,
+      [peerUserId]: !previous[peerUserId],
+    }));
+  }, [peerAudioMutedOverride]);
 
   useEffect(() => {
     return () => {
@@ -659,39 +745,42 @@ export function VoiceChat({
   }, [stopVoiceChat]);
 
   return (
-    <div className="flex items-center gap-1">
-      <audio ref={remoteAudioRef} autoPlay playsInline />
+    <div className={showInlineControls ? "flex items-center gap-1" : "hidden"}>
+      {peerOrder.map((peerUserId) => (
+        <audio
+          key={`voice-audio-${peerUserId}`}
+          ref={(element) => bindPeerAudioElement(peerUserId, element)}
+          autoPlay
+          playsInline
+          className="hidden"
+        />
+      ))}
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant={isEnabled ? (connectionState === "connected" ? "default" : "secondary") : "ghost"}
-            size="icon"
-            onClick={onToggle}
-            className={cn(
-              connectionState === "connected" && "bg-green-600 hover:bg-green-700",
-              connectionState === "error" && "bg-destructive hover:bg-destructive/90"
-            )}
-            data-testid="button-voice-toggle"
-          >
-            {connectionState === "connecting" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : isEnabled ? (
-              <Phone className="h-4 w-4" />
-            ) : (
-              <PhoneOff className="h-4 w-4" />
-            )}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          {connectionState === "connecting" && t("challenge.voiceConnecting")}
-          {connectionState === "connected" && t("challenge.voiceConnected")}
-          {connectionState === "disconnected" && t("challenge.voiceStart")}
-          {connectionState === "error" && t("challenge.voiceErrorRetry")}
-        </TooltipContent>
-      </Tooltip>
+      {showInlineControls && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="secondary"
+              className="h-8 px-2 text-xs bg-transparent border"
+              data-testid="voice-connection-status"
+            >
+              {connectionState === "connecting" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                t("challenge.voiceLive")
+              )}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            {connectionState === "connecting" && t("challenge.voiceConnecting")}
+            {connectionState === "connected" && t("challenge.voiceConnected")}
+            {connectionState === "disconnected" && t("challenge.voiceConnecting")}
+            {connectionState === "error" && t("challenge.voiceErrorRetry")}
+          </TooltipContent>
+        </Tooltip>
+      )}
 
-      {isEnabled && (
+      {showInlineControls && isEnabled && (
         <>
           {!isSpectatorRole && (
             <Tooltip>
@@ -715,32 +804,35 @@ export function VoiceChat({
             </Tooltip>
           )}
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={isSpeakerMuted ? "destructive" : "ghost"}
-                size="icon"
-                onClick={() => setIsSpeakerMuted(!isSpeakerMuted)}
-                data-testid="button-speaker-toggle"
-              >
-                {isSpeakerMuted ? (
-                  <VolumeX className="h-4 w-4" />
-                ) : (
-                  <Volume2 className="h-4 w-4" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {isSpeakerMuted ? t("challenge.voiceUnmuteSpeaker") : t("challenge.voiceMuteSpeaker")}
-            </TooltipContent>
-          </Tooltip>
-        </>
-      )}
+          {peerOrder.map((peerUserId, index) => {
+            const muted = !!effectivePeerAudioMuted[peerUserId];
+            const peerRole = peerRoles[peerUserId] || "player";
+            const testIdSuffix = peerUserId.replace(/[^a-zA-Z0-9_-]/g, "-");
 
-      {connectionState === "connected" && (
-        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-          {t("challenge.voiceLive")}
-        </Badge>
+            return (
+              <Tooltip key={`peer-audio-toggle-${peerUserId}`}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={muted ? "destructive" : "ghost"}
+                    size="icon"
+                    onClick={() => togglePeerAudioMute(peerUserId)}
+                    data-testid={`button-peer-audio-toggle-${testIdSuffix}`}
+                  >
+                    {muted ? (
+                      <MicOff className="h-4 w-4" />
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {muted ? t("challenge.voiceUnmuteSpeaker") : t("challenge.voiceMuteSpeaker")} #{index + 1}
+                  {peerRole === "spectator" ? " · S" : " · P"}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </>
       )}
     </div>
   );

@@ -58,6 +58,9 @@ import {
   Info,
   ArrowRightLeft,
   MessageCircle,
+  Volume2,
+  VolumeX,
+  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -206,7 +209,6 @@ export default function ChallengeWatchPage() {
   const [showGiftPanel, setShowGiftPanel] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [mobileChatInput, setMobileChatInput] = useState("");
-  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [autoPlayNotice, setAutoPlayNotice] = useState<{
@@ -220,6 +222,9 @@ export default function ChallengeWatchPage() {
   const [fundingShortageProject, setFundingShortageProject] = useState(0);
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
   const [quickConvertAmount, setQuickConvertAmount] = useState("5");
+  const [voicePeerMutedMap, setVoicePeerMutedMap] = useState<Record<string, boolean>>({});
+  const [connectedVoicePeers, setConnectedVoicePeers] = useState<string[]>([]);
+  const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const wsErrorToastRef = useRef<{ signature: string; at: number }>({ signature: "", at: 0 });
@@ -393,6 +398,22 @@ export default function ChallengeWatchPage() {
   const { data: supports, isLoading: isLoadingSupports } = useQuery<SupportEntry[]>({
     queryKey: [`/api/challenges/${challengeId}/supports`],
     enabled: !!challengeId,
+  });
+
+  const { data: selectedProfile } = useQuery<Record<string, unknown>>({
+    queryKey: [selectedProfileUserId ? `/api/users/${selectedProfileUserId}` : ""],
+    enabled: !!selectedProfileUserId,
+  });
+
+  const sendFriendRequestMutation = useMutation({
+    mutationFn: async (userId: string) => apiRequest("POST", `/api/users/friend-request/${userId}`),
+    onSuccess: () => {
+      toast({ title: t("friends.requestSentSuccess") });
+      queryClient.invalidateQueries({ queryKey: ["/api/users/friend-requests/outgoing"] });
+    },
+    onError: () => {
+      toast({ title: t("common.error"), variant: "destructive" });
+    },
   });
 
   const addSupportMutation = useMutation({
@@ -900,7 +921,6 @@ export default function ChallengeWatchPage() {
     [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id]
       .filter((id): id is string => typeof id === "string" && id.length > 0),
   );
-  const isHeadToHeadChallenge = participantIds.size === 2;
 
   const liveChatMessages = messages
     .filter((msg) => String(msg.message || "").trim().length > 0)
@@ -1053,6 +1073,91 @@ export default function ChallengeWatchPage() {
   const dominoScoreLookup = new Map(dominoScoreRows.map((row) => [row.id, row.score]));
   const dominoPlayer1Score = challenge?.player1Id ? (dominoScoreLookup.get(challenge.player1Id) ?? 0) : 0;
   const dominoPlayer2Score = challenge?.player2Id ? (dominoScoreLookup.get(challenge.player2Id) ?? 0) : 0;
+  const supportSummaryByPlayer = useMemo(() => {
+    const map = new Map<string, { count: number; totalAmount: number }>();
+    for (const support of supports || []) {
+      if (!support?.playerId) continue;
+      const existing = map.get(support.playerId) || { count: 0, totalAmount: 0 };
+      const numericAmount = Number.parseFloat(String(support.amount || 0));
+      map.set(support.playerId, {
+        count: existing.count + 1,
+        totalAmount: existing.totalAmount + (Number.isFinite(numericAmount) ? numericAmount : 0),
+      });
+    }
+    return map;
+  }, [supports]);
+
+  const giftSummaryByPlayer = useMemo(() => {
+    const map = new Map<string, { count: number; totalAmount: number }>();
+    for (const gift of receivedGifts) {
+      const recipientId = typeof gift.recipientId === "string" ? gift.recipientId : "";
+      if (!recipientId) continue;
+      const existing = map.get(recipientId) || { count: 0, totalAmount: 0 };
+      const numericAmount = Number.parseFloat(String(gift.amount || 0));
+      map.set(recipientId, {
+        count: existing.count + 1,
+        totalAmount: existing.totalAmount + (Number.isFinite(numericAmount) ? numericAmount : 0),
+      });
+    }
+    return map;
+  }, [receivedGifts]);
+
+  const participantCards = useMemo(() => {
+    if (!challenge) return [];
+
+    const rawItems = [
+      { id: challenge.player1Id, seat: 1, player: challenge.player1 },
+      { id: challenge.player2Id, seat: 2, player: challenge.player2 },
+      { id: challenge.player3Id, seat: 3, player: challenge.player3 },
+      { id: challenge.player4Id, seat: 4, player: challenge.player4 },
+    ];
+
+    const items = rawItems.flatMap((entry) => (entry.id ? [{ ...entry, id: entry.id }] : []));
+
+    return items.map((entry) => {
+      const supportSummary = supportSummaryByPlayer.get(entry.id) || { count: 0, totalAmount: 0 };
+      const giftSummary = giftSummaryByPlayer.get(entry.id) || { count: 0, totalAmount: 0 };
+      const isConnectedToVoice = connectedVoicePeers.includes(entry.id);
+
+      let scoreValue = 0;
+      if (challenge.gameType === "domino") {
+        scoreValue = dominoScoreLookup.get(entry.id) ?? 0;
+      }
+
+      const timeRemaining = entry.seat === 1
+        ? (gameSession?.player1TimeRemaining || challenge.timeLimit)
+        : (gameSession?.player2TimeRemaining || challenge.timeLimit);
+
+      return {
+        id: entry.id,
+        seat: entry.seat,
+        username: entry.player?.username || `${language === "ar" ? "لاعب" : "Player"} ${entry.seat}`,
+        avatarUrl: entry.player?.avatarUrl,
+        vipLevel: entry.player?.vipLevel,
+        scoreValue,
+        timeRemaining,
+        supportCount: supportSummary.count,
+        supportTotal: supportSummary.totalAmount,
+        giftCount: giftSummary.count,
+        giftTotal: giftSummary.totalAmount,
+        isConnectedToVoice,
+        isMutedForViewer: Boolean(voicePeerMutedMap[entry.id]),
+      };
+    });
+  }, [challenge, connectedVoicePeers, dominoScoreLookup, gameSession?.player1TimeRemaining, gameSession?.player2TimeRemaining, giftSummaryByPlayer, language, supportSummaryByPlayer, voicePeerMutedMap]);
+
+  const selectedParticipantCard = useMemo(
+    () => participantCards.find((participant) => participant.id === selectedProfileUserId) || null,
+    [participantCards, selectedProfileUserId],
+  );
+
+  const togglePeerListening = useCallback((peerUserId: string) => {
+    setVoicePeerMutedMap((previous) => ({
+      ...previous,
+      [peerUserId]: !previous[peerUserId],
+    }));
+  }, []);
+
   const dominoAutoPlayBadgeText = autoPlayNotice && autoPlayLiveSeconds !== null
     ? (autoPlayNotice.mode === "grace"
       ? (language === "ar"
@@ -1108,24 +1213,100 @@ export default function ChallengeWatchPage() {
                 <span className="text-sm">{gameSession?.spectatorCount || 0}</span>
               </div>
 
-              {isHeadToHeadChallenge && (
-                <VoiceChat
-                  challengeId={challengeId!}
-                  isEnabled={isVoiceEnabled}
-                  onToggle={() => setIsVoiceEnabled((prev) => !prev)}
-                  isMicMuted={true}
-                  onMicMuteToggle={() => {
-                    // Spectator mode is listen-only.
-                  }}
-                  role="spectator"
-                />
-              )}
+              <VoiceChat
+                challengeId={challengeId!}
+                isEnabled={true}
+                onToggle={() => { }}
+                isMicMuted={true}
+                onMicMuteToggle={() => {
+                  // Spectator mode is listen-only.
+                }}
+                role="spectator"
+                showInlineControls={false}
+                peerAudioMutedOverride={voicePeerMutedMap}
+                onConnectedPeersChange={setConnectedVoicePeers}
+              />
             </div>
           </header>
 
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             <ScrollArea className="flex-1">
               <div className="p-4 pb-28 lg:pb-6 flex flex-col items-center">
+                <div className={cn(playerInfoWidthClass, "mb-3")}>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {participantCards.map((participant) => (
+                      <button
+                        key={`participant-watch-${participant.id}`}
+                        type="button"
+                        onClick={() => setSelectedProfileUserId(participant.id)}
+                        className="w-full rounded-xl border bg-card p-3 text-start transition hover:border-primary/50"
+                        data-testid={`participant-watch-card-${participant.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarImage src={participant.avatarUrl} />
+                              <AvatarFallback>{participant.username?.[0]?.toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">{participant.username}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {language === "ar" ? `المقعد ${participant.seat}` : `Seat ${participant.seat}`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant={participant.isMutedForViewer ? "destructive" : "outline"}
+                              className="h-8 w-8"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                togglePeerListening(participant.id);
+                              }}
+                              disabled={!participant.isConnectedToVoice}
+                              data-testid={`participant-watch-listen-${participant.id}`}
+                            >
+                              {participant.isMutedForViewer ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                          <Badge variant="outline" className="font-mono">
+                            {challenge.gameType === "domino"
+                              ? `${t("domino.score")}: ${participant.scoreValue}`
+                              : `${language === "ar" ? "الوقت" : "Time"}: ${formatTime(participant.timeRemaining)}`}
+                          </Badge>
+                          {typeof participant.vipLevel === "number" && participant.vipLevel > 0 && (
+                            <Badge variant="secondary">
+                              VIP {participant.vipLevel}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                          <div className="rounded-lg border border-primary/20 bg-primary/5 px-2 py-1.5">
+                            <p className="text-muted-foreground">{language === "ar" ? "الهدايا" : "Gifts"}</p>
+                            <p className="font-semibold">
+                              {participant.giftCount}
+                              {participant.giftTotal > 0 ? ` · ${participant.giftTotal.toFixed(2)}` : ""}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-2 py-1.5">
+                            <p className="text-muted-foreground">{language === "ar" ? "الدعم" : "Support"}</p>
+                            <p className="font-semibold">
+                              {participant.supportCount}
+                              {participant.supportTotal > 0 ? ` · ${participant.supportTotal.toFixed(2)}` : ""}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className={playerInfoWidthClass}>
                   <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
@@ -1644,6 +1825,66 @@ export default function ChallengeWatchPage() {
       <FloatingGiftsOverlay
         gifts={receivedGifts.map(g => ({ id: g.id, giftId: g.giftId || 'heart', senderName: g.senderName }))}
       />
+
+      <Dialog open={Boolean(selectedProfileUserId)} onOpenChange={(open) => { if (!open) setSelectedProfileUserId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{language === "ar" ? "ملف اللاعب" : "Player Profile"}</DialogTitle>
+            <DialogDescription>
+              {language === "ar" ? "ملخص سريع للحساب" : "Quick account snapshot"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-12 w-12">
+                <AvatarImage src={(selectedProfile?.avatarUrl as string) || selectedParticipantCard?.avatarUrl} />
+                <AvatarFallback>{selectedParticipantCard?.username?.[0]?.toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="truncate font-semibold">{(selectedProfile?.username as string) || selectedParticipantCard?.username}</p>
+                <p className="text-xs text-muted-foreground">ID: {(selectedProfile?.accountId as string) || "-"}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-lg border bg-muted/30 px-2 py-2">
+                <p className="text-muted-foreground">{language === "ar" ? "المستوى" : "Level"}</p>
+                <p className="font-semibold">{(selectedProfile?.vipLevel as number) || selectedParticipantCard?.vipLevel || 0}</p>
+              </div>
+              <div className="rounded-lg border bg-muted/30 px-2 py-2">
+                <p className="text-muted-foreground">{language === "ar" ? "الحالة" : "Status"}</p>
+                <p className="font-semibold">{String(selectedProfile?.status || "active")}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+              <p className="font-medium">{language === "ar" ? "مزايا الحساب" : "Account Perks"}</p>
+              <p className="mt-1 text-muted-foreground">
+                {language === "ar"
+                  ? "شارات VIP وأولوية ظهور ودعم اجتماعي أسرع"
+                  : "VIP badges, better visibility priority, and faster social support"}
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedProfileUserId(null)}>
+              {language === "ar" ? "إغلاق" : "Close"}
+            </Button>
+            {selectedProfileUserId && user?.id !== selectedProfileUserId && (
+              <Button
+                onClick={() => sendFriendRequestMutation.mutate(selectedProfileUserId)}
+                disabled={sendFriendRequestMutation.isPending}
+                data-testid="watch-send-friend-request"
+              >
+                <UserPlus className="me-1 h-4 w-4" />
+                {language === "ar" ? "إرسال طلب صداقة" : t("friends.addFriend")}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="pointer-events-none fixed inset-y-0 start-0 end-0 z-40 flex items-center justify-between px-2 lg:hidden">
         <div className="pointer-events-auto flex flex-col gap-2">

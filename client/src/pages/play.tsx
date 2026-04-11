@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,12 +20,9 @@ import {
   Wallet, TrendingUp, ArrowUpCircle, ArrowDownCircle,
   CreditCard, Crown, Clock, Megaphone, Pin, Eye,
   CheckCircle, History, DollarSign, Play, Maximize2, Minimize2,
-  MessageCircle, Send, ChevronDown, ChevronUp, Mic, MicOff,
-  Volume2, VolumeX, PhoneCall, PhoneOff
+  MessageCircle, Send, ChevronDown, ChevronUp
 } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
-import { useSettings } from '@/lib/settings';
-import { buildRtcConfiguration } from '@/lib/rtc-config';
+import { VoiceChat as SharedVoiceChat } from '@/components/games/VoiceChat';
 import type { Game, Transaction, User, Announcement, GameplayEmoji, Advertisement, GameSection as GameSectionType } from '@shared/schema';
 import Autoplay from 'embla-carousel-autoplay';
 import DOMPurify from 'dompurify';
@@ -301,299 +298,17 @@ function VoiceChat({
   isActive: boolean;
   onToggle: () => void;
 }) {
-  const { language } = useI18n();
-  const { token } = useAuth();
-  const { settings } = useSettings();
-  const [isMuted, setIsMuted] = useState(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
-
-  const rtcConfiguration = useMemo(() => buildRtcConfiguration(settings?.rtc), [settings?.rtc]);
-
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const iceCandidateQueueRef = useRef<RTCIceCandidate[]>([]);
-  const isAuthenticatedRef = useRef(false);
-  const hasRemoteDescriptionRef = useRef(false);
-
-  const safeWsSend = useCallback((data: Record<string, unknown>) => {
-    try {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify(data));
-      }
-    } catch (error) {
-      console.error('Error sending WebSocket message:', error);
-    }
-  }, []);
-
-  const processIceCandidateQueue = useCallback(async () => {
-    const pc = peerConnectionRef.current;
-    if (!pc || !hasRemoteDescriptionRef.current) return;
-
-    while (iceCandidateQueueRef.current.length > 0) {
-      const candidate = iceCandidateQueueRef.current.shift();
-      if (candidate) {
-        try {
-          await pc.addIceCandidate(candidate);
-        } catch (error) {
-          console.error('Error adding ICE candidate:', error);
-        }
-      }
-    }
-  }, []);
-
-  const startVoiceChat = useCallback(async () => {
-    try {
-      setConnectionStatus('connecting');
-      isAuthenticatedRef.current = false;
-      hasRemoteDescriptionRef.current = false;
-      iceCandidateQueueRef.current = [];
-
-      // Get user media
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      localStreamRef.current = stream;
-
-      // Create peer connection with STUN servers
-      const pc = new RTCPeerConnection(rtcConfiguration);
-      peerConnectionRef.current = pc;
-
-      // Add local stream tracks
-      stream.getTracks().forEach(track => {
-        pc.addTrack(track, stream);
-      });
-
-      // Handle remote stream
-      pc.ontrack = (event) => {
-        if (remoteAudioRef.current && event.streams[0]) {
-          remoteAudioRef.current.srcObject = event.streams[0];
-        }
-      };
-
-      // Connect to WebSocket for signaling
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'auth', token }));
-      };
-
-      ws.onmessage = async (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          if (data.type === 'auth_success') {
-            isAuthenticatedRef.current = true;
-            safeWsSend({ type: 'voice_join', matchId });
-          }
-
-          if (data.type === 'auth_error') {
-            console.error('Voice chat auth error:', data.error);
-            setConnectionStatus('disconnected');
-            return;
-          }
-
-          const currentPc = peerConnectionRef.current;
-          if (!currentPc) return;
-
-          if (data.type === 'voice_offer') {
-            await currentPc.setRemoteDescription(new RTCSessionDescription(data.offer));
-            hasRemoteDescriptionRef.current = true;
-            await processIceCandidateQueue();
-            const answer = await currentPc.createAnswer();
-            await currentPc.setLocalDescription(answer);
-            safeWsSend({ type: 'voice_answer', matchId, answer });
-          }
-
-          if (data.type === 'voice_answer') {
-            await currentPc.setRemoteDescription(new RTCSessionDescription(data.answer));
-            hasRemoteDescriptionRef.current = true;
-            await processIceCandidateQueue();
-          }
-
-          if (data.type === 'voice_ice_candidate') {
-            const candidate = new RTCIceCandidate(data.candidate);
-            if (hasRemoteDescriptionRef.current) {
-              await currentPc.addIceCandidate(candidate);
-            } else {
-              iceCandidateQueueRef.current.push(candidate);
-            }
-          }
-
-          if (data.type === 'voice_peer_joined') {
-            // Create and send offer when peer joins
-            const offer = await currentPc.createOffer();
-            await currentPc.setLocalDescription(offer);
-            safeWsSend({ type: 'voice_offer', matchId, offer });
-          }
-
-          if (data.type === 'voice_connected') {
-            setConnectionStatus('connected');
-          }
-        } catch (error) {
-          console.error('Error processing voice chat message:', error);
-        }
-      };
-
-      ws.onerror = () => {
-        setConnectionStatus('disconnected');
-      };
-
-      ws.onclose = () => {
-        isAuthenticatedRef.current = false;
-      };
-
-      // Handle ICE candidates
-      pc.onicecandidate = (event) => {
-        if (event.candidate && isAuthenticatedRef.current) {
-          safeWsSend({
-            type: 'voice_ice_candidate',
-            matchId,
-            candidate: event.candidate
-          });
-        }
-      };
-
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'connected') {
-          setConnectionStatus('connected');
-        } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-          setConnectionStatus('disconnected');
-        }
-      };
-
-    } catch (error) {
-      console.error('Error starting voice chat:', error);
-      setConnectionStatus('disconnected');
-    }
-  }, [matchId, token, safeWsSend, processIceCandidateQueue, rtcConfiguration]);
-
-  const stopVoiceChat = useCallback(() => {
-    try {
-      // Stop local stream
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
-        localStreamRef.current = null;
-      }
-
-      // Close peer connection
-      if (peerConnectionRef.current) {
-        peerConnectionRef.current.close();
-        peerConnectionRef.current = null;
-      }
-
-      // Close WebSocket safely
-      if (wsRef.current) {
-        safeWsSend({ type: 'voice_leave', matchId });
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-
-      // Reset state
-      iceCandidateQueueRef.current = [];
-      isAuthenticatedRef.current = false;
-      hasRemoteDescriptionRef.current = false;
-      setConnectionStatus('disconnected');
-    } catch (error) {
-      console.error('Error stopping voice chat:', error);
-    }
-  }, [matchId, safeWsSend]);
-
-  useEffect(() => {
-    if (isActive) {
-      startVoiceChat();
-    } else {
-      stopVoiceChat();
-    }
-
-    return () => {
-      stopVoiceChat();
-    };
-  }, [isActive, startVoiceChat, stopVoiceChat]);
-
-  const toggleMute = () => {
-    if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = isMuted;
-        setIsMuted(!isMuted);
-      }
-    }
-  };
-
-  const toggleSpeaker = () => {
-    if (remoteAudioRef.current) {
-      remoteAudioRef.current.muted = isSpeakerOn;
-      setIsSpeakerOn(!isSpeakerOn);
-    }
-  };
+  const [isMicMuted, setIsMicMuted] = useState(false);
 
   return (
-    <div className="flex items-center gap-2">
-      <audio ref={remoteAudioRef} autoPlay />
-
-      {isActive ? (
-        <>
-          <div className="flex items-center gap-1">
-            <div className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500 animate-pulse' :
-                connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
-                  'bg-red-500'
-              }`} />
-            <span className="text-xs text-muted-foreground">
-              {connectionStatus === 'connected'
-                ? (language === 'ar' ? 'متصل' : 'Connected')
-                : connectionStatus === 'connecting'
-                  ? (language === 'ar' ? 'جاري الاتصال...' : 'Connecting...')
-                  : (language === 'ar' ? 'غير متصل' : 'Disconnected')}
-            </span>
-          </div>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleMute}
-            aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
-            data-testid="button-toggle-mute"
-          >
-            {isMuted ? <MicOff className="h-4 w-4 text-red-500" /> : <Mic className="h-4 w-4 text-green-500" />}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSpeaker}
-            aria-label={isSpeakerOn ? "Mute speaker" : "Unmute speaker"}
-            data-testid="button-toggle-speaker"
-          >
-            {isSpeakerOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4 text-muted-foreground" />}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggle}
-            className="text-red-500"
-            aria-label="End voice call"
-            data-testid="button-end-voice-call"
-          >
-            <PhoneOff className="h-4 w-4" />
-          </Button>
-        </>
-      ) : (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggle}
-          className="text-green-500"
-          aria-label="Start voice call"
-          data-testid="button-start-voice-call"
-        >
-          <PhoneCall className="h-4 w-4" />
-        </Button>
-      )}
-    </div>
+    <SharedVoiceChat
+      challengeId={matchId}
+      isEnabled={isActive}
+      onToggle={onToggle}
+      isMicMuted={isMicMuted}
+      onMicMuteToggle={() => setIsMicMuted((previous) => !previous)}
+      role="player"
+    />
   );
 }
 
@@ -769,7 +484,7 @@ function FullScreenGameplay({
   const { language } = useI18n();
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showChat, setShowChat] = useState(true);
-  const [voiceChatActive, setVoiceChatActive] = useState(false);
+  const [voiceChatActive] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const exitFullScreen = useCallback(async () => {
@@ -843,7 +558,7 @@ function FullScreenGameplay({
               <VoiceChat
                 matchId={matchId}
                 isActive={voiceChatActive}
-                onToggle={() => setVoiceChatActive(!voiceChatActive)}
+                onToggle={() => { }}
               />
               <div className="w-px h-6 bg-border mx-1" />
               <Button
