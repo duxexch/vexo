@@ -19,7 +19,7 @@ export function runAdminBootstrap(): void {
         if (existingAdmin.length > 0) {
           const currentHash = existingAdmin[0].password;
           const alreadyApplied = currentHash ? await bcrypt.compare(resetPassword, currentHash) : false;
-          
+
           if (alreadyApplied) {
             logger.warn('ADMIN_RESET_PASSWORD already applied — remove it from secrets');
           } else {
@@ -81,11 +81,11 @@ export function runAdminBootstrap(): void {
 
       // Check if any admin exists
       const existingAdmins = await db.select().from(users).where(eq(users.role, "admin")).limit(1);
-      
+
       if (existingAdmins.length === 0) {
         const bootstrapPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD;
         const isDevelopment = process.env.NODE_ENV !== "production";
-        
+
         if (isDevelopment) {
           const devPassword = crypto.randomBytes(16).toString("hex");
           const hashedPassword = await bcrypt.hash(devPassword, 12);
