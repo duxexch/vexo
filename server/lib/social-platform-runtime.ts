@@ -137,8 +137,8 @@ function getOAuthResolutionMode(platform: SocialPlatform): OAuthCredentialResolu
     return candidate;
   }
 
-  // Default to files first, then Admin panel as the secondary fallback.
-  return "env-first";
+  // Default to Admin panel first to match production runbook and avoid env/admin drift.
+  return "admin-first";
 }
 
 export function getOAuthEnvFieldNames(platformName: string): string[] {

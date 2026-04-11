@@ -315,8 +315,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   // Control referrer information
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
-  // Permissions policy - restrict browser features
-  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()");
+  // Permissions policy - allow same-origin microphone usage for in-app voice features.
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(self), camera=(), payment=(), usb=(), interest-cohort=()");
 
   // Content Security Policy (CSP) - prevent XSS and injection attacks
   if (isProduction) {
