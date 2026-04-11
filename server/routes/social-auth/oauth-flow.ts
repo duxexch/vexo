@@ -453,7 +453,11 @@ function shouldRequestGoogleOfflineAccess(): boolean {
   return strategy === "always" || strategy === "google";
 }
 
-function buildProviderAuthorizationParams(platform: string, isPopupRequest: boolean): Record<string, string> {
+function buildProviderAuthorizationParams(
+  platform: string,
+  isPopupRequest: boolean,
+  forceConsent: boolean,
+): Record<string, string> {
   const normalizedPlatform = platform.trim().toLowerCase();
   const providerDefinition = getSocialProviderDefinition(normalizedPlatform);
   const params: Record<string, string> = {
@@ -464,16 +468,27 @@ function buildProviderAuthorizationParams(platform: string, isPopupRequest: bool
     Object.assign(params, providerDefinition.oauth.popupAuthorizationParams);
   }
 
-  if (normalizedPlatform === "google" && shouldRequestGoogleOfflineAccess()) {
-    params.access_type = "offline";
-    const promptTokens = new Set(
-      (params.prompt || "select_account")
-        .split(/\s+/)
-        .map((token) => token.trim())
-        .filter((token) => token.length > 0),
-    );
-    promptTokens.add("consent");
-    params.prompt = Array.from(promptTokens).join(" ");
+  if (normalizedPlatform === "google") {
+    if (shouldRequestGoogleOfflineAccess()) {
+      params.access_type = "offline";
+    }
+
+    // When social login fails بسبب نقص صلاحيات/توكن, force a real Google consent screen.
+    if (forceConsent) {
+      params.include_granted_scopes = "true";
+    }
+
+    if (shouldRequestGoogleOfflineAccess() || forceConsent) {
+      const promptTokens = new Set(
+        (params.prompt || "select_account")
+          .split(/\s+/)
+          .map((token) => token.trim())
+          .filter((token) => token.length > 0),
+      );
+      promptTokens.add("consent");
+      promptTokens.add("select_account");
+      params.prompt = Array.from(promptTokens).join(" ");
+    }
   }
 
   return params;
@@ -889,6 +904,7 @@ export function registerOAuthFlowRoutes(app: Express) {
       const requestedRedirectUrl = typeof req.query.redirect === "string" ? req.query.redirect : undefined;
       const redirectUrl = sanitizePostLoginRedirect(requestedRedirectUrl);
       const isPopupRequest = req.query.popup === "1" || req.query.popup === "true";
+      const forceConsent = req.query.force_consent === "1" || req.query.force_consent === "true";
 
       const reusableAuthUrl = getReusableOAuthInitiationUrl(req, platform);
       if (reusableAuthUrl) {
@@ -935,7 +951,7 @@ export function registerOAuthFlowRoutes(app: Express) {
       rememberOAuthStatePopupHint(state, isPopupRequest);
 
       // Build authorization URL
-      const extraParams = buildProviderAuthorizationParams(platform, isPopupRequest);
+      const extraParams = buildProviderAuthorizationParams(platform, isPopupRequest, forceConsent);
 
       const authUrl = await buildAuthorizationUrl(
         platform,

@@ -1,0 +1,8 @@
+[
+    {
+        "name": "domino-prod-pair-1",
+        "matchId": "replace-with-active-challenge-id",
+        "tokenA": "replace-with-player1-jwt",
+        "tokenB": "replace-with-player2-jwt"
+    }
+]

@@ -78,6 +78,7 @@ export function setupWebSocket(server: Server) {
     ws.isAlive = true;
     ws.userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined;
     const clientIp = req.socket.remoteAddress || "unknown";
+    ws.clientIp = clientIp;
 
     ws.on("pong", () => {
       ws.isAlive = true;

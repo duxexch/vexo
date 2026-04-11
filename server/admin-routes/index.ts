@@ -19,6 +19,7 @@ import { registerAdminAiAgentRoutes } from "./admin-ai-agent";
 import { registerAdminPaymentSecurityRoutes } from "./admin-payment-security";
 import { registerAdminGiftsRoutes } from "./admin-gifts";
 import { registerAdminTransactionsRoutes } from "./admin-transactions";
+import { registerAdminRealtimeRoutes } from "./admin-realtime";
 
 /**
  * Register all admin routes.
@@ -47,4 +48,5 @@ export function registerAdminRoutes(app: Express) {
   registerAdminPaymentSecurityRoutes(app);
   registerAdminGiftsRoutes(app);
   registerAdminTransactionsRoutes(app);
+  registerAdminRealtimeRoutes(app);
 }

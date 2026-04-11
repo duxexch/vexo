@@ -172,6 +172,7 @@ export default function LoginPage() {
   const socialPopupRef = useRef<Window | null>(null);
   const socialLoginLockRef = useRef<{ platformName: string; startedAt: number } | null>(null);
   const socialLoginUnlockTimeoutRef = useRef<number | null>(null);
+  const socialGoogleForceConsentRetriedRef = useRef<boolean>(false);
   const lastOAuthEventTsRef = useRef<number>(0);
   const [activeSocialLoginPlatform, setActiveSocialLoginPlatform] = useState<string | null>(null);
 
@@ -382,11 +383,15 @@ export default function LoginPage() {
     await completeSocialLogin(exchangeData as { token?: string; redirect?: string; isNew?: boolean });
   };
 
-  const startPlatformOAuthFlow = async (platformName: string) => {
+  const startPlatformOAuthFlow = async (platformName: string, options?: { forceConsent?: boolean }) => {
     const postLoginRedirect = resolvePostLoginRedirect();
     const startParams = new URLSearchParams({ redirect: postLoginRedirect });
     if (!Capacitor.isNativePlatform()) {
       startParams.set("popup", "1");
+    }
+
+    if (options?.forceConsent && platformName.trim().toLowerCase() === "google") {
+      startParams.set("force_consent", "1");
     }
 
     const res = await fetch(`/api/auth/social/${platformName}?${startParams.toString()}`, {
@@ -438,6 +443,10 @@ export default function LoginPage() {
     }
 
     try {
+      if (platform.name.trim().toLowerCase() === "google") {
+        socialGoogleForceConsentRetriedRef.current = false;
+      }
+
       if (Capacitor.isNativePlatform() && platform.name === "google") {
         await handleNativeGoogleLogin();
         clearSocialLoginLock();
@@ -534,6 +543,26 @@ export default function LoginPage() {
       }
 
       if (payload.type === "vex_oauth_error") {
+        const failingPlatform = socialLoginLockRef.current?.platformName?.trim().toLowerCase() || "";
+        const reason = (payload.reason || "").toLowerCase();
+        const isGoogleConsentRelated =
+          failingPlatform === "google"
+          && !socialGoogleForceConsentRetriedRef.current
+          && (reason.includes("access_denied")
+            || reason.includes("scope")
+            || reason.includes("oauth_exchange_failed")
+            || reason.includes("no_token"));
+
+        if (isGoogleConsentRelated) {
+          socialGoogleForceConsentRetriedRef.current = true;
+          try {
+            await startPlatformOAuthFlow("google", { forceConsent: true });
+            return;
+          } catch {
+            // Continue to default error handling below.
+          }
+        }
+
         clearSocialLoginLock();
         toast({
           title: t('auth.error') || 'Error',

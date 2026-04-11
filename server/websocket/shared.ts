@@ -18,6 +18,7 @@ export interface AuthenticatedSocket extends WebSocket {
   username?: string;
   role?: string;
   userAgent?: string;
+  clientIp?: string;
   tokenFingerprint?: string;
   isAlive?: boolean;
   activeChallengeId?: string;

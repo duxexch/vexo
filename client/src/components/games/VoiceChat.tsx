@@ -8,6 +8,9 @@ import { useI18n } from "@/lib/i18n";
 import { useSettings } from "@/lib/settings";
 import { buildRtcConfiguration } from "@/lib/rtc-config";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+import { openAppSettings } from "@/lib/startup-permissions";
+import { Capacitor } from "@capacitor/core";
 import { Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff, Loader2 } from "lucide-react";
 
 interface VoiceChatProps {
@@ -44,6 +47,7 @@ export function VoiceChat({
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
+  const joinAckTimerRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const isAuthenticatedRef = useRef(false);
   const hasRemoteDescriptionRef = useRef(false);
@@ -56,6 +60,13 @@ export function VoiceChat({
     if (reconnectTimerRef.current !== null) {
       window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
+    }
+  }, []);
+
+  const clearJoinAckTimer = useCallback(() => {
+    if (joinAckTimerRef.current !== null) {
+      window.clearTimeout(joinAckTimerRef.current);
+      joinAckTimerRef.current = null;
     }
   }, []);
 
@@ -104,18 +115,34 @@ export function VoiceChat({
     }, delayMs);
   }, [clearReconnectTimer, isEnabled]);
 
-  const setupPeerConnection = useCallback(async (): Promise<RTCPeerConnection | null> => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      toast({
-        variant: "destructive",
-        title: t("challenge.voiceMicPermissionNeeded"),
-        description: t("challenge.voiceMicPermissionHint"),
-      });
-      setConnectionState("error");
-      return null;
-    }
+  const showMicPermissionToast = useCallback(() => {
+    const openSettingsLabel = t("permissions.gate.openSettings") || t("common.retry");
 
-    const streamConstraints: MediaStreamConstraints = {
+    toast({
+      variant: "destructive",
+      title: t("challenge.voiceMicPermissionNeeded"),
+      description: t("challenge.voiceMicPermissionHint"),
+      action: (
+        <ToastAction
+          altText={openSettingsLabel}
+          onClick={() => {
+            void openAppSettings();
+          }}
+        >
+          {openSettingsLabel}
+        </ToastAction>
+      ),
+    });
+  }, [t, toast]);
+
+  const isPermissionDeniedError = useCallback((error: unknown): boolean => {
+    const candidate = error as { name?: string } | null;
+    const name = typeof candidate?.name === "string" ? candidate.name : "";
+    return ["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(name);
+  }, []);
+
+  const acquireMicrophoneStream = useCallback(async (): Promise<MediaStream> => {
+    const preferredConstraints: MediaStreamConstraints = {
       audio: {
         echoCancellation: { ideal: true },
         noiseSuppression: { ideal: true },
@@ -127,16 +154,45 @@ export function VoiceChat({
       video: false,
     };
 
+    try {
+      return await navigator.mediaDevices.getUserMedia(preferredConstraints);
+    } catch (primaryError) {
+      // Some Android devices reject advanced audio constraints; retry with minimal audio request.
+      if (!isPermissionDeniedError(primaryError)) {
+        return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      }
+      throw primaryError;
+    }
+  }, [isPermissionDeniedError]);
+
+  const setupPeerConnection = useCallback(async (): Promise<RTCPeerConnection | null> => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      showMicPermissionToast();
+      setConnectionState("error");
+      return null;
+    }
+
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia(streamConstraints);
+      stream = await acquireMicrophoneStream();
     } catch (error) {
       console.error("[VoiceChat] Failed to access microphone", error);
-      toast({
-        variant: "destructive",
-        title: t("challenge.voiceMicPermissionNeeded"),
-        description: t("challenge.voiceMicPermissionHint"),
-      });
+
+      if (isPermissionDeniedError(error)) {
+        showMicPermissionToast();
+
+        if (Capacitor.isNativePlatform()) {
+          // Force-open app settings on native when microphone permission is denied.
+          void openAppSettings();
+        }
+      } else {
+        toast({
+          variant: "destructive",
+          title: t("challenge.voiceErrorRetry"),
+          description: t("challenge.voiceRtcNetworkHint"),
+        });
+      }
+
       setConnectionState("error");
       return null;
     }
@@ -197,10 +253,23 @@ export function VoiceChat({
     };
 
     return pc;
-  }, [challengeId, clearReconnectTimer, isMicMuted, rtcConfiguration, safelySend, scheduleReconnect]);
+  }, [
+    acquireMicrophoneStream,
+    challengeId,
+    clearReconnectTimer,
+    isMicMuted,
+    isPermissionDeniedError,
+    rtcConfiguration,
+    safelySend,
+    scheduleReconnect,
+    showMicPermissionToast,
+    t,
+    toast,
+  ]);
 
   const stopVoiceChat = useCallback(() => {
     clearReconnectTimer();
+    clearJoinAckTimer();
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       safelySend({ type: "voice_leave", matchId: challengeId });
@@ -227,7 +296,7 @@ export function VoiceChat({
     makingOfferRef.current = false;
     startingRef.current = false;
     setConnectionState("disconnected");
-  }, [challengeId, clearReconnectTimer, safelySend]);
+  }, [challengeId, clearJoinAckTimer, clearReconnectTimer, safelySend]);
 
   const startVoiceChat = useCallback(async () => {
     if (startingRef.current) {
@@ -284,6 +353,22 @@ export function VoiceChat({
           case "auth_success":
             isAuthenticatedRef.current = true;
             safelySend({ type: "voice_join", matchId: challengeId });
+            clearJoinAckTimer();
+            joinAckTimerRef.current = window.setTimeout(() => {
+              joinAckTimerRef.current = null;
+              if (!intentionalStopRef.current && isEnabled) {
+                toast({
+                  variant: "destructive",
+                  title: t("challenge.voiceErrorRetry"),
+                  description: t("challenge.voiceRtcNetworkHint"),
+                });
+                setConnectionState("error");
+                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                  ws.close();
+                }
+                scheduleReconnect();
+              }
+            }, 4000);
             break;
 
           case "auth_error":
@@ -305,6 +390,7 @@ export function VoiceChat({
             break;
 
           case "voice_joined":
+            clearJoinAckTimer();
             setConnectionState("connecting");
             break;
 
@@ -402,6 +488,7 @@ export function VoiceChat({
     };
 
     ws.onclose = () => {
+      clearJoinAckTimer();
       if (wsRef.current === ws) {
         wsRef.current = null;
       }
@@ -413,7 +500,7 @@ export function VoiceChat({
     };
 
     startingRef.current = false;
-  }, [challengeId, clearReconnectTimer, isEnabled, processQueuedIceCandidates, safelySend, scheduleReconnect, setupPeerConnection, t, toast, token]);
+  }, [challengeId, clearJoinAckTimer, clearReconnectTimer, isEnabled, processQueuedIceCandidates, safelySend, scheduleReconnect, setupPeerConnection, t, toast, token]);
 
   useEffect(() => {
     if (isEnabled && connectionState === "disconnected") {
