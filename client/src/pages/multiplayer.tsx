@@ -32,8 +32,8 @@ interface FriendItem {
 interface MatchmakingStatusData {
   inQueue?: { createdAt: string };
   queueCount?: number;
-  pendingInvites?: Array<{ id: string; createdAt: string; [key: string]: unknown }>;
-  activeMatches?: Array<{ id: string; startedAt: string; [key: string]: unknown }>;
+  pendingInvites?: Array<{ id: string; createdAt: string;[key: string]: unknown }>;
+  activeMatches?: Array<{ id: string; startedAt: string;[key: string]: unknown }>;
   [key: string]: unknown;
 }
 
@@ -46,7 +46,7 @@ interface MatchInfo {
 }
 
 export default function MultiplayerPage() {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const { user, token } = useAuth();
   const { toast } = useToast();
   const [selectedGameId, setSelectedGameId] = useState<string>("");
@@ -87,7 +87,7 @@ export default function MultiplayerPage() {
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      
+
       if (data.type === "match_found") {
         setIsSearching(false);
         setSearchStartTime(null);
@@ -95,7 +95,7 @@ export default function MultiplayerPage() {
         setMatchFoundDialog(true);
         queryClient.invalidateQueries({ queryKey: ["/api/games/matchmaking/status"] });
       }
-      
+
       if (data.type === "game_invite") {
         queryClient.invalidateQueries({ queryKey: ["/api/games/matchmaking/status"] });
         toast({
@@ -103,7 +103,7 @@ export default function MultiplayerPage() {
           description: `${data.data.sender.username} ${t("multiplayer.invitedYou")}`,
         });
       }
-      
+
       if (data.type === "invite_response") {
         if (data.data.accepted) {
           setFoundMatch(data.data.match);
@@ -117,17 +117,17 @@ export default function MultiplayerPage() {
         }
         queryClient.invalidateQueries({ queryKey: ["/api/games/matchmaking/status"] });
       }
-      
+
       if (data.type === "matchmaking_queued") {
         setIsSearching(true);
         setSearchStartTime(new Date());
       }
-      
+
       if (data.type === "matchmaking_cancelled") {
         setIsSearching(false);
         setSearchStartTime(null);
       }
-      
+
       if (data.type === "matchmaking_error") {
         toast({
           title: t("common.error"),
@@ -268,18 +268,18 @@ export default function MultiplayerPage() {
       });
       return;
     }
-    
-    const targetAccountId = friendSelectionMode === 'list' 
-      ? selectedFriend?.accountId 
+
+    const targetAccountId = friendSelectionMode === 'list'
+      ? selectedFriend?.accountId
       : friendAccountId;
-      
+
     if (!targetAccountId) {
       toast({
-        title: friendSelectionMode === 'list' 
-          ? (language === 'ar' ? 'اختر صديقاً' : 'Select a friend')
+        title: friendSelectionMode === 'list'
+          ? t("multiplayer.selectFriend")
           : t("multiplayer.enterAccountId"),
         description: friendSelectionMode === 'list'
-          ? (language === 'ar' ? 'اختر صديقاً من القائمة للعب معه' : 'Select a friend from your list to play with')
+          ? t("multiplayer.selectFriendDesc")
           : t("multiplayer.enterAccountIdDesc"),
         variant: "destructive",
       });
@@ -305,7 +305,7 @@ export default function MultiplayerPage() {
             <Wifi className="h-3 w-3" />
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="font-medium">
-              {matchmakingStatus?.queueCount || 0} {language === 'ar' ? 'في الانتظار' : 'in queue'}
+              {matchmakingStatus?.queueCount || 0} {t("multiplayer.inQueue")}
             </span>
           </div>
         </div>
@@ -347,8 +347,8 @@ export default function MultiplayerPage() {
                 <Clock className="w-4 h-4 text-muted-foreground" />
                 <span className="font-mono text-lg" data-testid="text-elapsed-time">{formatTime(elapsedTime)}</span>
               </div>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={() => cancelMatchmakingMutation.mutate()}
                 data-testid="button-cancel-search"
               >
@@ -373,8 +373,8 @@ export default function MultiplayerPage() {
                 <Users className="w-4 h-4" />
                 <span>{t("multiplayer.playersOnline")}</span>
               </div>
-              <Button 
-                className="w-full" 
+              <Button
+                className="w-full"
                 onClick={handleJoinRandom}
                 disabled={joinRandomMutation.isPending || !selectedGameId}
                 data-testid="button-join-random"
@@ -402,14 +402,14 @@ export default function MultiplayerPage() {
                 <TabsList className="w-full">
                   <TabsTrigger value="list" className="flex-1" data-testid="tab-friend-list">
                     <UserCheck className="w-4 h-4 me-1" />
-                    {language === 'ar' ? 'قائمة الأصدقاء' : 'Friends List'}
+                    {t("multiplayer.friendsList")}
                   </TabsTrigger>
                   <TabsTrigger value="manual" className="flex-1" data-testid="tab-manual-entry">
                     <UserPlus className="w-4 h-4 me-1" />
-                    {language === 'ar' ? 'إدخال يدوي' : 'Manual Entry'}
+                    {t("multiplayer.manualEntry")}
                   </TabsTrigger>
                 </TabsList>
-                
+
                 <TabsContent value="list" className="mt-4">
                   {friends.length > 0 ? (
                     <ScrollArea className="h-48 border rounded-lg">
@@ -417,11 +417,10 @@ export default function MultiplayerPage() {
                         {friends.map((friend: FriendItem) => (
                           <div
                             key={friend.id}
-                            className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                              selectedFriend?.id === friend.id 
-                                ? 'bg-primary/20 border border-primary' 
+                            className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${selectedFriend?.id === friend.id
+                                ? 'bg-primary/20 border border-primary'
                                 : 'hover-elevate'
-                            }`}
+                              }`}
                             onClick={() => setSelectedFriend(friend)}
                             data-testid={`friend-item-${friend.id}`}
                           >
@@ -446,12 +445,12 @@ export default function MultiplayerPage() {
                     <div className="text-center py-8 text-muted-foreground">
                       <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
                       <p className="text-sm">
-                        {language === 'ar' ? 'لا يوجد أصدقاء بعد' : 'No friends yet'}
+                        {t("multiplayer.noFriendsYet")}
                       </p>
                     </div>
                   )}
                 </TabsContent>
-                
+
                 <TabsContent value="manual" className="mt-4">
                   <div className="space-y-2">
                     <Label htmlFor="friendAccountId">{t("multiplayer.friendAccountId")}</Label>
@@ -465,11 +464,11 @@ export default function MultiplayerPage() {
                   </div>
                 </TabsContent>
               </Tabs>
-              
-              <Button 
-                className="w-full" 
+
+              <Button
+                className="w-full"
                 onClick={handleInviteFriend}
-                disabled={inviteFriendMutation.isPending || !selectedGameId || 
+                disabled={inviteFriendMutation.isPending || !selectedGameId ||
                   (friendSelectionMode === 'list' ? !selectedFriend : !friendAccountId)}
                 data-testid="button-invite-friend"
               >
@@ -492,9 +491,9 @@ export default function MultiplayerPage() {
             <CardDescription>{t("multiplayer.pendingInvitesDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {matchmakingStatus.pendingInvites.map((invite: { id: string; createdAt: string; [key: string]: unknown }) => (
-              <div 
-                key={invite.id} 
+            {matchmakingStatus.pendingInvites.map((invite: { id: string; createdAt: string;[key: string]: unknown }) => (
+              <div
+                key={invite.id}
                 className="flex items-center justify-between p-3 bg-muted rounded-md"
                 data-testid={`invite-${invite.id}`}
               >
@@ -540,9 +539,9 @@ export default function MultiplayerPage() {
             <CardTitle>{t("multiplayer.activeMatches")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {matchmakingStatus.activeMatches.map((match: { id: string; startedAt: string; [key: string]: unknown }) => (
-              <div 
-                key={match.id} 
+            {matchmakingStatus.activeMatches.map((match: { id: string; startedAt: string;[key: string]: unknown }) => (
+              <div
+                key={match.id}
                 className="flex items-center justify-between p-3 bg-muted rounded-md"
                 data-testid={`match-${match.id}`}
               >
@@ -578,14 +577,14 @@ export default function MultiplayerPage() {
                   </Avatar>
                   <div>
                     <p className="font-medium">{foundMatch.player1?.username}</p>
-                    <p className="text-sm text-muted-foreground">Level {foundMatch.player1?.vipLevel || 1}</p>
+                    <p className="text-sm text-muted-foreground">{t("multiplayer.level")} {foundMatch.player1?.vipLevel || 1}</p>
                   </div>
                 </div>
-                <span className="text-xl font-bold text-muted-foreground">VS</span>
+                <span className="text-xl font-bold text-muted-foreground">{t("lobby.versus")}</span>
                 <div className="flex items-center gap-3">
                   <div className="text-end">
                     <p className="font-medium">{foundMatch.player2?.username}</p>
-                    <p className="text-sm text-muted-foreground">Level {foundMatch.player2?.vipLevel || 1}</p>
+                    <p className="text-sm text-muted-foreground">{t("multiplayer.level")} {foundMatch.player2?.vipLevel || 1}</p>
                   </div>
                   <Avatar>
                     <AvatarImage src={foundMatch.player2?.avatarUrl} />
