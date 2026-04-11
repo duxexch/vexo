@@ -1703,6 +1703,13 @@ const en: Record<string, string> = {
   'dailyRewards.tip3': 'Day 7 gives a big bonus reward!',
   'dailyRewards.tip4': 'Missing a day resets your streak',
   'dailyRewards.tip5': 'Rewards are added directly to your balance',
+  'dailyRewards.lastReferenceLabel': 'Latest reward claim reference',
+  'dailyRewards.copyReference': 'Copy Reference',
+  'dailyRewards.copiedTitle': 'Copied!',
+  'dailyRewards.referenceCopied': 'Operation reference copied',
+  'dailyRewards.claimReceiptNoRef': 'You received {amount} project coins',
+  'dailyRewards.claimReceiptWithRef': 'You received {amount} project coins - Ref: {reference}',
+  'dailyRewards.todayRewardProject': 'Day {day} reward: {amount} project coins',
 
   // Game History page
   'gameHistory.title': 'Game History',

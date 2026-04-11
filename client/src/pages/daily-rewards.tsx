@@ -68,11 +68,13 @@ export default function DailyRewardsPage() {
       if (referenceId) {
         setLastReferenceId(referenceId);
       }
+      const amountText = amount.toFixed(2);
+      const claimDescription = referenceId
+        ? t('dailyRewards.claimReceiptWithRef', { amount: amountText, reference: referenceId })
+        : t('dailyRewards.claimReceiptNoRef', { amount: amountText });
       toast({
         title: t('dailyRewards.claimed'),
-        description: language === 'ar'
-          ? `حصلت على ${amount.toFixed(2)} من عملة المشروع${referenceId ? ` - المرجع: ${referenceId}` : ''}`
-          : `You received ${amount.toFixed(2)} project coins${referenceId ? ` - Ref: ${referenceId}` : ''}`,
+        description: claimDescription,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/daily-rewards/status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
@@ -92,8 +94,8 @@ export default function DailyRewardsPage() {
       await navigator.clipboard.writeText(lastReferenceId);
       setCopiedReference(true);
       toast({
-        title: language === 'ar' ? 'تم النسخ' : 'Copied!',
-        description: language === 'ar' ? 'تم نسخ مرجع العملية' : 'Operation reference copied',
+        title: t('dailyRewards.copiedTitle'),
+        description: t('dailyRewards.referenceCopied'),
       });
       setTimeout(() => setCopiedReference(false), 2000);
     } catch {
@@ -176,13 +178,13 @@ export default function DailyRewardsPage() {
           <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <p className="text-sm text-muted-foreground">
-                {language === 'ar' ? 'مرجع آخر مطالبة مكافأة' : 'Latest reward claim reference'}
+                {t('dailyRewards.lastReferenceLabel')}
               </p>
               <p className="font-mono text-sm sm:text-base break-all">{lastReferenceId}</p>
             </div>
             <Button variant="outline" onClick={copyReference}>
               {copiedReference ? <Check className="h-4 w-4 me-2" /> : <Copy className="h-4 w-4 me-2" />}
-              {language === 'ar' ? 'نسخ المرجع' : 'Copy Reference'}
+              {t('dailyRewards.copyReference')}
             </Button>
           </CardContent>
         </Card>
@@ -277,9 +279,10 @@ export default function DailyRewardsPage() {
               </div>
               <div className="text-center">
                 <p className="font-semibold text-lg">
-                  {language === 'ar'
-                    ? `مكافأة اليوم ${nextDay}: ${status?.nextRewardAmount || '0.50'} من عملة المشروع`
-                    : `Day ${nextDay} reward: ${status?.nextRewardAmount || '0.50'} project coins`}
+                  {t('dailyRewards.todayRewardProject', {
+                    day: String(nextDay),
+                    amount: status?.nextRewardAmount || '0.50',
+                  })}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
                   {t('dailyRewards.tapToClaim')}
@@ -312,7 +315,7 @@ export default function DailyRewardsPage() {
             <li>{t('dailyRewards.tip2')}</li>
             <li>{t('dailyRewards.tip3')}</li>
             <li>{t('dailyRewards.tip4')}</li>
-            <li>{language === 'ar' ? 'تُضاف المكافآت مباشرة إلى محفظة عملة المشروع' : 'Rewards are credited directly to your project-currency wallet'}</li>
+            <li>{t('dailyRewards.tip5')}</li>
           </ul>
         </CardContent>
       </Card>
