@@ -16,7 +16,6 @@ const STORAGE_KEY = "vex_startup_permission_summary_v1";
 const PushNotifications = registerPlugin<any>("PushNotifications");
 const LocalNotifications = registerPlugin<any>("LocalNotifications");
 
-let ensureInFlight: Promise<PermissionSummary> | null = null;
 let requestInFlight: Promise<PermissionSummary> | null = null;
 
 function saveSummary(summary: PermissionSummary): void {
@@ -24,28 +23,6 @@ function saveSummary(summary: PermissionSummary): void {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(summary));
     } catch {
         // Ignore storage failures.
-    }
-}
-
-export function getStoredStartupPermissionSummary(): PermissionSummary | null {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) {
-            return null;
-        }
-
-        const parsed = JSON.parse(raw) as PermissionSummary;
-        if (!parsed || typeof parsed !== "object") {
-            return null;
-        }
-
-        if (!parsed.checkedAt) {
-            return null;
-        }
-
-        return parsed;
-    } catch {
-        return null;
     }
 }
 
@@ -238,44 +215,6 @@ async function requestNativeLocalNotificationsPermission(): Promise<PermissionRe
     }
 }
 
-export function isStartupPermissionSummaryReady(summary: PermissionSummary | null): boolean {
-    if (!summary) {
-        return false;
-    }
-
-    const webNotificationsReady = !requiresWebNotificationPermission() || summary.notifications === "granted";
-    const microphoneReady = !requiresMicrophonePermission() || summary.microphone === "granted";
-    const nativePushReady = !requiresNativePushPermission() || summary.nativePush === "granted";
-
-    return webNotificationsReady && microphoneReady && nativePushReady;
-}
-
-export function shouldShowNotificationSettingsHint(summary: PermissionSummary | null): boolean {
-    if (!summary) {
-        return false;
-    }
-
-    const webDenied = requiresWebNotificationPermission() && summary.notifications === "denied";
-    const nativePushDenied = requiresNativePushPermission() && summary.nativePush === "denied";
-    return webDenied || nativePushDenied;
-}
-
-export function shouldShowMicrophoneSettingsHint(summary: PermissionSummary | null): boolean {
-    if (!summary) {
-        return false;
-    }
-
-    return requiresMicrophonePermission() && summary.microphone === "denied";
-}
-
-export function shouldAttemptAutoStartupNotificationPrompt(summary: PermissionSummary | null): boolean {
-    if (!summary) {
-        return true;
-    }
-
-    return summary.notifications === "prompt" || summary.nativePush === "prompt";
-}
-
 export async function openAppSettings(): Promise<void> {
     if (!Capacitor.isNativePlatform()) {
         return;
@@ -395,26 +334,14 @@ async function collectPermissionSummary(options: CollectOptions = {}): Promise<P
     return summary;
 }
 
-export async function ensureStartupPermissions(): Promise<PermissionSummary> {
-    if (ensureInFlight) {
-        return ensureInFlight;
-    }
-
-    ensureInFlight = collectPermissionSummary({ requestNotificationPermission: false }).finally(() => {
-        ensureInFlight = null;
-    });
-
-    return ensureInFlight;
-}
-
-export async function requestRequiredStartupPermissions(): Promise<PermissionSummary> {
+export async function requestPostSignupNotificationPermissions(): Promise<PermissionSummary> {
     if (requestInFlight) {
         return requestInFlight;
     }
 
     requestInFlight = collectPermissionSummary({
         requestNotificationPermission: true,
-        requestMicrophonePermission: true,
+        requestMicrophonePermission: false,
     }).finally(() => {
         requestInFlight = null;
     });

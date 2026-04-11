@@ -55,7 +55,6 @@ import { VexLogo } from "@/components/vex-logo";
 import { NotificationBell } from "@/components/NotificationBell";
 import { NotificationProvider, useNotificationStatus } from "@/components/NotificationProvider";
 import { VexNotificationPopupProvider } from "@/components/VexNotificationPopup";
-import { StartupPermissionGate } from "@/components/startup-permission-gate";
 import { ThemeProvider } from "@/lib/theme";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { prefetchPage } from "@/components/PrefetchLink";
@@ -740,7 +739,6 @@ function App() {
                   <OfflineBanner />
                   <Toaster />
                   <TranslationDebugger />
-                  <StartupPermissionGate />
                   <Router />
                 </VexNotificationPopupProvider>
               </AuthProvider>
