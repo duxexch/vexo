@@ -134,6 +134,33 @@ async function checkMicrophonePermission(): Promise<PermissionResult> {
     return "unavailable";
 }
 
+async function requestMicrophonePermission(): Promise<PermissionResult> {
+    if (!requiresMicrophonePermission()) {
+        return "unavailable";
+    }
+
+    const current = await checkMicrophonePermission();
+    if (current === "granted" || current === "denied") {
+        return current;
+    }
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream.getTracks().forEach((track) => track.stop());
+        return "granted";
+    } catch (error) {
+        const errorName = typeof (error as { name?: string } | null)?.name === "string"
+            ? ((error as { name?: string }).name as string)
+            : "";
+
+        if (["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(errorName)) {
+            return "denied";
+        }
+
+        return "prompt";
+    }
+}
+
 function normalizeNativePermission(value: unknown): PermissionResult {
     if (value === "granted") return "granted";
     if (value === "denied") return "denied";
@@ -217,9 +244,10 @@ export function isStartupPermissionSummaryReady(summary: PermissionSummary | nul
     }
 
     const webNotificationsReady = !requiresWebNotificationPermission() || summary.notifications === "granted";
+    const microphoneReady = !requiresMicrophonePermission() || summary.microphone === "granted";
     const nativePushReady = !requiresNativePushPermission() || summary.nativePush === "granted";
 
-    return webNotificationsReady && nativePushReady;
+    return webNotificationsReady && microphoneReady && nativePushReady;
 }
 
 export function shouldShowNotificationSettingsHint(summary: PermissionSummary | null): boolean {
@@ -230,6 +258,14 @@ export function shouldShowNotificationSettingsHint(summary: PermissionSummary | 
     const webDenied = requiresWebNotificationPermission() && summary.notifications === "denied";
     const nativePushDenied = requiresNativePushPermission() && summary.nativePush === "denied";
     return webDenied || nativePushDenied;
+}
+
+export function shouldShowMicrophoneSettingsHint(summary: PermissionSummary | null): boolean {
+    if (!summary) {
+        return false;
+    }
+
+    return requiresMicrophonePermission() && summary.microphone === "denied";
 }
 
 export function shouldAttemptAutoStartupNotificationPrompt(summary: PermissionSummary | null): boolean {
@@ -329,16 +365,18 @@ export async function openMicrophoneSettings(): Promise<void> {
 
 type CollectOptions = {
     requestNotificationPermission?: boolean;
+    requestMicrophonePermission?: boolean;
 };
 
 async function collectPermissionSummary(options: CollectOptions = {}): Promise<PermissionSummary> {
     const requestNotificationPermission = options.requestNotificationPermission === true;
+    const requestMicrophonePermissionFlag = options.requestMicrophonePermission === true;
 
     const [notifications, microphone, nativePush, nativeLocalNotifications] = await Promise.all([
         requestNotificationPermission
             ? requestWebNotificationPermission()
             : Promise.resolve(checkWebNotificationPermission()),
-        checkMicrophonePermission(),
+        requestMicrophonePermissionFlag ? requestMicrophonePermission() : checkMicrophonePermission(),
         requestNotificationPermission ? requestNativePushPermission() : checkNativePushPermission(),
         requestNotificationPermission
             ? requestNativeLocalNotificationsPermission()
@@ -374,7 +412,10 @@ export async function requestRequiredStartupPermissions(): Promise<PermissionSum
         return requestInFlight;
     }
 
-    requestInFlight = collectPermissionSummary({ requestNotificationPermission: true }).finally(() => {
+    requestInFlight = collectPermissionSummary({
+        requestNotificationPermission: true,
+        requestMicrophonePermission: true,
+    }).finally(() => {
         requestInFlight = null;
     });
 

@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
 import { Bell, Mic, RefreshCw, ShieldAlert, Smartphone, Volume2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
@@ -8,15 +8,14 @@ import {
     ensureStartupPermissions,
     getStoredStartupPermissionSummary,
     isStartupPermissionSummaryReady,
+    openMicrophoneSettings,
     openNotificationSettings,
     requestRequiredStartupPermissions,
-    shouldAttemptAutoStartupNotificationPrompt,
+    shouldShowMicrophoneSettingsHint,
     shouldShowNotificationSettingsHint,
     type PermissionResult,
     type PermissionSummary,
 } from "@/lib/startup-permissions";
-
-const AUTO_STARTUP_NOTIFICATION_PROMPT_KEY = "vex_startup_auto_notification_prompt_attempted_v2";
 
 type PermissionLine = {
     key: string;
@@ -55,7 +54,6 @@ function statusText(value: PermissionResult, t: (key: string) => string): string
 export function StartupPermissionGate() {
     const { t, dir } = useI18n();
     const [summary, setSummary] = useState<PermissionSummary | null>(() => getStoredStartupPermissionSummary());
-    const hasAutoPromptedRef = useRef(false);
 
     const [isChecking, setIsChecking] = useState(false);
     const [isRequesting, setIsRequesting] = useState(false);
@@ -68,7 +66,10 @@ export function StartupPermissionGate() {
     const needsNativeLocal = isNative && Capacitor.isPluginAvailable("LocalNotifications");
 
     const isReady = useMemo(() => isStartupPermissionSummaryReady(summary), [summary]);
-    const showSettingsShortcut = useMemo(() => isNative || shouldShowNotificationSettingsHint(summary), [isNative, summary]);
+    const showSettingsShortcut = useMemo(
+        () => isNative || shouldShowNotificationSettingsHint(summary) || shouldShowMicrophoneSettingsHint(summary),
+        [isNative, summary],
+    );
 
     const refreshSummary = useCallback(async () => {
         setIsChecking(true);
@@ -101,37 +102,6 @@ export function StartupPermissionGate() {
             void refreshSummary();
         }
     }, [summary, refreshSummary]);
-
-    useEffect(() => {
-        if (hasAutoPromptedRef.current) {
-            return;
-        }
-
-        if (!shouldAttemptAutoStartupNotificationPrompt(summary)) {
-            return;
-        }
-
-        let alreadyAttempted = false;
-        try {
-            alreadyAttempted = sessionStorage.getItem(AUTO_STARTUP_NOTIFICATION_PROMPT_KEY) === "1";
-        } catch {
-            alreadyAttempted = false;
-        }
-
-        if (alreadyAttempted) {
-            hasAutoPromptedRef.current = true;
-            return;
-        }
-
-        hasAutoPromptedRef.current = true;
-        try {
-            sessionStorage.setItem(AUTO_STARTUP_NOTIFICATION_PROMPT_KEY, "1");
-        } catch {
-            // Ignore storage failures.
-        }
-
-        void requestNotifications();
-    }, [requestNotifications, summary]);
 
     useEffect(() => {
         const onVisible = () => {
@@ -168,7 +138,7 @@ export function StartupPermissionGate() {
             key: "microphone",
             label: t("permissions.gate.microphone"),
             value: fallbackSummary.microphone,
-            required: false,
+            required: needsMicrophone,
             icon: Mic,
         },
         {
@@ -229,7 +199,7 @@ export function StartupPermissionGate() {
                     })}
 
                     <p className="text-xs text-slate-400">{t(isNative ? "permissions.gate.hintNative" : "permissions.gate.hintWeb")}</p>
-                    {(needsMicrophone || needsNativeLocal) && (
+                    {needsNativeLocal && (
                         <p className="text-xs text-slate-400">{t("permissions.gate.onDemandHint")}</p>
                     )}
                     {isNative && (
@@ -263,7 +233,14 @@ export function StartupPermissionGate() {
                         <Button
                             variant="outline"
                             className="w-full sm:w-auto border-slate-600 text-slate-100"
-                            onClick={() => void openNotificationSettings()}
+                            onClick={() => {
+                                if (needsMicrophone && fallbackSummary.microphone === "denied") {
+                                    void openMicrophoneSettings();
+                                    return;
+                                }
+
+                                void openNotificationSettings();
+                            }}
                             data-testid="button-permissions-open-settings"
                         >
                             {t(isNative ? "permissions.gate.openDeviceSettings" : "permissions.gate.openBrowserSettings")}
