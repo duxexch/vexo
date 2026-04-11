@@ -210,7 +210,12 @@ function toUniqueParticipantIds(values: Array<string | null | undefined>): strin
   return Array.from(new Set(values.filter(isNonEmptyId)));
 }
 
-async function resolveVoiceParticipantIds(roomId: string, userId: string): Promise<string[] | null> {
+type VoiceAccessResolution = {
+  participantIds: string[];
+  userRole: "player" | "spectator";
+};
+
+async function resolveVoiceAccess(roomId: string, userId: string): Promise<VoiceAccessResolution | null> {
   const [match] = await db
     .select({
       player1Id: gameMatches.player1Id,
@@ -221,7 +226,14 @@ async function resolveVoiceParticipantIds(roomId: string, userId: string): Promi
     .limit(1);
 
   if (match) {
-    return toUniqueParticipantIds([match.player1Id, match.player2Id]);
+    const participantIds = toUniqueParticipantIds([match.player1Id, match.player2Id]);
+    if (!participantIds.includes(userId)) {
+      return null;
+    }
+    return {
+      participantIds,
+      userRole: "player",
+    };
   }
 
   const [challenge] = await db
@@ -230,6 +242,7 @@ async function resolveVoiceParticipantIds(roomId: string, userId: string): Promi
       player2Id: challenges.player2Id,
       player3Id: challenges.player3Id,
       player4Id: challenges.player4Id,
+      visibility: challenges.visibility,
     })
     .from(challenges)
     .where(eq(challenges.id, roomId))
@@ -270,7 +283,22 @@ async function resolveVoiceParticipantIds(roomId: string, userId: string): Promi
     }
   }
 
-  return participantIds;
+  if (participantIds.includes(userId)) {
+    return {
+      participantIds,
+      userRole: "player",
+    };
+  }
+
+  const visibility = String(challenge.visibility || "public").toLowerCase();
+  if (visibility !== "private") {
+    return {
+      participantIds,
+      userRole: "spectator",
+    };
+  }
+
+  return null;
 }
 
 /**
@@ -326,47 +354,57 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
       return;
     }
 
-    const participantIds = await resolveVoiceParticipantIds(matchId, ws.userId);
-    if (!participantIds || !participantIds.includes(ws.userId)) {
-      sendVoiceError("Not authorized for this match", { matchId, participantCount: participantIds?.length ?? 0 });
+    const access = await resolveVoiceAccess(matchId, ws.userId);
+    if (!access) {
+      sendVoiceError("Not authorized for this match", { matchId, participantCount: 0 });
       return;
     }
 
-    // Current signaling client is single-peer; keep voice limited to head-to-head rooms.
-    if (participantIds.length !== 2) {
-      sendVoiceError("Voice chat is currently available for 2-player games only", { matchId, participantCount: participantIds.length });
-      return;
-    }
+    const participantIds = access.participantIds;
 
     // Add to voice room
     if (!voiceRooms.has(matchId)) {
       voiceRooms.set(matchId, new Map());
     }
+    const room = voiceRooms.get(matchId)!;
+    const existingPeers = Array.from(room.entries())
+      .filter(([peerUserId, socket]) => peerUserId !== ws.userId && socket.readyState === WebSocket.OPEN)
+      .map(([peerUserId]) => ({
+        userId: peerUserId,
+        role: participantIds.includes(peerUserId) ? "player" : "spectator",
+      }));
+
     voiceRooms.get(matchId)!.set(ws.userId, ws);
     incrementVoiceTelemetryCounter("joinAccepted");
 
     logger.info("[VoiceWS] voice_join accepted", {
       matchId,
       userId: ws.userId,
+      role: access.userRole,
       participantIds,
       roomSize: voiceRooms.get(matchId)?.size ?? 0,
     });
 
-    // Notify other participant that peer joined
-    for (const participantId of participantIds) {
-      if (participantId === ws.userId) continue;
-      const participantSocket = voiceRooms.get(matchId)?.get(participantId);
-      if (participantSocket && participantSocket.readyState === WebSocket.OPEN) {
-        participantSocket.send(JSON.stringify({ type: "voice_peer_joined", matchId }));
-        logger.info("[VoiceWS] voice_peer_joined forwarded", {
-          matchId,
-          fromUserId: ws.userId,
-          toUserId: participantId,
-        });
+    // Notify existing peers that a new peer joined.
+    room.forEach((socket, peerUserId) => {
+      if (peerUserId === ws.userId || socket.readyState !== WebSocket.OPEN) {
+        return;
       }
-    }
 
-    ws.send(JSON.stringify({ type: "voice_joined", matchId }));
+      socket.send(JSON.stringify({
+        type: "voice_peer_joined",
+        matchId,
+        peerUserId: ws.userId,
+        peerRole: access.userRole,
+      }));
+    });
+
+    ws.send(JSON.stringify({
+      type: "voice_joined",
+      matchId,
+      role: access.userRole,
+      peers: existingPeers,
+    }));
   }
 
   // Voice offer — forward WebRTC offer to other peers
@@ -377,7 +415,9 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
 
     const matchId = validateMatchId(data.matchId);
     const offer = validateSessionDescription(data.offer, "offer");
-    if (!matchId || !offer) {
+    const targetUserId = validateMatchId(data.targetUserId);
+
+    if (!matchId || !offer || !targetUserId) {
       sendVoiceError("Invalid voice offer payload", {
         matchId: data.matchId,
       });
@@ -387,18 +427,29 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
     // Verify sender is in the voice room before forwarding
     const room = voiceRooms.get(matchId);
     if (room && room.has(ws.userId)) {
-      let forwardedCount = 0;
-      room.forEach((socket, oderId) => {
-        if (oderId !== ws.userId && socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: "voice_offer", matchId, offer }));
-          forwardedCount += 1;
-        }
-      });
-      incrementVoiceTelemetryCounter("offerForwarded", forwardedCount);
+      const targetSocket = room.get(targetUserId);
+      if (!targetSocket || targetSocket.readyState !== WebSocket.OPEN) {
+        sendVoiceError("Voice peer is not available", {
+          matchId,
+          targetUserId,
+          event: "voice_offer",
+        });
+        return;
+      }
+
+      targetSocket.send(JSON.stringify({
+        type: "voice_offer",
+        matchId,
+        fromUserId: ws.userId,
+        offer,
+      }));
+
+      incrementVoiceTelemetryCounter("offerForwarded", 1);
       logger.info("[VoiceWS] voice_offer forwarded", {
         matchId,
         fromUserId: ws.userId,
-        forwardedCount,
+        toUserId: targetUserId,
+        forwardedCount: 1,
       });
     } else {
       sendVoiceError("Not in voice room", { matchId, event: "voice_offer" });
@@ -413,7 +464,9 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
 
     const matchId = validateMatchId(data.matchId);
     const answer = validateSessionDescription(data.answer, "answer");
-    if (!matchId || !answer) {
+    const targetUserId = validateMatchId(data.targetUserId);
+
+    if (!matchId || !answer || !targetUserId) {
       sendVoiceError("Invalid voice answer payload", {
         matchId: data.matchId,
       });
@@ -423,18 +476,29 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
     // Verify sender is in the voice room before forwarding
     const room = voiceRooms.get(matchId);
     if (room && room.has(ws.userId)) {
-      let forwardedCount = 0;
-      room.forEach((socket, oderId) => {
-        if (oderId !== ws.userId && socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: "voice_answer", matchId, answer }));
-          forwardedCount += 1;
-        }
-      });
-      incrementVoiceTelemetryCounter("answerForwarded", forwardedCount);
+      const targetSocket = room.get(targetUserId);
+      if (!targetSocket || targetSocket.readyState !== WebSocket.OPEN) {
+        sendVoiceError("Voice peer is not available", {
+          matchId,
+          targetUserId,
+          event: "voice_answer",
+        });
+        return;
+      }
+
+      targetSocket.send(JSON.stringify({
+        type: "voice_answer",
+        matchId,
+        fromUserId: ws.userId,
+        answer,
+      }));
+
+      incrementVoiceTelemetryCounter("answerForwarded", 1);
       logger.info("[VoiceWS] voice_answer forwarded", {
         matchId,
         fromUserId: ws.userId,
-        forwardedCount,
+        toUserId: targetUserId,
+        forwardedCount: 1,
       });
     } else {
       sendVoiceError("Not in voice room", { matchId, event: "voice_answer" });
@@ -449,7 +513,8 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
 
     const matchId = validateMatchId(data.matchId);
     const candidate = validateIceCandidate(data.candidate);
-    if (!matchId || !candidate) {
+    const targetUserId = validateMatchId(data.targetUserId);
+    if (!matchId || !candidate || !targetUserId) {
       sendVoiceError("Invalid ICE candidate payload", {
         matchId: data.matchId,
       });
@@ -459,19 +524,25 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
     // Verify sender is in the voice room before forwarding
     const room = voiceRooms.get(matchId);
     if (room && room.has(ws.userId)) {
-      let forwardedCount = 0;
-      room.forEach((socket, oderId) => {
-        if (oderId !== ws.userId && socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: "voice_ice_candidate", matchId, candidate }));
-          forwardedCount += 1;
-        }
-      });
-      incrementVoiceTelemetryCounter("iceForwarded", forwardedCount);
+      const targetSocket = room.get(targetUserId);
+      if (!targetSocket || targetSocket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      targetSocket.send(JSON.stringify({
+        type: "voice_ice_candidate",
+        matchId,
+        fromUserId: ws.userId,
+        candidate,
+      }));
+
+      incrementVoiceTelemetryCounter("iceForwarded", 1);
 
       logger.debug("[VoiceWS] voice_ice_candidate forwarded", {
         matchId,
         fromUserId: ws.userId,
-        forwardedCount,
+        toUserId: targetUserId,
+        forwardedCount: 1,
       });
     }
   }
@@ -495,7 +566,7 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
       // Notify peer that user left
       room.forEach((socket) => {
         if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ type: "voice_peer_left", matchId }));
+          socket.send(JSON.stringify({ type: "voice_peer_left", matchId, peerUserId: ws.userId }));
         }
       });
 

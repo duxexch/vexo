@@ -33,6 +33,7 @@ import BalootBoard from "@/components/games/BalootBoard";
 import type { BalootState } from "@/components/games/BalootBoard";
 import LanguageDuelBoard from "@/components/games/LanguageDuelBoard";
 import { ProjectCurrencyAmount } from "@/components/ProjectCurrencySymbol";
+import { VoiceChat } from "@/components/games/VoiceChat";
 import { SpectatorPanel } from "@/components/games/SpectatorPanel";
 import { ShareMatchButton } from "@/components/games/ShareMatchButton";
 import { FloatingGiftsOverlay } from "@/components/games/TikTokGiftBar";
@@ -205,6 +206,7 @@ export default function ChallengeWatchPage() {
   const [showGiftPanel, setShowGiftPanel] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [mobileChatInput, setMobileChatInput] = useState("");
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(false);
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [autoPlayNotice, setAutoPlayNotice] = useState<{
@@ -898,6 +900,7 @@ export default function ChallengeWatchPage() {
     [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id]
       .filter((id): id is string => typeof id === "string" && id.length > 0),
   );
+  const isHeadToHeadChallenge = participantIds.size === 2;
 
   const liveChatMessages = messages
     .filter((msg) => String(msg.message || "").trim().length > 0)
@@ -1104,6 +1107,19 @@ export default function ChallengeWatchPage() {
                 <Eye className="h-4 w-4" />
                 <span className="text-sm">{gameSession?.spectatorCount || 0}</span>
               </div>
+
+              {isHeadToHeadChallenge && (
+                <VoiceChat
+                  challengeId={challengeId!}
+                  isEnabled={isVoiceEnabled}
+                  onToggle={() => setIsVoiceEnabled((prev) => !prev)}
+                  isMicMuted={true}
+                  onMicMuteToggle={() => {
+                    // Spectator mode is listen-only.
+                  }}
+                  role="spectator"
+                />
+              )}
             </div>
           </header>
 

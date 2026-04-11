@@ -9,7 +9,7 @@ import { useSettings } from "@/lib/settings";
 import { buildRtcConfiguration } from "@/lib/rtc-config";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { openAppSettings } from "@/lib/startup-permissions";
+import { openAppSettings, openMicrophoneSettings } from "@/lib/startup-permissions";
 import { Capacitor } from "@capacitor/core";
 import { Mic, MicOff, Volume2, VolumeX, Phone, PhoneOff, Loader2 } from "lucide-react";
 
@@ -19,9 +19,23 @@ interface VoiceChatProps {
   onToggle: () => void;
   isMicMuted: boolean;
   onMicMuteToggle: () => void;
+  role?: "player" | "spectator";
 }
 
 type ConnectionState = "disconnected" | "connecting" | "connected" | "error";
+
+type VoicePeerRole = "player" | "spectator";
+
+type VoiceWsMessage = {
+  type: string;
+  error?: string;
+  peers?: Array<{ userId: string; role?: VoicePeerRole }>;
+  peerUserId?: string;
+  fromUserId?: string;
+  offer?: RTCSessionDescriptionInit;
+  answer?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+};
 
 export function VoiceChat({
   challengeId,
@@ -29,6 +43,7 @@ export function VoiceChat({
   onToggle,
   isMicMuted,
   onMicMuteToggle,
+  role = "player",
 }: VoiceChatProps) {
   const { token } = useAuth();
   const { t } = useI18n();
@@ -36,23 +51,25 @@ export function VoiceChat({
   const { settings } = useSettings();
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [isSpeakerMuted, setIsSpeakerMuted] = useState(false);
+  const isSpectatorRole = role === "spectator";
 
   const rtcConfiguration = useMemo(
     () => buildRtcConfiguration(settings?.rtc),
     [settings?.rtc],
   );
 
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const makingOfferPeersRef = useRef<Set<string>>(new Set());
+  const remoteDescriptionPeersRef = useRef<Set<string>>(new Set());
+  const iceCandidateQueueRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteMixStreamRef = useRef<MediaStream>(new MediaStream());
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const joinAckTimerRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const isAuthenticatedRef = useRef(false);
-  const hasRemoteDescriptionRef = useRef(false);
-  const makingOfferRef = useRef(false);
-  const iceCandidateQueueRef = useRef<RTCIceCandidateInit[]>([]);
   const intentionalStopRef = useRef(false);
   const startingRef = useRef(false);
 
@@ -70,6 +87,38 @@ export function VoiceChat({
     }
   }, []);
 
+  const cleanupEndedRemoteTracks = useCallback(() => {
+    const stream = remoteMixStreamRef.current;
+    stream.getTracks().forEach((track) => {
+      if (track.readyState === "ended") {
+        stream.removeTrack(track);
+      }
+    });
+  }, []);
+
+  const closePeerConnection = useCallback((peerUserId: string) => {
+    const pc = peerConnectionsRef.current.get(peerUserId);
+    if (pc) {
+      pc.close();
+      peerConnectionsRef.current.delete(peerUserId);
+    }
+
+    makingOfferPeersRef.current.delete(peerUserId);
+    remoteDescriptionPeersRef.current.delete(peerUserId);
+    iceCandidateQueueRef.current.delete(peerUserId);
+    cleanupEndedRemoteTracks();
+  }, [cleanupEndedRemoteTracks]);
+
+  const closeAllPeerConnections = useCallback(() => {
+    Array.from(peerConnectionsRef.current.keys()).forEach((peerUserId) => {
+      closePeerConnection(peerUserId);
+    });
+    peerConnectionsRef.current.clear();
+    makingOfferPeersRef.current.clear();
+    remoteDescriptionPeersRef.current.clear();
+    iceCandidateQueueRef.current.clear();
+  }, [closePeerConnection]);
+
   const safelySend = useCallback((payload: Record<string, unknown>) => {
     try {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -80,14 +129,15 @@ export function VoiceChat({
     }
   }, []);
 
-  const processQueuedIceCandidates = useCallback(async () => {
-    const pc = peerConnectionRef.current;
-    if (!pc || !hasRemoteDescriptionRef.current) {
+  const processQueuedIceCandidates = useCallback(async (peerUserId: string) => {
+    const pc = peerConnectionsRef.current.get(peerUserId);
+    if (!pc || !remoteDescriptionPeersRef.current.has(peerUserId)) {
       return;
     }
 
-    while (iceCandidateQueueRef.current.length > 0) {
-      const queued = iceCandidateQueueRef.current.shift();
+    const queue = iceCandidateQueueRef.current.get(peerUserId) || [];
+    while (queue.length > 0) {
+      const queued = queue.shift();
       if (!queued) continue;
       try {
         await pc.addIceCandidate(new RTCIceCandidate(queued));
@@ -95,6 +145,8 @@ export function VoiceChat({
         console.error("[VoiceChat] Failed to process queued ICE candidate", error);
       }
     }
+
+    iceCandidateQueueRef.current.set(peerUserId, queue);
   }, []);
 
   const scheduleReconnect = useCallback(() => {
@@ -126,14 +178,14 @@ export function VoiceChat({
         <ToastAction
           altText={openSettingsLabel}
           onClick={() => {
-            void openAppSettings();
+            void openMicrophoneSettings();
           }}
         >
           {openSettingsLabel}
         </ToastAction>
       ),
     });
-  }, [t, toast]);
+  }, [openMicrophoneSettings, t, toast]);
 
   const isPermissionDeniedError = useCallback((error: unknown): boolean => {
     const candidate = error as { name?: string } | null;
@@ -165,7 +217,15 @@ export function VoiceChat({
     }
   }, [isPermissionDeniedError]);
 
-  const setupPeerConnection = useCallback(async (): Promise<RTCPeerConnection | null> => {
+  const ensureLocalStream = useCallback(async (): Promise<MediaStream | null> => {
+    if (isSpectatorRole) {
+      return null;
+    }
+
+    if (localStreamRef.current) {
+      return localStreamRef.current;
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
       showMicPermissionToast();
       setConnectionState("error");
@@ -198,29 +258,62 @@ export function VoiceChat({
     }
 
     localStreamRef.current = stream;
+    return stream;
+  }, [
+    acquireMicrophoneStream,
+    isPermissionDeniedError,
+    isSpectatorRole,
+    openAppSettings,
+    showMicPermissionToast,
+    t,
+    toast,
+  ]);
+
+  const createPeerConnection = useCallback((peerUserId: string): RTCPeerConnection => {
+    const existing = peerConnectionsRef.current.get(peerUserId);
+    if (existing) {
+      return existing;
+    }
 
     const pc = new RTCPeerConnection(rtcConfiguration);
-    peerConnectionRef.current = pc;
+    peerConnectionsRef.current.set(peerUserId, pc);
 
-    stream.getTracks().forEach((track) => {
-      track.enabled = !isMicMuted;
-      pc.addTrack(track, stream);
-    });
+    const localStream = localStreamRef.current;
+    if (localStream) {
+      localStream.getTracks().forEach((track) => {
+        track.enabled = !isMicMuted;
+        pc.addTrack(track, localStream);
+      });
+    } else {
+      pc.addTransceiver("audio", { direction: "recvonly" });
+    }
 
     pc.onicecandidate = (event) => {
       if (event.candidate && isAuthenticatedRef.current) {
         safelySend({
           type: "voice_ice_candidate",
           matchId: challengeId,
+          targetUserId: peerUserId,
           candidate: event.candidate,
         });
       }
     };
 
     pc.ontrack = (event) => {
-      const [remoteStream] = event.streams;
-      if (remoteAudioRef.current && remoteStream) {
-        remoteAudioRef.current.srcObject = remoteStream;
+      event.streams.forEach((stream) => {
+        stream.getAudioTracks().forEach((track) => {
+          const exists = remoteMixStreamRef.current.getAudioTracks().some((existingTrack) => existingTrack.id === track.id);
+          if (!exists) {
+            remoteMixStreamRef.current.addTrack(track);
+            track.onended = () => {
+              cleanupEndedRemoteTracks();
+            };
+          }
+        });
+      });
+
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = remoteMixStreamRef.current;
         void remoteAudioRef.current.play().catch(() => {
           // Autoplay can be blocked on some browsers; user interaction already exists via toggle.
         });
@@ -228,44 +321,46 @@ export function VoiceChat({
     };
 
     pc.onconnectionstatechange = () => {
-      switch (pc.connectionState) {
-        case "connected":
-          reconnectAttemptsRef.current = 0;
-          clearReconnectTimer();
-          setConnectionState("connected");
-          break;
-        case "disconnected":
-        case "failed":
-          if (!intentionalStopRef.current) {
-            toast({
-              variant: "destructive",
-              title: t("challenge.voiceErrorRetry"),
-              description: t("challenge.voiceRtcNetworkHint"),
-            });
-            setConnectionState("error");
-            scheduleReconnect();
-          }
-          break;
-        case "closed":
-          setConnectionState("disconnected");
-          break;
+      if (pc.connectionState === "connected") {
+        reconnectAttemptsRef.current = 0;
+        clearReconnectTimer();
+        setConnectionState("connected");
+      }
+      if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+        closePeerConnection(peerUserId);
       }
     };
 
     return pc;
-  }, [
-    acquireMicrophoneStream,
-    challengeId,
-    clearReconnectTimer,
-    isMicMuted,
-    isPermissionDeniedError,
-    rtcConfiguration,
-    safelySend,
-    scheduleReconnect,
-    showMicPermissionToast,
-    t,
-    toast,
-  ]);
+  }, [challengeId, cleanupEndedRemoteTracks, clearReconnectTimer, closePeerConnection, isMicMuted, rtcConfiguration, safelySend]);
+
+  const initiateOfferToPeer = useCallback(async (peerUserId: string) => {
+    const pc = createPeerConnection(peerUserId);
+    if (makingOfferPeersRef.current.has(peerUserId)) {
+      return;
+    }
+
+    if (pc.signalingState !== "stable") {
+      return;
+    }
+
+    makingOfferPeersRef.current.add(peerUserId);
+    try {
+      const offer = await pc.createOffer({ offerToReceiveAudio: true });
+      if (pc.signalingState !== "stable") {
+        return;
+      }
+      await pc.setLocalDescription(offer);
+      safelySend({
+        type: "voice_offer",
+        matchId: challengeId,
+        targetUserId: peerUserId,
+        offer: pc.localDescription,
+      });
+    } finally {
+      makingOfferPeersRef.current.delete(peerUserId);
+    }
+  }, [challengeId, createPeerConnection, safelySend]);
 
   const stopVoiceChat = useCallback(() => {
     clearReconnectTimer();
@@ -280,23 +375,21 @@ export function VoiceChat({
       wsRef.current = null;
     }
 
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
+    closeAllPeerConnections();
 
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
     }
 
-    iceCandidateQueueRef.current = [];
-    hasRemoteDescriptionRef.current = false;
+    remoteMixStreamRef.current.getTracks().forEach((track) => {
+      remoteMixStreamRef.current.removeTrack(track);
+    });
+
     isAuthenticatedRef.current = false;
-    makingOfferRef.current = false;
     startingRef.current = false;
     setConnectionState("disconnected");
-  }, [challengeId, clearJoinAckTimer, clearReconnectTimer, safelySend]);
+  }, [challengeId, clearJoinAckTimer, clearReconnectTimer, closeAllPeerConnections, safelySend]);
 
   const startVoiceChat = useCallback(async () => {
     if (startingRef.current) {
@@ -316,19 +409,15 @@ export function VoiceChat({
     clearReconnectTimer();
     setConnectionState("connecting");
 
+    const localStream = await ensureLocalStream();
+    if (!isSpectatorRole && !localStream) {
+      startingRef.current = false;
+      return;
+    }
+
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
     wsRef.current = ws;
-
-    const pc = await setupPeerConnection();
-    if (!pc) {
-      startingRef.current = false;
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-        ws.close();
-      }
-      wsRef.current = null;
-      return;
-    }
 
     ws.onopen = () => {
       if (wsRef.current !== ws) return;
@@ -338,15 +427,12 @@ export function VoiceChat({
     ws.onmessage = async (event) => {
       if (wsRef.current !== ws) return;
 
-      let data: any;
+      let data: VoiceWsMessage;
       try {
         data = JSON.parse(event.data);
       } catch {
         return;
       }
-
-      const currentPc = peerConnectionRef.current;
-      if (!currentPc) return;
 
       try {
         switch (data.type) {
@@ -391,36 +477,38 @@ export function VoiceChat({
 
           case "voice_joined":
             clearJoinAckTimer();
-            setConnectionState("connecting");
+            reconnectAttemptsRef.current = 0;
+            setConnectionState("connected");
+
+            for (const peer of data.peers || []) {
+              if (!peer?.userId) {
+                continue;
+              }
+              await initiateOfferToPeer(peer.userId);
+            }
             break;
 
-          case "voice_peer_joined":
-            if (makingOfferRef.current || currentPc.signalingState !== "stable") {
+          case "voice_peer_joined": {
+            const peerUserId = data.peerUserId;
+            if (!peerUserId) {
               break;
             }
 
-            makingOfferRef.current = true;
-            try {
-              const offer = await currentPc.createOffer({ offerToReceiveAudio: true });
-              if (currentPc.signalingState !== "stable") {
-                break;
-              }
-              await currentPc.setLocalDescription(offer);
-              safelySend({
-                type: "voice_offer",
-                matchId: challengeId,
-                offer: currentPc.localDescription,
-              });
-            } finally {
-              makingOfferRef.current = false;
-            }
+            await initiateOfferToPeer(peerUserId);
             break;
+          }
 
           case "voice_offer": {
-            const offerDescription = new RTCSessionDescription(data.offer);
-            const isOfferCollision = makingOfferRef.current || currentPc.signalingState !== "stable";
+            const fromUserId = data.fromUserId;
+            if (!fromUserId || !data.offer) {
+              break;
+            }
 
-            if (isOfferCollision) {
+            const currentPc = createPeerConnection(fromUserId);
+            const offerDescription = new RTCSessionDescription(data.offer);
+            const isOfferCollision = makingOfferPeersRef.current.has(fromUserId) || currentPc.signalingState !== "stable";
+
+            if (isOfferCollision && currentPc.signalingState !== "stable") {
               await Promise.all([
                 currentPc.setLocalDescription({ type: "rollback" }),
                 currentPc.setRemoteDescription(offerDescription),
@@ -429,8 +517,8 @@ export function VoiceChat({
               await currentPc.setRemoteDescription(offerDescription);
             }
 
-            hasRemoteDescriptionRef.current = true;
-            await processQueuedIceCandidates();
+            remoteDescriptionPeersRef.current.add(fromUserId);
+            await processQueuedIceCandidates(fromUserId);
 
             const answer = await currentPc.createAnswer();
             await currentPc.setLocalDescription(answer);
@@ -438,34 +526,53 @@ export function VoiceChat({
             safelySend({
               type: "voice_answer",
               matchId: challengeId,
+              targetUserId: fromUserId,
               answer: currentPc.localDescription,
             });
             break;
           }
 
-          case "voice_answer":
+          case "voice_answer": {
+            const fromUserId = data.fromUserId;
+            if (!fromUserId || !data.answer) {
+              break;
+            }
+
+            const currentPc = peerConnectionsRef.current.get(fromUserId);
+            if (!currentPc) {
+              break;
+            }
+
             await currentPc.setRemoteDescription(new RTCSessionDescription(data.answer));
-            hasRemoteDescriptionRef.current = true;
-            await processQueuedIceCandidates();
+            remoteDescriptionPeersRef.current.add(fromUserId);
+            await processQueuedIceCandidates(fromUserId);
             break;
+          }
 
           case "voice_ice_candidate": {
+            const fromUserId = data.fromUserId;
             const candidateInit = data.candidate as RTCIceCandidateInit;
-            if (!candidateInit) break;
+            if (!fromUserId || !candidateInit) break;
 
-            if (hasRemoteDescriptionRef.current) {
+            const currentPc = peerConnectionsRef.current.get(fromUserId) || createPeerConnection(fromUserId);
+
+            if (remoteDescriptionPeersRef.current.has(fromUserId)) {
               await currentPc.addIceCandidate(new RTCIceCandidate(candidateInit));
             } else {
-              iceCandidateQueueRef.current.push(candidateInit);
+              const queue = iceCandidateQueueRef.current.get(fromUserId) || [];
+              queue.push(candidateInit);
+              iceCandidateQueueRef.current.set(fromUserId, queue);
             }
             break;
           }
 
-          case "voice_peer_left":
-            hasRemoteDescriptionRef.current = false;
-            iceCandidateQueueRef.current = [];
-            setConnectionState("connecting");
+          case "voice_peer_left": {
+            const peerUserId = data.peerUserId;
+            if (peerUserId) {
+              closePeerConnection(peerUserId);
+            }
             break;
+          }
 
           default:
             break;
@@ -494,13 +601,31 @@ export function VoiceChat({
       }
 
       if (!intentionalStopRef.current && isEnabled) {
+        closeAllPeerConnections();
         setConnectionState("connecting");
         scheduleReconnect();
       }
     };
 
     startingRef.current = false;
-  }, [challengeId, clearJoinAckTimer, clearReconnectTimer, isEnabled, processQueuedIceCandidates, safelySend, scheduleReconnect, setupPeerConnection, t, toast, token]);
+  }, [
+    challengeId,
+    clearJoinAckTimer,
+    clearReconnectTimer,
+    closeAllPeerConnections,
+    closePeerConnection,
+    createPeerConnection,
+    ensureLocalStream,
+    initiateOfferToPeer,
+    isEnabled,
+    isSpectatorRole,
+    processQueuedIceCandidates,
+    safelySend,
+    scheduleReconnect,
+    t,
+    toast,
+    token,
+  ]);
 
   useEffect(() => {
     if (isEnabled && connectionState === "disconnected") {
@@ -512,12 +637,12 @@ export function VoiceChat({
   }, [isEnabled, connectionState, startVoiceChat, stopVoiceChat]);
 
   useEffect(() => {
-    if (localStreamRef.current) {
+    if (localStreamRef.current && !isSpectatorRole) {
       localStreamRef.current.getAudioTracks().forEach((track) => {
         track.enabled = !isMicMuted;
       });
     }
-  }, [isMicMuted]);
+  }, [isMicMuted, isSpectatorRole]);
 
   useEffect(() => {
     if (remoteAudioRef.current) {
@@ -568,25 +693,27 @@ export function VoiceChat({
 
       {isEnabled && (
         <>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={isMicMuted ? "destructive" : "ghost"}
-                size="icon"
-                onClick={onMicMuteToggle}
-                data-testid="button-mic-toggle"
-              >
-                {isMicMuted ? (
-                  <MicOff className="h-4 w-4" />
-                ) : (
-                  <Mic className="h-4 w-4" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {isMicMuted ? t("challenge.voiceUnmuteMic") : t("challenge.voiceMuteMic")}
-            </TooltipContent>
-          </Tooltip>
+          {!isSpectatorRole && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={isMicMuted ? "destructive" : "ghost"}
+                  size="icon"
+                  onClick={onMicMuteToggle}
+                  data-testid="button-mic-toggle"
+                >
+                  {isMicMuted ? (
+                    <MicOff className="h-4 w-4" />
+                  ) : (
+                    <Mic className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isMicMuted ? t("challenge.voiceUnmuteMic") : t("challenge.voiceMuteMic")}
+              </TooltipContent>
+            </Tooltip>
+          )}
 
           <Tooltip>
             <TooltipTrigger asChild>

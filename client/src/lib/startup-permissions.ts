@@ -294,6 +294,39 @@ export async function openNotificationSettings(): Promise<void> {
     window.open("https://support.google.com/chrome/answer/3220216", "_blank", "noopener,noreferrer");
 }
 
+export async function openMicrophoneSettings(): Promise<void> {
+    if (Capacitor.isNativePlatform()) {
+        await openAppSettings();
+        return;
+    }
+
+    const userAgent = navigator.userAgent.toLowerCase();
+    const targets: string[] = [];
+
+    if (userAgent.includes("edg/")) {
+        targets.push("edge://settings/content/microphone");
+    }
+    if (userAgent.includes("chrome/")) {
+        targets.push("chrome://settings/content/microphone");
+    }
+    if (userAgent.includes("firefox/")) {
+        targets.push("about:preferences#privacy");
+    }
+
+    for (const url of targets) {
+        try {
+            const opened = window.open(url, "_blank", "noopener,noreferrer");
+            if (opened) {
+                return;
+            }
+        } catch {
+            // Continue to fallback.
+        }
+    }
+
+    window.open("https://support.google.com/chrome/answer/2693767", "_blank", "noopener,noreferrer");
+}
+
 type CollectOptions = {
     requestNotificationPermission?: boolean;
 };

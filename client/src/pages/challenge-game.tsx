@@ -1698,6 +1698,7 @@ export default function ChallengeGamePage() {
                   onToggle={() => setIsVoiceEnabled((prev) => !prev)}
                   isMicMuted={isVoiceMicMuted}
                   onMicMuteToggle={() => setIsVoiceMicMuted((prev) => !prev)}
+                  role="player"
                 />
               )}
             </div>

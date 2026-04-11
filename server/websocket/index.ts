@@ -167,7 +167,7 @@ export function setupWebSocket(server: Server) {
             // Notify remaining peers
             room.forEach((socket) => {
               if (socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ type: "voice_peer_left", matchId }));
+                socket.send(JSON.stringify({ type: "voice_peer_left", matchId, peerUserId: ws.userId }));
               }
             });
             // Clean up empty room
