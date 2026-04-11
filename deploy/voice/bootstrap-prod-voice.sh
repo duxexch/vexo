@@ -279,13 +279,17 @@ restart_stack() {
 
   cd "${REPO_DIR}"
 
+  # Remove stale containers that may exist under a different compose project name.
+  # These stale names block recreation and keep old LIVEKIT_KEYS values active.
+  docker rm -f vex-livekit vex-coturn >/dev/null 2>&1 || true
+
   docker compose --env-file .env up -d app
 
   if [[ -f "deploy/docker-compose.voice.linux-sysctl.yml" ]]; then
-    docker compose -f deploy/docker-compose.voice.yml -f deploy/docker-compose.voice.linux-sysctl.yml --env-file .env up -d livekit coturn || \
-      docker compose -f deploy/docker-compose.voice.yml --env-file .env up -d livekit coturn
+    docker compose -f deploy/docker-compose.voice.yml -f deploy/docker-compose.voice.linux-sysctl.yml --env-file .env up -d --force-recreate --remove-orphans livekit coturn || \
+      docker compose -f deploy/docker-compose.voice.yml --env-file .env up -d --force-recreate --remove-orphans livekit coturn
   else
-    docker compose -f deploy/docker-compose.voice.yml --env-file .env up -d livekit coturn
+    docker compose -f deploy/docker-compose.voice.yml --env-file .env up -d --force-recreate --remove-orphans livekit coturn
   fi
 }
 
