@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -83,7 +84,7 @@ function UserCard({
             {user.username}
           </span>
           <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-mono border-primary/20 text-primary/70" data-testid={`badge-level-${user.id}`}>
-            Lv.{level}
+            {t("friends.level")} {level}
           </Badge>
           {actionType === "friend" && (
             <Badge className="text-[10px] h-5 px-1.5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0" data-testid={`badge-mutual-${user.id}`}>
@@ -470,6 +471,7 @@ function StatsBar({
 export default function FriendsPage() {
   const { user, updateUser } = useAuth();
   const { t, dir } = useI18n();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"friends" | "following" | "followers" | "requests" | "blocked">("friends");
   const [searchFilter, setSearchFilter] = useState<"all" | "friends" | "following" | "followers" | "blocked">("all");
@@ -631,11 +633,11 @@ export default function FriendsPage() {
       case "block": blockMutation.mutate({ userId, action: "block" }); break;
       case "unblock": blockMutation.mutate({ userId, action: "unblock" }); break;
       case "chat":
-        window.location.href = `/chat?user=${userId}`;
+        navigate(`/chat?user=${userId}`);
         setActionLoadingId(null);
         break;
       case "challenge":
-        window.location.href = `/challenges?opponent=${userId}`;
+        navigate(`/challenges?opponent=${userId}`);
         setActionLoadingId(null);
         break;
       default: setActionLoadingId(null);
