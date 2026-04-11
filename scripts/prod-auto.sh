@@ -24,6 +24,7 @@ DOMAIN="vixo.click"
 TRAEFIK_NETWORK_OVERRIDE=""
 PULL_LATEST="false"
 NO_BUILD="false"
+NO_CACHE_BUILD="false"
 SKIP_SYSCTL="false"
 SKIP_VOICE="false"
 
@@ -63,6 +64,7 @@ Options:
   --voice-project <name>      Voice compose project name (default: vex)
   --pull-latest               Pull latest code from origin/main before deploy
   --no-build                  Skip --build for app service
+  --no-cache                 Build app/ai-agent images with --no-cache before deploy
   --skip-sysctl               Skip host sysctl persistence setup
   --skip-voice                Skip voice stack bootstrap (livekit/coturn)
   -h, --help                  Show this help
@@ -110,6 +112,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-build)
       NO_BUILD="true"
+      shift
+      ;;
+    --no-cache)
+      NO_CACHE_BUILD="true"
       shift
       ;;
     --skip-sysctl)
@@ -606,6 +612,10 @@ compose_cmd=(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
 voice_compose_cmd=(docker compose -p "$VOICE_PROJECT_NAME" -f "$VOICE_COMPOSE_FILE" --env-file "$ENV_FILE")
 
 log_info "Starting dependency services"
+if [[ "$NO_CACHE_BUILD" == "true" ]]; then
+  log_info "Building ai-agent image without cache"
+  "${compose_cmd[@]}" build --no-cache ai-agent
+fi
 "${compose_cmd[@]}" up -d db redis minio ai-agent
 
 if ! wait_for_container_health vex-db 180; then
@@ -624,7 +634,13 @@ log_info "Deploying application service"
 if [[ "$NO_BUILD" == "true" ]]; then
   "${compose_cmd[@]}" up -d app
 else
-  "${compose_cmd[@]}" up -d --build app
+  if [[ "$NO_CACHE_BUILD" == "true" ]]; then
+    log_info "Building app image without cache"
+    "${compose_cmd[@]}" build --no-cache app
+    "${compose_cmd[@]}" up -d app
+  else
+    "${compose_cmd[@]}" up -d --build app
+  fi
 fi
 
 if ! wait_for_container_health vex-app 180; then

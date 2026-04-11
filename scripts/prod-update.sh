@@ -25,6 +25,7 @@ Options:
   --no-backup          Skip pre-update DB backup
   --env-file <path>    Override env file used for backup and deployment
   --compose-file <path>Override compose file used for backup and deployment
+  --no-cache           Build app/ai-agent images with no Docker cache
   -h, --help           Show this help
 
 Any additional options are forwarded to ./scripts/prod-auto.sh.
