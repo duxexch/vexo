@@ -39,7 +39,7 @@ export const apiRateLimiter = rateLimit({
   message: { error: "Too many requests, please slow down" },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === "/api/health" || req.path === "/api/health/detailed",
+  skip: (req) => req.path === "/api/health" || req.path === "/api/health/kpi" || req.path === "/api/health/detailed",
 });
 
 // Aggressive rate limiter for suspected attacks (DDoS protection)

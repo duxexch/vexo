@@ -31,6 +31,7 @@
     "quality:perf:domino-load": "tsx scripts/smoke-domino-load-latency.ts --profile=load",
     "quality:perf:domino": "tsx scripts/smoke-domino-load-latency.ts --profile=all",
     "quality:perf:voice-signaling": "node scripts/smoke-voice-signaling-load.mjs",
+    "quality:perf:voice-signaling:ci": "node scripts/smoke-voice-signaling-load.mjs --artifact-file=output/ci-artifacts/voice-signaling-load.json",
     "quality:gate:phase-e": "npm run quality:smoke:challenge-gameplay-regression && npm run quality:perf:domino",
     "security:smoke:domino-adapter-contract": "tsx scripts/smoke-domino-challenge-adapter-contract.ts",
     "security:smoke:ws-heartbeat": "node scripts/smoke-ws-heartbeat.mjs",

@@ -1,10 +1,20 @@
 #!/usr/bin/env node
 
 import fs from "node:fs/promises";
+import path from "node:path";
 import { WebSocket } from "ws";
 
 const SMOKE_USER_AGENT = "smoke-voice-signaling-load/1.0";
 const DEFAULT_TIMEOUT_MS = 9000;
+
+class SmokeFailure extends Error {
+    constructor(message, details) {
+        super(details !== undefined ? `${message}: ${details}` : message);
+        this.name = "SmokeFailure";
+        this.summaryMessage = message;
+        this.details = details;
+    }
+}
 
 function parseArgs(argv) {
     const options = {
@@ -14,6 +24,7 @@ function parseArgs(argv) {
         timeoutMs: Number.parseInt(process.env.VOICE_LOAD_TIMEOUT_MS || "", 10) || DEFAULT_TIMEOUT_MS,
         icePerRound: Number.parseInt(process.env.VOICE_LOAD_ICE_PER_ROUND || "", 10) || 6,
         parallel: Number.parseInt(process.env.VOICE_LOAD_PARALLEL || "", 10) || 2,
+        artifactFile: process.env.VOICE_LOAD_ARTIFACT_FILE || (process.env.CI ? "output/ci-artifacts/voice-signaling-load.json" : ""),
     };
 
     for (let i = 2; i < argv.length; i += 1) {
@@ -39,6 +50,7 @@ function parseArgs(argv) {
             const parsed = Number.parseInt(rawValue, 10);
             if (Number.isFinite(parsed) && parsed > 0) options.parallel = parsed;
         }
+        if (key === "--artifact-file") options.artifactFile = rawValue;
     }
 
     options.baseUrl = options.baseUrl.replace(/\/+$/, "");
@@ -46,12 +58,7 @@ function parseArgs(argv) {
 }
 
 function fail(message, details) {
-    if (details !== undefined) {
-        console.error("[smoke:voice-signaling-load]", message, details);
-    } else {
-        console.error("[smoke:voice-signaling-load]", message);
-    }
-    process.exit(1);
+    throw new SmokeFailure(message, details);
 }
 
 function toWebSocketUrl(baseUrl) {
@@ -66,6 +73,48 @@ function percentile(values, p) {
     const sorted = [...values].sort((a, b) => a - b);
     const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
     return sorted[idx];
+}
+
+async function writeArtifact(filePath, report) {
+    const outputPath = path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath);
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    return outputPath;
+}
+
+function toErrorMessage(error) {
+    return error instanceof Error ? error.message : String(error);
+}
+
+function buildFailedEarlyReport(options, startedAtIso, error) {
+    return {
+        tool: "smoke-voice-signaling-load",
+        version: 1,
+        startedAt: startedAtIso,
+        finishedAt: new Date().toISOString(),
+        baseUrl: options.baseUrl,
+        options: {
+            rounds: options.rounds,
+            timeoutMs: options.timeoutMs,
+            icePerRound: options.icePerRound,
+            parallel: options.parallel,
+            scenarios: 0,
+            scenariosFile: options.scenariosFile || null,
+        },
+        summary: {
+            durationMs: Math.max(0, Date.now() - Date.parse(startedAtIso)),
+            scenarios: 0,
+            totalAttempted: 0,
+            totalPassed: 0,
+            totalFailed: 0,
+            passRate: 0,
+            p95OfferMs: 0,
+            p95AnswerMs: 0,
+            p95ReconnectMs: 0,
+        },
+        scenarios: [],
+        fatalError: toErrorMessage(error),
+    };
 }
 
 function expandWsMessages(raw) {
@@ -488,8 +537,7 @@ async function runWithConcurrency(items, parallel, worker) {
     return results;
 }
 
-async function main() {
-    const options = parseArgs(process.argv);
+async function main(options, startedAtIso) {
     const scenarios = await loadScenarios(options.scenariosFile);
 
     const health = await fetch(`${options.baseUrl}/`);
@@ -549,13 +597,68 @@ async function main() {
         p95ReconnectMs: percentile(reconnectLatencies, 95),
     };
 
+    const report = {
+        tool: "smoke-voice-signaling-load",
+        version: 1,
+        startedAt: startedAtIso,
+        finishedAt: new Date().toISOString(),
+        baseUrl: options.baseUrl,
+        options: {
+            rounds: options.rounds,
+            timeoutMs: options.timeoutMs,
+            icePerRound: options.icePerRound,
+            parallel: options.parallel,
+            scenarios: scenarios.length,
+        },
+        summary,
+        scenarios: scenarioResults.map((result) => ({
+            name: result.name,
+            attemptedRounds: result.attemptedRounds,
+            passedRounds: result.passedRounds,
+            failedRounds: result.failedRounds,
+            passRate: result.attemptedRounds > 0 ? Number(((result.passedRounds / result.attemptedRounds) * 100).toFixed(2)) : 0,
+            p95OfferMs: percentile(result.offerLatencies, 95),
+            p95AnswerMs: percentile(result.answerLatencies, 95),
+            p95ReconnectMs: percentile(result.reconnectLatencies, 95),
+            offerLatenciesMs: result.offerLatencies,
+            answerLatenciesMs: result.answerLatencies,
+            reconnectLatenciesMs: result.reconnectLatencies,
+            errors: result.errors,
+        })),
+    };
+
     console.log("[smoke:voice-signaling-load] Summary", summary);
+
+    if (options.artifactFile) {
+        const writtenPath = await writeArtifact(options.artifactFile, report);
+        console.log("[smoke:voice-signaling-load] Wrote artifact", {
+            path: writtenPath,
+            totalAttempted: summary.totalAttempted,
+            totalFailed: summary.totalFailed,
+        });
+    }
 
     if (totalPassed !== totalAttempted) {
         process.exit(1);
     }
 }
 
-main().catch((error) => {
-    fail("Unexpected error", error instanceof Error ? error.message : String(error));
+const options = parseArgs(process.argv);
+const startedAtIso = new Date().toISOString();
+
+main(options, startedAtIso).catch(async (error) => {
+    const message = toErrorMessage(error);
+    console.error("[smoke:voice-signaling-load]", "Unexpected error", message);
+
+    if (options.artifactFile) {
+        try {
+            const report = buildFailedEarlyReport(options, startedAtIso, error);
+            const writtenPath = await writeArtifact(options.artifactFile, report);
+            console.error("[smoke:voice-signaling-load]", "Wrote early-failure artifact", { path: writtenPath });
+        } catch (artifactError) {
+            console.error("[smoke:voice-signaling-load]", "Failed to write early-failure artifact", toErrorMessage(artifactError));
+        }
+    }
+
+    process.exit(1);
 });

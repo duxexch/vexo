@@ -8,6 +8,8 @@ import { redisHealthCheck } from "../lib/redis";
 import { minioHealthCheck } from "../lib/minio-client";
 import { adminTokenMiddleware } from "./middleware";
 import { getErrorMessage } from "./helpers";
+import { clients } from "../websocket/shared";
+import { getVoiceTelemetrySnapshot } from "../websocket/voice";
 
 const PROCESS_BOOT_AT = new Date().toISOString();
 
@@ -67,6 +69,81 @@ function readReleaseInfo(req: Request): ReleaseInfo {
   };
 }
 
+function getTotalWsConnections(): number {
+  let total = 0;
+  clients.forEach((sockets) => {
+    total += sockets.size;
+  });
+  return total;
+}
+
+async function buildMonitoringKpi(req: Request): Promise<{
+  status: "healthy" | "degraded" | "unhealthy";
+  timestamp: string;
+  release: ReleaseInfo;
+  kpi: {
+    uptimeSeconds: number;
+    databaseLatencyMs: number | null;
+    redisConnected: boolean;
+    minioConnected: boolean;
+    connectedUsers: number;
+    totalWsConnections: number;
+    activeVoiceRooms: number;
+    voiceJoinAcceptanceRate: number;
+    voiceRejectedEvents: number;
+    voiceForwardedEvents: number;
+    processRssMb: number;
+  };
+}> {
+  const dbStart = Date.now();
+  let databaseLatencyMs: number | null = null;
+  let databaseHealthy = false;
+
+  try {
+    await db.execute(sql`SELECT 1`);
+    databaseLatencyMs = Date.now() - dbStart;
+    databaseHealthy = true;
+  } catch {
+    databaseHealthy = false;
+  }
+
+  const [redisHealth, minioHealth] = await Promise.all([
+    redisHealthCheck().catch(() => false),
+    minioHealthCheck().catch(() => false),
+  ]);
+  const redisConnected = typeof redisHealth === "boolean" ? redisHealth : redisHealth.status === "connected";
+  const minioConnected = typeof minioHealth === "boolean" ? minioHealth : minioHealth.status === "connected";
+
+  const voiceTelemetry = getVoiceTelemetrySnapshot();
+  const memoryUsage = process.memoryUsage();
+
+  let status: "healthy" | "degraded" | "unhealthy" = "healthy";
+  if (!databaseHealthy) {
+    status = "unhealthy";
+  } else if (!redisConnected || !minioConnected) {
+    status = "degraded";
+  }
+
+  return {
+    status,
+    timestamp: new Date().toISOString(),
+    release: readReleaseInfo(req),
+    kpi: {
+      uptimeSeconds: Math.round(process.uptime()),
+      databaseLatencyMs,
+      redisConnected,
+      minioConnected,
+      connectedUsers: clients.size,
+      totalWsConnections: getTotalWsConnections(),
+      activeVoiceRooms: voiceTelemetry.activeRooms,
+      voiceJoinAcceptanceRate: voiceTelemetry.rates.joinAcceptanceRate,
+      voiceRejectedEvents: voiceTelemetry.totals.rejected,
+      voiceForwardedEvents: voiceTelemetry.totals.forwarded,
+      processRssMb: Math.round(memoryUsage.rss / 1024 / 1024),
+    },
+  };
+}
+
 export function registerHealthRoutes(app: Express): void {
   app.get("/api/release", (req: Request, res: Response) => {
     res.json({
@@ -108,6 +185,30 @@ export function registerHealthRoutes(app: Express): void {
           error: getErrorMessage(error),
         },
       });
+    }
+  });
+
+  app.get("/api/health/kpi", async (req: Request, res: Response) => {
+    try {
+      const payload = await buildMonitoringKpi(req);
+      const statusCode = payload.status === "unhealthy" ? 503 : 200;
+      res.status(statusCode).json(payload);
+    } catch (error: unknown) {
+      res.status(503).json({
+        status: "unhealthy",
+        timestamp: new Date().toISOString(),
+        error: getErrorMessage(error),
+      });
+    }
+  });
+
+  app.get("/api/admin/health/kpi", adminTokenMiddleware, async (req: Request, res: Response) => {
+    try {
+      const payload = await buildMonitoringKpi(req);
+      const statusCode = payload.status === "unhealthy" ? 503 : 200;
+      res.status(statusCode).json(payload);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
     }
   });
 
