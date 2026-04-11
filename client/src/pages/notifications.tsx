@@ -82,7 +82,7 @@ const priorityColors: Record<string, string> = {
 
 export default function NotificationsPage() {
   const { token } = useAuth();
-  const { language, dir } = useI18n();
+  const { language, dir, t } = useI18n();
   const [, navigate] = useLocation();
   const [typeFilter, setTypeFilter] = useState("all");
   const [readFilter, setReadFilter] = useState("all");
@@ -172,9 +172,9 @@ export default function NotificationsPage() {
   });
   const olderItems = filtered.filter((n) => new Date(n.createdAt) < yesterday);
 
-  if (todayItems.length > 0) groups.push({ label: isAr ? "اليوم" : "Today", items: todayItems });
-  if (yesterdayItems.length > 0) groups.push({ label: isAr ? "أمس" : "Yesterday", items: yesterdayItems });
-  if (olderItems.length > 0) groups.push({ label: isAr ? "أقدم" : "Older", items: olderItems });
+  if (todayItems.length > 0) groups.push({ label: t('notifications.today'), items: todayItems });
+  if (yesterdayItems.length > 0) groups.push({ label: t('notifications.yesterday'), items: yesterdayItems });
+  if (olderItems.length > 0) groups.push({ label: t('notifications.older'), items: olderItems });
 
   if (isLoading) {
     return (
@@ -192,16 +192,12 @@ export default function NotificationsPage() {
           <BellRing className="h-6 w-6 text-primary" />
           <div>
             <h1 className="text-xl sm:text-2xl font-bold">
-              {isAr ? "الإشعارات" : "Notifications"}
+              {t('notifications.title')}
             </h1>
             <p className="text-sm text-muted-foreground">
               {unreadCount > 0
-                ? isAr
-                  ? `${unreadCount} غير مقروءة`
-                  : `${unreadCount} unread`
-                : isAr
-                  ? "لا توجد إشعارات جديدة"
-                  : "No new notifications"}
+                ? `${unreadCount} ${t('notifications.unreadCountSuffix')}`
+                : t('notifications.noNew')}
             </p>
           </div>
         </div>
@@ -214,7 +210,7 @@ export default function NotificationsPage() {
               disabled={markAllAsReadMutation.isPending}
             >
               <CheckCheck className="h-4 w-4 me-2" />
-              {isAr ? "قراءة الكل" : "Mark All Read"}
+              {t('notifications.markAllRead')}
             </Button>
           )}
         </div>
@@ -225,7 +221,7 @@ export default function NotificationsPage() {
         <div className="relative flex-1 min-w-[160px] max-w-[280px]">
           <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
-            placeholder={isAr ? "بحث في الإشعارات..." : "Search notifications..."}
+            placeholder={t('notifications.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="h-8 text-xs ps-8"
@@ -234,10 +230,10 @@ export default function NotificationsPage() {
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="w-[140px] h-8 text-xs">
             <Filter className="h-3 w-3 me-1" />
-            <SelectValue placeholder={isAr ? "النوع" : "Type"} />
+            <SelectValue placeholder={t('notifications.type')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{isAr ? "كل الأنواع" : "All Types"}</SelectItem>
+            <SelectItem value="all">{t('notifications.allTypes')}</SelectItem>
             {Object.entries(typeLabels).map(([key, labels]) => (
               <SelectItem key={key} value={key}>
                 {isAr ? labels.ar : labels.en}
@@ -247,12 +243,12 @@ export default function NotificationsPage() {
         </Select>
         <Select value={readFilter} onValueChange={setReadFilter}>
           <SelectTrigger className="w-[130px] h-8 text-xs">
-            <SelectValue placeholder={isAr ? "الحالة" : "Status"} />
+            <SelectValue placeholder={t('notifications.status')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{isAr ? "الكل" : "All"}</SelectItem>
-            <SelectItem value="unread">{isAr ? "غير مقروءة" : "Unread"}</SelectItem>
-            <SelectItem value="read">{isAr ? "مقروءة" : "Read"}</SelectItem>
+            <SelectItem value="all">{t('notifications.all')}</SelectItem>
+            <SelectItem value="unread">{t('notifications.unread')}</SelectItem>
+            <SelectItem value="read">{t('notifications.read')}</SelectItem>
           </SelectContent>
         </Select>
         {(typeFilter !== "all" || readFilter !== "all" || searchQuery.trim()) && (
@@ -262,7 +258,7 @@ export default function NotificationsPage() {
             className="h-8 text-xs"
             onClick={() => { setTypeFilter("all"); setReadFilter("all"); setSearchQuery(""); }}
           >
-            {isAr ? "مسح الفلاتر" : "Clear Filters"}
+            {t('notifications.clearFilters')}
           </Button>
         )}
       </div>
@@ -273,10 +269,10 @@ export default function NotificationsPage() {
           <CardContent className="p-8 text-center text-muted-foreground">
             <Inbox className="h-12 w-12 mx-auto mb-3 opacity-30" />
             <p className="font-medium">
-              {isAr ? "لا توجد إشعارات" : "No notifications"}
+              {t('notifications.empty')}
             </p>
             <p className="text-sm mt-1">
-              {isAr ? "ستظهر إشعاراتك هنا" : "Your notifications will appear here"}
+              {t('notifications.emptyHint')}
             </p>
           </CardContent>
         </Card>
@@ -338,12 +334,12 @@ export default function NotificationsPage() {
                               </span>
                               {notification.priority === "urgent" && (
                                 <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                                  {isAr ? "عاجل" : "Urgent"}
+                                  {t('notifications.urgent')}
                                 </Badge>
                               )}
                               {notification.priority === "high" && (
                                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-orange-500 border-orange-500/30">
-                                  {isAr ? "مهم" : "Important"}
+                                  {t('notifications.important')}
                                 </Badge>
                               )}
                             </div>
@@ -367,7 +363,7 @@ export default function NotificationsPage() {
                 disabled={isFetching}
               >
                 {isFetching && <Loader2 className="h-4 w-4 me-2 animate-spin" />}
-                {isAr ? "تحميل المزيد" : "Load More"}
+                {t('notifications.loadMore')}
               </Button>
             </div>
           )}
