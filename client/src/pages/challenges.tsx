@@ -251,7 +251,7 @@ export default function ChallengesPage() {
   useEffect(() => {
     if (!showCreateDialog || user) return;
     setShowCreateDialog(false);
-    setLocation('/auth');
+    setLocation('/');
   }, [showCreateDialog, user, setLocation]);
 
   useEffect(() => {
@@ -402,7 +402,7 @@ export default function ChallengesPage() {
 
   function parseApiErrorMessage(message: string): string {
     const raw = String(message || '').trim();
-    if (!raw) return language === 'ar' ? 'حدث خطأ غير متوقع' : 'Unexpected error occurred';
+    if (!raw) return t('challenges.unexpectedError');
 
     const jsonStartIndex = raw.indexOf('{');
     if (jsonStartIndex >= 0) {
@@ -588,8 +588,8 @@ export default function ChallengesPage() {
       toast({
         title: t('common.success'),
         description: payload?.status === 'pending'
-          ? (language === 'ar' ? 'تم إرسال طلب التحويل للمراجعة' : 'Conversion request submitted for review')
-          : (language === 'ar' ? 'تم التحويل بنجاح' : 'Converted successfully'),
+          ? t('challenges.conversionPending')
+          : t('challenges.conversionSuccess'),
       });
     },
     onError: (err: Error) => {
@@ -616,7 +616,7 @@ export default function ChallengesPage() {
 
   const handleOpenCreateDialog = () => {
     if (!user) {
-      setLocation('/auth');
+      setLocation('/');
       return;
     }
 
@@ -638,7 +638,7 @@ export default function ChallengesPage() {
   const handleCreateChallenge = () => {
     if (!user) {
       setShowCreateDialog(false);
-      setLocation('/auth');
+      setLocation('/');
       return;
     }
 
@@ -898,7 +898,7 @@ export default function ChallengesPage() {
           <div className="relative flex-1">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder={language === 'ar' ? 'بحث عن لعبة أو لاعب...' : 'Search game or player...'}
+              placeholder={t('challenges.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="ps-9 pe-9 h-10 bg-card border-border"
@@ -961,7 +961,7 @@ export default function ChallengesPage() {
               onClick={() => setGameFilter([])}
               data-testid="button-clear-all-filters"
             >
-              {language === 'ar' ? 'مسح الكل' : 'Clear all'}
+              {t('challenges.clearFilter')}
             </Button>
           </div>
         )}
@@ -973,7 +973,7 @@ export default function ChallengesPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Filter className="h-5 w-5" />
-              {language === 'ar' ? 'تصفية حسب اللعبة' : 'Filter by Game'}
+              {t('challenges.filterByGame')}
             </DialogTitle>
           </DialogHeader>
           <div className="py-2">
@@ -985,7 +985,7 @@ export default function ChallengesPage() {
               </span>
               {pendingGameFilter.length > 0 && (
                 <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleClearFilter}>
-                  {language === 'ar' ? 'مسح الكل' : 'Clear all'}
+                  {t('challenges.clearFilter')}
                 </Button>
               )}
             </div>
@@ -1015,11 +1015,11 @@ export default function ChallengesPage() {
           </div>
           <DialogFooter className="flex gap-2 sm:gap-2">
             <Button variant="outline" className="flex-1" onClick={handleCancelFilter}>
-              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+              {t('common.cancel')}
             </Button>
             <Button className="flex-1" onClick={handleConfirmFilter}>
               <Check className="h-4 w-4 me-2" />
-              {language === 'ar' ? 'تأكيد' : 'Confirm'}
+              {t('common.confirm')}
               {pendingGameFilter.length > 0 && ` (${pendingGameFilter.length})`}
             </Button>
           </DialogFooter>

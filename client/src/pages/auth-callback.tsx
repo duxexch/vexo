@@ -162,7 +162,7 @@ export default function AuthCallbackPage() {
         if (completePopupFlow()) {
           return;
         }
-        setLocation(`/login?error=${encodeURIComponent(callbackError)}`);
+        setLocation(`/?error=${encodeURIComponent(callbackError)}`);
         return;
       }
 
@@ -229,7 +229,7 @@ export default function AuthCallbackPage() {
             if (completePopupFlow()) {
               return;
             }
-            setLocation("/login?error=oauth_exchange_failed");
+            setLocation("/?error=oauth_exchange_failed");
             return;
           }
 
@@ -241,7 +241,7 @@ export default function AuthCallbackPage() {
             if (completePopupFlow()) {
               return;
             }
-            setLocation("/login?error=no_token");
+            setLocation("/?error=no_token");
             return;
           }
 
@@ -268,7 +268,7 @@ export default function AuthCallbackPage() {
           if (completePopupFlow()) {
             return;
           }
-          setLocation("/login?error=oauth_exchange_failed");
+          setLocation("/?error=oauth_exchange_failed");
           return;
         }
       }
@@ -295,7 +295,7 @@ export default function AuthCallbackPage() {
       if (completePopupFlow()) {
         return;
       }
-      setLocation("/login?error=no_token");
+      setLocation("/?error=no_token");
     };
 
     void run();

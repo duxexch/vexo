@@ -68,7 +68,7 @@ const AUTO_CREATE_ATTEMPTS_STORAGE_KEY = "vex_auto_create_attempts_v1";
 const AUTO_CREATE_CLIENT_ID_STORAGE_KEY = "vex_auto_create_client_id_v1";
 
 export default function LoginPage() {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const {
     login,
     loginByAccount,
@@ -274,10 +274,8 @@ export default function LoginPage() {
     socialLoginUnlockTimeoutRef.current = window.setTimeout(() => {
       clearSocialLoginLock();
       toast({
-        title: t('auth.error') || 'Error',
-        description: dir === "rtl"
-          ? "انتهت محاولة تسجيل الدخول. حاول مرة أخرى."
-          : "Login attempt timed out. Please try again.",
+        title: t('common.error'),
+        description: t('auth.loginTimeout'),
         variant: 'destructive',
       });
     }, 90_000);
@@ -568,8 +566,8 @@ export default function LoginPage() {
 
         clearSocialLoginLock();
         toast({
-          title: t('auth.error') || 'Error',
-          description: payload.reason || 'Social login failed',
+          title: t('common.error'),
+          description: payload.reason || t('auth.socialLoginFailed'),
           variant: 'destructive',
         });
       }
@@ -615,7 +613,7 @@ export default function LoginPage() {
         socialPopupWatcherRef.current = null;
       }
     };
-  }, [dir, location, refreshUser, setLocation, t, toast]);
+  }, [refreshUser, setLocation, t, toast]);
 
   useEffect(() => {
     try {
@@ -681,10 +679,8 @@ export default function LoginPage() {
   const checkTermsAgreed = () => {
     if (!agreedToTerms) {
       toast({
-        title: dir === "rtl" ? "مطلوب" : "Required",
-        description: dir === "rtl"
-          ? "يجب الموافقة على الشروط والأحكام وسياسة الخصوصية أولاً"
-          : "You must agree to the Terms & Conditions and Privacy Policy first",
+        title: t('auth.termsRequiredTitle'),
+        description: t('auth.termsRequiredDescription'),
         variant: "destructive"
       });
       return false;
@@ -889,7 +885,7 @@ export default function LoginPage() {
       // Phone tab: validate phone number format (digits with optional + prefix, min 7 chars)
       const phoneClean = phoneLoginForm.phone.trim();
       if (!/^\+?[0-9]{7,15}$/.test(phoneClean)) {
-        toast({ title: t('common.error'), description: "الرجاء إدخال رقم هاتف صحيح (أرقام فقط، 7-15 خانة)", variant: "destructive" });
+        toast({ title: t('common.error'), description: t('auth.phoneInvalidFormat'), variant: "destructive" });
         setIsLoading(false);
         return;
       }
@@ -927,7 +923,7 @@ export default function LoginPage() {
     try {
       // Email tab: only accept email format with @
       if (!emailLoginForm.username.includes("@")) {
-        toast({ title: t('common.error'), description: "الرجاء إدخال بريد إلكتروني صحيح يحتوي على @", variant: "destructive" });
+        toast({ title: t('common.error'), description: t('auth.emailInvalidFormat'), variant: "destructive" });
         setIsLoading(false);
         return;
       }
@@ -1045,12 +1041,13 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      const tokenFromResponse = typeof data.token === "string" ? data.token : "";
+      const tokenFromResponse = typeof data.token === "string" ? data.token.trim() : "";
       const deliveryMasked = data?.delivery && typeof data.delivery === "object" && typeof data.delivery.masked === "string"
         ? data.delivery.masked
         : "";
+      const shouldPrefillResetToken = import.meta.env.DEV && tokenFromResponse.length > 0;
 
-      setResetToken(tokenFromResponse);
+      setResetToken(shouldPrefillResetToken ? tokenFromResponse : "");
       setForgotPasswordStep("reset");
       toast({
         title: t('common.success'),
@@ -1101,8 +1098,13 @@ export default function LoginPage() {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  const buildCredentialsShareText = () => t('auth.credentialsShareBody', {
+    accountId: generatedCredentials?.accountId ?? "",
+    password: generatedCredentials?.password ?? "",
+  });
+
   const copyAllCredentials = () => {
-    const text = `VEX Account Credentials\n\nAccount ID: ${generatedCredentials?.accountId}\nPassword: ${generatedCredentials?.password}\n\nKeep these safe!`;
+    const text = buildCredentialsShareText();
     navigator.clipboard.writeText(text);
     setCopiedField("all");
     toast({ title: t('auth.copied'), description: t('auth.allCopied') });
@@ -1110,12 +1112,12 @@ export default function LoginPage() {
   };
 
   const shareCredentials = async () => {
-    const text = `VEX Account Credentials\n\nAccount ID: ${generatedCredentials?.accountId}\nPassword: ${generatedCredentials?.password}\n\nKeep these safe!`;
+    const text = buildCredentialsShareText();
 
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'VEX Account Credentials',
+          title: t('auth.credentialsShareTitle'),
           text: text,
         });
       } catch (err) {
@@ -1199,7 +1201,10 @@ export default function LoginPage() {
 
   return (
     <main id="main-content" className="min-h-screen flex items-center justify-center bg-background p-4 relative" dir={dir}>
-      <div className="absolute top-4 start-4 end-4 flex items-center justify-between z-50">
+      <div
+        className="absolute start-4 end-4 flex items-center justify-between z-50"
+        style={{ top: "calc(env(safe-area-inset-top, 0px) + 0.75rem)" }}
+      >
         <div className="flex items-center gap-2">
           <SupportChatIcon />
           <LanguageSwitcher />
@@ -1453,29 +1458,16 @@ export default function LoginPage() {
                     htmlFor="terms-agreement"
                     className="text-xs text-muted-foreground leading-relaxed cursor-pointer select-none"
                   >
-                    {dir === "rtl" ? (
-                      <>
-                        أوافق على{" "}
-                        <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
-                          الشروط والأحكام
-                        </a>
-                        {" "}و{" "}
-                        <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
-                          سياسة الخصوصية
-                        </a>
-                      </>
-                    ) : (
-                      <>
-                        I agree to the{" "}
-                        <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
-                          Terms & Conditions
-                        </a>
-                        {" "}and{" "}
-                        <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
-                          Privacy Policy
-                        </a>
-                      </>
-                    )}
+                    <>
+                      {t('auth.termsAgreementPrefix')} {" "}
+                      <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                        {t('auth.termsConditions')}
+                      </a>
+                      {" "}{t('common.and')} {" "}
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                        {t('auth.privacyPolicy')}
+                      </a>
+                    </>
                   </label>
                 </div>
               </div>
@@ -1596,7 +1588,7 @@ export default function LoginPage() {
                   size="icon"
                   onClick={() => {
                     const text = encodeURIComponent(`VEX Account\nAccount ID: ${generatedCredentials?.accountId}\nPassword: ${generatedCredentials?.password}`);
-                    window.open(`mailto:?subject=VEX Account Credentials&body=${text}`, '_blank');
+                    window.open(`mailto:?subject=${encodeURIComponent(t('auth.credentialsShareMailSubject'))}&body=${text}`, '_blank');
                   }}
                   data-testid="button-share-email"
                   className="bg-muted hover:bg-muted/80"
@@ -1849,7 +1841,7 @@ export default function LoginPage() {
                 disabled={isLoading}
                 data-testid="button-cancel-create"
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 onClick={handleCreateAccount}

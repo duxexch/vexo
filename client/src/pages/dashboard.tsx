@@ -4,8 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
-import { 
-  Users, Gamepad2, DollarSign, AlertTriangle, 
+import {
+  Users, Gamepad2, DollarSign, AlertTriangle,
   TrendingUp, TrendingDown, Activity, Clock,
   Wallet, Eye, EyeOff, ArrowUpRight, ArrowDownRight, Trophy, Gift,
   Flame, Target, Swords, Crown, Star, ChevronRight
@@ -31,13 +31,24 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
   const { t, language } = useI18n();
   const headers = useAuthHeaders();
   const [isBalanceHidden, setIsBalanceHidden] = useState(() => {
-    return localStorage.getItem('hideBalance') === 'true';
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem('hideBalance') === 'true';
+    } catch {
+      return false;
+    }
   });
 
   const toggleBalanceVisibility = () => {
     const newValue = !isBalanceHidden;
     setIsBalanceHidden(newValue);
-    localStorage.setItem('hideBalance', String(newValue));
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem('hideBalance', String(newValue));
+      } catch {
+        // Ignore storage write failures (e.g. private mode restrictions)
+      }
+    }
   };
 
   // Fetch platform stats (online players, active games)
@@ -85,6 +96,23 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
   const currentStreak = gameStats?.currentWinStreak ?? Number(user?.currentWinStreak ?? 0);
   const bestStreak = gameStats?.longestWinStreak ?? Number(user?.longestWinStreak ?? 0);
   const activeChallengesCount = Array.isArray(challenges) ? challenges.length : 0;
+  const locale = language === "ar" ? "ar" : "en";
+  const userCurrency = typeof user?.balanceCurrency === "string" && user.balanceCurrency.trim().length > 0
+    ? user.balanceCurrency.trim().toUpperCase()
+    : "USD";
+
+  const formatCurrency = (amount: number) => {
+    try {
+      return new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: userCurrency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount);
+    } catch {
+      return `${userCurrency} ${amount.toFixed(2)}`;
+    }
+  };
 
   const quickActions = [
     { title: t('nav.wallet'), url: "/wallet", icon: Wallet, color: "bg-primary/10 text-primary" },
@@ -92,10 +120,8 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
     { title: t('nav.challenges'), url: "/challenges", icon: Trophy, color: "bg-orange-500/10 text-orange-500" },
     { title: t('nav.tournaments'), url: "/tournaments", icon: Crown, color: "bg-amber-500/10 text-amber-500" },
     { title: t('nav.free'), url: "/free", icon: Gift, color: "bg-purple-500/10 text-purple-500" },
-    { title: language === 'ar' ? '🎮 الألعاب' : '🎮 Games', url: "/games", icon: Gamepad2, color: "bg-indigo-500/10 text-indigo-500" },
+    { title: t('nav.games'), url: "/games", icon: Gamepad2, color: "bg-indigo-500/10 text-indigo-500" },
   ];
-
-  const isAr = language === 'ar';
 
   const welcomeName = String(user?.nickname || user?.username || '');
 
@@ -107,25 +133,21 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>
-              {isAr 
-                ? `${platformStats.onlinePlayers} لاعب متصل` 
-                : `${platformStats.onlinePlayers} online`}
+              {platformStats.onlinePlayers} {t('dashboard.onlinePlayers')}
             </span>
           </div>
           {platformStats.activeGames > 0 && (
             <div className="flex items-center gap-1.5">
               <Activity className="h-3 w-3" />
               <span>
-                {isAr 
-                  ? `${platformStats.activeGames} مباراة جارية`
-                  : `${platformStats.activeGames} active game${platformStats.activeGames !== 1 ? 's' : ''}`}
+                {platformStats.activeGames} {t('dashboard.activeGames')}
               </span>
             </div>
           )}
         </div>
       )}
       <h1 className="text-xl sm:text-2xl font-bold">{t('dashboard.welcome')}, {welcomeName}</h1>
-      
+
       {/* Balance & Account Summary */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2 text-xs">
@@ -134,7 +156,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
             variant="ghost"
             size="icon"
             onClick={toggleBalanceVisibility}
-            aria-label={isBalanceHidden ? "Show balance" : "Hide balance"}
+            aria-label={isBalanceHidden ? t('dashboard.showBalance') : t('dashboard.hideBalance')}
             data-testid="button-toggle-dashboard-balance"
           >
             {isBalanceHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -144,10 +166,10 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">{t('common.balance')}</span>
             <span className="text-3xl font-bold text-primary balance-glow" data-testid="text-dashboard-balance">
-              {isBalanceHidden ? '******' : `$${balance.toFixed(2)}`}
+              {isBalanceHidden ? '******' : formatCurrency(balance)}
             </span>
           </div>
-          
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
             <div className="space-y-1">
               <div className="flex items-center gap-1 text-muted-foreground text-sm">
@@ -155,7 +177,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
                 {t('dashboard.deposited')}
               </div>
               <p className="font-semibold" data-testid="text-total-deposited">
-                {isBalanceHidden ? '***' : `$${totalDeposited.toFixed(2)}`}
+                {isBalanceHidden ? '***' : formatCurrency(totalDeposited)}
               </p>
             </div>
             <div className="space-y-1">
@@ -164,7 +186,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
                 {t('dashboard.withdrawn')}
               </div>
               <p className="font-semibold" data-testid="text-total-withdrawn">
-                {isBalanceHidden ? '***' : `$${totalWithdrawn.toFixed(2)}`}
+                {isBalanceHidden ? '***' : formatCurrency(totalWithdrawn)}
               </p>
             </div>
             <div className="space-y-1">
@@ -173,7 +195,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
                 {t('dashboard.wagered')}
               </div>
               <p className="font-semibold" data-testid="text-total-wagered">
-                {isBalanceHidden ? '***' : `$${totalWagered.toFixed(2)}`}
+                {isBalanceHidden ? '***' : formatCurrency(totalWagered)}
               </p>
             </div>
             <div className="space-y-1">
@@ -182,7 +204,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
                 {t('dashboard.won')}
               </div>
               <p className="font-semibold" data-testid="text-total-won">
-                {isBalanceHidden ? '***' : `$${totalWon.toFixed(2)}`}
+                {isBalanceHidden ? '***' : formatCurrency(totalWon)}
               </p>
             </div>
           </div>
@@ -198,7 +220,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
                 <Swords className="h-4 w-4 text-blue-500" />
               </div>
               <span className="text-sm text-muted-foreground">
-                {isAr ? 'المباريات' : 'Games Played'}
+                {t('dashboard.gamesPlayed')}
               </span>
             </div>
             <p className="text-2xl font-bold">{gamesPlayed}</p>
@@ -212,7 +234,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
                 <Star className="h-4 w-4 text-primary" />
               </div>
               <span className="text-sm text-muted-foreground">
-                {isAr ? 'الانتصارات' : 'Wins'}
+                {t('dashboard.wins')}
               </span>
             </div>
             <p className="text-2xl font-bold">{gamesWon}</p>
@@ -226,7 +248,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
                 <Target className="h-4 w-4 text-emerald-500" />
               </div>
               <span className="text-sm text-muted-foreground">
-                {isAr ? 'نسبة الفوز' : 'Win Rate'}
+                {t('dashboard.winRate')}
               </span>
             </div>
             <div className="space-y-1">
@@ -243,14 +265,14 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
                 <Flame className="h-4 w-4 text-orange-500" />
               </div>
               <span className="text-sm text-muted-foreground">
-                {isAr ? 'سلسلة الانتصارات' : 'Win Streak'}
+                {t('dashboard.winStreak')}
               </span>
             </div>
             <div className="flex items-baseline gap-2">
               <p className="text-2xl font-bold">{currentStreak}</p>
               {bestStreak > 0 && (
                 <span className="text-xs text-muted-foreground">
-                  {isAr ? `الأفضل: ${bestStreak}` : `Best: ${bestStreak}`}
+                  {t('dashboard.best')}: {bestStreak}
                 </span>
               )}
             </div>
@@ -269,12 +291,10 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
                 </div>
                 <div>
                   <p className="font-semibold">
-                    {isAr 
-                      ? `لديك ${activeChallengesCount} تحدي نشط` 
-                      : `You have ${activeChallengesCount} active challenge${activeChallengesCount > 1 ? 's' : ''}`}
+                    {activeChallengesCount} {t('dashboard.activeChallenges')}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {isAr ? 'اضغط للعرض والقبول' : 'Tap to view and accept'}
+                    {t('dashboard.tapToViewAccept')}
                   </p>
                 </div>
               </div>
@@ -306,8 +326,8 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
 export default function DashboardPage() {
   const { user } = useAuth();
   const headers = useAuthHeaders();
-  const { dir } = useI18n();
-  
+  const { dir, t, language } = useI18n();
+
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
     queryFn: async () => {
@@ -335,71 +355,88 @@ export default function DashboardPage() {
     );
   }
 
+  const formatAdminCurrency = (amount: number) => {
+    const locale = language === "ar" ? "ar" : "en";
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
   const statCards = [
     {
-      title: "Total Users",
+      id: "total-users",
+      title: t('dashboard.totalUsers'),
       value: stats?.totalUsers || 0,
       icon: Users,
       color: "text-blue-500",
     },
     {
-      title: "Active Games",
+      id: "active-games",
+      title: t('dashboard.activeGames'),
       value: stats?.totalGames || 0,
       icon: Gamepad2,
       color: "text-primary",
     },
     {
-      title: "Total Agents",
+      id: "total-agents",
+      title: t('dashboard.totalAgents'),
       value: stats?.totalAgents || 0,
       icon: Activity,
       color: "text-purple-500",
     },
     {
-      title: "Affiliates",
+      id: "affiliates",
+      title: t('dashboard.affiliates'),
       value: stats?.totalAffiliates || 0,
       icon: TrendingUp,
       color: "text-orange-500",
     },
     {
-      title: "Total Deposits",
-      value: `$${(stats?.totalDeposits || 0).toLocaleString()}`,
+      id: "total-deposits",
+      title: t('dashboard.totalDeposits'),
+      value: formatAdminCurrency(stats?.totalDeposits || 0),
       icon: DollarSign,
       color: "text-primary",
     },
     {
-      title: "Total Withdrawals",
-      value: `$${(stats?.totalWithdrawals || 0).toLocaleString()}`,
+      id: "total-withdrawals",
+      title: t('dashboard.totalWithdrawals'),
+      value: formatAdminCurrency(stats?.totalWithdrawals || 0),
       icon: TrendingDown,
       color: "text-red-500",
     },
     {
-      title: "Pending Transactions",
+      id: "pending-transactions",
+      title: t('dashboard.pendingTransactions'),
       value: stats?.pendingTransactions || 0,
       icon: Clock,
       color: "text-yellow-500",
-      badge: stats?.pendingTransactions ? "Action Required" : null,
+      badge: stats?.pendingTransactions ? t('dashboard.actionRequired') : null,
     },
     {
-      title: "Open Complaints",
+      id: "open-complaints",
+      title: t('dashboard.openComplaints'),
       value: stats?.openComplaints || 0,
       icon: AlertTriangle,
       color: "text-red-500",
-      badge: stats?.openComplaints ? "Needs Attention" : null,
+      badge: stats?.openComplaints ? t('dashboard.needsAttention') : null,
     },
   ];
 
   return (
     <div className="p-3 sm:p-6 space-y-3 sm:space-y-6" dir={dir}>
       <div className="flex items-center justify-between gap-3 sm:gap-4 flex-wrap">
-        <h1 className="text-xl sm:text-2xl font-bold">Admin Dashboard</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">{t('dashboard.adminTitle')}</h1>
         <Badge variant="outline" className="text-primary border-primary">
-          Net Revenue: ${(stats?.netRevenue || 0).toLocaleString()}
+          {t('dashboard.netRevenue')}: {formatAdminCurrency(stats?.netRevenue || 0)}
         </Badge>
       </div>
-      
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {statCards.map((stat) => (
-          <Card key={stat.title} data-testid={`card-stat-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
+          <Card key={stat.id} data-testid={`card-stat-${stat.id}`}>
             <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 {stat.title}

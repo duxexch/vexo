@@ -172,6 +172,23 @@ export default function GamesCatalogPage() {
   const [, navigate] = useLocation();
   const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [animatedStats, setAnimatedStats] = useState({ players: 0, matches: 0, spectators: 0 });
+  const locale = language === "ar" ? "ar" : "en";
+  const preferredCurrency = typeof user?.balanceCurrency === "string" && user.balanceCurrency.trim().length > 0
+    ? user.balanceCurrency.trim().toUpperCase()
+    : "USD";
+
+  const formatCurrency = (amount: number) => {
+    try {
+      return new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: preferredCurrency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount);
+    } catch {
+      return `${preferredCurrency} ${amount.toFixed(2)}`;
+    }
+  };
 
   const { data: liveMatches = [] } = useQuery<LiveMatch[]>({
     queryKey: ["/api/challenges/public"],
@@ -195,11 +212,11 @@ export default function GamesCatalogPage() {
   useEffect(() => {
     const totalPlayers = liveMatches.length * 2;
     const totalSpectators = liveMatches.reduce((sum, m) => sum + (m.spectatorCount || 0), 0);
-    
+
     const duration = 1000;
     const steps = 30;
     const interval = duration / steps;
-    
+
     let step = 0;
     const timer = setInterval(() => {
       step++;
@@ -217,7 +234,7 @@ export default function GamesCatalogPage() {
 
   const handlePlayNow = (gameKey: string) => {
     if (!user) {
-      navigate("/auth");
+      navigate("/");
       return;
     }
     if (gameKey === "snake") {
@@ -320,12 +337,12 @@ export default function GamesCatalogPage() {
                 data-testid={`game-card-${game.key}`}
               >
                 <div className={cn("absolute inset-0 bg-gradient-to-br opacity-60", game.gradient)} />
-                
+
                 {liveCount > 0 && (
                   <div className="absolute top-3 end-3 z-10">
                     <Badge variant="destructive" className="gap-1 animate-pulse">
                       <div className="w-2 h-2 rounded-full bg-white" />
-                      {liveCount} {language === "ar" ? "مباشر" : "LIVE"}
+                      {liveCount} {t('common.live')}
                     </Badge>
                   </div>
                 )}
@@ -427,7 +444,7 @@ export default function GamesCatalogPage() {
                     <div className="absolute top-3 end-3 z-10">
                       <Badge variant="secondary" className="gap-1 text-xs">
                         <Sparkles className="w-3 h-3" />
-                        {language === "ar" ? "مجاني" : "FREE"}
+                        {t('nav.free')}
                       </Badge>
                     </div>
                   )}
@@ -536,7 +553,7 @@ export default function GamesCatalogPage() {
                         </div>
                         <Badge variant="destructive" className="gap-1 text-xs">
                           <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          LIVE
+                          {t('common.live')}
                         </Badge>
                       </div>
 
@@ -567,7 +584,7 @@ export default function GamesCatalogPage() {
                         </div>
                         <div className="flex items-center gap-1">
                           <Trophy className="w-4 h-4 text-yellow-500" />
-                          <span>${match.betAmount}</span>
+                          <span>{t('catalog.bet')}: {formatCurrency(Number(match.betAmount || 0))}</span>
                         </div>
                       </div>
                     </CardContent>

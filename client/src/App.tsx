@@ -144,11 +144,13 @@ const PrivacyPage = lazy(() => import("@/pages/privacy"));
 const InstallAppPage = lazy(() => import("@/pages/install-app"));
 
 function PageLoader() {
+  const { t } = useI18n();
+
   return (
     <div className="min-h-[80vh] flex items-center justify-center" style={{ contain: 'layout' }}>
       <div className="flex flex-col items-center gap-3">
         <VexLogo size={48} className="animate-pulse" />
-        <span className="text-sm text-muted-foreground">Loading...</span>
+        <span className="text-sm text-muted-foreground">{t('common.loading')}</span>
       </div>
     </div>
   );
@@ -177,7 +179,7 @@ function SidebarBalanceDisplay({ user, logout, t }: { user: { balance?: string |
 
 function AppSidebar({ side }: { side: "left" | "right" }) {
   const { user, logout } = useAuth();
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const { isSectionEnabled } = useSettings();
   const [location, setLocation] = useLocation();
   const { setOpenMobile, isMobile } = useSidebar();
@@ -209,9 +211,9 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
     { title: t('nav.transactions'), url: "/transactions", icon: DollarSign, key: "transactions" },
     { title: t('nav.complaints'), url: "/complaints", icon: AlertTriangle, key: "complaints" },
     { title: t('nav.support'), url: "/support", icon: Headset, key: "support" },
-    { title: language === 'ar' ? 'الإشعارات' : 'Notifications', url: "/notifications", icon: Bell, key: "notifications", hasBadge: true },
+    { title: t('nav.notifications'), url: "/notifications", icon: Bell, key: "notifications", hasBadge: true },
     { title: t('nav.settings'), url: "/settings", icon: Settings, key: "settings" },
-    { title: language === 'ar' ? 'تحميل التطبيق' : 'Install App', url: "/install-app", icon: Download, key: "install-app" },
+    { title: t('nav.installApp'), url: "/install-app", icon: Download, key: "install-app" },
   ];
 
   const adminMenuItems: MenuItem[] = [
@@ -235,9 +237,9 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
     { title: t('nav.transactions'), url: "/transactions", icon: DollarSign, key: "transactions" },
     { title: t('nav.complaints'), url: "/complaints", icon: AlertTriangle, key: "complaints" },
     { title: t('nav.support'), url: "/support", icon: Headset, key: "support" },
-    { title: language === 'ar' ? 'الإشعارات' : 'Notifications', url: "/notifications", icon: Bell, key: "notifications", hasBadge: true },
+    { title: t('nav.notifications'), url: "/notifications", icon: Bell, key: "notifications", hasBadge: true },
     { title: t('nav.settings'), url: "/settings", icon: Settings, key: "settings" },
-    { title: language === 'ar' ? 'تحميل التطبيق' : 'Install App', url: "/install-app", icon: Download, key: "install-app" },
+    { title: t('nav.installApp'), url: "/install-app", icon: Download, key: "install-app" },
   ];
 
   const baseItems = user?.role === "admin" ? adminMenuItems : playerMenuItems;
@@ -250,7 +252,7 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
           <VexLogo size={32} />
           <div>
             <p className="font-bold text-lg" aria-hidden="true">VEX</p>
-            <p className="text-xs text-muted-foreground capitalize">{user?.role === 'admin' ? (t('nav.admin') || 'Admin') : (t('nav.player') || 'Player')}</p>
+            <p className="text-xs text-muted-foreground capitalize">{user?.role === 'admin' ? t('nav.admin') : t('nav.player')}</p>
           </div>
         </div>
       </SidebarHeader>
@@ -598,7 +600,7 @@ function AdminRouter() {
 }
 
 function PublicLayout({ children }: { children: React.ReactNode }) {
-  const { dir } = useI18n();
+  const { dir, t } = useI18n();
   return (
     <div className="min-h-screen bg-background" dir={dir}>
       <header className="flex items-center justify-between gap-4 p-3 border-b bg-background sticky top-0 z-50">
@@ -612,7 +614,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
           <ThemeToggle />
           <LanguageSwitcher />
           <Link href="/">
-            <Button size="sm" data-testid="button-login">Login</Button>
+            <Button size="sm" data-testid="button-login">{t('auth.login')}</Button>
           </Link>
         </div>
       </header>
