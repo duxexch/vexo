@@ -73,6 +73,10 @@ export default function SeasonalLeaderboardPage() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [selectedSeasonId, setSelectedSeasonId] = useState<string>('');
+  const locale = language === 'ar' ? 'ar-SA' : 'en-US';
+  const preferredCurrency = typeof user?.balanceCurrency === 'string' && user.balanceCurrency.trim().length > 0
+    ? user.balanceCurrency.trim().toUpperCase()
+    : 'USD';
 
   const { data: seasons, isLoading: seasonsLoading } = useQuery<Season[]>({
     queryKey: ['/api/seasons'],
@@ -100,11 +104,26 @@ export default function SeasonalLeaderboardPage() {
   });
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
+    return new Date(dateStr).toLocaleDateString(locale, {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
+  };
+
+  const formatCurrency = (amount: number | string) => {
+    const parsed = typeof amount === 'string' ? Number(amount) : amount;
+    const safeAmount = Number.isFinite(parsed) ? parsed : 0;
+    try {
+      return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: preferredCurrency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(safeAmount);
+    } catch {
+      return `${preferredCurrency} ${safeAmount.toFixed(2)}`;
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -210,7 +229,7 @@ export default function SeasonalLeaderboardPage() {
                   </div>
                   <div>
                     <div className="text-2xl font-bold">
-                      {myStats.gamesPlayed > 0 
+                      {myStats.gamesPlayed > 0
                         ? Math.round((myStats.gamesWon / myStats.gamesPlayed) * 100)
                         : 0}%
                     </div>
@@ -224,7 +243,7 @@ export default function SeasonalLeaderboardPage() {
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-green-500">
-                      ${parseFloat(myStats.totalEarnings || '0').toFixed(2)}
+                      {formatCurrency(myStats.totalEarnings || '0')}
                     </div>
                     <div className="text-xs text-muted-foreground">{t('profile.earnings')}</div>
                   </div>
@@ -266,9 +285,8 @@ export default function SeasonalLeaderboardPage() {
                   return (
                     <div
                       key={entry.userId}
-                      className={`flex items-center gap-4 p-4 rounded-lg transition-colors hover-elevate cursor-pointer ${
-                        isCurrentUser ? 'bg-primary/10 border border-primary/20' : 'bg-muted/30'
-                      }`}
+                      className={`flex items-center gap-4 p-4 rounded-lg transition-colors hover-elevate cursor-pointer ${isCurrentUser ? 'bg-primary/10 border border-primary/20' : 'bg-muted/30'
+                        }`}
                       onClick={() => navigate(`/player/${entry.user.id}`)}
                       data-testid={`leaderboard-entry-${entry.rank}`}
                     >
@@ -317,7 +335,7 @@ export default function SeasonalLeaderboardPage() {
                       <div className="text-end">
                         <div className="flex items-center gap-1 text-green-500 font-medium">
                           <DollarSign className="w-4 h-4" />
-                          {parseFloat(entry.totalEarnings).toFixed(2)}
+                          {formatCurrency(entry.totalEarnings)}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {entry.gamesPlayed} {t('seasons.games')}

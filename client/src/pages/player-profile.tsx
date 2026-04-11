@@ -173,6 +173,10 @@ export default function PlayerProfilePage() {
 
   const userId = params?.userId || user?.id;
   const isOwnProfile = userId === user?.id;
+  const locale = language === 'ar' ? 'ar-SA' : 'en-US';
+  const preferredCurrency = typeof user?.balanceCurrency === 'string' && user.balanceCurrency.trim().length > 0
+    ? user.balanceCurrency.trim().toUpperCase()
+    : 'USD';
 
   const { data: stats, isLoading: statsLoading } = useQuery<PlayerStats>({
     queryKey: isOwnProfile ? ['/api/me/stats'] : ['/api/player', userId, 'stats'],
@@ -274,15 +278,30 @@ export default function PlayerProfilePage() {
 
   const formatNumber = (num: number | string) => {
     const n = typeof num === 'string' ? parseFloat(num) : num;
-    return new Intl.NumberFormat(language === 'ar' ? 'ar-SA' : 'en-US').format(n);
+    return new Intl.NumberFormat(locale).format(n);
   };
 
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
+    return new Date(date).toLocaleDateString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  const formatCurrency = (amount: number | string) => {
+    const parsed = typeof amount === 'string' ? Number(amount) : amount;
+    const safeAmount = Number.isFinite(parsed) ? parsed : 0;
+    try {
+      return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: preferredCurrency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(safeAmount);
+    } catch {
+      return `${preferredCurrency} ${safeAmount.toFixed(2)}`;
+    }
   };
 
   return (
@@ -362,7 +381,7 @@ export default function PlayerProfilePage() {
                   data-testid="button-challenge-player"
                 >
                   <Swords className="w-4 h-4 me-2" />
-                  {language === 'ar' ? 'تحدّي' : 'Challenge'}
+                  {t('profile.challenge')}
                 </Button>
                 <Button
                   variant="outline"
@@ -370,7 +389,7 @@ export default function PlayerProfilePage() {
                   data-testid="button-message-player"
                 >
                   <MessageCircle className="w-4 h-4 me-2" />
-                  {language === 'ar' ? 'رسالة' : 'Message'}
+                  {t('profile.message')}
                 </Button>
                 <Button
                   variant={isBlocked ? "default" : "outline"}
@@ -421,7 +440,7 @@ export default function PlayerProfilePage() {
           <CardContent className="p-4 text-center">
             <Gamepad2 className="w-8 h-8 mx-auto text-indigo-500 mb-2" />
             <div className="text-2xl font-bold">{formatNumber(stats.gamesPlayed)}</div>
-            <div className="text-sm text-muted-foreground">{language === 'ar' ? 'مباريات' : 'Games'}</div>
+            <div className="text-sm text-muted-foreground">{t('profile.games')}</div>
           </CardContent>
         </Card>
         <Card className="hover-elevate">
@@ -448,7 +467,7 @@ export default function PlayerProfilePage() {
         <Card className="hover-elevate">
           <CardContent className="p-4 text-center">
             <DollarSign className="w-8 h-8 mx-auto text-green-500 mb-2" />
-            <div className="text-2xl font-bold">${formatNumber(stats.totalEarnings)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(stats.totalEarnings)}</div>
             <div className="text-sm text-muted-foreground">{t('profile.earnings')}</div>
           </CardContent>
         </Card>
