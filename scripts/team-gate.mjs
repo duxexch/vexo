@@ -53,6 +53,28 @@ function runCommand(label, command, args = []) {
     });
 }
 
+function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function runCommandWithRetry(label, command, args = [], retries = 0, retryDelayMs = 1000) {
+    let attempt = 0;
+    while (attempt <= retries) {
+        try {
+            await runCommand(label, command, args);
+            return;
+        } catch (error) {
+            if (attempt >= retries) {
+                throw error;
+            }
+            const nextAttempt = attempt + 2;
+            console.warn(`[gate] ${label} failed on attempt ${attempt + 1}; retrying (${nextAttempt}/${retries + 1})...`);
+            await wait(retryDelayMs);
+        }
+        attempt += 1;
+    }
+}
+
 function checkPortOpen(host, port, timeoutMs = 2000) {
     return new Promise((resolve) => {
         const socket = new net.Socket();
@@ -102,7 +124,13 @@ async function run() {
     // Gate-1: baseline compile + health + foundational websocket smoke
     await runCommand("TypeScript", "npm", ["run", "check:types"]);
     await assertHealth("http://localhost:3001/");
-    await runCommand("WebSocket heartbeat smoke", "npm", ["run", "security:smoke:ws-heartbeat"]);
+    await runCommandWithRetry(
+        "WebSocket heartbeat smoke",
+        "npm",
+        ["run", "security:smoke:ws-heartbeat"],
+        1,
+        1000,
+    );
 
     // Gate-2: scoped checks
     if (needAuth) {

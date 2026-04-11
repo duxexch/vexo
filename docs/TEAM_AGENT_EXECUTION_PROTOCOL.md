@@ -30,7 +30,7 @@ The gate script runs in fail-fast mode:
 
 1. TypeScript gate (`npm run check:types`)
 2. Runtime health gate (`GET http://localhost:3001/` must be 200)
-3. WebSocket heartbeat gate (`npm run security:smoke:ws-heartbeat`)
+3. WebSocket heartbeat gate (`npm run security:smoke:ws-heartbeat`, auto-retry once on transient failure)
 4. Scope-specific smokes for auth/challenge/finance
 
 For challenge or finance scopes, PostgreSQL readiness on `localhost:5432` is required.
