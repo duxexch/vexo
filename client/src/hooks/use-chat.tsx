@@ -3,6 +3,56 @@ import { useAuth } from "@/lib/auth";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
 import type { ChatMessage } from "@shared/schema";
 
+interface OutboundChatMessagePayload {
+  type: "chat_message";
+  clientMessageId: string;
+  receiverId: string;
+  content: string;
+  messageType: string;
+  attachmentUrl?: string;
+  isDisappearing: boolean;
+  disappearAfterRead: boolean;
+  replyToId: string | null;
+}
+
+interface PendingOutboundChatMessage {
+  payload: OutboundChatMessagePayload;
+  preview: string;
+  status: "pending" | "failed";
+  createdAt: number;
+  attempts: number;
+  lastAttemptAt: number;
+}
+
+interface OutgoingMessageStatusItem {
+  clientMessageId: string;
+  receiverId: string;
+  preview: string;
+  attempts: number;
+  status: "pending" | "failed";
+}
+
+const MAX_PENDING_CHAT_AGE_MS = 5 * 60 * 1000;
+const MAX_PENDING_CHAT_ATTEMPTS = 6;
+
+function createClientMessageId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function buildOutgoingPreview(content: string, messageType: string): string {
+  const trimmed = content.trim();
+  if (trimmed.length > 0) {
+    return trimmed.slice(0, 120);
+  }
+  if (messageType === "image") return "[image]";
+  if (messageType === "video") return "[video]";
+  if (messageType === "voice") return "[voice]";
+  return "[message]";
+}
+
 interface ChatUser {
   id: string;
   username: string;
@@ -25,6 +75,7 @@ interface ChatState {
   conversations: Conversation[];
   activeConversation: string | null;
   messages: ChatMessage[];
+  pendingOutgoing: OutgoingMessageStatusItem[];
   typingUsers: Set<string>;
   isConnected: boolean;
   isChatEnabled: boolean;
@@ -42,6 +93,7 @@ interface SendMessageOptions {
 
 interface UseChatReturn extends ChatState {
   sendMessage: (receiverId: string, content: string, messageType?: string, attachmentUrl?: string, options?: SendMessageOptions) => void;
+  retryPendingMessage: (clientMessageId: string) => void;
   setTyping: (receiverId: string, isTyping: boolean) => void;
   selectConversation: (userId: string) => void;
   loadMoreMessages: () => void;
@@ -69,6 +121,7 @@ export function useChat(): UseChatReturn {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const activeConversationRef = useRef<string | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const pendingOutboundRef = useRef<Map<string, PendingOutboundChatMessage>>(new Map());
   const maxReconnectDelay = 30000;
 
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
@@ -77,6 +130,7 @@ export function useChat(): UseChatReturn {
     conversations: [],
     activeConversation: null,
     messages: [],
+    pendingOutgoing: [],
     typingUsers: new Set(),
     isConnected: false,
     isChatEnabled: true,
@@ -126,8 +180,65 @@ export function useChat(): UseChatReturn {
     }
   }, [token]);
 
+  const sendChatPayload = useCallback((payload: OutboundChatMessagePayload): boolean => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+    wsRef.current.send(JSON.stringify(payload));
+    return true;
+  }, []);
+
+  const syncPendingOutgoingState = useCallback(() => {
+    const pendingSnapshot: OutgoingMessageStatusItem[] = Array.from(pendingOutboundRef.current.entries()).map(
+      ([clientMessageId, entry]) => ({
+        clientMessageId,
+        receiverId: entry.payload.receiverId,
+        preview: entry.preview,
+        attempts: entry.attempts,
+        status: entry.status,
+      })
+    );
+
+    setState((prev) => ({
+      ...prev,
+      pendingOutgoing: pendingSnapshot,
+    }));
+  }, []);
+
+  const flushPendingOutboundMessages = useCallback(() => {
+    const now = Date.now();
+    pendingOutboundRef.current.forEach((entry, key) => {
+      const expired = now - entry.createdAt > MAX_PENDING_CHAT_AGE_MS;
+      const attemptsExceeded = entry.attempts >= MAX_PENDING_CHAT_ATTEMPTS;
+
+      if (expired || attemptsExceeded) {
+        pendingOutboundRef.current.set(key, {
+          ...entry,
+          status: "failed",
+        });
+        return;
+      }
+
+      if (entry.status !== "pending") {
+        return;
+      }
+
+      if (sendChatPayload(entry.payload)) {
+        pendingOutboundRef.current.set(key, {
+          ...entry,
+          attempts: entry.attempts + 1,
+          lastAttemptAt: now,
+        });
+      }
+    });
+    syncPendingOutgoingState();
+  }, [sendChatPayload, syncPendingOutgoingState]);
+
   const connectWebSocket = useCallback(() => {
-    if (!token || wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (!token) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
+      return;
+    }
 
     // Close existing connection cleanly
     if (wsRef.current) {
@@ -154,6 +265,7 @@ export function useChat(): UseChatReturn {
       }
       setState((prev) => ({ ...prev, isConnected: true }));
       reconnectAttemptsRef.current = 0;
+      flushPendingOutboundMessages();
     };
 
     ws.onmessage = (event) => {
@@ -161,6 +273,17 @@ export function useChat(): UseChatReturn {
         const data = JSON.parse(event.data);
 
         if (isWsErrorType(data?.type) || data?.type === "chat_error") {
+          if (typeof data?.clientMessageId === "string" && data.clientMessageId.trim().length > 0 && data?.code !== "message_in_flight") {
+            const key = data.clientMessageId.trim();
+            const pending = pendingOutboundRef.current.get(key);
+            if (pending) {
+              pendingOutboundRef.current.set(key, {
+                ...pending,
+                status: "failed",
+              });
+              syncPendingOutgoingState();
+            }
+          }
           const { message, code } = extractWsErrorInfo(data);
           if (message) {
             console.error("Chat websocket error:", code || "unknown_code", message);
@@ -230,6 +353,10 @@ export function useChat(): UseChatReturn {
             break;
 
           case "chat_message_sent":
+            if (typeof data?.clientMessageId === "string" && data.clientMessageId.trim().length > 0) {
+              pendingOutboundRef.current.delete(data.clientMessageId.trim());
+              syncPendingOutgoingState();
+            }
             let needsConversationRefresh = false;
             setState((prev) => {
               if (prev.messages.some(m => m.id === data.data.id)) return prev;
@@ -428,7 +555,7 @@ export function useChat(): UseChatReturn {
     };
 
     wsRef.current = ws;
-  }, [token]); // FIXED: Only depend on token, NOT state.activeConversation
+  }, [token, flushPendingOutboundMessages, syncPendingOutgoingState]); // FIXED: Only depend on token, NOT state.activeConversation
 
   useEffect(() => {
     fetchChatSettings();
@@ -454,22 +581,86 @@ export function useChat(): UseChatReturn {
       attachmentUrl?: string,
       options?: SendMessageOptions
     ) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: "chat_message",
-            receiverId,
-            content: content || "",
-            messageType,
-            attachmentUrl,
-            isDisappearing: options?.isDisappearing || false,
-            disappearAfterRead: options?.disappearAfterRead || false,
-            replyToId: options?.replyToId || null,
-          })
-        );
+      const clientMessageId = createClientMessageId();
+      const payload: OutboundChatMessagePayload = {
+        type: "chat_message",
+        clientMessageId,
+        receiverId,
+        content: content || "",
+        messageType,
+        attachmentUrl,
+        isDisappearing: options?.isDisappearing || false,
+        disappearAfterRead: options?.disappearAfterRead || false,
+        replyToId: options?.replyToId || null,
+      };
+
+      const now = Date.now();
+      const preview = buildOutgoingPreview(content || "", messageType);
+      pendingOutboundRef.current.set(clientMessageId, {
+        payload,
+        preview,
+        status: "pending",
+        createdAt: now,
+        attempts: 0,
+        lastAttemptAt: 0,
+      });
+      syncPendingOutgoingState();
+
+      if (sendChatPayload(payload)) {
+        pendingOutboundRef.current.set(clientMessageId, {
+          payload,
+          preview,
+          status: "pending",
+          createdAt: now,
+          attempts: 1,
+          lastAttemptAt: now,
+        });
+        syncPendingOutgoingState();
+      } else {
+        connectWebSocket();
       }
     },
-    []
+    [connectWebSocket, sendChatPayload, syncPendingOutgoingState]
+  );
+
+  const retryPendingMessage = useCallback(
+    (clientMessageId: string) => {
+      const key = clientMessageId.trim();
+      if (!key) {
+        return;
+      }
+
+      const entry = pendingOutboundRef.current.get(key);
+      if (!entry) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - entry.createdAt > MAX_PENDING_CHAT_AGE_MS) {
+        pendingOutboundRef.current.delete(key);
+        syncPendingOutgoingState();
+        return;
+      }
+
+      const nextEntry: PendingOutboundChatMessage = {
+        ...entry,
+        status: "pending",
+      };
+
+      if (sendChatPayload(nextEntry.payload)) {
+        pendingOutboundRef.current.set(key, {
+          ...nextEntry,
+          attempts: nextEntry.attempts + 1,
+          lastAttemptAt: now,
+        });
+      } else {
+        pendingOutboundRef.current.set(key, nextEntry);
+        connectWebSocket();
+      }
+
+      syncPendingOutgoingState();
+    },
+    [connectWebSocket, sendChatPayload, syncPendingOutgoingState]
   );
 
   const setTyping = useCallback((receiverId: string, isTyping: boolean) => {
@@ -640,6 +831,7 @@ export function useChat(): UseChatReturn {
   return {
     ...state,
     sendMessage,
+    retryPendingMessage,
     setTyping,
     selectConversation,
     loadMoreMessages,

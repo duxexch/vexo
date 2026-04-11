@@ -99,6 +99,7 @@ export default function ChatPage() {
     sendMessage, setTyping, selectConversation, loadMoreMessages,
     refreshConversations, deleteMessage, editMessage, reactToMessage,
     searchMessages, searchResults, markAsRead,
+    pendingOutgoing, retryPendingMessage,
   } = useChat();
 
   const { isLocked, hasPinEnabled, unlock, setupPin, pinStatus, loading: pinLoading } = useChatPin();
@@ -148,6 +149,20 @@ export default function ChatPage() {
   }, []);
 
   const activeUser = conversations.find((c) => c.otherUserId === activeConversation)?.otherUser;
+  const activeConversationPending = useMemo(() => {
+    if (!activeConversation) {
+      return [];
+    }
+    return pendingOutgoing.filter((item) => item.receiverId === activeConversation);
+  }, [activeConversation, pendingOutgoing]);
+  const activeConversationFailed = useMemo(
+    () => activeConversationPending.filter((item) => item.status === "failed"),
+    [activeConversationPending]
+  );
+  const activeConversationPendingCount = useMemo(
+    () => activeConversationPending.filter((item) => item.status === "pending").length,
+    [activeConversationPending]
+  );
   const activeUserProfile = activeUser || (
     activeConversation && preselectedConversationUserId && activeConversation === preselectedConversationUserId
       ? directConversationUser
@@ -1100,6 +1115,38 @@ export default function ChatPage() {
 
             {/* ======= Input Area ======= */}
             <div className="p-3 sm:p-4 border-t">
+              {activeConversationPendingCount > 0 && (
+                <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>{t("common.loading")}</span>
+                </div>
+              )}
+
+              {activeConversationFailed.length > 0 && (
+                <div className="mb-2 space-y-2">
+                  {activeConversationFailed.slice(0, 3).map((failed) => (
+                    <div
+                      key={failed.clientMessageId}
+                      className="flex items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-2"
+                    >
+                      <div className="min-w-0 flex items-center gap-2 text-xs text-destructive">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{failed.preview || t("common.failed")}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={() => retryPendingMessage(failed.clientMessageId)}
+                      >
+                        {t("common.retry")}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {disappearingMode && (
                 <div className="mb-2 flex items-center gap-2 text-xs text-primary">
                   <Timer className="h-3 w-3" />

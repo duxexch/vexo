@@ -42,7 +42,16 @@ export async function completeP2PTradeProjectCurrencyAtomic(tradeId: string, com
 
     const escrowAmount = parseFloat(trade.escrowAmount);
     const platformFee = parseFloat(trade.platformFee || '0');
+
+    if (!Number.isFinite(escrowAmount) || escrowAmount < 0 || !Number.isFinite(platformFee) || platformFee < 0) {
+      return { success: false, error: 'Invalid escrow/fee configuration' };
+    }
+
     const releaseAmount = escrowAmount - platformFee;
+
+    if (releaseAmount < 0) {
+      return { success: false, error: 'Invalid escrow/fee configuration' };
+    }
 
     // 2. Get or create buyer's project currency wallet
     let [buyerWallet] = await tx

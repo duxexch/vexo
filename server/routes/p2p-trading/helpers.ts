@@ -163,33 +163,42 @@ export function getP2PVerificationErrorMessage(requiredLevel: P2PVerificationLev
 }
 
 export async function calculateP2PFee(tradeAmount: number): Promise<number> {
+  const safeTradeAmount = Number.isFinite(tradeAmount) && tradeAmount > 0 ? tradeAmount : 0;
+  if (safeTradeAmount <= 0) {
+    return 0;
+  }
+
   const [settings] = await db.select().from(p2pSettings).limit(1);
   if (!settings) {
-    return tradeAmount * 0.005;
+    return Math.min(safeTradeAmount * 0.005, safeTradeAmount);
   }
 
   let fee = 0;
-  const percentageRate = parseFloat(settings.platformFeePercentage);
-  const fixedAmount = parseFloat(settings.platformFeeFixed);
-  const minFee = parseFloat(settings.minFee);
-  const maxFee = settings.maxFee ? parseFloat(settings.maxFee) : null;
+  const percentageRate = Math.max(0, parseFloat(settings.platformFeePercentage || "0"));
+  const fixedAmount = Math.max(0, parseFloat(settings.platformFeeFixed || "0"));
+  const minFee = Math.max(0, parseFloat(settings.minFee || "0"));
+  const maxFeeRaw = settings.maxFee ? parseFloat(settings.maxFee) : null;
+  const maxFee = maxFeeRaw !== null && Number.isFinite(maxFeeRaw) ? Math.max(0, maxFeeRaw) : null;
 
   switch (settings.feeType) {
     case "percentage":
-      fee = tradeAmount * percentageRate;
+      fee = safeTradeAmount * percentageRate;
       break;
     case "fixed":
       fee = fixedAmount;
       break;
     case "hybrid":
-      fee = (tradeAmount * percentageRate) + fixedAmount;
+      fee = (safeTradeAmount * percentageRate) + fixedAmount;
       break;
     default:
-      fee = tradeAmount * 0.005;
+      fee = safeTradeAmount * 0.005;
   }
 
   if (fee < minFee) fee = minFee;
   if (maxFee !== null && fee > maxFee) fee = maxFee;
+
+  if (!Number.isFinite(fee) || fee < 0) fee = 0;
+  if (fee > safeTradeAmount) fee = safeTradeAmount;
 
   return fee;
 }

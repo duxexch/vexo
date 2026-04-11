@@ -42,7 +42,16 @@ export async function completeP2PTradeAtomic(tradeId: string, completedByUserId:
 
     const escrowAmount = parseFloat(trade.escrowAmount);
     const platformFee = parseFloat(trade.platformFee || '0');
+
+    if (!Number.isFinite(escrowAmount) || escrowAmount < 0 || !Number.isFinite(platformFee) || platformFee < 0) {
+      return { success: false, error: 'Invalid escrow/fee configuration' };
+    }
+
     const releaseAmount = escrowAmount - platformFee;
+
+    if (releaseAmount < 0) {
+      return { success: false, error: 'Invalid escrow/fee configuration' };
+    }
 
     // 2. Lock buyer's balance and credit
     const [buyer] = await tx

@@ -25,7 +25,8 @@ touch "${APP_ENV_FILE}"
 
 LIVEKIT_SECRET="$(openssl rand -hex 32)"
 TURN_PASSWORD="$(openssl rand -hex 24)"
-LIVEKIT_KEYS="${LIVEKIT_KEY_NAME}: ${LIVEKIT_SECRET}"
+# LiveKit expects API key pairs as key:secret with no whitespace.
+LIVEKIT_KEYS="${LIVEKIT_KEY_NAME}:${LIVEKIT_SECRET}"
 TURN_URLS="turn:${SERVER_IP}:3478?transport=udp,turn:${SERVER_IP}:3478?transport=tcp"
 STUN_URLS="stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
 
