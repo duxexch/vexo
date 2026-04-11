@@ -53,3 +53,19 @@ SERVER_IP=72.61.187.119 REPO_DIR=/opt/vixo RTC_POLICY=relay bash deploy/voice/bo
   - docker compose -f deploy/docker-compose.voice.yml --env-file .env ps
 - Verify app receives RTC config:
   - curl -s <http://localhost:3001/api/settings/public>
+
+## Optional UDP Buffer Tuning (Linux VPS)
+
+Use the Linux-only override file to avoid breaking non-Linux Docker hosts:
+
+- Start with sysctl override:
+  - docker compose -f deploy/docker-compose.voice.yml -f deploy/docker-compose.voice.linux-sysctl.yml --env-file .env up -d
+
+Verify effective host values:
+
+- cat /proc/sys/net/core/rmem_max
+- cat /proc/sys/net/core/rmem_default
+- cat /proc/sys/net/core/wmem_max
+- cat /proc/sys/net/core/wmem_default
+
+If your platform blocks container sysctls, apply them on the VPS host using `/etc/sysctl.d/*.conf` then run `sysctl --system`.
