@@ -24,9 +24,25 @@ export function runAdminBootstrap(): void {
             logger.warn('ADMIN_RESET_PASSWORD already applied — remove it from secrets');
           } else {
             const hashedPassword = await bcrypt.hash(resetPassword, 12);
-            const resetEmail = process.env.ADMIN_RESET_EMAIL || "admin@vixo.click";
+            const resetEmail = process.env.ADMIN_RESET_EMAIL?.trim();
+            const updatePayload: Partial<typeof users.$inferInsert> = { password: hashedPassword };
+
+            if (resetEmail) {
+              const emailOwner = await db
+                .select({ id: users.id, username: users.username })
+                .from(users)
+                .where(eq(users.email, resetEmail))
+                .limit(1);
+
+              if (emailOwner.length === 0 || emailOwner[0].id === existingAdmin[0].id) {
+                updatePayload.email = resetEmail;
+              } else {
+                logger.warn(`ADMIN_RESET_EMAIL ignored because it's already used by username: ${emailOwner[0].username}`);
+              }
+            }
+
             await db.update(users)
-              .set({ password: hashedPassword, email: resetEmail })
+              .set(updatePayload)
               .where(and(eq(users.username, resetUsername), eq(users.role, "admin")));
             logger.security('Admin password reset via env var', {
               action: 'env_password_reset',
