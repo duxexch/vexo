@@ -86,3 +86,48 @@ Use one consistent spectator experience across all games (current and future) wi
 1. If old HUD/status strips reappear, check for stale props and stale bundles.
 2. If watcher UI diverges by game, align to this playbook before adding game-specific polish.
 3. Keep this document as the baseline for all future game onboarding and watch-mode refactors.
+
+## Screenshot-Derived Visual Pattern (Ludo/Tabletop Style)
+
+Use this visual DNA for both challenge player and watch surfaces:
+
+1. Stage/background
+
+- Bright board-centric stage with layered blue gradients and soft atmospheric glow.
+- Keep board as the visual center; avoid heavy blocks above/below that break board focus.
+
+1. Surface language
+
+- Use glossy panels with soft borders and subtle inner highlight (game-like cards, not flat admin cards).
+- Keep avatars and player summaries in compact “chips/cards” close to the board lane.
+
+1. Button language
+
+- Floating primary action: circular, high-contrast, saturated, depth shadow.
+- Floating secondary action: circular with translucent glass feel.
+- Inline action buttons: rounded, slightly raised, consistent border and hover lift.
+- Icon toggles (voice/listen/dice-like controls): circular with clear active/inactive states.
+
+1. Motion language
+
+- Use small lift/pulse interactions for action affordance.
+- Avoid aggressive animations that hide board state or reduce turn readability.
+
+1. One-page composition rule (players + spectators)
+
+- Keep all critical controls available in one continuous surface:
+  - Header actions (share, watchers, voice)
+  - Participant chips/cards near board
+  - Board lane (dominant center)
+  - Support/Gift/Chat access without route switching
+- Mobile keeps floating quick actions; desktop keeps equivalent controls visible in-page.
+
+## Implementation Mapping (Current Classes)
+
+- Stage: `.vex-arcade-stage`
+- Header shell: `.vex-arcade-header`
+- Player/support cards: `.vex-arcade-panel`
+- Inline action buttons: `.vex-arcade-btn`
+- Icon action buttons: `.vex-arcade-btn.vex-arcade-btn--icon`
+- Floating primary action: `.vex-arcade-fab`
+- Floating secondary action: `.vex-arcade-fab-outline`

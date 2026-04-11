@@ -1175,10 +1175,10 @@ export default function ChallengeWatchPage() {
     && !dominoBoardState;
 
   return (
-    <div className="min-h-screen bg-background" dir={isRTL ? "rtl" : "ltr"}>
+    <div className="vex-arcade-stage min-h-screen bg-background" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex flex-col lg:flex-row min-h-screen">
         <div className="flex-1 flex flex-col overflow-hidden">
-          <header className="flex items-center justify-between gap-4 p-3 border-b bg-card">
+          <header className="vex-arcade-header flex items-center justify-between gap-4 p-3 border-b bg-card">
             <div className="flex items-center gap-3">
               <BackButton />
               <Badge variant="outline" className="gap-1">
@@ -1234,7 +1234,7 @@ export default function ChallengeWatchPage() {
                         key={`participant-watch-${participant.id}`}
                         type="button"
                         onClick={() => setSelectedProfileUserId(participant.id)}
-                        className="w-full rounded-xl border bg-card p-3 text-start transition hover:border-primary/50"
+                        className="vex-arcade-panel w-full rounded-xl border bg-card p-3 text-start transition hover:border-primary/50"
                         data-testid={`participant-watch-card-${participant.id}`}
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -1255,7 +1255,7 @@ export default function ChallengeWatchPage() {
                               type="button"
                               size="icon"
                               variant={participant.isMutedForViewer ? "destructive" : "outline"}
-                              className="h-8 w-8"
+                              className="vex-arcade-btn vex-arcade-btn--icon h-8 w-8"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 togglePeerListening(participant.id);
@@ -1303,7 +1303,7 @@ export default function ChallengeWatchPage() {
                 </div>
 
                 <div className={playerInfoWidthClass}>
-                  <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
+                  <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
                         <AvatarImage src={challenge.player1?.avatarUrl} />
@@ -1495,7 +1495,7 @@ export default function ChallengeWatchPage() {
                 </div>
 
                 <div className={cn(playerInfoWidthClass, "mt-4 mb-0")}>
-                  <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
+                  <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
                         <AvatarImage src={challenge.player2?.avatarUrl} />
@@ -1557,7 +1557,7 @@ export default function ChallengeWatchPage() {
                         <div className="grid grid-cols-2 gap-3">
                           <button
                             onClick={() => setSelectedPlayer(challenge.player1Id)}
-                            className={`p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player1Id
+                            className={`vex-arcade-panel p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player1Id
                               ? "border-green-500 bg-green-500/10"
                               : "border-transparent bg-card hover:bg-accent"
                               }`}
@@ -1577,7 +1577,7 @@ export default function ChallengeWatchPage() {
                               <Button
                                 size="sm"
                                 variant={selectedPlayer === challenge.player1Id ? "default" : "outline"}
-                                className="w-full"
+                                className="vex-arcade-btn w-full"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedPlayer(challenge.player1Id);
@@ -1591,7 +1591,7 @@ export default function ChallengeWatchPage() {
 
                           <button
                             onClick={() => setSelectedPlayer(challenge.player2Id!)}
-                            className={`p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player2Id
+                            className={`vex-arcade-panel p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player2Id
                               ? "border-blue-500 bg-blue-500/10"
                               : "border-transparent bg-card hover:bg-accent"
                               }`}
@@ -1611,7 +1611,7 @@ export default function ChallengeWatchPage() {
                               <Button
                                 size="sm"
                                 variant={selectedPlayer === challenge.player2Id ? "default" : "outline"}
-                                className="w-full"
+                                className="vex-arcade-btn w-full"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedPlayer(challenge.player2Id!);
@@ -1676,6 +1676,7 @@ export default function ChallengeWatchPage() {
                                     key={amount}
                                     variant="outline"
                                     size="sm"
+                                    className="vex-arcade-btn"
                                     onClick={() => setSupportAmount(String(amount))}
                                     data-testid={`quick-amount-${amount}`}
                                   >
@@ -1719,7 +1720,7 @@ export default function ChallengeWatchPage() {
                             <div className="flex gap-2">
                               <Button
                                 variant="outline"
-                                className="flex-1"
+                                className="vex-arcade-btn flex-1"
                                 onClick={() => {
                                   setSelectedPlayer(null);
                                   setSupportAmount("");
@@ -1729,7 +1730,7 @@ export default function ChallengeWatchPage() {
                                 {language === "ar" ? "إلغاء" : "Cancel"}
                               </Button>
                               <Button
-                                className="flex-1 gap-2"
+                                className="vex-arcade-btn flex-1 gap-2"
                                 onClick={handleAddSupport}
                                 disabled={!supportAmount || parseFloat(supportAmount) <= 0 || addSupportMutation.isPending}
                                 data-testid="button-add-support"
@@ -1886,7 +1887,7 @@ export default function ChallengeWatchPage() {
           <Button
             variant="outline"
             onClick={() => setShowMobileChat(true)}
-            className="relative h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md"
+            className="vex-arcade-fab-outline relative h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md"
             data-testid="button-mobile-open-chat"
             title={language === "ar" ? "الدردشة المباشرة" : "Live Chat"}
           >
@@ -1904,7 +1905,7 @@ export default function ChallengeWatchPage() {
           <div className="pointer-events-auto flex flex-col gap-2">
             <Button
               onClick={openGiftPanel}
-              className="h-11 w-11 rounded-full p-0 shadow-2xl"
+              className="vex-arcade-fab h-11 w-11 rounded-full p-0 shadow-2xl"
               data-testid="fab-gift"
               title={language === "ar" ? "إرسال هدية" : "Send Gift"}
             >
@@ -1915,7 +1916,7 @@ export default function ChallengeWatchPage() {
               variant="outline"
               onClick={jumpToSupportSection}
               disabled={supportActionsDisabled}
-              className="h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md"
+              className="vex-arcade-fab-outline h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md"
               data-testid="button-mobile-jump-support"
               title={language === "ar" ? "ادعم" : "Support"}
             >
@@ -1971,7 +1972,7 @@ export default function ChallengeWatchPage() {
                   placeholder={language === "ar" ? "اكتب رسالة للمشاهدين..." : "Write a message to the viewers..."}
                   maxLength={300}
                 />
-                <Button onClick={() => sendLiveChatMessage(mobileChatInput)} disabled={!mobileChatInput.trim()}>
+                <Button className="vex-arcade-btn" onClick={() => sendLiveChatMessage(mobileChatInput)} disabled={!mobileChatInput.trim()}>
                   {language === "ar" ? "إرسال" : "Send"}
                 </Button>
               </div>

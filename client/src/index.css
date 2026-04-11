@@ -758,6 +758,78 @@ svg {
   pointer-events: none;
 }
 
+/* Screenshot-inspired game surface language (Ludo/tabletop style) */
+@layer components {
+  .vex-arcade-stage {
+    background:
+      radial-gradient(1200px 520px at 50% -220px, hsl(var(--chart-4) / 0.2), transparent 72%),
+      radial-gradient(900px 360px at 88% 12%, hsl(var(--primary) / 0.16), transparent 70%),
+      linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--background)) 70%, hsl(var(--muted) / 0.55) 100%);
+  }
+
+  .vex-arcade-header {
+    border-bottom: 1px solid hsl(var(--primary) / 0.26);
+    background: linear-gradient(180deg, hsl(var(--card) / 0.96), hsl(var(--card) / 0.9));
+    box-shadow: 0 10px 26px rgba(3, 40, 79, 0.16);
+    backdrop-filter: blur(10px);
+  }
+
+  .vex-arcade-panel {
+    border-color: hsl(var(--primary) / 0.24);
+    background: linear-gradient(180deg, hsl(var(--card) / 0.95), hsl(var(--card) / 0.86));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 10px 20px rgba(12, 52, 90, 0.14);
+  }
+
+  .vex-arcade-btn {
+    border-radius: 0.9rem;
+    border-width: 1px;
+    border-color: hsl(var(--primary) / 0.35);
+    box-shadow: 0 8px 14px rgba(11, 49, 88, 0.16);
+    transition: transform 140ms ease, box-shadow 180ms ease, filter 180ms ease;
+  }
+
+  .vex-arcade-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 18px rgba(11, 49, 88, 0.22);
+    filter: saturate(1.06);
+  }
+
+  .vex-arcade-btn:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .vex-arcade-btn--icon {
+    border-radius: 9999px;
+  }
+
+  .vex-arcade-fab {
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--primary) / 0.45);
+    background: linear-gradient(160deg, hsl(var(--primary) / 0.95), hsl(var(--chart-4) / 0.88));
+    color: hsl(var(--primary-foreground));
+    box-shadow:
+      0 14px 30px rgba(0, 64, 138, 0.38),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transition: transform 140ms ease, box-shadow 180ms ease, filter 180ms ease;
+  }
+
+  .vex-arcade-fab:hover:not(:disabled) {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 18px 34px rgba(0, 72, 152, 0.44);
+    filter: saturate(1.08);
+  }
+
+  .vex-arcade-fab-outline {
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--primary) / 0.4);
+    background: hsl(var(--card) / 0.9);
+    box-shadow: 0 12px 26px rgba(0, 46, 96, 0.32);
+    backdrop-filter: blur(10px);
+  }
+}
+
 /* RTL Support */
 [dir="rtl"] .rtl-flip {
   transform: scaleX(-1);

@@ -1719,7 +1719,7 @@ export default function ChallengeGamePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="vex-arcade-stage min-h-screen bg-background">
       {/* Reconnection overlay */}
       {wsConnState === "reconnecting" && (
         <div className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-center gap-4 backdrop-blur-sm">
@@ -1734,7 +1734,7 @@ export default function ChallengeGamePage() {
       )}
       <div className="flex flex-col lg:flex-row h-screen">
         <div className="flex-1 flex flex-col">
-          <header className="flex items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card">
+          <header className="vex-arcade-header flex items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <BackButton fallbackPath="/challenges" className="shrink-0" />
               <div className="flex items-center gap-1.5 min-w-0">
@@ -1857,7 +1857,7 @@ export default function ChallengeGamePage() {
                   {participantCards.map((participant) => (
                     <div
                       key={`participant-play-card-${participant.id}`}
-                      className="rounded-xl border bg-card px-3 py-2"
+                      className="vex-arcade-panel rounded-xl border bg-card px-3 py-2"
                       data-testid={`participant-play-card-${participant.id}`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -1880,7 +1880,7 @@ export default function ChallengeGamePage() {
                               type="button"
                               size="icon"
                               variant={isVoiceMicMuted ? "destructive" : "outline"}
-                              className="h-8 w-8"
+                              className="vex-arcade-btn vex-arcade-btn--icon h-8 w-8"
                               onClick={() => setIsVoiceMicMuted((prev) => !prev)}
                               data-testid={`participant-self-mic-${participant.id}`}
                             >
@@ -1891,7 +1891,7 @@ export default function ChallengeGamePage() {
                               type="button"
                               size="icon"
                               variant={participant.isMutedForViewer ? "destructive" : "outline"}
-                              className="h-8 w-8"
+                              className="vex-arcade-btn vex-arcade-btn--icon h-8 w-8"
                               disabled={!participant.isConnectedToVoice}
                               onClick={() => togglePeerListening(participant.id)}
                               data-testid={`participant-peer-listen-${participant.id}`}
@@ -1933,7 +1933,7 @@ export default function ChallengeGamePage() {
 
               {!isDominoGame && (
                 <div className={`${boardShellWidthClass} mb-4`}>
-                  <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
+                  <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
                         <AvatarImage src={opponent?.avatarUrl} />
@@ -2063,7 +2063,7 @@ export default function ChallengeGamePage() {
 
               {!isDominoGame && (
                 <div className={`${boardShellWidthClass} mt-4`}>
-                  <div className="flex items-center justify-between p-3 bg-card rounded-lg border">
+                  <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10 ring-2 ring-primary">
                         <AvatarImage src={user?.profilePicture || undefined} />
@@ -2101,6 +2101,7 @@ export default function ChallengeGamePage() {
                   <Button
                     variant="destructive"
                     size="sm"
+                    className="vex-arcade-btn"
                     onClick={() => setShowResignDialog(true)}
                     data-testid="button-resign"
                   >
@@ -2113,6 +2114,7 @@ export default function ChallengeGamePage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      className="vex-arcade-btn"
                       onClick={sendOfferDraw}
                       data-testid="button-offer-draw"
                     >
@@ -2131,10 +2133,10 @@ export default function ChallengeGamePage() {
                   {drawOffered && drawOffered !== user?.id && (
                     <div className="flex gap-1 items-center">
                       <Badge>{t('challenge.drawOffer')}</Badge>
-                      <Button size="sm" variant="default" onClick={() => sendRespondDraw(true)}>
+                      <Button size="sm" variant="default" className="vex-arcade-btn" onClick={() => sendRespondDraw(true)}>
                         {t('challenge.accept')}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => sendRespondDraw(false)}>
+                      <Button size="sm" variant="outline" className="vex-arcade-btn" onClick={() => sendRespondDraw(false)}>
                         {t('challenge.decline')}
                       </Button>
                     </div>
