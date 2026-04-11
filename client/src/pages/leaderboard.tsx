@@ -19,16 +19,11 @@ import {
   Trophy,
   Medal,
   Crown,
-  Target,
-  Shuffle,
-  Gem,
   DollarSign,
   Flame,
-  TrendingUp,
   Users,
   Star,
-  ChevronRight,
-  Gamepad2
+  ChevronRight
 } from "lucide-react";
 
 interface LeaderboardPlayer {
@@ -59,7 +54,7 @@ export default function LeaderboardPage() {
   const { t, language, dir } = useI18n();
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  
+
   const [sortBy, setSortBy] = useState<string>('wins');
   const [gameType, setGameType] = useState<string>('all');
   const [timePeriod, setTimePeriod] = useState<string>('all');
@@ -147,13 +142,13 @@ export default function LeaderboardPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">
-              {language === 'ar' ? 'كل الأوقات' : 'All Time'}
+              {t('leaderboard.allTime')}
             </SelectItem>
             <SelectItem value="weekly">
-              {language === 'ar' ? 'هذا الأسبوع' : 'This Week'}
+              {t('leaderboard.thisWeek')}
             </SelectItem>
             <SelectItem value="monthly">
-              {language === 'ar' ? 'هذا الشهر' : 'This Month'}
+              {t('leaderboard.thisMonth')}
             </SelectItem>
           </SelectContent>
         </Select>
@@ -198,19 +193,17 @@ export default function LeaderboardPage() {
                       const isCurrentUser = player.id === user?.id;
                       const isTop3 = index < 3;
                       const medal = RANK_MEDALS[index];
-                      
+
                       return (
                         <div
                           key={player.id}
-                          className={`flex items-center gap-4 p-3 rounded-lg transition-all hover-elevate cursor-pointer ${
-                            isCurrentUser ? 'bg-primary/10 border border-primary/20' : 'bg-muted/50'
-                          }`}
+                          className={`flex items-center gap-4 p-3 rounded-lg transition-all hover-elevate cursor-pointer ${isCurrentUser ? 'bg-primary/10 border border-primary/20' : 'bg-muted/50'
+                            }`}
                           onClick={() => navigate(`/player/${player.id}`)}
                           data-testid={`row-player-${player.id}`}
                         >
-                          <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 ${
-                            isTop3 ? medal.bg : 'bg-muted'
-                          }`}>
+                          <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 ${isTop3 ? medal.bg : 'bg-muted'
+                            }`}>
                             {isTop3 ? (
                               <medal.icon className={`${medal.size} text-white`} />
                             ) : (
