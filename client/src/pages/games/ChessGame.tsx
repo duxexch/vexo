@@ -289,7 +289,7 @@ export default function ChessGame() {
     : (chessState?.capturedPieces?.black || []);
 
   return (
-    <div className="container mx-auto px-3 sm:px-4 py-4 max-w-7xl">
+    <div className="vex-arcade-stage container mx-auto px-3 sm:px-4 py-4 max-w-7xl">
       {/* ── Cinematic Game Start ── */}
       {showCinematic && !gameResult && (
         <GameStartCinematic
@@ -303,7 +303,7 @@ export default function ChessGame() {
       )}
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="vex-arcade-header mb-4 flex items-center justify-between rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -311,7 +311,7 @@ export default function ChessGame() {
             onClick={() => setLocation('/games')}
             aria-label="Go back"
             data-testid="button-back"
-            className="shrink-0"
+            className="vex-arcade-btn vex-arcade-btn--icon shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
@@ -349,7 +349,7 @@ export default function ChessGame() {
               {spectatorCount}
             </Badge>
           )}
-          <Button variant="outline" size="sm" onClick={handleShare} data-testid="button-share" className="hidden sm:flex">
+          <Button variant="outline" size="sm" onClick={handleShare} data-testid="button-share" className="vex-arcade-btn hidden sm:flex">
             <Share2 className="w-4 h-4 me-1.5" />
             {t('chess.share')}
           </Button>
@@ -358,11 +358,11 @@ export default function ChessGame() {
 
       {/* ── Game Result Banner ── */}
       {gameResult && (
-        <div className={`mb-4 p-4 rounded-xl border-2 text-center ${gameResult.winner === user?.id
-            ? 'bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border-yellow-500/50'
-            : gameResult.winner === null
-              ? 'bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-blue-500/50'
-              : 'bg-gradient-to-r from-red-500/10 to-rose-500/10 border-red-500/50'
+        <div className={`vex-arcade-panel mb-4 p-4 rounded-xl border-2 text-center ${gameResult.winner === user?.id
+          ? 'bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border-yellow-500/50'
+          : gameResult.winner === null
+            ? 'bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-blue-500/50'
+            : 'bg-gradient-to-r from-red-500/10 to-rose-500/10 border-red-500/50'
           }`}>
           <div className="flex items-center justify-center gap-2 mb-1">
             {gameResult.winner === user?.id ? (
@@ -385,6 +385,7 @@ export default function ChessGame() {
             <Button
               variant="outline"
               size="sm"
+              className="vex-arcade-btn"
               onClick={() => setLocation('/games')}
               data-testid="button-back-to-games"
             >
@@ -404,8 +405,8 @@ export default function ChessGame() {
             <div className="w-full max-w-[560px] flex items-center justify-between mb-2 px-1">
               <div className="flex items-center gap-2 min-w-0">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${opponentColor === 'w'
-                    ? 'bg-gradient-to-b from-white to-gray-200 text-gray-900 shadow-sm'
-                    : 'bg-gradient-to-b from-gray-700 to-gray-900 text-white shadow-sm'
+                  ? 'bg-gradient-to-b from-white to-gray-200 text-gray-900 shadow-sm'
+                  : 'bg-gradient-to-b from-gray-700 to-gray-900 text-white shadow-sm'
                   }`}>
                   {opponentColor === 'w' ? '♔' : '♚'}
                 </div>
@@ -416,8 +417,8 @@ export default function ChessGame() {
               </div>
               {chessState && (
                 <div className={`font-mono text-lg font-bold px-3 py-1 rounded-lg ${chessState.currentTurn === opponentColor && isGameActive
-                    ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
-                    : 'text-muted-foreground'
+                  ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
+                  : 'text-muted-foreground'
                   }`}>
                   {formatTimerBrief(opponentColor === 'w' ? tickingWhiteTime : tickingBlackTime)}
                 </div>
@@ -445,8 +446,8 @@ export default function ChessGame() {
             <div className="w-full max-w-[560px] flex items-center justify-between mt-2 px-1">
               <div className="flex items-center gap-2 min-w-0">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${playerColor === 'w'
-                    ? 'bg-gradient-to-b from-white to-gray-200 text-gray-900 shadow-sm'
-                    : 'bg-gradient-to-b from-gray-700 to-gray-900 text-white shadow-sm'
+                  ? 'bg-gradient-to-b from-white to-gray-200 text-gray-900 shadow-sm'
+                  : 'bg-gradient-to-b from-gray-700 to-gray-900 text-white shadow-sm'
                   }`}>
                   {playerColor === 'w' ? '♔' : '♚'}
                 </div>
@@ -459,8 +460,8 @@ export default function ChessGame() {
               </div>
               {chessState && (
                 <div className={`font-mono text-lg font-bold px-3 py-1 rounded-lg ${chessState.currentTurn === playerColor && isGameActive
-                    ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
-                    : 'text-muted-foreground'
+                  ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
+                  : 'text-muted-foreground'
                   }`}>
                   {formatTimerBrief(playerColor === 'w' ? tickingWhiteTime : tickingBlackTime)}
                 </div>

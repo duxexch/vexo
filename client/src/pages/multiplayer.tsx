@@ -15,6 +15,7 @@ import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Shuffle, UserPlus, X, Loader2, Clock, Gamepad2, Check, XCircle, Users, UserCheck, Wifi } from "lucide-react";
+import { useLocation } from "wouter";
 
 interface GameItem {
   id: string;
@@ -39,15 +40,45 @@ interface MatchmakingStatusData {
 
 interface MatchInfo {
   id: string;
+  gameId?: string;
   player1?: { username?: string; avatarUrl?: string; vipLevel?: number };
   player2?: { username?: string; avatarUrl?: string; vipLevel?: number };
-  game?: { name: string };
+  game?: { name?: string };
   [key: string]: unknown;
+}
+
+const GAME_ROUTE_SEGMENTS: Record<string, string> = {
+  chess: "chess",
+  backgammon: "backgammon",
+  domino: "domino",
+  tarneeb: "tarneeb",
+  baloot: "baloot",
+};
+
+function normalizeGameRouteSegment(gameName: string | null | undefined): string | null {
+  const normalized = String(gameName || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+
+  if (!normalized) return null;
+  if (GAME_ROUTE_SEGMENTS[normalized]) {
+    return GAME_ROUTE_SEGMENTS[normalized];
+  }
+
+  if (normalized.includes("backgammon")) return "backgammon";
+  if (normalized.includes("chess")) return "chess";
+  if (normalized.includes("domino")) return "domino";
+  if (normalized.includes("tarneeb")) return "tarneeb";
+  if (normalized.includes("baloot")) return "baloot";
+
+  return null;
 }
 
 export default function MultiplayerPage() {
   const { t } = useI18n();
   const { user, token } = useAuth();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [selectedGameId, setSelectedGameId] = useState<string>("");
   const [friendAccountId, setFriendAccountId] = useState("");
@@ -288,6 +319,31 @@ export default function MultiplayerPage() {
     inviteFriendMutation.mutate({ gameId: selectedGameId, friendAccountId: targetAccountId });
   };
 
+  const resolveMatchRoute = (match: MatchInfo): string | null => {
+    const gameName = match.game?.name
+      || (match.gameId ? games.find((game) => game.id === match.gameId)?.name : undefined);
+    const routeSegment = normalizeGameRouteSegment(gameName);
+    if (!routeSegment) {
+      return null;
+    }
+    return `/game/${routeSegment}/${match.id}`;
+  };
+
+  const openMatchRoute = (match: MatchInfo) => {
+    const route = resolveMatchRoute(match);
+    if (!route) {
+      toast({
+        title: t("common.error"),
+        description: t("common.error"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setMatchFoundDialog(false);
+    setLocation(route);
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-4xl space-y-6">
       <div className="flex items-center justify-between gap-3 mb-6">
@@ -418,8 +474,8 @@ export default function MultiplayerPage() {
                           <div
                             key={friend.id}
                             className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${selectedFriend?.id === friend.id
-                                ? 'bg-primary/20 border border-primary'
-                                : 'hover-elevate'
+                              ? 'bg-primary/20 border border-primary'
+                              : 'hover-elevate'
                               }`}
                             onClick={() => setSelectedFriend(friend)}
                             data-testid={`friend-item-${friend.id}`}
@@ -549,7 +605,11 @@ export default function MultiplayerPage() {
                   <Badge>{t("multiplayer.inProgress")}</Badge>
                   <span className="text-sm">{new Date(match.startedAt).toLocaleString()}</span>
                 </div>
-                <Button size="sm" data-testid={`button-play-${match.id}`}>
+                <Button
+                  size="sm"
+                  data-testid={`button-play-${match.id}`}
+                  onClick={() => openMatchRoute(match as MatchInfo)}
+                >
                   {t("multiplayer.play")}
                 </Button>
               </div>
@@ -602,7 +662,16 @@ export default function MultiplayerPage() {
             </div>
           )}
           <DialogFooter>
-            <Button onClick={() => setMatchFoundDialog(false)} data-testid="button-start-game">
+            <Button
+              onClick={() => {
+                if (foundMatch) {
+                  openMatchRoute(foundMatch);
+                  return;
+                }
+                setMatchFoundDialog(false);
+              }}
+              data-testid="button-start-game"
+            >
               {t("multiplayer.startGame")}
             </Button>
           </DialogFooter>

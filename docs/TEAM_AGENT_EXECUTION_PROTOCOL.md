@@ -2,6 +2,27 @@
 
 This protocol enforces coordinated agent execution and regression safety.
 
+## Six-Role Team (Flow, i18n/RTL, Mobile, Backend, Frontend, Database)
+
+Use the dedicated agent runner when a batch affects gameplay or cross-surface UX:
+
+- Full team:
+  - `npm run team:agents:all`
+- Route/flow agent:
+  - `npm run team:agents:flow`
+- i18n and RTL agent:
+  - `npm run team:agents:i18n`
+- Mobile/app readiness agent:
+  - `npm run team:agents:mobile`
+- Backend agent:
+  - `npm run team:agents:backend`
+- Frontend agent:
+  - `npm run team:agents:frontend`
+- Database agent:
+  - `npm run team:agents:database`
+
+The full-team command executes all six checks in sequence and fails fast.
+
 ## Agent Coordination (Before Any Implementation)
 
 1. Explore agent gathers implementation surface and impacted files.

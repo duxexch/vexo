@@ -304,7 +304,7 @@ export default function BalootGame() {
   const winnerTeam = (gameResult as { winner: string | null; reason: string; winningTeam?: number } | null)?.winningTeam ?? boardState.winningTeam;
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-6xl">
+    <div className="vex-arcade-stage container mx-auto px-4 py-6 max-w-6xl">
       {/* ── Cinematic Game Start ── */}
       {showCinematic && !gameResult && balootState?.playerOrder && (
         <GameStartCinematic
@@ -324,7 +324,7 @@ export default function BalootGame() {
       )}
 
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
+        <div className="vex-arcade-header flex items-center justify-between rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -332,6 +332,7 @@ export default function BalootGame() {
               onClick={() => setLocation('/challenges')}
               aria-label={t('common.back')}
               data-testid="button-back"
+              className="vex-arcade-btn vex-arcade-btn--icon"
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -361,14 +362,14 @@ export default function BalootGame() {
                 <WifiOff className="w-3 h-3" />
               )}
             </Badge>
-            <Button variant="outline" size="icon" onClick={handleShare} aria-label={t('common.share') || 'Share game'} data-testid="button-share">
+            <Button variant="outline" size="icon" onClick={handleShare} aria-label={t('common.share') || 'Share game'} data-testid="button-share" className="vex-arcade-btn vex-arcade-btn--icon">
               <Share2 className="w-4 h-4" />
             </Button>
           </div>
         </div>
 
         {gameResult && (
-          <Card className="bg-card/80 backdrop-blur">
+          <Card className="vex-arcade-panel bg-card/80 backdrop-blur">
             <CardContent className="pt-6">
               <div className="text-center">
                 <h2 className="text-2xl font-bold mb-2">
@@ -380,11 +381,11 @@ export default function BalootGame() {
                     : (winnerTeam === myTeam ? t('baloot.youWon') : t('baloot.youLost'))}
                 </p>
                 <div className="flex gap-2 mt-4 justify-center">
-                  <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')}>
+                  <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')} className="vex-arcade-btn">
                     <ArrowLeft className="w-4 h-4 me-1.5" />
                     {t('common.back')}
                   </Button>
-                  <Button size="sm" onClick={() => setLocation('/challenges?game=baloot')}>
+                  <Button size="sm" onClick={() => setLocation('/challenges?game=baloot')} className="vex-arcade-btn">
                     <RefreshCw className="w-4 h-4 me-1.5" />
                     {t('common.playAgain')}
                   </Button>

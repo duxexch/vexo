@@ -6,6 +6,42 @@ import type { AuthenticatedSocket } from "./shared";
 import { clients } from "./shared";
 import { sendNotification } from "./notifications";
 
+const GAME_ROUTE_SEGMENTS: Record<string, string> = {
+  chess: "chess",
+  backgammon: "backgammon",
+  domino: "domino",
+  tarneeb: "tarneeb",
+  baloot: "baloot",
+};
+
+function normalizeGameRouteSegment(gameName: string | null | undefined): string | null {
+  const normalized = String(gameName || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+
+  if (!normalized) return null;
+  if (GAME_ROUTE_SEGMENTS[normalized]) {
+    return GAME_ROUTE_SEGMENTS[normalized];
+  }
+
+  if (normalized.includes("backgammon")) return "backgammon";
+  if (normalized.includes("chess")) return "chess";
+  if (normalized.includes("domino")) return "domino";
+  if (normalized.includes("tarneeb")) return "tarneeb";
+  if (normalized.includes("baloot")) return "baloot";
+
+  return null;
+}
+
+function buildMatchLink(gameName: string | null | undefined, matchId: string): string {
+  const routeSegment = normalizeGameRouteSegment(gameName);
+  if (!routeSegment) {
+    return "/multiplayer";
+  }
+  return `/game/${routeSegment}/${matchId}`;
+}
+
 /**
  * Handle matchmaking message types:
  * join_random_match, invite_friend, accept_invite, decline_invite, cancel_matchmaking
@@ -105,6 +141,7 @@ export async function handleMatchmaking(ws: AuthenticatedSocket, data: any): Pro
 
       // Persist match_found notification for both players (in case WS missed)
       const gameName = game?.name || 'Game';
+      const matchLink = buildMatchLink(game?.name, match.id);
       sendNotification(ws.userId!, {
         type: 'system',
         priority: 'high',
@@ -112,8 +149,8 @@ export async function handleMatchmaking(ws: AuthenticatedSocket, data: any): Pro
         titleAr: `تم إيجاد خصم — ${gameName}`,
         message: `A match has been found! Join now.`,
         messageAr: `تم إيجاد مباراة! انضم الآن.`,
-        link: `/game/${match.id}`,
-      }).catch(() => {});
+        link: matchLink,
+      }).catch(() => { });
       sendNotification(opponent.userId, {
         type: 'system',
         priority: 'high',
@@ -121,8 +158,8 @@ export async function handleMatchmaking(ws: AuthenticatedSocket, data: any): Pro
         titleAr: `تم إيجاد خصم — ${gameName}`,
         message: `A match has been found! Join now.`,
         messageAr: `تم إيجاد مباراة! انضم الآن.`,
-        link: `/game/${match.id}`,
-      }).catch(() => {});
+        link: matchLink,
+      }).catch(() => { });
     } else {
       // Join queue
       const [queueEntry] = await db.insert(matchmakingQueue).values({
@@ -185,6 +222,7 @@ export async function handleMatchmaking(ws: AuthenticatedSocket, data: any): Pro
 
     // Persist game invite notification (friend may be offline)
     const gameName = game?.name || 'Game';
+    const matchLink = buildMatchLink(game?.name, match.id);
     sendNotification(friend.id, {
       type: 'system',
       priority: 'high',
@@ -192,9 +230,9 @@ export async function handleMatchmaking(ws: AuthenticatedSocket, data: any): Pro
       titleAr: `دعوة لعب — ${gameName}`,
       message: `${sender?.username || 'Someone'} invited you to play ${gameName}!`,
       messageAr: `${sender?.username || 'شخص'} دعاك للعب ${gameName}!`,
-      link: `/game/${match.id}`,
+      link: matchLink,
       metadata: JSON.stringify({ matchId: match.id, senderId: ws.userId }),
-    }).catch(() => {});
+    }).catch(() => { });
 
     ws.send(JSON.stringify({ type: "invite_sent", data: { match, friendId: friend.id } }));
   }
@@ -285,7 +323,7 @@ export async function handleMatchmaking(ws: AuthenticatedSocket, data: any): Pro
       message: 'Your game invite was declined.',
       messageAr: 'تم رفض دعوة اللعب الخاصة بك.',
       link: '/multiplayer',
-    }).catch(() => {});
+    }).catch(() => { });
 
     ws.send(JSON.stringify({ type: "invite_declined", data: { matchId } }));
   }

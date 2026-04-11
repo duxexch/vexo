@@ -299,7 +299,7 @@ export default function BackgammonGame() {
   }
 
   return (
-    <div className="container max-w-6xl mx-auto px-4 py-6">
+    <div className="vex-arcade-stage container max-w-6xl mx-auto px-4 py-6">
       {/* ── Cinematic Game Start ── */}
       {showCinematic && !gameResult && (
         <GameStartCinematic
@@ -312,7 +312,7 @@ export default function BackgammonGame() {
         />
       )}
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="vex-arcade-header mb-6 flex items-center justify-between rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -320,6 +320,7 @@ export default function BackgammonGame() {
             onClick={() => setLocation('/challenges')}
             aria-label="Go back"
             data-testid="button-back"
+            className="vex-arcade-btn vex-arcade-btn--icon"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
@@ -342,7 +343,7 @@ export default function BackgammonGame() {
             <Users className="w-3 h-3 me-1" />
             {spectatorCount} {t('common.spectators')}
           </Badge>
-          <Button variant="outline" size="icon" onClick={handleShare} aria-label="Share game" data-testid="button-share">
+          <Button variant="outline" size="icon" onClick={handleShare} aria-label="Share game" data-testid="button-share" className="vex-arcade-btn vex-arcade-btn--icon">
             <Share2 className="w-4 h-4" />
           </Button>
         </div>
@@ -350,7 +351,7 @@ export default function BackgammonGame() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Card>
+          <Card className="vex-arcade-panel">
             <CardContent className="p-4">
               <BackgammonBoard
                 board={bgState.board}
@@ -378,7 +379,7 @@ export default function BackgammonGame() {
         </div>
 
         <div className="space-y-4">
-          <Card>
+          <Card className="vex-arcade-panel">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg">{t('backgammon.gameInfo')}</CardTitle>
             </CardHeader>
@@ -450,7 +451,7 @@ export default function BackgammonGame() {
           </Card>
 
           {gameResult && (
-            <Card className="border-primary">
+            <Card className="vex-arcade-panel border-primary">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg">{t('backgammon.gameOver')}</CardTitle>
               </CardHeader>
@@ -472,11 +473,11 @@ export default function BackgammonGame() {
                   </p>
                 )}
                 <div className="flex gap-2 mt-4">
-                  <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')}>
+                  <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')} className="vex-arcade-btn">
                     <ArrowLeft className="w-4 h-4 me-1.5" />
                     {t('common.back')}
                   </Button>
-                  <Button size="sm" onClick={() => setLocation('/challenges?game=backgammon')}>
+                  <Button size="sm" onClick={() => setLocation('/challenges?game=backgammon')} className="vex-arcade-btn">
                     <RefreshCw className="w-4 h-4 me-1.5" />
                     {t('common.playAgain')}
                   </Button>

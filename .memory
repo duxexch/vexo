@@ -1,6 +1,6 @@
 # 🧠 VEX PLATFORM — ذاكرة المشروع الكاملة (AI MEMORY)
 >
-> آخر تحديث: 27 فبراير 2026
+> آخر تحديث: 11 أبريل 2026
 
 ---
 
@@ -613,6 +613,18 @@ interface GameEngine {
 ---
 
 ## 📊 سجل التطوير (DEVELOPMENT LOG)
+
+### [11 أبريل 2026] — توحيد واجهات اللعب + فريق وكلاء متعدد التخصصات
+
+- ✅ توسيع تصميم `vex-arcade-*` ليشمل صفحات الألعاب المستقلة: Chess, Backgammon, Domino, Tarneeb, Baloot
+- ✅ إصلاح انحراف روابط الـ matchmaking في السيرفر:
+  - من `/game/${match.id}` إلى مسار كامل يدعم نوع اللعبة: `/game/<type>/<sessionId>`
+  - إضافة دوال موحدة `normalizeGameRouteSegment` و `buildMatchLink` في websocket matchmaking
+- ✅ ربط صفحة Multiplayer بالتنقل الحقيقي للمباراة عبر `openMatchRoute()` بدل زر start غير الفعال
+- ✅ إنشاء سكربت فريق الوكلاء `scripts/team-agents.mjs` (6 أدوار):
+  - flow, i18n-rtl, mobile, backend, frontend, database
+  - مع fail-fast checks وعقود مسارات اللعب
+- ✅ إضافة أوامر npm جاهزة للتشغيل (`team:agents:*`) + تحديث بروتوكول الفريق
 
 ### [22 فبراير 2026] — تحليل المشروع الكامل وإنشاء الذاكرة
 
