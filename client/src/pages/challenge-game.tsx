@@ -1648,7 +1648,7 @@ export default function ChallengeGamePage() {
     }
   }
 
-  const supportSummaryByPlayer = useMemo(() => {
+  const supportSummaryByPlayer = (() => {
     const map = new Map<string, { count: number; totalAmount: number }>();
     for (const support of supports) {
       if (!support?.playerId) continue;
@@ -1660,9 +1660,9 @@ export default function ChallengeGamePage() {
       });
     }
     return map;
-  }, [supports]);
+  })();
 
-  const giftSummaryByPlayer = useMemo(() => {
+  const giftSummaryByPlayer = (() => {
     const map = new Map<string, { count: number; totalAmount: number }>();
     for (const gift of receivedGifts) {
       const recipientId = typeof gift.recipientId === "string" ? gift.recipientId : "";
@@ -1675,9 +1675,9 @@ export default function ChallengeGamePage() {
       });
     }
     return map;
-  }, [receivedGifts]);
+  })();
 
-  const participantCards = useMemo(() => {
+  const participantCards = (() => {
     const rawList = [
       { id: challenge.player1Id, seat: 1, player: challenge.player1 },
       { id: challenge.player2Id, seat: 2, player: challenge.player2 },
@@ -1709,14 +1709,14 @@ export default function ChallengeGamePage() {
         isConnectedToVoice: connectedVoicePeers.includes(entry.id),
       };
     });
-  }, [challenge.gameType, challenge.player1, challenge.player1Id, challenge.player2, challenge.player2Id, challenge.player3, challenge.player3Id, challenge.player4, challenge.player4Id, connectedVoicePeers, dominoScoreLookup, giftSummaryByPlayer, language, player1TimeRemaining, player2TimeRemaining, supportSummaryByPlayer, user?.id, voicePeerMutedMap]);
+  })();
 
-  const togglePeerListening = useCallback((peerUserId: string) => {
+  const togglePeerListening = (peerUserId: string) => {
     setVoicePeerMutedMap((previous) => ({
       ...previous,
       [peerUserId]: !previous[peerUserId],
     }));
-  }, []);
+  };
 
   return (
     <div className="min-h-screen bg-background">

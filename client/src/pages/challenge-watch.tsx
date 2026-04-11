@@ -1073,7 +1073,7 @@ export default function ChallengeWatchPage() {
   const dominoScoreLookup = new Map(dominoScoreRows.map((row) => [row.id, row.score]));
   const dominoPlayer1Score = challenge?.player1Id ? (dominoScoreLookup.get(challenge.player1Id) ?? 0) : 0;
   const dominoPlayer2Score = challenge?.player2Id ? (dominoScoreLookup.get(challenge.player2Id) ?? 0) : 0;
-  const supportSummaryByPlayer = useMemo(() => {
+  const supportSummaryByPlayer = (() => {
     const map = new Map<string, { count: number; totalAmount: number }>();
     for (const support of supports || []) {
       if (!support?.playerId) continue;
@@ -1085,9 +1085,9 @@ export default function ChallengeWatchPage() {
       });
     }
     return map;
-  }, [supports]);
+  })();
 
-  const giftSummaryByPlayer = useMemo(() => {
+  const giftSummaryByPlayer = (() => {
     const map = new Map<string, { count: number; totalAmount: number }>();
     for (const gift of receivedGifts) {
       const recipientId = typeof gift.recipientId === "string" ? gift.recipientId : "";
@@ -1100,11 +1100,9 @@ export default function ChallengeWatchPage() {
       });
     }
     return map;
-  }, [receivedGifts]);
+  })();
 
-  const participantCards = useMemo(() => {
-    if (!challenge) return [];
-
+  const participantCards = (() => {
     const rawItems = [
       { id: challenge.player1Id, seat: 1, player: challenge.player1 },
       { id: challenge.player2Id, seat: 2, player: challenge.player2 },
@@ -1144,19 +1142,16 @@ export default function ChallengeWatchPage() {
         isMutedForViewer: Boolean(voicePeerMutedMap[entry.id]),
       };
     });
-  }, [challenge, connectedVoicePeers, dominoScoreLookup, gameSession?.player1TimeRemaining, gameSession?.player2TimeRemaining, giftSummaryByPlayer, language, supportSummaryByPlayer, voicePeerMutedMap]);
+  })();
 
-  const selectedParticipantCard = useMemo(
-    () => participantCards.find((participant) => participant.id === selectedProfileUserId) || null,
-    [participantCards, selectedProfileUserId],
-  );
+  const selectedParticipantCard = participantCards.find((participant) => participant.id === selectedProfileUserId) || null;
 
-  const togglePeerListening = useCallback((peerUserId: string) => {
+  const togglePeerListening = (peerUserId: string) => {
     setVoicePeerMutedMap((previous) => ({
       ...previous,
       [peerUserId]: !previous[peerUserId],
     }));
-  }, []);
+  };
 
   const dominoAutoPlayBadgeText = autoPlayNotice && autoPlayLiveSeconds !== null
     ? (autoPlayNotice.mode === "grace"
