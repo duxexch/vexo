@@ -134,6 +134,26 @@ wait_for_http_200() {
   return 1
 }
 
+wait_for_container_ready() {
+  local container="$1"
+  local timeout_seconds="${2:-120}"
+  local waited=0
+
+  while (( waited < timeout_seconds )); do
+    local state
+    state="$(container_runtime_state "$container")"
+
+    if is_container_ready "$state"; then
+      return 0
+    fi
+
+    sleep 2
+    waited=$((waited + 2))
+  done
+
+  return 1
+}
+
 container_runtime_state() {
   local container="$1"
   docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || true
@@ -949,9 +969,9 @@ rebuild_ai_agent_service() {
     return 1
   fi
 
-  local agent_state
-  agent_state="$(container_runtime_state vex-ai-agent)"
-  if ! is_container_ready "$agent_state"; then
+  if ! wait_for_container_ready vex-ai-agent 180; then
+    local agent_state
+    agent_state="$(container_runtime_state vex-ai-agent)"
     log_error "ai-agent container check failed after rebuild (state: ${agent_state:-missing})"
     docker logs --tail 120 vex-ai-agent 2>/dev/null || true
     return 1
