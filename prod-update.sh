@@ -4,12 +4,21 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_REPO_DIR="/docker/vex"
+DEFAULT_REPO_URL="https://github.com/duxexch/vexo.git"
+DEFAULT_REPO_BRANCH="main"
 
 if [[ -d "$SERVER_REPO_DIR/.git" ]]; then
   REPO_DIR="$SERVER_REPO_DIR"
 else
   REPO_DIR="$SCRIPT_DIR"
 fi
+REPO_URL="$DEFAULT_REPO_URL"
+REPO_BRANCH="$DEFAULT_REPO_BRANCH"
+AUTH_MODE="auto"
+GITHUB_TOKEN_INPUT=""
+GITHUB_TOKEN_VALUE=""
+USE_TOKEN_AUTH="false"
+REPO_PREPULLED="false"
 ENV_FILE_INPUT=".env"
 NO_BACKUP="false"
 NON_INTERACTIVE="false"
@@ -124,6 +133,139 @@ resolve_path() {
   fi
 }
 
+to_ssh_url() {
+  local url="$1"
+  if [[ "$url" =~ ^git@github.com:.+ ]]; then
+    printf '%s' "$url"
+    return 0
+  fi
+
+  if [[ "$url" =~ ^https://github.com/(.+)\.git$ ]]; then
+    printf 'git@github.com:%s.git' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  if [[ "$url" =~ ^https://github.com/(.+)$ ]]; then
+    printf 'git@github.com:%s.git' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  printf '%s' "$url"
+}
+
+to_https_url() {
+  local url="$1"
+  if [[ "$url" =~ ^https://github.com/.+ ]]; then
+    printf '%s' "$url"
+    return 0
+  fi
+
+  if [[ "$url" =~ ^git@github.com:(.+)$ ]]; then
+    printf 'https://github.com/%s' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  printf '%s' "$url"
+}
+
+to_token_url() {
+  local url="$1"
+  local token="$2"
+  local https_url
+  https_url="$(to_https_url "$url")"
+
+  if [[ "$https_url" =~ ^https://github.com/(.+)$ ]]; then
+    printf 'https://x-access-token:%s@github.com/%s' "$token" "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  printf '%s' "$https_url"
+}
+
+resolve_git_auth_mode() {
+  if [[ -z "$GITHUB_TOKEN_VALUE" && -n "$GITHUB_TOKEN_INPUT" ]]; then
+    GITHUB_TOKEN_VALUE="$GITHUB_TOKEN_INPUT"
+  fi
+
+  if [[ -z "$GITHUB_TOKEN_VALUE" && -n "${GITHUB_TOKEN:-}" ]]; then
+    GITHUB_TOKEN_VALUE="$GITHUB_TOKEN"
+  fi
+
+  GITHUB_TOKEN_VALUE="${GITHUB_TOKEN_VALUE%$'\r'}"
+
+  case "$AUTH_MODE" in
+    auto)
+      if [[ -n "$GITHUB_TOKEN_VALUE" ]]; then
+        USE_TOKEN_AUTH="true"
+      else
+        USE_TOKEN_AUTH="false"
+      fi
+      ;;
+    ssh)
+      USE_TOKEN_AUTH="false"
+      ;;
+    token)
+      USE_TOKEN_AUTH="true"
+      ;;
+    *)
+      log_error "Invalid --auth-mode value: $AUTH_MODE"
+      log_error "Allowed values: auto, ssh, token"
+      exit 1
+      ;;
+  esac
+
+  if [[ "$USE_TOKEN_AUTH" == "true" ]]; then
+    if [[ -z "$GITHUB_TOKEN_VALUE" ]]; then
+      log_error "Token auth selected but no token provided"
+      log_error "Set env var GITHUB_TOKEN or pass --github-token <token>"
+      exit 1
+    fi
+
+    REPO_URL="$(to_https_url "$REPO_URL")"
+    log_info "Update auth mode: token"
+  else
+    REPO_URL="$(to_ssh_url "$REPO_URL")"
+    log_info "Update auth mode: ssh"
+  fi
+}
+
+ensure_origin_url_for_mode() {
+  local origin_url
+  origin_url="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)"
+
+  if [[ -z "$origin_url" ]]; then
+    git -C "$REPO_DIR" remote add origin "$REPO_URL"
+    return 0
+  fi
+
+  if [[ "$origin_url" != "$REPO_URL" ]]; then
+    git -C "$REPO_DIR" remote set-url origin "$REPO_URL"
+  fi
+}
+
+pull_latest_repo_before_handoff() {
+  if [[ "$USE_TOKEN_AUTH" == "true" ]]; then
+    local token_url
+    token_url="$(to_token_url "$REPO_URL" "$GITHUB_TOKEN_VALUE")"
+
+    log_info "Pre-pulling latest repository state using token auth"
+    git -C "$REPO_DIR" pull --ff-only "$token_url" "$REPO_BRANCH"
+    ensure_origin_url_for_mode
+    REPO_PREPULLED="true"
+    return 0
+  fi
+
+  if [[ "$AUTH_MODE" == "ssh" ]]; then
+    log_info "Pre-pulling latest repository state using ssh auth"
+    ensure_origin_url_for_mode
+    git -C "$REPO_DIR" pull --ff-only origin "$REPO_BRANCH"
+    REPO_PREPULLED="true"
+    return 0
+  fi
+
+  log_info "Auto auth without token: delegating pull-latest to prod-auto"
+}
+
 read_env_from_file() {
   local env_file="$1"
   local key="$2"
@@ -183,6 +325,26 @@ while [[ $# -gt 0 ]]; do
       REPO_DIR="$2"
       shift 2
       ;;
+    --repo-url)
+      [[ $# -ge 2 ]] || { log_error "Missing value for --repo-url"; exit 1; }
+      REPO_URL="$2"
+      shift 2
+      ;;
+    --branch)
+      [[ $# -ge 2 ]] || { log_error "Missing value for --branch"; exit 1; }
+      REPO_BRANCH="$2"
+      shift 2
+      ;;
+    --auth-mode)
+      [[ $# -ge 2 ]] || { log_error "Missing value for --auth-mode"; exit 1; }
+      AUTH_MODE="$2"
+      shift 2
+      ;;
+    --github-token)
+      [[ $# -ge 2 ]] || { log_error "Missing value for --github-token"; exit 1; }
+      GITHUB_TOKEN_INPUT="$2"
+      shift 2
+      ;;
     --env-file)
       [[ $# -ge 2 ]] || { log_error "Missing value for --env-file"; exit 1; }
       ENV_FILE_INPUT="$2"
@@ -227,6 +389,8 @@ if ! is_absolute_path "$REPO_DIR"; then
   REPO_DIR="$(pwd)/$REPO_DIR"
 fi
 
+resolve_git_auth_mode
+
 require_command git
 require_command docker
 require_command gzip
@@ -242,6 +406,12 @@ fi
 ENV_FILE_PATH="$(resolve_path "$REPO_DIR" "$ENV_FILE_INPUT")"
 create_pre_update_backup "$ENV_FILE_PATH"
 
+if [[ -n "$GITHUB_TOKEN_VALUE" ]]; then
+  export GITHUB_TOKEN="$GITHUB_TOKEN_VALUE"
+fi
+
+pull_latest_repo_before_handoff
+
 if [[ "$IMAGE_REFRESH_MODE" == "auto" ]]; then
   FORWARD_ARGS+=("--refresh-images")
 fi
@@ -253,11 +423,20 @@ if [[ ! -f "$AUTO_SCRIPT" ]]; then
 fi
 
 log_info "Running strict update flow via prod-auto (pull latest + env reconcile + redeploy)"
+
+PULL_LATEST_FLAG=(--pull-latest)
+if [[ "$REPO_PREPULLED" == "true" ]]; then
+  PULL_LATEST_FLAG=()
+fi
+
 bash "$AUTO_SCRIPT" \
   --repo-dir "$REPO_DIR" \
+  --repo-url "$REPO_URL" \
+  --branch "$REPO_BRANCH" \
+  --auth-mode "$AUTH_MODE" \
   --env-file "$ENV_FILE_INPUT" \
   --skip-repo-setup \
-  --pull-latest \
+  "${PULL_LATEST_FLAG[@]}" \
   "${FORWARD_ARGS[@]}"
 
 log_ok "Production update completed successfully"
