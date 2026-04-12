@@ -348,11 +348,21 @@ export function VoiceChat({
 
     pc.onicecandidate = (event) => {
       if (event.candidate && isAuthenticatedRef.current) {
+        const serializedCandidate =
+          typeof event.candidate.toJSON === "function"
+            ? event.candidate.toJSON()
+            : {
+              candidate: event.candidate.candidate,
+              sdpMid: event.candidate.sdpMid,
+              sdpMLineIndex: event.candidate.sdpMLineIndex,
+              usernameFragment: event.candidate.usernameFragment,
+            };
+
         safelySend({
           type: "voice_ice_candidate",
           matchId: challengeId,
           targetUserId: peerUserId,
-          candidate: event.candidate,
+          candidate: serializedCandidate,
         });
       }
     };

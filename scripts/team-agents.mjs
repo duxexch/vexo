@@ -21,6 +21,8 @@ const DEFAULT_AGENTS = [
     "database",
 ];
 
+const VALID_DB_POLICIES = new Set(["auto", "strict", "skip"]);
+
 function parseAgents() {
     const arg = process.argv.find((entry) => entry.startsWith("--agents="));
     const raw = arg ? arg.split("=")[1] : DEFAULT_AGENTS.join(",");
@@ -41,6 +43,19 @@ function parseAgents() {
     }
 
     return Array.from(new Set(agents));
+}
+
+function parseDbPolicy() {
+    const arg = process.argv.find((entry) => entry.startsWith("--db-policy="));
+    const policy = (arg ? arg.split("=")[1] : "auto").trim().toLowerCase();
+
+    if (!VALID_DB_POLICIES.has(policy)) {
+        throw new Error(
+            `Invalid db policy: ${policy}. Valid values: ${Array.from(VALID_DB_POLICIES).join(", ")}`,
+        );
+    }
+
+    return policy;
 }
 
 function runCommand(label, command, args = []) {
@@ -142,13 +157,24 @@ function checkPortOpen(host, port, timeoutMs = 2000) {
     });
 }
 
-async function assertDbReady() {
+async function checkDbReady() {
     console.log("\n[team-agent] DB precheck: localhost:5432");
     const reachable = await checkPortOpen("127.0.0.1", 5432, 2000);
-    if (!reachable) {
-        throw new Error("PostgreSQL is not reachable on localhost:5432. Start DB/container before database agent checks.");
+    if (reachable) {
+        console.log("[team-agent] DB precheck passed");
     }
-    console.log("[team-agent] DB precheck passed");
+    return reachable;
+}
+
+function assertDatabaseSchemaContracts() {
+    assertIncludes(
+        "shared/schema.ts",
+        [
+            "export const matchmakingQueue = pgTable",
+            "export const gameMatches = pgTable",
+        ],
+        "Database schema contract",
+    );
 }
 
 const agentRunners = {
@@ -182,23 +208,41 @@ const agentRunners = {
         await runCommand("TypeScript", "npm", ["run", "check:types"]);
     },
 
-    async database() {
+    async database({ dbPolicy }) {
         console.log("\n[team-agent] Running database agent");
-        await assertDbReady();
+
+        if (dbPolicy === "skip") {
+            console.warn("[team-agent] Database checks skipped (--db-policy=skip).");
+            return;
+        }
+
+        const dbReady = await checkDbReady();
+        if (!dbReady) {
+            if (dbPolicy === "strict") {
+                throw new Error("PostgreSQL is not reachable on localhost:5432. Start DB/container before database agent checks.");
+            }
+
+            console.warn("[team-agent] PostgreSQL is offline; running static database contract checks (auto mode).");
+            assertDatabaseSchemaContracts();
+            await runCommand("TypeScript", "npm", ["run", "check:types"]);
+            return;
+        }
+
         await runCommand("Settlement idempotency smoke", "npm", ["run", "security:smoke:settlement-idempotency"]);
     },
 };
 
 async function run() {
     const agents = parseAgents();
-    console.log(`[team-agent] Running agents: ${agents.join(", ")}`);
+    const dbPolicy = parseDbPolicy();
+    console.log(`[team-agent] Running agents: ${agents.join(", ")} (db-policy=${dbPolicy})`);
 
     for (const agent of agents) {
         const runner = agentRunners[agent];
         if (!runner) {
             throw new Error(`Agent runner not found: ${agent}`);
         }
-        await runner();
+        await runner({ dbPolicy });
     }
 
     console.log("\n[team-agent] All selected agents passed.");

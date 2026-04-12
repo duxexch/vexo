@@ -382,8 +382,8 @@ export default function DominoGame() {
       )}
 
       <div className="flex flex-col gap-4">
-        <div className="vex-arcade-header flex items-center justify-between rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
-          <div className="flex items-center gap-3">
+        <div className="vex-arcade-header flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
@@ -398,14 +398,14 @@ export default function DominoGame() {
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <h1 className="text-2xl font-bold">{t('domino.title')}</h1>
+            <h1 className="text-lg sm:text-2xl font-bold">{t('domino.title')}</h1>
             <Badge variant={isSpectator ? 'outline' : 'default'}>
               {isSpectator
                 ? (language === 'ar' ? 'مشاهد' : 'Spectator')
                 : (language === 'ar' ? 'لاعب' : 'Player')}
             </Badge>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             {spectatorCount > 0 && (
               <Badge variant="secondary" className="flex items-center gap-1">
                 <Users className="w-3 h-3" />
@@ -453,12 +453,28 @@ export default function DominoGame() {
         )}
 
         {gameResult && (
-          <div className="flex gap-2 justify-center">
-            <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')} className="vex-arcade-btn">
+          <div className="vex-arcade-panel rounded-2xl border-2 border-primary/30 bg-card/80 p-4 text-center backdrop-blur sm:p-5">
+            <h2 className="text-xl font-bold sm:text-2xl">{t('domino.gameOver')}</h2>
+            <p className={`mt-2 text-base sm:text-lg ${isSpectator ? 'text-blue-500' : gameResult.isDraw ? 'text-blue-500' : isWinner ? 'text-green-500' : 'text-red-500'}`}>
+              {gameResult.isDraw
+                ? t('domino.draw')
+                : isSpectator
+                  ? (language === 'ar' ? 'انتهت المباراة' : 'Match finished')
+                  : (isWinner ? t('domino.youWon') : t('domino.youLost'))}
+            </p>
+            {gameResult.reason && !gameResult.isDraw && (
+              <p className="mt-1 text-sm text-muted-foreground">{gameResult.reason}</p>
+            )}
+          </div>
+        )}
+
+        {gameResult && (
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')} className="vex-arcade-btn w-full sm:w-auto">
               <ArrowLeft className="w-4 h-4 me-1.5" />
               {t('common.back')}
             </Button>
-            <Button size="sm" onClick={() => setLocation('/challenges?game=domino')} className="vex-arcade-btn">
+            <Button size="sm" onClick={() => setLocation('/challenges?game=domino')} className="vex-arcade-btn w-full sm:w-auto">
               <RefreshCw className="w-4 h-4 me-1.5" />
               {t('common.playAgain')}
             </Button>

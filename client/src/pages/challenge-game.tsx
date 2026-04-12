@@ -8,7 +8,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useGameSounds } from "@/hooks/use-game-sounds";
@@ -88,7 +95,13 @@ interface Player {
 interface GameSession {
   id: string;
   challengeId: string;
-  gameType: "chess" | "domino" | "backgammon" | "tarneeb" | "baloot" | "languageduel";
+  gameType:
+  | "chess"
+  | "domino"
+  | "backgammon"
+  | "tarneeb"
+  | "baloot"
+  | "languageduel";
   currentTurn: string;
   player1TimeRemaining: number;
   player2TimeRemaining: number;
@@ -201,6 +214,11 @@ interface ChatMsg {
   timestamp: string | number;
 }
 
+interface AvatarChatBubbleState {
+  id: string;
+  text: string;
+}
+
 interface SpectatorInfo {
   id: string;
   username: string;
@@ -237,30 +255,46 @@ export default function ChallengeGamePage() {
   const [showResignDialog, setShowResignDialog] = useState(false);
   const [spectators, setSpectators] = useState<SpectatorInfo[]>([]);
   const [receivedGifts, setReceivedGifts] = useState<GiftInfo[]>([]);
-  const [activeGiftAnimation, setActiveGiftAnimation] = useState<GiftAnimationState | null>(null);
-  const [serverRole, setServerRole] = useState<"player" | "spectator" | null>(null);
-  const [playerView, setPlayerView] = useState<Record<string, unknown> | null>(null);
+  const [activeGiftAnimation, setActiveGiftAnimation] =
+    useState<GiftAnimationState | null>(null);
+  const [serverRole, setServerRole] = useState<"player" | "spectator" | null>(
+    null,
+  );
+  const [playerView, setPlayerView] = useState<Record<string, unknown> | null>(
+    null,
+  );
   const [localTimerTick, setLocalTimerTick] = useState(0);
   const [drawOffered, setDrawOffered] = useState<string | null>(null); // offeredBy userId
-  const [wsConnState, setWsConnState] = useState<"connecting" | "connected" | "reconnecting" | "disconnected">("connecting");
+  const [wsConnState, setWsConnState] = useState<
+    "connecting" | "connected" | "reconnecting" | "disconnected"
+  >("connecting");
   const [showQuickConvertCard, setShowQuickConvertCard] = useState(false);
   const [quickConvertAmount, setQuickConvertAmount] = useState("5");
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showDepositDialog, setShowDepositDialog] = useState(false);
+  const [showMobileChat, setShowMobileChat] = useState(false);
   const [fundingShortageProject, setFundingShortageProject] = useState(0);
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
   const [dominoMoveError, setDominoMoveError] = useState<string | null>(null);
   const [dominoResyncing, setDominoResyncing] = useState(false);
-  const [dominoTimeline, setDominoTimeline] = useState<DominoTimelineEntry[]>([]);
-  const [dominoResultMeta, setDominoResultMeta] = useState<DominoGameResultMeta | null>(null);
+  const [dominoTimeline, setDominoTimeline] = useState<DominoTimelineEntry[]>(
+    [],
+  );
+  const [dominoResultMeta, setDominoResultMeta] =
+    useState<DominoGameResultMeta | null>(null);
   const [autoPlayNotice, setAutoPlayNotice] = useState<{
     mode: "grace" | "autoplay";
     username?: string;
     seconds?: number;
     startedAtMs?: number;
   } | null>(null);
-  const [voicePeerMutedMap, setVoicePeerMutedMap] = useState<Record<string, boolean>>({});
+  const [voicePeerMutedMap, setVoicePeerMutedMap] = useState<
+    Record<string, boolean>
+  >({});
   const [connectedVoicePeers, setConnectedVoicePeers] = useState<string[]>([]);
+  const [avatarChatBubbles, setAvatarChatBubbles] = useState<
+    Record<string, AvatarChatBubbleState>
+  >({});
 
   const wsRef = useRef<WebSocket | null>(null);
   const authReadyRef = useRef(false);
@@ -272,24 +306,37 @@ export default function ChallengeGamePage() {
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
   const intentionalCloseRef = useRef(false);
-  const wsErrorToastRef = useRef<{ signature: string; at: number }>({ signature: "", at: 0 });
+  const wsErrorToastRef = useRef<{ signature: string; at: number }>({
+    signature: "",
+    at: 0,
+  });
   const latestWsSeqRef = useRef(0);
   const latestTotalMovesRef = useRef(0);
   const latestViewMovesRef = useRef(0);
   const chessMovePendingRef = useRef(false);
   const chessMoveAckTimerRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutSignalSentRef = useRef(false);
-  const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(null);
+  const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(
+    null,
+  );
   const dominoLastActionSigRef = useRef<string>("");
   const dominoCanPlayRef = useRef(false);
   const dominoStatusRef = useRef<GameSession["status"] | null>(null);
 
-  const { data: challenge, isLoading, isError: isChallengeError, error: challengeError } = useQuery<Challenge, Error>({
+  const {
+    data: challenge,
+    isLoading,
+    isError: isChallengeError,
+    error: challengeError,
+  } = useQuery<Challenge, Error>({
     queryKey: [`/api/challenges/${challengeId}`],
     enabled: !!challengeId,
   });
 
-  const { data: currencyPolicy } = useQuery<{ mode: "project_only" | "mixed"; projectOnly: boolean }>({
+  const { data: currencyPolicy } = useQuery<{
+    mode: "project_only" | "mixed";
+    projectOnly: boolean;
+  }>({
     queryKey: ["/api/project-currency/play-gift-policy"],
     queryFn: async () => {
       const res = await fetch("/api/project-currency/play-gift-policy");
@@ -298,11 +345,16 @@ export default function ChallengeGamePage() {
     },
   });
 
-  const { data: projectWallet, refetch: refetchProjectWallet } = useQuery<{ totalBalance: string; currencySymbol: string }>({
+  const { data: projectWallet, refetch: refetchProjectWallet } = useQuery<{
+    totalBalance: string;
+    currencySymbol: string;
+  }>({
     queryKey: ["/api/project-currency/wallet"],
     enabled: !!user,
     queryFn: async () => {
-      const res = await fetch("/api/project-currency/wallet", { credentials: "include" });
+      const res = await fetch("/api/project-currency/wallet", {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to load project wallet");
       return res.json();
     },
@@ -312,7 +364,9 @@ export default function ChallengeGamePage() {
     queryKey: ["/api/project-currency/settings"],
     enabled: !!user,
     queryFn: async () => {
-      const res = await fetch("/api/project-currency/settings", { credentials: "include" });
+      const res = await fetch("/api/project-currency/settings", {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to load currency settings");
       return res.json();
     },
@@ -322,7 +376,9 @@ export default function ChallengeGamePage() {
     queryKey: ["/api/payment-methods"],
     enabled: !!user,
     queryFn: async () => {
-      const res = await fetch("/api/payment-methods", { credentials: "include" });
+      const res = await fetch("/api/payment-methods", {
+        credentials: "include",
+      });
       if (!res.ok) return [];
       return res.json();
     },
@@ -332,22 +388,37 @@ export default function ChallengeGamePage() {
     (method) => method.isActive && (method.isAvailable ?? true),
   );
 
-  const { data: supports = [] } = useQuery<Array<{ playerId: string; amount: string }>>({
+  const { data: supports = [] } = useQuery<
+    Array<{ playerId: string; amount: string }>
+  >({
     queryKey: [`/api/challenges/${challengeId}/supports`],
     enabled: !!challengeId,
   });
 
   const quickConvertMutation = useMutation({
-    mutationFn: (amount: string) => apiRequestWithPaymentToken("POST", "/api/project-currency/convert", { amount }, "convert"),
+    mutationFn: (amount: string) =>
+      apiRequestWithPaymentToken(
+        "POST",
+        "/api/project-currency/convert",
+        { amount },
+        "convert",
+      ),
     onSuccess: async (res: Response) => {
-      const payload = await res.json().catch(() => ({} as { status?: string }));
+      const payload = await res.json().catch(() => ({}) as { status?: string });
       await refetchProjectWallet();
-      queryClient.invalidateQueries({ queryKey: ["/api/project-currency/conversions"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/project-currency/conversions"],
+      });
       toast({
         title: language === "ar" ? "تم التحويل" : "Converted",
-        description: payload?.status === "pending"
-          ? (language === "ar" ? "تم إرسال طلب التحويل للمراجعة" : "Conversion request submitted for review")
-          : (language === "ar" ? "تمت إضافة رصيد عملة المشروع بنجاح." : "Project currency balance was updated successfully."),
+        description:
+          payload?.status === "pending"
+            ? language === "ar"
+              ? "تم إرسال طلب التحويل للمراجعة"
+              : "Conversion request submitted for review"
+            : language === "ar"
+              ? "تمت إضافة رصيد عملة المشروع بنجاح."
+              : "Project currency balance was updated successfully.",
       });
       setShowQuickConvertCard(false);
       setShowConvertDialog(false);
@@ -383,83 +454,138 @@ export default function ChallengeGamePage() {
 
   const challengeErrorStatus = parseHttpStatus(challengeError ?? null);
 
-  const parseApiErrorMessage = useCallback((message: string): string => {
-    const raw = String(message || "").trim();
-    if (!raw) return language === "ar" ? "حدث خطأ غير متوقع" : "Unexpected error occurred";
+  const parseApiErrorMessage = useCallback(
+    (message: string): string => {
+      const raw = String(message || "").trim();
+      if (!raw)
+        return language === "ar"
+          ? "حدث خطأ غير متوقع"
+          : "Unexpected error occurred";
 
-    const jsonStartIndex = raw.indexOf("{");
-    if (jsonStartIndex >= 0) {
-      try {
-        const parsed = JSON.parse(raw.slice(jsonStartIndex)) as { error?: string };
-        if (parsed?.error) return parsed.error;
-      } catch {
-        // Fallback to normalized message below
+      const jsonStartIndex = raw.indexOf("{");
+      if (jsonStartIndex >= 0) {
+        try {
+          const parsed = JSON.parse(raw.slice(jsonStartIndex)) as {
+            error?: string;
+          };
+          if (parsed?.error) return parsed.error;
+        } catch {
+          // Fallback to normalized message below
+        }
       }
-    }
 
-    return raw.replace(/^\d+\s*:\s*/, "").trim();
-  }, [language]);
+      return raw.replace(/^\d+\s*:\s*/, "").trim();
+    },
+    [language],
+  );
 
-  const getDominoMoveErrorText = useCallback((errorText: string, errorKey?: string): string => {
-    if (errorKey && errorKey.startsWith("domino.")) {
-      return t(errorKey);
-    }
+  const getDominoMoveErrorText = useCallback(
+    (errorText: string, errorKey?: string): string => {
+      if (errorKey && errorKey.startsWith("domino.")) {
+        return t(errorKey);
+      }
 
-    const normalized = String(errorText || "").toLowerCase();
-    if (normalized.includes("not your turn")) return t("domino.notYourTurn");
-    if (normalized.includes("cannot pass")) return t("domino.cannotPass");
-    if (normalized.includes("must draw")) return t("domino.mustDraw");
-    if (normalized.includes("cannot draw")) return t("domino.cannotDraw");
-    if (normalized.includes("boneyard is empty")) return t("domino.boneyardEmpty");
-    if (normalized.includes("tile not in your hand")) return t("domino.tileNotInHand");
-    if (normalized.includes("maximum draws reached")) return t("domino.maxDrawsReached");
-    if (normalized.includes("cannot play this tile on this end") || normalized.includes("invalid placement")) {
-      return t("domino.invalidPlacement");
-    }
-    if (normalized.includes("invalid game state") || normalized.includes("corrupted game state")) {
-      return t("domino.invalidState");
-    }
-    if (normalized.includes("invalid")) return t("domino.invalidMoveType");
-    return errorText;
-  }, [t]);
+      const normalized = String(errorText || "").toLowerCase();
+      if (normalized.includes("not your turn")) return t("domino.notYourTurn");
+      if (normalized.includes("cannot pass")) return t("domino.cannotPass");
+      if (normalized.includes("must draw")) return t("domino.mustDraw");
+      if (normalized.includes("cannot draw")) return t("domino.cannotDraw");
+      if (normalized.includes("boneyard is empty"))
+        return t("domino.boneyardEmpty");
+      if (normalized.includes("tile not in your hand"))
+        return t("domino.tileNotInHand");
+      if (normalized.includes("maximum draws reached"))
+        return t("domino.maxDrawsReached");
+      if (
+        normalized.includes("cannot play this tile on this end") ||
+        normalized.includes("invalid placement")
+      ) {
+        return t("domino.invalidPlacement");
+      }
+      if (
+        normalized.includes("invalid game state") ||
+        normalized.includes("corrupted game state")
+      ) {
+        return t("domino.invalidState");
+      }
+      if (normalized.includes("invalid")) return t("domino.invalidMoveType");
+      return errorText;
+    },
+    [t],
+  );
 
-  const estimateUsdForProjectCurrency = useCallback((projectAmount: number): number => {
-    const exchangeRate = Number(projectCurrencySettings?.exchangeRate || 0);
-    const commissionRate = Number(projectCurrencySettings?.conversionCommissionRate || 0);
-    const netRate = exchangeRate * Math.max(0, 1 - commissionRate);
+  const estimateUsdForProjectCurrency = useCallback(
+    (projectAmount: number): number => {
+      const exchangeRate = Number(projectCurrencySettings?.exchangeRate || 0);
+      const commissionRate = Number(
+        projectCurrencySettings?.conversionCommissionRate || 0,
+      );
+      const netRate = exchangeRate * Math.max(0, 1 - commissionRate);
 
-    if (!Number.isFinite(netRate) || netRate <= 0) {
-      return projectAmount;
-    }
+      if (!Number.isFinite(netRate) || netRate <= 0) {
+        return projectAmount;
+      }
 
-    return projectAmount / netRate;
-  }, [projectCurrencySettings?.exchangeRate, projectCurrencySettings?.conversionCommissionRate]);
+      return projectAmount / netRate;
+    },
+    [
+      projectCurrencySettings?.exchangeRate,
+      projectCurrencySettings?.conversionCommissionRate,
+    ],
+  );
 
-  const openFundingAssistance = useCallback((projectAmountNeeded: number, usdFallbackAmount = 0): void => {
-    const safeProjectAmount = Math.max(0, Number(projectAmountNeeded) || 0);
-    const estimatedUsd = Math.max(Number(usdFallbackAmount) || 0, estimateUsdForProjectCurrency(safeProjectAmount));
-    const minConvert = Number(projectCurrencySettings?.minConversionAmount || 1);
-    const maxConvert = Number(projectCurrencySettings?.maxConversionAmount || 10000);
-    const suggestedConvert = Math.min(maxConvert, Math.max(minConvert, Number(estimatedUsd.toFixed(2))));
-    const userUsdBalance = Number(user?.balance || 0);
+  const openFundingAssistance = useCallback(
+    (projectAmountNeeded: number, usdFallbackAmount = 0): void => {
+      const safeProjectAmount = Math.max(0, Number(projectAmountNeeded) || 0);
+      const estimatedUsd = Math.max(
+        Number(usdFallbackAmount) || 0,
+        estimateUsdForProjectCurrency(safeProjectAmount),
+      );
+      const minConvert = Number(
+        projectCurrencySettings?.minConversionAmount || 1,
+      );
+      const maxConvert = Number(
+        projectCurrencySettings?.maxConversionAmount || 10000,
+      );
+      const suggestedConvert = Math.min(
+        maxConvert,
+        Math.max(minConvert, Number(estimatedUsd.toFixed(2))),
+      );
+      const userUsdBalance = Number(user?.balance || 0);
 
-    setFundingShortageProject(safeProjectAmount);
-    setFundingUsdNeeded(estimatedUsd);
-    setQuickConvertAmount(String(suggestedConvert));
-    setShowQuickConvertCard(false);
-    setShowConvertDialog(false);
-    setShowDepositDialog(false);
+      setFundingShortageProject(safeProjectAmount);
+      setFundingUsdNeeded(estimatedUsd);
+      setQuickConvertAmount(String(suggestedConvert));
+      setShowQuickConvertCard(false);
+      setShowConvertDialog(false);
+      setShowDepositDialog(false);
 
-    if (!projectCurrencySettings?.isActive || userUsdBalance < suggestedConvert) {
-      setShowDepositDialog(true);
-      return;
-    }
+      if (
+        !projectCurrencySettings?.isActive ||
+        userUsdBalance < suggestedConvert
+      ) {
+        setShowDepositDialog(true);
+        return;
+      }
 
-    setShowConvertDialog(true);
-  }, [estimateUsdForProjectCurrency, projectCurrencySettings?.isActive, projectCurrencySettings?.minConversionAmount, projectCurrencySettings?.maxConversionAmount, user?.balance]);
+      setShowConvertDialog(true);
+    },
+    [
+      estimateUsdForProjectCurrency,
+      projectCurrencySettings?.isActive,
+      projectCurrencySettings?.minConversionAmount,
+      projectCurrencySettings?.maxConversionAmount,
+      user?.balance,
+    ],
+  );
 
   const toFiniteNumber = useCallback((value: unknown): number | null => {
-    const num = typeof value === "string" ? Number(value) : (typeof value === "number" ? value : Number.NaN);
+    const num =
+      typeof value === "string"
+        ? Number(value)
+        : typeof value === "number"
+          ? value
+          : Number.NaN;
     if (!Number.isFinite(num) || num <= 0) return null;
     return num;
   }, []);
@@ -467,11 +593,18 @@ export default function ChallengeGamePage() {
   const isPlayer = serverRole === "player";
   const isSpectator = serverRole === "spectator";
   const isChallengeParticipant = Boolean(
-    user?.id
-    && [challenge?.player1Id, challenge?.player2Id, challenge?.player3Id, challenge?.player4Id]
+    user?.id &&
+    [
+      challenge?.player1Id,
+      challenge?.player2Id,
+      challenge?.player3Id,
+      challenge?.player4Id,
+    ]
       .filter(Boolean)
-      .includes(user.id)
+      .includes(user.id),
   );
+  const shouldRenderPlayerVoiceChat =
+    serverRole === "player" || (serverRole === null && isChallengeParticipant);
   // Do not allow gameplay actions until the server explicitly assigns role.
   const canPlayActions = serverRole === "player";
   const myColor = challenge?.player1Id === user?.id ? "white" : "black";
@@ -504,59 +637,77 @@ export default function ChallengeGamePage() {
     addPlayerLabel(challenge?.player4Id, challenge?.player4?.username, 4);
 
     return labels;
-  }, [challenge?.player1Id, challenge?.player1?.username, challenge?.player2Id, challenge?.player2?.username, challenge?.player3Id, challenge?.player3?.username, challenge?.player4Id, challenge?.player4?.username, t, user?.id]);
+  }, [
+    challenge?.player1Id,
+    challenge?.player1?.username,
+    challenge?.player2Id,
+    challenge?.player2?.username,
+    challenge?.player3Id,
+    challenge?.player3?.username,
+    challenge?.player4Id,
+    challenge?.player4?.username,
+    t,
+    user?.id,
+  ]);
 
-  const appendDominoTimeline = useCallback((view: Record<string, unknown> | undefined, moveNumber?: number) => {
-    if (challenge?.gameType !== "domino" || !view) {
-      return;
-    }
-
-    const actionRaw = view.lastAction;
-    if (!actionRaw || typeof actionRaw !== "object") {
-      return;
-    }
-
-    const action = actionRaw as Record<string, unknown>;
-    const actionType = typeof action.type === "string" ? action.type : "";
-    const playerId = typeof action.playerId === "string" ? action.playerId : "";
-    const tile = action.tile && typeof action.tile === "object"
-      ? action.tile as { left?: number; right?: number }
-      : undefined;
-
-    if (!actionType || !playerId) {
-      return;
-    }
-
-    const signature = `${actionType}:${playerId}:${typeof tile?.left === "number" ? tile.left : ""}:${typeof tile?.right === "number" ? tile.right : ""}:${typeof moveNumber === "number" ? moveNumber : ""}`;
-    if (signature === dominoLastActionSigRef.current) {
-      return;
-    }
-    dominoLastActionSigRef.current = signature;
-
-    const actor = dominoPlayerLabels.get(playerId) || t("domino.player");
-    let text = `${actor} ${t("domino.lastMove")}`;
-
-    if (actionType === "draw") {
-      text = `${actor} ${t("domino.drewTile")}`;
-    } else if (actionType === "pass") {
-      text = `${actor} ${t("domino.passedTurn")}`;
-    } else if (actionType === "play") {
-      if (typeof tile?.left === "number" && typeof tile?.right === "number") {
-        text = `${actor} ${t("domino.played")} [${tile.left}|${tile.right}]`;
-      } else {
-        text = `${actor} ${t("domino.played")}`;
+  const appendDominoTimeline = useCallback(
+    (view: Record<string, unknown> | undefined, moveNumber?: number) => {
+      if (challenge?.gameType !== "domino" || !view) {
+        return;
       }
-    }
 
-    setDominoTimeline((prev) => [
-      {
-        id: `${signature}-${Date.now()}`,
-        text,
-        moveNumber,
-      },
-      ...prev,
-    ].slice(0, 12));
-  }, [challenge?.gameType, dominoPlayerLabels, t]);
+      const actionRaw = view.lastAction;
+      if (!actionRaw || typeof actionRaw !== "object") {
+        return;
+      }
+
+      const action = actionRaw as Record<string, unknown>;
+      const actionType = typeof action.type === "string" ? action.type : "";
+      const playerId =
+        typeof action.playerId === "string" ? action.playerId : "";
+      const tile =
+        action.tile && typeof action.tile === "object"
+          ? (action.tile as { left?: number; right?: number })
+          : undefined;
+
+      if (!actionType || !playerId) {
+        return;
+      }
+
+      const signature = `${actionType}:${playerId}:${typeof tile?.left === "number" ? tile.left : ""}:${typeof tile?.right === "number" ? tile.right : ""}:${typeof moveNumber === "number" ? moveNumber : ""}`;
+      if (signature === dominoLastActionSigRef.current) {
+        return;
+      }
+      dominoLastActionSigRef.current = signature;
+
+      const actor = dominoPlayerLabels.get(playerId) || t("domino.player");
+      let text = `${actor} ${t("domino.lastMove")}`;
+
+      if (actionType === "draw") {
+        text = `${actor} ${t("domino.drewTile")}`;
+      } else if (actionType === "pass") {
+        text = `${actor} ${t("domino.passedTurn")}`;
+      } else if (actionType === "play") {
+        if (typeof tile?.left === "number" && typeof tile?.right === "number") {
+          text = `${actor} ${t("domino.played")} [${tile.left}|${tile.right}]`;
+        } else {
+          text = `${actor} ${t("domino.played")}`;
+        }
+      }
+
+      setDominoTimeline((prev) =>
+        [
+          {
+            id: `${signature}-${Date.now()}`,
+            text,
+            moveNumber,
+          },
+          ...prev,
+        ].slice(0, 12),
+      );
+    },
+    [challenge?.gameType, dominoPlayerLabels, t],
+  );
 
   useEffect(() => {
     dominoCanPlayRef.current = canPlayActions;
@@ -566,31 +717,71 @@ export default function ChallengeGamePage() {
   const showSpectatorActionBlocked = useCallback(() => {
     toast({
       title: language === "ar" ? "وضع المشاهدة" : "Spectator mode",
-      description: language === "ar"
-        ? "هذا الإجراء متاح للاعبين فقط."
-        : "This action is available to players only.",
+      description:
+        language === "ar"
+          ? "هذا الإجراء متاح للاعبين فقط."
+          : "This action is available to players only.",
       variant: "destructive",
     });
   }, [toast, language]);
 
-  const showWsErrorToast = useCallback((message: string, code?: string) => {
-    const normalizedMessage = message.trim();
-    if (!normalizedMessage) return;
+  const showWsErrorToast = useCallback(
+    (message: string, code?: string) => {
+      const normalizedMessage = message.trim();
+      if (!normalizedMessage) return;
 
-    const signature = `${code || "unknown"}:${normalizedMessage}`;
-    const now = Date.now();
-    const isDuplicate = wsErrorToastRef.current.signature === signature
-      && (now - wsErrorToastRef.current.at) < 2000;
+      const signature = `${code || "unknown"}:${normalizedMessage}`;
+      const now = Date.now();
+      const isDuplicate =
+        wsErrorToastRef.current.signature === signature &&
+        now - wsErrorToastRef.current.at < 2000;
 
-    if (isDuplicate) return;
+      if (isDuplicate) return;
 
-    wsErrorToastRef.current = { signature, at: now };
-    toast({
-      title: t("common.error"),
-      description: normalizedMessage,
-      variant: "destructive",
-    });
-  }, [t, toast]);
+      wsErrorToastRef.current = { signature, at: now };
+      toast({
+        title: t("common.error"),
+        description: normalizedMessage,
+        variant: "destructive",
+      });
+    },
+    [t, toast],
+  );
+
+  const pushAvatarChatBubble = useCallback(
+    (senderId: string, rawMessage: string) => {
+      const normalizedMessage = rawMessage.trim();
+      if (!senderId || !normalizedMessage) {
+        return;
+      }
+
+      const bubbleId = `${senderId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      setAvatarChatBubbles((prev) => ({
+        ...prev,
+        [senderId]: {
+          id: bubbleId,
+          text:
+            normalizedMessage.length > 72
+              ? `${normalizedMessage.slice(0, 69)}...`
+              : normalizedMessage,
+        },
+      }));
+
+      setTimeout(() => {
+        setAvatarChatBubbles((prev) => {
+          const current = prev[senderId];
+          if (!current || current.id !== bubbleId) {
+            return prev;
+          }
+
+          const next = { ...prev };
+          delete next[senderId];
+          return next;
+        });
+      }, 4000);
+    },
+    [],
+  );
 
   useEffect(() => {
     latestWsSeqRef.current = 0;
@@ -620,25 +811,36 @@ export default function ChallengeGamePage() {
     }
   }, []);
 
-  const requestRoleAssignment = useCallback((socket: WebSocket) => {
-    if (!challengeId || socket.readyState !== WebSocket.OPEN) return;
+  const requestRoleAssignment = useCallback(
+    (socket: WebSocket) => {
+      if (!challengeId || socket.readyState !== WebSocket.OPEN) return;
 
-    socket.send(JSON.stringify({
-      type: "join_challenge_game",
-      challengeId,
-    }));
-    pendingJoinRef.current = false;
-
-    clearRoleAssignmentTimer();
-    roleAssignmentTimerRef.current = setTimeout(() => {
-      if (serverRoleRef.current === null && authReadyRef.current && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
+      socket.send(
+        JSON.stringify({
           type: "join_challenge_game",
           challengeId,
-        }));
-      }
-    }, 2500);
-  }, [challengeId, clearRoleAssignmentTimer]);
+        }),
+      );
+      pendingJoinRef.current = false;
+
+      clearRoleAssignmentTimer();
+      roleAssignmentTimerRef.current = setTimeout(() => {
+        if (
+          serverRoleRef.current === null &&
+          authReadyRef.current &&
+          socket.readyState === WebSocket.OPEN
+        ) {
+          socket.send(
+            JSON.stringify({
+              type: "join_challenge_game",
+              challengeId,
+            }),
+          );
+        }
+      }, 2500);
+    },
+    [challengeId, clearRoleAssignmentTimer],
+  );
 
   useEffect(() => {
     serverRoleRef.current = serverRole;
@@ -652,14 +854,18 @@ export default function ChallengeGamePage() {
 
     const connect = () => {
       const existingSocket = wsRef.current;
-      if (existingSocket && (
-        existingSocket.readyState === WebSocket.OPEN
-        || existingSocket.readyState === WebSocket.CONNECTING
-      )) {
+      if (
+        existingSocket &&
+        (existingSocket.readyState === WebSocket.OPEN ||
+          existingSocket.readyState === WebSocket.CONNECTING)
+      ) {
         return;
       }
 
-      const token = authToken || localStorage.getItem("pwm_token") || sessionStorage.getItem("pwm_token_backup");
+      const token =
+        authToken ||
+        localStorage.getItem("pwm_token") ||
+        sessionStorage.getItem("pwm_token_backup");
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
       wsRef.current = ws;
@@ -689,9 +895,12 @@ export default function ChallengeGamePage() {
           }
 
           if (data.type === "auth_error") {
-            const description = typeof data.error === "string"
-              ? data.error
-              : (language === "ar" ? "فشل توثيق الجلسة" : "Session authentication failed");
+            const description =
+              typeof data.error === "string"
+                ? data.error
+                : language === "ar"
+                  ? "فشل توثيق الجلسة"
+                  : "Session authentication failed";
             showWsErrorToast(description, "auth_error");
             authReadyRef.current = false;
             pendingJoinRef.current = true;
@@ -699,7 +908,10 @@ export default function ChallengeGamePage() {
 
             if (token) {
               setWsConnState("reconnecting");
-              if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+              if (
+                ws.readyState === WebSocket.OPEN ||
+                ws.readyState === WebSocket.CONNECTING
+              ) {
                 ws.close();
               }
               return;
@@ -712,7 +924,11 @@ export default function ChallengeGamePage() {
 
           if (data.type === "challenge_error" && authReadyRef.current) {
             const code = typeof data.code === "string" ? data.code : "";
-            if (code === "auth_required" || code === "rejoin_required" || code === "room_not_ready") {
+            if (
+              code === "auth_required" ||
+              code === "rejoin_required" ||
+              code === "room_not_ready"
+            ) {
               pendingJoinRef.current = true;
               requestRoleAssignment(ws);
               return;
@@ -762,12 +978,25 @@ export default function ChallengeGamePage() {
       clearChessMovePending();
       const activeSocket = wsRef.current;
       if (activeSocket?.readyState === WebSocket.OPEN) {
-        activeSocket.send(JSON.stringify({ type: "leave_challenge_game", challengeId }));
+        activeSocket.send(
+          JSON.stringify({ type: "leave_challenge_game", challengeId }),
+        );
       }
       activeSocket?.close();
       wsRef.current = null;
     };
-  }, [authToken, challengeId, user, clearRoleAssignmentTimer, language, requestRoleAssignment, setLocation, showWsErrorToast, t, clearChessMovePending]);
+  }, [
+    authToken,
+    challengeId,
+    user,
+    clearRoleAssignmentTimer,
+    language,
+    requestRoleAssignment,
+    setLocation,
+    showWsErrorToast,
+    t,
+    clearChessMovePending,
+  ]);
 
   useEffect(() => {
     if (challenge?.gameType !== "domino" || !challengeId) {
@@ -775,13 +1004,19 @@ export default function ChallengeGamePage() {
     }
 
     const pushGuardHistory = () => {
-      window.history.pushState({ dominoChallengeId: challengeId }, "", window.location.href);
+      window.history.pushState(
+        { dominoChallengeId: challengeId },
+        "",
+        window.location.href,
+      );
     };
 
     const onPopState = () => {
-      const inActiveMatch = dominoCanPlayRef.current && dominoStatusRef.current === "playing";
+      const inActiveMatch =
+        dominoCanPlayRef.current && dominoStatusRef.current === "playing";
       if (inActiveMatch) {
-        const leavePrompt = t("common.leaveConfirm") || t("challenge.backToChallenges");
+        const leavePrompt =
+          t("common.leaveConfirm") || t("challenge.backToChallenges");
         const shouldLeave = window.confirm(leavePrompt);
         if (!shouldLeave) {
           pushGuardHistory();
@@ -801,7 +1036,9 @@ export default function ChallengeGamePage() {
   }, [challenge?.gameType, challengeId, setLocation, t]);
 
   // Live countdown timer — ticks every second when game is playing
-  useEffect(() => { setSoundMuted(isMuted); }, [isMuted, setSoundMuted]);
+  useEffect(() => {
+    setSoundMuted(isMuted);
+  }, [isMuted, setSoundMuted]);
   useEffect(() => {
     if (gameSession?.status !== "playing") {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -809,386 +1046,517 @@ export default function ChallengeGamePage() {
     }
     lastSyncRef.current = Date.now();
     timerRef.current = setInterval(() => {
-      setLocalTimerTick(t => t + 1);
+      setLocalTimerTick((t) => t + 1);
     }, 1000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [gameSession?.status, gameSession?.currentTurn]);
 
-  const handleWebSocketMessage = useCallback((data: ChallengeWSMessage) => {
-    const shouldAcceptSeqOnly = (seq?: number): boolean => {
-      if (typeof seq !== "number") return true;
-      if (seq < latestWsSeqRef.current) return false;
-      latestWsSeqRef.current = seq;
-      return true;
-    };
-
-    const getViewMoveCount = (view?: Record<string, unknown>): number | null => {
-      if (!view) return null;
-      const moveHistory = view.moveHistory;
-      if (Array.isArray(moveHistory)) return moveHistory.length;
-      const history = view.history;
-      if (Array.isArray(history)) return history.length;
-      return null;
-    };
-
-    const shouldApplySessionUpdate = (session?: GameSession, view?: Record<string, unknown>, seq?: number): boolean => {
-      if (typeof seq === "number") {
+  const handleWebSocketMessage = useCallback(
+    (data: ChallengeWSMessage) => {
+      const shouldAcceptSeqOnly = (seq?: number): boolean => {
+        if (typeof seq !== "number") return true;
         if (seq < latestWsSeqRef.current) return false;
         latestWsSeqRef.current = seq;
-      }
+        return true;
+      };
 
-      const sessionMoves = (session && typeof session.totalMoves === "number") ? session.totalMoves : null;
-      const viewMoves = getViewMoveCount(view);
+      const getViewMoveCount = (
+        view?: Record<string, unknown>,
+      ): number | null => {
+        if (!view) return null;
+        const moveHistory = view.moveHistory;
+        if (Array.isArray(moveHistory)) return moveHistory.length;
+        const history = view.history;
+        if (Array.isArray(history)) return history.length;
+        return null;
+      };
 
-      if (sessionMoves !== null) {
-        if (sessionMoves < latestTotalMovesRef.current) return false;
-        if (sessionMoves === latestTotalMovesRef.current && viewMoves !== null && viewMoves < latestViewMovesRef.current) {
+      const shouldApplySessionUpdate = (
+        session?: GameSession,
+        view?: Record<string, unknown>,
+        seq?: number,
+      ): boolean => {
+        if (typeof seq === "number") {
+          if (seq < latestWsSeqRef.current) return false;
+          latestWsSeqRef.current = seq;
+        }
+
+        const sessionMoves =
+          session && typeof session.totalMoves === "number"
+            ? session.totalMoves
+            : null;
+        const viewMoves = getViewMoveCount(view);
+
+        if (sessionMoves !== null) {
+          if (sessionMoves < latestTotalMovesRef.current) return false;
+          if (
+            sessionMoves === latestTotalMovesRef.current &&
+            viewMoves !== null &&
+            viewMoves < latestViewMovesRef.current
+          ) {
+            return false;
+          }
+          latestTotalMovesRef.current = sessionMoves;
+        } else if (
+          viewMoves !== null &&
+          viewMoves < latestViewMovesRef.current
+        ) {
           return false;
         }
-        latestTotalMovesRef.current = sessionMoves;
-      } else if (viewMoves !== null && viewMoves < latestViewMovesRef.current) {
-        return false;
-      }
 
-      if (viewMoves !== null) {
-        latestViewMovesRef.current = Math.max(latestViewMovesRef.current, viewMoves);
-      }
-      return true;
-    };
-
-    if (isWsErrorType(data.type)) {
-      const { message, code } = extractWsErrorInfo(data);
-      if (message) {
-        const parsedError = parseApiErrorMessage(message);
-        const rawErrorKey = typeof data.errorKey === "string" ? data.errorKey : undefined;
-        const displayError = challenge?.gameType === "domino"
-          ? getDominoMoveErrorText(parsedError, rawErrorKey)
-          : parsedError;
-
-        showWsErrorToast(displayError, code);
-
-        if (challenge?.gameType === "domino") {
-          setDominoMoveError(displayError);
+        if (viewMoves !== null) {
+          latestViewMovesRef.current = Math.max(
+            latestViewMovesRef.current,
+            viewMoves,
+          );
         }
+        return true;
+      };
 
-        if (data.requiresSync && wsRef.current?.readyState === WebSocket.OPEN) {
+      if (isWsErrorType(data.type)) {
+        const { message, code } = extractWsErrorInfo(data);
+        if (message) {
+          const parsedError = parseApiErrorMessage(message);
+          const rawErrorKey =
+            typeof data.errorKey === "string" ? data.errorKey : undefined;
+          const displayError =
+            challenge?.gameType === "domino"
+              ? getDominoMoveErrorText(parsedError, rawErrorKey)
+              : parsedError;
+
+          showWsErrorToast(displayError, code);
+
           if (challenge?.gameType === "domino") {
-            setDominoResyncing(true);
+            setDominoMoveError(displayError);
           }
-          requestRoleAssignment(wsRef.current);
-        }
 
-        const normalized = parsedError.toLowerCase();
-        const isGiftFundingError = code === "project_currency_required" || (
-          normalized.includes("direct real-money gifts are disabled")
-          || normalized.includes("purchase gifts with project currency first")
-          || normalized.includes("insufficient project currency")
-          || normalized.includes("project currency wallet")
-        );
-
-        if (isGiftFundingError) {
-          const requiredFromServer = toFiniteNumber((data as { requiredProjectAmount?: unknown }).requiredProjectAmount)
-            ?? toFiniteNumber((data as { giftPrice?: unknown }).giftPrice);
-          const shortfallFromServer = toFiniteNumber((data as { shortfallProjectAmount?: unknown }).shortfallProjectAmount);
-          const requiredFromRecentGift = toFiniteNumber(lastGiftAttemptRef.current?.price);
-          const requiredProjectAmount = requiredFromServer ?? requiredFromRecentGift ?? shortfallFromServer ?? 0;
-
-          if (requiredProjectAmount > 0) {
-            const projectBalanceNow = Number(projectWallet?.totalBalance || 0);
-            const projectShortage = shortfallFromServer ?? Math.max(0, requiredProjectAmount - projectBalanceNow);
-            openFundingAssistance(projectShortage > 0 ? projectShortage : requiredProjectAmount, requiredProjectAmount);
-          } else {
-            setShowQuickConvertCard(true);
-          }
-        }
-      }
-      return;
-    }
-
-    switch (data.type) {
-      case "role_assigned": {
-        const assignedRole = data.role ?? null;
-
-        if (assignedRole === "spectator" && isChallengeParticipant) {
-          setServerRole("player");
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
+          if (
+            data.requiresSync &&
+            wsRef.current?.readyState === WebSocket.OPEN
+          ) {
+            if (challenge?.gameType === "domino") {
+              setDominoResyncing(true);
+            }
             requestRoleAssignment(wsRef.current);
           }
+
+          const normalized = parsedError.toLowerCase();
+          const isGiftFundingError =
+            code === "project_currency_required" ||
+            normalized.includes("direct real-money gifts are disabled") ||
+            normalized.includes("purchase gifts with project currency first") ||
+            normalized.includes("insufficient project currency") ||
+            normalized.includes("project currency wallet");
+
+          if (isGiftFundingError) {
+            const requiredFromServer =
+              toFiniteNumber(
+                (data as { requiredProjectAmount?: unknown })
+                  .requiredProjectAmount,
+              ) ?? toFiniteNumber((data as { giftPrice?: unknown }).giftPrice);
+            const shortfallFromServer = toFiniteNumber(
+              (data as { shortfallProjectAmount?: unknown })
+                .shortfallProjectAmount,
+            );
+            const requiredFromRecentGift = toFiniteNumber(
+              lastGiftAttemptRef.current?.price,
+            );
+            const requiredProjectAmount =
+              requiredFromServer ??
+              requiredFromRecentGift ??
+              shortfallFromServer ??
+              0;
+
+            if (requiredProjectAmount > 0) {
+              const projectBalanceNow = Number(
+                projectWallet?.totalBalance || 0,
+              );
+              const projectShortage =
+                shortfallFromServer ??
+                Math.max(0, requiredProjectAmount - projectBalanceNow);
+              openFundingAssistance(
+                projectShortage > 0 ? projectShortage : requiredProjectAmount,
+                requiredProjectAmount,
+              );
+            } else {
+              setShowQuickConvertCard(true);
+            }
+          }
+        }
+        return;
+      }
+
+      switch (data.type) {
+        case "role_assigned": {
+          const assignedRole = data.role ?? null;
+
+          if (assignedRole === "spectator" && isChallengeParticipant) {
+            setServerRole("player");
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              requestRoleAssignment(wsRef.current);
+            }
+            break;
+          }
+
+          setServerRole(assignedRole);
+          if (assignedRole && challenge?.gameType === "domino") {
+            dominoLastActionSigRef.current = "";
+            setDominoTimeline([]);
+            setDominoResultMeta(null);
+          }
           break;
         }
+        case "joined_challenge_game":
+          setDominoResyncing(false);
+          if (challenge?.gameType === "domino") {
+            dominoLastActionSigRef.current = "";
+            setDominoTimeline([]);
+            setDominoResultMeta(null);
+          }
+          break;
+        case "game_state_sync":
+          lastSyncRef.current = Date.now();
+          if (shouldApplySessionUpdate(data.session, data.view, data.seq)) {
+            if (data.session) setGameSession(data.session);
+            if (data.view) {
+              setPlayerView(data.view);
+              appendDominoTimeline(data.view, data.session?.totalMoves);
+            }
+            setDominoResyncing(false);
+            setDominoMoveError(null);
+          }
+          break;
+        case "game_move":
+          lastSyncRef.current = Date.now();
+          if (shouldApplySessionUpdate(data.session, data.view, data.seq)) {
+            if (data.session) {
+              setGameSession((prev) =>
+                prev ? { ...prev, ...data.session } : (data.session ?? null),
+              );
+              clearChessMovePending();
+            }
+            if (data.view) {
+              setPlayerView(data.view);
+              appendDominoTimeline(data.view, data.session?.totalMoves);
+            }
+            setDominoResyncing(false);
+            setDominoMoveError(null);
+          }
+          // Sound: determine move type from game context
+          if (gameSession?.gameType === "chess") {
+            const view = data.view as Record<string, unknown> | undefined;
+            if (view?.lastMoveCapture) playSound("capture");
+            else if (view?.inCheck) playSound("check");
+            else playSound("move");
+          } else if (gameSession?.gameType === "backgammon") {
+            playSound("diceRoll");
+          } else {
+            playSound("cardPlay");
+          }
+          break;
+        case "chat_message":
+          if (data.message) {
+            const incomingMessage = data.message as unknown as ChatMsg;
+            setMessages((prev) => [
+              ...prev,
+              incomingMessage,
+            ]);
+            const senderRecord = incomingMessage as {
+              userId?: unknown;
+              senderId?: unknown;
+              message?: unknown;
+            };
+            const senderId =
+              typeof senderRecord.userId === "string"
+                ? senderRecord.userId
+                : typeof senderRecord.senderId === "string"
+                  ? senderRecord.senderId
+                  : "";
+            const chatText =
+              typeof senderRecord.message === "string"
+                ? senderRecord.message
+                : "";
 
-        setServerRole(assignedRole);
-        if (assignedRole && challenge?.gameType === "domino") {
-          dominoLastActionSigRef.current = "";
-          setDominoTimeline([]);
-          setDominoResultMeta(null);
-        }
-        break;
-      }
-      case "joined_challenge_game":
-        setDominoResyncing(false);
-        if (challenge?.gameType === "domino") {
-          dominoLastActionSigRef.current = "";
-          setDominoTimeline([]);
-          setDominoResultMeta(null);
-        }
-        break;
-      case "game_state_sync":
-        lastSyncRef.current = Date.now();
-        if (shouldApplySessionUpdate(data.session, data.view, data.seq)) {
-          if (data.session) setGameSession(data.session);
-          if (data.view) {
-            setPlayerView(data.view);
-            appendDominoTimeline(data.view, data.session?.totalMoves);
+            if (senderId && chatText) {
+              pushAvatarChatBubble(senderId, chatText);
+            }
           }
-          setDominoResyncing(false);
-          setDominoMoveError(null);
-        }
-        break;
-      case "game_move":
-        lastSyncRef.current = Date.now();
-        if (shouldApplySessionUpdate(data.session, data.view, data.seq)) {
-          if (data.session) {
-            setGameSession(prev => prev ? { ...prev, ...data.session } : (data.session ?? null));
-            clearChessMovePending();
+          break;
+        case "spectator_joined":
+          if (data.spectator)
+            setSpectators((prev) => [...prev, data.spectator as SpectatorInfo]);
+          break;
+        case "spectator_left":
+          setSpectators((prev) =>
+            prev.filter((s) => s.id !== data.spectatorId),
+          );
+          break;
+        case "gift_received":
+          if (data.gift) {
+            const gift = data.gift as GiftInfo;
+            const displayId = `${String(gift.id || "gift")}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const displayGift: GiftInfo = {
+              ...gift,
+              id: displayId,
+            };
+            setReceivedGifts((prev) => [...prev, displayGift]);
+            setActiveGiftAnimation({
+              id: displayId,
+              senderId: String(gift.senderId || "unknown"),
+              senderUsername: String(gift.senderName || "Supporter"),
+              recipientId: String(gift.recipientId || "unknown"),
+              giftItem: {
+                id: String(gift.id || "gift"),
+                name: String(gift.giftName || "Gift"),
+                nameAr: String(gift.giftName || "هدية"),
+                icon: "sparkles",
+                price: String(gift.amount || 0),
+              },
+              quantity: 1,
+            });
+            toast({
+              title: t("challenge.newGift"),
+              description: `${gift.senderName} sent ${gift.giftName}`,
+            });
+            setTimeout(() => {
+              setReceivedGifts((prev) =>
+                prev.filter((g) => g.id !== displayId),
+              );
+            }, 1500);
           }
-          if (data.view) {
-            setPlayerView(data.view);
-            appendDominoTimeline(data.view, data.session?.totalMoves);
-          }
-          setDominoResyncing(false);
-          setDominoMoveError(null);
+          break;
+        case "player_disconnected_grace": {
+          const payload = (data.payload || {}) as Record<string, unknown>;
+          const graceMs = Number(payload.graceMs);
+          setAutoPlayNotice({
+            mode: "grace",
+            username:
+              typeof payload.username === "string"
+                ? payload.username
+                : undefined,
+            seconds:
+              Number.isFinite(graceMs) && graceMs > 0
+                ? Math.max(1, Math.round(graceMs / 1000))
+                : 60,
+            startedAtMs: Date.now(),
+          });
+          break;
         }
-        // Sound: determine move type from game context
-        if (gameSession?.gameType === "chess") {
-          const view = data.view as Record<string, unknown> | undefined;
-          if (view?.lastMoveCapture) playSound("capture");
-          else if (view?.inCheck) playSound("check");
-          else playSound("move");
-        } else if (gameSession?.gameType === "backgammon") {
-          playSound("diceRoll");
-        } else {
-          playSound("cardPlay");
-        }
-        break;
-      case "chat_message":
-        if (data.message) setMessages(prev => [...prev, data.message as unknown as ChatMsg]);
-        break;
-      case "spectator_joined":
-        if (data.spectator) setSpectators(prev => [...prev, data.spectator as SpectatorInfo]);
-        break;
-      case "spectator_left":
-        setSpectators(prev => prev.filter(s => s.id !== data.spectatorId));
-        break;
-      case "gift_received":
-        if (data.gift) {
-          const gift = data.gift as GiftInfo;
-          const displayId = `${String(gift.id || "gift")}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-          const displayGift: GiftInfo = {
-            ...gift,
-            id: displayId,
-          };
-          setReceivedGifts(prev => [...prev, displayGift]);
-          setActiveGiftAnimation({
-            id: displayId,
-            senderId: String(gift.senderId || "unknown"),
-            senderUsername: String(gift.senderName || "Supporter"),
-            recipientId: String(gift.recipientId || "unknown"),
-            giftItem: {
-              id: String(gift.id || "gift"),
-              name: String(gift.giftName || "Gift"),
-              nameAr: String(gift.giftName || "هدية"),
-              icon: "sparkles",
-              price: String(gift.amount || 0),
-            },
-            quantity: 1,
+        case "player_absent_auto": {
+          const payload = (data.payload || {}) as Record<string, unknown>;
+          const username =
+            typeof payload.username === "string" ? payload.username : undefined;
+          const turnTimeLimitMs = Number(payload.turnTimeLimitMs);
+          const seconds =
+            Number.isFinite(turnTimeLimitMs) && turnTimeLimitMs > 0
+              ? Math.max(1, Math.round(turnTimeLimitMs / 1000))
+              : 30;
+          setAutoPlayNotice({
+            mode: "autoplay",
+            username,
+            seconds,
+            startedAtMs: Date.now(),
           });
           toast({
-            title: t('challenge.newGift'),
-            description: `${gift.senderName} sent ${gift.giftName}`,
+            title:
+              language === "ar"
+                ? "تم تفعيل اللعب التلقائي"
+                : "Auto Play enabled",
+            description:
+              language === "ar"
+                ? `${username || "أحد اللاعبين"} أصبح غائبًا، وسيكمل النظام اللعب تلقائيًا كل ${seconds} ثانية حتى نهاية التحدي.`
+                : `${username || "A player"} is absent, so the system will auto-play every ${seconds} seconds until the challenge ends.`,
           });
-          setTimeout(() => {
-            setReceivedGifts(prev => prev.filter(g => g.id !== displayId));
-          }, 1500);
-        }
-        break;
-      case "player_disconnected_grace": {
-        const payload = (data.payload || {}) as Record<string, unknown>;
-        const graceMs = Number(payload.graceMs);
-        setAutoPlayNotice({
-          mode: "grace",
-          username: typeof payload.username === "string" ? payload.username : undefined,
-          seconds: Number.isFinite(graceMs) && graceMs > 0 ? Math.max(1, Math.round(graceMs / 1000)) : 60,
-          startedAtMs: Date.now(),
-        });
-        break;
-      }
-      case "player_absent_auto": {
-        const payload = (data.payload || {}) as Record<string, unknown>;
-        const username = typeof payload.username === "string" ? payload.username : undefined;
-        const turnTimeLimitMs = Number(payload.turnTimeLimitMs);
-        const seconds = Number.isFinite(turnTimeLimitMs) && turnTimeLimitMs > 0 ? Math.max(1, Math.round(turnTimeLimitMs / 1000)) : 30;
-        setAutoPlayNotice({
-          mode: "autoplay",
-          username,
-          seconds,
-          startedAtMs: Date.now(),
-        });
-        toast({
-          title: language === "ar" ? "تم تفعيل اللعب التلقائي" : "Auto Play enabled",
-          description: language === "ar"
-            ? `${username || "أحد اللاعبين"} أصبح غائبًا، وسيكمل النظام اللعب تلقائيًا كل ${seconds} ثانية حتى نهاية التحدي.`
-            : `${username || "A player"} is absent, so the system will auto-play every ${seconds} seconds until the challenge ends.`,
-        });
-        break;
-      }
-      case "game_ended":
-        setAutoPlayNotice(null);
-        if (!shouldAcceptSeqOnly(data.seq)) {
           break;
         }
-        setDominoResyncing(false);
-        if (challenge?.gameType === "domino") {
-          setDominoResultMeta({
-            winnerId: data.winnerId,
-            reason: data.reason,
-            isDraw: data.isDraw,
-            scores: data.scores,
-            lowestPips: data.lowestPips,
-            winningTeamPips: data.winningTeamPips,
+        case "game_ended":
+          setAutoPlayNotice(null);
+          if (!shouldAcceptSeqOnly(data.seq)) {
+            break;
+          }
+          setDominoResyncing(false);
+          if (challenge?.gameType === "domino") {
+            setDominoResultMeta({
+              winnerId: data.winnerId,
+              reason: data.reason,
+              isDraw: data.isDraw,
+              scores: data.scores,
+              lowestPips: data.lowestPips,
+              winningTeamPips: data.winningTeamPips,
+            });
+          }
+          clearChessMovePending();
+          setGameSession((prev) =>
+            prev
+              ? {
+                ...prev,
+                status: "finished",
+                winnerId: data.winnerId ?? undefined,
+                winReason: data.reason ?? undefined,
+              }
+              : {
+                id: "",
+                challengeId: challengeId || "",
+                gameType:
+                  (challenge?.gameType as GameSession["gameType"]) || "chess",
+                currentTurn: "",
+                player1TimeRemaining: 0,
+                player2TimeRemaining: 0,
+                gameState: "",
+                status: "finished",
+                winnerId: data.winnerId ?? undefined,
+                winReason: data.reason ?? undefined,
+                totalMoves: latestTotalMovesRef.current,
+                spectatorCount: 0,
+                totalGiftsValue: "0",
+              },
+          );
+          setDrawOffered(null);
+          const isDrawResult =
+            data.reason === "draw_agreement" ||
+            data.reason === "draw" ||
+            data.isDraw === true;
+          if (data.winnerId === user?.id) playSound("gameWin");
+          else if (isDrawResult) playSound("draw");
+          else playSound("gameLose");
+          break;
+        case "draw_offered":
+          if (!shouldAcceptSeqOnly(data.seq)) {
+            break;
+          }
+          setDrawOffered(data.offeredBy ?? null);
+          playSound("draw");
+          toast({
+            title: t("challenge.drawOffered"),
+            description: t("challenge.opponentOffersDraw"),
           });
-        }
-        clearChessMovePending();
-        setGameSession(prev => prev ? { ...prev, status: "finished", winnerId: data.winnerId ?? undefined, winReason: data.reason ?? undefined } : {
-          id: "",
-          challengeId: challengeId || "",
-          gameType: (challenge?.gameType as GameSession["gameType"]) || "chess",
-          currentTurn: "",
-          player1TimeRemaining: 0,
-          player2TimeRemaining: 0,
-          gameState: "",
-          status: "finished",
-          winnerId: data.winnerId ?? undefined,
-          winReason: data.reason ?? undefined,
-          totalMoves: latestTotalMovesRef.current,
-          spectatorCount: 0,
-          totalGiftsValue: "0",
-        });
-        setDrawOffered(null);
-        const isDrawResult = data.reason === "draw_agreement"
-          || data.reason === "draw"
-          || data.isDraw === true;
-        if (data.winnerId === user?.id) playSound("gameWin");
-        else if (isDrawResult) playSound("draw");
-        else playSound("gameLose");
-        break;
-      case "draw_offered":
-        if (!shouldAcceptSeqOnly(data.seq)) {
           break;
-        }
-        setDrawOffered(data.offeredBy ?? null);
-        playSound("draw");
-        toast({
-          title: t('challenge.drawOffered'),
-          description: t('challenge.opponentOffersDraw'),
-        });
-        break;
-      case "draw_declined":
-        if (!shouldAcceptSeqOnly(data.seq)) {
+        case "draw_declined":
+          if (!shouldAcceptSeqOnly(data.seq)) {
+            break;
+          }
+          setDrawOffered(null);
+          toast({
+            title: t("challenge.drawDeclined"),
+            description: t("challenge.drawDeclinedDesc"),
+          });
           break;
-        }
-        setDrawOffered(null);
-        toast({
-          title: t('challenge.drawDeclined'),
-          description: t('challenge.drawDeclinedDesc'),
-        });
-        break;
-      case "dice_rolled":
-      case "turn_ended":
-        if (!shouldAcceptSeqOnly(data.seq)) {
+        case "dice_rolled":
+        case "turn_ended":
+          if (!shouldAcceptSeqOnly(data.seq)) {
+            break;
+          }
+          lastSyncRef.current = Date.now();
+          if (data.view) setPlayerView(data.view);
           break;
-        }
-        lastSyncRef.current = Date.now();
-        if (data.view) setPlayerView(data.view);
-        break;
-      case "session_replaced":
-        toast({
-          title: t('challenge.openedOtherTab'),
-          description: t('challenge.redirecting'),
-          variant: "destructive",
-        });
-        setTimeout(() => setLocation("/challenges"), 2000);
-        break;
-      case "spectator_count":
-        setGameSession(prev => prev ? { ...prev, spectatorCount: (data.count as number) ?? 0 } : prev);
-        break;
-    }
-  }, [
-    toast,
-    playSound,
-    user,
-    gameSession?.gameType,
-    showWsErrorToast,
-    clearChessMovePending,
-    challengeId,
-    challenge?.gameType,
-    parseApiErrorMessage,
-    openFundingAssistance,
-    projectWallet?.totalBalance,
-    toFiniteNumber,
-    isChallengeParticipant,
-    requestRoleAssignment,
-    getDominoMoveErrorText,
-    appendDominoTimeline,
-    language,
-  ]);
+        case "session_replaced":
+          toast({
+            title: t("challenge.openedOtherTab"),
+            description: t("challenge.redirecting"),
+            variant: "destructive",
+          });
+          setTimeout(() => setLocation("/challenges"), 2000);
+          break;
+        case "spectator_count":
+          setGameSession((prev) =>
+            prev
+              ? { ...prev, spectatorCount: (data.count as number) ?? 0 }
+              : prev,
+          );
+          break;
+      }
+    },
+    [
+      toast,
+      playSound,
+      user,
+      gameSession?.gameType,
+      showWsErrorToast,
+      clearChessMovePending,
+      challengeId,
+      challenge?.gameType,
+      parseApiErrorMessage,
+      openFundingAssistance,
+      projectWallet?.totalBalance,
+      toFiniteNumber,
+      isChallengeParticipant,
+      requestRoleAssignment,
+      getDominoMoveErrorText,
+      appendDominoTimeline,
+      language,
+      pushAvatarChatBubble,
+    ],
+  );
 
-  const sendMove = useCallback((move: object) => {
-    if (!canPlayActions) {
-      showSpectatorActionBlocked();
+  useEffect(() => {
+    if (gameSession?.status !== "finished") {
       return;
     }
 
-    const isChessMove = gameSession?.gameType === "chess"
-      && typeof (move as { from?: unknown }).from === "string"
-      && typeof (move as { to?: unknown }).to === "string";
+    setMessages([]);
+    setAvatarChatBubbles({});
+  }, [gameSession?.status]);
 
-    if (isChessMove && chessMovePendingRef.current) {
-      return;
-    }
-
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      setDominoMoveError(null);
-      if (isChessMove) {
-        chessMovePendingRef.current = true;
-        if (chessMoveAckTimerRef.current) {
-          clearTimeout(chessMoveAckTimerRef.current);
-        }
-        chessMoveAckTimerRef.current = setTimeout(() => {
-          chessMovePendingRef.current = false;
-          chessMoveAckTimerRef.current = null;
-        }, 3000);
+  const sendMove = useCallback(
+    (move: object) => {
+      if (!canPlayActions) {
+        showSpectatorActionBlocked();
+        return;
       }
 
-      wsRef.current.send(JSON.stringify({
-        type: "game_move",
-        challengeId,
-        move,
-      }));
-    }
-  }, [challengeId, canPlayActions, showSpectatorActionBlocked, gameSession?.gameType]);
+      const isChessMove =
+        gameSession?.gameType === "chess" &&
+        typeof (move as { from?: unknown }).from === "string" &&
+        typeof (move as { to?: unknown }).to === "string";
+
+      if (isChessMove && chessMovePendingRef.current) {
+        return;
+      }
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        setDominoMoveError(null);
+        if (isChessMove) {
+          chessMovePendingRef.current = true;
+          if (chessMoveAckTimerRef.current) {
+            clearTimeout(chessMoveAckTimerRef.current);
+          }
+          chessMoveAckTimerRef.current = setTimeout(() => {
+            chessMovePendingRef.current = false;
+            chessMoveAckTimerRef.current = null;
+          }, 3000);
+        }
+
+        wsRef.current.send(
+          JSON.stringify({
+            type: "game_move",
+            challengeId,
+            move,
+          }),
+        );
+      }
+    },
+    [
+      challengeId,
+      canPlayActions,
+      showSpectatorActionBlocked,
+      gameSession?.gameType,
+    ],
+  );
 
   // DominoBoard emits UI-friendly move shape; challenge websocket expects engine move shape.
-  const sendDominoMove = useCallback((move: DominoBoardMove) => {
-    setDominoMoveError(null);
-    setDominoResyncing(false);
+  const sendDominoMove = useCallback(
+    (move: DominoBoardMove) => {
+      setDominoMoveError(null);
+      setDominoResyncing(false);
 
-    const hand = extractDominoHandFromPlayerView(playerView);
-    const adaptedMove = adaptDominoBoardMoveToEngine(move, hand);
-    sendMove(adaptedMove);
-  }, [sendMove, playerView]);
+      const hand = extractDominoHandFromPlayerView(playerView);
+      const adaptedMove = adaptDominoBoardMoveToEngine(move, hand);
+      sendMove(adaptedMove);
+    },
+    [sendMove, playerView],
+  );
 
   const dominoBoardState = useMemo(() => {
     const normalized = normalizeDominoChallengePlayerView(playerView);
@@ -1206,30 +1574,47 @@ export default function ChallengeGamePage() {
   }, [gameSession?.lastMoveAt, gameSession?.totalMoves]);
 
   const balootTurnStartedAtMs = useMemo(() => {
-    const rawStartedAt = gameSession?.lastMoveAt || gameSession?.updatedAt || gameSession?.createdAt;
+    const rawStartedAt =
+      gameSession?.lastMoveAt ||
+      gameSession?.updatedAt ||
+      gameSession?.createdAt;
     if (!rawStartedAt) {
       return undefined;
     }
 
     const parsed = new Date(rawStartedAt).getTime();
     return Number.isFinite(parsed) ? parsed : undefined;
-  }, [gameSession?.createdAt, gameSession?.lastMoveAt, gameSession?.totalMoves, gameSession?.updatedAt]);
+  }, [
+    gameSession?.createdAt,
+    gameSession?.lastMoveAt,
+    gameSession?.totalMoves,
+    gameSession?.updatedAt,
+  ]);
 
   const tarneebTurnStartedAtMs = useMemo(() => {
-    const rawStartedAt = gameSession?.lastMoveAt || gameSession?.updatedAt || gameSession?.createdAt;
+    const rawStartedAt =
+      gameSession?.lastMoveAt ||
+      gameSession?.updatedAt ||
+      gameSession?.createdAt;
     if (!rawStartedAt) {
       return undefined;
     }
 
     const parsed = new Date(rawStartedAt).getTime();
     return Number.isFinite(parsed) ? parsed : undefined;
-  }, [gameSession?.createdAt, gameSession?.lastMoveAt, gameSession?.totalMoves, gameSession?.updatedAt]);
+  }, [
+    gameSession?.createdAt,
+    gameSession?.lastMoveAt,
+    gameSession?.totalMoves,
+    gameSession?.updatedAt,
+  ]);
 
   const dominoScoreRows = useMemo<DominoScoreRow[]>(() => {
     const metaScores = dominoResultMeta?.scores;
-    const liveScores = playerView?.scores && typeof playerView.scores === "object"
-      ? playerView.scores as Record<string, unknown>
-      : undefined;
+    const liveScores =
+      playerView?.scores && typeof playerView.scores === "object"
+        ? (playerView.scores as Record<string, unknown>)
+        : undefined;
     const source = metaScores || liveScores;
 
     if (!source || typeof source !== "object") {
@@ -1237,10 +1622,14 @@ export default function ChallengeGamePage() {
     }
 
     return Object.entries(source)
-      .filter(([, value]) => typeof value === "number" && Number.isFinite(value))
+      .filter(
+        ([, value]) => typeof value === "number" && Number.isFinite(value),
+      )
       .map(([playerId, value], index) => ({
         id: playerId,
-        label: dominoPlayerLabels.get(playerId) || `${t("domino.player")} ${index + 1}`,
+        label:
+          dominoPlayerLabels.get(playerId) ||
+          `${t("domino.player")} ${index + 1}`,
         score: value as number,
       }))
       .sort((a, b) => b.score - a.score);
@@ -1249,16 +1638,20 @@ export default function ChallengeGamePage() {
   const dominoEndgameSummary = useMemo<DominoEndgameSummary>(() => {
     const reason = dominoResultMeta?.reason || gameSession?.winReason;
     const winnerId = dominoResultMeta?.winnerId || gameSession?.winnerId;
-    const isDraw = Boolean(dominoResultMeta?.isDraw)
-      || reason === "draw"
-      || reason === "draw_agreement";
+    const isDraw =
+      Boolean(dominoResultMeta?.isDraw) ||
+      reason === "draw" ||
+      reason === "draw_agreement";
 
     const winnerLabel = winnerId
-      ? (winnerId === user?.id ? t("domino.you") : (dominoPlayerLabels.get(winnerId) || t("domino.player")))
+      ? winnerId === user?.id
+        ? t("domino.you")
+        : dominoPlayerLabels.get(winnerId) || t("domino.player")
       : undefined;
 
-    const isFinished = challenge?.gameType === "domino"
-      && (gameSession?.status === "finished" || Boolean(dominoResultMeta));
+    const isFinished =
+      challenge?.gameType === "domino" &&
+      (gameSession?.status === "finished" || Boolean(dominoResultMeta));
 
     return {
       isFinished,
@@ -1268,7 +1661,16 @@ export default function ChallengeGamePage() {
       lowestPips: dominoResultMeta?.lowestPips,
       winningTeamPips: dominoResultMeta?.winningTeamPips,
     };
-  }, [challenge?.gameType, dominoPlayerLabels, dominoResultMeta, gameSession?.status, gameSession?.winReason, gameSession?.winnerId, t, user?.id]);
+  }, [
+    challenge?.gameType,
+    dominoPlayerLabels,
+    dominoResultMeta,
+    gameSession?.status,
+    gameSession?.winReason,
+    gameSession?.winnerId,
+    t,
+    user?.id,
+  ]);
 
   // Backgammon-specific: roll dice
   const sendRoll = useCallback(() => {
@@ -1276,9 +1678,12 @@ export default function ChallengeGamePage() {
   }, [sendMove]);
 
   // Backgammon: move checker
-  const sendBackgammonMove = useCallback((from: number, to: number) => {
-    sendMove({ type: "move", from: String(from), to: String(to) });
-  }, [sendMove]);
+  const sendBackgammonMove = useCallback(
+    (from: number, to: number) => {
+      sendMove({ type: "move", from: String(from), to: String(to) });
+    },
+    [sendMove],
+  );
 
   // Backgammon: doubling cube
   const sendDouble = useCallback(() => {
@@ -1294,14 +1699,20 @@ export default function ChallengeGamePage() {
   }, [sendMove]);
 
   // Card games: play a card
-  const sendPlayCard = useCallback((card: object) => {
-    sendMove({ type: "playCard", card });
-  }, [sendMove]);
+  const sendPlayCard = useCallback(
+    (card: object) => {
+      sendMove({ type: "playCard", card });
+    },
+    [sendMove],
+  );
 
   // Tarneeb/Baloot: bid
-  const sendBid = useCallback((bid: number) => {
-    sendMove({ type: "bid", bid });
-  }, [sendMove]);
+  const sendBid = useCallback(
+    (bid: number) => {
+      sendMove({ type: "bid", bid });
+    },
+    [sendMove],
+  );
 
   // Tarneeb/Baloot: pass
   const sendPass = useCallback(() => {
@@ -1315,18 +1726,27 @@ export default function ChallengeGamePage() {
   }, [challenge?.gameType, sendMove]);
 
   // Tarneeb: set trump suit after winning bid
-  const sendSetTrump = useCallback((suit: string) => {
-    sendMove({ type: "setTrump", suit });
-  }, [sendMove]);
+  const sendSetTrump = useCallback(
+    (suit: string) => {
+      sendMove({ type: "setTrump", suit });
+    },
+    [sendMove],
+  );
 
   // Baloot: choose game type (sun/hokm)
-  const sendChooseTrump = useCallback((gameType: "sun" | "hokm", suit?: string) => {
-    sendMove({ type: "choose", gameType, trumpSuit: suit });
-  }, [sendMove]);
+  const sendChooseTrump = useCallback(
+    (gameType: "sun" | "hokm", suit?: string) => {
+      sendMove({ type: "choose", gameType, trumpSuit: suit });
+    },
+    [sendMove],
+  );
 
-  const sendLanguageDuelAnswer = useCallback((answerText: string, responseMs: number) => {
-    sendMove({ type: "submit_answer", answerText, responseMs });
-  }, [sendMove]);
+  const sendLanguageDuelAnswer = useCallback(
+    (answerText: string, responseMs: number) => {
+      sendMove({ type: "submit_answer", answerText, responseMs });
+    },
+    [sendMove],
+  );
 
   // Chess: draw offer
   const sendOfferDraw = useCallback(() => {
@@ -1336,71 +1756,93 @@ export default function ChallengeGamePage() {
     }
 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: "offer_draw",
-        challengeId,
-      }));
+      wsRef.current.send(
+        JSON.stringify({
+          type: "offer_draw",
+          challengeId,
+        }),
+      );
       setDrawOffered(user?.id || null);
     }
   }, [challengeId, user, canPlayActions, showSpectatorActionBlocked]);
 
-  const sendRespondDraw = useCallback((accept: boolean) => {
-    if (!canPlayActions) {
-      showSpectatorActionBlocked();
-      return;
-    }
+  const sendRespondDraw = useCallback(
+    (accept: boolean) => {
+      if (!canPlayActions) {
+        showSpectatorActionBlocked();
+        return;
+      }
 
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: "respond_draw",
-        challengeId,
-        accept,
-      }));
-      setDrawOffered(null);
-    }
-  }, [challengeId, canPlayActions, showSpectatorActionBlocked]);
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: "respond_draw",
+            challengeId,
+            accept,
+          }),
+        );
+        setDrawOffered(null);
+      }
+    },
+    [challengeId, canPlayActions, showSpectatorActionBlocked],
+  );
 
-  const sendChatMessage = useCallback((message: string, isQuickMessage = false, quickMessageKey?: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: "challenge_chat",
-        challengeId,
-        message,
-        isQuickMessage,
-        quickMessageKey,
-      }));
-    }
-    setMessageInput("");
-  }, [challengeId]);
+  const sendChatMessage = useCallback(
+    (message: string, isQuickMessage = false, quickMessageKey?: string) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: "challenge_chat",
+            challengeId,
+            message,
+            isQuickMessage,
+            quickMessageKey,
+          }),
+        );
+      }
+      setMessageInput("");
+    },
+    [challengeId],
+  );
 
-  const sendGiftToPlayer = useCallback((giftId: string, recipientId: string, meta?: { price?: number }) => {
-    if (wsRef.current?.readyState !== WebSocket.OPEN) {
-      toast({
-        title: language === "ar" ? "الاتصال غير جاهز" : "Connection not ready",
-        description: language === "ar" ? "أعد المحاولة خلال لحظة." : "Please try again in a moment.",
-        variant: "destructive",
-      });
-      return;
-    }
+  const sendGiftToPlayer = useCallback(
+    (giftId: string, recipientId: string, meta?: { price?: number }) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+        toast({
+          title:
+            language === "ar" ? "الاتصال غير جاهز" : "Connection not ready",
+          description:
+            language === "ar"
+              ? "أعد المحاولة خلال لحظة."
+              : "Please try again in a moment.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    const attemptedGiftPrice = Number(meta?.price || 0);
-    lastGiftAttemptRef.current = {
-      giftId,
-      price: Number.isFinite(attemptedGiftPrice) ? attemptedGiftPrice : 0,
-    };
+      const attemptedGiftPrice = Number(meta?.price || 0);
+      lastGiftAttemptRef.current = {
+        giftId,
+        price: Number.isFinite(attemptedGiftPrice) ? attemptedGiftPrice : 0,
+      };
 
-    const idempotencyKey = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const idempotencyKey =
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-    wsRef.current.send(JSON.stringify({
-      type: "gift_to_player",
-      challengeId,
-      giftId,
-      recipientId,
-      idempotencyKey,
-    }));
-  }, [challengeId, toast, language]);
+      wsRef.current.send(
+        JSON.stringify({
+          type: "gift_to_player",
+          challengeId,
+          giftId,
+          recipientId,
+          idempotencyKey,
+        }),
+      );
+    },
+    [challengeId, toast, language],
+  );
 
   const clearGiftAnimation = useCallback(() => {
     setActiveGiftAnimation(null);
@@ -1414,10 +1856,12 @@ export default function ChallengeGamePage() {
     }
 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: "game_resign",
-        challengeId,
-      }));
+      wsRef.current.send(
+        JSON.stringify({
+          type: "game_resign",
+          challengeId,
+        }),
+      );
     }
     setShowResignDialog(false);
   }, [challengeId, canPlayActions, showSpectatorActionBlocked]);
@@ -1430,7 +1874,9 @@ export default function ChallengeGamePage() {
 
   // Keep timer calculations and timeout effect above conditional returns
   // so hook order stays stable across loading/error/success renders.
-  const elapsedSinceSyncSec = Math.floor((Date.now() - lastSyncRef.current) / 1000);
+  const elapsedSinceSyncSec = Math.floor(
+    (Date.now() - lastSyncRef.current) / 1000,
+  );
   const isMyTurnForTimer = gameSession?.currentTurn === user?.id;
   const fallbackTimeLimit = challenge?.timeLimit ?? 0;
   const isPlayerOne = challenge?.player1Id === user?.id;
@@ -1441,78 +1887,139 @@ export default function ChallengeGamePage() {
     ? (gameSession?.player2TimeRemaining ?? fallbackTimeLimit)
     : (gameSession?.player1TimeRemaining ?? fallbackTimeLimit);
   void localTimerTick; // referenced to trigger re-render
-  const myTimeRemaining = Math.max(0, isMyTurnForTimer ? serverMyTime - elapsedSinceSyncSec : serverMyTime);
-  const opponentTimeRemaining = Math.max(0, !isMyTurnForTimer ? serverOppTime - elapsedSinceSyncSec : serverOppTime);
+  const myTimeRemaining = Math.max(
+    0,
+    isMyTurnForTimer ? serverMyTime - elapsedSinceSyncSec : serverMyTime,
+  );
+  const opponentTimeRemaining = Math.max(
+    0,
+    !isMyTurnForTimer ? serverOppTime - elapsedSinceSyncSec : serverOppTime,
+  );
   const player1TurnActive = gameSession?.currentTurn === challenge?.player1Id;
   const player2TurnActive = gameSession?.currentTurn === challenge?.player2Id;
   const rawPlayer1Time = gameSession?.player1TimeRemaining ?? fallbackTimeLimit;
   const rawPlayer2Time = gameSession?.player2TimeRemaining ?? fallbackTimeLimit;
-  const player1TimeRemaining = Math.max(0, player1TurnActive ? rawPlayer1Time - elapsedSinceSyncSec : rawPlayer1Time);
-  const player2TimeRemaining = Math.max(0, player2TurnActive ? rawPlayer2Time - elapsedSinceSyncSec : rawPlayer2Time);
-  const autoPlayActorName = autoPlayNotice?.username || (language === "ar" ? "أحد اللاعبين" : "A player");
-  const autoPlayBaseSeconds = Math.max(1, autoPlayNotice?.seconds ?? (autoPlayNotice?.mode === "grace" ? 60 : 30));
+  const player1TimeRemaining = Math.max(
+    0,
+    player1TurnActive ? rawPlayer1Time - elapsedSinceSyncSec : rawPlayer1Time,
+  );
+  const player2TimeRemaining = Math.max(
+    0,
+    player2TurnActive ? rawPlayer2Time - elapsedSinceSyncSec : rawPlayer2Time,
+  );
+  const autoPlayActorName =
+    autoPlayNotice?.username ||
+    (language === "ar" ? "أحد اللاعبين" : "A player");
+  const autoPlayBaseSeconds = Math.max(
+    1,
+    autoPlayNotice?.seconds ?? (autoPlayNotice?.mode === "grace" ? 60 : 30),
+  );
   const autoPlayElapsedSeconds = autoPlayNotice
-    ? Math.max(0, Math.floor((Date.now() - (autoPlayNotice.startedAtMs ?? Date.now())) / 1000))
+    ? Math.max(
+      0,
+      Math.floor(
+        (Date.now() - (autoPlayNotice.startedAtMs ?? Date.now())) / 1000,
+      ),
+    )
     : 0;
   const autoPlayLiveSeconds = autoPlayNotice
-    ? (autoPlayNotice.mode === "grace"
+    ? autoPlayNotice.mode === "grace"
       ? Math.max(0, autoPlayBaseSeconds - autoPlayElapsedSeconds)
-      : Math.max(1, autoPlayBaseSeconds - (autoPlayElapsedSeconds % autoPlayBaseSeconds)))
+      : Math.max(
+        1,
+        autoPlayBaseSeconds - (autoPlayElapsedSeconds % autoPlayBaseSeconds),
+      )
     : null;
-  const autoPlayTitle = autoPlayNotice?.mode === "autoplay"
-    ? (language === "ar" ? "تم تفعيل Auto Play" : "Auto Play is active")
-    : (language === "ar" ? "بانتظار عودة اللاعب" : "Waiting for reconnection");
-  const autoPlayDescription = autoPlayNotice?.mode === "autoplay"
-    ? (language === "ar"
-      ? `${autoPlayActorName} أصبح غائبًا، وسيقوم النظام بحركة تلقائية كل ${autoPlayBaseSeconds} ثانية حتى تنتهي المباراة.`
-      : `${autoPlayActorName} is absent, so the system will auto-play every ${autoPlayBaseSeconds} seconds until the match ends.`)
-    : (language === "ar"
-      ? `${autoPlayActorName} انقطع عن المباراة. إذا لم يعد خلال ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} ثانية سيدخل التحدي وضع Auto Play.`
-      : `${autoPlayActorName} disconnected from the match. If they do not return within ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} seconds, Auto Play will take over.`);
-  const dominoScoreLookup = useMemo(() => new Map(dominoScoreRows.map((row) => [row.id, row.score])), [dominoScoreRows]);
-  const dominoPlayer1Score = challenge?.player1Id ? (dominoScoreLookup.get(challenge.player1Id) ?? 0) : 0;
-  const dominoPlayer2Score = challenge?.player2Id ? (dominoScoreLookup.get(challenge.player2Id) ?? 0) : 0;
-  const dominoAutoPlayBadgeText = autoPlayNotice && autoPlayLiveSeconds !== null
-    ? (autoPlayNotice.mode === "grace"
-      ? (language === "ar"
-        ? `اللعب التلقائي خلال ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
-        : `Auto Play in ${autoPlayLiveSeconds}s · ${autoPlayActorName}`)
-      : (language === "ar"
-        ? `اللعب التلقائي ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
-        : `Auto Play ${autoPlayLiveSeconds}s · ${autoPlayActorName}`))
-    : null;
+  const autoPlayTitle =
+    autoPlayNotice?.mode === "autoplay"
+      ? language === "ar"
+        ? "تم تفعيل Auto Play"
+        : "Auto Play is active"
+      : language === "ar"
+        ? "بانتظار عودة اللاعب"
+        : "Waiting for reconnection";
+  const autoPlayDescription =
+    autoPlayNotice?.mode === "autoplay"
+      ? language === "ar"
+        ? `${autoPlayActorName} أصبح غائبًا، وسيقوم النظام بحركة تلقائية كل ${autoPlayBaseSeconds} ثانية حتى تنتهي المباراة.`
+        : `${autoPlayActorName} is absent, so the system will auto-play every ${autoPlayBaseSeconds} seconds until the match ends.`
+      : language === "ar"
+        ? `${autoPlayActorName} انقطع عن المباراة. إذا لم يعد خلال ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} ثانية سيدخل التحدي وضع Auto Play.`
+        : `${autoPlayActorName} disconnected from the match. If they do not return within ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} seconds, Auto Play will take over.`;
+  const dominoScoreLookup = useMemo(
+    () => new Map(dominoScoreRows.map((row) => [row.id, row.score])),
+    [dominoScoreRows],
+  );
+  const dominoPlayer1Score = challenge?.player1Id
+    ? (dominoScoreLookup.get(challenge.player1Id) ?? 0)
+    : 0;
+  const dominoPlayer2Score = challenge?.player2Id
+    ? (dominoScoreLookup.get(challenge.player2Id) ?? 0)
+    : 0;
+  const dominoAutoPlayBadgeText =
+    autoPlayNotice && autoPlayLiveSeconds !== null
+      ? autoPlayNotice.mode === "grace"
+        ? language === "ar"
+          ? `اللعب التلقائي خلال ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
+          : `Auto Play in ${autoPlayLiveSeconds}s · ${autoPlayActorName}`
+        : language === "ar"
+          ? `اللعب التلقائي ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
+          : `Auto Play ${autoPlayLiveSeconds}s · ${autoPlayActorName}`
+      : null;
 
   useEffect(() => {
-    if (gameSession?.status !== "playing" || !canPlayActions || challenge?.gameType !== "chess") {
+    if (
+      gameSession?.status !== "playing" ||
+      !canPlayActions ||
+      challenge?.gameType !== "chess"
+    ) {
       timeoutSignalSentRef.current = false;
       return;
     }
 
     const iAmCurrentTurn = gameSession.currentTurn === user?.id;
-    if (!iAmCurrentTurn || myTimeRemaining > 0 || timeoutSignalSentRef.current) {
+    if (
+      !iAmCurrentTurn ||
+      myTimeRemaining > 0 ||
+      timeoutSignalSentRef.current
+    ) {
       return;
     }
 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       timeoutSignalSentRef.current = true;
-      wsRef.current.send(JSON.stringify({
-        type: "game_resign",
-        challengeId,
-        reason: "timeout",
-      }));
+      wsRef.current.send(
+        JSON.stringify({
+          type: "game_resign",
+          challengeId,
+          reason: "timeout",
+        }),
+      );
     }
-  }, [gameSession?.status, gameSession?.currentTurn, canPlayActions, challenge?.gameType, myTimeRemaining, user?.id, challengeId]);
+  }, [
+    gameSession?.status,
+    gameSession?.currentTurn,
+    canPlayActions,
+    challenge?.gameType,
+    myTimeRemaining,
+    user?.id,
+    challengeId,
+  ]);
 
-  const minConvertAmount = Number(projectCurrencySettings?.minConversionAmount || 1);
-  const maxConvertAmount = Number(projectCurrencySettings?.maxConversionAmount || 10000);
+  const minConvertAmount = Number(
+    projectCurrencySettings?.minConversionAmount || 1,
+  );
+  const maxConvertAmount = Number(
+    projectCurrencySettings?.maxConversionAmount || 10000,
+  );
   const quickConvertAmountValue = Number(quickConvertAmount || 0);
   const quickConvertDisabled =
-    quickConvertMutation.isPending
-    || !quickConvertAmount
-    || quickConvertAmountValue <= 0
-    || quickConvertAmountValue < minConvertAmount
-    || quickConvertAmountValue > maxConvertAmount
-    || quickConvertAmountValue > Number(user?.balance || 0);
+    quickConvertMutation.isPending ||
+    !quickConvertAmount ||
+    quickConvertAmountValue <= 0 ||
+    quickConvertAmountValue < minConvertAmount ||
+    quickConvertAmountValue > maxConvertAmount ||
+    quickConvertAmountValue > Number(user?.balance || 0);
 
   if (isLoading) {
     return (
@@ -1529,24 +2036,45 @@ export default function ChallengeGamePage() {
     const isRateLimited = challengeErrorStatus === 429;
 
     const title = isUnauthorized
-      ? (language === "ar" ? "تسجيل الدخول مطلوب" : "Login required")
+      ? language === "ar"
+        ? "تسجيل الدخول مطلوب"
+        : "Login required"
       : isForbidden
-        ? (language === "ar" ? "غير مصرح لك بالدخول لهذه المباراة" : "You are not authorized to access this match")
+        ? language === "ar"
+          ? "غير مصرح لك بالدخول لهذه المباراة"
+          : "You are not authorized to access this match"
         : isNotFound
-          ? (language === "ar" ? "التحدي غير موجود" : "Challenge not found")
+          ? language === "ar"
+            ? "التحدي غير موجود"
+            : "Challenge not found"
           : isRateLimited
-            ? (language === "ar" ? "تم تجاوز الحد المسموح من الطلبات" : "Too many requests")
-            : (language === "ar" ? "تعذر تحميل التحدي" : "Failed to load challenge");
+            ? language === "ar"
+              ? "تم تجاوز الحد المسموح من الطلبات"
+              : "Too many requests"
+            : language === "ar"
+              ? "تعذر تحميل التحدي"
+              : "Failed to load challenge";
 
     const description = isUnauthorized
-      ? (language === "ar" ? "الجلسة مفقودة أو منتهية." : "Your session is missing or expired.")
+      ? language === "ar"
+        ? "الجلسة مفقودة أو منتهية."
+        : "Your session is missing or expired."
       : isForbidden
-        ? (language === "ar" ? "هذا التحدي غير متاح لهذا الحساب." : "This challenge is not available for this account.")
+        ? language === "ar"
+          ? "هذا التحدي غير متاح لهذا الحساب."
+          : "This challenge is not available for this account."
         : isNotFound
-          ? (language === "ar" ? "قد يكون التحدي أُلغي أو انتهى." : "The challenge may have been cancelled or completed.")
+          ? language === "ar"
+            ? "قد يكون التحدي أُلغي أو انتهى."
+            : "The challenge may have been cancelled or completed."
           : isRateLimited
-            ? (language === "ar" ? "يرجى الانتظار قليلًا ثم إعادة المحاولة." : "Please wait a moment and try again.")
-            : (challengeError?.message || (language === "ar" ? "حدث خطأ غير متوقع." : "An unexpected error occurred."));
+            ? language === "ar"
+              ? "يرجى الانتظار قليلًا ثم إعادة المحاولة."
+              : "Please wait a moment and try again."
+            : challengeError?.message ||
+            (language === "ar"
+              ? "حدث خطأ غير متوقع."
+              : "An unexpected error occurred.");
 
     return (
       <div className="p-6">
@@ -1555,13 +2083,28 @@ export default function ChallengeGamePage() {
             <p className="font-semibold">{title}</p>
             <p className="text-sm text-muted-foreground">{description}</p>
             <div className="flex items-center justify-center gap-2">
-              <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: [`/api/challenges/${challengeId}`] })}>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  queryClient.invalidateQueries({
+                    queryKey: [`/api/challenges/${challengeId}`],
+                  })
+                }
+              >
                 {language === "ar" ? "إعادة المحاولة" : "Retry"}
               </Button>
-              <Button onClick={() => setLocation(isUnauthorized ? "/login" : "/challenges")}>
+              <Button
+                onClick={() =>
+                  setLocation(isUnauthorized ? "/login" : "/challenges")
+                }
+              >
                 {isUnauthorized
-                  ? (language === "ar" ? "تسجيل الدخول" : "Go to Login")
-                  : (language === "ar" ? "العودة للتحديات" : "Back to Challenges")}
+                  ? language === "ar"
+                    ? "تسجيل الدخول"
+                    : "Go to Login"
+                  : language === "ar"
+                    ? "العودة للتحديات"
+                    : "Back to Challenges"}
               </Button>
             </div>
           </CardContent>
@@ -1575,9 +2118,9 @@ export default function ChallengeGamePage() {
       <div className="p-6">
         <Card>
           <CardContent className="pt-6 text-center">
-            <p>{t('challenge.notFound')}</p>
+            <p>{t("challenge.notFound")}</p>
             <Button className="mt-4" onClick={() => setLocation("/challenges")}>
-              {t('challenge.backToChallenges')}
+              {t("challenge.backToChallenges")}
             </Button>
           </CardContent>
         </Card>
@@ -1590,13 +2133,29 @@ export default function ChallengeGamePage() {
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-muted-foreground">
-          {t('challenge.determiningRole')}
+          {t("challenge.determiningRole")}
         </p>
       </div>
     );
   }
 
-  const opponent = challenge.player1Id === user?.id ? challenge.player2 : challenge.player1;
+  const opponent =
+    challenge.player1Id === user?.id ? challenge.player2 : challenge.player1;
+  const opponentId = opponent?.id;
+  const opponentVoiceConnected = Boolean(
+    opponentId && connectedVoicePeers.includes(opponentId),
+  );
+  const opponentMutedForViewer = Boolean(
+    opponentId && voicePeerMutedMap[opponentId],
+  );
+  const opponentAvatarBubble =
+    opponentId && avatarChatBubbles[opponentId]
+      ? avatarChatBubbles[opponentId].text
+      : undefined;
+  const selfAvatarBubble =
+    user?.id && avatarChatBubbles[user.id]
+      ? avatarChatBubbles[user.id].text
+      : undefined;
 
   const chessStatePayload = (() => {
     const fen = typeof playerView?.fen === "string" ? playerView.fen : "";
@@ -1604,7 +2163,10 @@ export default function ChallengeGamePage() {
       return JSON.stringify({ fen });
     }
 
-    const sessionState = typeof gameSession?.gameState === "string" ? gameSession.gameState.trim() : "";
+    const sessionState =
+      typeof gameSession?.gameState === "string"
+        ? gameSession.gameState.trim()
+        : "";
     if (sessionState.length > 0) {
       return sessionState;
     }
@@ -1612,27 +2174,107 @@ export default function ChallengeGamePage() {
     return undefined;
   })();
 
-  const GAME_INFO: Record<string, { icon: React.ComponentType<{ className?: string }>; nameAr: string; nameEn: string }> = {
+  const GAME_INFO: Record<
+    string,
+    {
+      icon: React.ComponentType<{ className?: string }>;
+      nameAr: string;
+      nameEn: string;
+    }
+  > = {
     chess: { icon: Crown, nameAr: "الشطرنج", nameEn: "Chess" },
     domino: { icon: Target, nameAr: "الدومينو", nameEn: "Domino" },
     backgammon: { icon: Dice5, nameAr: "الطاولة", nameEn: "Backgammon" },
     tarneeb: { icon: Spade, nameAr: "الطرنيب", nameEn: "Tarneeb" },
     baloot: { icon: Heart, nameAr: "البلوت", nameEn: "Baloot" },
-    languageduel: { icon: MessageCircle, nameAr: t('languageduel.title'), nameEn: t('languageduel.title') },
+    languageduel: {
+      icon: MessageCircle,
+      nameAr: t("languageduel.title"),
+      nameEn: t("languageduel.title"),
+    },
   };
   const gameInfo = GAME_INFO[challenge.gameType] || GAME_INFO.chess;
   const GameIcon = gameInfo.icon;
-  const challengeCurrencyType = challenge.currencyType === "project" ? "project" : "usd";
+  const challengeCurrencyType =
+    challenge.currencyType === "project" ? "project" : "usd";
   const isProjectChallengeCurrency = challengeCurrencyType === "project";
-  const challengeBetAmountValue = Number.parseFloat(String(challenge.betAmount || 0));
+  const challengeBetAmountValue = Number.parseFloat(
+    String(challenge.betAmount || 0),
+  );
 
+  const isChessGame = challenge.gameType === "chess";
+  const isBackgammonGame = challenge.gameType === "backgammon";
   const isDominoGame = challenge.gameType === "domino";
-  const isTeamGame = challenge.gameType === "tarneeb" || challenge.gameType === "baloot";
-  const isWideBoardGame = isDominoGame || challenge.gameType === "backgammon" || isTeamGame;
-  const boardShellWidthClass = challenge.gameType === "baloot"
-    ? "w-full max-w-6xl"
-    : (isWideBoardGame ? "w-full max-w-5xl" : "w-full max-w-lg");
-  const playerIds = [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id].filter(Boolean);
+  const isTeamGame =
+    challenge.gameType === "tarneeb" || challenge.gameType === "baloot";
+  const isWideBoardGame =
+    isDominoGame || isBackgammonGame || isTeamGame;
+  const isTopAlignedBoardGame = isWideBoardGame || isChessGame;
+  const boardShellWidthClass =
+    challenge.gameType === "baloot"
+      ? "w-full max-w-6xl"
+      : isWideBoardGame
+        ? "w-full max-w-5xl"
+        : isChessGame
+          ? "w-full max-w-2xl"
+          : "w-full max-w-lg";
+  const chessWhiteLabel = `⚪ ${t("chess.white")}`;
+  const chessBlackLabel = `⚫ ${t("chess.black")}`;
+  const backgammonWhiteLabel = `⚪ ${t("backgammon.white")}`;
+  const backgammonBlackLabel = `⚫ ${t("backgammon.black")}`;
+  const chessTurnDescriptor = (() => {
+    if (!isChessGame || !gameSession?.currentTurn) {
+      return null;
+    }
+
+    if (!isSpectator) {
+      return gameSession.currentTurn === user?.id
+        ? t("chess.yourTurn")
+        : t("chess.opponentTurn");
+    }
+
+    if (gameSession.currentTurn === challenge.player1Id) {
+      return `${challenge.player1?.username || (language === "ar" ? "اللاعب 1" : "Player 1")} · ${chessWhiteLabel}`;
+    }
+
+    if (gameSession.currentTurn === challenge.player2Id) {
+      return `${challenge.player2?.username || (language === "ar" ? "اللاعب 2" : "Player 2")} · ${chessBlackLabel}`;
+    }
+
+    return null;
+  })();
+  const backgammonTurnDescriptor = (() => {
+    if (!isBackgammonGame || !gameSession?.currentTurn) {
+      return null;
+    }
+
+    if (!isSpectator) {
+      return gameSession.currentTurn === user?.id
+        ? t("backgammon.yourTurn")
+        : t("backgammon.opponentTurn");
+    }
+
+    if (gameSession.currentTurn === challenge.player1Id) {
+      return `${challenge.player1?.username || (language === "ar" ? "اللاعب 1" : "Player 1")} · ${backgammonWhiteLabel}`;
+    }
+
+    if (gameSession.currentTurn === challenge.player2Id) {
+      return `${challenge.player2?.username || (language === "ar" ? "اللاعب 2" : "Player 2")} · ${backgammonBlackLabel}`;
+    }
+
+    return null;
+  })();
+  const topTurnDescriptor = isChessGame
+    ? chessTurnDescriptor
+    : isBackgammonGame
+      ? backgammonTurnDescriptor
+      : null;
+  const playerIds = [
+    challenge.player1Id,
+    challenge.player2Id,
+    challenge.player3Id,
+    challenge.player4Id,
+  ].filter(Boolean);
   const mySeatIndex = playerIds.indexOf(user?.id || "");
   const myTeam = mySeatIndex % 2 === 0 ? 0 : 1;
 
@@ -1652,11 +2294,16 @@ export default function ChallengeGamePage() {
     const map = new Map<string, { count: number; totalAmount: number }>();
     for (const support of supports) {
       if (!support?.playerId) continue;
-      const existing = map.get(support.playerId) || { count: 0, totalAmount: 0 };
+      const existing = map.get(support.playerId) || {
+        count: 0,
+        totalAmount: 0,
+      };
       const numericAmount = Number.parseFloat(String(support.amount || 0));
       map.set(support.playerId, {
         count: existing.count + 1,
-        totalAmount: existing.totalAmount + (Number.isFinite(numericAmount) ? numericAmount : 0),
+        totalAmount:
+          existing.totalAmount +
+          (Number.isFinite(numericAmount) ? numericAmount : 0),
       });
     }
     return map;
@@ -1665,13 +2312,15 @@ export default function ChallengeGamePage() {
   const giftSummaryByPlayer = (() => {
     const map = new Map<string, { count: number; totalAmount: number }>();
     for (const gift of receivedGifts) {
-      const recipientId = typeof gift.recipientId === "string" ? gift.recipientId : "";
+      const recipientId =
+        typeof gift.recipientId === "string" ? gift.recipientId : "";
       if (!recipientId) continue;
       const existing = map.get(recipientId) || { count: 0, totalAmount: 0 };
       const giftAmount = Number.parseFloat(String(gift.amount || 0));
       map.set(recipientId, {
         count: existing.count + 1,
-        totalAmount: existing.totalAmount + (Number.isFinite(giftAmount) ? giftAmount : 0),
+        totalAmount:
+          existing.totalAmount + (Number.isFinite(giftAmount) ? giftAmount : 0),
       });
     }
     return map;
@@ -1685,18 +2334,32 @@ export default function ChallengeGamePage() {
       { id: challenge.player4Id, seat: 4, player: challenge.player4 },
     ];
 
-    const list = rawList.flatMap((entry) => (entry.id ? [{ ...entry, id: entry.id }] : []));
+    const list = rawList.flatMap((entry) =>
+      entry.id ? [{ ...entry, id: entry.id }] : [],
+    );
 
     return list.map((entry) => {
-      const supportSummary = supportSummaryByPlayer.get(entry.id) || { count: 0, totalAmount: 0 };
-      const giftSummary = giftSummaryByPlayer.get(entry.id) || { count: 0, totalAmount: 0 };
-      const scoreValue = challenge.gameType === "domino" ? (dominoScoreLookup.get(entry.id) ?? 0) : 0;
-      const timeRemaining = entry.seat === 1 ? player1TimeRemaining : player2TimeRemaining;
+      const supportSummary = supportSummaryByPlayer.get(entry.id) || {
+        count: 0,
+        totalAmount: 0,
+      };
+      const giftSummary = giftSummaryByPlayer.get(entry.id) || {
+        count: 0,
+        totalAmount: 0,
+      };
+      const scoreValue =
+        challenge.gameType === "domino"
+          ? (dominoScoreLookup.get(entry.id) ?? 0)
+          : 0;
+      const timeRemaining =
+        entry.seat === 1 ? player1TimeRemaining : player2TimeRemaining;
 
       return {
         id: entry.id,
         seat: entry.seat,
-        username: entry.player?.username || `${language === "ar" ? "لاعب" : "Player"} ${entry.seat}`,
+        username:
+          entry.player?.username ||
+          `${language === "ar" ? "لاعب" : "Player"} ${entry.seat}`,
         avatarUrl: entry.player?.avatarUrl,
         scoreValue,
         timeRemaining,
@@ -1719,38 +2382,50 @@ export default function ChallengeGamePage() {
   };
 
   return (
-    <div className="vex-arcade-stage min-h-screen bg-background">
+    <div className="vex-arcade-stage vex-arcade-stage--tabletop min-h-screen bg-background">
       {/* Reconnection overlay */}
       {wsConnState === "reconnecting" && (
         <div className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-center gap-4 backdrop-blur-sm">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
           <p className="text-white text-lg font-medium">
-            {t('challenge.reconnecting')}
+            {t("challenge.reconnecting")}
           </p>
-          <p className="text-white/60 text-sm">
-            {t('challenge.dontClose')}
-          </p>
+          <p className="text-white/60 text-sm">{t("challenge.dontClose")}</p>
         </div>
       )}
       <div className="flex flex-col lg:flex-row h-screen">
         <div className="flex-1 flex flex-col">
-          <header className="vex-arcade-header flex items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
+          <header className="vex-arcade-header flex flex-wrap items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
               <BackButton fallbackPath="/challenges" className="shrink-0" />
               <div className="flex items-center gap-1.5 min-w-0">
                 <GameIcon className="h-5 w-5 text-primary" />
                 <span className="font-semibold truncate">
                   {language === "ar" ? gameInfo.nameAr : gameInfo.nameEn}
                 </span>
-                <Badge variant={isSpectator ? "outline" : "default"} className="hidden sm:inline-flex">
-                  {isSpectator
-                    ? (language === "ar" ? "مشاهد" : "Spectator")
-                    : (language === "ar" ? "لاعب" : "Player")}
-                </Badge>
               </div>
-              <Badge variant="secondary" className="inline-flex shrink-0 text-[11px] sm:text-xs">
+              <Badge
+                variant={isSpectator ? "outline" : "default"}
+                className="inline-flex shrink-0 text-[11px] sm:text-xs"
+              >
+                {isSpectator
+                  ? language === "ar"
+                    ? "مشاهد"
+                    : "Spectator"
+                  : language === "ar"
+                    ? "لاعب"
+                    : "Player"}
+              </Badge>
+              <Badge
+                variant="secondary"
+                className="inline-flex shrink-0 text-[11px] sm:text-xs"
+              >
                 {isProjectChallengeCurrency ? (
-                  <ProjectCurrencyAmount amount={challengeBetAmountValue} symbolClassName="text-xs" amountClassName="text-xs font-medium" />
+                  <ProjectCurrencyAmount
+                    amount={challengeBetAmountValue}
+                    symbolClassName="text-xs"
+                    amountClassName="text-xs font-medium"
+                  />
                 ) : (
                   `$${challengeBetAmountValue.toFixed(2)}`
                 )}
@@ -1758,14 +2433,19 @@ export default function ChallengeGamePage() {
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
-              <ShareMatchButton challengeId={challengeId!} gameType={challenge.gameType} />
+              <ShareMatchButton
+                challengeId={challengeId!}
+                gameType={challenge.gameType}
+              />
 
               <div className="flex items-center gap-1 text-muted-foreground">
                 <Eye className="h-4 w-4" />
-                <span className="text-sm">{gameSession?.spectatorCount || 0}</span>
+                <span className="text-sm">
+                  {gameSession?.spectatorCount || 0}
+                </span>
               </div>
 
-              {isPlayer && (
+              {shouldRenderPlayerVoiceChat && (
                 <VoiceChat
                   challengeId={challengeId!}
                   isEnabled={true}
@@ -1790,8 +2470,15 @@ export default function ChallengeGamePage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold">{autoPlayTitle}</p>
-                    <Badge variant="secondary" className="rounded-full bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-200">
-                      {autoPlayNotice.mode === "autoplay" ? "Auto Play" : (language === "ar" ? "مهلة عودة" : "Reconnect")}
+                    <Badge
+                      variant="secondary"
+                      className="rounded-full bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-200"
+                    >
+                      {autoPlayNotice.mode === "autoplay"
+                        ? "Auto Play"
+                        : language === "ar"
+                          ? "مهلة عودة"
+                          : "Reconnect"}
                     </Badge>
                   </div>
                   <p className="mt-1 text-xs leading-5 text-amber-900/80 dark:text-amber-100/85">
@@ -1806,21 +2493,30 @@ export default function ChallengeGamePage() {
                   onClick={() => setAutoPlayNotice(null)}
                 >
                   <X className="h-4 w-4" />
-                  <span className="sr-only">{language === "ar" ? "إغلاق" : "Dismiss"}</span>
+                  <span className="sr-only">
+                    {language === "ar" ? "إغلاق" : "Dismiss"}
+                  </span>
                 </Button>
               </div>
             </div>
           )}
 
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-            <div className={`flex-1 p-2 sm:p-4 flex flex-col items-center relative ${isWideBoardGame ? "justify-start overflow-y-auto" : "justify-center overflow-y-auto"}`}>
+            <div
+              className={`flex-1 ${isChessGame ? "p-1.5 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-3" : "p-2 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-4"} flex flex-col items-center relative ${isTopAlignedBoardGame ? "justify-start" : "justify-center"} ${isChessGame ? "overflow-hidden" : "overflow-y-auto"}`}
+            >
               {isDominoGame && (
                 <div className="mb-3 w-full max-w-5xl space-y-2">
                   {dominoAutoPlayBadgeText && (
                     <div className="flex justify-center">
-                      <Badge variant="outline" className="rounded-full border-amber-500/35 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-200">
+                      <Badge
+                        variant="outline"
+                        className="rounded-full border-amber-500/35 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
+                      >
                         <Clock className="me-1 h-3.5 w-3.5" />
-                        <span className="font-mono tabular-nums">{dominoAutoPlayBadgeText}</span>
+                        <span className="font-mono tabular-nums">
+                          {dominoAutoPlayBadgeText}
+                        </span>
                       </Badge>
                     </div>
                   )}
@@ -1833,8 +2529,12 @@ export default function ChallengeGamePage() {
                         </p>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 shrink-0">
-                        <span className="text-[11px] text-muted-foreground">{t("domino.score")}</span>
-                        <span className="font-mono text-sm font-semibold sm:text-base">{dominoPlayer1Score}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {t("domino.score")}
+                        </span>
+                        <span className="font-mono text-sm font-semibold sm:text-base">
+                          {dominoPlayer1Score}
+                        </span>
                       </div>
                     </div>
                     <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2">
@@ -1844,103 +2544,195 @@ export default function ChallengeGamePage() {
                         </p>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 shrink-0">
-                        <span className="text-[11px] text-muted-foreground">{t("domino.score")}</span>
-                        <span className="font-mono text-sm font-semibold sm:text-base">{dominoPlayer2Score}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {t("domino.score")}
+                        </span>
+                        <span className="font-mono text-sm font-semibold sm:text-base">
+                          {dominoPlayer2Score}
+                        </span>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              <div className={`${boardShellWidthClass} mb-3`}>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {participantCards.map((participant) => (
-                    <div
-                      key={`participant-play-card-${participant.id}`}
-                      className="vex-arcade-panel rounded-xl border bg-card px-3 py-2"
-                      data-testid={`participant-play-card-${participant.id}`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <Avatar className="h-9 w-9">
-                            <AvatarImage src={participant.avatarUrl} />
-                            <AvatarFallback>{participant.username?.[0]?.toUpperCase()}</AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold">{participant.username}</p>
-                            <p className="text-[11px] text-muted-foreground">
-                              {language === "ar" ? `المقعد ${participant.seat}` : `Seat ${participant.seat}`}
-                            </p>
+              {!isChessGame && !isBackgammonGame && (
+                <div className={`${boardShellWidthClass} mb-3`}>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {participantCards.map((participant) => (
+                      <div
+                        key={`participant-play-card-${participant.id}`}
+                        className="vex-arcade-panel rounded-xl border bg-card px-3 py-2"
+                        data-testid={`participant-play-card-${participant.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Avatar className="h-9 w-9">
+                              <AvatarImage src={participant.avatarUrl} />
+                              <AvatarFallback>
+                                {participant.username?.[0]?.toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">
+                                {participant.username}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {language === "ar"
+                                  ? `المقعد ${participant.seat}`
+                                  : `Seat ${participant.seat}`}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            {participant.isCurrentUser ? (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant={
+                                  isVoiceMicMuted ? "destructive" : "outline"
+                                }
+                                className="vex-arcade-btn vex-arcade-btn--icon h-8 w-8"
+                                onClick={() =>
+                                  setIsVoiceMicMuted((prev) => !prev)
+                                }
+                                data-testid={`participant-self-mic-${participant.id}`}
+                              >
+                                {isVoiceMicMuted ? (
+                                  <MicOff className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Mic className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant={
+                                  participant.isMutedForViewer
+                                    ? "destructive"
+                                    : "outline"
+                                }
+                                className="vex-arcade-btn vex-arcade-btn--icon h-8 w-8"
+                                disabled={!participant.isConnectedToVoice}
+                                onClick={() =>
+                                  togglePeerListening(participant.id)
+                                }
+                                data-testid={`participant-peer-listen-${participant.id}`}
+                              >
+                                {participant.isMutedForViewer ? (
+                                  <VolumeX className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Volume2 className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1">
-                          {participant.isCurrentUser ? (
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant={isVoiceMicMuted ? "destructive" : "outline"}
-                              className="vex-arcade-btn vex-arcade-btn--icon h-8 w-8"
-                              onClick={() => setIsVoiceMicMuted((prev) => !prev)}
-                              data-testid={`participant-self-mic-${participant.id}`}
-                            >
-                              {isVoiceMicMuted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-                            </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant={participant.isMutedForViewer ? "destructive" : "outline"}
-                              className="vex-arcade-btn vex-arcade-btn--icon h-8 w-8"
-                              disabled={!participant.isConnectedToVoice}
-                              onClick={() => togglePeerListening(participant.id)}
-                              data-testid={`participant-peer-listen-${participant.id}`}
-                            >
-                              {participant.isMutedForViewer ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
-                            </Button>
-                          )}
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                          <Badge variant="outline" className="font-mono">
+                            {isDominoGame
+                              ? `${t("domino.score")}: ${participant.scoreValue}`
+                              : `${language === "ar" ? "الوقت" : "Time"}: ${formatTime(participant.timeRemaining)}`}
+                          </Badge>
                         </div>
-                      </div>
 
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                        <Badge variant="outline" className="font-mono">
-                          {isDominoGame
-                            ? `${t("domino.score")}: ${participant.scoreValue}`
-                            : `${language === "ar" ? "الوقت" : "Time"}: ${formatTime(participant.timeRemaining)}`}
-                        </Badge>
-                      </div>
-
-                      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-                        <div className="rounded-md border border-primary/20 bg-primary/5 px-2 py-1.5">
-                          <p className="text-muted-foreground">{language === "ar" ? "الهدايا" : "Gifts"}</p>
-                          <p className="font-semibold">
-                            {participant.giftCount}
-                            {participant.giftTotal > 0 ? ` · ${participant.giftTotal.toFixed(2)}` : ""}
-                          </p>
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                          <div className="rounded-md border border-primary/20 bg-primary/5 px-2 py-1.5">
+                            <p className="text-muted-foreground">
+                              {language === "ar" ? "الهدايا" : "Gifts"}
+                            </p>
+                            <p className="font-semibold">
+                              {participant.giftCount}
+                              {participant.giftTotal > 0
+                                ? ` · ${participant.giftTotal.toFixed(2)}`
+                                : ""}
+                            </p>
+                          </div>
+                          <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1.5">
+                            <p className="text-muted-foreground">
+                              {language === "ar" ? "الدعم" : "Support"}
+                            </p>
+                            <p className="font-semibold">
+                              {participant.supportCount}
+                              {participant.supportTotal > 0
+                                ? ` · ${participant.supportTotal.toFixed(2)}`
+                                : ""}
+                            </p>
+                          </div>
                         </div>
-                        <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1.5">
-                          <p className="text-muted-foreground">{language === "ar" ? "الدعم" : "Support"}</p>
-                          <p className="font-semibold">
-                            {participant.supportCount}
-                            {participant.supportTotal > 0 ? ` · ${participant.supportTotal.toFixed(2)}` : ""}
-                          </p>
-                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {!isDominoGame && (
-                <div className={`${boardShellWidthClass} mb-4`}>
+                <div
+                  className={`${boardShellWidthClass} ${isChessGame || isBackgammonGame ? "mb-2" : "mb-4"}`}
+                >
                   <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={opponent?.avatarUrl} />
-                        <AvatarFallback>{opponent?.username?.[0]?.toUpperCase()}</AvatarFallback>
-                      </Avatar>
+                      <div className="relative">
+                        {opponentAvatarBubble && (
+                          <div className="pointer-events-none absolute bottom-full start-1/2 z-20 mb-1 -translate-x-1/2">
+                            <div className="max-w-[10rem] rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-center text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
+                              {opponentAvatarBubble}
+                            </div>
+                          </div>
+                        )}
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={opponent?.avatarUrl} />
+                          <AvatarFallback>
+                            {opponent?.username?.[0]?.toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant={
+                            opponentMutedForViewer ? "destructive" : "outline"
+                          }
+                          className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
+                          disabled={!opponentId || !opponentVoiceConnected}
+                          onClick={() => {
+                            if (opponentId) {
+                              togglePeerListening(opponentId);
+                            }
+                          }}
+                          data-testid="play-opponent-avatar-voice-toggle"
+                          title={
+                            language === "ar"
+                              ? "الاستماع لصوت الخصم"
+                              : "Toggle opponent voice"
+                          }
+                        >
+                          {opponentMutedForViewer ? (
+                            <VolumeX className="h-3 w-3" />
+                          ) : (
+                            <Volume2 className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </div>
                       <div>
-                        <p className="font-medium">{opponent?.username || "Waiting..."}</p>
+                        <p className="font-medium">
+                          {opponent?.username || "Waiting..."}
+                        </p>
+                        {isChessGame ? (
+                          <p className="text-xs text-muted-foreground">
+                            {myColor === "white"
+                              ? chessBlackLabel
+                              : chessWhiteLabel}
+                          </p>
+                        ) : isBackgammonGame ? (
+                          <p className="text-xs text-muted-foreground">
+                            {playerView?.myColor === "white"
+                              ? backgammonBlackLabel
+                              : backgammonWhiteLabel}
+                          </p>
+                        ) : null}
                         {opponent?.rating && (
                           <p className="text-xs text-muted-foreground">
                             {opponent.rating.wins}W / {opponent.rating.losses}L
@@ -1950,7 +2742,9 @@ export default function ChallengeGamePage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className={`font-mono text-lg ${opponentTimeRemaining < 30 ? "text-destructive" : ""}`}>
+                      <span
+                        className={`font-mono text-lg ${opponentTimeRemaining < 30 ? "text-destructive" : ""}`}
+                      >
                         {formatTime(opponentTimeRemaining)}
                       </span>
                     </div>
@@ -1958,36 +2752,49 @@ export default function ChallengeGamePage() {
                 </div>
               )}
 
-              <div className={`relative ${boardShellWidthClass}`}>
-                {receivedGifts.map((gift) => (
-                  <div
-                    key={gift.id}
-                    className="absolute inset-0 flex items-center justify-center pointer-events-none z-50 animate-bounce"
+              {topTurnDescriptor && (
+                <div
+                  className={`${boardShellWidthClass} mb-1 flex justify-center`}
+                >
+                  <Badge
+                    variant="outline"
+                    className="rounded-full border-primary/35 bg-primary/10 px-3 py-1 text-[11px] sm:text-xs"
                   >
-                    <div className="bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg">
-                      <Gift className="h-6 w-6 inline-block me-2" />
-                      {gift.giftName} from {gift.senderName}
-                    </div>
-                  </div>
-                ))}
+                    <Clock className="me-1 h-3.5 w-3.5" />
+                    {topTurnDescriptor}
+                  </Badge>
+                </div>
+              )}
 
+              <div
+                className={`relative vex-board-lane ${boardShellWidthClass}`}
+              >
                 {challenge.gameType === "chess" && (
                   <ChessBoard
                     gameState={chessStatePayload}
                     currentTurn={gameSession?.currentTurn}
                     myColor={myColor}
-                    isMyTurn={canPlayActions && ((playerView?.isMyTurn as boolean) ?? (gameSession?.currentTurn === user?.id))}
+                    isMyTurn={
+                      canPlayActions &&
+                      ((playerView?.isMyTurn as boolean) ??
+                        gameSession?.currentTurn === user?.id)
+                    }
                     isSpectator={isSpectator}
                     authoritativeValidMoves={playerView?.validMoves}
                     onMove={canPlayActions ? sendMove : () => { }}
                     status={gameSession?.status}
+                    compactTopArea
                   />
                 )}
                 {challenge.gameType === "domino" && (
                   <DominoChallengeContainer
                     boardState={dominoBoardState}
                     currentTurn={gameSession?.currentTurn}
-                    isMyTurn={canPlayActions && ((playerView?.isMyTurn as boolean) ?? (gameSession?.currentTurn === user?.id))}
+                    isMyTurn={
+                      canPlayActions &&
+                      ((playerView?.isMyTurn as boolean) ??
+                        gameSession?.currentTurn === user?.id)
+                    }
                     isSpectator={isSpectator}
                     onMove={canPlayActions ? sendDominoMove : () => { }}
                     status={gameSession?.status}
@@ -2003,23 +2810,53 @@ export default function ChallengeGamePage() {
                 {challenge.gameType === "backgammon" && playerView && (
                   <BackgammonBoard
                     board={(playerView.board as number[]) || []}
-                    bar={(playerView.bar as { white: number; black: number }) || { white: 0, black: 0 }}
-                    borneOff={(playerView.borneOff as { white: number; black: number }) || { white: 0, black: 0 }}
+                    bar={
+                      (playerView.bar as { white: number; black: number }) || {
+                        white: 0,
+                        black: 0,
+                      }
+                    }
+                    borneOff={
+                      (playerView.borneOff as {
+                        white: number;
+                        black: number;
+                      }) || { white: 0, black: 0 }
+                    }
                     dice={(playerView.dice as number[]) || []}
                     diceUsed={(playerView.diceUsed as boolean[]) || []}
-                    currentTurn={(playerView.currentTurn as "white" | "black") || "white"}
-                    playerColor={(playerView.myColor as "white" | "black" | "spectator") || "spectator"}
-                    validMoves={(playerView.validMoves as { type: string; from: string; to: string }[]) || []}
+                    currentTurn={
+                      (playerView.currentTurn as "white" | "black") || "white"
+                    }
+                    playerColor={
+                      (playerView.myColor as "white" | "black" | "spectator") ||
+                      "spectator"
+                    }
+                    validMoves={
+                      (playerView.validMoves as {
+                        type: string;
+                        from: string;
+                        to: string;
+                      }[]) || []
+                    }
                     mustRoll={(playerView.mustRoll as boolean) || false}
                     onMove={canPlayActions ? sendBackgammonMove : () => { }}
                     onRoll={canPlayActions ? sendRoll : () => { }}
                     onDouble={canPlayActions ? sendDouble : () => { }}
-                    onAcceptDouble={canPlayActions ? sendAcceptDouble : () => { }}
-                    onDeclineDouble={canPlayActions ? sendDeclineDouble : () => { }}
+                    onAcceptDouble={
+                      canPlayActions ? sendAcceptDouble : () => { }
+                    }
+                    onDeclineDouble={
+                      canPlayActions ? sendDeclineDouble : () => { }
+                    }
                     doublingCube={(playerView.doublingCube as number) ?? 1}
-                    cubeOwner={(playerView.cubeOwner as "white" | "black" | null) ?? null}
+                    cubeOwner={
+                      (playerView.cubeOwner as "white" | "black" | null) ?? null
+                    }
                     cubeOffered={(playerView.cubeOffered as boolean) ?? false}
-                    cubeOfferedBy={(playerView.cubeOfferedBy as "white" | "black" | null) ?? null}
+                    cubeOfferedBy={
+                      (playerView.cubeOfferedBy as "white" | "black" | null) ??
+                      null
+                    }
                     disabled={isSpectator}
                   />
                 )}
@@ -2027,8 +2864,13 @@ export default function ChallengeGamePage() {
                   <TarneebBoard
                     sessionId={gameSession?.id || ""}
                     gameState={playerView as TarneebState | null}
-                    playerId={isSpectator ? "__spectator__" : (user?.id || "")}
-                    playerPosition={isSpectator ? 0 : ((playerView?.playerPosition as number) ?? mySeatIndex)}
+                    playerId={isSpectator ? "__spectator__" : user?.id || ""}
+                    playerPosition={
+                      isSpectator
+                        ? 0
+                        : ((playerView?.playerPosition as number) ??
+                          mySeatIndex)
+                    }
                     playerNames={balootPlayerNames}
                     onPlayCard={canPlayActions ? sendPlayCard : () => { }}
                     onBid={canPlayActions ? sendBid : () => { }}
@@ -2041,8 +2883,13 @@ export default function ChallengeGamePage() {
                 {challenge.gameType === "baloot" && (
                   <BalootBoard
                     gameState={playerView as BalootState | null}
-                    playerId={isSpectator ? "__spectator__" : (user?.id || "")}
-                    playerPosition={isSpectator ? 0 : ((playerView?.playerPosition as number) ?? mySeatIndex)}
+                    playerId={isSpectator ? "__spectator__" : user?.id || ""}
+                    playerPosition={
+                      isSpectator
+                        ? 0
+                        : ((playerView?.playerPosition as number) ??
+                          mySeatIndex)
+                    }
                     onPlayCard={canPlayActions ? sendPlayCard : () => { }}
                     onChooseTrump={canPlayActions ? sendChooseTrump : () => { }}
                     onPass={canPlayActions ? sendPass : () => { }}
@@ -2056,39 +2903,87 @@ export default function ChallengeGamePage() {
                     playerView={playerView}
                     isSpectator={isSpectator}
                     canPlay={canPlayActions}
-                    onSubmitAnswer={canPlayActions ? sendLanguageDuelAnswer : undefined}
+                    onSubmitAnswer={
+                      canPlayActions ? sendLanguageDuelAnswer : undefined
+                    }
                   />
                 )}
               </div>
 
               {!isDominoGame && (
-                <div className={`${boardShellWidthClass} mt-4`}>
+                <div
+                  className={`${boardShellWidthClass} ${isChessGame || isBackgammonGame ? "mt-2" : "mt-4"}`}
+                >
                   <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 ring-2 ring-primary">
-                        <AvatarImage src={user?.profilePicture || undefined} />
-                        <AvatarFallback>{user?.username?.[0]?.toUpperCase()}</AvatarFallback>
-                      </Avatar>
+                      <div className="relative">
+                        {selfAvatarBubble && (
+                          <div className="pointer-events-none absolute bottom-full start-1/2 z-20 mb-1 -translate-x-1/2">
+                            <div className="max-w-[10rem] rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-center text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
+                              {selfAvatarBubble}
+                            </div>
+                          </div>
+                        )}
+                        <Avatar className="h-10 w-10 ring-2 ring-primary">
+                          <AvatarImage
+                            src={user?.profilePicture || undefined}
+                          />
+                          <AvatarFallback>
+                            {user?.username?.[0]?.toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant={isVoiceMicMuted ? "destructive" : "outline"}
+                          className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
+                          onClick={() => setIsVoiceMicMuted((prev) => !prev)}
+                          data-testid="play-self-avatar-mic-toggle"
+                          title={
+                            language === "ar"
+                              ? "تشغيل/كتم المايك"
+                              : "Toggle microphone"
+                          }
+                        >
+                          {isVoiceMicMuted ? (
+                            <MicOff className="h-3 w-3" />
+                          ) : (
+                            <Mic className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </div>
                       <div>
                         <p className="font-medium">
                           {isSpectator
                             ? `${user?.username} ${language === "ar" ? "(مشاهدة)" : "(Watching)"}`
-                            : `${user?.username} ${t('challenge.you')}`}
+                            : `${user?.username} ${t("challenge.you")}`}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {isSpectator
-                            ? (language === "ar" ? "وضع المشاهدة" : "Spectator mode")
+                            ? language === "ar"
+                              ? "وضع المشاهدة"
+                              : "Spectator mode"
                             : isTeamGame
-                              ? t('challenge.team', { num: String(myTeam + 1) })
-                              : challenge.gameType === "backgammon"
-                                ? (playerView?.myColor === "white" ? "⚪" : "⚫")
-                                : (myColor === "white" ? "⚪" : "⚫")}
+                              ? t("challenge.team", { num: String(myTeam + 1) })
+                              : isChessGame
+                                ? myColor === "white"
+                                  ? chessWhiteLabel
+                                  : chessBlackLabel
+                                : isBackgammonGame
+                                  ? playerView?.myColor === "white"
+                                    ? backgammonWhiteLabel
+                                    : backgammonBlackLabel
+                                  : myColor === "white"
+                                    ? "⚪"
+                                    : "⚫"}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className={`font-mono text-lg ${myTimeRemaining < 30 ? "text-destructive" : ""}`}>
+                      <span
+                        className={`font-mono text-lg ${myTimeRemaining < 30 ? "text-destructive" : ""}`}
+                      >
                         {formatTime(myTimeRemaining)}
                       </span>
                     </div>
@@ -2097,7 +2992,9 @@ export default function ChallengeGamePage() {
               )}
 
               {canPlayActions && gameSession?.status === "playing" && (
-                <div className="mt-4 flex gap-2 items-center">
+                <div
+                  className={`${isChessGame || isBackgammonGame ? "mt-2" : "mt-4"} flex gap-2 items-center`}
+                >
                   <Button
                     variant="destructive"
                     size="sm"
@@ -2106,38 +3003,50 @@ export default function ChallengeGamePage() {
                     data-testid="button-resign"
                   >
                     <Flag className="h-4 w-4 me-2" />
-                    {t('challenge.resign')}
+                    {t("challenge.resign")}
                   </Button>
 
                   {/* Draw offer button (chess/backgammon only) */}
-                  {(challenge.gameType === "chess" || challenge.gameType === "backgammon") && !drawOffered && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="vex-arcade-btn"
-                      onClick={sendOfferDraw}
-                      data-testid="button-offer-draw"
-                    >
-                      {t('challenge.offerDraw')}
-                    </Button>
-                  )}
+                  {(challenge.gameType === "chess" ||
+                    challenge.gameType === "backgammon") &&
+                    !drawOffered && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="vex-arcade-btn"
+                        onClick={sendOfferDraw}
+                        data-testid="button-offer-draw"
+                      >
+                        {t("challenge.offerDraw")}
+                      </Button>
+                    )}
 
                   {/* Draw offered by me — waiting */}
                   {drawOffered === user?.id && (
                     <Badge variant="secondary" className="animate-pulse">
-                      {t('challenge.waitingResponse')}
+                      {t("challenge.waitingResponse")}
                     </Badge>
                   )}
 
                   {/* Draw offered by opponent — accept/decline */}
                   {drawOffered && drawOffered !== user?.id && (
                     <div className="flex gap-1 items-center">
-                      <Badge>{t('challenge.drawOffer')}</Badge>
-                      <Button size="sm" variant="default" className="vex-arcade-btn" onClick={() => sendRespondDraw(true)}>
-                        {t('challenge.accept')}
+                      <Badge>{t("challenge.drawOffer")}</Badge>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="vex-arcade-btn"
+                        onClick={() => sendRespondDraw(true)}
+                      >
+                        {t("challenge.accept")}
                       </Button>
-                      <Button size="sm" variant="outline" className="vex-arcade-btn" onClick={() => sendRespondDraw(false)}>
-                        {t('challenge.decline')}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="vex-arcade-btn"
+                        onClick={() => sendRespondDraw(false)}
+                      >
+                        {t("challenge.decline")}
                       </Button>
                     </div>
                   )}
@@ -2146,9 +3055,19 @@ export default function ChallengeGamePage() {
 
               {/* Floating game chat for players (Ludo King style) */}
               {!isSpectator && (
-                <div className={`w-full mt-3 h-36 sm:h-40 relative ${isWideBoardGame ? "max-w-5xl" : "max-w-lg"}`}>
+                <div
+                  className={`w-full mt-2 h-36 sm:h-40 relative ${isWideBoardGame ? "max-w-5xl" : isChessGame ? "max-w-2xl" : "max-w-lg"} ${isChessGame || isBackgammonGame ? "hidden sm:block" : ""}`}
+                >
                   <GameChat
-                    messages={messages as unknown as { id: string; senderId: string; senderName: string; message: string; createdAt: string }[]}
+                    messages={
+                      messages as unknown as {
+                        id: string;
+                        senderId: string;
+                        senderName: string;
+                        message: string;
+                        createdAt: string;
+                      }[]
+                    }
                     onSendMessage={sendChatMessage}
                     quickMessages={QUICK_MESSAGES}
                     language={language}
@@ -2168,8 +3087,24 @@ export default function ChallengeGamePage() {
                     currentTurn={gameSession?.currentTurn}
                     gameStatus={gameSession?.status}
                     boardState={dominoBoardState}
-                    player1={challenge.player1 ? { id: challenge.player1.id, username: challenge.player1.username, avatarUrl: challenge.player1.avatarUrl } : undefined}
-                    player2={challenge.player2 ? { id: challenge.player2.id, username: challenge.player2.username, avatarUrl: challenge.player2.avatarUrl } : undefined}
+                    player1={
+                      challenge.player1
+                        ? {
+                          id: challenge.player1.id,
+                          username: challenge.player1.username,
+                          avatarUrl: challenge.player1.avatarUrl,
+                        }
+                        : undefined
+                    }
+                    player2={
+                      challenge.player2
+                        ? {
+                          id: challenge.player2.id,
+                          username: challenge.player2.username,
+                          avatarUrl: challenge.player2.avatarUrl,
+                        }
+                        : undefined
+                    }
                     timeline={dominoTimeline}
                     scoreRows={dominoScoreRows}
                     endgameSummary={dominoEndgameSummary}
@@ -2199,6 +3134,62 @@ export default function ChallengeGamePage() {
         </div>
       </div>
 
+      {!isSpectator && (isChessGame || isBackgammonGame) && (
+        <div className="pointer-events-none !fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] end-2 z-50 flex sm:hidden">
+          <div className="pointer-events-auto">
+            <Button
+              variant="outline"
+              onClick={() => setShowMobileChat(true)}
+              className="vex-arcade-fab-outline relative h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md"
+              data-testid="button-mobile-open-chat-player"
+              title={language === "ar" ? "الدردشة المباشرة" : "Live Chat"}
+            >
+              <MessageCircle className="h-5 w-5" />
+              <span className="sr-only">
+                {language === "ar" ? "الدردشة" : "Chat"}
+              </span>
+              {messages.length > 0 && (
+                <span className="absolute -end-1 -top-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
+                  {messages.length > 99 ? "99+" : messages.length}
+                </span>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <Dialog open={showMobileChat} onOpenChange={setShowMobileChat}>
+        <DialogContent className="overflow-hidden p-0 sm:max-w-md lg:hidden">
+          <DialogHeader className="border-b px-4 py-3">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <MessageCircle className="h-4 w-4 text-primary" />
+              {language === "ar" ? "دردشة المباراة" : "Match Chat"}
+              <Badge variant="secondary" className="ms-auto">
+                {messages.length}
+              </Badge>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="relative h-[58vh] px-2 pb-2">
+            <GameChat
+              messages={
+                messages as unknown as {
+                  id: string;
+                  senderId: string;
+                  senderName: string;
+                  message: string;
+                  createdAt: string;
+                }[]
+              }
+              onSendMessage={sendChatMessage}
+              quickMessages={QUICK_MESSAGES}
+              language={language}
+              currentUserId={user?.id}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={showResignDialog}
         title={language === "ar" ? "تأكيد الاستسلام" : "Confirm Resignation"}
@@ -2226,18 +3217,23 @@ export default function ChallengeGamePage() {
                       {language === "ar" ? "انتهت المباراة" : "Match Finished"}
                     </span>
                   </div>
-                ) : challenge.gameType === "domino" && gameSession.winReason === "draw" ? (
+                ) : challenge.gameType === "domino" &&
+                  gameSession.winReason === "draw" ? (
                   <div className="flex flex-col items-center gap-2">
                     <ArrowRightLeft className="h-12 w-12 text-yellow-500" />
                     <span className="text-2xl">
-                      {language === "ar" ? "انتهت المباراة بالتعادل" : "Match Draw"}
+                      {language === "ar"
+                        ? "انتهت المباراة بالتعادل"
+                        : "Match Draw"}
                     </span>
                   </div>
                 ) : gameSession.winnerId === user?.id ? (
                   <div className="flex flex-col items-center gap-2">
                     <Trophy className="h-12 w-12 text-yellow-500" />
                     <span className="text-2xl">
-                      {language === "ar" ? "مبروك! فزت!" : "Congratulations! You Won!"}
+                      {language === "ar"
+                        ? "مبروك! فزت!"
+                        : "Congratulations! You Won!"}
                     </span>
                   </div>
                 ) : (
@@ -2252,42 +3248,79 @@ export default function ChallengeGamePage() {
             </DialogHeader>
             <div className="text-center text-muted-foreground">
               <p>
-                {gameSession.winReason === "checkmate" && (language === "ar" ? "كش مات!" : "Checkmate!")}
-                {gameSession.winReason === "timeout" && (language === "ar" ? "انتهى الوقت" : "Time out")}
-                {gameSession.winReason === "resignation" && (language === "ar" ? "استسلام" : "Resignation")}
-                {gameSession.winReason === "domino_blocked" && (language === "ar" ? "اللعبة محظورة" : "Game blocked")}
-                {gameSession.winReason === "blocked" && (language === "ar" ? "اللعبة محظورة" : "Game blocked")}
-                {gameSession.winReason === "stalemate" && (language === "ar" ? "طريق مسدود" : "Stalemate")}
-                {gameSession.winReason === "gammon" && (language === "ar" ? "غامون!" : "Gammon!")}
-                {gameSession.winReason === "backgammon" && (language === "ar" ? "باكغامون!" : "Backgammon!")}
-                {gameSession.winReason === "double_declined" && (language === "ar" ? "رفض المضاعفة" : "Double declined")}
-                {gameSession.winReason === "target_reached" && (language === "ar" ? "وصل للهدف" : "Target score reached")}
-                {gameSession.winReason === "normal" && (language === "ar" ? "فوز عادي" : "Normal win")}
-                {gameSession.winReason === "draw_agreement" && (language === "ar" ? "تعادل بالاتفاق" : "Draw by agreement")}
-                {gameSession.winReason === "draw" && (language === "ar" ? "تعادل" : "Draw")}
+                {gameSession.winReason === "checkmate" &&
+                  (language === "ar" ? "كش مات!" : "Checkmate!")}
+                {gameSession.winReason === "timeout" &&
+                  (language === "ar" ? "انتهى الوقت" : "Time out")}
+                {gameSession.winReason === "resignation" &&
+                  (language === "ar" ? "استسلام" : "Resignation")}
+                {gameSession.winReason === "domino_blocked" &&
+                  (language === "ar" ? "اللعبة محظورة" : "Game blocked")}
+                {gameSession.winReason === "blocked" &&
+                  (language === "ar" ? "اللعبة محظورة" : "Game blocked")}
+                {gameSession.winReason === "stalemate" &&
+                  (language === "ar" ? "طريق مسدود" : "Stalemate")}
+                {gameSession.winReason === "gammon" &&
+                  (language === "ar" ? "غامون!" : "Gammon!")}
+                {gameSession.winReason === "backgammon" &&
+                  (language === "ar" ? "باكغامون!" : "Backgammon!")}
+                {gameSession.winReason === "double_declined" &&
+                  (language === "ar" ? "رفض المضاعفة" : "Double declined")}
+                {gameSession.winReason === "target_reached" &&
+                  (language === "ar" ? "وصل للهدف" : "Target score reached")}
+                {gameSession.winReason === "normal" &&
+                  (language === "ar" ? "فوز عادي" : "Normal win")}
+                {gameSession.winReason === "draw_agreement" &&
+                  (language === "ar" ? "تعادل بالاتفاق" : "Draw by agreement")}
+                {gameSession.winReason === "draw" &&
+                  (language === "ar" ? "تعادل" : "Draw")}
               </p>
               {canPlayActions && gameSession.winnerId === user?.id && (
                 <div className="mt-2 inline-flex items-center gap-1 text-lg font-bold text-green-500">
                   <span>+</span>
                   {isProjectChallengeCurrency ? (
                     <ProjectCurrencyAmount
-                      amount={challengeBetAmountValue * 2 * (1 - parseFloat(challengeConfig?.commissionPercent || "5") / 100)}
+                      amount={
+                        challengeBetAmountValue *
+                        2 *
+                        (1 -
+                          parseFloat(
+                            challengeConfig?.commissionPercent || "5",
+                          ) /
+                          100)
+                      }
                       symbolClassName="text-base"
                       amountClassName="text-lg font-bold text-green-500"
                     />
                   ) : (
-                    <span>${(challengeBetAmountValue * 2 * (1 - parseFloat(challengeConfig?.commissionPercent || "5") / 100)).toFixed(2)}</span>
+                    <span>
+                      $
+                      {(
+                        challengeBetAmountValue *
+                        2 *
+                        (1 -
+                          parseFloat(
+                            challengeConfig?.commissionPercent || "5",
+                          ) /
+                          100)
+                      ).toFixed(2)}
+                    </span>
                   )}
                 </div>
               )}
             </div>
             <DialogFooter className="flex-col sm:flex-row gap-2">
-              <Button variant="outline" onClick={() => setLocation("/challenges")}>
+              <Button
+                variant="outline"
+                onClick={() => setLocation("/challenges")}
+              >
                 {language === "ar" ? "العودة للتحديات" : "Back to Challenges"}
               </Button>
-              <Button onClick={() => {
-                setLocation("/challenges");
-              }}>
+              <Button
+                onClick={() => {
+                  setLocation("/challenges");
+                }}
+              >
                 {language === "ar" ? "مباراة جديدة" : "New Match"}
               </Button>
             </DialogFooter>
@@ -2305,22 +3338,28 @@ export default function ChallengeGamePage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ArrowRightLeft className="h-5 w-5" />
-              {language === "ar" ? "تحويل سريع لإرسال الهدية" : "Quick Conversion To Send Gift"}
+              {language === "ar"
+                ? "تحويل سريع لإرسال الهدية"
+                : "Quick Conversion To Send Gift"}
             </DialogTitle>
             <DialogDescription>
-              {language === "ar"
-                ? (
-                  <span className="inline-flex items-center gap-1">
-                    <span>المطلوب للهدية:</span>
-                    <ProjectCurrencyAmount amount={fundingShortageProject} symbolClassName="text-sm" />
-                  </span>
-                )
-                : (
-                  <span className="inline-flex items-center gap-1">
-                    <span>Required for gift:</span>
-                    <ProjectCurrencyAmount amount={fundingShortageProject} symbolClassName="text-sm" />
-                  </span>
-                )}
+              {language === "ar" ? (
+                <span className="inline-flex items-center gap-1">
+                  <span>المطلوب للهدية:</span>
+                  <ProjectCurrencyAmount
+                    amount={fundingShortageProject}
+                    symbolClassName="text-sm"
+                  />
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <span>Required for gift:</span>
+                  <ProjectCurrencyAmount
+                    amount={fundingShortageProject}
+                    symbolClassName="text-sm"
+                  />
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -2339,7 +3378,11 @@ export default function ChallengeGamePage() {
             </div>
 
             <div>
-              <Label>{language === "ar" ? "مبلغ التحويل (USD)" : "Conversion Amount (USD)"}</Label>
+              <Label>
+                {language === "ar"
+                  ? "مبلغ التحويل (USD)"
+                  : "Conversion Amount (USD)"}
+              </Label>
               <div className="flex items-center gap-2 mt-2">
                 <Input
                   type="number"
@@ -2352,7 +3395,18 @@ export default function ChallengeGamePage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setQuickConvertAmount(String(Math.max(Number(projectCurrencySettings?.minConversionAmount || 1), Number(fundingUsdNeeded.toFixed(2) || 0))))}
+                  onClick={() =>
+                    setQuickConvertAmount(
+                      String(
+                        Math.max(
+                          Number(
+                            projectCurrencySettings?.minConversionAmount || 1,
+                          ),
+                          Number(fundingUsdNeeded.toFixed(2) || 0),
+                        ),
+                      ),
+                    )
+                  }
                 >
                   {language === "ar" ? "اقتراح" : "Suggest"}
                 </Button>
@@ -2361,13 +3415,18 @@ export default function ChallengeGamePage() {
 
             {quickConvertAmountValue > Number(user?.balance || 0) && (
               <p className="text-xs text-destructive">
-                {language === "ar" ? "الرصيد بالدولار غير كافٍ، قم بالإيداع أولًا." : "Insufficient USD balance, deposit first."}
+                {language === "ar"
+                  ? "الرصيد بالدولار غير كافٍ، قم بالإيداع أولًا."
+                  : "Insufficient USD balance, deposit first."}
               </p>
             )}
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConvertDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowConvertDialog(false)}
+            >
               {t("common.cancel")}
             </Button>
             <Button
@@ -2384,7 +3443,11 @@ export default function ChallengeGamePage() {
               disabled={quickConvertDisabled}
               data-testid="button-game-popup-quick-convert"
             >
-              {quickConvertMutation.isPending ? t("common.loading") : (language === "ar" ? "تحويل الآن" : "Convert Now")}
+              {quickConvertMutation.isPending
+                ? t("common.loading")
+                : language === "ar"
+                  ? "تحويل الآن"
+                  : "Convert Now"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2393,7 +3456,9 @@ export default function ChallengeGamePage() {
       <Dialog open={showDepositDialog} onOpenChange={setShowDepositDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{language === "ar" ? "الرصيد غير كافٍ" : "Insufficient Balance"}</DialogTitle>
+            <DialogTitle>
+              {language === "ar" ? "الرصيد غير كافٍ" : "Insufficient Balance"}
+            </DialogTitle>
             <DialogDescription>
               {language === "ar"
                 ? "لا يوجد رصيد كافٍ للتحويل المطلوب لإرسال الهدية. يمكنك فتح نافذة الإيداع مباشرة."
@@ -2430,9 +3495,14 @@ export default function ChallengeGamePage() {
               </Button>
               <Button
                 onClick={() => {
-                  const suggestedDeposit = Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0));
+                  const suggestedDeposit = Math.max(
+                    1,
+                    Number(fundingUsdNeeded.toFixed(2) || 0),
+                  );
                   setShowDepositDialog(false);
-                  setLocation(`/wallet?modal=deposit&amount=${suggestedDeposit.toFixed(2)}`);
+                  setLocation(
+                    `/wallet?modal=deposit&amount=${suggestedDeposit.toFixed(2)}`,
+                  );
                 }}
                 data-testid="button-game-open-wallet-deposit"
                 className="w-full"
@@ -2440,7 +3510,11 @@ export default function ChallengeGamePage() {
                 {language === "ar" ? "فتح كارت الإيداع" : "Open Deposit Card"}
               </Button>
             </div>
-            <Button variant="outline" onClick={() => setShowDepositDialog(false)} className="w-full">
+            <Button
+              variant="outline"
+              onClick={() => setShowDepositDialog(false)}
+              className="w-full"
+            >
               {t("common.cancel")}
             </Button>
           </DialogFooter>
@@ -2452,7 +3526,9 @@ export default function ChallengeGamePage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-semibold">
-                {language === "ar" ? "مطلوب عملة المشروع" : "Project currency required"}
+                {language === "ar"
+                  ? "مطلوب عملة المشروع"
+                  : "Project currency required"}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {language === "ar"
@@ -2460,7 +3536,11 @@ export default function ChallengeGamePage() {
                   : "Convert quickly to continue gameplay and gifting."}
               </p>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setShowQuickConvertCard(false)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowQuickConvertCard(false)}
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -2477,13 +3557,22 @@ export default function ChallengeGamePage() {
               onClick={() => quickConvertMutation.mutate(quickConvertAmount)}
               disabled={quickConvertMutation.isPending}
             >
-              {quickConvertMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : (language === "ar" ? "تحويل" : "Convert")}
+              {quickConvertMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : language === "ar" ? (
+                "تحويل"
+              ) : (
+                "Convert"
+              )}
             </Button>
           </div>
 
           <p className="text-xs text-muted-foreground mt-2">
             {language === "ar" ? "رصيدك الحالي:" : "Current balance:"}{" "}
-            <ProjectCurrencyAmount amount={projectWallet?.totalBalance || 0} symbolClassName="text-xs" />
+            <ProjectCurrencyAmount
+              amount={projectWallet?.totalBalance || 0}
+              symbolClassName="text-xs"
+            />
           </p>
         </div>
       )}

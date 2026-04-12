@@ -12,6 +12,7 @@ interface ChessBoardProps {
   onMove: (move: ChessMove) => void;
   status?: string;
   turnTimeLimit?: number;
+  compactTopArea?: boolean;
 }
 
 interface ChessMove {
@@ -427,6 +428,7 @@ export function ChessBoard({
   onMove,
   status,
   turnTimeLimit = 30,
+  compactTopArea = false,
 }: ChessBoardProps) {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [validMoves, setValidMoves] = useState<string[]>([]);
@@ -820,7 +822,7 @@ export function ChessBoard({
 
   return (
     <div className="relative">
-      {status !== "finished" && currentTurn && (
+      {status !== "finished" && currentTurn && !compactTopArea && (
         <div className="mb-2 flex justify-center">
           <div
             className={cn(
@@ -839,85 +841,104 @@ export function ChessBoard({
 
       {/* Opponent's captures (pieces they took from us) */}
       {bottomCaptures.length > 0 && (
-        <div className="flex items-center gap-0.5 mb-1 min-h-[1.25rem]">
+        <div className="mb-0.5 flex items-center gap-0.5">
           {bottomCaptures.map((p, i) => (
             <span key={i} className="chess-piece-captured">{PIECE_SYMBOLS[p]}</span>
           ))}
         </div>
       )}
-      <div className="grid grid-cols-8 w-full aspect-square border-2 rounded-lg overflow-hidden shadow-lg chess-board-frame">
-        {flippedBoard.map((rowPieces, row) => (
-          rowPieces.map((piece, col) => {
-            const actualRow = myColor === "black" ? 7 - row : row;
-            const actualCol = myColor === "black" ? 7 - col : col;
-            const square = coordsToSquare(actualRow, actualCol);
-            const isValidMove = validMoves.includes(square);
+      <div className="relative">
+        <div className="grid grid-cols-8 w-full aspect-square border-2 rounded-lg overflow-hidden shadow-lg chess-board-frame">
+          {flippedBoard.map((rowPieces, row) => (
+            rowPieces.map((piece, col) => {
+              const actualRow = myColor === "black" ? 7 - row : row;
+              const actualCol = myColor === "black" ? 7 - col : col;
+              const square = coordsToSquare(actualRow, actualCol);
+              const isValidMove = validMoves.includes(square);
 
-            return (
-              <div
-                key={`${row}-${col}`}
-                className={cn(
-                  "w-full h-full min-w-0 min-h-0 aspect-square flex items-center justify-center cursor-pointer relative transition-colors",
-                  getSquareColor(row, col),
-                  isMyTurn && !isSpectator && "hover:brightness-110",
-                  kingInCheck === square && "animate-chess-check"
-                )}
-                onClick={() => handleSquareClick(row, col)}
-                data-testid={`chess-square-${square}`}
-              >
-                {piece && (
-                  <span
-                    className={cn(
-                      "text-[clamp(1.3rem,5.4vw,2.25rem)] select-none chess-piece",
-                      isWhitePiece(piece) ? "chess-piece-white" : "chess-piece-black",
-                      animSquare === square && "animate-chess-move chess-piece-moving"
-                    )}
-                    style={animSquare === square ? {
-                      "--move-from-col": `${animDelta.dx}`,
-                      "--move-from-row": `${animDelta.dy}`,
-                    } as React.CSSProperties : undefined}
-                  >
-                    {PIECE_SYMBOLS[piece]}
-                  </span>
-                )}
-                {captureFx?.square === square && (
-                  <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+              return (
+                <div
+                  key={`${row}-${col}`}
+                  className={cn(
+                    "w-full h-full min-w-0 min-h-0 aspect-square flex items-center justify-center cursor-pointer relative transition-colors",
+                    getSquareColor(row, col),
+                    isMyTurn && !isSpectator && "hover:brightness-110",
+                    kingInCheck === square && "animate-chess-check"
+                  )}
+                  onClick={() => handleSquareClick(row, col)}
+                  data-testid={`chess-square-${square}`}
+                >
+                  {piece && (
                     <span
                       className={cn(
-                        "text-[clamp(1.3rem,5.4vw,2.25rem)] select-none chess-piece animate-chess-capture",
-                        isWhitePiece(captureFx.piece) ? "chess-piece-white" : "chess-piece-black"
+                        "text-[clamp(1.3rem,5.4vw,2.25rem)] select-none chess-piece",
+                        isWhitePiece(piece) ? "chess-piece-white" : "chess-piece-black",
+                        animSquare === square && "animate-chess-move chess-piece-moving"
                       )}
+                      style={animSquare === square ? {
+                        "--move-from-col": `${animDelta.dx}`,
+                        "--move-from-row": `${animDelta.dy}`,
+                      } as React.CSSProperties : undefined}
                     >
-                      {PIECE_SYMBOLS[captureFx.piece]}
+                      {PIECE_SYMBOLS[piece]}
                     </span>
-                    <span className="absolute inset-1 rounded-full border border-red-500/50 animate-chess-capture-ring" />
-                  </div>
-                )}
-                {isValidMove && !piece && (
-                  <div className="absolute w-3 h-3 rounded-full bg-green-500/50" />
-                )}
-                {isValidMove && piece && (
-                  <div className="absolute inset-0 border-4 border-green-500/50 rounded-full" />
-                )}
-                {col === 0 && (
-                  <span className="absolute top-0.5 start-0.5 text-xs font-bold text-amber-900/70">
-                    {myColor === "black" ? row + 1 : 8 - row}
-                  </span>
-                )}
-                {row === 7 && (
-                  <span className="absolute bottom-0.5 end-0.5 text-xs font-bold text-amber-900/70">
-                    {myColor === "black" ? FILES[7 - col] : FILES[col]}
-                  </span>
-                )}
-              </div>
-            );
-          })
-        ))}
+                  )}
+                  {captureFx?.square === square && (
+                    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                      <span
+                        className={cn(
+                          "text-[clamp(1.3rem,5.4vw,2.25rem)] select-none chess-piece animate-chess-capture",
+                          isWhitePiece(captureFx.piece) ? "chess-piece-white" : "chess-piece-black"
+                        )}
+                      >
+                        {PIECE_SYMBOLS[captureFx.piece]}
+                      </span>
+                      <span className="absolute inset-1 rounded-full border border-red-500/50 animate-chess-capture-ring" />
+                    </div>
+                  )}
+                  {isValidMove && !piece && (
+                    <div className="absolute w-3 h-3 rounded-full bg-green-500/50" />
+                  )}
+                  {isValidMove && piece && (
+                    <div className="absolute inset-0 border-4 border-green-500/50 rounded-full" />
+                  )}
+                  {col === 0 && (
+                    <span className="absolute top-0.5 start-0.5 text-xs font-bold text-amber-900/70">
+                      {myColor === "black" ? row + 1 : 8 - row}
+                    </span>
+                  )}
+                  {row === 7 && (
+                    <span className="absolute bottom-0.5 end-0.5 text-xs font-bold text-amber-900/70">
+                      {myColor === "black" ? FILES[7 - col] : FILES[col]}
+                    </span>
+                  )}
+                </div>
+              );
+            })
+          ))}
+        </div>
+
+        {status !== "finished" && currentTurn && compactTopArea && (
+          <div className="pointer-events-none absolute start-1/2 top-2 z-20 -translate-x-1/2">
+            <div
+              className={cn(
+                "rounded-full border px-2.5 py-0.5 text-xs font-semibold font-mono shadow-sm",
+                timeLeft <= 10
+                  ? "border-red-500/60 bg-red-500/15 text-red-600"
+                  : isMyTurn
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-border/60 bg-muted/75 text-foreground"
+              )}
+            >
+              {timeLeft}s
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Our captures (pieces we took from opponent) */}
       {topCaptures.length > 0 && (
-        <div className="flex items-center gap-0.5 mt-1 min-h-[1.25rem]">
+        <div className="mt-0.5 flex items-center gap-0.5">
           {topCaptures.map((p, i) => (
             <span key={i} className="chess-piece-captured">{PIECE_SYMBOLS[p]}</span>
           ))}

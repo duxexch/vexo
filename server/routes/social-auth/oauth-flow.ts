@@ -36,6 +36,7 @@ interface OAuthExchangeRecord {
   isNew: boolean;
   expiresAt: number;
   userAgent?: string;
+  clientBindingHash?: string;
 }
 
 interface OAuthInitiationRecord {
@@ -131,7 +132,6 @@ function logOAuthRuntimeEvent(req: Request, platform: string, event: string, met
 }
 
 const oauthExchangeStore = new Map<string, OAuthExchangeRecord>();
-const oauthExchangeReplayStore = new Map<string, OAuthExchangeRecord>();
 const oauthInitiationStore = new Map<string, OAuthInitiationRecord>();
 const oauthInitiationStateToKey = new Map<string, string>();
 const oauthStateReplayStore = new Map<string, OAuthStateReplayRecord>();
@@ -251,12 +251,6 @@ setInterval(() => {
     }
   }
 
-  for (const [code, record] of oauthExchangeReplayStore.entries()) {
-    if (record.expiresAt <= now) {
-      oauthExchangeReplayStore.delete(code);
-    }
-  }
-
   for (const [key, record] of oauthInitiationStore.entries()) {
     if (record.expiresAt <= now) {
       oauthInitiationStore.delete(key);
@@ -286,38 +280,27 @@ function createOAuthExchangeCode(record: Omit<OAuthExchangeRecord, "expiresAt">)
   return code;
 }
 
-function consumeOAuthExchangeCode(code: string, userAgent?: string): OAuthExchangeRecord | null {
+function consumeOAuthExchangeCode(code: string, userAgent?: string, clientBindingHash?: string): OAuthExchangeRecord | null {
   const record = oauthExchangeStore.get(code);
-  if (record) {
-    oauthExchangeStore.delete(code);
-    if (record.expiresAt <= Date.now()) {
-      return null;
-    }
-
-    if (!isUserAgentCompatible(record.userAgent, userAgent)) {
-      return null;
-    }
-
-    // Keep short replay window to make exchange idempotent for same callback code.
-    oauthExchangeReplayStore.set(code, record);
-    return record;
-  }
-
-  const replayRecord = oauthExchangeReplayStore.get(code);
-  if (!replayRecord) {
+  if (!record) {
     return null;
   }
 
-  if (replayRecord.expiresAt <= Date.now()) {
-    oauthExchangeReplayStore.delete(code);
+  oauthExchangeStore.delete(code);
+  if (record.expiresAt <= Date.now()) {
     return null;
   }
 
-  if (!isUserAgentCompatible(replayRecord.userAgent, userAgent)) {
+  // Exchange codes are strictly single-use and bound to the initiating client context.
+  if (record.userAgent && userAgent && record.userAgent !== userAgent) {
     return null;
   }
 
-  return replayRecord;
+  if (record.clientBindingHash && clientBindingHash && record.clientBindingHash !== clientBindingHash) {
+    return null;
+  }
+
+  return record;
 }
 
 // Decode Apple id_token for profile data
@@ -653,7 +636,9 @@ export function registerOAuthFlowRoutes(app: Express) {
     }
 
     const userAgent = typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined;
-    const exchange = consumeOAuthExchangeCode(code, userAgent);
+    const sessionFingerprint = getSessionFingerprint(req);
+    const clientBindingHash = buildOAuthClientBinding(req, sessionFingerprint);
+    const exchange = consumeOAuthExchangeCode(code, userAgent, clientBindingHash);
     if (!exchange) {
       logOAuthSecurityEvent(req, "exchange", "exchange_code_invalid_or_expired");
       return res.status(400).json({ error: "Invalid or expired exchange code" });
@@ -1157,7 +1142,13 @@ export function registerOAuthFlowRoutes(app: Express) {
       }
 
       const redirect = sanitizePostLoginRedirect(stateRecord.redirectUrl) || "/";
-      const exchangeCode = createOAuthExchangeCode({ userId: user.id, redirect, isNew, userAgent });
+      const exchangeCode = createOAuthExchangeCode({
+        userId: user.id,
+        redirect,
+        isNew,
+        userAgent,
+        clientBindingHash: expectedClientBindingHash,
+      });
       const callbackPlatformParam = `&platform=${safePlatform}`;
       const callbackRedirectPath = isPopupFlow
         ? `/auth/callback?code=${encodeURIComponent(exchangeCode)}&popup=1${callbackPlatformParam}`

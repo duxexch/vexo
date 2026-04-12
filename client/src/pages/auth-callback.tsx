@@ -142,7 +142,7 @@ export default function AuthCallbackPage() {
       closePopupWindow();
     }, 180);
 
-    return true;
+    return window.closed;
   };
 
   useEffect(() => {
@@ -151,12 +151,7 @@ export default function AuthCallbackPage() {
       const code = params.get("code");
       const callbackError = params.get("error");
 
-      // Legacy fallback for older redirects still carrying token directly.
-      const legacyToken = params.get("token");
-      const legacyRedirect = params.get("redirect") || "/";
-      const legacyIsNew = params.get("isNew") === "true";
-
-      if (callbackError && !code && !legacyToken) {
+      if (callbackError && !code) {
         setStage("error");
         emitOAuthEvent({ type: "vex_oauth_error", reason: callbackError });
         if (completePopupFlow()) {
@@ -271,23 +266,6 @@ export default function AuthCallbackPage() {
           setLocation("/?error=oauth_exchange_failed");
           return;
         }
-      }
-
-      if (legacyToken) {
-        localStorage.setItem("pwm_token", legacyToken);
-        const legacyDestination = resolveSuccessRedirect(legacyRedirect, legacyIsNew);
-        setStage("success");
-
-        emitOAuthEvent({
-          type: "vex_oauth_success",
-          redirect: legacyDestination,
-          isNew: legacyIsNew,
-        });
-        if (completePopupFlow()) {
-          return;
-        }
-        setLocation(legacyDestination);
-        return;
       }
 
       setStage("error");

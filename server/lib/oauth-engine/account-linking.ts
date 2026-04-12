@@ -17,6 +17,10 @@ function resolveAccountLinkingPolicy(): AccountLinkingPolicy {
     ? process.env.SOCIAL_ACCOUNT_LINKING_POLICY.trim().toLowerCase()
     : "";
 
+  if (policy === "merge-by-email" || policy === "merge") {
+    return "merge-by-email";
+  }
+
   if (policy === "strict-verified-email") {
     return "strict-verified-email";
   }
@@ -25,7 +29,8 @@ function resolveAccountLinkingPolicy(): AccountLinkingPolicy {
     return "separate-account";
   }
 
-  return "merge-by-email";
+  // Secure default: do not auto-merge on unverified provider emails.
+  return "strict-verified-email";
 }
 
 function canLinkByEmail(policy: AccountLinkingPolicy, profile: NormalizedProfile): boolean {

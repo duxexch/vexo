@@ -828,6 +828,72 @@ svg {
     box-shadow: 0 12px 26px rgba(0, 46, 96, 0.32);
     backdrop-filter: blur(10px);
   }
+
+  .vex-arcade-stage--tabletop {
+    position: relative;
+    isolation: isolate;
+    background:
+      radial-gradient(1200px 520px at 50% -260px, rgba(255, 223, 122, 0.42), transparent 62%),
+      radial-gradient(780px 380px at 50% 72%, rgba(255, 255, 255, 0.2), transparent 70%),
+      linear-gradient(180deg, #36b9ff 0%, #2aa8f6 38%, #1987d9 74%, #106bc0 100%);
+  }
+
+  .vex-arcade-stage--tabletop::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(12px 12px at 14% 20%, rgba(255, 255, 255, 0.2), transparent 66%),
+      radial-gradient(10px 10px at 88% 18%, rgba(255, 255, 255, 0.16), transparent 66%),
+      radial-gradient(14px 14px at 22% 72%, rgba(255, 255, 255, 0.14), transparent 66%),
+      radial-gradient(16px 16px at 78% 74%, rgba(255, 255, 255, 0.16), transparent 66%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(8, 36, 82, 0.08) 100%);
+    z-index: 0;
+  }
+
+  .vex-arcade-stage--tabletop>* {
+    position: relative;
+    z-index: 1;
+  }
+
+  .vex-arcade-stage--tabletop .vex-arcade-header {
+    border-bottom-color: rgba(255, 220, 111, 0.45);
+    background: linear-gradient(180deg, rgba(7, 20, 44, 0.82), rgba(9, 28, 58, 0.7));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      0 10px 24px rgba(7, 31, 76, 0.38);
+    backdrop-filter: blur(10px);
+  }
+
+  .vex-arcade-stage--tabletop .vex-arcade-panel {
+    border-color: rgba(255, 220, 111, 0.34);
+    background: linear-gradient(180deg, rgba(11, 26, 51, 0.84), rgba(8, 20, 43, 0.74));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      0 10px 24px rgba(0, 25, 65, 0.28);
+  }
+
+  .vex-arcade-stage--tabletop .vex-board-lane {
+    border: 1px solid rgba(255, 220, 111, 0.34);
+    border-radius: 0.9rem;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 16px 34px rgba(0, 46, 98, 0.36);
+  }
+
+  .vex-avatar-mic {
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 222, 126, 0.62);
+    background: linear-gradient(170deg, rgba(12, 29, 58, 0.96), rgba(9, 23, 47, 0.94));
+    box-shadow: 0 8px 16px rgba(3, 25, 58, 0.38);
+    color: rgba(245, 251, 255, 0.96);
+  }
+
+  .vex-avatar-mic:disabled {
+    opacity: 0.58;
+    filter: grayscale(0.22);
+  }
 }
 
 /* RTL Support */

@@ -8,6 +8,7 @@ Use the dedicated agent runner when a batch affects gameplay or cross-surface UX
 
 - Full team:
   - `npm run team:agents:all`
+  - `npm run team:agents:all:strictdb` (requires live PostgreSQL)
 - Route/flow agent:
   - `npm run team:agents:flow`
 - i18n and RTL agent:
@@ -22,6 +23,13 @@ Use the dedicated agent runner when a batch affects gameplay or cross-surface UX
   - `npm run team:agents:database`
 
 The full-team command executes all six checks in sequence and fails fast.
+
+Database agent policy:
+
+- Default (`team:agents:all`) uses `--db-policy=auto`.
+  - If PostgreSQL is reachable: runs settlement idempotency smoke.
+  - If PostgreSQL is offline: runs static schema/type contracts instead of failing.
+- Strict mode (`team:agents:all:strictdb`) fails immediately when PostgreSQL is offline.
 
 ## Agent Coordination (Before Any Implementation)
 

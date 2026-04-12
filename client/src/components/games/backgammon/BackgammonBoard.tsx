@@ -462,6 +462,14 @@ export function BackgammonBoard({
     ? Array.from({ length: 12 }, (_, i) => 23 - i)
     : Array.from({ length: 12 }, (_, i) => 11 - i);
 
+  const spectatorTurnLabel = currentTurn === 'white'
+    ? `⚪ ${t('backgammon.white')}`
+    : `⚫ ${t('backgammon.black')}`;
+  const isActiveTurnForPlayer = playerColor !== 'spectator' && currentTurn === playerColor;
+  const turnStatusLabel = playerColor === 'spectator'
+    ? spectatorTurnLabel
+    : (isActiveTurnForPlayer ? t('backgammon.yourTurn') : t('backgammon.opponentTurn'));
+
   return (
     <div className="flex flex-col gap-3 sm:gap-4 max-w-[min(920px,100vw)] mx-auto w-full overflow-hidden px-1 sm:px-2 [--bg-checker-size:clamp(18px,3.2vw,32px)]" data-testid="backgammon-board">
       <div className="flex items-center justify-between">
@@ -540,11 +548,9 @@ export function BackgammonBoard({
         <div className="text-center">
           <span className={cn(
             "text-sm font-medium px-3 py-1 rounded-full",
-            currentTurn === playerColor ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+            isActiveTurnForPlayer ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
           )}>
-            {currentTurn === playerColor
-              ? t('backgammon.yourTurn')
-              : t('backgammon.opponentTurn')}
+            {turnStatusLabel}
           </span>
         </div>
       </div>

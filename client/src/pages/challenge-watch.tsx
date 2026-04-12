@@ -5,7 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -74,7 +81,13 @@ interface Player {
 interface GameSession {
   id: string;
   challengeId: string;
-  gameType: "chess" | "domino" | "backgammon" | "tarneeb" | "baloot" | "languageduel";
+  gameType:
+  | "chess"
+  | "domino"
+  | "backgammon"
+  | "tarneeb"
+  | "baloot"
+  | "languageduel";
   currentTurn: string | null;
   player1TimeRemaining: number;
   player2TimeRemaining: number;
@@ -162,6 +175,11 @@ interface WatchChatMessage {
   timestamp: string | number;
 }
 
+interface WatchAvatarChatBubbleState {
+  id: string;
+  text: string;
+}
+
 interface ChallengeWatchWSMessage {
   type: string;
   payload?: {
@@ -198,14 +216,21 @@ export default function ChallengeWatchPage() {
   const challengeId = params?.id;
 
   const [gameSession, setGameSession] = useState<GameSession | null>(null);
-  const [playerView, setPlayerView] = useState<Record<string, unknown> | null>(null);
+  const [playerView, setPlayerView] = useState<Record<string, unknown> | null>(
+    null,
+  );
   const [messages, setMessages] = useState<WatchChatMessage[]>([]);
   const [receivedGifts, setReceivedGifts] = useState<WatchGiftInfo[]>([]);
-  const [giftAggregate, setGiftAggregate] = useState<{ count: number; totalValue: number }>({ count: 0, totalValue: 0 });
+  const [giftAggregate, setGiftAggregate] = useState<{
+    count: number;
+    totalValue: number;
+  }>({ count: 0, totalValue: 0 });
 
   const [supportAmount, setSupportAmount] = useState("");
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
-  const [supportMode, setSupportMode] = useState<"instant" | "wait_for_match">("instant");
+  const [supportMode, setSupportMode] = useState<"instant" | "wait_for_match">(
+    "instant",
+  );
   const [showGiftPanel, setShowGiftPanel] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [mobileChatInput, setMobileChatInput] = useState("");
@@ -222,36 +247,92 @@ export default function ChallengeWatchPage() {
   const [fundingShortageProject, setFundingShortageProject] = useState(0);
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
   const [quickConvertAmount, setQuickConvertAmount] = useState("5");
-  const [voicePeerMutedMap, setVoicePeerMutedMap] = useState<Record<string, boolean>>({});
+  const [voicePeerMutedMap, setVoicePeerMutedMap] = useState<
+    Record<string, boolean>
+  >({});
   const [connectedVoicePeers, setConnectedVoicePeers] = useState<string[]>([]);
-  const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null);
+  const [avatarChatBubbles, setAvatarChatBubbles] = useState<
+    Record<string, WatchAvatarChatBubbleState>
+  >({});
+  const [selectedProfileUserId, setSelectedProfileUserId] = useState<
+    string | null
+  >(null);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const wsErrorToastRef = useRef<{ signature: string; at: number }>({ signature: "", at: 0 });
-  const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(null);
+  const wsErrorToastRef = useRef<{ signature: string; at: number }>({
+    signature: "",
+    at: 0,
+  });
+  const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(
+    null,
+  );
   const supportSectionRef = useRef<HTMLDivElement | null>(null);
   const WS_ERROR_TOAST_DEDUPE_MS = 2000;
 
-  const showWsErrorToast = useCallback((message: string, code?: string) => {
-    const normalizedMessage = message.trim();
-    if (!normalizedMessage) return;
+  const showWsErrorToast = useCallback(
+    (message: string, code?: string) => {
+      const normalizedMessage = message.trim();
+      if (!normalizedMessage) return;
 
-    const signature = `${code || "unknown"}:${normalizedMessage}`;
-    const now = Date.now();
-    const isDuplicate = wsErrorToastRef.current.signature === signature
-      && (now - wsErrorToastRef.current.at) < WS_ERROR_TOAST_DEDUPE_MS;
+      const signature = `${code || "unknown"}:${normalizedMessage}`;
+      const now = Date.now();
+      const isDuplicate =
+        wsErrorToastRef.current.signature === signature &&
+        now - wsErrorToastRef.current.at < WS_ERROR_TOAST_DEDUPE_MS;
 
-    if (isDuplicate) return;
+      if (isDuplicate) return;
 
-    wsErrorToastRef.current = { signature, at: now };
-    toast({
-      title: language === "ar" ? "خطأ" : "Error",
-      description: normalizedMessage,
-      variant: "destructive",
-    });
-  }, [language, toast]);
+      wsErrorToastRef.current = { signature, at: now };
+      toast({
+        title: language === "ar" ? "خطأ" : "Error",
+        description: normalizedMessage,
+        variant: "destructive",
+      });
+    },
+    [language, toast],
+  );
 
-  const { data: challenge, isLoading, isError: isChallengeError, error: challengeError } = useQuery<Challenge, Error>({
+  const pushAvatarChatBubble = useCallback(
+    (senderId: string, rawMessage: string) => {
+      const normalizedMessage = rawMessage.trim();
+      if (!senderId || !normalizedMessage) {
+        return;
+      }
+
+      const bubbleId = `${senderId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      setAvatarChatBubbles((prev) => ({
+        ...prev,
+        [senderId]: {
+          id: bubbleId,
+          text:
+            normalizedMessage.length > 72
+              ? `${normalizedMessage.slice(0, 69)}...`
+              : normalizedMessage,
+        },
+      }));
+
+      setTimeout(() => {
+        setAvatarChatBubbles((prev) => {
+          const current = prev[senderId];
+          if (!current || current.id !== bubbleId) {
+            return prev;
+          }
+
+          const next = { ...prev };
+          delete next[senderId];
+          return next;
+        });
+      }, 4000);
+    },
+    [],
+  );
+
+  const {
+    data: challenge,
+    isLoading,
+    isError: isChallengeError,
+    error: challengeError,
+  } = useQuery<Challenge, Error>({
     queryKey: [`/api/challenges/${challengeId}`],
     enabled: !!challengeId,
   });
@@ -259,17 +340,27 @@ export default function ChallengeWatchPage() {
   useEffect(() => {
     if (!challengeId || !challenge || !user?.id) return;
 
-    const participantIds = [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id].filter(Boolean);
+    const participantIds = [
+      challenge.player1Id,
+      challenge.player2Id,
+      challenge.player3Id,
+      challenge.player4Id,
+    ].filter(Boolean);
     if (participantIds.includes(user.id)) {
       setLocation(`/challenge/${challengeId}/play`);
     }
   }, [challengeId, challenge, user?.id, setLocation]);
 
-  const { data: projectWallet, refetch: refetchProjectWallet } = useQuery<{ totalBalance: string; currencySymbol: string }>({
+  const { data: projectWallet, refetch: refetchProjectWallet } = useQuery<{
+    totalBalance: string;
+    currencySymbol: string;
+  }>({
     queryKey: ["/api/project-currency/wallet"],
     enabled: !!user,
     queryFn: async () => {
-      const res = await fetch("/api/project-currency/wallet", { credentials: "include" });
+      const res = await fetch("/api/project-currency/wallet", {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to load project wallet");
       return res.json();
     },
@@ -279,7 +370,9 @@ export default function ChallengeWatchPage() {
     queryKey: ["/api/project-currency/settings"],
     enabled: !!user,
     queryFn: async () => {
-      const res = await fetch("/api/project-currency/settings", { credentials: "include" });
+      const res = await fetch("/api/project-currency/settings", {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Failed to load currency settings");
       return res.json();
     },
@@ -289,7 +382,9 @@ export default function ChallengeWatchPage() {
     queryKey: ["/api/payment-methods"],
     enabled: !!user,
     queryFn: async () => {
-      const res = await fetch("/api/payment-methods", { credentials: "include" });
+      const res = await fetch("/api/payment-methods", {
+        credentials: "include",
+      });
       if (!res.ok) return [];
       return res.json();
     },
@@ -300,16 +395,29 @@ export default function ChallengeWatchPage() {
   );
 
   const quickConvertMutation = useMutation({
-    mutationFn: (amount: string) => apiRequestWithPaymentToken("POST", "/api/project-currency/convert", { amount }, "convert"),
+    mutationFn: (amount: string) =>
+      apiRequestWithPaymentToken(
+        "POST",
+        "/api/project-currency/convert",
+        { amount },
+        "convert",
+      ),
     onSuccess: async (res: Response) => {
-      const payload = await res.json().catch(() => ({} as { status?: string }));
+      const payload = await res.json().catch(() => ({}) as { status?: string });
       await refetchProjectWallet();
-      queryClient.invalidateQueries({ queryKey: ["/api/project-currency/conversions"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/project-currency/conversions"],
+      });
       toast({
         title: language === "ar" ? "تم التحويل" : "Converted",
-        description: payload?.status === "pending"
-          ? (language === "ar" ? "تم إرسال طلب التحويل للمراجعة" : "Conversion request submitted for review")
-          : (language === "ar" ? "تمت إضافة رصيد عملة المشروع بنجاح." : "Project currency balance was updated successfully."),
+        description:
+          payload?.status === "pending"
+            ? language === "ar"
+              ? "تم إرسال طلب التحويل للمراجعة"
+              : "Conversion request submitted for review"
+            : language === "ar"
+              ? "تمت إضافة رصيد عملة المشروع بنجاح."
+              : "Project currency balance was updated successfully.",
       });
       setShowConvertDialog(false);
       setShowDepositDialog(false);
@@ -333,59 +441,102 @@ export default function ChallengeWatchPage() {
 
   const challengeErrorStatus = parseHttpStatus(challengeError ?? null);
 
-  const parseApiErrorMessage = useCallback((message: string): string => {
-    const raw = String(message || "").trim();
-    if (!raw) return language === "ar" ? "حدث خطأ غير متوقع" : "Unexpected error occurred";
+  const parseApiErrorMessage = useCallback(
+    (message: string): string => {
+      const raw = String(message || "").trim();
+      if (!raw)
+        return language === "ar"
+          ? "حدث خطأ غير متوقع"
+          : "Unexpected error occurred";
 
-    const jsonStartIndex = raw.indexOf("{");
-    if (jsonStartIndex >= 0) {
-      try {
-        const parsed = JSON.parse(raw.slice(jsonStartIndex)) as { error?: string };
-        if (parsed?.error) return parsed.error;
-      } catch {
-        // Fallback to normalized message below
+      const jsonStartIndex = raw.indexOf("{");
+      if (jsonStartIndex >= 0) {
+        try {
+          const parsed = JSON.parse(raw.slice(jsonStartIndex)) as {
+            error?: string;
+          };
+          if (parsed?.error) return parsed.error;
+        } catch {
+          // Fallback to normalized message below
+        }
       }
-    }
 
-    return raw.replace(/^\d+\s*:\s*/, "").trim();
-  }, [language]);
+      return raw.replace(/^\d+\s*:\s*/, "").trim();
+    },
+    [language],
+  );
 
-  const estimateUsdForProjectCurrency = useCallback((projectAmount: number): number => {
-    const exchangeRate = Number(projectCurrencySettings?.exchangeRate || 0);
-    const commissionRate = Number(projectCurrencySettings?.conversionCommissionRate || 0);
-    const netRate = exchangeRate * Math.max(0, 1 - commissionRate);
+  const estimateUsdForProjectCurrency = useCallback(
+    (projectAmount: number): number => {
+      const exchangeRate = Number(projectCurrencySettings?.exchangeRate || 0);
+      const commissionRate = Number(
+        projectCurrencySettings?.conversionCommissionRate || 0,
+      );
+      const netRate = exchangeRate * Math.max(0, 1 - commissionRate);
 
-    if (!Number.isFinite(netRate) || netRate <= 0) {
-      return projectAmount;
-    }
+      if (!Number.isFinite(netRate) || netRate <= 0) {
+        return projectAmount;
+      }
 
-    return projectAmount / netRate;
-  }, [projectCurrencySettings?.exchangeRate, projectCurrencySettings?.conversionCommissionRate]);
+      return projectAmount / netRate;
+    },
+    [
+      projectCurrencySettings?.exchangeRate,
+      projectCurrencySettings?.conversionCommissionRate,
+    ],
+  );
 
-  const openFundingAssistance = useCallback((projectAmountNeeded: number, usdFallbackAmount = 0): void => {
-    const safeProjectAmount = Math.max(0, Number(projectAmountNeeded) || 0);
-    const estimatedUsd = Math.max(Number(usdFallbackAmount) || 0, estimateUsdForProjectCurrency(safeProjectAmount));
-    const minConvert = Number(projectCurrencySettings?.minConversionAmount || 1);
-    const maxConvert = Number(projectCurrencySettings?.maxConversionAmount || 10000);
-    const suggestedConvert = Math.min(maxConvert, Math.max(minConvert, Number(estimatedUsd.toFixed(2))));
-    const userUsdBalance = Number(user?.balance || 0);
+  const openFundingAssistance = useCallback(
+    (projectAmountNeeded: number, usdFallbackAmount = 0): void => {
+      const safeProjectAmount = Math.max(0, Number(projectAmountNeeded) || 0);
+      const estimatedUsd = Math.max(
+        Number(usdFallbackAmount) || 0,
+        estimateUsdForProjectCurrency(safeProjectAmount),
+      );
+      const minConvert = Number(
+        projectCurrencySettings?.minConversionAmount || 1,
+      );
+      const maxConvert = Number(
+        projectCurrencySettings?.maxConversionAmount || 10000,
+      );
+      const suggestedConvert = Math.min(
+        maxConvert,
+        Math.max(minConvert, Number(estimatedUsd.toFixed(2))),
+      );
+      const userUsdBalance = Number(user?.balance || 0);
 
-    setFundingShortageProject(safeProjectAmount);
-    setFundingUsdNeeded(estimatedUsd);
-    setQuickConvertAmount(String(suggestedConvert));
-    setShowConvertDialog(false);
-    setShowDepositDialog(false);
+      setFundingShortageProject(safeProjectAmount);
+      setFundingUsdNeeded(estimatedUsd);
+      setQuickConvertAmount(String(suggestedConvert));
+      setShowConvertDialog(false);
+      setShowDepositDialog(false);
 
-    if (!projectCurrencySettings?.isActive || userUsdBalance < suggestedConvert) {
-      setShowDepositDialog(true);
-      return;
-    }
+      if (
+        !projectCurrencySettings?.isActive ||
+        userUsdBalance < suggestedConvert
+      ) {
+        setShowDepositDialog(true);
+        return;
+      }
 
-    setShowConvertDialog(true);
-  }, [estimateUsdForProjectCurrency, projectCurrencySettings?.isActive, projectCurrencySettings?.maxConversionAmount, projectCurrencySettings?.minConversionAmount, user?.balance]);
+      setShowConvertDialog(true);
+    },
+    [
+      estimateUsdForProjectCurrency,
+      projectCurrencySettings?.isActive,
+      projectCurrencySettings?.maxConversionAmount,
+      projectCurrencySettings?.minConversionAmount,
+      user?.balance,
+    ],
+  );
 
   const toFiniteNumber = useCallback((value: unknown): number | null => {
-    const num = typeof value === "string" ? Number(value) : (typeof value === "number" ? value : Number.NaN);
+    const num =
+      typeof value === "string"
+        ? Number(value)
+        : typeof value === "number"
+          ? value
+          : Number.NaN;
     if (!Number.isFinite(num) || num <= 0) return null;
     return num;
   }, []);
@@ -395,21 +546,28 @@ export default function ChallengeWatchPage() {
     enabled: !!challengeId,
   });
 
-  const { data: supports, isLoading: isLoadingSupports } = useQuery<SupportEntry[]>({
+  const { data: supports, isLoading: isLoadingSupports } = useQuery<
+    SupportEntry[]
+  >({
     queryKey: [`/api/challenges/${challengeId}/supports`],
     enabled: !!challengeId,
   });
 
   const { data: selectedProfile } = useQuery<Record<string, unknown>>({
-    queryKey: [selectedProfileUserId ? `/api/users/${selectedProfileUserId}` : ""],
+    queryKey: [
+      selectedProfileUserId ? `/api/users/${selectedProfileUserId}` : "",
+    ],
     enabled: !!selectedProfileUserId,
   });
 
   const sendFriendRequestMutation = useMutation({
-    mutationFn: async (userId: string) => apiRequest("POST", `/api/users/friend-request/${userId}`),
+    mutationFn: async (userId: string) =>
+      apiRequest("POST", `/api/users/friend-request/${userId}`),
     onSuccess: () => {
       toast({ title: t("friends.requestSentSuccess") });
-      queryClient.invalidateQueries({ queryKey: ["/api/users/friend-requests/outgoing"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/users/friend-requests/outgoing"],
+      });
     },
     onError: () => {
       toast({ title: t("common.error"), variant: "destructive" });
@@ -422,18 +580,23 @@ export default function ChallengeWatchPage() {
     onSuccess: () => {
       toast({
         title: language === "ar" ? "تم إضافة الدعم!" : "Support added!",
-        description: language === "ar"
-          ? "تم تسجيل دعمك بنجاح. حظاً موفقاً!"
-          : "Your support has been registered. Good luck!",
+        description:
+          language === "ar"
+            ? "تم تسجيل دعمك بنجاح. حظاً موفقاً!"
+            : "Your support has been registered. Good luck!",
       });
       setSupportAmount("");
       setSelectedPlayer(null);
-      queryClient.invalidateQueries({ queryKey: [`/api/challenges/${challengeId}/supports`] });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/challenges/${challengeId}/supports`],
+      });
     },
     onError: (err: Error) => {
       toast({
         title: language === "ar" ? "خطأ" : "Error",
-        description: err.message || (language === "ar" ? "فشل إضافة الدعم" : "Failed to add support"),
+        description:
+          err.message ||
+          (language === "ar" ? "فشل إضافة الدعم" : "Failed to add support"),
         variant: "destructive",
       });
     },
@@ -453,11 +616,13 @@ export default function ChallengeWatchPage() {
       }
       // Small delay to ensure auth is processed before joining
       setTimeout(() => {
-        ws.send(JSON.stringify({
-          type: "join_challenge_game",
-          challengeId,
-          isSpectator: true
-        }));
+        ws.send(
+          JSON.stringify({
+            type: "join_challenge_game",
+            challengeId,
+            isSpectator: true,
+          }),
+        );
       }, 100);
     };
 
@@ -467,8 +632,10 @@ export default function ChallengeWatchPage() {
         handleWebSocketMessage(data);
       } catch {
         showWsErrorToast(
-          language === "ar" ? "رسالة غير صالحة من الخادم" : "Invalid server message",
-          "invalid_server_message"
+          language === "ar"
+            ? "رسالة غير صالحة من الخادم"
+            : "Invalid server message",
+          "invalid_server_message",
         );
       }
     };
@@ -481,132 +648,217 @@ export default function ChallengeWatchPage() {
     };
   }, [challengeId, language, showWsErrorToast]);
 
-  const handleWebSocketMessage = useCallback((data: ChallengeWatchWSMessage) => {
-    if (isWsErrorType(data.type)) {
-      const { message, code } = extractWsErrorInfo(data);
-      if (message) {
-        const parsedError = parseApiErrorMessage(message);
-        showWsErrorToast(parsedError, code);
+  const handleWebSocketMessage = useCallback(
+    (data: ChallengeWatchWSMessage) => {
+      if (isWsErrorType(data.type)) {
+        const { message, code } = extractWsErrorInfo(data);
+        if (message) {
+          const parsedError = parseApiErrorMessage(message);
+          showWsErrorToast(parsedError, code);
 
-        const normalized = parsedError.toLowerCase();
-        const normalizedCode = String(code || "").toLowerCase();
-        const isGiftFundingError = normalizedCode === "project_currency_required"
-          || normalizedCode === "project_currency_wallet_required"
-          || (
-            normalized.includes("direct real-money gifts are disabled")
-            || normalized.includes("purchase gifts with project currency first")
-            || normalized.includes("insufficient project currency")
-            || normalized.includes("project currency wallet")
-          );
+          const normalized = parsedError.toLowerCase();
+          const normalizedCode = String(code || "").toLowerCase();
+          const isGiftFundingError =
+            normalizedCode === "project_currency_required" ||
+            normalizedCode === "project_currency_wallet_required" ||
+            normalized.includes("direct real-money gifts are disabled") ||
+            normalized.includes("purchase gifts with project currency first") ||
+            normalized.includes("insufficient project currency") ||
+            normalized.includes("project currency wallet");
 
-        if (isGiftFundingError) {
-          const requiredFromServer = toFiniteNumber((data as { requiredProjectAmount?: unknown }).requiredProjectAmount)
-            ?? toFiniteNumber((data as { giftPrice?: unknown }).giftPrice);
-          const shortfallFromServer = toFiniteNumber((data as { shortfallProjectAmount?: unknown }).shortfallProjectAmount);
-          const requiredFromRecentGift = toFiniteNumber(lastGiftAttemptRef.current?.price);
-          const requiredProjectAmount = requiredFromServer ?? requiredFromRecentGift ?? shortfallFromServer ?? 0;
+          if (isGiftFundingError) {
+            const requiredFromServer =
+              toFiniteNumber(
+                (data as { requiredProjectAmount?: unknown })
+                  .requiredProjectAmount,
+              ) ?? toFiniteNumber((data as { giftPrice?: unknown }).giftPrice);
+            const shortfallFromServer = toFiniteNumber(
+              (data as { shortfallProjectAmount?: unknown })
+                .shortfallProjectAmount,
+            );
+            const requiredFromRecentGift = toFiniteNumber(
+              lastGiftAttemptRef.current?.price,
+            );
+            const requiredProjectAmount =
+              requiredFromServer ??
+              requiredFromRecentGift ??
+              shortfallFromServer ??
+              0;
 
-          if (requiredProjectAmount > 0) {
-            const projectBalanceNow = Number(projectWallet?.totalBalance || 0);
-            const projectShortage = shortfallFromServer ?? Math.max(0, requiredProjectAmount - projectBalanceNow);
-            openFundingAssistance(projectShortage > 0 ? projectShortage : requiredProjectAmount, requiredProjectAmount);
+            if (requiredProjectAmount > 0) {
+              const projectBalanceNow = Number(
+                projectWallet?.totalBalance || 0,
+              );
+              const projectShortage =
+                shortfallFromServer ??
+                Math.max(0, requiredProjectAmount - projectBalanceNow);
+              openFundingAssistance(
+                projectShortage > 0 ? projectShortage : requiredProjectAmount,
+                requiredProjectAmount,
+              );
+            }
           }
         }
+        return;
       }
+
+      switch (data.type) {
+        case "game_state_sync":
+          if (data.session) setGameSession(data.session);
+          if (data.view) setPlayerView(data.view);
+          break;
+        case "game_move":
+          if (data.session)
+            setGameSession((prev) =>
+              prev ? { ...prev, ...data.session } : null,
+            );
+          if (data.view) setPlayerView(data.view);
+          break;
+        case "chat_message":
+          if (data.message) {
+            const incomingMessage = data.message as WatchChatMessage;
+            setMessages((prev) =>
+              [...prev, incomingMessage].slice(-160),
+            );
+
+            const senderId =
+              typeof incomingMessage.userId === "string"
+                ? incomingMessage.userId
+                : "";
+            const chatText =
+              typeof incomingMessage.message === "string"
+                ? incomingMessage.message
+                : "";
+
+            if (senderId && chatText) {
+              pushAvatarChatBubble(senderId, chatText);
+            }
+          }
+          break;
+        case "gift_received":
+          if (data.gift) {
+            const gift = data.gift;
+            const parsedGiftAmount = Number(
+              (gift as { amount?: unknown }).amount,
+            );
+            const safeGiftAmount =
+              Number.isFinite(parsedGiftAmount) && parsedGiftAmount > 0
+                ? parsedGiftAmount
+                : 0;
+            const displayId = `${String(gift.id || "gift")}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const displayGift: WatchGiftInfo = {
+              ...gift,
+              id: displayId,
+            };
+            setReceivedGifts((prev) => [...prev, displayGift]);
+            setGiftAggregate((prev) => ({
+              count: prev.count + 1,
+              totalValue: prev.totalValue + safeGiftAmount,
+            }));
+            toast({
+              title: language === "ar" ? "هدية!" : "Gift!",
+              description: `${gift.senderName} sent ${gift.giftName}`,
+            });
+            setTimeout(() => {
+              setReceivedGifts((prev) =>
+                prev.filter((g) => g.id !== displayId),
+              );
+            }, 1500);
+          }
+          break;
+        case "player_disconnected_grace": {
+          const payload = (data.payload || {}) as Record<string, unknown>;
+          const graceMs = toFiniteNumber(payload.graceMs);
+          setAutoPlayNotice({
+            mode: "grace",
+            username:
+              typeof payload.username === "string"
+                ? payload.username
+                : undefined,
+            reason: "disconnect",
+            seconds: graceMs ? Math.max(1, Math.round(graceMs / 1000)) : 60,
+            startedAtMs: Date.now(),
+          });
+          break;
+        }
+        case "player_absent_auto": {
+          const payload = (data.payload || {}) as Record<string, unknown>;
+          const turnTimeLimitMs = toFiniteNumber(payload.turnTimeLimitMs);
+          const username =
+            typeof payload.username === "string" ? payload.username : undefined;
+          const seconds = turnTimeLimitMs
+            ? Math.max(1, Math.round(turnTimeLimitMs / 1000))
+            : 30;
+          setAutoPlayNotice({
+            mode: "autoplay",
+            username,
+            reason:
+              typeof payload.reason === "string"
+                ? payload.reason
+                : "disconnect",
+            seconds,
+            startedAtMs: Date.now(),
+          });
+          toast({
+            title:
+              language === "ar"
+                ? "تم تفعيل اللعب التلقائي"
+                : "Auto Play enabled",
+            description:
+              language === "ar"
+                ? `${username || "أحد اللاعبين"} أصبح غائبًا، وسيقوم النظام باللعب تلقائيًا كل ${seconds} ثانية حتى تنتهي المباراة.`
+                : `${username || "A player"} is now absent, so the system will auto-play every ${seconds} seconds until the match ends.`,
+          });
+          break;
+        }
+        case "game_ended":
+          setAutoPlayNotice(null);
+          setGameSession((prev) =>
+            prev
+              ? {
+                ...prev,
+                status: "finished",
+                winnerId: data.winnerId,
+                winReason: data.reason,
+              }
+              : null,
+          );
+          break;
+        case "spectator_count":
+          setGameSession((prev) =>
+            prev
+              ? { ...prev, spectatorCount: (data.count as number) ?? 0 }
+              : null,
+          );
+          break;
+        case "support_added":
+          queryClient.invalidateQueries({
+            queryKey: [`/api/challenges/${challengeId}/supports`],
+          });
+          break;
+      }
+    },
+    [
+      challengeId,
+      showWsErrorToast,
+      parseApiErrorMessage,
+      toFiniteNumber,
+      projectWallet?.totalBalance,
+      openFundingAssistance,
+      language,
+      toast,
+      pushAvatarChatBubble,
+    ],
+  );
+
+  useEffect(() => {
+    if (gameSession?.status !== "finished") {
       return;
     }
 
-    switch (data.type) {
-      case "game_state_sync":
-        if (data.session) setGameSession(data.session);
-        if (data.view) setPlayerView(data.view);
-        break;
-      case "game_move":
-        if (data.session) setGameSession(prev => prev ? { ...prev, ...data.session } : null);
-        if (data.view) setPlayerView(data.view);
-        break;
-      case "chat_message":
-        if (data.message) {
-          setMessages((prev) => [...prev, data.message as WatchChatMessage].slice(-160));
-        }
-        break;
-      case "gift_received":
-        if (data.gift) {
-          const gift = data.gift;
-          const parsedGiftAmount = Number((gift as { amount?: unknown }).amount);
-          const safeGiftAmount = Number.isFinite(parsedGiftAmount) && parsedGiftAmount > 0 ? parsedGiftAmount : 0;
-          const displayId = `${String(gift.id || "gift")}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-          const displayGift: WatchGiftInfo = {
-            ...gift,
-            id: displayId,
-          };
-          setReceivedGifts(prev => [...prev, displayGift]);
-          setGiftAggregate((prev) => ({
-            count: prev.count + 1,
-            totalValue: prev.totalValue + safeGiftAmount,
-          }));
-          toast({
-            title: language === "ar" ? "هدية!" : "Gift!",
-            description: `${gift.senderName} sent ${gift.giftName}`,
-          });
-          setTimeout(() => {
-            setReceivedGifts(prev => prev.filter(g => g.id !== displayId));
-          }, 1500);
-        }
-        break;
-      case "player_disconnected_grace": {
-        const payload = (data.payload || {}) as Record<string, unknown>;
-        const graceMs = toFiniteNumber(payload.graceMs);
-        setAutoPlayNotice({
-          mode: "grace",
-          username: typeof payload.username === "string" ? payload.username : undefined,
-          reason: "disconnect",
-          seconds: graceMs ? Math.max(1, Math.round(graceMs / 1000)) : 60,
-          startedAtMs: Date.now(),
-        });
-        break;
-      }
-      case "player_absent_auto": {
-        const payload = (data.payload || {}) as Record<string, unknown>;
-        const turnTimeLimitMs = toFiniteNumber(payload.turnTimeLimitMs);
-        const username = typeof payload.username === "string" ? payload.username : undefined;
-        const seconds = turnTimeLimitMs ? Math.max(1, Math.round(turnTimeLimitMs / 1000)) : 30;
-        setAutoPlayNotice({
-          mode: "autoplay",
-          username,
-          reason: typeof payload.reason === "string" ? payload.reason : "disconnect",
-          seconds,
-          startedAtMs: Date.now(),
-        });
-        toast({
-          title: language === "ar" ? "تم تفعيل اللعب التلقائي" : "Auto Play enabled",
-          description: language === "ar"
-            ? `${username || "أحد اللاعبين"} أصبح غائبًا، وسيقوم النظام باللعب تلقائيًا كل ${seconds} ثانية حتى تنتهي المباراة.`
-            : `${username || "A player"} is now absent, so the system will auto-play every ${seconds} seconds until the match ends.`,
-        });
-        break;
-      }
-      case "game_ended":
-        setAutoPlayNotice(null);
-        setGameSession(prev => prev ? { ...prev, status: "finished", winnerId: data.winnerId, winReason: data.reason } : null);
-        break;
-      case "spectator_count":
-        setGameSession(prev => prev ? { ...prev, spectatorCount: (data.count as number) ?? 0 } : null);
-        break;
-      case "support_added":
-        queryClient.invalidateQueries({ queryKey: [`/api/challenges/${challengeId}/supports`] });
-        break;
-    }
-  }, [
-    challengeId,
-    showWsErrorToast,
-    parseApiErrorMessage,
-    toFiniteNumber,
-    projectWallet?.totalBalance,
-    openFundingAssistance,
-    language,
-    toast,
-  ]);
+    setMessages([]);
+    setAvatarChatBubbles({});
+  }, [gameSession?.status]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -627,7 +879,12 @@ export default function ChallengeWatchPage() {
     return () => {
       clearInterval(ticker);
     };
-  }, [autoPlayNotice?.mode, autoPlayNotice?.seconds, autoPlayNotice?.startedAtMs, gameSession?.status]);
+  }, [
+    autoPlayNotice?.mode,
+    autoPlayNotice?.seconds,
+    autoPlayNotice?.startedAtMs,
+    gameSession?.status,
+  ]);
 
   const formatChatTimestamp = (timestamp: string | number) => {
     const date = new Date(timestamp);
@@ -640,26 +897,46 @@ export default function ChallengeWatchPage() {
     });
   };
 
-  const autoPlayActorName = autoPlayNotice?.username || (language === "ar" ? "أحد اللاعبين" : "A player");
-  const autoPlayBaseSeconds = Math.max(1, autoPlayNotice?.seconds ?? (autoPlayNotice?.mode === "grace" ? 60 : 30));
+  const autoPlayActorName =
+    autoPlayNotice?.username ||
+    (language === "ar" ? "أحد اللاعبين" : "A player");
+  const autoPlayBaseSeconds = Math.max(
+    1,
+    autoPlayNotice?.seconds ?? (autoPlayNotice?.mode === "grace" ? 60 : 30),
+  );
   const autoPlayElapsedSeconds = autoPlayNotice
-    ? Math.max(0, Math.floor((autoPlayNowMs - (autoPlayNotice.startedAtMs ?? autoPlayNowMs)) / 1000))
+    ? Math.max(
+      0,
+      Math.floor(
+        (autoPlayNowMs - (autoPlayNotice.startedAtMs ?? autoPlayNowMs)) /
+        1000,
+      ),
+    )
     : 0;
   const autoPlayLiveSeconds = autoPlayNotice
-    ? (autoPlayNotice.mode === "grace"
+    ? autoPlayNotice.mode === "grace"
       ? Math.max(0, autoPlayBaseSeconds - autoPlayElapsedSeconds)
-      : Math.max(1, autoPlayBaseSeconds - (autoPlayElapsedSeconds % autoPlayBaseSeconds)))
+      : Math.max(
+        1,
+        autoPlayBaseSeconds - (autoPlayElapsedSeconds % autoPlayBaseSeconds),
+      )
     : null;
-  const autoPlayTitle = autoPlayNotice?.mode === "autoplay"
-    ? (language === "ar" ? "تم تفعيل Auto Play" : "Auto Play is active")
-    : (language === "ar" ? "بانتظار عودة اللاعب" : "Waiting for reconnection");
-  const autoPlayDescription = autoPlayNotice?.mode === "autoplay"
-    ? (language === "ar"
-      ? `${autoPlayActorName} أصبح غائبًا، وسيكمل النظام اللعب تلقائيًا كل ${autoPlayBaseSeconds} ثانية حتى تنتهي المباراة.`
-      : `${autoPlayActorName} is absent, so the system will auto-play every ${autoPlayBaseSeconds} seconds until the match ends.`)
-    : (language === "ar"
-      ? `${autoPlayActorName} انقطع عن المباراة. إذا لم يعد خلال ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} ثانية سيدخل التحدي وضع Auto Play.`
-      : `${autoPlayActorName} disconnected from the match. If they do not return within ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} seconds, Auto Play will take over.`);
+  const autoPlayTitle =
+    autoPlayNotice?.mode === "autoplay"
+      ? language === "ar"
+        ? "تم تفعيل Auto Play"
+        : "Auto Play is active"
+      : language === "ar"
+        ? "بانتظار عودة اللاعب"
+        : "Waiting for reconnection";
+  const autoPlayDescription =
+    autoPlayNotice?.mode === "autoplay"
+      ? language === "ar"
+        ? `${autoPlayActorName} أصبح غائبًا، وسيكمل النظام اللعب تلقائيًا كل ${autoPlayBaseSeconds} ثانية حتى تنتهي المباراة.`
+        : `${autoPlayActorName} is absent, so the system will auto-play every ${autoPlayBaseSeconds} seconds until the match ends.`
+      : language === "ar"
+        ? `${autoPlayActorName} انقطع عن المباراة. إذا لم يعد خلال ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} ثانية سيدخل التحدي وضع Auto Play.`
+        : `${autoPlayActorName} disconnected from the match. If they do not return within ${autoPlayLiveSeconds ?? autoPlayBaseSeconds} seconds, Auto Play will take over.`;
 
   const dominoTurnStartedAtMs = useMemo(() => {
     const rawLastMoveAt = gameSession?.lastMoveAt;
@@ -672,32 +949,52 @@ export default function ChallengeWatchPage() {
   }, [gameSession?.lastMoveAt, gameSession?.totalMoves]);
 
   const balootTurnStartedAtMs = useMemo(() => {
-    const rawStartedAt = gameSession?.lastMoveAt || gameSession?.updatedAt || gameSession?.createdAt;
+    const rawStartedAt =
+      gameSession?.lastMoveAt ||
+      gameSession?.updatedAt ||
+      gameSession?.createdAt;
     if (!rawStartedAt) {
       return undefined;
     }
 
     const parsed = new Date(rawStartedAt).getTime();
     return Number.isFinite(parsed) ? parsed : undefined;
-  }, [gameSession?.createdAt, gameSession?.lastMoveAt, gameSession?.totalMoves, gameSession?.updatedAt]);
+  }, [
+    gameSession?.createdAt,
+    gameSession?.lastMoveAt,
+    gameSession?.totalMoves,
+    gameSession?.updatedAt,
+  ]);
 
   const tarneebTurnStartedAtMs = useMemo(() => {
-    const rawStartedAt = gameSession?.lastMoveAt || gameSession?.updatedAt || gameSession?.createdAt;
+    const rawStartedAt =
+      gameSession?.lastMoveAt ||
+      gameSession?.updatedAt ||
+      gameSession?.createdAt;
     if (!rawStartedAt) {
       return undefined;
     }
 
     const parsed = new Date(rawStartedAt).getTime();
     return Number.isFinite(parsed) ? parsed : undefined;
-  }, [gameSession?.createdAt, gameSession?.lastMoveAt, gameSession?.totalMoves, gameSession?.updatedAt]);
+  }, [
+    gameSession?.createdAt,
+    gameSession?.lastMoveAt,
+    gameSession?.totalMoves,
+    gameSession?.updatedAt,
+  ]);
 
   const getPlayerOdds = (playerId: string): number => {
     if (!oddsData || !challenge) return 1.5;
     const instantOdds = parseFloat(oddsData.instantMatchOdds) || 1.8;
     if (playerId === challenge.player1Id) {
-      return supportMode === "instant" ? instantOdds : (oddsData.player1?.odds || 1.5);
+      return supportMode === "instant"
+        ? instantOdds
+        : oddsData.player1?.odds || 1.5;
     }
-    return supportMode === "instant" ? instantOdds : (oddsData.player2?.odds || 1.5);
+    return supportMode === "instant"
+      ? instantOdds
+      : oddsData.player2?.odds || 1.5;
   };
 
   const calculatePotentialWinnings = () => {
@@ -708,66 +1005,85 @@ export default function ChallengeWatchPage() {
     return amount * odds;
   };
 
-  const handleSendGift = useCallback((giftId: string, playerId: string, meta?: { price?: number }) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      toast({
-        title: language === "ar" ? "خطأ" : "Error",
-        description: language === "ar" ? "غير متصل" : "Not connected",
-        variant: "destructive",
-      });
-      return;
-    }
+  const handleSendGift = useCallback(
+    (giftId: string, playerId: string, meta?: { price?: number }) => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        toast({
+          title: language === "ar" ? "خطأ" : "Error",
+          description: language === "ar" ? "غير متصل" : "Not connected",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    const attemptedGiftPrice = Number(meta?.price || 0);
-    lastGiftAttemptRef.current = {
-      giftId,
-      price: Number.isFinite(attemptedGiftPrice) ? attemptedGiftPrice : 0,
-    };
+      const attemptedGiftPrice = Number(meta?.price || 0);
+      lastGiftAttemptRef.current = {
+        giftId,
+        price: Number.isFinite(attemptedGiftPrice) ? attemptedGiftPrice : 0,
+      };
 
-    wsRef.current.send(JSON.stringify({
-      type: "send_gift",
-      challengeId,
-      giftId,
-      recipientId: playerId,
-    }));
-  }, [challengeId, language, toast]);
+      wsRef.current.send(
+        JSON.stringify({
+          type: "send_gift",
+          challengeId,
+          giftId,
+          recipientId: playerId,
+        }),
+      );
+    },
+    [challengeId, language, toast],
+  );
 
-  const sendLiveChatMessage = useCallback((message: string) => {
-    const safeMessage = message.trim();
-    if (!safeMessage) return;
+  const sendLiveChatMessage = useCallback(
+    (message: string) => {
+      const safeMessage = message.trim();
+      if (!safeMessage) return;
 
-    if (!user) {
-      toast({
-        title: language === "ar" ? "سجل الدخول أولاً" : "Login required",
-        description: language === "ar" ? "سجّل الدخول للمشاركة في الدردشة المباشرة." : "Sign in to join the live chat.",
-        variant: "destructive",
-      });
-      return;
-    }
+      if (!user) {
+        toast({
+          title: language === "ar" ? "سجل الدخول أولاً" : "Login required",
+          description:
+            language === "ar"
+              ? "سجّل الدخول للمشاركة في الدردشة المباشرة."
+              : "Sign in to join the live chat.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      toast({
-        title: language === "ar" ? "خطأ" : "Error",
-        description: language === "ar" ? "الاتصال غير جاهز الآن" : "Connection is not ready right now",
-        variant: "destructive",
-      });
-      return;
-    }
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        toast({
+          title: language === "ar" ? "خطأ" : "Error",
+          description:
+            language === "ar"
+              ? "الاتصال غير جاهز الآن"
+              : "Connection is not ready right now",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    wsRef.current.send(JSON.stringify({
-      type: "challenge_chat",
-      challengeId,
-      message: safeMessage,
-    }));
-    setMobileChatInput("");
-  }, [challengeId, language, toast, user]);
+      wsRef.current.send(
+        JSON.stringify({
+          type: "challenge_chat",
+          challengeId,
+          message: safeMessage,
+        }),
+      );
+      setMobileChatInput("");
+    },
+    [challengeId, language, toast, user],
+  );
 
   const openGiftPanel = useCallback(() => {
     setShowGiftPanel(true);
   }, []);
 
   const jumpToSupportSection = useCallback(() => {
-    supportSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    supportSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
   }, []);
 
   const handleAddSupport = () => {
@@ -776,23 +1092,30 @@ export default function ChallengeWatchPage() {
     if (isNaN(amount) || amount <= 0) {
       toast({
         title: language === "ar" ? "خطأ" : "Error",
-        description: language === "ar" ? "أدخل مبلغاً صحيحاً" : "Enter a valid amount",
+        description:
+          language === "ar" ? "أدخل مبلغاً صحيحاً" : "Enter a valid amount",
         variant: "destructive",
       });
       return;
     }
-    if (oddsData && (amount < oddsData.minSupportAmount || amount > oddsData.maxSupportAmount)) {
-      const minAmountText = challenge?.currencyType === "project"
-        ? `${oddsData.minSupportAmount.toFixed(2)} VXC`
-        : `$${oddsData.minSupportAmount.toFixed(2)}`;
-      const maxAmountText = challenge?.currencyType === "project"
-        ? `${oddsData.maxSupportAmount.toFixed(2)} VXC`
-        : `$${oddsData.maxSupportAmount.toFixed(2)}`;
+    if (
+      oddsData &&
+      (amount < oddsData.minSupportAmount || amount > oddsData.maxSupportAmount)
+    ) {
+      const minAmountText =
+        challenge?.currencyType === "project"
+          ? `${oddsData.minSupportAmount.toFixed(2)} VXC`
+          : `$${oddsData.minSupportAmount.toFixed(2)}`;
+      const maxAmountText =
+        challenge?.currencyType === "project"
+          ? `${oddsData.maxSupportAmount.toFixed(2)} VXC`
+          : `$${oddsData.maxSupportAmount.toFixed(2)}`;
       toast({
         title: language === "ar" ? "خطأ" : "Error",
-        description: language === "ar"
-          ? `المبلغ يجب أن يكون بين ${minAmountText} و ${maxAmountText}`
-          : `Amount must be between ${minAmountText} and ${maxAmountText}`,
+        description:
+          language === "ar"
+            ? `المبلغ يجب أن يكون بين ${minAmountText} و ${maxAmountText}`
+            : `Amount must be between ${minAmountText} and ${maxAmountText}`,
         variant: "destructive",
       });
       return;
@@ -804,16 +1127,20 @@ export default function ChallengeWatchPage() {
     });
   };
 
-  const minConvertAmount = Number(projectCurrencySettings?.minConversionAmount || 1);
-  const maxConvertAmount = Number(projectCurrencySettings?.maxConversionAmount || 10000);
+  const minConvertAmount = Number(
+    projectCurrencySettings?.minConversionAmount || 1,
+  );
+  const maxConvertAmount = Number(
+    projectCurrencySettings?.maxConversionAmount || 10000,
+  );
   const quickConvertAmountValue = Number(quickConvertAmount || 0);
   const quickConvertDisabled =
-    quickConvertMutation.isPending
-    || !quickConvertAmount
-    || quickConvertAmountValue <= 0
-    || quickConvertAmountValue < minConvertAmount
-    || quickConvertAmountValue > maxConvertAmount
-    || quickConvertAmountValue > Number(user?.balance || 0);
+    quickConvertMutation.isPending ||
+    !quickConvertAmount ||
+    quickConvertAmountValue <= 0 ||
+    quickConvertAmountValue < minConvertAmount ||
+    quickConvertAmountValue > maxConvertAmount ||
+    quickConvertAmountValue > Number(user?.balance || 0);
 
   if (isLoading) {
     return (
@@ -830,24 +1157,45 @@ export default function ChallengeWatchPage() {
     const isRateLimited = challengeErrorStatus === 429;
 
     const title = isUnauthorized
-      ? (language === "ar" ? "تسجيل الدخول مطلوب" : "Login required")
+      ? language === "ar"
+        ? "تسجيل الدخول مطلوب"
+        : "Login required"
       : isForbidden
-        ? (language === "ar" ? "غير مصرح لك بمشاهدة هذا التحدي" : "You are not authorized to view this challenge")
+        ? language === "ar"
+          ? "غير مصرح لك بمشاهدة هذا التحدي"
+          : "You are not authorized to view this challenge"
         : isNotFound
-          ? (language === "ar" ? "التحدي غير موجود" : "Challenge not found")
+          ? language === "ar"
+            ? "التحدي غير موجود"
+            : "Challenge not found"
           : isRateLimited
-            ? (language === "ar" ? "تم تجاوز الحد المسموح من الطلبات" : "Too many requests")
-            : (language === "ar" ? "تعذر تحميل التحدي" : "Failed to load challenge");
+            ? language === "ar"
+              ? "تم تجاوز الحد المسموح من الطلبات"
+              : "Too many requests"
+            : language === "ar"
+              ? "تعذر تحميل التحدي"
+              : "Failed to load challenge";
 
     const description = isUnauthorized
-      ? (language === "ar" ? "انتهت الجلسة أو لم يتم تسجيل الدخول." : "Your session is missing or expired.")
+      ? language === "ar"
+        ? "انتهت الجلسة أو لم يتم تسجيل الدخول."
+        : "Your session is missing or expired."
       : isForbidden
-        ? (language === "ar" ? "هذا التحدي خاص ولا يمكن الوصول إليه بهذا الحساب." : "This challenge is private for your account.")
+        ? language === "ar"
+          ? "هذا التحدي خاص ولا يمكن الوصول إليه بهذا الحساب."
+          : "This challenge is private for your account."
         : isNotFound
-          ? (language === "ar" ? "قد يكون التحدي أُلغي أو لم يعد متاحًا." : "The challenge may have been cancelled or no longer available.")
+          ? language === "ar"
+            ? "قد يكون التحدي أُلغي أو لم يعد متاحًا."
+            : "The challenge may have been cancelled or no longer available."
           : isRateLimited
-            ? (language === "ar" ? "يرجى الانتظار قليلًا ثم إعادة المحاولة." : "Please wait a moment and try again.")
-            : (challengeError?.message || (language === "ar" ? "حدث خطأ غير متوقع." : "An unexpected error occurred."));
+            ? language === "ar"
+              ? "يرجى الانتظار قليلًا ثم إعادة المحاولة."
+              : "Please wait a moment and try again."
+            : challengeError?.message ||
+            (language === "ar"
+              ? "حدث خطأ غير متوقع."
+              : "An unexpected error occurred.");
 
     return (
       <div className="p-6">
@@ -856,13 +1204,28 @@ export default function ChallengeWatchPage() {
             <p className="font-semibold">{title}</p>
             <p className="text-sm text-muted-foreground">{description}</p>
             <div className="flex items-center justify-center gap-2">
-              <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: [`/api/challenges/${challengeId}`] })}>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  queryClient.invalidateQueries({
+                    queryKey: [`/api/challenges/${challengeId}`],
+                  })
+                }
+              >
                 {language === "ar" ? "إعادة المحاولة" : "Retry"}
               </Button>
-              <Button onClick={() => setLocation(isUnauthorized ? "/login" : "/challenges")}>
+              <Button
+                onClick={() =>
+                  setLocation(isUnauthorized ? "/login" : "/challenges")
+                }
+              >
                 {isUnauthorized
-                  ? (language === "ar" ? "تسجيل الدخول" : "Go to Login")
-                  : (language === "ar" ? "العودة للتحديات" : "Back to Challenges")}
+                  ? language === "ar"
+                    ? "تسجيل الدخول"
+                    : "Go to Login"
+                  : language === "ar"
+                    ? "العودة للتحديات"
+                    : "Back to Challenges"}
               </Button>
             </div>
           </CardContent>
@@ -876,7 +1239,9 @@ export default function ChallengeWatchPage() {
       <div className="p-6">
         <Card>
           <CardContent className="pt-6 text-center">
-            <p>{language === "ar" ? "التحدي غير موجود" : "Challenge not found"}</p>
+            <p>
+              {language === "ar" ? "التحدي غير موجود" : "Challenge not found"}
+            </p>
             <Button className="mt-4" onClick={() => setLocation("/challenges")}>
               {language === "ar" ? "العودة للتحديات" : "Back to Challenges"}
             </Button>
@@ -887,68 +1252,175 @@ export default function ChallengeWatchPage() {
   }
 
   const isRTL = language === "ar";
-  const GAME_INFO: Record<string, { icon: React.ComponentType<{ className?: string }>; nameAr: string; nameEn: string }> = {
+  const mobileTopSupportDockClass = isRTL ? "end-1" : "start-1";
+  const mobileChatDockClass = isRTL ? "start-2" : "end-2";
+  const GAME_INFO: Record<
+    string,
+    {
+      icon: React.ComponentType<{ className?: string }>;
+      nameAr: string;
+      nameEn: string;
+    }
+  > = {
     chess: { icon: Crown, nameAr: "الشطرنج", nameEn: "Chess" },
     domino: { icon: Target, nameAr: "الدومينو", nameEn: "Domino" },
     backgammon: { icon: Dice5, nameAr: "الطاولة", nameEn: "Backgammon" },
     tarneeb: { icon: Spade, nameAr: "الطرنيب", nameEn: "Tarneeb" },
     baloot: { icon: Heart, nameAr: "البلوت", nameEn: "Baloot" },
-    languageduel: { icon: MessageCircle, nameAr: t('languageduel.title'), nameEn: t('languageduel.title') },
+    languageduel: {
+      icon: MessageCircle,
+      nameAr: t("languageduel.title"),
+      nameEn: t("languageduel.title"),
+    },
   };
   const gameInfo = GAME_INFO[challenge.gameType] || GAME_INFO.chess;
   const GameIcon = gameInfo.icon;
-  const isTeamGame = challenge.gameType === "tarneeb" || challenge.gameType === "baloot";
-  const challengeCurrencyType = challenge.currencyType === "project" ? "project" : "usd";
+  const isTeamGame =
+    challenge.gameType === "tarneeb" || challenge.gameType === "baloot";
+  const challengeCurrencyType =
+    challenge.currencyType === "project" ? "project" : "usd";
   const isProjectChallengeCurrency = challengeCurrencyType === "project";
 
   const formatChallengeAmountText = (amount: number | string): string => {
-    const parsed = typeof amount === "number" ? amount : Number.parseFloat(String(amount));
+    const parsed =
+      typeof amount === "number" ? amount : Number.parseFloat(String(amount));
     const safeAmount = Number.isFinite(parsed) ? parsed : 0;
-    return isProjectChallengeCurrency ? `${safeAmount.toFixed(2)} VXC` : `$${safeAmount.toFixed(2)}`;
+    return isProjectChallengeCurrency
+      ? `${safeAmount.toFixed(2)} VXC`
+      : `$${safeAmount.toFixed(2)}`;
   };
 
-  const supportAggregate = !supports || supports.length === 0
-    ? { count: 0, totalAmount: 0 }
-    : {
-      count: supports.length,
-      totalAmount: supports.reduce((sum, support) => {
-        const numericAmount = Number(support.amount);
-        return sum + (Number.isFinite(numericAmount) ? numericAmount : 0);
-      }, 0),
-    };
+  const supportAggregate =
+    !supports || supports.length === 0
+      ? { count: 0, totalAmount: 0 }
+      : {
+        count: supports.length,
+        totalAmount: supports.reduce((sum, support) => {
+          const numericAmount = Number(support.amount);
+          return sum + (Number.isFinite(numericAmount) ? numericAmount : 0);
+        }, 0),
+      };
 
   const participantIds = new Set(
-    [challenge.player1Id, challenge.player2Id, challenge.player3Id, challenge.player4Id]
-      .filter((id): id is string => typeof id === "string" && id.length > 0),
+    [
+      challenge.player1Id,
+      challenge.player2Id,
+      challenge.player3Id,
+      challenge.player4Id,
+    ].filter((id): id is string => typeof id === "string" && id.length > 0),
   );
 
   const liveChatMessages = messages
     .filter((msg) => String(msg.message || "").trim().length > 0)
     .slice(-80)
     .map((msg, index) => {
-      const isPlayerMessage = Boolean(msg.userId && participantIds.has(msg.userId));
+      const isPlayerMessage = Boolean(
+        msg.userId && participantIds.has(msg.userId),
+      );
       return {
-        id: msg.id || `${msg.userId || "chat"}-${index}-${String(msg.timestamp)}`,
+        id:
+          msg.id || `${msg.userId || "chat"}-${index}-${String(msg.timestamp)}`,
         userId: msg.userId,
-        username: msg.username || (isPlayerMessage
-          ? (language === "ar" ? "لاعب" : "Player")
-          : (language === "ar" ? "مشاهد" : "Viewer")),
+        username:
+          msg.username ||
+          (isPlayerMessage
+            ? language === "ar"
+              ? "لاعب"
+              : "Player"
+            : language === "ar"
+              ? "مشاهد"
+              : "Viewer"),
         message: String(msg.message || ""),
         timestamp: msg.timestamp,
       };
     });
 
-  const isWideBoardGame = challenge.gameType === "domino"
-    || challenge.gameType === "backgammon"
-    || challenge.gameType === "tarneeb"
-    || challenge.gameType === "baloot";
-  const playerInfoWidthClass = challenge.gameType === "baloot"
-    ? "w-full max-w-6xl mb-4"
-    : (isWideBoardGame ? "w-full max-w-5xl mb-4" : "w-full max-w-lg mb-4");
-  const boardWidthClass = challenge.gameType === "baloot"
-    ? "w-full max-w-6xl"
-    : (isWideBoardGame ? "w-full max-w-5xl" : "w-full max-w-lg");
-  const supportActionsDisabled = !challenge.player2 || gameSession?.status !== "playing" || isTeamGame;
+  const isWideBoardGame =
+    challenge.gameType === "domino" ||
+    challenge.gameType === "backgammon" ||
+    challenge.gameType === "tarneeb" ||
+    challenge.gameType === "baloot";
+  const isChessGame = challenge.gameType === "chess";
+  const isBackgammonGame = challenge.gameType === "backgammon";
+  const playerInfoWidthClass =
+    challenge.gameType === "baloot"
+      ? "w-full max-w-6xl mb-4"
+      : isBackgammonGame
+        ? "w-full max-w-5xl mb-2"
+        : isWideBoardGame
+          ? "w-full max-w-5xl mb-4"
+          : isChessGame
+            ? "w-full max-w-2xl mb-2"
+            : "w-full max-w-lg mb-4";
+  const boardWidthClass =
+    challenge.gameType === "baloot"
+      ? "w-full max-w-6xl"
+      : isWideBoardGame
+        ? "w-full max-w-5xl"
+        : isChessGame
+          ? "w-full max-w-2xl"
+          : "w-full max-w-lg";
+  const chessWhiteLabel = `⚪ ${t("chess.white")}`;
+  const chessBlackLabel = `⚫ ${t("chess.black")}`;
+  const backgammonWhiteLabel = `⚪ ${t("backgammon.white")}`;
+  const backgammonBlackLabel = `⚫ ${t("backgammon.black")}`;
+  const chessTurnDescriptor = (() => {
+    if (!isChessGame || !gameSession?.currentTurn) {
+      return null;
+    }
+
+    if (gameSession.currentTurn === challenge.player1Id) {
+      return `${challenge.player1?.username || (language === "ar" ? "اللاعب 1" : "Player 1")} · ${chessWhiteLabel}`;
+    }
+
+    if (gameSession.currentTurn === challenge.player2Id) {
+      return `${challenge.player2?.username || (language === "ar" ? "اللاعب 2" : "Player 2")} · ${chessBlackLabel}`;
+    }
+
+    return null;
+  })();
+  const backgammonTurnDescriptor = (() => {
+    if (!isBackgammonGame || !gameSession?.currentTurn) {
+      return null;
+    }
+
+    if (gameSession.currentTurn === challenge.player1Id) {
+      return `${challenge.player1?.username || (language === "ar" ? "اللاعب 1" : "Player 1")} · ${backgammonWhiteLabel}`;
+    }
+
+    if (gameSession.currentTurn === challenge.player2Id) {
+      return `${challenge.player2?.username || (language === "ar" ? "اللاعب 2" : "Player 2")} · ${backgammonBlackLabel}`;
+    }
+
+    return null;
+  })();
+  const topTurnDescriptor = isChessGame
+    ? chessTurnDescriptor
+    : isBackgammonGame
+      ? backgammonTurnDescriptor
+      : null;
+  const player1VoiceConnected = Boolean(
+    challenge.player1Id && connectedVoicePeers.includes(challenge.player1Id),
+  );
+  const player1MutedForViewer = Boolean(
+    challenge.player1Id && voicePeerMutedMap[challenge.player1Id],
+  );
+  const player2VoiceConnected = Boolean(
+    challenge.player2Id && connectedVoicePeers.includes(challenge.player2Id),
+  );
+  const player2MutedForViewer = Boolean(
+    challenge.player2Id && voicePeerMutedMap[challenge.player2Id],
+  );
+  const player1AvatarBubble =
+    challenge.player1Id && avatarChatBubbles[challenge.player1Id]
+      ? avatarChatBubbles[challenge.player1Id].text
+      : undefined;
+  const player2AvatarBubble =
+    challenge.player2Id && avatarChatBubbles[challenge.player2Id]
+      ? avatarChatBubbles[challenge.player2Id].text
+      : undefined;
+  const supportActionsDisabled =
+    !challenge.player2 || gameSession?.status !== "playing" || isTeamGame;
 
   const balootPlayerNames: Record<string, string> = {};
   for (const [id, username] of [
@@ -965,10 +1437,22 @@ export default function ChallengeWatchPage() {
   const resolveWinnerName = (winnerId?: string) => {
     if (!winnerId) return language === "ar" ? "غير معروف" : "Unknown";
     const playerMap = new Map<string, string>([
-      [challenge.player1?.id || challenge.player1Id, challenge.player1?.username || "Player 1"],
-      [challenge.player2?.id || challenge.player2Id || "", challenge.player2?.username || "Player 2"],
-      [challenge.player3?.id || challenge.player3Id || "", challenge.player3?.username || "Player 3"],
-      [challenge.player4?.id || challenge.player4Id || "", challenge.player4?.username || "Player 4"],
+      [
+        challenge.player1?.id || challenge.player1Id,
+        challenge.player1?.username || "Player 1",
+      ],
+      [
+        challenge.player2?.id || challenge.player2Id || "",
+        challenge.player2?.username || "Player 2",
+      ],
+      [
+        challenge.player3?.id || challenge.player3Id || "",
+        challenge.player3?.username || "Player 3",
+      ],
+      [
+        challenge.player4?.id || challenge.player4Id || "",
+        challenge.player4?.username || "Player 4",
+      ],
     ]);
     return playerMap.get(winnerId) || winnerId;
   };
@@ -981,7 +1465,10 @@ export default function ChallengeWatchPage() {
     { id: challenge.player4Id, username: challenge.player4?.username, seat: 4 },
   ]) {
     if (!player.id) continue;
-    dominoPlayerLabels.set(player.id, player.username || `${t("domino.player")} ${player.seat}`);
+    dominoPlayerLabels.set(
+      player.id,
+      player.username || `${t("domino.player")} ${player.seat}`,
+    );
   }
 
   const dominoRawView = (() => {
@@ -1006,7 +1493,9 @@ export default function ChallengeWatchPage() {
   })();
 
   const dominoBoardState = dominoRawView
-    ? normalizeDominoChallengePlayerView(dominoRawView) as Record<string, unknown> | undefined
+    ? (normalizeDominoChallengePlayerView(dominoRawView) as
+      | Record<string, unknown>
+      | undefined)
     : undefined;
 
   const dominoTimeline: DominoTimelineEntry[] = (() => {
@@ -1023,7 +1512,10 @@ export default function ChallengeWatchPage() {
       tile?: { left?: unknown; right?: unknown };
     };
 
-    if (typeof action.type !== "string" || typeof action.playerId !== "string") {
+    if (
+      typeof action.type !== "string" ||
+      typeof action.playerId !== "string"
+    ) {
       return [];
     }
 
@@ -1035,53 +1527,74 @@ export default function ChallengeWatchPage() {
     } else if (action.type === "draw") {
       text = `${actor} ${t("domino.drewTile")}`;
     } else if (
-      action.type === "play"
-      && action.tile
-      && typeof action.tile.left === "number"
-      && typeof action.tile.right === "number"
+      action.type === "play" &&
+      action.tile &&
+      typeof action.tile.left === "number" &&
+      typeof action.tile.right === "number"
     ) {
       text = `${actor} ${t("domino.played")} ${action.tile.left}|${action.tile.right}`;
     }
 
-    return [{
-      id: `${action.type}-${action.playerId}`,
-      text,
-      moveNumber: typeof gameSession?.totalMoves === "number" ? gameSession.totalMoves : undefined,
-    }];
+    return [
+      {
+        id: `${action.type}-${action.playerId}`,
+        text,
+        moveNumber:
+          typeof gameSession?.totalMoves === "number"
+            ? gameSession.totalMoves
+            : undefined,
+      },
+    ];
   })();
 
   const dominoScoreRows: DominoScoreRow[] = (() => {
-    const scores = dominoBoardState
-      && typeof (dominoBoardState as { scores?: unknown }).scores === "object"
-      ? (dominoBoardState as { scores?: Record<string, unknown> }).scores
-      : undefined;
+    const scores =
+      dominoBoardState &&
+        typeof (dominoBoardState as { scores?: unknown }).scores === "object"
+        ? (dominoBoardState as { scores?: Record<string, unknown> }).scores
+        : undefined;
 
     if (!scores) {
       return [];
     }
 
     return Object.entries(scores)
-      .filter(([, value]) => typeof value === "number" && Number.isFinite(value))
+      .filter(
+        ([, value]) => typeof value === "number" && Number.isFinite(value),
+      )
       .map(([playerId, value], index) => ({
         id: playerId,
-        label: dominoPlayerLabels.get(playerId) || `${t("domino.player")} ${index + 1}`,
+        label:
+          dominoPlayerLabels.get(playerId) ||
+          `${t("domino.player")} ${index + 1}`,
         score: value as number,
       }))
       .sort((a, b) => b.score - a.score);
   })();
 
-  const dominoScoreLookup = new Map(dominoScoreRows.map((row) => [row.id, row.score]));
-  const dominoPlayer1Score = challenge?.player1Id ? (dominoScoreLookup.get(challenge.player1Id) ?? 0) : 0;
-  const dominoPlayer2Score = challenge?.player2Id ? (dominoScoreLookup.get(challenge.player2Id) ?? 0) : 0;
+  const dominoScoreLookup = new Map(
+    dominoScoreRows.map((row) => [row.id, row.score]),
+  );
+  const dominoPlayer1Score = challenge?.player1Id
+    ? (dominoScoreLookup.get(challenge.player1Id) ?? 0)
+    : 0;
+  const dominoPlayer2Score = challenge?.player2Id
+    ? (dominoScoreLookup.get(challenge.player2Id) ?? 0)
+    : 0;
   const supportSummaryByPlayer = (() => {
     const map = new Map<string, { count: number; totalAmount: number }>();
     for (const support of supports || []) {
       if (!support?.playerId) continue;
-      const existing = map.get(support.playerId) || { count: 0, totalAmount: 0 };
+      const existing = map.get(support.playerId) || {
+        count: 0,
+        totalAmount: 0,
+      };
       const numericAmount = Number.parseFloat(String(support.amount || 0));
       map.set(support.playerId, {
         count: existing.count + 1,
-        totalAmount: existing.totalAmount + (Number.isFinite(numericAmount) ? numericAmount : 0),
+        totalAmount:
+          existing.totalAmount +
+          (Number.isFinite(numericAmount) ? numericAmount : 0),
       });
     }
     return map;
@@ -1090,13 +1603,16 @@ export default function ChallengeWatchPage() {
   const giftSummaryByPlayer = (() => {
     const map = new Map<string, { count: number; totalAmount: number }>();
     for (const gift of receivedGifts) {
-      const recipientId = typeof gift.recipientId === "string" ? gift.recipientId : "";
+      const recipientId =
+        typeof gift.recipientId === "string" ? gift.recipientId : "";
       if (!recipientId) continue;
       const existing = map.get(recipientId) || { count: 0, totalAmount: 0 };
       const numericAmount = Number.parseFloat(String(gift.amount || 0));
       map.set(recipientId, {
         count: existing.count + 1,
-        totalAmount: existing.totalAmount + (Number.isFinite(numericAmount) ? numericAmount : 0),
+        totalAmount:
+          existing.totalAmount +
+          (Number.isFinite(numericAmount) ? numericAmount : 0),
       });
     }
     return map;
@@ -1110,11 +1626,19 @@ export default function ChallengeWatchPage() {
       { id: challenge.player4Id, seat: 4, player: challenge.player4 },
     ];
 
-    const items = rawItems.flatMap((entry) => (entry.id ? [{ ...entry, id: entry.id }] : []));
+    const items = rawItems.flatMap((entry) =>
+      entry.id ? [{ ...entry, id: entry.id }] : [],
+    );
 
     return items.map((entry) => {
-      const supportSummary = supportSummaryByPlayer.get(entry.id) || { count: 0, totalAmount: 0 };
-      const giftSummary = giftSummaryByPlayer.get(entry.id) || { count: 0, totalAmount: 0 };
+      const supportSummary = supportSummaryByPlayer.get(entry.id) || {
+        count: 0,
+        totalAmount: 0,
+      };
+      const giftSummary = giftSummaryByPlayer.get(entry.id) || {
+        count: 0,
+        totalAmount: 0,
+      };
       const isConnectedToVoice = connectedVoicePeers.includes(entry.id);
 
       let scoreValue = 0;
@@ -1122,14 +1646,17 @@ export default function ChallengeWatchPage() {
         scoreValue = dominoScoreLookup.get(entry.id) ?? 0;
       }
 
-      const timeRemaining = entry.seat === 1
-        ? (gameSession?.player1TimeRemaining || challenge.timeLimit)
-        : (gameSession?.player2TimeRemaining || challenge.timeLimit);
+      const timeRemaining =
+        entry.seat === 1
+          ? gameSession?.player1TimeRemaining || challenge.timeLimit
+          : gameSession?.player2TimeRemaining || challenge.timeLimit;
 
       return {
         id: entry.id,
         seat: entry.seat,
-        username: entry.player?.username || `${language === "ar" ? "لاعب" : "Player"} ${entry.seat}`,
+        username:
+          entry.player?.username ||
+          `${language === "ar" ? "لاعب" : "Player"} ${entry.seat}`,
         avatarUrl: entry.player?.avatarUrl,
         vipLevel: entry.player?.vipLevel,
         scoreValue,
@@ -1144,7 +1671,10 @@ export default function ChallengeWatchPage() {
     });
   })();
 
-  const selectedParticipantCard = participantCards.find((participant) => participant.id === selectedProfileUserId) || null;
+  const selectedParticipantCard =
+    participantCards.find(
+      (participant) => participant.id === selectedProfileUserId,
+    ) || null;
 
   const togglePeerListening = (peerUserId: string) => {
     setVoicePeerMutedMap((previous) => ({
@@ -1153,59 +1683,84 @@ export default function ChallengeWatchPage() {
     }));
   };
 
-  const dominoAutoPlayBadgeText = autoPlayNotice && autoPlayLiveSeconds !== null
-    ? (autoPlayNotice.mode === "grace"
-      ? (language === "ar"
-        ? `اللعب التلقائي خلال ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
-        : `Auto Play in ${autoPlayLiveSeconds}s · ${autoPlayActorName}`)
-      : (language === "ar"
-        ? `اللعب التلقائي ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
-        : `Auto Play ${autoPlayLiveSeconds}s · ${autoPlayActorName}`))
-    : null;
+  const dominoAutoPlayBadgeText =
+    autoPlayNotice && autoPlayLiveSeconds !== null
+      ? autoPlayNotice.mode === "grace"
+        ? language === "ar"
+          ? `اللعب التلقائي خلال ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
+          : `Auto Play in ${autoPlayLiveSeconds}s · ${autoPlayActorName}`
+        : language === "ar"
+          ? `اللعب التلقائي ${autoPlayLiveSeconds}ث · ${autoPlayActorName}`
+          : `Auto Play ${autoPlayLiveSeconds}s · ${autoPlayActorName}`
+      : null;
 
   const dominoEndgameSummary: DominoEndgameSummary = {
-    isFinished: challenge.gameType === "domino" && gameSession?.status === "finished",
-    isDraw: gameSession?.winReason === "draw" || gameSession?.winReason === "draw_agreement",
+    isFinished:
+      challenge.gameType === "domino" && gameSession?.status === "finished",
+    isDraw:
+      gameSession?.winReason === "draw" ||
+      gameSession?.winReason === "draw_agreement",
     reason: gameSession?.winReason,
-    winnerLabel: gameSession?.winnerId ? (dominoPlayerLabels.get(gameSession.winnerId) || gameSession.winnerId) : undefined,
+    winnerLabel: gameSession?.winnerId
+      ? dominoPlayerLabels.get(gameSession.winnerId) || gameSession.winnerId
+      : undefined,
   };
 
-  const dominoResyncing = challenge.gameType === "domino"
-    && gameSession?.status === "playing"
-    && !dominoBoardState;
+  const dominoResyncing =
+    challenge.gameType === "domino" &&
+    gameSession?.status === "playing" &&
+    !dominoBoardState;
 
   return (
-    <div className="vex-arcade-stage min-h-screen bg-background" dir={isRTL ? "rtl" : "ltr"}>
+    <div
+      className="vex-arcade-stage vex-arcade-stage--tabletop min-h-screen bg-background"
+      dir={isRTL ? "rtl" : "ltr"}
+    >
       <div className="flex flex-col lg:flex-row min-h-screen">
         <div className="flex-1 flex flex-col overflow-hidden">
-          <header className="vex-arcade-header flex items-center justify-between gap-4 p-3 border-b bg-card">
-            <div className="flex items-center gap-3">
+          <header className="vex-arcade-header flex flex-wrap items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
               <BackButton />
-              <Badge variant="outline" className="gap-1">
-                <Eye className="h-3 w-3" />
-                {language === "ar" ? "مشاهدة" : "Watching"}
-              </Badge>
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-1.5">
                 <GameIcon className="h-5 w-5 text-primary" />
-                <span className="font-semibold">
+                <span className="font-semibold truncate">
                   {language === "ar" ? gameInfo.nameAr : gameInfo.nameEn}
                 </span>
               </div>
-              <Badge variant="secondary">
+              <Badge
+                variant="outline"
+                className="inline-flex shrink-0 gap-1 text-[11px] sm:text-xs"
+              >
+                <Eye className="h-3 w-3" />
+                {language === "ar" ? "مشاهد" : "Spectator"}
+              </Badge>
+              <Badge
+                variant="secondary"
+                className="inline-flex shrink-0 text-[11px] sm:text-xs"
+              >
                 {isProjectChallengeCurrency ? (
-                  <ProjectCurrencyAmount amount={challenge.betAmount} symbolClassName="text-xs" amountClassName="text-xs font-medium" />
+                  <ProjectCurrencyAmount
+                    amount={challenge.betAmount}
+                    symbolClassName="text-xs"
+                    amountClassName="text-xs font-medium"
+                  />
                 ) : (
                   `$${parseFloat(challenge.betAmount).toFixed(2)}`
                 )}
               </Badge>
             </div>
 
-            <div className="flex items-center gap-2">
-              <ShareMatchButton challengeId={challengeId!} gameType={challenge.gameType} />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <ShareMatchButton
+                challengeId={challengeId!}
+                gameType={challenge.gameType}
+              />
 
               <div className="flex items-center gap-1 text-muted-foreground">
                 <Eye className="h-4 w-4" />
-                <span className="text-sm">{gameSession?.spectatorCount || 0}</span>
+                <span className="text-sm">
+                  {gameSession?.spectatorCount || 0}
+                </span>
               </div>
 
               <VoiceChat
@@ -1226,101 +1781,173 @@ export default function ChallengeWatchPage() {
 
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             <ScrollArea className="flex-1">
-              <div className="p-4 pb-28 lg:pb-6 flex flex-col items-center">
-                <div className={cn(playerInfoWidthClass, "mb-3")}>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {participantCards.map((participant) => (
-                      <button
-                        key={`participant-watch-${participant.id}`}
-                        type="button"
-                        onClick={() => setSelectedProfileUserId(participant.id)}
-                        className="vex-arcade-panel w-full rounded-xl border bg-card p-3 text-start transition hover:border-primary/50"
-                        data-testid={`participant-watch-card-${participant.id}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={participant.avatarUrl} />
-                              <AvatarFallback>{participant.username?.[0]?.toUpperCase()}</AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold">{participant.username}</p>
-                              <p className="text-[11px] text-muted-foreground">
-                                {language === "ar" ? `المقعد ${participant.seat}` : `Seat ${participant.seat}`}
+              <div className="p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6 flex flex-col items-center">
+                {!isChessGame && !isBackgammonGame && (
+                  <div className={cn(playerInfoWidthClass, "mb-3")}>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {participantCards.map((participant) => (
+                        <button
+                          key={`participant-watch-${participant.id}`}
+                          type="button"
+                          onClick={() =>
+                            setSelectedProfileUserId(participant.id)
+                          }
+                          className="vex-arcade-panel w-full rounded-xl border bg-card p-3 text-start transition hover:border-primary/50"
+                          data-testid={`participant-watch-card-${participant.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <Avatar className="h-10 w-10">
+                                <AvatarImage src={participant.avatarUrl} />
+                                <AvatarFallback>
+                                  {participant.username?.[0]?.toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold">
+                                  {participant.username}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {language === "ar"
+                                    ? `المقعد ${participant.seat}`
+                                    : `Seat ${participant.seat}`}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant={
+                                  participant.isMutedForViewer
+                                    ? "destructive"
+                                    : "outline"
+                                }
+                                className="vex-arcade-btn vex-arcade-btn--icon h-8 w-8"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  togglePeerListening(participant.id);
+                                }}
+                                disabled={!participant.isConnectedToVoice}
+                                data-testid={`participant-watch-listen-${participant.id}`}
+                              >
+                                {participant.isMutedForViewer ? (
+                                  <VolumeX className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Volume2 className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                            <Badge variant="outline" className="font-mono">
+                              {challenge.gameType === "domino"
+                                ? `${t("domino.score")}: ${participant.scoreValue}`
+                                : `${language === "ar" ? "الوقت" : "Time"}: ${formatTime(participant.timeRemaining)}`}
+                            </Badge>
+                            {typeof participant.vipLevel === "number" &&
+                              participant.vipLevel > 0 && (
+                                <Badge variant="secondary">
+                                  VIP {participant.vipLevel}
+                                </Badge>
+                              )}
+                          </div>
+
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                            <div className="rounded-lg border border-primary/20 bg-primary/5 px-2 py-1.5">
+                              <p className="text-muted-foreground">
+                                {language === "ar" ? "الهدايا" : "Gifts"}
+                              </p>
+                              <p className="font-semibold">
+                                {participant.giftCount}
+                                {participant.giftTotal > 0
+                                  ? ` · ${participant.giftTotal.toFixed(2)}`
+                                  : ""}
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-2 py-1.5">
+                              <p className="text-muted-foreground">
+                                {language === "ar" ? "الدعم" : "Support"}
+                              </p>
+                              <p className="font-semibold">
+                                {participant.supportCount}
+                                {participant.supportTotal > 0
+                                  ? ` · ${participant.supportTotal.toFixed(2)}`
+                                  : ""}
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant={participant.isMutedForViewer ? "destructive" : "outline"}
-                              className="vex-arcade-btn vex-arcade-btn--icon h-8 w-8"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                togglePeerListening(participant.id);
-                              }}
-                              disabled={!participant.isConnectedToVoice}
-                              data-testid={`participant-watch-listen-${participant.id}`}
-                            >
-                              {participant.isMutedForViewer ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                          <Badge variant="outline" className="font-mono">
-                            {challenge.gameType === "domino"
-                              ? `${t("domino.score")}: ${participant.scoreValue}`
-                              : `${language === "ar" ? "الوقت" : "Time"}: ${formatTime(participant.timeRemaining)}`}
-                          </Badge>
-                          {typeof participant.vipLevel === "number" && participant.vipLevel > 0 && (
-                            <Badge variant="secondary">
-                              VIP {participant.vipLevel}
-                            </Badge>
-                          )}
-                        </div>
-
-                        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-                          <div className="rounded-lg border border-primary/20 bg-primary/5 px-2 py-1.5">
-                            <p className="text-muted-foreground">{language === "ar" ? "الهدايا" : "Gifts"}</p>
-                            <p className="font-semibold">
-                              {participant.giftCount}
-                              {participant.giftTotal > 0 ? ` · ${participant.giftTotal.toFixed(2)}` : ""}
-                            </p>
-                          </div>
-                          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-2 py-1.5">
-                            <p className="text-muted-foreground">{language === "ar" ? "الدعم" : "Support"}</p>
-                            <p className="font-semibold">
-                              {participant.supportCount}
-                              {participant.supportTotal > 0 ? ` · ${participant.supportTotal.toFixed(2)}` : ""}
-                            </p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className={playerInfoWidthClass}>
                   <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={challenge.player1?.avatarUrl} />
-                        <AvatarFallback>{challenge.player1?.username?.[0]?.toUpperCase()}</AvatarFallback>
-                      </Avatar>
+                      <div className="relative">
+                        {player1AvatarBubble && (
+                          <div className="pointer-events-none absolute bottom-full start-1/2 z-20 mb-1 -translate-x-1/2">
+                            <div className="max-w-[10rem] rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-center text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
+                              {player1AvatarBubble}
+                            </div>
+                          </div>
+                        )}
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={challenge.player1?.avatarUrl} />
+                          <AvatarFallback>
+                            {challenge.player1?.username?.[0]?.toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant={
+                            player1MutedForViewer ? "destructive" : "outline"
+                          }
+                          className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
+                          disabled={
+                            !challenge.player1Id || !player1VoiceConnected
+                          }
+                          onClick={() =>
+                            challenge.player1Id &&
+                            togglePeerListening(challenge.player1Id)
+                          }
+                          data-testid="watch-player1-avatar-voice-toggle"
+                          title={
+                            language === "ar"
+                              ? "الاستماع لصوت اللاعب 1"
+                              : "Toggle player 1 voice"
+                          }
+                        >
+                          {player1MutedForViewer ? (
+                            <VolumeX className="h-3 w-3" />
+                          ) : (
+                            <Volume2 className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </div>
                       <div>
-                        <p className="font-medium">{challenge.player1?.username || "Player 1"}</p>
+                        <p className="font-medium">
+                          {challenge.player1?.username || "Player 1"}
+                        </p>
                         <div className="flex items-center gap-2">
                           <p className="text-xs text-muted-foreground">
                             {challenge.gameType === "chess"
-                              ? "⚪ White"
-                              : challenge.gameType === "backgammon"
-                                ? (language === "ar" ? "⚪ أبيض" : "⚪ White")
-                                : (language === "ar" ? "المقعد 1" : "Seat 1")}
+                              ? chessWhiteLabel
+                              : isBackgammonGame
+                                ? backgammonWhiteLabel
+                                : language === "ar"
+                                  ? "المقعد 1"
+                                  : "Seat 1"}
                           </p>
                           {oddsData?.player1 && (
-                            <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/30">
+                            <Badge
+                              variant="outline"
+                              className="text-xs bg-green-500/10 text-green-500 border-green-500/30"
+                            >
                               x{oddsData.player1.odds.toFixed(2)}
                             </Badge>
                           )}
@@ -1329,14 +1956,23 @@ export default function ChallengeWatchPage() {
                     </div>
                     {challenge.gameType === "domino" ? (
                       <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1">
-                        <span className="text-xs text-muted-foreground">{t("domino.score")}</span>
-                        <span className="font-mono text-base font-semibold">{dominoPlayer1Score}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {t("domino.score")}
+                        </span>
+                        <span className="font-mono text-base font-semibold">
+                          {dominoPlayer1Score}
+                        </span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className={`font-mono text-lg ${(gameSession?.player1TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}>
-                          {formatTime(gameSession?.player1TimeRemaining || challenge.timeLimit)}
+                        <span
+                          className={`font-mono text-lg ${(gameSession?.player1TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}
+                        >
+                          {formatTime(
+                            gameSession?.player1TimeRemaining ||
+                            challenge.timeLimit,
+                          )}
                         </span>
                       </div>
                     )}
@@ -1344,11 +1980,71 @@ export default function ChallengeWatchPage() {
                 </div>
 
                 {challenge.gameType === "domino" && dominoAutoPlayBadgeText && (
-                  <div className={cn(playerInfoWidthClass, "mt-3 mb-0 flex justify-center")}>
-                    <Badge variant="outline" className="rounded-full border-amber-500/35 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-200">
+                  <div
+                    className={cn(
+                      playerInfoWidthClass,
+                      "mt-3 mb-0 flex justify-center",
+                    )}
+                  >
+                    <Badge
+                      variant="outline"
+                      className="rounded-full border-amber-500/35 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-200"
+                    >
                       <Timer className="me-1 h-3.5 w-3.5" />
-                      <span className="font-mono tabular-nums">{dominoAutoPlayBadgeText}</span>
+                      <span className="font-mono tabular-nums">
+                        {dominoAutoPlayBadgeText}
+                      </span>
                     </Badge>
+                  </div>
+                )}
+
+                {(user || topTurnDescriptor) && (
+                  <div className={cn(boardWidthClass, "mb-3")}>
+                    <div className="relative flex min-h-[2.25rem] items-center justify-center">
+                      {user && (
+                        <div
+                          className={cn(
+                            "absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-2 lg:hidden",
+                            mobileTopSupportDockClass,
+                          )}
+                        >
+                          <Button
+                            onClick={openGiftPanel}
+                            className="vex-arcade-fab h-9 w-9 rounded-full p-0 shadow-xl"
+                            data-testid="fab-gift"
+                            title={language === "ar" ? "إرسال هدية" : "Send Gift"}
+                          >
+                            <Gift className="h-4 w-4" />
+                            <span className="sr-only">
+                              {language === "ar" ? "هدية" : "Gift"}
+                            </span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={jumpToSupportSection}
+                            disabled={supportActionsDisabled}
+                            className="vex-arcade-fab-outline h-9 w-9 rounded-full border-primary/35 bg-background/90 p-0 shadow-xl backdrop-blur-md"
+                            data-testid="button-mobile-jump-support"
+                            title={language === "ar" ? "ادعم" : "Support"}
+                          >
+                            <TrendingUp className="h-4 w-4" />
+                            <span className="sr-only">
+                              {language === "ar" ? "ادعم" : "Support"}
+                            </span>
+                          </Button>
+                        </div>
+                      )}
+
+                      {topTurnDescriptor && (
+                        <Badge
+                          variant="outline"
+                          className="rounded-full border-primary/35 bg-primary/10 px-3 py-1 text-[11px] sm:text-xs"
+                        >
+                          <Clock className="me-1 h-3.5 w-3.5" />
+                          {topTurnDescriptor}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1360,9 +2056,18 @@ export default function ChallengeWatchPage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold">{autoPlayTitle}</p>
-                          <Badge variant="secondary" className="rounded-full bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-200">
-                            {autoPlayNotice.mode === "autoplay" ? "Auto Play" : (language === "ar" ? "مهلة عودة" : "Reconnect")}
+                          <p className="text-sm font-semibold">
+                            {autoPlayTitle}
+                          </p>
+                          <Badge
+                            variant="secondary"
+                            className="rounded-full bg-amber-500/15 text-[10px] text-amber-700 dark:text-amber-200"
+                          >
+                            {autoPlayNotice.mode === "autoplay"
+                              ? "Auto Play"
+                              : language === "ar"
+                                ? "مهلة عودة"
+                                : "Reconnect"}
                           </Badge>
                         </div>
                         <p className="mt-1 text-xs leading-5 text-amber-900/80 dark:text-amber-100/85">
@@ -1377,33 +2082,27 @@ export default function ChallengeWatchPage() {
                         onClick={() => setAutoPlayNotice(null)}
                       >
                         <X className="h-4 w-4" />
-                        <span className="sr-only">{language === "ar" ? "إغلاق" : "Dismiss"}</span>
+                        <span className="sr-only">
+                          {language === "ar" ? "إغلاق" : "Dismiss"}
+                        </span>
                       </Button>
                     </div>
                   </div>
                 )}
 
-                <div className={cn("relative", boardWidthClass)}>
-                  {receivedGifts.map((gift) => (
-                    <div
-                      key={gift.id}
-                      className="absolute inset-0 flex items-center justify-center pointer-events-none z-50 animate-bounce"
-                    >
-                      <div className="bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg shadow-lg">
-                        {gift.giftName} from {gift.senderName}
-                      </div>
-                    </div>
-                  ))}
-
+                <div className={cn("relative vex-board-lane", boardWidthClass)}>
                   {challenge.gameType === "chess" && (
                     <ChessBoard
-                      gameState={(playerView?.fen as string) || gameSession?.gameState}
+                      gameState={
+                        (playerView?.fen as string) || gameSession?.gameState
+                      }
                       currentTurn={gameSession?.currentTurn || undefined}
                       myColor="white"
                       isMyTurn={false}
                       isSpectator={true}
                       onMove={() => { }}
                       status={gameSession?.status}
+                      compactTopArea
                     />
                   )}
 
@@ -1428,13 +2127,36 @@ export default function ChallengeWatchPage() {
                   {challenge.gameType === "backgammon" && playerView && (
                     <BackgammonBoard
                       board={(playerView.board as number[]) || []}
-                      bar={(playerView.bar as { white: number; black: number }) || { white: 0, black: 0 }}
-                      borneOff={(playerView.borneOff as { white: number; black: number }) || { white: 0, black: 0 }}
+                      bar={
+                        (playerView.bar as {
+                          white: number;
+                          black: number;
+                        }) || { white: 0, black: 0 }
+                      }
+                      borneOff={
+                        (playerView.borneOff as {
+                          white: number;
+                          black: number;
+                        }) || { white: 0, black: 0 }
+                      }
                       dice={(playerView.dice as number[]) || []}
                       diceUsed={(playerView.diceUsed as boolean[]) || []}
-                      currentTurn={(playerView.currentTurn as "white" | "black") || "white"}
-                      playerColor={(playerView.myColor as "white" | "black" | "spectator") || "spectator"}
-                      validMoves={(playerView.validMoves as { type: string; from: string; to: string }[]) || []}
+                      currentTurn={
+                        (playerView.currentTurn as "white" | "black") || "white"
+                      }
+                      playerColor={
+                        (playerView.myColor as
+                          | "white"
+                          | "black"
+                          | "spectator") || "spectator"
+                      }
+                      validMoves={
+                        (playerView.validMoves as {
+                          type: string;
+                          from: string;
+                          to: string;
+                        }[]) || []
+                      }
                       mustRoll={(playerView.mustRoll as boolean) || false}
                       onMove={() => { }}
                       onRoll={() => { }}
@@ -1442,9 +2164,17 @@ export default function ChallengeWatchPage() {
                       onAcceptDouble={() => { }}
                       onDeclineDouble={() => { }}
                       doublingCube={(playerView.doublingCube as number) ?? 1}
-                      cubeOwner={(playerView.cubeOwner as "white" | "black" | null) ?? null}
+                      cubeOwner={
+                        (playerView.cubeOwner as "white" | "black" | null) ??
+                        null
+                      }
                       cubeOffered={(playerView.cubeOffered as boolean) ?? false}
-                      cubeOfferedBy={(playerView.cubeOfferedBy as "white" | "black" | null) ?? null}
+                      cubeOfferedBy={
+                        (playerView.cubeOfferedBy as
+                          | "white"
+                          | "black"
+                          | null) ?? null
+                      }
                       disabled={true}
                     />
                   )}
@@ -1487,32 +2217,90 @@ export default function ChallengeWatchPage() {
                     />
                   )}
 
-                  {(challenge.gameType === "backgammon" || challenge.gameType === "tarneeb" || challenge.gameType === "baloot" || challenge.gameType === "languageduel") && !playerView && (
-                    <div className="w-full max-w-lg rounded-lg border bg-card p-6 text-center text-muted-foreground">
-                      {language === "ar" ? "جاري مزامنة حالة المباراة..." : "Synchronizing live game state..."}
-                    </div>
-                  )}
+                  {(challenge.gameType === "backgammon" ||
+                    challenge.gameType === "tarneeb" ||
+                    challenge.gameType === "baloot" ||
+                    challenge.gameType === "languageduel") &&
+                    !playerView && (
+                      <div className="w-full max-w-lg rounded-lg border bg-card p-6 text-center text-muted-foreground">
+                        {language === "ar"
+                          ? "جاري مزامنة حالة المباراة..."
+                          : "Synchronizing live game state..."}
+                      </div>
+                    )}
                 </div>
 
-                <div className={cn(playerInfoWidthClass, "mt-4 mb-0")}>
+                <div
+                  className={cn(
+                    playerInfoWidthClass,
+                    isChessGame || isBackgammonGame
+                      ? "mt-2 mb-0"
+                      : "mt-4 mb-0",
+                  )}
+                >
                   <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={challenge.player2?.avatarUrl} />
-                        <AvatarFallback>{challenge.player2?.username?.[0]?.toUpperCase()}</AvatarFallback>
-                      </Avatar>
+                      <div className="relative">
+                        {player2AvatarBubble && (
+                          <div className="pointer-events-none absolute bottom-full start-1/2 z-20 mb-1 -translate-x-1/2">
+                            <div className="max-w-[10rem] rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-center text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
+                              {player2AvatarBubble}
+                            </div>
+                          </div>
+                        )}
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage src={challenge.player2?.avatarUrl} />
+                          <AvatarFallback>
+                            {challenge.player2?.username?.[0]?.toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant={
+                            player2MutedForViewer ? "destructive" : "outline"
+                          }
+                          className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
+                          disabled={
+                            !challenge.player2Id || !player2VoiceConnected
+                          }
+                          onClick={() =>
+                            challenge.player2Id &&
+                            togglePeerListening(challenge.player2Id)
+                          }
+                          data-testid="watch-player2-avatar-voice-toggle"
+                          title={
+                            language === "ar"
+                              ? "الاستماع لصوت اللاعب 2"
+                              : "Toggle player 2 voice"
+                          }
+                        >
+                          {player2MutedForViewer ? (
+                            <VolumeX className="h-3 w-3" />
+                          ) : (
+                            <Volume2 className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </div>
                       <div>
-                        <p className="font-medium">{challenge.player2?.username || "Waiting..."}</p>
+                        <p className="font-medium">
+                          {challenge.player2?.username || "Waiting..."}
+                        </p>
                         <div className="flex items-center gap-2">
                           <p className="text-xs text-muted-foreground">
                             {challenge.gameType === "chess"
-                              ? "⚫ Black"
-                              : challenge.gameType === "backgammon"
-                                ? (language === "ar" ? "⚫ أسود" : "⚫ Black")
-                                : (language === "ar" ? "المقعد 2" : "Seat 2")}
+                              ? chessBlackLabel
+                              : isBackgammonGame
+                                ? backgammonBlackLabel
+                                : language === "ar"
+                                  ? "المقعد 2"
+                                  : "Seat 2"}
                           </p>
                           {oddsData?.player2 && challenge.player2 && (
-                            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">
+                            <Badge
+                              variant="outline"
+                              className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30"
+                            >
                               x{oddsData.player2.odds.toFixed(2)}
                             </Badge>
                           )}
@@ -1521,14 +2309,23 @@ export default function ChallengeWatchPage() {
                     </div>
                     {challenge.gameType === "domino" ? (
                       <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1">
-                        <span className="text-xs text-muted-foreground">{t("domino.score")}</span>
-                        <span className="font-mono text-base font-semibold">{dominoPlayer2Score}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {t("domino.score")}
+                        </span>
+                        <span className="font-mono text-base font-semibold">
+                          {dominoPlayer2Score}
+                        </span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className={`font-mono text-lg ${(gameSession?.player2TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}>
-                          {formatTime(gameSession?.player2TimeRemaining || challenge.timeLimit)}
+                        <span
+                          className={`font-mono text-lg ${(gameSession?.player2TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}
+                        >
+                          {formatTime(
+                            gameSession?.player2TimeRemaining ||
+                            challenge.timeLimit,
+                          )}
                         </span>
                       </div>
                     )}
@@ -1538,225 +2335,331 @@ export default function ChallengeWatchPage() {
                 {!user && (
                   <div className="mt-4">
                     <Button onClick={() => setLocation("/")}>
-                      {language === "ar" ? "سجل دخول للمشاركة" : "Login to participate"}
+                      {language === "ar"
+                        ? "سجل دخول للمشاركة"
+                        : "Login to participate"}
                     </Button>
                   </div>
                 )}
 
-                {user && challenge.player2 && gameSession?.status === "playing" && !isTeamGame && (
-                  <div ref={supportSectionRef} className="w-full max-w-lg mt-6">
-                    <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-lg">
-                          <TrendingUp className="h-5 w-5 text-primary" />
-                          <span>{language === "ar" ? "ادعم واربح" : "Support & Win"}</span>
-                          <Star className="h-4 w-4 text-yellow-500" />
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                          <button
-                            onClick={() => setSelectedPlayer(challenge.player1Id)}
-                            className={`vex-arcade-panel p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player1Id
-                              ? "border-green-500 bg-green-500/10"
-                              : "border-transparent bg-card hover:bg-accent"
-                              }`}
-                            data-testid="support-player1-card"
-                          >
-                            <div className="flex flex-col items-center gap-2">
-                              <Avatar className="h-12 w-12">
-                                <AvatarImage src={challenge.player1?.avatarUrl} />
-                                <AvatarFallback>{challenge.player1?.username?.[0]?.toUpperCase()}</AvatarFallback>
-                              </Avatar>
-                              <p className="font-medium text-sm truncate w-full text-center">
-                                {challenge.player1?.username}
-                              </p>
-                              <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                                x{supportMode === "instant" ? (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) : (oddsData?.player1?.odds?.toFixed(2) || "1.50")}
-                              </Badge>
-                              <Button
-                                size="sm"
-                                variant={selectedPlayer === challenge.player1Id ? "default" : "outline"}
-                                className="vex-arcade-btn w-full"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedPlayer(challenge.player1Id);
-                                }}
-                                data-testid="button-support-player1"
-                              >
-                                {language === "ar" ? "ادعم" : "Support"}
-                              </Button>
-                            </div>
-                          </button>
-
-                          <button
-                            onClick={() => setSelectedPlayer(challenge.player2Id!)}
-                            className={`vex-arcade-panel p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player2Id
-                              ? "border-blue-500 bg-blue-500/10"
-                              : "border-transparent bg-card hover:bg-accent"
-                              }`}
-                            data-testid="support-player2-card"
-                          >
-                            <div className="flex flex-col items-center gap-2">
-                              <Avatar className="h-12 w-12">
-                                <AvatarImage src={challenge.player2?.avatarUrl} />
-                                <AvatarFallback>{challenge.player2?.username?.[0]?.toUpperCase()}</AvatarFallback>
-                              </Avatar>
-                              <p className="font-medium text-sm truncate w-full text-center">
-                                {challenge.player2?.username}
-                              </p>
-                              <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-                                x{supportMode === "instant" ? (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) : (oddsData?.player2?.odds?.toFixed(2) || "1.50")}
-                              </Badge>
-                              <Button
-                                size="sm"
-                                variant={selectedPlayer === challenge.player2Id ? "default" : "outline"}
-                                className="vex-arcade-btn w-full"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedPlayer(challenge.player2Id!);
-                                }}
-                                data-testid="button-support-player2"
-                              >
-                                {language === "ar" ? "ادعم" : "Support"}
-                              </Button>
-                            </div>
-                          </button>
-                        </div>
-
-                        {selectedPlayer && (
-                          <div className="space-y-4 pt-3 border-t">
-                            <Tabs value={supportMode} onValueChange={(v) => setSupportMode(v as "instant" | "wait_for_match")}>
-                              <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="instant" className="gap-2" data-testid="tab-instant">
-                                  <Zap className="h-4 w-4" />
-                                  {language === "ar" ? "فوري" : "Instant"}
-                                </TabsTrigger>
-                                <TabsTrigger value="wait_for_match" className="gap-2" data-testid="tab-wait">
-                                  <Timer className="h-4 w-4" />
-                                  {language === "ar" ? "انتظر مقابل" : "Wait for Match"}
-                                </TabsTrigger>
-                              </TabsList>
-                              <TabsContent value="instant" className="mt-3">
-                                <p className="text-xs text-muted-foreground">
-                                  {language === "ar"
-                                    ? "معدل ربح ثابت x" + (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) + " - نتيجة فورية!"
-                                    : "Fixed rate x" + (parseFloat(oddsData?.instantMatchOdds || "1.50")).toFixed(2) + " - instant result!"}
+                {user &&
+                  challenge.player2 &&
+                  gameSession?.status === "playing" &&
+                  !isTeamGame && (
+                    <div
+                      ref={supportSectionRef}
+                      className="w-full max-w-lg mt-6"
+                    >
+                      <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="flex items-center gap-2 text-lg">
+                            <TrendingUp className="h-5 w-5 text-primary" />
+                            <span>
+                              {language === "ar"
+                                ? "ادعم واربح"
+                                : "Support & Win"}
+                            </span>
+                            <Star className="h-4 w-4 text-yellow-500" />
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            <button
+                              onClick={() =>
+                                setSelectedPlayer(challenge.player1Id)
+                              }
+                              className={`vex-arcade-panel p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player1Id
+                                ? "border-green-500 bg-green-500/10"
+                                : "border-transparent bg-card hover:bg-accent"
+                                }`}
+                              data-testid="support-player1-card"
+                            >
+                              <div className="flex flex-col items-center gap-2">
+                                <Avatar className="h-12 w-12">
+                                  <AvatarImage
+                                    src={challenge.player1?.avatarUrl}
+                                  />
+                                  <AvatarFallback>
+                                    {challenge.player1?.username?.[0]?.toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <p className="font-medium text-sm truncate w-full text-center">
+                                  {challenge.player1?.username}
                                 </p>
-                              </TabsContent>
-                              <TabsContent value="wait_for_match" className="mt-3">
-                                <p className="text-xs text-muted-foreground">
-                                  {language === "ar"
-                                    ? "معدل ربح ديناميكي حسب أداء اللاعب - انتظر نهاية المباراة"
-                                    : "Dynamic rate based on player performance - wait for match end"}
-                                </p>
-                              </TabsContent>
-                            </Tabs>
-
-                            <div>
-                              <label className="text-sm font-medium mb-2 block">
-                                {language === "ar"
-                                  ? `مبلغ الدعم (${isProjectChallengeCurrency ? "عملة المشروع" : "USD"})`
-                                  : `Support Amount (${isProjectChallengeCurrency ? "Project Currency" : "USD"})`}
-                              </label>
-                              <Input
-                                type="number"
-                                min={oddsData?.minSupportAmount || 1}
-                                max={oddsData?.maxSupportAmount || 1000}
-                                step="0.01"
-                                value={supportAmount}
-                                onChange={(e) => setSupportAmount(e.target.value)}
-                                placeholder={`${oddsData?.minSupportAmount || 1} - ${oddsData?.maxSupportAmount || 1000}`}
-                                className="text-lg"
-                                data-testid="input-support-amount"
-                              />
-                              <div className="flex gap-2 mt-2">
-                                {[5, 10, 25, 50, 100].map((amount) => (
-                                  <Button
-                                    key={amount}
-                                    variant="outline"
-                                    size="sm"
-                                    className="vex-arcade-btn"
-                                    onClick={() => setSupportAmount(String(amount))}
-                                    data-testid={`quick-amount-${amount}`}
-                                  >
-                                    {isProjectChallengeCurrency ? (
-                                      <ProjectCurrencyAmount amount={amount} symbolClassName="text-xs" amountClassName="text-xs" fractionDigits={0} />
-                                    ) : (
-                                      `$${amount}`
-                                    )}
-                                  </Button>
-                                ))}
+                                <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                                  x
+                                  {supportMode === "instant"
+                                    ? parseFloat(
+                                      oddsData?.instantMatchOdds || "1.50",
+                                    ).toFixed(2)
+                                    : oddsData?.player1?.odds?.toFixed(2) ||
+                                    "1.50"}
+                                </Badge>
+                                <Button
+                                  size="sm"
+                                  variant={
+                                    selectedPlayer === challenge.player1Id
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  className="vex-arcade-btn w-full"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedPlayer(challenge.player1Id);
+                                  }}
+                                  data-testid="button-support-player1"
+                                >
+                                  {language === "ar" ? "ادعم" : "Support"}
+                                </Button>
                               </div>
-                            </div>
+                            </button>
 
-                            {supportAmount && parseFloat(supportAmount) > 0 && (
-                              <div className="p-3 bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-lg border border-green-500/20">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm text-muted-foreground">
-                                    {language === "ar" ? "الربح المحتمل:" : "Potential Winnings:"}
-                                  </span>
-                                  <span className="text-xl font-bold text-green-500">
-                                    {formatChallengeAmountText(calculatePotentialWinnings())}
+                            <button
+                              onClick={() =>
+                                setSelectedPlayer(challenge.player2Id!)
+                              }
+                              className={`vex-arcade-panel p-3 rounded-lg border-2 transition-all ${selectedPlayer === challenge.player2Id
+                                ? "border-blue-500 bg-blue-500/10"
+                                : "border-transparent bg-card hover:bg-accent"
+                                }`}
+                              data-testid="support-player2-card"
+                            >
+                              <div className="flex flex-col items-center gap-2">
+                                <Avatar className="h-12 w-12">
+                                  <AvatarImage
+                                    src={challenge.player2?.avatarUrl}
+                                  />
+                                  <AvatarFallback>
+                                    {challenge.player2?.username?.[0]?.toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <p className="font-medium text-sm truncate w-full text-center">
+                                  {challenge.player2?.username}
+                                </p>
+                                <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+                                  x
+                                  {supportMode === "instant"
+                                    ? parseFloat(
+                                      oddsData?.instantMatchOdds || "1.50",
+                                    ).toFixed(2)
+                                    : oddsData?.player2?.odds?.toFixed(2) ||
+                                    "1.50"}
+                                </Badge>
+                                <Button
+                                  size="sm"
+                                  variant={
+                                    selectedPlayer === challenge.player2Id
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  className="vex-arcade-btn w-full"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedPlayer(challenge.player2Id!);
+                                  }}
+                                  data-testid="button-support-player2"
+                                >
+                                  {language === "ar" ? "ادعم" : "Support"}
+                                </Button>
+                              </div>
+                            </button>
+                          </div>
+
+                          {selectedPlayer && (
+                            <div className="space-y-4 pt-3 border-t">
+                              <Tabs
+                                value={supportMode}
+                                onValueChange={(v) =>
+                                  setSupportMode(
+                                    v as "instant" | "wait_for_match",
+                                  )
+                                }
+                              >
+                                <TabsList className="grid w-full grid-cols-2">
+                                  <TabsTrigger
+                                    value="instant"
+                                    className="gap-2"
+                                    data-testid="tab-instant"
+                                  >
+                                    <Zap className="h-4 w-4" />
+                                    {language === "ar" ? "فوري" : "Instant"}
+                                  </TabsTrigger>
+                                  <TabsTrigger
+                                    value="wait_for_match"
+                                    className="gap-2"
+                                    data-testid="tab-wait"
+                                  >
+                                    <Timer className="h-4 w-4" />
+                                    {language === "ar"
+                                      ? "انتظر مقابل"
+                                      : "Wait for Match"}
+                                  </TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="instant" className="mt-3">
+                                  <p className="text-xs text-muted-foreground">
+                                    {language === "ar"
+                                      ? "معدل ربح ثابت x" +
+                                      parseFloat(
+                                        oddsData?.instantMatchOdds || "1.50",
+                                      ).toFixed(2) +
+                                      " - نتيجة فورية!"
+                                      : "Fixed rate x" +
+                                      parseFloat(
+                                        oddsData?.instantMatchOdds || "1.50",
+                                      ).toFixed(2) +
+                                      " - instant result!"}
+                                  </p>
+                                </TabsContent>
+                                <TabsContent
+                                  value="wait_for_match"
+                                  className="mt-3"
+                                >
+                                  <p className="text-xs text-muted-foreground">
+                                    {language === "ar"
+                                      ? "معدل ربح ديناميكي حسب أداء اللاعب - انتظر نهاية المباراة"
+                                      : "Dynamic rate based on player performance - wait for match end"}
+                                  </p>
+                                </TabsContent>
+                              </Tabs>
+
+                              <div>
+                                <label className="text-sm font-medium mb-2 block">
+                                  {language === "ar"
+                                    ? `مبلغ الدعم (${isProjectChallengeCurrency ? "عملة المشروع" : "USD"})`
+                                    : `Support Amount (${isProjectChallengeCurrency ? "Project Currency" : "USD"})`}
+                                </label>
+                                <Input
+                                  type="number"
+                                  min={oddsData?.minSupportAmount || 1}
+                                  max={oddsData?.maxSupportAmount || 1000}
+                                  step="0.01"
+                                  value={supportAmount}
+                                  onChange={(e) =>
+                                    setSupportAmount(e.target.value)
+                                  }
+                                  placeholder={`${oddsData?.minSupportAmount || 1} - ${oddsData?.maxSupportAmount || 1000}`}
+                                  className="text-lg"
+                                  data-testid="input-support-amount"
+                                />
+                                <div className="flex gap-2 mt-2">
+                                  {[5, 10, 25, 50, 100].map((amount) => (
+                                    <Button
+                                      key={amount}
+                                      variant="outline"
+                                      size="sm"
+                                      className="vex-arcade-btn"
+                                      onClick={() =>
+                                        setSupportAmount(String(amount))
+                                      }
+                                      data-testid={`quick-amount-${amount}`}
+                                    >
+                                      {isProjectChallengeCurrency ? (
+                                        <ProjectCurrencyAmount
+                                          amount={amount}
+                                          symbolClassName="text-xs"
+                                          amountClassName="text-xs"
+                                          fractionDigits={0}
+                                        />
+                                      ) : (
+                                        `$${amount}`
+                                      )}
+                                    </Button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {supportAmount &&
+                                parseFloat(supportAmount) > 0 && (
+                                  <div className="p-3 bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-lg border border-green-500/20">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm text-muted-foreground">
+                                        {language === "ar"
+                                          ? "الربح المحتمل:"
+                                          : "Potential Winnings:"}
+                                      </span>
+                                      <span className="text-xl font-bold text-green-500">
+                                        {formatChallengeAmountText(
+                                          calculatePotentialWinnings(),
+                                        )}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {formatChallengeAmountText(
+                                        parseFloat(supportAmount),
+                                      )}{" "}
+                                      ×{" "}
+                                      {getPlayerOdds(selectedPlayer).toFixed(2)}{" "}
+                                      ={" "}
+                                      {formatChallengeAmountText(
+                                        calculatePotentialWinnings(),
+                                      )}
+                                    </p>
+                                  </div>
+                                )}
+
+                              {oddsData && (
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  <Info className="h-3 w-3" />
+                                  <span>
+                                    {language === "ar"
+                                      ? `رسوم المنصة: ${oddsData.houseFeePercent}% • الحد الأدنى: ${formatChallengeAmountText(oddsData.minSupportAmount)} • الحد الأقصى: ${formatChallengeAmountText(oddsData.maxSupportAmount)}`
+                                      : `House fee: ${oddsData.houseFeePercent}% • Min: ${formatChallengeAmountText(oddsData.minSupportAmount)} • Max: ${formatChallengeAmountText(oddsData.maxSupportAmount)}`}
                                   </span>
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {formatChallengeAmountText(parseFloat(supportAmount))} × {getPlayerOdds(selectedPlayer).toFixed(2)} = {formatChallengeAmountText(calculatePotentialWinnings())}
-                                </p>
-                              </div>
-                            )}
+                              )}
 
-                            {oddsData && (
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Info className="h-3 w-3" />
-                                <span>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  className="vex-arcade-btn flex-1"
+                                  onClick={() => {
+                                    setSelectedPlayer(null);
+                                    setSupportAmount("");
+                                  }}
+                                  data-testid="button-cancel-support"
+                                >
+                                  {language === "ar" ? "إلغاء" : "Cancel"}
+                                </Button>
+                                <Button
+                                  className="vex-arcade-btn flex-1 gap-2"
+                                  onClick={handleAddSupport}
+                                  disabled={
+                                    !supportAmount ||
+                                    parseFloat(supportAmount) <= 0 ||
+                                    addSupportMutation.isPending
+                                  }
+                                  data-testid="button-add-support"
+                                >
+                                  {addSupportMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <TrendingUp className="h-4 w-4" />
+                                  )}
                                   {language === "ar"
-                                    ? `رسوم المنصة: ${oddsData.houseFeePercent}% • الحد الأدنى: ${formatChallengeAmountText(oddsData.minSupportAmount)} • الحد الأقصى: ${formatChallengeAmountText(oddsData.maxSupportAmount)}`
-                                    : `House fee: ${oddsData.houseFeePercent}% • Min: ${formatChallengeAmountText(oddsData.minSupportAmount)} • Max: ${formatChallengeAmountText(oddsData.maxSupportAmount)}`}
-                                </span>
+                                    ? "أضف الدعم"
+                                    : "Add Support"}
+                                </Button>
                               </div>
-                            )}
-
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                className="vex-arcade-btn flex-1"
-                                onClick={() => {
-                                  setSelectedPlayer(null);
-                                  setSupportAmount("");
-                                }}
-                                data-testid="button-cancel-support"
-                              >
-                                {language === "ar" ? "إلغاء" : "Cancel"}
-                              </Button>
-                              <Button
-                                className="vex-arcade-btn flex-1 gap-2"
-                                onClick={handleAddSupport}
-                                disabled={!supportAmount || parseFloat(supportAmount) <= 0 || addSupportMutation.isPending}
-                                data-testid="button-add-support"
-                              >
-                                {addSupportMutation.isPending ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <TrendingUp className="h-4 w-4" />
-                                )}
-                                {language === "ar" ? "أضف الدعم" : "Add Support"}
-                              </Button>
                             </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
 
                 {supports && supports.length > 0 && (
                   <Card className="w-full max-w-lg mt-4">
                     <CardHeader className="pb-2">
                       <CardTitle className="flex items-center gap-2 text-base">
                         <Users className="h-4 w-4 text-primary" />
-                        <span>{language === "ar" ? "الدعم الحالي" : "Current Supports"}</span>
-                        <Badge variant="secondary" className="ms-auto">{supports.length}</Badge>
+                        <span>
+                          {language === "ar"
+                            ? "الدعم الحالي"
+                            : "Current Supports"}
+                        </span>
+                        <Badge variant="secondary" className="ms-auto">
+                          {supports.length}
+                        </Badge>
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -1770,19 +2673,29 @@ export default function ChallengeWatchPage() {
                             <div className="flex items-center gap-2">
                               <Avatar className="h-6 w-6">
                                 <AvatarImage src={support.supporterAvatar} />
-                                <AvatarFallback className="text-xs">{support.supporterName?.[0]?.toUpperCase()}</AvatarFallback>
+                                <AvatarFallback className="text-xs">
+                                  {support.supporterName?.[0]?.toUpperCase()}
+                                </AvatarFallback>
                               </Avatar>
                               <div>
-                                <p className="text-sm font-medium">{support.supporterName}</p>
+                                <p className="text-sm font-medium">
+                                  {support.supporterName}
+                                </p>
                                 <p className="text-xs text-muted-foreground">
-                                  {language === "ar" ? "يدعم" : "supports"} {support.playerName}
+                                  {language === "ar" ? "يدعم" : "supports"}{" "}
+                                  {support.playerName}
                                 </p>
                               </div>
                             </div>
                             <div className="text-end">
-                              <p className="text-sm font-bold text-primary">{formatChallengeAmountText(support.amount)}</p>
+                              <p className="text-sm font-bold text-primary">
+                                {formatChallengeAmountText(support.amount)}
+                              </p>
                               <p className="text-xs text-green-500">
-                                → {formatChallengeAmountText(support.potentialWinnings)}
+                                →{" "}
+                                {formatChallengeAmountText(
+                                  support.potentialWinnings,
+                                )}
                               </p>
                             </div>
                           </div>
@@ -1806,7 +2719,9 @@ export default function ChallengeWatchPage() {
                 panelMode="spectator"
                 chatMessages={liveChatMessages}
                 supportCount={supportAggregate.count}
-                supportTotalText={formatChallengeAmountText(supportAggregate.totalAmount)}
+                supportTotalText={formatChallengeAmountText(
+                  supportAggregate.totalAmount,
+                )}
                 giftCount={giftAggregate.count}
                 giftTotalText={`${giftAggregate.totalValue.toFixed(2)} VXC`}
                 onSendGift={handleSendGift}
@@ -1819,43 +2734,80 @@ export default function ChallengeWatchPage() {
       </div>
 
       <FloatingGiftsOverlay
-        gifts={receivedGifts.map(g => ({ id: g.id, giftId: g.giftId || 'heart', senderName: g.senderName }))}
+        gifts={receivedGifts.map((g) => ({
+          id: g.id,
+          giftId: g.giftId || "heart",
+          senderName: g.senderName,
+        }))}
       />
 
-      <Dialog open={Boolean(selectedProfileUserId)} onOpenChange={(open) => { if (!open) setSelectedProfileUserId(null); }}>
+      <Dialog
+        open={Boolean(selectedProfileUserId)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedProfileUserId(null);
+        }}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{language === "ar" ? "ملف اللاعب" : "Player Profile"}</DialogTitle>
+            <DialogTitle>
+              {language === "ar" ? "ملف اللاعب" : "Player Profile"}
+            </DialogTitle>
             <DialogDescription>
-              {language === "ar" ? "ملخص سريع للحساب" : "Quick account snapshot"}
+              {language === "ar"
+                ? "ملخص سريع للحساب"
+                : "Quick account snapshot"}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <Avatar className="h-12 w-12">
-                <AvatarImage src={(selectedProfile?.avatarUrl as string) || selectedParticipantCard?.avatarUrl} />
-                <AvatarFallback>{selectedParticipantCard?.username?.[0]?.toUpperCase()}</AvatarFallback>
+                <AvatarImage
+                  src={
+                    (selectedProfile?.avatarUrl as string) ||
+                    selectedParticipantCard?.avatarUrl
+                  }
+                />
+                <AvatarFallback>
+                  {selectedParticipantCard?.username?.[0]?.toUpperCase()}
+                </AvatarFallback>
               </Avatar>
               <div className="min-w-0">
-                <p className="truncate font-semibold">{(selectedProfile?.username as string) || selectedParticipantCard?.username}</p>
-                <p className="text-xs text-muted-foreground">ID: {(selectedProfile?.accountId as string) || "-"}</p>
+                <p className="truncate font-semibold">
+                  {(selectedProfile?.username as string) ||
+                    selectedParticipantCard?.username}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  ID: {(selectedProfile?.accountId as string) || "-"}
+                </p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="rounded-lg border bg-muted/30 px-2 py-2">
-                <p className="text-muted-foreground">{language === "ar" ? "المستوى" : "Level"}</p>
-                <p className="font-semibold">{(selectedProfile?.vipLevel as number) || selectedParticipantCard?.vipLevel || 0}</p>
+                <p className="text-muted-foreground">
+                  {language === "ar" ? "المستوى" : "Level"}
+                </p>
+                <p className="font-semibold">
+                  {(selectedProfile?.vipLevel as number) ||
+                    selectedParticipantCard?.vipLevel ||
+                    0}
+                </p>
               </div>
               <div className="rounded-lg border bg-muted/30 px-2 py-2">
-                <p className="text-muted-foreground">{language === "ar" ? "الحالة" : "Status"}</p>
-                <p className="font-semibold">{String(selectedProfile?.status || "active")}</p>
+                <p className="text-muted-foreground">
+                  {language === "ar" ? "الحالة" : "Status"}
+                </p>
+                <p className="font-semibold">
+                  {String(selectedProfile?.status || "active")}
+                </p>
               </div>
             </div>
 
             <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
-              <p className="font-medium">{language === "ar" ? "مزايا الحساب" : "Account Perks"}</p>
+              <p className="font-medium">
+                {language === "ar" ? "مزايا الحساب" : "Account Perks"}
+              </p>
               <p className="mt-1 text-muted-foreground">
                 {language === "ar"
                   ? "شارات VIP وأولوية ظهور ودعم اجتماعي أسرع"
@@ -1865,12 +2817,17 @@ export default function ChallengeWatchPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedProfileUserId(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setSelectedProfileUserId(null)}
+            >
               {language === "ar" ? "إغلاق" : "Close"}
             </Button>
             {selectedProfileUserId && user?.id !== selectedProfileUserId && (
               <Button
-                onClick={() => sendFriendRequestMutation.mutate(selectedProfileUserId)}
+                onClick={() =>
+                  sendFriendRequestMutation.mutate(selectedProfileUserId)
+                }
                 disabled={sendFriendRequestMutation.isPending}
                 data-testid="watch-send-friend-request"
               >
@@ -1882,8 +2839,10 @@ export default function ChallengeWatchPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="pointer-events-none fixed inset-y-0 start-0 end-0 z-40 flex items-center justify-between px-2 lg:hidden">
-        <div className="pointer-events-auto flex flex-col gap-2">
+      <div
+        className={`pointer-events-none !fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] ${mobileChatDockClass} z-50 lg:hidden`}
+      >
+        <div className="pointer-events-auto flex min-h-[2.75rem] min-w-[2.75rem] items-end justify-end">
           <Button
             variant="outline"
             onClick={() => setShowMobileChat(true)}
@@ -1892,7 +2851,9 @@ export default function ChallengeWatchPage() {
             title={language === "ar" ? "الدردشة المباشرة" : "Live Chat"}
           >
             <MessageCircle className="h-5 w-5" />
-            <span className="sr-only">{language === "ar" ? "الدردشة" : "Chat"}</span>
+            <span className="sr-only">
+              {language === "ar" ? "الدردشة" : "Chat"}
+            </span>
             {liveChatMessages.length > 0 && (
               <span className="absolute -end-1 -top-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
                 {liveChatMessages.length > 99 ? "99+" : liveChatMessages.length}
@@ -1900,31 +2861,6 @@ export default function ChallengeWatchPage() {
             )}
           </Button>
         </div>
-
-        {user && (
-          <div className="pointer-events-auto flex flex-col gap-2">
-            <Button
-              onClick={openGiftPanel}
-              className="vex-arcade-fab h-11 w-11 rounded-full p-0 shadow-2xl"
-              data-testid="fab-gift"
-              title={language === "ar" ? "إرسال هدية" : "Send Gift"}
-            >
-              <Gift className="h-5 w-5" />
-              <span className="sr-only">{language === "ar" ? "هدية" : "Gift"}</span>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={jumpToSupportSection}
-              disabled={supportActionsDisabled}
-              className="vex-arcade-fab-outline h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md"
-              data-testid="button-mobile-jump-support"
-              title={language === "ar" ? "ادعم" : "Support"}
-            >
-              <TrendingUp className="h-5 w-5" />
-              <span className="sr-only">{language === "ar" ? "ادعم" : "Support"}</span>
-            </Button>
-          </div>
-        )}
       </div>
 
       <Dialog open={showMobileChat} onOpenChange={setShowMobileChat}>
@@ -1932,25 +2868,40 @@ export default function ChallengeWatchPage() {
           <DialogHeader className="border-b px-4 py-3">
             <DialogTitle className="flex items-center gap-2 text-base">
               <MessageCircle className="h-4 w-4 text-primary" />
-              {language === "ar" ? "الدردشة المباشرة للمباراة" : "Live Match Chat"}
-              <Badge variant="secondary" className="ms-auto">{liveChatMessages.length}</Badge>
+              {language === "ar"
+                ? "الدردشة المباشرة للمباراة"
+                : "Live Match Chat"}
+              <Badge variant="secondary" className="ms-auto">
+                {liveChatMessages.length}
+              </Badge>
             </DialogTitle>
           </DialogHeader>
 
           <div className="max-h-[65vh] overflow-y-auto px-4 py-3">
             {liveChatMessages.length === 0 ? (
               <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
-                {language === "ar" ? "لا توجد رسائل بعد — ستظهر رسائل الدردشة هنا لكل المشاهدين." : "No messages yet — live chat will appear here for all spectators."}
+                {language === "ar"
+                  ? "لا توجد رسائل بعد — ستظهر رسائل الدردشة هنا لكل المشاهدين."
+                  : "No messages yet — live chat will appear here for all spectators."}
               </div>
             ) : (
               <div className="space-y-2">
                 {liveChatMessages.map((msg) => (
-                  <div key={msg.id} className="rounded-xl border bg-card/70 px-3 py-2 shadow-sm">
+                  <div
+                    key={msg.id}
+                    className="rounded-xl border bg-card/70 px-3 py-2 shadow-sm"
+                  >
                     <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="truncate text-xs font-semibold">{msg.username}</span>
-                      <span className="text-[10px] text-muted-foreground">{formatChatTimestamp(msg.timestamp)}</span>
+                      <span className="truncate text-xs font-semibold">
+                        {msg.username}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {formatChatTimestamp(msg.timestamp)}
+                      </span>
                     </div>
-                    <p className="text-sm leading-6 break-words">{msg.message}</p>
+                    <p className="text-sm leading-6 break-words">
+                      {msg.message}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -1969,16 +2920,26 @@ export default function ChallengeWatchPage() {
                       sendLiveChatMessage(mobileChatInput);
                     }
                   }}
-                  placeholder={language === "ar" ? "اكتب رسالة للمشاهدين..." : "Write a message to the viewers..."}
+                  placeholder={
+                    language === "ar"
+                      ? "اكتب رسالة للمشاهدين..."
+                      : "Write a message to the viewers..."
+                  }
                   maxLength={300}
                 />
-                <Button className="vex-arcade-btn" onClick={() => sendLiveChatMessage(mobileChatInput)} disabled={!mobileChatInput.trim()}>
+                <Button
+                  className="vex-arcade-btn"
+                  onClick={() => sendLiveChatMessage(mobileChatInput)}
+                  disabled={!mobileChatInput.trim()}
+                >
                   {language === "ar" ? "إرسال" : "Send"}
                 </Button>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                {language === "ar" ? "سجّل الدخول للمشاركة في الدردشة المباشرة." : "Sign in to participate in the live chat."}
+                {language === "ar"
+                  ? "سجّل الدخول للمشاركة في الدردشة المباشرة."
+                  : "Sign in to participate in the live chat."}
               </p>
             )}
           </div>
@@ -2003,22 +2964,28 @@ export default function ChallengeWatchPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ArrowRightLeft className="h-5 w-5" />
-              {language === "ar" ? "تحويل سريع لإرسال الهدية" : "Quick Conversion To Send Gift"}
+              {language === "ar"
+                ? "تحويل سريع لإرسال الهدية"
+                : "Quick Conversion To Send Gift"}
             </DialogTitle>
             <DialogDescription>
-              {language === "ar"
-                ? (
-                  <span className="inline-flex items-center gap-1">
-                    <span>المطلوب للهدية:</span>
-                    <ProjectCurrencyAmount amount={fundingShortageProject} symbolClassName="text-sm" />
-                  </span>
-                )
-                : (
-                  <span className="inline-flex items-center gap-1">
-                    <span>Required for gift:</span>
-                    <ProjectCurrencyAmount amount={fundingShortageProject} symbolClassName="text-sm" />
-                  </span>
-                )}
+              {language === "ar" ? (
+                <span className="inline-flex items-center gap-1">
+                  <span>المطلوب للهدية:</span>
+                  <ProjectCurrencyAmount
+                    amount={fundingShortageProject}
+                    symbolClassName="text-sm"
+                  />
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <span>Required for gift:</span>
+                  <ProjectCurrencyAmount
+                    amount={fundingShortageProject}
+                    symbolClassName="text-sm"
+                  />
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -2037,7 +3004,11 @@ export default function ChallengeWatchPage() {
             </div>
 
             <div>
-              <Label>{language === "ar" ? "مبلغ التحويل (USD)" : "Conversion Amount (USD)"}</Label>
+              <Label>
+                {language === "ar"
+                  ? "مبلغ التحويل (USD)"
+                  : "Conversion Amount (USD)"}
+              </Label>
               <div className="flex items-center gap-2 mt-2">
                 <Input
                   type="number"
@@ -2050,7 +3021,18 @@ export default function ChallengeWatchPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setQuickConvertAmount(String(Math.max(Number(projectCurrencySettings?.minConversionAmount || 1), Number(fundingUsdNeeded.toFixed(2) || 0))))}
+                  onClick={() =>
+                    setQuickConvertAmount(
+                      String(
+                        Math.max(
+                          Number(
+                            projectCurrencySettings?.minConversionAmount || 1,
+                          ),
+                          Number(fundingUsdNeeded.toFixed(2) || 0),
+                        ),
+                      ),
+                    )
+                  }
                 >
                   {language === "ar" ? "اقتراح" : "Suggest"}
                 </Button>
@@ -2059,13 +3041,18 @@ export default function ChallengeWatchPage() {
 
             {quickConvertAmountValue > Number(user?.balance || 0) && (
               <p className="text-xs text-destructive">
-                {language === "ar" ? "الرصيد بالدولار غير كافٍ، قم بالإيداع أولًا." : "Insufficient USD balance, deposit first."}
+                {language === "ar"
+                  ? "الرصيد بالدولار غير كافٍ، قم بالإيداع أولًا."
+                  : "Insufficient USD balance, deposit first."}
               </p>
             )}
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConvertDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowConvertDialog(false)}
+            >
               {t("common.cancel")}
             </Button>
             <Button
@@ -2082,7 +3069,11 @@ export default function ChallengeWatchPage() {
               disabled={quickConvertDisabled}
               data-testid="button-watch-popup-quick-convert"
             >
-              {quickConvertMutation.isPending ? t("common.loading") : (language === "ar" ? "تحويل الآن" : "Convert Now")}
+              {quickConvertMutation.isPending
+                ? t("common.loading")
+                : language === "ar"
+                  ? "تحويل الآن"
+                  : "Convert Now"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2091,7 +3082,9 @@ export default function ChallengeWatchPage() {
       <Dialog open={showDepositDialog} onOpenChange={setShowDepositDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{language === "ar" ? "الرصيد غير كافٍ" : "Insufficient Balance"}</DialogTitle>
+            <DialogTitle>
+              {language === "ar" ? "الرصيد غير كافٍ" : "Insufficient Balance"}
+            </DialogTitle>
             <DialogDescription>
               {language === "ar"
                 ? "لا يوجد رصيد كافٍ للتحويل المطلوب لإرسال الهدية. يمكنك فتح نافذة الإيداع مباشرة."
@@ -2128,9 +3121,14 @@ export default function ChallengeWatchPage() {
               </Button>
               <Button
                 onClick={() => {
-                  const suggestedDeposit = Math.max(1, Number(fundingUsdNeeded.toFixed(2) || 0));
+                  const suggestedDeposit = Math.max(
+                    1,
+                    Number(fundingUsdNeeded.toFixed(2) || 0),
+                  );
                   setShowDepositDialog(false);
-                  setLocation(`/wallet?modal=deposit&amount=${suggestedDeposit.toFixed(2)}`);
+                  setLocation(
+                    `/wallet?modal=deposit&amount=${suggestedDeposit.toFixed(2)}`,
+                  );
                 }}
                 data-testid="button-watch-open-wallet-deposit"
                 className="w-full"
@@ -2138,7 +3136,11 @@ export default function ChallengeWatchPage() {
                 {language === "ar" ? "فتح كارت الإيداع" : "Open Deposit Card"}
               </Button>
             </div>
-            <Button variant="outline" onClick={() => setShowDepositDialog(false)} className="w-full">
+            <Button
+              variant="outline"
+              onClick={() => setShowDepositDialog(false)}
+              className="w-full"
+            >
               {t("common.cancel")}
             </Button>
           </DialogFooter>
@@ -2164,15 +3166,24 @@ export default function ChallengeWatchPage() {
                 {resolveWinnerName(gameSession.winnerId)}
               </p>
               <p className="mt-2">
-                {gameSession.winReason === "checkmate" && (language === "ar" ? "كش مات!" : "Checkmate!")}
-                {gameSession.winReason === "timeout" && (language === "ar" ? "انتهى الوقت" : "Time out")}
-                {gameSession.winReason === "resignation" && (language === "ar" ? "استسلام" : "Resignation")}
-                {gameSession.winReason === "domino_blocked" && (language === "ar" ? "اللعبة محظورة" : "Game blocked")}
-                {gameSession.winReason === "gammon" && (language === "ar" ? "غامون!" : "Gammon!")}
-                {gameSession.winReason === "backgammon" && (language === "ar" ? "باكغامون!" : "Backgammon!")}
-                {gameSession.winReason === "double_declined" && (language === "ar" ? "رفض المضاعفة" : "Double declined")}
-                {gameSession.winReason === "target_reached" && (language === "ar" ? "وصل للهدف" : "Target score reached")}
-                {gameSession.winReason === "draw_agreement" && (language === "ar" ? "تعادل بالاتفاق" : "Draw by agreement")}
+                {gameSession.winReason === "checkmate" &&
+                  (language === "ar" ? "كش مات!" : "Checkmate!")}
+                {gameSession.winReason === "timeout" &&
+                  (language === "ar" ? "انتهى الوقت" : "Time out")}
+                {gameSession.winReason === "resignation" &&
+                  (language === "ar" ? "استسلام" : "Resignation")}
+                {gameSession.winReason === "domino_blocked" &&
+                  (language === "ar" ? "اللعبة محظورة" : "Game blocked")}
+                {gameSession.winReason === "gammon" &&
+                  (language === "ar" ? "غامون!" : "Gammon!")}
+                {gameSession.winReason === "backgammon" &&
+                  (language === "ar" ? "باكغامون!" : "Backgammon!")}
+                {gameSession.winReason === "double_declined" &&
+                  (language === "ar" ? "رفض المضاعفة" : "Double declined")}
+                {gameSession.winReason === "target_reached" &&
+                  (language === "ar" ? "وصل للهدف" : "Target score reached")}
+                {gameSession.winReason === "draw_agreement" &&
+                  (language === "ar" ? "تعادل بالاتفاق" : "Draw by agreement")}
               </p>
             </div>
             <DialogFooter>

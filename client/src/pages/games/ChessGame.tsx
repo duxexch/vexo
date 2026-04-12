@@ -303,8 +303,8 @@ export default function ChessGame() {
       )}
 
       {/* ── Header ── */}
-      <div className="vex-arcade-header mb-4 flex items-center justify-between rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
-        <div className="flex items-center gap-3">
+      <div className="vex-arcade-header mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
+        <div className="flex min-w-0 items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
@@ -328,7 +328,7 @@ export default function ChessGame() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
           <Badge
             variant={connectionStatus === 'connected' ? 'default' : 'secondary'}
             className="gap-1"
@@ -381,11 +381,11 @@ export default function ChessGame() {
             </h2>
           </div>
           <p className="text-muted-foreground text-sm">{gameResult.reason}</p>
-          <div className="flex items-center justify-center gap-2 mt-3">
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              className="vex-arcade-btn"
+              className="vex-arcade-btn w-full sm:w-auto"
               onClick={() => setLocation('/games')}
               data-testid="button-back-to-games"
             >

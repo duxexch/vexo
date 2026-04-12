@@ -349,8 +349,8 @@ export default function TarneebGame() {
       )}
 
       <div className="flex flex-col gap-4">
-        <div className="vex-arcade-header flex items-center justify-between rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
-          <div className="flex items-center gap-3">
+        <div className="vex-arcade-header flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
@@ -361,12 +361,12 @@ export default function TarneebGame() {
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <h1 className="text-2xl font-bold">{t('tarneeb.title')}</h1>
+            <h1 className="text-lg sm:text-2xl font-bold">{t('tarneeb.title')}</h1>
             <Badge variant={isSpectator ? 'outline' : 'default'}>
               {isSpectator ? (isAr ? 'مشاهد' : 'Spectator') : (isAr ? 'لاعب' : 'Player')}
             </Badge>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             {spectatorCount > 0 && (
               <Badge variant="secondary" className="flex items-center gap-1">
                 <Users className="w-3 h-3" />
@@ -392,10 +392,10 @@ export default function TarneebGame() {
         </div>
 
         {gameResult && (
-          <Card className="vex-arcade-panel bg-card/80 backdrop-blur">
+          <Card className="vex-arcade-panel border-2 border-primary/30 bg-card/80 backdrop-blur">
             <CardContent className="pt-6">
               <div className="text-center">
-                <h2 className="text-2xl font-bold mb-2">
+                <h2 className="mb-2 text-xl font-bold sm:text-2xl">
                   {t('tarneeb.gameOver')}
                 </h2>
                 <p className={`text-lg ${isSpectator ? 'text-blue-500' : winnerTeam === myTeam ? 'text-green-500' : 'text-red-500'}`}>
@@ -403,12 +403,12 @@ export default function TarneebGame() {
                     ? (isAr ? 'انتهت المباراة' : 'Match finished')
                     : (winnerTeam === myTeam ? t('tarneeb.youWon') : t('tarneeb.youLost'))}
                 </p>
-                <div className="flex gap-2 mt-4 justify-center">
-                  <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')} className="vex-arcade-btn">
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')} className="vex-arcade-btn w-full sm:w-auto">
                     <ArrowLeft className="w-4 h-4 me-1.5" />
                     {t('common.back')}
                   </Button>
-                  <Button size="sm" onClick={() => setLocation('/challenges?game=tarneeb')} className="vex-arcade-btn">
+                  <Button size="sm" onClick={() => setLocation('/challenges?game=tarneeb')} className="vex-arcade-btn w-full sm:w-auto">
                     <RefreshCw className="w-4 h-4 me-1.5" />
                     {t('common.playAgain')}
                   </Button>

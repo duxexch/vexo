@@ -24,6 +24,9 @@ Use one consistent spectator experience across all games (current and future) wi
 - Buttons are fixed to viewport (must not move with page scroll).
 - Use soft pulse animation only (subtle, not aggressive).
 - Keep disabled visual state for unavailable actions.
+- Mobile pairing rule: Chat FAB must stay on the opposite side from Support FAB.
+- Chat FAB and Support FAB must share the same vertical baseline on mobile (same level).
+- RTL/LTR rule: if Support side flips because of language direction, Chat must flip to the opposite side automatically.
 
 1. Spectator side panel
 
@@ -49,6 +52,9 @@ Use one consistent spectator experience across all games (current and future) wi
 
 - Keep bounded in memory (cap recent messages).
 - Prefer participant-filtered messages for "players chat" section.
+- On each new chat message, show a transient bubble above the sender avatar for exactly 4 seconds.
+- The transient avatar bubble must never replace/remove the chat feed entry while the match is active.
+- Reset chat feed state when the match status transitions to `finished` (end of game cleanup for play/watch surfaces).
 
 1. Gift aggregates
 
@@ -67,6 +73,47 @@ Use one consistent spectator experience across all games (current and future) wi
 4. Feed SpectatorPanel with chat + support/gift aggregates.
 5. Ensure gift modal follows one-screen fixed-header/footer behavior.
 6. Remove any legacy watch widgets replaced by the new system.
+
+## Ordered Game Coverage (Players + Spectators)
+
+1. Chess
+
+- Player surface: `/challenge/:id/play` + `/game/chess/:sessionId`
+- Spectator surface: `/challenge/:id/watch`
+
+1. Backgammon
+
+- Player surface: `/challenge/:id/play` + `/game/backgammon/:sessionId`
+- Spectator surface: `/challenge/:id/watch`
+
+1. Domino
+
+- Player surface: `/challenge/:id/play` + `/game/domino/:sessionId`
+- Spectator surface: `/challenge/:id/watch`
+
+1. Tarneeb
+
+- Player surface: `/challenge/:id/play` + `/game/tarneeb/:sessionId`
+- Spectator surface: `/challenge/:id/watch`
+
+1. Baloot
+
+- Player surface: `/challenge/:id/play` + `/game/baloot/:sessionId`
+- Spectator surface: `/challenge/:id/watch`
+
+1. Language Duel
+
+- Player surface: `/challenge/:id/play`
+- Spectator surface: `/challenge/:id/watch`
+
+## Execution Order For UI Normalization
+
+1. Chess
+2. Backgammon
+3. Domino
+4. Tarneeb
+5. Baloot
+6. Language Duel
 
 ## Verification Checklist (Before Merge/Release)
 
@@ -121,6 +168,13 @@ Use this visual DNA for both challenge player and watch surfaces:
   - Board lane (dominant center)
   - Support/Gift/Chat access without route switching
 - Mobile keeps floating quick actions; desktop keeps equivalent controls visible in-page.
+
+1. Four-player adaptation rule (for future games)
+
+- Keep the same board-centric layout and floating action system.
+- Split the player info strip area (avatar + timer + mic/listen controls) into two balanced blocks/rows per side when there are 4 players.
+- Preserve the board lane width and avoid shrinking the board to fit the extra player strips.
+- Maintain the same component language (panel style, icon button style, spacing rhythm) so 2-player and 4-player games feel like one system.
 
 ## Implementation Mapping (Current Classes)
 

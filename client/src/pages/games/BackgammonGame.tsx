@@ -312,8 +312,8 @@ export default function BackgammonGame() {
         />
       )}
 
-      <div className="vex-arcade-header mb-6 flex items-center justify-between rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
-        <div className="flex items-center gap-4">
+      <div className="vex-arcade-header mb-6 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
           <Button
             variant="ghost"
             size="icon"
@@ -324,7 +324,7 @@ export default function BackgammonGame() {
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h1 className="text-2xl font-bold">{t('backgammon.title')}</h1>
+          <h1 className="text-lg sm:text-2xl font-bold">{t('backgammon.title')}</h1>
           <Badge variant={isSpectator ? 'outline' : 'default'}>
             {isSpectator
               ? (language === 'ar' ? 'مشاهد' : 'Spectator')
@@ -338,7 +338,7 @@ export default function BackgammonGame() {
             )}
           </Badge>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
           <Badge variant="outline">
             <Users className="w-3 h-3 me-1" />
             {spectatorCount} {t('common.spectators')}
@@ -451,7 +451,7 @@ export default function BackgammonGame() {
           </Card>
 
           {gameResult && (
-            <Card className="vex-arcade-panel border-primary">
+            <Card className="vex-arcade-panel border-2 border-primary/30 bg-card/80 backdrop-blur">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg">{t('backgammon.gameOver')}</CardTitle>
               </CardHeader>
@@ -472,12 +472,12 @@ export default function BackgammonGame() {
                     {gameResult.reason === 'normal' && t('backgammon.byNormal')}
                   </p>
                 )}
-                <div className="flex gap-2 mt-4">
-                  <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')} className="vex-arcade-btn">
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')} className="vex-arcade-btn w-full sm:w-auto">
                     <ArrowLeft className="w-4 h-4 me-1.5" />
                     {t('common.back')}
                   </Button>
-                  <Button size="sm" onClick={() => setLocation('/challenges?game=backgammon')} className="vex-arcade-btn">
+                  <Button size="sm" onClick={() => setLocation('/challenges?game=backgammon')} className="vex-arcade-btn w-full sm:w-auto">
                     <RefreshCw className="w-4 h-4 me-1.5" />
                     {t('common.playAgain')}
                   </Button>

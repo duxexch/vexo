@@ -505,19 +505,25 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    const isTrustedOAuthOrigin = (origin: string) => {
-      try {
-        const currentUrl = new URL(window.location.origin);
-        const sourceUrl = new URL(origin);
-        const normalizeHost = (host: string) => host.replace(/^www\./, "");
+    const isTrustedOAuthOrigin = (origin: string) => origin === window.location.origin;
 
-        return sourceUrl.protocol === currentUrl.protocol && normalizeHost(sourceUrl.hostname) === normalizeHost(currentUrl.hostname);
-      } catch {
-        return false;
+    const isTrustedOAuthSource = (source: MessageEventSource | null) => {
+      return Boolean(socialPopupRef.current && source === socialPopupRef.current);
+    };
+
+    const hasActiveSocialAttempt = () => {
+      if (socialLoginLockRef.current) {
+        return true;
       }
+
+      return Boolean(socialPopupRef.current && !socialPopupRef.current.closed);
     };
 
     const handleOAuthSignal = async (payload: { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean }) => {
+      if ((payload.type === "vex_oauth_success" || payload.type === "vex_oauth_error") && !hasActiveSocialAttempt()) {
+        return;
+      }
+
       if (typeof payload.ts === "number" && payload.ts <= lastOAuthEventTsRef.current) {
         return;
       }
@@ -579,6 +585,10 @@ export default function LoginPage() {
       }
 
       if (!isTrustedOAuthOrigin(event.origin)) {
+        return;
+      }
+
+      if (!isTrustedOAuthSource(event.source)) {
         return;
       }
 
@@ -1200,7 +1210,11 @@ export default function LoginPage() {
   };
 
   return (
-    <main id="main-content" className="min-h-screen flex items-center justify-center bg-background p-4 relative" dir={dir}>
+    <main
+      id="main-content"
+      className="relative flex min-h-screen items-start justify-center overflow-y-auto bg-background p-4 pt-20 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:pt-4"
+      dir={dir}
+    >
       <div
         className="absolute start-4 end-4 flex items-center justify-between z-50"
         style={{ top: "calc(env(safe-area-inset-top, 0px) + 0.75rem)" }}
