@@ -59,12 +59,25 @@ interface FullScreenGiftPanelProps {
   onSendGift: (giftId: string, playerId: string, meta?: { price?: number; name?: string }) => void;
   player1Id?: string;
   player2Id?: string;
+  player3Id?: string;
+  player4Id?: string;
   player1Name?: string;
   player2Name?: string;
+  player3Name?: string;
+  player4Name?: string;
   player1Avatar?: string;
   player2Avatar?: string;
+  player3Avatar?: string;
+  player4Avatar?: string;
   disabled?: boolean;
 }
+
+type RecipientOption = {
+  id: string;
+  name: string;
+  avatar: string | undefined;
+  fallback: string;
+};
 
 export function FullScreenGiftPanel({
   open,
@@ -72,10 +85,16 @@ export function FullScreenGiftPanel({
   onSendGift,
   player1Id,
   player2Id,
+  player3Id,
+  player4Id,
   player1Name,
   player2Name,
+  player3Name,
+  player4Name,
   player1Avatar,
   player2Avatar,
+  player3Avatar,
+  player4Avatar,
   disabled,
 }: FullScreenGiftPanelProps) {
   const { language } = useI18n();
@@ -84,6 +103,45 @@ export function FullScreenGiftPanel({
   const [selectedGift, setSelectedGift] = useState<GiftDef | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+
+  const rawRecipientOptions: Array<RecipientOption | null> = [
+    player1Id
+      ? {
+        id: player1Id,
+        name: player1Name || "Player 1",
+        avatar: player1Avatar,
+        fallback: "1",
+      }
+      : null,
+    player2Id
+      ? {
+        id: player2Id,
+        name: player2Name || "Player 2",
+        avatar: player2Avatar,
+        fallback: "2",
+      }
+      : null,
+    player3Id
+      ? {
+        id: player3Id,
+        name: player3Name || "Player 3",
+        avatar: player3Avatar,
+        fallback: "3",
+      }
+      : null,
+    player4Id
+      ? {
+        id: player4Id,
+        name: player4Name || "Player 4",
+        avatar: player4Avatar,
+        fallback: "4",
+      }
+      : null,
+  ];
+
+  const recipientOptions = rawRecipientOptions.filter(
+    (option): option is RecipientOption => option !== null,
+  );
 
   const { data: giftCatalog = [] } = useQuery<Array<{
     id: string;
@@ -141,8 +199,12 @@ export function FullScreenGiftPanel({
   }, [selectedGift, selectedPlayer, disabled, onSendGift, onClose]);
 
   // Auto-select lone player
-  const autoPlayer = player1Id && !player2Id ? player1Id : player2Id && !player1Id ? player2Id : null;
+  const autoPlayer =
+    recipientOptions.length === 1 ? recipientOptions[0].id : null;
   const effectivePlayer = selectedPlayer ?? autoPlayer;
+  const selectedRecipient = recipientOptions.find(
+    (option) => option.id === effectivePlayer,
+  );
 
   if (!open) return null;
 
@@ -187,48 +249,28 @@ export function FullScreenGiftPanel({
             {isRTL ? "اختر المستلم" : "Choose recipient"}
           </p>
           <div className="grid grid-cols-2 gap-3">
-            {player1Id && (
+            {recipientOptions.map((option) => (
               <button
-                onClick={() => handlePlayerClick(player1Id)}
+                key={option.id}
+                onClick={() => handlePlayerClick(option.id)}
                 className={cn(
                   "flex-1 flex items-center gap-2 p-2.5 rounded-xl border-2 transition-all",
-                  effectivePlayer === player1Id
+                  effectivePlayer === option.id
                     ? "border-primary bg-primary/15 shadow-lg shadow-primary/20"
                     : "border-white/10 bg-white/5 hover:bg-white/10"
                 )}
               >
                 <Avatar className="h-9 w-9">
-                  <AvatarImage src={player1Avatar} />
+                  <AvatarImage src={option.avatar} />
                   <AvatarFallback className="text-xs bg-primary/20 text-primary">
-                    {player1Name?.[0]?.toUpperCase() || "1"}
+                    {option.name?.[0]?.toUpperCase() || option.fallback}
                   </AvatarFallback>
                 </Avatar>
                 <span className="text-sm font-medium text-white truncate">
-                  {player1Name || "Player 1"}
+                  {option.name}
                 </span>
               </button>
-            )}
-            {player2Id && (
-              <button
-                onClick={() => handlePlayerClick(player2Id)}
-                className={cn(
-                  "flex-1 flex items-center gap-2 p-2.5 rounded-xl border-2 transition-all",
-                  effectivePlayer === player2Id
-                    ? "border-primary bg-primary/15 shadow-lg shadow-primary/20"
-                    : "border-white/10 bg-white/5 hover:bg-white/10"
-                )}
-              >
-                <Avatar className="h-9 w-9">
-                  <AvatarImage src={player2Avatar} />
-                  <AvatarFallback className="text-xs bg-primary/20 text-primary">
-                    {player2Name?.[0]?.toUpperCase() || "2"}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-sm font-medium text-white truncate">
-                  {player2Name || "Player 2"}
-                </span>
-              </button>
-            )}
+            ))}
           </div>
         </div>
 
@@ -302,7 +344,7 @@ export function FullScreenGiftPanel({
         <div className="shrink-0 border-t border-white/10 bg-black/55 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.9rem)] backdrop-blur-xl">
           <div className="mb-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 flex items-center justify-between">
             <span>
-              {isRTL ? "المستلم:" : "Recipient:"} <span className="font-semibold text-white">{effectivePlayer === player1Id ? (player1Name || "Player 1") : effectivePlayer === player2Id ? (player2Name || "Player 2") : (isRTL ? "غير محدد" : "Not selected")}</span>
+              {isRTL ? "المستلم:" : "Recipient:"} <span className="font-semibold text-white">{selectedRecipient?.name || (isRTL ? "غير محدد" : "Not selected")}</span>
             </span>
             <span>
               {isRTL ? "الهدية:" : "Gift:"} <span className="font-semibold text-white">{selectedGift ? (isRTL ? selectedGift.nameAr : selectedGift.name) : (isRTL ? "غير محددة" : "Not selected")}</span>

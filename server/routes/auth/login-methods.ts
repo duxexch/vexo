@@ -7,7 +7,7 @@ import { JWT_USER_SECRET, JWT_USER_EXPIRY } from "../../lib/auth-config";
 import { toSafeUser } from "../../lib/safe-user";
 import {
     createIdentifierOtpChallengeToken,
-    getVerifiedIdentifierMethods,
+    getLoginIdentifierMethods,
     issueIdentifierOtp,
     type IdentifierOtpMethod,
     verifyIdentifierOtpChallengeToken,
@@ -33,16 +33,15 @@ export function registerAlternativeLoginRoutes(app: Express) {
         res: Response,
         user: LoginOtpUser,
         preferredMethod?: IdentifierOtpMethod,
-    ) => {
-        const verifiedMethods = getVerifiedIdentifierMethods(user);
-        if (verifiedMethods.length === 0) {
-            await consumeInvalidLoginDelay("no_verified_identifier_method");
-            return res.status(401).json({ error: "Invalid credentials", errorCode: "INVALID_CREDENTIALS" });
+    ): Promise<boolean> => {
+        const availableMethods = getLoginIdentifierMethods(user);
+        if (availableMethods.length === 0) {
+            return false;
         }
 
-        const selectedMethod = preferredMethod && verifiedMethods.includes(preferredMethod)
+        const selectedMethod = preferredMethod && availableMethods.includes(preferredMethod)
             ? preferredMethod
-            : verifiedMethods[0];
+            : availableMethods[0];
 
         const issuedOtp = await issueIdentifierOtp({
             user,
@@ -51,23 +50,26 @@ export function registerAlternativeLoginRoutes(app: Express) {
         });
 
         if (!issuedOtp.sent) {
-            return res.status(503).json({ error: "Unable to send verification code" });
+            res.status(503).json({ error: "Unable to send verification code" });
+            return true;
         }
 
         const challengeToken = createIdentifierOtpChallengeToken({
             userId: user.id,
-            methods: verifiedMethods,
+            methods: availableMethods,
             preferredMethod: selectedMethod,
             flow: "login",
         });
 
-        return res.json({
+        res.json({
             requiresIdentifierOtp: true,
             challengeToken,
-            availableMethods: verifiedMethods,
+            availableMethods,
             maskedTarget: issuedOtp.maskedTarget,
             expiresIn: issuedOtp.expiresInSeconds,
         });
+
+        return true;
     };
 
     // Login by account ID (one-click generated users)
@@ -96,7 +98,42 @@ export function registerAlternativeLoginRoutes(app: Express) {
                 return res.status(403).json({ error: "Account is not active" });
             }
 
-            return beginIdentifierOtpLogin(req, res, user);
+            const otpFlowHandled = await beginIdentifierOtpLogin(req, res, user);
+            if (otpFlowHandled) {
+                return;
+            }
+
+            // Backward-compatible fallback for one-click accounts that still have
+            // no email/phone configured yet.
+            if (user.twoFactorEnabled && user.twoFactorSecret) {
+                const challengeToken = generate2FAChallenge(user.id);
+                return res.json({
+                    requires2FA: true,
+                    challengeToken,
+                    message: "Two-factor authentication required",
+                });
+            }
+
+            await handleSuccessfulLogin(user);
+
+            const token = jwt.sign(
+                { id: user.id, role: user.role, username: user.username, fp: getSessionFingerprint(req) },
+                JWT_USER_SECRET,
+                { expiresIn: JWT_USER_EXPIRY },
+            );
+
+            await storage.createAuditLog({
+                userId: user.id,
+                action: "login",
+                entityType: "user",
+                entityId: user.id,
+                details: "Login by account (direct fallback)",
+                ipAddress: req.ip,
+            });
+
+            setAuthCookie(res, token);
+            await createSession(user.id, token, req);
+            return res.json({ user: toSafeUser(user), token });
         } catch (error: unknown) {
             res.status(500).json({ error: getErrorMessage(error) });
         }
@@ -133,7 +170,15 @@ export function registerAlternativeLoginRoutes(app: Express) {
                 return res.status(403).json({ error: "Account is not active" });
             }
 
-            return beginIdentifierOtpLogin(req, res, user, "phone");
+            const otpFlowHandled = await beginIdentifierOtpLogin(req, res, user, "phone");
+            if (otpFlowHandled) {
+                return;
+            }
+
+            return res.status(400).json({
+                error: "No phone verification channel configured for this account",
+                errorCode: "LOGIN_IDENTIFIER_UNAVAILABLE",
+            });
         } catch (error: unknown) {
             res.status(500).json({ error: getErrorMessage(error) });
         }
@@ -166,7 +211,15 @@ export function registerAlternativeLoginRoutes(app: Express) {
                 return res.status(403).json({ error: "Account is not active" });
             }
 
-            return beginIdentifierOtpLogin(req, res, user, "email");
+            const otpFlowHandled = await beginIdentifierOtpLogin(req, res, user, "email");
+            if (otpFlowHandled) {
+                return;
+            }
+
+            return res.status(400).json({
+                error: "No email verification channel configured for this account",
+                errorCode: "LOGIN_IDENTIFIER_UNAVAILABLE",
+            });
         } catch (error: unknown) {
             res.status(500).json({ error: getErrorMessage(error) });
         }
@@ -247,11 +300,11 @@ export function registerAlternativeLoginRoutes(app: Express) {
                 return res.status(400).json({ error: "Invalid verification code" });
             }
 
-            if (challenge.flow === "signup" && otpVerification.matchedMethod) {
-                if (otpVerification.matchedMethod === "email") {
+            if (otpVerification.matchedMethod) {
+                if (otpVerification.matchedMethod === "email" && !user.emailVerified) {
                     await storage.updateUser(user.id, { emailVerified: true });
                 }
-                if (otpVerification.matchedMethod === "phone") {
+                if (otpVerification.matchedMethod === "phone" && !user.phoneVerified) {
                     await storage.updateUser(user.id, { phoneVerified: true });
                 }
             }

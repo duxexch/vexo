@@ -38,6 +38,8 @@ interface SpectatorPanelProps {
   challengeId: string;
   player1?: Player;
   player2?: Player;
+  player3?: Player;
+  player4?: Player;
   spectatorCount: number;
   totalMoves?: number;
   currentTurn?: string;
@@ -71,6 +73,8 @@ export function SpectatorPanel({
   challengeId,
   player1,
   player2,
+  player3,
+  player4,
   spectatorCount,
   totalMoves,
   currentTurn,
@@ -94,7 +98,13 @@ export function SpectatorPanel({
   const [showGiftPanel, setShowGiftPanel] = useState(false);
   const [showPointsDialog, setShowPointsDialog] = useState(false);
   const isViewerPanel = panelMode === "spectator";
-  const participantCount = [player1, player2].filter(Boolean).length;
+  const panelPlayers = [player1, player2, player3, player4].filter(
+    (player): player is Player => Boolean(player),
+  );
+  const participantCount = panelPlayers.length;
+  const currentTurnPlayerName = currentTurn
+    ? panelPlayers.find((player) => player.id === currentTurn)?.username
+    : undefined;
 
   const { data: followedChallengers } = useQuery<{ id: string; followedId: string }[]>({
     queryKey: ["/api/challenger-follows"],
@@ -293,7 +303,7 @@ export function SpectatorPanel({
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {currentTurn === player1?.id ? player1?.username : player2?.username}{" "}
+                  {currentTurnPlayerName || (language === "ar" ? "لاعب" : "Player")}{" "}
                   {language === "ar" ? "يلعب الآن" : "is playing"}
                 </span>
               </div>
@@ -317,8 +327,12 @@ export function SpectatorPanel({
               {participantCount}
             </Badge>
           </div>
-          {renderPlayerCard(player1, language === "ar" ? "لاعب 1" : "Player 1")}
-          {renderPlayerCard(player2, language === "ar" ? "لاعب 2" : "Player 2")}
+          {panelPlayers.map((player, index) =>
+            renderPlayerCard(
+              player,
+              language === "ar" ? `لاعب ${index + 1}` : `Player ${index + 1}`,
+            ),
+          )}
         </div>
 
         <div className="mb-4">
@@ -421,10 +435,16 @@ export function SpectatorPanel({
         onSendGift={onSendGift || (() => { })}
         player1Id={player1?.id}
         player2Id={player2?.id}
+        player3Id={player3?.id}
+        player4Id={player4?.id}
         player1Name={player1?.username}
         player2Name={player2?.username}
+        player3Name={player3?.username}
+        player4Name={player4?.username}
         player1Avatar={player1?.avatarUrl}
         player2Avatar={player2?.avatarUrl}
+        player3Avatar={player3?.avatarUrl}
+        player4Avatar={player4?.avatarUrl}
       />
 
       <Dialog open={showPointsDialog} onOpenChange={setShowPointsDialog}>

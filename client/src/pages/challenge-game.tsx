@@ -2205,8 +2205,11 @@ export default function ChallengeGamePage() {
   const isChessGame = challenge.gameType === "chess";
   const isBackgammonGame = challenge.gameType === "backgammon";
   const isDominoGame = challenge.gameType === "domino";
+  const isLanguageDuelGame = challenge.gameType === "languageduel";
+  const isTarneebGame = challenge.gameType === "tarneeb";
   const isTeamGame =
-    challenge.gameType === "tarneeb" || challenge.gameType === "baloot";
+    isTarneebGame || challenge.gameType === "baloot";
+  const showTwoPlayerAvatarLanes = !isDominoGame && !isTeamGame;
   const isWideBoardGame =
     isDominoGame || isBackgammonGame || isTeamGame;
   const isTopAlignedBoardGame = isWideBoardGame || isChessGame;
@@ -2325,6 +2328,39 @@ export default function ChallengeGamePage() {
     }
     return map;
   })();
+
+  const supportAggregate = supports.reduce(
+    (aggregate, support) => {
+      const amount = Number.parseFloat(String(support.amount || 0));
+      return {
+        count: aggregate.count + 1,
+        totalAmount:
+          aggregate.totalAmount + (Number.isFinite(amount) ? amount : 0),
+      };
+    },
+    { count: 0, totalAmount: 0 },
+  );
+
+  const giftAggregate = receivedGifts.reduce(
+    (aggregate, gift) => {
+      const amount = Number.parseFloat(String(gift.amount || 0));
+      return {
+        count: aggregate.count + 1,
+        totalAmount:
+          aggregate.totalAmount + (Number.isFinite(amount) ? amount : 0),
+      };
+    },
+    { count: 0, totalAmount: 0 },
+  );
+
+  const supportAggregateText = isProjectChallengeCurrency
+    ? `${supportAggregate.totalAmount.toFixed(2)} VXC`
+    : `$${supportAggregate.totalAmount.toFixed(2)}`;
+  const giftAggregateText =
+    typeof gameSession?.totalGiftsValue === "string" &&
+      gameSession.totalGiftsValue.trim().length > 0
+      ? gameSession.totalGiftsValue
+      : `${giftAggregate.totalAmount.toFixed(2)} VXC`;
 
   const participantCards = (() => {
     const rawList = [
@@ -2556,7 +2592,7 @@ export default function ChallengeGamePage() {
                 </div>
               )}
 
-              {!isChessGame && !isBackgammonGame && (
+              {!isChessGame && !isBackgammonGame && !isLanguageDuelGame && (
                 <div className={`${boardShellWidthClass} mb-3`}>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {participantCards.map((participant) => (
@@ -2669,7 +2705,7 @@ export default function ChallengeGamePage() {
                 </div>
               )}
 
-              {!isDominoGame && (
+              {showTwoPlayerAvatarLanes && (
                 <div
                   className={`${boardShellWidthClass} ${isChessGame || isBackgammonGame ? "mb-2" : "mb-4"}`}
                 >
@@ -2910,7 +2946,7 @@ export default function ChallengeGamePage() {
                 )}
               </div>
 
-              {!isDominoGame && (
+              {showTwoPlayerAvatarLanes && (
                 <div
                   className={`${boardShellWidthClass} ${isChessGame || isBackgammonGame ? "mt-2" : "mt-4"}`}
                 >
@@ -3054,7 +3090,7 @@ export default function ChallengeGamePage() {
               )}
 
               {/* Floating game chat for players (Ludo King style) */}
-              {!isSpectator && (
+              {!isSpectator && !isBackgammonGame && !isTeamGame && !isLanguageDuelGame && (
                 <div
                   className={`w-full mt-2 h-36 sm:h-40 relative ${isWideBoardGame ? "max-w-5xl" : isChessGame ? "max-w-2xl" : "max-w-lg"} ${isChessGame || isBackgammonGame ? "hidden sm:block" : ""}`}
                 >
@@ -3077,8 +3113,8 @@ export default function ChallengeGamePage() {
               )}
             </div>
 
-            {/* Sidebar with gifts/comments for spectators and domino players */}
-            {(isSpectator || isDominoGame) && (
+            {/* Sidebar with gifts/comments for spectators and supported player game types */}
+            {(isSpectator || isDominoGame || isBackgammonGame || isTeamGame || isLanguageDuelGame) && (
               <div className="w-full lg:w-[22rem] border-t lg:border-t-0 lg:border-s flex flex-col bg-card max-h-[46vh] lg:max-h-none">
                 {isSpectator && challenge.gameType === "domino" && (
                   <DominoSpectatorInsights
@@ -3117,6 +3153,8 @@ export default function ChallengeGamePage() {
                   challengeId={challengeId!}
                   player1={challenge.player1}
                   player2={challenge.player2}
+                  player3={challenge.player3}
+                  player4={challenge.player4}
                   spectatorCount={gameSession?.spectatorCount || 0}
                   totalMoves={gameSession?.totalMoves}
                   currentTurn={gameSession?.currentTurn}
@@ -3124,9 +3162,10 @@ export default function ChallengeGamePage() {
                   panelMode={isSpectator ? "spectator" : "player"}
                   onSendGift={sendGiftToPlayer}
                   chatMessages={messages}
-                  supportCount={receivedGifts.length}
-                  giftCount={receivedGifts.length}
-                  giftTotalText={gameSession?.totalGiftsValue}
+                  supportCount={supportAggregate.count}
+                  supportTotalText={supportAggregateText}
+                  giftCount={giftAggregate.count}
+                  giftTotalText={giftAggregateText}
                 />
               </div>
             )}

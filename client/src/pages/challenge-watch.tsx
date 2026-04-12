@@ -1252,7 +1252,7 @@ export default function ChallengeWatchPage() {
   }
 
   const isRTL = language === "ar";
-  const mobileTopSupportDockClass = isRTL ? "end-1" : "start-1";
+  const mobileSupportDockClass = isRTL ? "end-2" : "start-2";
   const mobileChatDockClass = isRTL ? "start-2" : "end-2";
   const GAME_INFO: Record<
     string,
@@ -1275,8 +1275,11 @@ export default function ChallengeWatchPage() {
   };
   const gameInfo = GAME_INFO[challenge.gameType] || GAME_INFO.chess;
   const GameIcon = gameInfo.icon;
+  const isLanguageDuelGame = challenge.gameType === "languageduel";
+  const isTarneebGame = challenge.gameType === "tarneeb";
+  const isDominoGame = challenge.gameType === "domino";
   const isTeamGame =
-    challenge.gameType === "tarneeb" || challenge.gameType === "baloot";
+    isTarneebGame || challenge.gameType === "baloot";
   const challengeCurrencyType =
     challenge.currencyType === "project" ? "project" : "usd";
   const isProjectChallengeCurrency = challengeCurrencyType === "project";
@@ -1336,12 +1339,13 @@ export default function ChallengeWatchPage() {
     });
 
   const isWideBoardGame =
-    challenge.gameType === "domino" ||
+    isDominoGame ||
     challenge.gameType === "backgammon" ||
-    challenge.gameType === "tarneeb" ||
+    isTarneebGame ||
     challenge.gameType === "baloot";
   const isChessGame = challenge.gameType === "chess";
   const isBackgammonGame = challenge.gameType === "backgammon";
+  const showTwoPlayerAvatarLanes = !isDominoGame && !isTeamGame;
   const playerInfoWidthClass =
     challenge.gameType === "baloot"
       ? "w-full max-w-6xl mb-4"
@@ -1782,7 +1786,7 @@ export default function ChallengeWatchPage() {
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             <ScrollArea className="flex-1">
               <div className="p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6 flex flex-col items-center">
-                {!isChessGame && !isBackgammonGame && (
+                {!isChessGame && !isBackgammonGame && !isLanguageDuelGame && (
                   <div className={cn(playerInfoWidthClass, "mb-3")}>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {participantCards.map((participant) => (
@@ -1884,100 +1888,102 @@ export default function ChallengeWatchPage() {
                   </div>
                 )}
 
-                <div className={playerInfoWidthClass}>
-                  <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        {player1AvatarBubble && (
-                          <div className="pointer-events-none absolute bottom-full start-1/2 z-20 mb-1 -translate-x-1/2">
-                            <div className="max-w-[10rem] rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-center text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
-                              {player1AvatarBubble}
+                {showTwoPlayerAvatarLanes && (
+                  <div className={playerInfoWidthClass}>
+                    <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
+                      <div className="flex items-center gap-3">
+                        <div className="relative">
+                          {player1AvatarBubble && (
+                            <div className="pointer-events-none absolute bottom-full start-1/2 z-20 mb-1 -translate-x-1/2">
+                              <div className="max-w-[10rem] rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-center text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
+                                {player1AvatarBubble}
+                              </div>
                             </div>
-                          </div>
-                        )}
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={challenge.player1?.avatarUrl} />
-                          <AvatarFallback>
-                            {challenge.player1?.username?.[0]?.toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant={
-                            player1MutedForViewer ? "destructive" : "outline"
-                          }
-                          className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
-                          disabled={
-                            !challenge.player1Id || !player1VoiceConnected
-                          }
-                          onClick={() =>
-                            challenge.player1Id &&
-                            togglePeerListening(challenge.player1Id)
-                          }
-                          data-testid="watch-player1-avatar-voice-toggle"
-                          title={
-                            language === "ar"
-                              ? "الاستماع لصوت اللاعب 1"
-                              : "Toggle player 1 voice"
-                          }
-                        >
-                          {player1MutedForViewer ? (
-                            <VolumeX className="h-3 w-3" />
-                          ) : (
-                            <Volume2 className="h-3 w-3" />
                           )}
-                        </Button>
-                      </div>
-                      <div>
-                        <p className="font-medium">
-                          {challenge.player1?.username || "Player 1"}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs text-muted-foreground">
-                            {challenge.gameType === "chess"
-                              ? chessWhiteLabel
-                              : isBackgammonGame
-                                ? backgammonWhiteLabel
-                                : language === "ar"
-                                  ? "المقعد 1"
-                                  : "Seat 1"}
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={challenge.player1?.avatarUrl} />
+                            <AvatarFallback>
+                              {challenge.player1?.username?.[0]?.toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant={
+                              player1MutedForViewer ? "destructive" : "outline"
+                            }
+                            className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
+                            disabled={
+                              !challenge.player1Id || !player1VoiceConnected
+                            }
+                            onClick={() =>
+                              challenge.player1Id &&
+                              togglePeerListening(challenge.player1Id)
+                            }
+                            data-testid="watch-player1-avatar-voice-toggle"
+                            title={
+                              language === "ar"
+                                ? "الاستماع لصوت اللاعب 1"
+                                : "Toggle player 1 voice"
+                            }
+                          >
+                            {player1MutedForViewer ? (
+                              <VolumeX className="h-3 w-3" />
+                            ) : (
+                              <Volume2 className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+                        <div>
+                          <p className="font-medium">
+                            {challenge.player1?.username || "Player 1"}
                           </p>
-                          {oddsData?.player1 && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs bg-green-500/10 text-green-500 border-green-500/30"
-                            >
-                              x{oddsData.player1.odds.toFixed(2)}
-                            </Badge>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-muted-foreground">
+                              {challenge.gameType === "chess"
+                                ? chessWhiteLabel
+                                : isBackgammonGame
+                                  ? backgammonWhiteLabel
+                                  : language === "ar"
+                                    ? "المقعد 1"
+                                    : "Seat 1"}
+                            </p>
+                            {oddsData?.player1 && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-green-500/10 text-green-500 border-green-500/30"
+                              >
+                                x{oddsData.player1.odds.toFixed(2)}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
+                      {challenge.gameType === "domino" ? (
+                        <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1">
+                          <span className="text-xs text-muted-foreground">
+                            {t("domino.score")}
+                          </span>
+                          <span className="font-mono text-base font-semibold">
+                            {dominoPlayer1Score}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span
+                            className={`font-mono text-lg ${(gameSession?.player1TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}
+                          >
+                            {formatTime(
+                              gameSession?.player1TimeRemaining ||
+                              challenge.timeLimit,
+                            )}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    {challenge.gameType === "domino" ? (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1">
-                        <span className="text-xs text-muted-foreground">
-                          {t("domino.score")}
-                        </span>
-                        <span className="font-mono text-base font-semibold">
-                          {dominoPlayer1Score}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span
-                          className={`font-mono text-lg ${(gameSession?.player1TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}
-                        >
-                          {formatTime(
-                            gameSession?.player1TimeRemaining ||
-                            challenge.timeLimit,
-                          )}
-                        </span>
-                      </div>
-                    )}
                   </div>
-                </div>
+                )}
 
                 {challenge.gameType === "domino" && dominoAutoPlayBadgeText && (
                   <div
@@ -2001,40 +2007,6 @@ export default function ChallengeWatchPage() {
                 {(user || topTurnDescriptor) && (
                   <div className={cn(boardWidthClass, "mb-3")}>
                     <div className="relative flex min-h-[2.25rem] items-center justify-center">
-                      {user && (
-                        <div
-                          className={cn(
-                            "absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-2 lg:hidden",
-                            mobileTopSupportDockClass,
-                          )}
-                        >
-                          <Button
-                            onClick={openGiftPanel}
-                            className="vex-arcade-fab h-9 w-9 rounded-full p-0 shadow-xl"
-                            data-testid="fab-gift"
-                            title={language === "ar" ? "إرسال هدية" : "Send Gift"}
-                          >
-                            <Gift className="h-4 w-4" />
-                            <span className="sr-only">
-                              {language === "ar" ? "هدية" : "Gift"}
-                            </span>
-                          </Button>
-                          <Button
-                            variant="outline"
-                            onClick={jumpToSupportSection}
-                            disabled={supportActionsDisabled}
-                            className="vex-arcade-fab-outline h-9 w-9 rounded-full border-primary/35 bg-background/90 p-0 shadow-xl backdrop-blur-md"
-                            data-testid="button-mobile-jump-support"
-                            title={language === "ar" ? "ادعم" : "Support"}
-                          >
-                            <TrendingUp className="h-4 w-4" />
-                            <span className="sr-only">
-                              {language === "ar" ? "ادعم" : "Support"}
-                            </span>
-                          </Button>
-                        </div>
-                      )}
-
                       {topTurnDescriptor && (
                         <Badge
                           variant="outline"
@@ -2230,107 +2202,109 @@ export default function ChallengeWatchPage() {
                     )}
                 </div>
 
-                <div
-                  className={cn(
-                    playerInfoWidthClass,
-                    isChessGame || isBackgammonGame
-                      ? "mt-2 mb-0"
-                      : "mt-4 mb-0",
-                  )}
-                >
-                  <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        {player2AvatarBubble && (
-                          <div className="pointer-events-none absolute bottom-full start-1/2 z-20 mb-1 -translate-x-1/2">
-                            <div className="max-w-[10rem] rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-center text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
-                              {player2AvatarBubble}
+                {showTwoPlayerAvatarLanes && (
+                  <div
+                    className={cn(
+                      playerInfoWidthClass,
+                      isChessGame || isBackgammonGame
+                        ? "mt-2 mb-0"
+                        : "mt-4 mb-0",
+                    )}
+                  >
+                    <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
+                      <div className="flex items-center gap-3">
+                        <div className="relative">
+                          {player2AvatarBubble && (
+                            <div className="pointer-events-none absolute bottom-full start-1/2 z-20 mb-1 -translate-x-1/2">
+                              <div className="max-w-[10rem] rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-center text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
+                                {player2AvatarBubble}
+                              </div>
                             </div>
-                          </div>
-                        )}
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={challenge.player2?.avatarUrl} />
-                          <AvatarFallback>
-                            {challenge.player2?.username?.[0]?.toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant={
-                            player2MutedForViewer ? "destructive" : "outline"
-                          }
-                          className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
-                          disabled={
-                            !challenge.player2Id || !player2VoiceConnected
-                          }
-                          onClick={() =>
-                            challenge.player2Id &&
-                            togglePeerListening(challenge.player2Id)
-                          }
-                          data-testid="watch-player2-avatar-voice-toggle"
-                          title={
-                            language === "ar"
-                              ? "الاستماع لصوت اللاعب 2"
-                              : "Toggle player 2 voice"
-                          }
-                        >
-                          {player2MutedForViewer ? (
-                            <VolumeX className="h-3 w-3" />
-                          ) : (
-                            <Volume2 className="h-3 w-3" />
                           )}
-                        </Button>
-                      </div>
-                      <div>
-                        <p className="font-medium">
-                          {challenge.player2?.username || "Waiting..."}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs text-muted-foreground">
-                            {challenge.gameType === "chess"
-                              ? chessBlackLabel
-                              : isBackgammonGame
-                                ? backgammonBlackLabel
-                                : language === "ar"
-                                  ? "المقعد 2"
-                                  : "Seat 2"}
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={challenge.player2?.avatarUrl} />
+                            <AvatarFallback>
+                              {challenge.player2?.username?.[0]?.toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant={
+                              player2MutedForViewer ? "destructive" : "outline"
+                            }
+                            className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
+                            disabled={
+                              !challenge.player2Id || !player2VoiceConnected
+                            }
+                            onClick={() =>
+                              challenge.player2Id &&
+                              togglePeerListening(challenge.player2Id)
+                            }
+                            data-testid="watch-player2-avatar-voice-toggle"
+                            title={
+                              language === "ar"
+                                ? "الاستماع لصوت اللاعب 2"
+                                : "Toggle player 2 voice"
+                            }
+                          >
+                            {player2MutedForViewer ? (
+                              <VolumeX className="h-3 w-3" />
+                            ) : (
+                              <Volume2 className="h-3 w-3" />
+                            )}
+                          </Button>
+                        </div>
+                        <div>
+                          <p className="font-medium">
+                            {challenge.player2?.username || "Waiting..."}
                           </p>
-                          {oddsData?.player2 && challenge.player2 && (
-                            <Badge
-                              variant="outline"
-                              className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30"
-                            >
-                              x{oddsData.player2.odds.toFixed(2)}
-                            </Badge>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-muted-foreground">
+                              {challenge.gameType === "chess"
+                                ? chessBlackLabel
+                                : isBackgammonGame
+                                  ? backgammonBlackLabel
+                                  : language === "ar"
+                                    ? "المقعد 2"
+                                    : "Seat 2"}
+                            </p>
+                            {oddsData?.player2 && challenge.player2 && (
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30"
+                              >
+                                x{oddsData.player2.odds.toFixed(2)}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
+                      {challenge.gameType === "domino" ? (
+                        <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1">
+                          <span className="text-xs text-muted-foreground">
+                            {t("domino.score")}
+                          </span>
+                          <span className="font-mono text-base font-semibold">
+                            {dominoPlayer2Score}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span
+                            className={`font-mono text-lg ${(gameSession?.player2TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}
+                          >
+                            {formatTime(
+                              gameSession?.player2TimeRemaining ||
+                              challenge.timeLimit,
+                            )}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    {challenge.gameType === "domino" ? (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1">
-                        <span className="text-xs text-muted-foreground">
-                          {t("domino.score")}
-                        </span>
-                        <span className="font-mono text-base font-semibold">
-                          {dominoPlayer2Score}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span
-                          className={`font-mono text-lg ${(gameSession?.player2TimeRemaining || 0) < 30 ? "text-destructive" : ""}`}
-                        >
-                          {formatTime(
-                            gameSession?.player2TimeRemaining ||
-                            challenge.timeLimit,
-                          )}
-                        </span>
-                      </div>
-                    )}
                   </div>
-                </div>
+                )}
 
                 {!user && (
                   <div className="mt-4">
@@ -2712,6 +2686,8 @@ export default function ChallengeWatchPage() {
                 challengeId={challengeId!}
                 player1={challenge.player1}
                 player2={challenge.player2}
+                player3={challenge.player3}
+                player4={challenge.player4}
                 spectatorCount={gameSession?.spectatorCount || 0}
                 totalMoves={gameSession?.totalMoves}
                 currentTurn={gameSession?.currentTurn || undefined}
@@ -2839,6 +2815,40 @@ export default function ChallengeWatchPage() {
         </DialogContent>
       </Dialog>
 
+      {user && (
+        <div
+          className={`pointer-events-none !fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] ${mobileSupportDockClass} z-50 lg:hidden`}
+        >
+          <div className="pointer-events-auto flex min-h-[2.75rem] min-w-[2.75rem] items-end gap-2">
+            <Button
+              onClick={openGiftPanel}
+              className="vex-arcade-fab relative h-11 w-11 rounded-full p-0 shadow-2xl"
+              data-testid="fab-gift"
+              title={language === "ar" ? "إرسال هدية" : "Send Gift"}
+            >
+              <Gift className="h-5 w-5" />
+              <span className="sr-only">
+                {language === "ar" ? "هدية" : "Gift"}
+              </span>
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={jumpToSupportSection}
+              disabled={supportActionsDisabled}
+              className="vex-arcade-fab-outline h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md disabled:opacity-45"
+              data-testid="button-mobile-jump-support"
+              title={language === "ar" ? "ادعم" : "Support"}
+            >
+              <TrendingUp className="h-5 w-5" />
+              <span className="sr-only">
+                {language === "ar" ? "ادعم" : "Support"}
+              </span>
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div
         className={`pointer-events-none !fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] ${mobileChatDockClass} z-50 lg:hidden`}
       >
@@ -2952,10 +2962,16 @@ export default function ChallengeWatchPage() {
         onSendGift={handleSendGift}
         player1Id={challenge?.player1Id}
         player2Id={challenge?.player2Id}
+        player3Id={challenge?.player3Id}
+        player4Id={challenge?.player4Id}
         player1Name={challenge?.player1?.username}
         player2Name={challenge?.player2?.username}
+        player3Name={challenge?.player3?.username}
+        player4Name={challenge?.player4?.username}
         player1Avatar={challenge?.player1?.avatarUrl}
         player2Avatar={challenge?.player2?.avatarUrl}
+        player3Avatar={challenge?.player3?.avatarUrl}
+        player4Avatar={challenge?.player4?.avatarUrl}
         disabled={!user}
       />
 

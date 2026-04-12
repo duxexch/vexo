@@ -11,7 +11,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Copy, Check, CheckCircle2, Smartphone, Mail, User, Zap, KeyRound, Share2, Globe } from "lucide-react";
+import { Loader2, Copy, Check, CheckCircle2, Smartphone, Mail, User, Zap, KeyRound, Share2, Globe, AlertTriangle } from "lucide-react";
 import { VexLogo } from "@/components/vex-logo";
 import { SiGoogle, SiFacebook, SiTelegram, SiWhatsapp, SiX, SiApple, SiDiscord, SiLinkedin, SiGithub, SiTiktok, SiInstagram } from "react-icons/si";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -181,6 +181,7 @@ export default function LoginPage() {
 
   // Terms & privacy agreement state
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [showTermsVisualWarning, setShowTermsVisualWarning] = useState(false);
 
   const clearSocialLoginLock = (resetLoading: boolean = true) => {
     socialLoginLockRef.current = null;
@@ -318,7 +319,10 @@ export default function LoginPage() {
       return;
     }
 
-    setLocation(typeof payload.redirect === "string" && payload.redirect.length > 0 ? payload.redirect : "/");
+    const redirectTarget = sanitizeRelativeRedirect(
+      typeof payload.redirect === "string" && payload.redirect.length > 0 ? payload.redirect : "/",
+    ) || "/";
+    setLocation(redirectTarget);
   };
 
   const handleNativeGoogleLogin = async () => {
@@ -688,6 +692,7 @@ export default function LoginPage() {
 
   const checkTermsAgreed = () => {
     if (!agreedToTerms) {
+      setShowTermsVisualWarning(true);
       toast({
         title: t('auth.termsRequiredTitle'),
         description: t('auth.termsRequiredDescription'),
@@ -856,7 +861,6 @@ export default function LoginPage() {
 
   const handleAccountLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!checkTermsAgreed()) return;
     shouldPromptPostSignupPermissionsRef.current = false;
     setIsLoading(true);
     try {
@@ -888,7 +892,6 @@ export default function LoginPage() {
 
   const handlePhoneLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!checkTermsAgreed()) return;
     shouldPromptPostSignupPermissionsRef.current = false;
     setIsLoading(true);
     try {
@@ -927,7 +930,6 @@ export default function LoginPage() {
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!checkTermsAgreed()) return;
     shouldPromptPostSignupPermissionsRef.current = false;
     setIsLoading(true);
     try {
@@ -1236,11 +1238,11 @@ export default function LoginPage() {
 
         <CardContent className="p-0">
           <Tabs value={currentTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className={`w-full grid rounded-none border-b border-border h-auto p-0 bg-transparent`} style={{ gridTemplateColumns: `repeat(${enabledTabs.length}, 1fr)` }}>
+            <TabsList className="w-full rounded-none border-b border-border h-auto p-0 bg-transparent flex items-stretch overflow-x-auto">
               {enabledTabs.includes("one-click") && (
                 <TabsTrigger
                   value="one-click"
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs"
+                  className="min-w-[4.75rem] flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs sm:text-sm"
                   data-testid="tab-one-click"
                 >
                   <Zap className="w-4 h-4 me-1" />
@@ -1250,7 +1252,7 @@ export default function LoginPage() {
               {enabledTabs.includes("account") && (
                 <TabsTrigger
                   value="account"
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs"
+                  className="min-w-[4.75rem] flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs sm:text-sm"
                   data-testid="tab-account"
                 >
                   <User className="w-4 h-4 me-1" />
@@ -1260,7 +1262,7 @@ export default function LoginPage() {
               {enabledTabs.includes("phone") && (
                 <TabsTrigger
                   value="phone"
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs"
+                  className="min-w-[4.75rem] flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs sm:text-sm"
                   data-testid="tab-phone"
                 >
                   <Smartphone className="w-4 h-4 me-1" />
@@ -1270,7 +1272,7 @@ export default function LoginPage() {
               {enabledTabs.includes("email") && (
                 <TabsTrigger
                   value="email"
-                  className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs"
+                  className="min-w-[4.75rem] flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent py-3 text-xs sm:text-sm"
                   data-testid="tab-email"
                 >
                   <Mail className="w-4 h-4 me-1" />
@@ -1292,7 +1294,7 @@ export default function LoginPage() {
                     </div>
                     <Button
                       onClick={handleOneClickRegister}
-                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                      className="h-11 w-full bg-primary hover:bg-primary/90 text-primary-foreground"
                       disabled={isLoading || !agreedToTerms}
                       data-testid="button-one-click-register"
                     >
@@ -1314,9 +1316,13 @@ export default function LoginPage() {
                       <Input
                         id="accountId"
                         data-testid="input-account-id"
+                        className="h-11"
                         value={accountLoginForm.accountId}
                         onChange={e => setAccountLoginForm(prev => ({ ...prev, accountId: e.target.value }))}
                         placeholder={t('auth.enterAccountId')}
+                        autoComplete="username"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         required
                       />
                     </div>
@@ -1326,13 +1332,15 @@ export default function LoginPage() {
                         id="accountPassword"
                         type="password"
                         data-testid="input-account-password"
+                        className="h-11"
                         value={accountLoginForm.password}
                         onChange={e => setAccountLoginForm(prev => ({ ...prev, password: e.target.value }))}
                         placeholder={t('auth.enterPassword')}
+                        autoComplete="current-password"
                         required
                       />
                     </div>
-                    <Button type="submit" className="w-full" disabled={isLoading || !agreedToTerms} data-testid="button-account-login">
+                    <Button type="submit" className="h-11 w-full" disabled={isLoading} data-testid="button-account-login">
                       {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                       {t('auth.signIn')}
                     </Button>
@@ -1349,6 +1357,7 @@ export default function LoginPage() {
                         id="phone"
                         type="tel"
                         data-testid="input-phone"
+                        className="h-11"
                         value={phoneLoginForm.phone}
                         onChange={e => {
                           // Only allow digits and + prefix
@@ -1357,6 +1366,7 @@ export default function LoginPage() {
                         }}
                         placeholder="+1234567890"
                         pattern="^\+?[0-9]{7,15}$"
+                        autoComplete="tel"
                         required
                       />
                     </div>
@@ -1366,13 +1376,15 @@ export default function LoginPage() {
                         id="phonePassword"
                         type="password"
                         data-testid="input-phone-password"
+                        className="h-11"
                         value={phoneLoginForm.password}
                         onChange={e => setPhoneLoginForm(prev => ({ ...prev, password: e.target.value }))}
                         placeholder={t('auth.enterPassword')}
+                        autoComplete="current-password"
                         required
                       />
                     </div>
-                    <Button type="submit" className="w-full" disabled={isLoading || !agreedToTerms} data-testid="button-phone-login">
+                    <Button type="submit" className="h-11 w-full" disabled={isLoading} data-testid="button-phone-login">
                       {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                       {t('auth.signIn')}
                     </Button>
@@ -1388,9 +1400,14 @@ export default function LoginPage() {
                       <Input
                         id="username"
                         data-testid="input-username"
+                        className="h-11"
                         value={emailLoginForm.username}
                         onChange={e => setEmailLoginForm(prev => ({ ...prev, username: e.target.value }))}
                         placeholder={t('auth.enterUsernameEmail')}
+                        autoComplete="email"
+                        inputMode="email"
+                        autoCapitalize="none"
+                        spellCheck={false}
                         required
                       />
                     </div>
@@ -1400,13 +1417,15 @@ export default function LoginPage() {
                         id="emailPassword"
                         type="password"
                         data-testid="input-email-password"
+                        className="h-11"
                         value={emailLoginForm.password}
                         onChange={e => setEmailLoginForm(prev => ({ ...prev, password: e.target.value }))}
                         placeholder={t('auth.enterPassword')}
+                        autoComplete="current-password"
                         required
                       />
                     </div>
-                    <Button type="submit" className="w-full" disabled={isLoading || !agreedToTerms} data-testid="button-email-login">
+                    <Button type="submit" className="h-11 w-full" disabled={isLoading} data-testid="button-email-login">
                       {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                       {t('auth.signIn')}
                     </Button>
@@ -1424,6 +1443,53 @@ export default function LoginPage() {
                   <KeyRound className="w-3 h-3" />
                   {t('auth.forgotPassword')}
                 </button>
+              </div>
+
+              {/* Terms & Privacy Agreement Checkbox */}
+              <div
+                className={`rounded-md border p-3 transition-all ${showTermsVisualWarning && !agreedToTerms
+                  ? "border-destructive/70 bg-destructive/10 ring-2 ring-destructive/30"
+                  : "border-border"
+                  }`}
+                data-testid="terms-agreement-container"
+              >
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="terms-agreement"
+                    checked={agreedToTerms}
+                    onCheckedChange={(checked) => {
+                      const isChecked = checked === true;
+                      setAgreedToTerms(isChecked);
+                      if (isChecked) {
+                        setShowTermsVisualWarning(false);
+                      }
+                    }}
+                    className="mt-0.5 h-5 w-5"
+                    data-testid="checkbox-terms"
+                  />
+                  <label
+                    htmlFor="terms-agreement"
+                    className="text-sm text-muted-foreground leading-relaxed cursor-pointer select-none"
+                  >
+                    <>
+                      {t('auth.termsAgreementPrefix')} {" "}
+                      <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                        {t('auth.termsConditions')}
+                      </a>
+                      {" "}{t('common.and')} {" "}
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                        {t('auth.privacyPolicy')}
+                      </a>
+                    </>
+                  </label>
+                </div>
+
+                {showTermsVisualWarning && !agreedToTerms && (
+                  <div className="mt-2 flex items-start gap-2 text-destructive" data-testid="terms-strong-visual-hint">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p className="text-xs font-semibold">{t('auth.termsRequiredDescription')}</p>
+                  </div>
+                )}
               </div>
 
               {socialPlatforms.length > 0 && (
@@ -1457,34 +1523,6 @@ export default function LoginPage() {
                   </div>
                 </div>
               )}
-
-              {/* Terms & Privacy Agreement Checkbox */}
-              <div className="pt-4 border-t border-border">
-                <div className="flex items-start gap-3">
-                  <Checkbox
-                    id="terms-agreement"
-                    checked={agreedToTerms}
-                    onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
-                    className="mt-0.5"
-                    data-testid="checkbox-terms"
-                  />
-                  <label
-                    htmlFor="terms-agreement"
-                    className="text-xs text-muted-foreground leading-relaxed cursor-pointer select-none"
-                  >
-                    <>
-                      {t('auth.termsAgreementPrefix')} {" "}
-                      <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
-                        {t('auth.termsConditions')}
-                      </a>
-                      {" "}{t('common.and')} {" "}
-                      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
-                        {t('auth.privacyPolicy')}
-                      </a>
-                    </>
-                  </label>
-                </div>
-              </div>
             </div>
           </Tabs>
         </CardContent>

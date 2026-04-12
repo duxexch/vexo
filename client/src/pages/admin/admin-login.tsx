@@ -97,6 +97,9 @@ export default function AdminLoginPage() {
                       type="text"
                       placeholder={t("auth.username")}
                       className="h-11 ps-10"
+                      autoComplete="username"
+                      autoCapitalize="none"
+                      spellCheck={false}
                       value={credentials.username}
                       onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
                       required
@@ -113,6 +116,7 @@ export default function AdminLoginPage() {
                       type="password"
                       placeholder={t("auth.password")}
                       className="h-11 ps-10"
+                      autoComplete="current-password"
                       value={credentials.password}
                       onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
                       required

@@ -1,7 +1,11 @@
 {
     "recommendations": [
         "redis.redis-for-vscode",
-        "amitpatole.mcp-marketplace",
         "ms-dotnettools.vscode-dotnet-runtime"
+    ],
+    "unwantedRecommendations": [
+        "amitpatole.mcp-marketplace",
+        "rickyang.ocopilot",
+        "DanielSanMedium.dscodegpt"
     ]
 }

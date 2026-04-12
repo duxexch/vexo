@@ -4,5 +4,37 @@
         "markdown": true,
         "scminput": true
     },
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "terminal.integrated.scrollback": 4000,
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/**": true,
+        "**/dist/**": true,
+        "**/build/**": true,
+        "**/coverage/**": true,
+        "**/logs/**": true,
+        "**/backups/**": true,
+        "**/uploads/**": true,
+        "**/output/**": true,
+        "**/android/build/**": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/coverage": true,
+        "**/logs": true,
+        "**/backups": true,
+        "**/uploads": true,
+        "**/output": true,
+        "**/android/build": true
+    },
+    "extensions.experimental.affinity": {
+        "GitHub.copilot-chat": 1,
+        "GitHub.copilot": 1,
+        "Continue.continue": 2,
+        "Anthropic.claude-code": 3,
+        "Sixth.sixth-ai": 4
+    }
 }

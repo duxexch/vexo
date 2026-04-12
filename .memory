@@ -626,6 +626,16 @@ interface GameEngine {
   - مع fail-fast checks وعقود مسارات اللعب
 - ✅ إضافة أوامر npm جاهزة للتشغيل (`team:agents:*`) + تحديث بروتوكول الفريق
 
+### [11 أبريل 2026] — تحسين تشغيل فريق الوكلاء بالكامل (All Agents Runtime)
+
+- ✅ تحديث `scripts/team-agents.mjs` لدعم `--db-policy` بثلاثة أوضاع: `auto`, `strict`, `skip`
+- ✅ في وضع `auto` (الافتراضي): وكيل قاعدة البيانات لا يُسقط التنفيذ عند غياب PostgreSQL محلياً
+  - يشغّل بدلاً منه فحوصات static contracts على `shared/schema.ts` + TypeScript
+- ✅ إضافة أوامر npm جديدة:
+  - `team:agents:all:strictdb`
+  - `team:agents:database:strict`
+- ✅ تحديث وثيقة البروتوكول لتوضيح سياسة تشغيل وكيل قاعدة البيانات في الوضعين auto/strict
+
 ### [22 فبراير 2026] — تحليل المشروع الكامل وإنشاء الذاكرة
 
 - ✅ قراءة وتحليل جميع ملفات المشروع بالكامل

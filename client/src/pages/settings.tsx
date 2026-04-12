@@ -145,6 +145,7 @@ function ProfileSection() {
   const [securityCode, setSecurityCode] = useState("");
   const [isSendingSecurityCode, setIsSendingSecurityCode] = useState(false);
   const [securityOtpSent, setSecurityOtpSent] = useState(false);
+  const [editingContact, setEditingContact] = useState<"email" | "phone" | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -164,6 +165,49 @@ function ProfileSection() {
     email: payload.email || "",
     phone: payload.phone || "",
   });
+
+  useEffect(() => {
+    form.reset({
+      firstName: user?.firstName || "",
+      lastName: user?.lastName || "",
+      email: user?.email || "",
+      phone: user?.phone || "",
+    });
+    setEditingContact(null);
+  }, [form, user?.firstName, user?.lastName, user?.email, user?.phone]);
+
+  const maskEmailValue = (value: string): string => {
+    const normalized = value.trim();
+    const [localPart = "", domainPart = ""] = normalized.split("@");
+    if (!localPart || !domainPart) return "***";
+    const visiblePrefix = localPart.slice(0, Math.min(2, localPart.length));
+    return `${visiblePrefix}***@${domainPart}`;
+  };
+
+  const maskPhoneValue = (value: string): string => {
+    const normalized = value.trim();
+    if (normalized.length <= 4) return "****";
+    return `${normalized.slice(0, 2)}****${normalized.slice(-2)}`;
+  };
+
+  const startContactEdit = (type: "email" | "phone") => {
+    setEditingContact(type);
+    resetSecurityChallenge();
+    if (type === "email") {
+      form.setValue("email", user?.email || "", { shouldDirty: false });
+      return;
+    }
+    form.setValue("phone", user?.phone || "", { shouldDirty: false });
+  };
+
+  const cancelContactEdit = (type: "email" | "phone") => {
+    setEditingContact((prev) => (prev === type ? null : prev));
+    if (type === "email") {
+      form.setValue("email", user?.email || "", { shouldDirty: false });
+      return;
+    }
+    form.setValue("phone", user?.phone || "", { shouldDirty: false });
+  };
 
   const resetSecurityChallenge = () => {
     setPendingSecureUpdate(null);
@@ -205,6 +249,7 @@ function ProfileSection() {
     },
     onSuccess: (data) => {
       updateUser(data as Parameters<typeof updateUser>[0]);
+      setEditingContact(null);
       resetSecurityChallenge();
       toast({ title: t("common.success"), description: t("settings.profileUpdated") });
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
@@ -502,9 +547,39 @@ function ProfileSection() {
                       )
                     )}
                   </div>
-                  <FormControl>
-                    <Input {...field} type="email" placeholder="email@example.com" data-testid="input-email" />
-                  </FormControl>
+                  {user?.email && editingContact !== "email" ? (
+                    <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/40 px-3 py-2" data-testid="masked-email-display">
+                      <p className="text-sm font-medium">{maskEmailValue(user.email)}</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => startContactEdit("email")}
+                        data-testid="button-change-email"
+                      >
+                        {t("common.change") || "Change"}
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <FormControl>
+                        <Input {...field} type="email" placeholder="email@example.com" data-testid="input-email" />
+                      </FormControl>
+                      {user?.email && editingContact === "email" && (
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => cancelContactEdit("email")}
+                            data-testid="button-cancel-change-email"
+                          >
+                            {t("common.cancel")}
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -529,9 +604,39 @@ function ProfileSection() {
                       )
                     )}
                   </div>
-                  <FormControl>
-                    <Input {...field} type="tel" placeholder="+1234567890" data-testid="input-phone" />
-                  </FormControl>
+                  {user?.phone && editingContact !== "phone" ? (
+                    <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/40 px-3 py-2" data-testid="masked-phone-display">
+                      <p className="text-sm font-medium">{maskPhoneValue(user.phone)}</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => startContactEdit("phone")}
+                        data-testid="button-change-phone"
+                      >
+                        {t("common.change") || "Change"}
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <FormControl>
+                        <Input {...field} type="tel" placeholder="+1234567890" data-testid="input-phone" />
+                      </FormControl>
+                      {user?.phone && editingContact === "phone" && (
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => cancelContactEdit("phone")}
+                            data-testid="button-cancel-change-phone"
+                          >
+                            {t("common.cancel")}
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

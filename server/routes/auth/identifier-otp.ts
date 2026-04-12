@@ -58,17 +58,24 @@ function maskPhone(phone: string): string {
     return `${clean.slice(0, 2)}****${clean.slice(-2)}`;
 }
 
-function resolveContactValue(user: UserOtpProfile, method: IdentifierOtpMethod, flow: IdentifierOtpFlow): string | null {
+function resolveContactValue(
+    user: UserOtpProfile,
+    method: IdentifierOtpMethod,
+    flow: IdentifierOtpFlow,
+    options?: { allowUnverifiedLogin?: boolean },
+): string | null {
+    const allowUnverifiedLogin = options?.allowUnverifiedLogin === true;
+
     if (method === "email") {
         const email = (user.email || "").trim().toLowerCase();
         if (!email || !isSafeEmailAddress(email)) return null;
-        if (flow === "login" && !user.emailVerified) return null;
+        if (flow === "login" && !allowUnverifiedLogin && !user.emailVerified) return null;
         return email;
     }
 
     const phone = (user.phone || "").trim();
     if (!phone || !isSafePhoneNumber(phone)) return null;
-    if (flow === "login" && !user.phoneVerified) return null;
+    if (flow === "login" && !allowUnverifiedLogin && !user.phoneVerified) return null;
     return phone;
 }
 
@@ -80,6 +87,22 @@ export function getVerifiedIdentifierMethods(user: UserOtpProfile): IdentifierOt
     }
 
     if (resolveContactValue(user, "phone", "login")) {
+        methods.push("phone");
+    }
+
+    return methods;
+}
+
+export function getLoginIdentifierMethods(user: UserOtpProfile): IdentifierOtpMethod[] {
+    // Prioritize already-verified methods, then include existing safe contacts
+    // so users can prove ownership during login and avoid account lockout.
+    const methods = getVerifiedIdentifierMethods(user);
+
+    if (resolveContactValue(user, "email", "login", { allowUnverifiedLogin: true }) && !methods.includes("email")) {
+        methods.push("email");
+    }
+
+    if (resolveContactValue(user, "phone", "login", { allowUnverifiedLogin: true }) && !methods.includes("phone")) {
         methods.push("phone");
     }
 
@@ -180,7 +203,9 @@ export async function issueIdentifierOtp(input: {
     flow: IdentifierOtpFlow;
 }): Promise<{ sent: boolean; maskedTarget: string; expiresInSeconds: number }> {
     const { user, method, flow } = input;
-    const contactValue = resolveContactValue(user, method, flow);
+    const contactValue = resolveContactValue(user, method, flow, {
+        allowUnverifiedLogin: flow === "login",
+    });
     if (!contactValue) {
         return { sent: false, maskedTarget: "", expiresInSeconds: 0 };
     }

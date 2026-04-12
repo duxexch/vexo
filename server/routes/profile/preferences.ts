@@ -232,17 +232,17 @@ export function registerPreferencesRoutes(app: Express): void {
       const phoneChanged = normalizedPhone !== undefined && normalizedPhone !== currentPhone;
 
       const requiresSecurityVerification =
-        (emailChanged && Boolean(currentUser.emailVerified)) ||
-        (phoneChanged && Boolean(currentUser.phoneVerified));
+        (emailChanged && Boolean(currentEmail)) ||
+        (phoneChanged && Boolean(currentPhone));
 
       const allowedMethods: ProfileSecurityMethod[] = [];
       if (currentUser.twoFactorEnabled && currentUser.twoFactorSecret) {
         allowedMethods.push("two_factor");
       }
-      if (currentUser.emailVerified && currentUser.email) {
+      if (currentUser.email) {
         allowedMethods.push("email");
       }
-      if (currentUser.phoneVerified && currentUser.phone) {
+      if (currentUser.phone) {
         allowedMethods.push("phone");
       }
 

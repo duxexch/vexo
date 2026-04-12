@@ -280,7 +280,7 @@ export default function AuthCallbackPage() {
   }, [setLocation]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-100 via-slate-50 to-white">
+    <div className="relative min-h-screen overflow-y-auto bg-gradient-to-b from-slate-100 via-slate-50 to-white">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-28 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-cyan-200/40 blur-3xl" />
         <div className="absolute -bottom-32 right-8 h-72 w-72 rounded-full bg-indigo-200/40 blur-3xl" />
