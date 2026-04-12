@@ -894,7 +894,7 @@ export default function ChatPage() {
                                       className="mb-1"
                                     />
                                   )}
-                                  {/* Legacy attachment */}
+                                  {/* Attachment fallback for backward-compatible records */}
                                   {msg.attachmentUrl && !msg.mediaUrl && (
                                     <div className="mb-1">
                                       {msg.messageType === "image" ? (

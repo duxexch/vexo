@@ -11,6 +11,10 @@ const UPDATE_FORCE_GATE_ID = "app-force-update-gate";
 const UPDATE_BANNER_TEXT = "تحديث جديد متاح — A new update is available";
 const UPDATE_BUTTON_TEXT = "تحديث / Update";
 
+function isGameplayPath(pathname: string): boolean {
+  return /^\/challenge\/\d+\/(play|watch)$/.test(pathname) || /^\/game\//.test(pathname);
+}
+
 interface ReleaseInfo {
   webVersion: string;
   releasedAt: string;
@@ -77,6 +81,11 @@ if (!isRedirectingToCanonicalHost && 'serviceWorker' in navigator) {
 
         newSW.addEventListener('statechange', () => {
           if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+            // Gameplay surfaces should never stay on stale bundles.
+            if (isGameplayPath(window.location.pathname)) {
+              activateLatestWebUpdate();
+              return;
+            }
             // New content available — show update banner
             showUpdateBanner(() => activateLatestWebUpdate());
           }

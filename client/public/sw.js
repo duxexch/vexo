@@ -17,7 +17,7 @@
  *   ✓ Background Sync (retry failed requests)
  */
 
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v10';
 const STATIC_CACHE = `vex-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `vex-dynamic-${CACHE_VERSION}`;
 const MAX_DYNAMIC = 150;

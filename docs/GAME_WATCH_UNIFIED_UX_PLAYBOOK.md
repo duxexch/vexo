@@ -10,6 +10,14 @@ Use one consistent spectator experience across all games (current and future) wi
 2. Mobile-first behavior: all watch surfaces must work on narrow phones first, then scale up.
 3. Spectator parity rule: watch mode must consume normalized read-only live view data, not ad-hoc raw state.
 4. No dead code in touched areas: remove unused props, stale toggles, and obsolete rendering branches.
+5. Enforce cleanup in the same change: if a design branch is replaced, delete the old branch and any orphaned helpers/files in the same PR.
+
+## Mandatory Cleanup Discipline
+
+1. Never keep parallel UI paths for the same play/watch intent.
+2. Remove dead imports, stale state, and obsolete helper blocks while touching game UI.
+3. Remove unused game UI files/components once they have no active call sites.
+4. Keep one dominant board lane composition and one side-panel model per surface.
 
 ## Layout Standards (Applied to Domino, Reusable for New Games)
 

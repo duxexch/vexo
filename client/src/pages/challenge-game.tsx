@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -63,11 +61,7 @@ import {
   MicOff,
   Eye,
   Users,
-  Gift,
-  Star,
-  Send,
   ArrowRightLeft,
-  Share2,
   Flag,
   X,
   Check,
@@ -2293,42 +2287,6 @@ export default function ChallengeGamePage() {
     }
   }
 
-  const supportSummaryByPlayer = (() => {
-    const map = new Map<string, { count: number; totalAmount: number }>();
-    for (const support of supports) {
-      if (!support?.playerId) continue;
-      const existing = map.get(support.playerId) || {
-        count: 0,
-        totalAmount: 0,
-      };
-      const numericAmount = Number.parseFloat(String(support.amount || 0));
-      map.set(support.playerId, {
-        count: existing.count + 1,
-        totalAmount:
-          existing.totalAmount +
-          (Number.isFinite(numericAmount) ? numericAmount : 0),
-      });
-    }
-    return map;
-  })();
-
-  const giftSummaryByPlayer = (() => {
-    const map = new Map<string, { count: number; totalAmount: number }>();
-    for (const gift of receivedGifts) {
-      const recipientId =
-        typeof gift.recipientId === "string" ? gift.recipientId : "";
-      if (!recipientId) continue;
-      const existing = map.get(recipientId) || { count: 0, totalAmount: 0 };
-      const giftAmount = Number.parseFloat(String(gift.amount || 0));
-      map.set(recipientId, {
-        count: existing.count + 1,
-        totalAmount:
-          existing.totalAmount + (Number.isFinite(giftAmount) ? giftAmount : 0),
-      });
-    }
-    return map;
-  })();
-
   const supportAggregate = supports.reduce(
     (aggregate, support) => {
       const amount = Number.parseFloat(String(support.amount || 0));
@@ -2361,54 +2319,6 @@ export default function ChallengeGamePage() {
       gameSession.totalGiftsValue.trim().length > 0
       ? gameSession.totalGiftsValue
       : `${giftAggregate.totalAmount.toFixed(2)} VXC`;
-
-  const participantCards = (() => {
-    const rawList = [
-      { id: challenge.player1Id, seat: 1, player: challenge.player1 },
-      { id: challenge.player2Id, seat: 2, player: challenge.player2 },
-      { id: challenge.player3Id, seat: 3, player: challenge.player3 },
-      { id: challenge.player4Id, seat: 4, player: challenge.player4 },
-    ];
-
-    const list = rawList.flatMap((entry) =>
-      entry.id ? [{ ...entry, id: entry.id }] : [],
-    );
-
-    return list.map((entry) => {
-      const supportSummary = supportSummaryByPlayer.get(entry.id) || {
-        count: 0,
-        totalAmount: 0,
-      };
-      const giftSummary = giftSummaryByPlayer.get(entry.id) || {
-        count: 0,
-        totalAmount: 0,
-      };
-      const scoreValue =
-        challenge.gameType === "domino"
-          ? (dominoScoreLookup.get(entry.id) ?? 0)
-          : 0;
-      const timeRemaining =
-        entry.seat === 1 ? player1TimeRemaining : player2TimeRemaining;
-
-      return {
-        id: entry.id,
-        seat: entry.seat,
-        username:
-          entry.player?.username ||
-          `${language === "ar" ? "لاعب" : "Player"} ${entry.seat}`,
-        avatarUrl: entry.player?.avatarUrl,
-        scoreValue,
-        timeRemaining,
-        giftCount: giftSummary.count,
-        giftTotal: giftSummary.totalAmount,
-        supportCount: supportSummary.count,
-        supportTotal: supportSummary.totalAmount,
-        isCurrentUser: entry.id === user?.id,
-        isMutedForViewer: Boolean(voicePeerMutedMap[entry.id]),
-        isConnectedToVoice: connectedVoicePeers.includes(entry.id),
-      };
-    });
-  })();
 
   const togglePeerListening = (peerUserId: string) => {
     setVoicePeerMutedMap((previous) => ({
@@ -2588,119 +2498,6 @@ export default function ChallengeGamePage() {
                         </span>
                       </div>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {!isChessGame && !isBackgammonGame && !isLanguageDuelGame && (
-                <div className={`${boardShellWidthClass} mb-3`}>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {participantCards.map((participant) => (
-                      <div
-                        key={`participant-play-card-${participant.id}`}
-                        className="vex-arcade-panel rounded-xl border bg-card px-3 py-2"
-                        data-testid={`participant-play-card-${participant.id}`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage src={participant.avatarUrl} />
-                              <AvatarFallback>
-                                {participant.username?.[0]?.toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold">
-                                {participant.username}
-                              </p>
-                              <p className="text-[11px] text-muted-foreground">
-                                {language === "ar"
-                                  ? `المقعد ${participant.seat}`
-                                  : `Seat ${participant.seat}`}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1">
-                            {participant.isCurrentUser ? (
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant={
-                                  isVoiceMicMuted ? "destructive" : "outline"
-                                }
-                                className="vex-arcade-btn vex-arcade-btn--icon h-8 w-8"
-                                onClick={() =>
-                                  setIsVoiceMicMuted((prev) => !prev)
-                                }
-                                data-testid={`participant-self-mic-${participant.id}`}
-                              >
-                                {isVoiceMicMuted ? (
-                                  <MicOff className="h-3.5 w-3.5" />
-                                ) : (
-                                  <Mic className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
-                            ) : (
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant={
-                                  participant.isMutedForViewer
-                                    ? "destructive"
-                                    : "outline"
-                                }
-                                className="vex-arcade-btn vex-arcade-btn--icon h-8 w-8"
-                                disabled={!participant.isConnectedToVoice}
-                                onClick={() =>
-                                  togglePeerListening(participant.id)
-                                }
-                                data-testid={`participant-peer-listen-${participant.id}`}
-                              >
-                                {participant.isMutedForViewer ? (
-                                  <VolumeX className="h-3.5 w-3.5" />
-                                ) : (
-                                  <Volume2 className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                          <Badge variant="outline" className="font-mono">
-                            {isDominoGame
-                              ? `${t("domino.score")}: ${participant.scoreValue}`
-                              : `${language === "ar" ? "الوقت" : "Time"}: ${formatTime(participant.timeRemaining)}`}
-                          </Badge>
-                        </div>
-
-                        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-                          <div className="rounded-md border border-primary/20 bg-primary/5 px-2 py-1.5">
-                            <p className="text-muted-foreground">
-                              {language === "ar" ? "الهدايا" : "Gifts"}
-                            </p>
-                            <p className="font-semibold">
-                              {participant.giftCount}
-                              {participant.giftTotal > 0
-                                ? ` · ${participant.giftTotal.toFixed(2)}`
-                                : ""}
-                            </p>
-                          </div>
-                          <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1.5">
-                            <p className="text-muted-foreground">
-                              {language === "ar" ? "الدعم" : "Support"}
-                            </p>
-                            <p className="font-semibold">
-                              {participant.supportCount}
-                              {participant.supportTotal > 0
-                                ? ` · ${participant.supportTotal.toFixed(2)}`
-                                : ""}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 </div>
               )}
