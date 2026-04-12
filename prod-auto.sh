@@ -16,11 +16,20 @@ else
 fi
 REPO_URL="$DEFAULT_REPO_URL"
 REPO_BRANCH="$DEFAULT_REPO_BRANCH"
+AUTH_MODE="auto"
+GITHUB_TOKEN_INPUT=""
+GITHUB_TOKEN_VALUE=""
+USE_TOKEN_AUTH="false"
 ENV_FILE_INPUT=".env"
 COMPOSE_FILE_INPUT="docker-compose.prod.yml"
+VOICE_COMPOSE_FILE_INPUT="deploy/docker-compose.voice.yml"
+VOICE_SYSCTL_COMPOSE_FILE_INPUT="deploy/docker-compose.voice.linux-sysctl.yml"
+VOICE_STACK_MODE="auto"
 NON_INTERACTIVE="false"
 SKIP_REPO_SETUP="false"
 PULL_LATEST="false"
+IMAGE_REFRESH_MODE="auto"
+POST_DEPLOY_VERIFY="true"
 
 CORE_FORWARD_ARGS=()
 
@@ -41,17 +50,29 @@ Usage: ./prod-auto.sh [options]
 
 First-run bootstrap script:
 - Creates/validates repo path
-- Configures Git SSH auth (no password per pull)
+- Configures Git auth (SSH or GitHub token)
 - Validates and interactively repairs .env
+- Validates LIVEKIT/TURN voice env values and normalizes LIVEKIT_KEYS format
 - Runs strict production deployment
+- Rebuilds ai-agent service to ensure latest AI code is applied
 - Verifies env values are loaded correctly in vex-app container
+- Ensures voice stack containers (livekit + coturn) are running when voice compose exists
 
 Options:
   --repo-dir <path>           Target repository directory (default: /docker/vex if present)
-  --repo-url <ssh-url>        Git SSH URL (default: git@github.com:duxexch/vexo.git)
+  --repo-url <url>            Git repository URL (default: git@github.com:duxexch/vexo.git)
   --branch <name>             Branch to use (default: main)
+  --auth-mode <auto|ssh|token> Git auth mode (default: auto)
+  --github-token <token>      GitHub token (prefer env var GITHUB_TOKEN)
   --env-file <path>           Env file path (default: .env)
   --compose-file <path>       Compose file path (default: docker-compose.prod.yml)
+  --voice-compose-file <path> Voice compose file (default: deploy/docker-compose.voice.yml)
+  --voice-sysctl-file <path>  Voice sysctl overlay compose file
+  --enable-voice-stack        Force voice stack deployment
+  --disable-voice-stack       Skip voice stack deployment
+  --refresh-images            Pull latest upstream images for infra/voice services
+  --skip-image-refresh        Skip pulling upstream images (even on --pull-latest)
+  --skip-post-verify          Skip deep post-deploy runtime verification
   --skip-repo-setup           Skip path/repo/ssh setup (used by update script)
   --pull-latest               Pull latest code before deploy
   --non-interactive           Fail on invalid env values instead of prompting
@@ -76,6 +97,50 @@ ensure_docker_compose_available() {
   fi
 }
 
+should_refresh_images() {
+  case "$IMAGE_REFRESH_MODE" in
+    true)
+      return 0
+      ;;
+    false)
+      return 1
+      ;;
+    *)
+      [[ "$PULL_LATEST" == "true" ]]
+      ;;
+  esac
+}
+
+wait_for_http_200() {
+  local url="$1"
+  local timeout_seconds="${2:-120}"
+  local waited=0
+
+  while (( waited < timeout_seconds )); do
+    local code
+    code="$(curl -s -o /dev/null -w '%{http_code}' "$url" || true)"
+
+    if [[ "$code" == "200" ]]; then
+      return 0
+    fi
+
+    sleep 2
+    waited=$((waited + 2))
+  done
+
+  return 1
+}
+
+container_runtime_state() {
+  local container="$1"
+  docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || true
+}
+
+is_container_ready() {
+  local state="$1"
+  [[ "$state" == "healthy" || "$state" == "running" ]]
+}
+
 warn_ubuntu_2510_update_bug() {
   if [[ ! -r /etc/os-release ]]; then
     return 0
@@ -88,6 +153,53 @@ warn_ubuntu_2510_update_bug() {
 
   if [[ "$distro_id" == "ubuntu" && "$distro_version" == "25.10" ]]; then
     log_warn "Ubuntu 25.10 detected. If updates fail, run: sudo apt install --update rust-coreutils"
+  fi
+}
+
+strip_wrapping_quotes() {
+  local value="${1:-}"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value#\"}"
+    value="${value%\"}"
+  fi
+  printf '%s' "$value"
+}
+
+normalize_livekit_keys_value() {
+  local raw
+  raw="$(strip_wrapping_quotes "${1:-}")"
+  raw="${raw//$'\r'/}"
+  raw="$(printf '%s' "$raw" | sed -E 's/:[[:space:]]*/: /g; s/,[[:space:]]*/, /g')"
+  printf '%s' "$raw"
+}
+
+is_valid_livekit_keys() {
+  local value
+  value="$(normalize_livekit_keys_value "${1:-}")"
+  [[ -n "$value" && "$value" =~ ^[A-Za-z0-9._-]+:\ [^,[:space:]][^,]*([[:space:]]*,[[:space:]]*[A-Za-z0-9._-]+:\ [^,[:space:]][^,]*)*$ ]]
+}
+
+is_valid_ipv4() {
+  [[ "${1:-}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
+}
+
+detect_public_ipv4() {
+  local ip=""
+
+  if command -v curl >/dev/null 2>&1; then
+    ip="$(curl -fsS --max-time 4 https://api.ipify.org 2>/dev/null || true)"
+    if [[ -z "$ip" ]]; then
+      ip="$(curl -fsS --max-time 4 https://ipv4.icanhazip.com 2>/dev/null | tr -d '\r\n' || true)"
+    fi
+  fi
+
+  ip="${ip//$'\r'/}"
+  ip="${ip//$'\n'/}"
+
+  if is_valid_ipv4 "$ip"; then
+    printf '%s' "$ip"
+  else
+    printf ''
   fi
 }
 
@@ -123,6 +235,82 @@ to_ssh_url() {
   fi
 
   printf '%s' "$url"
+}
+
+to_https_url() {
+  local url="$1"
+  if [[ "$url" =~ ^https://github.com/.+ ]]; then
+    printf '%s' "$url"
+    return 0
+  fi
+
+  if [[ "$url" =~ ^git@github.com:(.+)$ ]]; then
+    printf 'https://github.com/%s' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  printf '%s' "$url"
+}
+
+to_token_url() {
+  local url="$1"
+  local token="$2"
+  local https_url
+  https_url="$(to_https_url "$url")"
+
+  if [[ "$https_url" =~ ^https://github.com/(.+)$ ]]; then
+    printf 'https://x-access-token:%s@github.com/%s' "$token" "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  printf '%s' "$https_url"
+}
+
+resolve_git_auth_mode() {
+  if [[ -z "$GITHUB_TOKEN_VALUE" && -n "$GITHUB_TOKEN_INPUT" ]]; then
+    GITHUB_TOKEN_VALUE="$GITHUB_TOKEN_INPUT"
+  fi
+
+  if [[ -z "$GITHUB_TOKEN_VALUE" && -n "${GITHUB_TOKEN:-}" ]]; then
+    GITHUB_TOKEN_VALUE="$GITHUB_TOKEN"
+  fi
+
+  GITHUB_TOKEN_VALUE="${GITHUB_TOKEN_VALUE%$'\r'}"
+
+  case "$AUTH_MODE" in
+    auto)
+      if [[ -n "$GITHUB_TOKEN_VALUE" ]]; then
+        USE_TOKEN_AUTH="true"
+      else
+        USE_TOKEN_AUTH="false"
+      fi
+      ;;
+    ssh)
+      USE_TOKEN_AUTH="false"
+      ;;
+    token)
+      USE_TOKEN_AUTH="true"
+      ;;
+    *)
+      log_error "Invalid --auth-mode value: $AUTH_MODE"
+      log_error "Allowed values: auto, ssh, token"
+      exit 1
+      ;;
+  esac
+
+  if [[ "$USE_TOKEN_AUTH" == "true" ]]; then
+    if [[ -z "$GITHUB_TOKEN_VALUE" ]]; then
+      log_error "Token auth selected but no token provided"
+      log_error "Set env var GITHUB_TOKEN or pass --github-token <token>"
+      exit 1
+    fi
+
+    REPO_URL="$(to_https_url "$REPO_URL")"
+    log_info "Git auth mode: token (token is used in-memory only)"
+  else
+    REPO_URL="$(to_ssh_url "$REPO_URL")"
+    log_info "Git auth mode: ssh"
+  fi
 }
 
 generate_secret_hex() {
@@ -402,6 +590,123 @@ ensure_required_env_values() {
 
   ensure_google_android_env
   sync_alias_env_keys
+
+  ensure_voice_env_values
+}
+
+ensure_voice_env_values() {
+  if [[ "$VOICE_STACK_MODE" == "false" ]]; then
+    return 0
+  fi
+
+  if [[ ! -f "$VOICE_COMPOSE_FILE_PATH" ]]; then
+    if [[ "$VOICE_STACK_MODE" == "true" ]]; then
+      log_error "Voice stack is forced but compose file was not found: $VOICE_COMPOSE_FILE_PATH"
+      exit 1
+    fi
+    return 0
+  fi
+
+  local livekit_keys normalized_keys
+  livekit_keys="$(read_env LIVEKIT_KEYS)"
+  normalized_keys="$(normalize_livekit_keys_value "$livekit_keys")"
+
+  if ! is_valid_livekit_keys "$normalized_keys" || value_is_placeholder "$normalized_keys"; then
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+      normalized_keys="vixo_prod: $(generate_secret_hex 24)"
+      upsert_env LIVEKIT_KEYS "$normalized_keys"
+      log_warn "Auto-generated LIVEKIT_KEYS in non-interactive mode"
+    else
+      while true; do
+        log_warn "LIVEKIT_KEYS الحالية غير صالحة. الصيغة المطلوبة: key: secret"
+        read -r -p "ادخل LIVEKIT_KEYS (Enter للتوليد التلقائي): " livekit_keys
+        livekit_keys="${livekit_keys%$'\r'}"
+
+        if [[ -z "$livekit_keys" ]]; then
+          livekit_keys="vixo_prod: $(generate_secret_hex 24)"
+          log_info "تم توليد LIVEKIT_KEYS آمن تلقائيًا"
+        fi
+
+        normalized_keys="$(normalize_livekit_keys_value "$livekit_keys")"
+        if is_valid_livekit_keys "$normalized_keys"; then
+          upsert_env LIVEKIT_KEYS "$normalized_keys"
+          log_ok "تم تحديث LIVEKIT_KEYS"
+          break
+        fi
+      done
+    fi
+  else
+    upsert_env LIVEKIT_KEYS "$normalized_keys"
+  fi
+
+  local turn_ip
+  turn_ip="$(read_env TURN_EXTERNAL_IP)"
+  turn_ip="$(strip_wrapping_quotes "$turn_ip")"
+
+  if value_is_placeholder "$turn_ip" || ! is_valid_ipv4 "$turn_ip"; then
+    turn_ip="$(detect_public_ipv4)"
+  fi
+
+  if [[ -z "$turn_ip" ]]; then
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+      log_error "TURN_EXTERNAL_IP is missing/invalid and could not be auto-detected"
+      exit 1
+    fi
+
+    while true; do
+      read -r -p "ادخل TURN_EXTERNAL_IP (IPv4 public): " turn_ip
+      turn_ip="${turn_ip%$'\r'}"
+      if is_valid_ipv4 "$turn_ip"; then
+        break
+      fi
+      log_warn "TURN_EXTERNAL_IP غير صالح"
+    done
+  fi
+  upsert_env TURN_EXTERNAL_IP "$turn_ip"
+
+  local turn_realm turn_username turn_password
+  turn_realm="$(read_env TURN_REALM)"
+  turn_username="$(read_env TURN_USERNAME)"
+  turn_password="$(read_env TURN_PASSWORD)"
+
+  if value_is_placeholder "$turn_realm"; then
+    turn_realm="$(extract_domain_from_env)"
+  fi
+  if value_is_placeholder "$turn_username"; then
+    turn_username="vex_turn_user"
+  fi
+  if value_is_placeholder "$turn_password" || [[ ${#turn_password} -lt 10 ]]; then
+    turn_password="$(generate_secret_hex 24)"
+    log_info "Generated TURN_PASSWORD automatically"
+  fi
+
+  upsert_env TURN_REALM "$turn_realm"
+  upsert_env TURN_USERNAME "$turn_username"
+  upsert_env TURN_PASSWORD "$turn_password"
+
+  local stun_urls turn_urls
+  stun_urls="$(read_env PUBLIC_RTC_STUN_URLS)"
+  turn_urls="$(read_env PUBLIC_RTC_TURN_URLS)"
+
+  if value_is_placeholder "$stun_urls"; then
+    stun_urls="stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
+  fi
+  if value_is_placeholder "$turn_urls"; then
+    turn_urls="turn:${turn_ip}:3478?transport=udp,turn:${turn_ip}:3478?transport=tcp"
+  fi
+
+  upsert_env PUBLIC_RTC_STUN_URLS "$stun_urls"
+  upsert_env PUBLIC_RTC_TURN_URLS "$turn_urls"
+  upsert_env PUBLIC_RTC_TURN_USERNAME "$turn_username"
+  upsert_env PUBLIC_RTC_TURN_CREDENTIAL "$turn_password"
+
+  local ice_policy
+  ice_policy="$(read_env PUBLIC_RTC_ICE_TRANSPORT_POLICY)"
+  ice_policy="${ice_policy,,}"
+  if [[ "$ice_policy" != "all" && "$ice_policy" != "relay" ]]; then
+    ice_policy="relay"
+  fi
+  upsert_env PUBLIC_RTC_ICE_TRANSPORT_POLICY "$ice_policy"
 }
 
 ensure_repo_exists() {
@@ -418,6 +723,17 @@ ensure_repo_exists() {
   fi
 
   log_info "Cloning repository into $REPO_DIR"
+
+  if [[ "$USE_TOKEN_AUTH" == "true" ]]; then
+    local token_url
+    token_url="$(to_token_url "$REPO_URL" "$GITHUB_TOKEN_VALUE")"
+    git clone --branch "$REPO_BRANCH" "$token_url" "$REPO_DIR"
+
+    # Keep origin clean (without embedded token) after clone.
+    git -C "$REPO_DIR" remote set-url origin "$REPO_URL"
+    return 0
+  fi
+
   git clone --branch "$REPO_BRANCH" "$REPO_URL" "$REPO_DIR"
 }
 
@@ -435,6 +751,23 @@ ensure_origin_ssh() {
   if [[ "$ssh_url" != "$origin_url" ]]; then
     git -C "$REPO_DIR" remote set-url origin "$ssh_url"
     log_ok "Converted origin remote to SSH: $ssh_url"
+  fi
+}
+
+ensure_origin_https() {
+  local origin_url
+  origin_url="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)"
+
+  if [[ -z "$origin_url" ]]; then
+    git -C "$REPO_DIR" remote add origin "$REPO_URL"
+    return 0
+  fi
+
+  local https_url
+  https_url="$(to_https_url "$origin_url")"
+  if [[ "$https_url" != "$origin_url" || "$origin_url" != "$REPO_URL" ]]; then
+    git -C "$REPO_DIR" remote set-url origin "$REPO_URL"
+    log_ok "Normalized origin remote URL for token auth"
   fi
 }
 
@@ -498,7 +831,7 @@ run_core_deploy() {
 
   local cmd=(bash "$core_script" --env-file "$ENV_FILE_PATH" --compose-file "$COMPOSE_FILE_PATH")
 
-  if [[ "$PULL_LATEST" == "true" ]]; then
+  if [[ "$PULL_LATEST" == "true" && "$USE_TOKEN_AUTH" != "true" ]]; then
     cmd+=(--pull-latest)
   fi
 
@@ -508,6 +841,76 @@ run_core_deploy() {
 
   log_info "Running strict production deploy"
   "${cmd[@]}"
+}
+
+pull_latest_with_token_if_needed() {
+  if [[ "$PULL_LATEST" != "true" || "$USE_TOKEN_AUTH" != "true" ]]; then
+    return 0
+  fi
+
+  local token_url
+  token_url="$(to_token_url "$REPO_URL" "$GITHUB_TOKEN_VALUE")"
+
+  log_info "Pulling latest code using token auth"
+  git -C "$REPO_DIR" pull --ff-only "$token_url" "$REPO_BRANCH"
+}
+
+refresh_upstream_images_if_needed() {
+  if ! should_refresh_images; then
+    return 0
+  fi
+
+  log_info "Refreshing upstream images for infrastructure services"
+
+  local compose_cmd=(docker compose -f "$COMPOSE_FILE_PATH" --env-file "$ENV_FILE_PATH")
+  local service
+
+  for service in db redis minio; do
+    if "${compose_cmd[@]}" pull "$service" >/dev/null 2>&1; then
+      log_ok "Pulled image: $service"
+    else
+      log_warn "Could not pull image for $service (continuing)"
+    fi
+  done
+
+  if [[ "$VOICE_STACK_MODE" == "false" || ! -f "$VOICE_COMPOSE_FILE_PATH" ]]; then
+    return 0
+  fi
+
+  local voice_cmd=(docker compose -f "$VOICE_COMPOSE_FILE_PATH" --env-file "$ENV_FILE_PATH")
+
+  for service in livekit coturn; do
+    if "${voice_cmd[@]}" pull "$service" >/dev/null 2>&1; then
+      log_ok "Pulled image: $service"
+    else
+      log_warn "Could not pull image for $service (continuing)"
+    fi
+  done
+}
+
+rebuild_ai_agent_service() {
+  local compose_cmd=(docker compose -f "$COMPOSE_FILE_PATH" --env-file "$ENV_FILE_PATH")
+
+  if ! "${compose_cmd[@]}" config --services 2>/dev/null | grep -Fxq 'ai-agent'; then
+    log_info "Service ai-agent is not defined in compose; skipping ai-agent rebuild"
+    return 0
+  fi
+
+  log_info "Rebuilding ai-agent service to apply latest source code"
+  if ! "${compose_cmd[@]}" up -d --build ai-agent; then
+    log_error "Failed to rebuild ai-agent service"
+    return 1
+  fi
+
+  local agent_state
+  agent_state="$(container_runtime_state vex-ai-agent)"
+  if ! is_container_ready "$agent_state"; then
+    log_error "ai-agent container check failed after rebuild (state: ${agent_state:-missing})"
+    docker logs --tail 120 vex-ai-agent 2>/dev/null || true
+    return 1
+  fi
+
+  log_ok "ai-agent rebuilt and running"
 }
 
 container_env_value() {
@@ -647,6 +1050,117 @@ repair_runtime_mismatches_if_needed() {
   return 1
 }
 
+run_voice_stack_deploy_if_needed() {
+  if [[ "$VOICE_STACK_MODE" == "false" ]]; then
+    log_info "Voice stack deployment skipped (--disable-voice-stack)"
+    return 0
+  fi
+
+  if [[ ! -f "$VOICE_COMPOSE_FILE_PATH" ]]; then
+    if [[ "$VOICE_STACK_MODE" == "true" ]]; then
+      log_error "Voice compose file not found: $VOICE_COMPOSE_FILE_PATH"
+      return 1
+    fi
+    return 0
+  fi
+
+  log_info "Deploying voice stack (livekit + coturn)"
+  docker rm -f vex-livekit vex-coturn >/dev/null 2>&1 || true
+
+  if [[ -f "$VOICE_SYSCTL_COMPOSE_FILE_PATH" ]]; then
+    if ! docker compose -f "$VOICE_COMPOSE_FILE_PATH" -f "$VOICE_SYSCTL_COMPOSE_FILE_PATH" --env-file "$ENV_FILE_PATH" up -d --force-recreate --remove-orphans livekit coturn; then
+      log_warn "Voice sysctl overlay failed, retrying with base voice compose"
+      docker compose -f "$VOICE_COMPOSE_FILE_PATH" --env-file "$ENV_FILE_PATH" up -d --force-recreate --remove-orphans livekit coturn
+    fi
+  else
+    docker compose -f "$VOICE_COMPOSE_FILE_PATH" --env-file "$ENV_FILE_PATH" up -d --force-recreate --remove-orphans livekit coturn
+  fi
+
+  local livekit_state coturn_state
+  livekit_state="$(docker inspect --format '{{.State.Status}}' vex-livekit 2>/dev/null || true)"
+  coturn_state="$(docker inspect --format '{{.State.Status}}' vex-coturn 2>/dev/null || true)"
+
+  if [[ "$livekit_state" != "running" ]]; then
+    log_error "LiveKit container is not running (state: ${livekit_state:-missing})"
+    docker logs --tail 80 vex-livekit 2>/dev/null || true
+    return 1
+  fi
+
+  if [[ "$coturn_state" != "running" ]]; then
+    log_error "Coturn container is not running (state: ${coturn_state:-missing})"
+    docker logs --tail 80 vex-coturn 2>/dev/null || true
+    return 1
+  fi
+
+  log_ok "Voice stack is running (vex-livekit + vex-coturn)"
+}
+
+verify_post_deploy_stack() {
+  local required_containers=(vex-db vex-redis vex-minio vex-ai-agent vex-app)
+  local container state
+
+  for container in "${required_containers[@]}"; do
+    state="$(container_runtime_state "$container")"
+    if ! is_container_ready "$state"; then
+      log_error "Container check failed: $container (state: ${state:-missing})"
+      docker logs --tail 80 "$container" 2>/dev/null || true
+      return 1
+    fi
+  done
+
+  if ! wait_for_http_200 "http://127.0.0.1:3001/api/health" 120; then
+    log_error "Health endpoint did not return 200: /api/health"
+    docker logs --tail 120 vex-app 2>/dev/null || true
+    return 1
+  fi
+
+  if ! wait_for_http_200 "http://127.0.0.1:3001/" 120; then
+    log_error "Root endpoint did not return 200: /"
+    docker logs --tail 120 vex-app 2>/dev/null || true
+    return 1
+  fi
+
+  local db_user db_name
+  db_user="$(read_env POSTGRES_USER)"
+  db_name="$(read_env POSTGRES_DB)"
+  db_name="${db_name:-vex_db}"
+
+  if ! docker exec vex-db pg_isready -U "$db_user" -d "$db_name" >/dev/null 2>&1; then
+    log_error "Database readiness check failed (pg_isready)"
+    docker logs --tail 80 vex-db 2>/dev/null || true
+    return 1
+  fi
+
+  local redis_pass redis_ping
+  redis_pass="$(read_env REDIS_PASSWORD)"
+  redis_ping="$(docker exec vex-redis redis-cli -a "$redis_pass" --no-auth-warning ping 2>/dev/null | tr -d '\r' || true)"
+  if [[ "$redis_ping" != "PONG" ]]; then
+    log_error "Redis PING check failed"
+    docker logs --tail 80 vex-redis 2>/dev/null || true
+    return 1
+  fi
+
+  if [[ "$VOICE_STACK_MODE" != "false" && -f "$VOICE_COMPOSE_FILE_PATH" ]]; then
+    local livekit_state coturn_state
+    livekit_state="$(container_runtime_state vex-livekit)"
+    coturn_state="$(container_runtime_state vex-coturn)"
+
+    if ! is_container_ready "$livekit_state"; then
+      log_error "Voice verification failed: vex-livekit (state: ${livekit_state:-missing})"
+      docker logs --tail 80 vex-livekit 2>/dev/null || true
+      return 1
+    fi
+
+    if ! is_container_ready "$coturn_state"; then
+      log_error "Voice verification failed: vex-coturn (state: ${coturn_state:-missing})"
+      docker logs --tail 80 vex-coturn 2>/dev/null || true
+      return 1
+    fi
+  fi
+
+  log_ok "Deep post-deploy verification passed (containers + API + DB + Redis)"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo-dir)
@@ -664,6 +1178,16 @@ while [[ $# -gt 0 ]]; do
       REPO_BRANCH="$2"
       shift 2
       ;;
+    --auth-mode)
+      [[ $# -ge 2 ]] || { log_error "Missing value for --auth-mode"; exit 1; }
+      AUTH_MODE="$2"
+      shift 2
+      ;;
+    --github-token)
+      [[ $# -ge 2 ]] || { log_error "Missing value for --github-token"; exit 1; }
+      GITHUB_TOKEN_INPUT="$2"
+      shift 2
+      ;;
     --env-file)
       [[ $# -ge 2 ]] || { log_error "Missing value for --env-file"; exit 1; }
       ENV_FILE_INPUT="$2"
@@ -673,6 +1197,36 @@ while [[ $# -gt 0 ]]; do
       [[ $# -ge 2 ]] || { log_error "Missing value for --compose-file"; exit 1; }
       COMPOSE_FILE_INPUT="$2"
       shift 2
+      ;;
+    --voice-compose-file)
+      [[ $# -ge 2 ]] || { log_error "Missing value for --voice-compose-file"; exit 1; }
+      VOICE_COMPOSE_FILE_INPUT="$2"
+      shift 2
+      ;;
+    --voice-sysctl-file)
+      [[ $# -ge 2 ]] || { log_error "Missing value for --voice-sysctl-file"; exit 1; }
+      VOICE_SYSCTL_COMPOSE_FILE_INPUT="$2"
+      shift 2
+      ;;
+    --enable-voice-stack)
+      VOICE_STACK_MODE="true"
+      shift
+      ;;
+    --disable-voice-stack)
+      VOICE_STACK_MODE="false"
+      shift
+      ;;
+    --refresh-images)
+      IMAGE_REFRESH_MODE="true"
+      shift
+      ;;
+    --skip-image-refresh)
+      IMAGE_REFRESH_MODE="false"
+      shift
+      ;;
+    --skip-post-verify)
+      POST_DEPLOY_VERIFY="false"
+      shift
       ;;
     --skip-repo-setup)
       SKIP_REPO_SETUP="true"
@@ -701,26 +1255,43 @@ if ! is_absolute_path "$REPO_DIR"; then
   REPO_DIR="$(pwd)/$REPO_DIR"
 fi
 
+resolve_git_auth_mode
+
 require_command git
 require_command docker
 require_command curl
-require_command ssh
-require_command ssh-keygen
-require_command ssh-agent
-require_command ssh-add
+
+if [[ "$USE_TOKEN_AUTH" != "true" && "$SKIP_REPO_SETUP" != "true" ]]; then
+  require_command ssh
+  require_command ssh-keygen
+  require_command ssh-agent
+  require_command ssh-add
+fi
+
 ensure_docker_compose_available
 warn_ubuntu_2510_update_bug
 
 if [[ "$SKIP_REPO_SETUP" != "true" ]]; then
   ensure_repo_exists
-  ensure_origin_ssh
-  ensure_ssh_auth
+
+  if [[ "$USE_TOKEN_AUTH" == "true" ]]; then
+    ensure_origin_https
+  else
+    ensure_origin_ssh
+    ensure_ssh_auth
+  fi
 else
   if [[ ! -d "$REPO_DIR/.git" ]]; then
     log_error "--skip-repo-setup used but no git repo found at: $REPO_DIR"
     exit 1
   fi
+
+  if [[ "$USE_TOKEN_AUTH" == "true" ]]; then
+    ensure_origin_https
+  fi
 fi
+
+pull_latest_with_token_if_needed
 
 if [[ ! -f "$REPO_DIR/scripts/prod-auto.sh" ]]; then
   log_error "Expected core script not found in repo: $REPO_DIR/scripts/prod-auto.sh"
@@ -729,6 +1300,8 @@ fi
 
 ENV_FILE_PATH="$(resolve_path "$REPO_DIR" "$ENV_FILE_INPUT")"
 COMPOSE_FILE_PATH="$(resolve_path "$REPO_DIR" "$COMPOSE_FILE_INPUT")"
+VOICE_COMPOSE_FILE_PATH="$(resolve_path "$REPO_DIR" "$VOICE_COMPOSE_FILE_INPUT")"
+VOICE_SYSCTL_COMPOSE_FILE_PATH="$(resolve_path "$REPO_DIR" "$VOICE_SYSCTL_COMPOSE_FILE_INPUT")"
 
 if [[ ! -f "$COMPOSE_FILE_PATH" ]]; then
   log_error "Compose file not found: $COMPOSE_FILE_PATH"
@@ -743,8 +1316,17 @@ if ! docker compose -f "$COMPOSE_FILE_PATH" --env-file "$ENV_FILE_PATH" config >
   exit 1
 fi
 
+refresh_upstream_images_if_needed
 run_core_deploy
+rebuild_ai_agent_service
 repair_runtime_mismatches_if_needed
+run_voice_stack_deploy_if_needed
+
+if [[ "$POST_DEPLOY_VERIFY" == "true" ]]; then
+  verify_post_deploy_stack
+else
+  log_warn "Deep post-deploy verification skipped (--skip-post-verify)"
+fi
 
 log_ok "First-run strict production bootstrap completed successfully"
 echo ""

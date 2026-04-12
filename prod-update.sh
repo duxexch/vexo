@@ -13,6 +13,8 @@ fi
 ENV_FILE_INPUT=".env"
 NO_BACKUP="false"
 NON_INTERACTIVE="false"
+IMAGE_REFRESH_MODE="auto"
+POST_DEPLOY_VERIFY="true"
 
 FORWARD_ARGS=()
 
@@ -82,10 +84,22 @@ Update script (without path/repo bootstrap):
 - Pulls latest updates from GitHub
 - Ensures updated env values are loaded into containers
 - Performs strict production redeploy + health verification
+- Reconciles voice stack (livekit + coturn) through prod-auto voice checks
 
 Options:
   --repo-dir <path>      Existing repository directory (default: /docker/vex if present)
+  --repo-url <url>       Forward repository URL to prod-auto (for token/https mode)
+  --branch <name>        Forward branch to prod-auto (default: main)
+  --auth-mode <mode>     Forward auth mode to prod-auto: auto|ssh|token
+  --github-token <token> Forward GitHub token to prod-auto (prefer env GITHUB_TOKEN)
   --env-file <path>      Env file path inside repo (default: .env)
+  --voice-compose-file   Forward custom voice compose path to prod-auto
+  --voice-sysctl-file    Forward custom voice sysctl overlay path to prod-auto
+  --enable-voice-stack   Force voice stack deployment in update run
+  --disable-voice-stack  Skip voice stack deployment in update run
+  --refresh-images       Pull latest upstream images for infra/voice services
+  --skip-image-refresh   Skip pulling upstream images
+  --skip-post-verify     Skip deep post-deploy runtime verification
   --no-backup            Skip pre-update DB backup
   --non-interactive      Fail on invalid env values instead of prompting
   -h, --help             Show help
@@ -149,7 +163,12 @@ create_pre_update_backup() {
   local backup_file="$REPO_DIR/backups/vex_db_$(safe_timestamp).sql.gz"
 
   if docker exec vex-db pg_dump -U "$db_user" "$db_name" | gzip > "$backup_file"; then
-    log_ok "Backup created: $backup_file"
+    if [[ -s "$backup_file" ]]; then
+      log_ok "Backup created: $backup_file"
+    else
+      rm -f "$backup_file"
+      log_warn "Backup file was empty and has been removed"
+    fi
   else
     log_warn "Backup failed; continuing with update"
   fi
@@ -174,6 +193,21 @@ while [[ $# -gt 0 ]]; do
     --non-interactive)
       NON_INTERACTIVE="true"
       FORWARD_ARGS+=("--non-interactive")
+      shift
+      ;;
+    --refresh-images)
+      IMAGE_REFRESH_MODE="true"
+      FORWARD_ARGS+=("--refresh-images")
+      shift
+      ;;
+    --skip-image-refresh)
+      IMAGE_REFRESH_MODE="false"
+      FORWARD_ARGS+=("--skip-image-refresh")
+      shift
+      ;;
+    --skip-post-verify)
+      POST_DEPLOY_VERIFY="false"
+      FORWARD_ARGS+=("--skip-post-verify")
       shift
       ;;
     -h|--help)
@@ -205,6 +239,10 @@ fi
 
 ENV_FILE_PATH="$(resolve_path "$REPO_DIR" "$ENV_FILE_INPUT")"
 create_pre_update_backup "$ENV_FILE_PATH"
+
+if [[ "$IMAGE_REFRESH_MODE" == "auto" ]]; then
+  FORWARD_ARGS+=("--refresh-images")
+fi
 
 AUTO_SCRIPT="$REPO_DIR/prod-auto.sh"
 if [[ ! -f "$AUTO_SCRIPT" ]]; then
