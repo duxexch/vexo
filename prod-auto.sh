@@ -25,6 +25,7 @@ COMPOSE_FILE_INPUT="docker-compose.prod.yml"
 VOICE_COMPOSE_FILE_INPUT="deploy/docker-compose.voice.yml"
 VOICE_SYSCTL_COMPOSE_FILE_INPUT="deploy/docker-compose.voice.linux-sysctl.yml"
 VOICE_STACK_MODE="auto"
+AUTO_ENV_VALUES="true"
 NON_INTERACTIVE="false"
 SKIP_REPO_SETUP="false"
 PULL_LATEST="false"
@@ -51,7 +52,7 @@ Usage: ./prod-auto.sh [options]
 First-run bootstrap script:
 - Creates/validates repo path
 - Configures Git auth (SSH or GitHub token)
-- Validates and interactively repairs .env
+- Validates and auto-repairs .env (server-safe defaults + generated keys)
 - Validates LIVEKIT/TURN voice env values and normalizes LIVEKIT_KEYS format
 - Runs strict production deployment
 - Rebuilds ai-agent service to ensure latest AI code is applied
@@ -73,6 +74,8 @@ Options:
   --refresh-images            Pull latest upstream images for infra/voice services
   --skip-image-refresh        Skip pulling upstream images (even on --pull-latest)
   --skip-post-verify          Skip deep post-deploy runtime verification
+  --auto-env-values           Auto-generate/fill missing required .env values (default)
+  --prompt-env-values         Ask interactively for missing required .env values
   --skip-repo-setup           Skip path/repo/ssh setup (used by update script)
   --pull-latest               Pull latest code before deploy
   --non-interactive           Fail on invalid env values instead of prompting
@@ -416,6 +419,36 @@ upsert_env() {
   mv "$tmp" "$ENV_FILE_PATH"
 }
 
+auto_fill_key_value() {
+  local key="$1"
+  local default_value="${2:-}"
+  local secret="${3:-false}"
+  local generated=""
+
+  if [[ "$secret" == "true" ]]; then
+    case "$key" in
+      SESSION_SECRET|JWT_SIGNING_KEY|ADMIN_JWT_SECRET|SECRETS_ENCRYPTION_KEY)
+        generated="$(generate_secret_hex 48)"
+        ;;
+      *)
+        generated="$(generate_secret_hex 24)"
+        ;;
+    esac
+  elif [[ -n "$default_value" ]]; then
+    generated="$default_value"
+  else
+    return 1
+  fi
+
+  if ! is_valid_key_value "$key" "$generated"; then
+    return 1
+  fi
+
+  upsert_env "$key" "$generated"
+  log_warn "Auto-filled missing key: $key"
+  return 0
+}
+
 prompt_for_key() {
   local key="$1"
   local label="$2"
@@ -429,22 +462,18 @@ prompt_for_key() {
       return 0
     fi
 
-    if [[ "$NON_INTERACTIVE" == "true" ]]; then
-      if [[ "$secret" == "true" && -z "$current" ]]; then
-        local generated
-        case "$key" in
-          SESSION_SECRET|JWT_SIGNING_KEY|ADMIN_JWT_SECRET|SECRETS_ENCRYPTION_KEY)
-            generated="$(generate_secret_hex 48)"
-            ;;
-          *)
-            generated="$(generate_secret_hex 24)"
-            ;;
-        esac
-        upsert_env "$key" "$generated"
-        log_warn "Auto-generated $key in non-interactive mode"
-        continue
+    if [[ "$AUTO_ENV_VALUES" == "true" || "$NON_INTERACTIVE" == "true" ]]; then
+      if auto_fill_key_value "$key" "$default_value" "$secret"; then
+        return 0
       fi
 
+      if [[ "$AUTO_ENV_VALUES" == "true" ]]; then
+        log_error "Failed to auto-fill required env key: $key"
+        exit 1
+      fi
+    fi
+
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
       log_error "Invalid or missing env key in non-interactive mode: $key"
       exit 1
     fi
@@ -492,10 +521,10 @@ ensure_env_file_exists() {
   fi
 
   local template=""
-  if [[ -f "$REPO_DIR/.env.production" ]]; then
-    template="$REPO_DIR/.env.production"
-  elif [[ -f "$REPO_DIR/.env.example" ]]; then
+  if [[ -f "$REPO_DIR/.env.example" ]]; then
     template="$REPO_DIR/.env.example"
+  elif [[ -f "$REPO_DIR/.env.production" ]]; then
+    template="$REPO_DIR/.env.production"
   fi
 
   if [[ -z "$template" ]]; then
@@ -534,6 +563,12 @@ ensure_google_android_env() {
   legacy_id="$(read_env GOOGLE_CLIENT_ID_ANDROID)"
 
   if ! is_valid_key_value GOOGLE_ANDROID_CLIENT_ID "$main_id" && ! is_valid_key_value GOOGLE_CLIENT_ID_ANDROID "$legacy_id"; then
+    if [[ "$AUTO_ENV_VALUES" == "true" || "$NON_INTERACTIVE" == "true" ]]; then
+      upsert_env GOOGLE_ANDROID_LOGIN_MODE "disabled"
+      log_warn "GOOGLE_ANDROID_CLIENT_ID is missing; set GOOGLE_ANDROID_LOGIN_MODE=disabled"
+      return 0
+    fi
+
     prompt_for_key GOOGLE_ANDROID_CLIENT_ID "ادخل Google Android Client ID" "" false
     main_id="$(read_env GOOGLE_ANDROID_CLIENT_ID)"
     upsert_env GOOGLE_CLIENT_ID_ANDROID "$main_id"
@@ -545,6 +580,12 @@ ensure_google_android_env() {
   elif ! is_valid_key_value GOOGLE_ANDROID_CLIENT_ID "$main_id" && is_valid_key_value GOOGLE_CLIENT_ID_ANDROID "$legacy_id"; then
     upsert_env GOOGLE_ANDROID_CLIENT_ID "$legacy_id"
   elif [[ -n "$main_id" && -n "$legacy_id" && "$main_id" != "$legacy_id" ]]; then
+    if [[ "$AUTO_ENV_VALUES" == "true" || "$NON_INTERACTIVE" == "true" ]]; then
+      upsert_env GOOGLE_CLIENT_ID_ANDROID "$main_id"
+      log_warn "Normalized Google Android client id mismatch using GOOGLE_ANDROID_CLIENT_ID"
+      return 0
+    fi
+
     if [[ "$NON_INTERACTIVE" == "true" ]]; then
       log_error "GOOGLE_ANDROID_CLIENT_ID and GOOGLE_CLIENT_ID_ANDROID mismatch in non-interactive mode"
       exit 1
@@ -612,10 +653,10 @@ ensure_voice_env_values() {
   normalized_keys="$(normalize_livekit_keys_value "$livekit_keys")"
 
   if ! is_valid_livekit_keys "$normalized_keys" || value_is_placeholder "$normalized_keys"; then
-    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+    if [[ "$AUTO_ENV_VALUES" == "true" || "$NON_INTERACTIVE" == "true" ]]; then
       normalized_keys="vixo_prod: $(generate_secret_hex 24)"
       upsert_env LIVEKIT_KEYS "$normalized_keys"
-      log_warn "Auto-generated LIVEKIT_KEYS in non-interactive mode"
+      log_warn "Auto-generated LIVEKIT_KEYS"
     else
       while true; do
         log_warn "LIVEKIT_KEYS الحالية غير صالحة. الصيغة المطلوبة: key: secret"
@@ -648,6 +689,12 @@ ensure_voice_env_values() {
   fi
 
   if [[ -z "$turn_ip" ]]; then
+    if [[ "$AUTO_ENV_VALUES" == "true" ]]; then
+      log_warn "TURN_EXTERNAL_IP could not be auto-detected; voice stack will be skipped"
+      VOICE_STACK_MODE="false"
+      return 0
+    fi
+
     if [[ "$NON_INTERACTIVE" == "true" ]]; then
       log_error "TURN_EXTERNAL_IP is missing/invalid and could not be auto-detected"
       exit 1
@@ -1226,6 +1273,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-post-verify)
       POST_DEPLOY_VERIFY="false"
+      shift
+      ;;
+    --auto-env-values)
+      AUTO_ENV_VALUES="true"
+      shift
+      ;;
+    --prompt-env-values)
+      AUTO_ENV_VALUES="false"
       shift
       ;;
     --skip-repo-setup)

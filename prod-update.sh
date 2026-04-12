@@ -93,6 +93,8 @@ Options:
   --auth-mode <mode>     Forward auth mode to prod-auto: auto|ssh|token
   --github-token <token> Forward GitHub token to prod-auto (prefer env GITHUB_TOKEN)
   --env-file <path>      Env file path inside repo (default: .env)
+  --auto-env-values      Forward auto env generation mode to prod-auto
+  --prompt-env-values    Forward interactive env prompts mode to prod-auto
   --voice-compose-file   Forward custom voice compose path to prod-auto
   --voice-sysctl-file    Forward custom voice sysctl overlay path to prod-auto
   --enable-voice-stack   Force voice stack deployment in update run
