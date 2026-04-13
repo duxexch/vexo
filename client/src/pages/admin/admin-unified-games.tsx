@@ -1422,7 +1422,7 @@ export default function AdminUnifiedGames() {
                             <img
                               src={String(game.iconUrl)}
                               alt={language === "ar" ? `أيقونة ${game.nameAr}` : `${game.name} icon`}
-                              className="h-5 w-5 rounded object-cover"
+                              className="h-5 w-5 rounded object-contain"
                               loading="lazy"
                             />
                           ) : (

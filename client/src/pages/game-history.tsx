@@ -21,21 +21,16 @@ import {
   XCircle,
   Minus,
   Clock,
-  Crown,
   Target,
-  Dice5,
-  Spade,
-  Heart,
   Loader2,
   History,
   DollarSign,
   Swords,
   ChevronLeft,
   ChevronRight,
-  Gem,
   Gamepad2,
 } from "lucide-react";
-import { type MultiplayerGameFromAPI, GAME_ICONS_SIMPLE, FALLBACK_GAME_CONFIG } from "@/lib/game-config";
+import { type MultiplayerGameFromAPI, type GameConfigItem, buildGameConfig } from "@/lib/game-config";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -71,23 +66,10 @@ export default function GameHistoryPage() {
   });
 
   // Build dynamic game config
-  const gameConfig = useMemo(() => {
-    const config: Record<string, { icon: React.ComponentType<{ className?: string }>; en: string; ar: string }> = {};
-    if (apiGames.length > 0) {
-      for (const g of apiGames) {
-        config[g.key] = {
-          icon: GAME_ICONS_SIMPLE[g.key] || Gamepad2,
-          en: g.nameEn,
-          ar: g.nameAr,
-        };
-      }
-    } else {
-      Object.entries(FALLBACK_GAME_CONFIG).forEach(([key, cfg]) => {
-        config[key] = { icon: GAME_ICONS_SIMPLE[key] || Gamepad2, en: cfg.name, ar: cfg.nameAr };
-      });
-    }
-    return config;
-  }, [apiGames]);
+  const gameConfig = useMemo<Record<string, GameConfigItem>>(
+    () => buildGameConfig(apiGames),
+    [apiGames],
+  );
 
   const allCompleted = challenges?.filter(c => c.status === "completed" || c.status === "cancelled") || [];
   const active = challenges?.filter(c => c.status !== "completed" && c.status !== "cancelled") || [];
@@ -210,13 +192,20 @@ export default function GameHistoryPage() {
             {active.map(c => {
               const cfg = gameConfig[c.gameType];
               const GameIcon = cfg?.icon || Gamepad2;
+              const iconImageUrl = cfg?.iconUrl;
               return (
                 <Card key={c.id} className="hover-elevate cursor-pointer">
                   <CardContent className="p-3 flex items-center gap-3" onClick={() => navigate(`/challenge/${c.id}/play`)}>
-                    <GameIcon className="h-8 w-8 text-primary shrink-0" />
+                    {iconImageUrl ? (
+                      <div className="h-8 w-8 shrink-0 rounded-md bg-muted/60 p-1">
+                        <img src={iconImageUrl} alt="" className="h-full w-full object-contain" loading="lazy" decoding="async" />
+                      </div>
+                    ) : (
+                      <GameIcon className="h-8 w-8 text-primary shrink-0" />
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">
-                        {language === "ar" ? cfg?.ar : cfg?.en}
+                        {language === "ar" ? cfg?.nameAr : cfg?.name}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
                         vs {c.player1Id === user?.id ? c.player2Name || "..." : c.player1Name || "..."}
@@ -254,7 +243,7 @@ export default function GameHistoryPage() {
                 <SelectItem value="all">{t('gameHistory.allGames')}</SelectItem>
                 {Object.entries(gameConfig).map(([key, cfg]) => (
                   <SelectItem key={key} value={key}>
-                    {language === "ar" ? cfg.ar : cfg.en}
+                    {language === "ar" ? cfg.nameAr : cfg.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -287,6 +276,7 @@ export default function GameHistoryPage() {
                   const result = getResult(c);
                   const cfg = gameConfig[c.gameType];
                   const GameIcon = cfg?.icon || Gamepad2;
+                  const iconImageUrl = cfg?.iconUrl;
                   const bet = parseFloat(c.betAmount) || 0;
 
                   return (
@@ -296,15 +286,19 @@ export default function GameHistoryPage() {
                           "p-2 rounded-lg shrink-0",
                           result === "win" ? "bg-green-500/10" : result === "loss" ? "bg-red-500/10" : "bg-muted"
                         )}>
-                          <GameIcon className={cn(
-                            "h-5 w-5",
-                            result === "win" ? "text-green-500" : result === "loss" ? "text-red-500" : "text-muted-foreground"
-                          )} />
+                          {iconImageUrl ? (
+                            <img src={iconImageUrl} alt="" className="h-5 w-5 object-contain" loading="lazy" decoding="async" />
+                          ) : (
+                            <GameIcon className={cn(
+                              "h-5 w-5",
+                              result === "win" ? "text-green-500" : result === "loss" ? "text-red-500" : "text-muted-foreground"
+                            )} />
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm">
-                              {language === "ar" ? cfg?.ar : cfg?.en}
+                              {language === "ar" ? cfg?.nameAr : cfg?.name}
                             </span>
                             {result === "win" && (
                               <Badge className="bg-green-500/20 text-green-600 text-xs">

@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -67,6 +72,7 @@ import {
   MessageCircle,
   Volume2,
   VolumeX,
+  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -75,6 +81,12 @@ interface Player {
   username: string;
   avatarUrl?: string;
   vipLevel?: number;
+}
+
+interface PlayerProfileStatsSummary {
+  gamesWon: number;
+  winRate: number;
+  currentWinStreak: number;
 }
 
 interface GameSession {
@@ -253,6 +265,9 @@ export default function ChallengeWatchPage() {
   const [avatarChatBubbles, setAvatarChatBubbles] = useState<
     Record<string, WatchAvatarChatBubbleState>
   >({});
+  const [socialActionLoadingUserId, setSocialActionLoadingUserId] = useState<
+    string | null
+  >(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const wsErrorToastRef = useRef<{ signature: string; at: number }>({
@@ -346,6 +361,130 @@ export default function ChallengeWatchPage() {
       setLocation(`/challenge/${challengeId}/play`);
     }
   }, [challengeId, challenge, user?.id, setLocation]);
+
+  const { data: followingUsers = [] } = useQuery<Array<{ id: string }>>({
+    queryKey: ["/api/users/following"],
+    enabled: !!user,
+  });
+
+  const { data: friendUsers = [] } = useQuery<Array<{ id: string }>>({
+    queryKey: ["/api/users/friends"],
+    enabled: !!user,
+  });
+
+  const { data: outgoingFriendRequests = [] } = useQuery<Array<{ id: string }>>({
+    queryKey: ["/api/users/friend-requests/outgoing"],
+    enabled: !!user,
+  });
+
+  const { data: player1ProfileStats } = useQuery<PlayerProfileStatsSummary>({
+    queryKey: [`/api/player/${challenge?.player1Id}/stats`],
+    enabled: !!user && !!challenge?.player1Id,
+  });
+
+  const { data: player2ProfileStats } = useQuery<PlayerProfileStatsSummary>({
+    queryKey: [`/api/player/${challenge?.player2Id}/stats`],
+    enabled: !!user && !!challenge?.player2Id,
+  });
+
+  const followingIdSet = useMemo(
+    () => new Set(followingUsers.map((item) => item.id)),
+    [followingUsers],
+  );
+  const friendIdSet = useMemo(
+    () => new Set(friendUsers.map((item) => item.id)),
+    [friendUsers],
+  );
+  const outgoingFriendRequestIdSet = useMemo(
+    () => new Set(outgoingFriendRequests.map((item) => item.id)),
+    [outgoingFriendRequests],
+  );
+
+  const invalidateSocialQueries = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["/api/users/following"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/users/friends"] });
+    queryClient.invalidateQueries({
+      queryKey: ["/api/users/friend-requests/outgoing"],
+    });
+  }, []);
+
+  const toggleFollowMutation = useMutation({
+    mutationFn: async ({
+      userId,
+      action,
+    }: {
+      userId: string;
+      action: "follow" | "unfollow";
+    }) =>
+      action === "follow"
+        ? apiRequest("POST", `/api/users/follow/${userId}`)
+        : apiRequest("DELETE", `/api/users/unfollow/${userId}`),
+    onSuccess: (_response, variables) => {
+      toast({
+        title: t(
+          variables.action === "follow"
+            ? "friends.followSuccess"
+            : "friends.unfollowSuccess",
+        ),
+      });
+      invalidateSocialQueries();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t("common.error"),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setSocialActionLoadingUserId(null);
+    },
+  });
+
+  const sendFriendRequestMutation = useMutation({
+    mutationFn: async (targetUserId: string) =>
+      apiRequest("POST", `/api/users/friend-request/${targetUserId}`),
+    onSuccess: () => {
+      toast({ title: t("friends.requestSentSuccess") });
+      invalidateSocialQueries();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t("common.error"),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setSocialActionLoadingUserId(null);
+    },
+  });
+
+  const handleToggleFollow = useCallback(
+    (targetUserId: string) => {
+      if (!user || targetUserId === user.id) {
+        return;
+      }
+      const action = followingIdSet.has(targetUserId) ? "unfollow" : "follow";
+      setSocialActionLoadingUserId(targetUserId);
+      toggleFollowMutation.mutate({ userId: targetUserId, action });
+    },
+    [followingIdSet, toggleFollowMutation, user],
+  );
+
+  const handleSendFriendRequest = useCallback(
+    (targetUserId: string) => {
+      if (!user || targetUserId === user.id) {
+        return;
+      }
+      if (friendIdSet.has(targetUserId) || outgoingFriendRequestIdSet.has(targetUserId)) {
+        return;
+      }
+      setSocialActionLoadingUserId(targetUserId);
+      sendFriendRequestMutation.mutate(targetUserId);
+    },
+    [friendIdSet, outgoingFriendRequestIdSet, sendFriendRequestMutation, user],
+  );
 
   const { data: projectWallet, refetch: refetchProjectWallet } = useQuery<{
     totalBalance: string;
@@ -1378,6 +1517,49 @@ export default function ChallengeWatchPage() {
     : isBackgammonGame
       ? backgammonTurnDescriptor
       : null;
+  const canUseSocialActions = Boolean(user?.id);
+  const player1TurnActive =
+    Boolean(challenge.player1Id) && gameSession?.currentTurn === challenge.player1Id;
+  const player2TurnActive =
+    Boolean(challenge.player2Id) && gameSession?.currentTurn === challenge.player2Id;
+  const getPlayerResultMeta = (playerId?: string) => {
+    if (!playerId || gameSession?.status !== "finished") {
+      return null;
+    }
+    const isDraw =
+      gameSession.winReason === "draw" ||
+      gameSession.winReason === "draw_agreement";
+    if (isDraw || !gameSession.winnerId) {
+      return {
+        label: t("profile.draw"),
+        className:
+          "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200",
+      };
+    }
+    if (gameSession.winnerId === playerId) {
+      return {
+        label: t("profile.win"),
+        className:
+          "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
+      };
+    }
+    return {
+      label: t("profile.loss"),
+      className:
+        "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-200",
+    };
+  };
+  const player1ResultMeta = getPlayerResultMeta(challenge.player1Id);
+  const player2ResultMeta = getPlayerResultMeta(challenge.player2Id);
+  const getFriendButtonLabel = (targetUserId: string) => {
+    if (friendIdSet.has(targetUserId)) {
+      return t("friends.friends");
+    }
+    if (outgoingFriendRequestIdSet.has(targetUserId)) {
+      return t("friends.requestSentSuccess");
+    }
+    return t("friends.addFriend");
+  };
   const player1VoiceConnected = Boolean(
     challenge.player1Id && connectedVoicePeers.includes(challenge.player1Id),
   );
@@ -1668,7 +1850,12 @@ export default function ChallengeWatchPage() {
               <div className="p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6 flex flex-col items-center">
                 {showTwoPlayerAvatarLanes && (
                   <div className={playerInfoWidthClass}>
-                    <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
+                    <div
+                      className={cn(
+                        "vex-arcade-panel flex items-center justify-between rounded-lg border bg-card p-3",
+                        player1TurnActive && "vex-turn-active-panel",
+                      )}
+                    >
                       <div className="flex items-center gap-3">
                         <div className="relative">
                           {player1AvatarBubble && (
@@ -1678,12 +1865,117 @@ export default function ChallengeWatchPage() {
                               </div>
                             </div>
                           )}
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={challenge.player1?.avatarUrl} />
-                            <AvatarFallback>
-                              {challenge.player1?.username?.[0]?.toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+                                disabled={!challenge.player1Id}
+                                data-testid="watch-player1-profile-popover-trigger"
+                              >
+                                <Avatar
+                                  className={cn(
+                                    "h-10 w-10",
+                                    player1TurnActive && "vex-turn-active-avatar ring-2 ring-primary/75",
+                                  )}
+                                >
+                                  <AvatarImage src={challenge.player1?.avatarUrl} />
+                                  <AvatarFallback>
+                                    {challenge.player1?.username?.[0]?.toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                              </button>
+                            </PopoverTrigger>
+                            {challenge.player1Id && (
+                              <PopoverContent align="start" className="w-72 p-3">
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-3">
+                                    <Avatar className="h-10 w-10">
+                                      <AvatarImage src={challenge.player1?.avatarUrl} />
+                                      <AvatarFallback>
+                                        {challenge.player1?.username?.[0]?.toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-semibold">
+                                        {challenge.player1?.username || "-"}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {t("profile.wins")}: {player1ProfileStats?.gamesWon ?? 0}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-2 text-center">
+                                    <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {t("profile.wins")}
+                                      </p>
+                                      <p className="text-sm font-semibold">
+                                        {player1ProfileStats?.gamesWon ?? 0}
+                                      </p>
+                                    </div>
+                                    <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {t("profile.winRate")}
+                                      </p>
+                                      <p className="text-sm font-semibold">
+                                        {player1ProfileStats?.winRate ?? 0}%
+                                      </p>
+                                    </div>
+                                    <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {t("profile.streak")}
+                                      </p>
+                                      <p className="text-sm font-semibold">
+                                        {player1ProfileStats?.currentWinStreak ?? 0}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setLocation(`/player/${challenge.player1Id}`)}
+                                      className="h-8"
+                                    >
+                                      {t("leaderboard.viewProfile")}
+                                    </Button>
+                                    {canUseSocialActions && challenge.player1Id !== user?.id && (
+                                      <>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleToggleFollow(challenge.player1Id)}
+                                          disabled={socialActionLoadingUserId === challenge.player1Id}
+                                          className="h-8"
+                                        >
+                                          {followingIdSet.has(challenge.player1Id)
+                                            ? t("friends.unfollow")
+                                            : t("friends.follow")}
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={() => handleSendFriendRequest(challenge.player1Id)}
+                                          disabled={
+                                            socialActionLoadingUserId === challenge.player1Id ||
+                                            friendIdSet.has(challenge.player1Id) ||
+                                            outgoingFriendRequestIdSet.has(challenge.player1Id)
+                                          }
+                                          className="h-8"
+                                        >
+                                          <UserPlus className="me-1 h-3.5 w-3.5" />
+                                          {getFriendButtonLabel(challenge.player1Id)}
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            )}
+                          </Popover>
                           <Button
                             type="button"
                             size="icon"
@@ -1713,9 +2005,19 @@ export default function ChallengeWatchPage() {
                           </Button>
                         </div>
                         <div>
-                          <p className="font-medium">
-                            {challenge.player1?.username || "Player 1"}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">
+                              {challenge.player1?.username || "Player 1"}
+                            </p>
+                            {player1ResultMeta && (
+                              <Badge
+                                variant="outline"
+                                className={cn("text-[10px]", player1ResultMeta.className)}
+                              >
+                                {player1ResultMeta.label}
+                              </Badge>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2">
                             <p className="text-xs text-muted-foreground">
                               {challenge.gameType === "chess"
@@ -1989,7 +2291,12 @@ export default function ChallengeWatchPage() {
                         : "mt-4 mb-0",
                     )}
                   >
-                    <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
+                    <div
+                      className={cn(
+                        "vex-arcade-panel flex items-center justify-between rounded-lg border bg-card p-3",
+                        player2TurnActive && "vex-turn-active-panel",
+                      )}
+                    >
                       <div className="flex items-center gap-3">
                         <div className="relative">
                           {player2AvatarBubble && (
@@ -1999,12 +2306,117 @@ export default function ChallengeWatchPage() {
                               </div>
                             </div>
                           )}
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={challenge.player2?.avatarUrl} />
-                            <AvatarFallback>
-                              {challenge.player2?.username?.[0]?.toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+                                disabled={!challenge.player2Id}
+                                data-testid="watch-player2-profile-popover-trigger"
+                              >
+                                <Avatar
+                                  className={cn(
+                                    "h-10 w-10",
+                                    player2TurnActive && "vex-turn-active-avatar ring-2 ring-primary/75",
+                                  )}
+                                >
+                                  <AvatarImage src={challenge.player2?.avatarUrl} />
+                                  <AvatarFallback>
+                                    {challenge.player2?.username?.[0]?.toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                              </button>
+                            </PopoverTrigger>
+                            {challenge.player2Id && (
+                              <PopoverContent align="start" className="w-72 p-3">
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-3">
+                                    <Avatar className="h-10 w-10">
+                                      <AvatarImage src={challenge.player2?.avatarUrl} />
+                                      <AvatarFallback>
+                                        {challenge.player2?.username?.[0]?.toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-semibold">
+                                        {challenge.player2?.username || "-"}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {t("profile.wins")}: {player2ProfileStats?.gamesWon ?? 0}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-2 text-center">
+                                    <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {t("profile.wins")}
+                                      </p>
+                                      <p className="text-sm font-semibold">
+                                        {player2ProfileStats?.gamesWon ?? 0}
+                                      </p>
+                                    </div>
+                                    <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {t("profile.winRate")}
+                                      </p>
+                                      <p className="text-sm font-semibold">
+                                        {player2ProfileStats?.winRate ?? 0}%
+                                      </p>
+                                    </div>
+                                    <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {t("profile.streak")}
+                                      </p>
+                                      <p className="text-sm font-semibold">
+                                        {player2ProfileStats?.currentWinStreak ?? 0}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setLocation(`/player/${challenge.player2Id}`)}
+                                      className="h-8"
+                                    >
+                                      {t("leaderboard.viewProfile")}
+                                    </Button>
+                                    {canUseSocialActions && Boolean(challenge.player2Id) && challenge.player2Id !== user?.id && (
+                                      <>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleToggleFollow(challenge.player2Id!)}
+                                          disabled={socialActionLoadingUserId === challenge.player2Id}
+                                          className="h-8"
+                                        >
+                                          {followingIdSet.has(challenge.player2Id)
+                                            ? t("friends.unfollow")
+                                            : t("friends.follow")}
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={() => handleSendFriendRequest(challenge.player2Id!)}
+                                          disabled={
+                                            socialActionLoadingUserId === challenge.player2Id ||
+                                            friendIdSet.has(challenge.player2Id) ||
+                                            outgoingFriendRequestIdSet.has(challenge.player2Id)
+                                          }
+                                          className="h-8"
+                                        >
+                                          <UserPlus className="me-1 h-3.5 w-3.5" />
+                                          {getFriendButtonLabel(challenge.player2Id)}
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </PopoverContent>
+                            )}
+                          </Popover>
                           <Button
                             type="button"
                             size="icon"
@@ -2034,9 +2446,19 @@ export default function ChallengeWatchPage() {
                           </Button>
                         </div>
                         <div>
-                          <p className="font-medium">
-                            {challenge.player2?.username || "Waiting..."}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">
+                              {challenge.player2?.username || "Waiting..."}
+                            </p>
+                            {player2ResultMeta && (
+                              <Badge
+                                variant="outline"
+                                className={cn("text-[10px]", player2ResultMeta.className)}
+                              >
+                                {player2ResultMeta.label}
+                              </Badge>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2">
                             <p className="text-xs text-muted-foreground">
                               {challenge.gameType === "chess"

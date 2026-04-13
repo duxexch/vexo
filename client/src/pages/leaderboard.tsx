@@ -127,7 +127,13 @@ export default function LeaderboardPage() {
               return (
                 <SelectItem key={key} value={key}>
                   <div className="flex items-center gap-2">
-                    <Icon className={`w-4 h-4 ${config.color}`} />
+                    {config.iconUrl ? (
+                      <div className="h-4 w-4 rounded-sm bg-muted/60 p-0.5">
+                        <img src={config.iconUrl} alt="" className="h-full w-full object-contain" loading="lazy" decoding="async" />
+                      </div>
+                    ) : (
+                      <Icon className={`w-4 h-4 ${config.color}`} />
+                    )}
                     {language === 'ar' ? config.nameAr : config.name}
                   </div>
                 </SelectItem>

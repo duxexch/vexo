@@ -12,7 +12,10 @@ export function registerMultiplayerGamesRoutes(app: Express): void {
   // Public: Get active multiplayer games
   app.get("/api/multiplayer-games", async (_req: Request, res: Response) => {
     try {
-      const multiplayerGames = await cacheGet("multiplayer-games:active", 300, async () => {
+      const configVersion = await storage.getConfigVersion("multiplayer_games_version");
+      const cacheKey = `multiplayer-games:active:v${configVersion}`;
+
+      const multiplayerGames = await cacheGet(cacheKey, 300, async () => {
         return await storage.listMultiplayerGames(true); // activeOnly = true
       });
       res.json(multiplayerGames);
@@ -61,7 +64,7 @@ export function registerMultiplayerGamesRoutes(app: Express): void {
   app.post("/api/admin/multiplayer-games", adminTokenMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const { key, nameEn, nameAr, ...rest } = req.body;
-      
+
       if (!key || !nameEn || !nameAr) {
         return res.status(400).json({ error: "key, nameEn, and nameAr are required" });
       }
@@ -100,7 +103,7 @@ export function registerMultiplayerGamesRoutes(app: Express): void {
     try {
       const { id } = req.params;
       const oldGame = await storage.getMultiplayerGame(id);
-      
+
       if (!oldGame) {
         return res.status(404).json({ error: "Game not found" });
       }
@@ -134,7 +137,7 @@ export function registerMultiplayerGamesRoutes(app: Express): void {
     try {
       const { id } = req.params;
       const game = await storage.getMultiplayerGame(id);
-      
+
       if (!game) {
         return res.status(404).json({ error: "Game not found" });
       }
@@ -168,7 +171,7 @@ export function registerMultiplayerGamesRoutes(app: Express): void {
     try {
       const { id } = req.params;
       const game = await storage.getMultiplayerGame(id);
-      
+
       if (!game) {
         return res.status(404).json({ error: "Game not found" });
       }

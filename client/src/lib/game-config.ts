@@ -19,6 +19,9 @@ export interface MultiplayerGameFromAPI {
   maxStake: string;
   houseFee: string;
   isActive: boolean;
+  iconName?: string;
+  iconUrl?: string;
+  updatedAt?: string;
 }
 
 /** Unified game config item used across lobby, leaderboard, challenges, game-history */
@@ -31,6 +34,38 @@ export interface GameConfigItem {
   minStake?: number;
   maxStake?: number;
   houseFee?: number;
+  iconUrl?: string;
+}
+
+function isImagePath(value?: string | null): value is string {
+  if (!value) return false;
+  const normalized = value.trim();
+  if (!normalized) return false;
+  return normalized.startsWith("/") || /^https?:\/\//i.test(normalized);
+}
+
+function withVersionSuffix(url: string, versionSeed?: string): string {
+  if (!versionSeed) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}v=${encodeURIComponent(versionSeed)}`;
+}
+
+function resolveGameIconUrl(game: MultiplayerGameFromAPI): string | undefined {
+  const iconUrl = typeof game.iconUrl === "string" ? game.iconUrl.trim() : "";
+  const iconName = typeof game.iconName === "string" ? game.iconName.trim() : "";
+
+  const imagePath = isImagePath(iconUrl)
+    ? iconUrl
+    : isImagePath(iconName)
+      ? iconName
+      : "";
+
+  if (!imagePath) {
+    return undefined;
+  }
+
+  const versionSeed = game.updatedAt ? String(new Date(game.updatedAt).getTime()) : game.id;
+  return withVersionSuffix(imagePath, versionSeed);
 }
 
 /** Icon + style mapping per game key */
@@ -89,6 +124,7 @@ export function buildGameConfig(apiGames: MultiplayerGameFromAPI[] | undefined):
       minStake: parseFloat(game.minStake),
       maxStake: parseFloat(game.maxStake),
       houseFee: parseFloat(game.houseFee),
+      iconUrl: resolveGameIconUrl(game),
     };
   }
   return config;

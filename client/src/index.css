@@ -894,6 +894,42 @@ svg {
     opacity: 0.58;
     filter: grayscale(0.22);
   }
+
+  @keyframes vex-turn-glow {
+
+    0%,
+    100% {
+      border-color: rgba(255, 214, 107, 0.42);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 10px 24px rgba(0, 25, 65, 0.28),
+        0 0 0 0 rgba(255, 214, 107, 0.18);
+    }
+
+    50% {
+      border-color: rgba(255, 231, 149, 0.86);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.18),
+        0 14px 28px rgba(0, 25, 65, 0.34),
+        0 0 0 4px rgba(255, 214, 107, 0.2);
+    }
+  }
+
+  .vex-turn-active-panel {
+    animation: vex-turn-glow 2.8s ease-in-out infinite;
+  }
+
+  .vex-turn-active-avatar {
+    box-shadow:
+      0 0 0 2px rgba(255, 224, 124, 0.82),
+      0 0 20px rgba(255, 214, 107, 0.48);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .vex-turn-active-panel {
+      animation: none;
+    }
+  }
 }
 
 /* RTL Support */

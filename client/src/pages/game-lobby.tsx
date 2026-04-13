@@ -138,6 +138,7 @@ const ChallengeRow = memo(function ChallengeRow({
   const fallbackConfig = { name: challenge.gameType, nameAr: challenge.gameType, icon: Gamepad2, color: DEFAULT_GAME_STYLE.color, gradient: DEFAULT_GAME_STYLE.gradient };
   const config = gameConfig[challenge.gameType] || fallbackConfig;
   const Icon = config.icon;
+  const iconImageUrl = config.iconUrl;
 
   return (
     <div
@@ -148,8 +149,12 @@ const ChallengeRow = memo(function ChallengeRow({
         <Badge className="absolute -top-2 -end-2 bg-primary text-xs px-1.5 z-10">{t('lobby.new')}</Badge>
       )}
 
-      <div className={`p-2 rounded-lg ${config.color} border shrink-0`}>
-        <Icon className="w-5 h-5" />
+      <div className={`p-2 rounded-lg border shrink-0 ${iconImageUrl ? "bg-muted/60 border-border" : config.color}`}>
+        {iconImageUrl ? (
+          <img src={iconImageUrl} alt="" className="w-5 h-5 object-contain" loading="lazy" decoding="async" />
+        ) : (
+          <Icon className="w-5 h-5" />
+        )}
       </div>
 
       <div className="flex-1 min-w-0">
@@ -261,6 +266,7 @@ const GameCard = memo(function GameCard({
   t
 }: GameCardProps) {
   const Icon = config.icon;
+  const iconImageUrl = config.iconUrl;
 
   return (
     <Card
@@ -272,8 +278,12 @@ const GameCard = memo(function GameCard({
       <CardContent className="p-3 sm:p-4 relative">
         <div className="flex flex-col gap-3">
           <div className="flex items-start justify-between gap-2">
-            <div className={`p-2.5 sm:p-3 rounded-lg ${config.color} border shrink-0`}>
-              <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
+            <div className={`p-2.5 sm:p-3 rounded-lg border shrink-0 ${iconImageUrl ? "bg-muted/60 border-border" : config.color}`}>
+              {iconImageUrl ? (
+                <img src={iconImageUrl} alt="" className="w-5 h-5 sm:w-6 sm:h-6 object-contain" loading="lazy" decoding="async" />
+              ) : (
+                <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
+              )}
             </div>
             <div className="flex items-center gap-1 flex-wrap justify-end">
               {isTrending && (

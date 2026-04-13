@@ -7,6 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -19,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useGameSounds } from "@/hooks/use-game-sounds";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
-import { queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import type { CountryPaymentMethod } from "@shared/schema";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
@@ -71,6 +76,7 @@ import {
   Dice5,
   Spade,
   Heart,
+  UserPlus,
 } from "lucide-react";
 
 interface Player {
@@ -84,6 +90,12 @@ interface Player {
     winRate: number;
     rank: string;
   };
+}
+
+interface PlayerProfileStatsSummary {
+  gamesWon: number;
+  winRate: number;
+  currentWinStreak: number;
 }
 
 interface GameSession {
@@ -289,6 +301,9 @@ export default function ChallengeGamePage() {
   const [avatarChatBubbles, setAvatarChatBubbles] = useState<
     Record<string, AvatarChatBubbleState>
   >({});
+  const [socialActionLoadingUserId, setSocialActionLoadingUserId] = useState<
+    string | null
+  >(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const authReadyRef = useRef(false);
@@ -380,6 +395,133 @@ export default function ChallengeGamePage() {
 
   const hasActivePaymentMethod = activePaymentMethods.some(
     (method) => method.isActive && (method.isAvailable ?? true),
+  );
+
+  const resolvedOpponentId =
+    challenge?.player1Id === user?.id ? challenge?.player2Id : challenge?.player1Id;
+
+  const { data: followingUsers = [] } = useQuery<Array<{ id: string }>>({
+    queryKey: ["/api/users/following"],
+    enabled: !!user,
+  });
+
+  const { data: friendUsers = [] } = useQuery<Array<{ id: string }>>({
+    queryKey: ["/api/users/friends"],
+    enabled: !!user,
+  });
+
+  const { data: outgoingFriendRequests = [] } = useQuery<Array<{ id: string }>>({
+    queryKey: ["/api/users/friend-requests/outgoing"],
+    enabled: !!user,
+  });
+
+  const { data: opponentProfileStats } = useQuery<PlayerProfileStatsSummary>({
+    queryKey: [`/api/player/${resolvedOpponentId}/stats`],
+    enabled: !!user && !!resolvedOpponentId,
+  });
+
+  const { data: selfProfileStats } = useQuery<PlayerProfileStatsSummary>({
+    queryKey: [`/api/player/${user?.id}/stats`],
+    enabled: !!user?.id,
+  });
+
+  const followingIdSet = useMemo(
+    () => new Set(followingUsers.map((item) => item.id)),
+    [followingUsers],
+  );
+  const friendIdSet = useMemo(
+    () => new Set(friendUsers.map((item) => item.id)),
+    [friendUsers],
+  );
+  const outgoingFriendRequestIdSet = useMemo(
+    () => new Set(outgoingFriendRequests.map((item) => item.id)),
+    [outgoingFriendRequests],
+  );
+
+  const invalidateSocialQueries = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["/api/users/following"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/users/friends"] });
+    queryClient.invalidateQueries({
+      queryKey: ["/api/users/friend-requests/outgoing"],
+    });
+  }, []);
+
+  const toggleFollowMutation = useMutation({
+    mutationFn: async ({
+      userId,
+      action,
+    }: {
+      userId: string;
+      action: "follow" | "unfollow";
+    }) =>
+      action === "follow"
+        ? apiRequest("POST", `/api/users/follow/${userId}`)
+        : apiRequest("DELETE", `/api/users/unfollow/${userId}`),
+    onSuccess: (_response, variables) => {
+      toast({
+        title: t(
+          variables.action === "follow"
+            ? "friends.followSuccess"
+            : "friends.unfollowSuccess",
+        ),
+      });
+      invalidateSocialQueries();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t("common.error"),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setSocialActionLoadingUserId(null);
+    },
+  });
+
+  const sendFriendRequestMutation = useMutation({
+    mutationFn: async (targetUserId: string) =>
+      apiRequest("POST", `/api/users/friend-request/${targetUserId}`),
+    onSuccess: () => {
+      toast({ title: t("friends.requestSentSuccess") });
+      invalidateSocialQueries();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t("common.error"),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setSocialActionLoadingUserId(null);
+    },
+  });
+
+  const handleToggleFollow = useCallback(
+    (targetUserId: string) => {
+      if (!user || targetUserId === user.id) {
+        return;
+      }
+      const action = followingIdSet.has(targetUserId) ? "unfollow" : "follow";
+      setSocialActionLoadingUserId(targetUserId);
+      toggleFollowMutation.mutate({ userId: targetUserId, action });
+    },
+    [followingIdSet, toggleFollowMutation, user],
+  );
+
+  const handleSendFriendRequest = useCallback(
+    (targetUserId: string) => {
+      if (!user || targetUserId === user.id) {
+        return;
+      }
+      if (friendIdSet.has(targetUserId) || outgoingFriendRequestIdSet.has(targetUserId)) {
+        return;
+      }
+      setSocialActionLoadingUserId(targetUserId);
+      sendFriendRequestMutation.mutate(targetUserId);
+    },
+    [friendIdSet, outgoingFriendRequestIdSet, sendFriendRequestMutation, user],
   );
 
   const { data: supports = [] } = useQuery<
@@ -1889,18 +2031,6 @@ export default function ChallengeGamePage() {
     0,
     !isMyTurnForTimer ? serverOppTime - elapsedSinceSyncSec : serverOppTime,
   );
-  const player1TurnActive = gameSession?.currentTurn === challenge?.player1Id;
-  const player2TurnActive = gameSession?.currentTurn === challenge?.player2Id;
-  const rawPlayer1Time = gameSession?.player1TimeRemaining ?? fallbackTimeLimit;
-  const rawPlayer2Time = gameSession?.player2TimeRemaining ?? fallbackTimeLimit;
-  const player1TimeRemaining = Math.max(
-    0,
-    player1TurnActive ? rawPlayer1Time - elapsedSinceSyncSec : rawPlayer1Time,
-  );
-  const player2TimeRemaining = Math.max(
-    0,
-    player2TurnActive ? rawPlayer2Time - elapsedSinceSyncSec : rawPlayer2Time,
-  );
   const autoPlayActorName =
     autoPlayNotice?.username ||
     (language === "ar" ? "أحد اللاعبين" : "A player");
@@ -2150,6 +2280,57 @@ export default function ChallengeGamePage() {
     user?.id && avatarChatBubbles[user.id]
       ? avatarChatBubbles[user.id].text
       : undefined;
+  const canUseSpectatorSocialActions = isSpectator && Boolean(user?.id);
+  const opponentTurnActive = Boolean(
+    opponentId && gameSession?.currentTurn === opponentId,
+  );
+  const selfTurnActive = Boolean(
+    user?.id &&
+    (challenge.player1Id === user.id || challenge.player2Id === user.id) &&
+    gameSession?.currentTurn === user.id,
+  );
+  const getPlayerResultMeta = (playerId?: string) => {
+    if (!playerId || gameSession?.status !== "finished") {
+      return null;
+    }
+    const isDraw =
+      gameSession.winReason === "draw" ||
+      gameSession.winReason === "draw_agreement";
+    if (isDraw || !gameSession.winnerId) {
+      return {
+        label: t("profile.draw"),
+        className:
+          "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200",
+      };
+    }
+    if (gameSession.winnerId === playerId) {
+      return {
+        label: t("profile.win"),
+        className:
+          "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
+      };
+    }
+    return {
+      label: t("profile.loss"),
+      className:
+        "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-200",
+    };
+  };
+  const opponentResultMeta = getPlayerResultMeta(opponentId);
+  const selfResultMeta = getPlayerResultMeta(
+    user?.id && (challenge.player1Id === user.id || challenge.player2Id === user.id)
+      ? user.id
+      : undefined,
+  );
+  const getFriendButtonLabel = (targetUserId: string) => {
+    if (friendIdSet.has(targetUserId)) {
+      return t("friends.friends");
+    }
+    if (outgoingFriendRequestIdSet.has(targetUserId)) {
+      return t("friends.requestSentSuccess");
+    }
+    return t("friends.addFriend");
+  };
 
   const chessStatePayload = (() => {
     const fen = typeof playerView?.fen === "string" ? playerView.fen : "";
@@ -2506,7 +2687,9 @@ export default function ChallengeGamePage() {
                 <div
                   className={`${boardShellWidthClass} ${isChessGame || isBackgammonGame ? "mb-2" : "mb-4"}`}
                 >
-                  <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
+                  <div
+                    className={`vex-arcade-panel flex items-center justify-between rounded-lg border bg-card p-3 ${opponentTurnActive ? "vex-turn-active-panel" : ""}`}
+                  >
                     <div className="flex items-center gap-3">
                       <div className="relative">
                         {opponentAvatarBubble && (
@@ -2516,12 +2699,114 @@ export default function ChallengeGamePage() {
                             </div>
                           </div>
                         )}
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={opponent?.avatarUrl} />
-                          <AvatarFallback>
-                            {opponent?.username?.[0]?.toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+                              disabled={!opponentId}
+                              data-testid="play-opponent-profile-popover-trigger"
+                            >
+                              <Avatar
+                                className={`h-10 w-10 ${opponentTurnActive ? "vex-turn-active-avatar ring-2 ring-primary/75" : ""}`}
+                              >
+                                <AvatarImage src={opponent?.avatarUrl} />
+                                <AvatarFallback>
+                                  {opponent?.username?.[0]?.toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                            </button>
+                          </PopoverTrigger>
+                          {opponentId && (
+                            <PopoverContent align="start" className="w-72 p-3">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <Avatar className="h-10 w-10">
+                                    <AvatarImage src={opponent?.avatarUrl} />
+                                    <AvatarFallback>
+                                      {opponent?.username?.[0]?.toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold">
+                                      {opponent?.username || "-"}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {t("profile.wins")}: {opponentProfileStats?.gamesWon ?? opponent?.rating?.wins ?? 0}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 text-center">
+                                  <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                    <p className="text-[10px] text-muted-foreground">
+                                      {t("profile.wins")}
+                                    </p>
+                                    <p className="text-sm font-semibold">
+                                      {opponentProfileStats?.gamesWon ?? opponent?.rating?.wins ?? 0}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                    <p className="text-[10px] text-muted-foreground">
+                                      {t("profile.winRate")}
+                                    </p>
+                                    <p className="text-sm font-semibold">
+                                      {opponentProfileStats?.winRate ?? opponent?.rating?.winRate ?? 0}%
+                                    </p>
+                                  </div>
+                                  <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                    <p className="text-[10px] text-muted-foreground">
+                                      {t("profile.streak")}
+                                    </p>
+                                    <p className="text-sm font-semibold">
+                                      {opponentProfileStats?.currentWinStreak ?? 0}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setLocation(`/player/${opponentId}`)}
+                                    className="h-8"
+                                  >
+                                    {t("leaderboard.viewProfile")}
+                                  </Button>
+                                  {canUseSpectatorSocialActions && opponentId !== user?.id && (
+                                    <>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleToggleFollow(opponentId)}
+                                        disabled={socialActionLoadingUserId === opponentId}
+                                        className="h-8"
+                                      >
+                                        {followingIdSet.has(opponentId)
+                                          ? t("friends.unfollow")
+                                          : t("friends.follow")}
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => handleSendFriendRequest(opponentId)}
+                                        disabled={
+                                          socialActionLoadingUserId === opponentId ||
+                                          friendIdSet.has(opponentId) ||
+                                          outgoingFriendRequestIdSet.has(opponentId)
+                                        }
+                                        className="h-8"
+                                      >
+                                        <UserPlus className="me-1 h-3.5 w-3.5" />
+                                        {getFriendButtonLabel(opponentId)}
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          )}
+                        </Popover>
                         <Button
                           type="button"
                           size="icon"
@@ -2550,9 +2835,19 @@ export default function ChallengeGamePage() {
                         </Button>
                       </div>
                       <div>
-                        <p className="font-medium">
-                          {opponent?.username || "Waiting..."}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">
+                            {opponent?.username || "Waiting..."}
+                          </p>
+                          {opponentResultMeta && (
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] ${opponentResultMeta.className}`}
+                            >
+                              {opponentResultMeta.label}
+                            </Badge>
+                          )}
+                        </div>
                         {isChessGame ? (
                           <p className="text-xs text-muted-foreground">
                             {myColor === "white"
@@ -2747,7 +3042,9 @@ export default function ChallengeGamePage() {
                 <div
                   className={`${boardShellWidthClass} ${isChessGame || isBackgammonGame ? "mt-2" : "mt-4"}`}
                 >
-                  <div className="vex-arcade-panel flex items-center justify-between p-3 bg-card rounded-lg border">
+                  <div
+                    className={`vex-arcade-panel flex items-center justify-between rounded-lg border bg-card p-3 ${selfTurnActive ? "vex-turn-active-panel" : ""}`}
+                  >
                     <div className="flex items-center gap-3">
                       <div className="relative">
                         {selfAvatarBubble && (
@@ -2757,14 +3054,84 @@ export default function ChallengeGamePage() {
                             </div>
                           </div>
                         )}
-                        <Avatar className="h-10 w-10 ring-2 ring-primary">
-                          <AvatarImage
-                            src={user?.profilePicture || undefined}
-                          />
-                          <AvatarFallback>
-                            {user?.username?.[0]?.toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+                              disabled={!user?.id}
+                              data-testid="play-self-profile-popover-trigger"
+                            >
+                              <Avatar
+                                className={`h-10 w-10 ring-2 ring-primary ${selfTurnActive ? "vex-turn-active-avatar" : ""}`}
+                              >
+                                <AvatarImage
+                                  src={user?.profilePicture || undefined}
+                                />
+                                <AvatarFallback>
+                                  {user?.username?.[0]?.toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                            </button>
+                          </PopoverTrigger>
+                          {user?.id && (
+                            <PopoverContent align="start" className="w-72 p-3">
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-3">
+                                  <Avatar className="h-10 w-10">
+                                    <AvatarImage src={user?.profilePicture || undefined} />
+                                    <AvatarFallback>
+                                      {user?.username?.[0]?.toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold">
+                                      {user?.username || "-"}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {t("profile.wins")}: {selfProfileStats?.gamesWon ?? 0}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 text-center">
+                                  <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                    <p className="text-[10px] text-muted-foreground">
+                                      {t("profile.wins")}
+                                    </p>
+                                    <p className="text-sm font-semibold">
+                                      {selfProfileStats?.gamesWon ?? 0}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                    <p className="text-[10px] text-muted-foreground">
+                                      {t("profile.winRate")}
+                                    </p>
+                                    <p className="text-sm font-semibold">
+                                      {selfProfileStats?.winRate ?? 0}%
+                                    </p>
+                                  </div>
+                                  <div className="rounded-md border bg-muted/35 px-2 py-1.5">
+                                    <p className="text-[10px] text-muted-foreground">
+                                      {t("profile.streak")}
+                                    </p>
+                                    <p className="text-sm font-semibold">
+                                      {selfProfileStats?.currentWinStreak ?? 0}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setLocation(`/player/${user.id}`)}
+                                  className="h-8"
+                                >
+                                  {t("leaderboard.viewProfile")}
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          )}
+                        </Popover>
                         <Button
                           type="button"
                           size="icon"
@@ -2786,11 +3153,21 @@ export default function ChallengeGamePage() {
                         </Button>
                       </div>
                       <div>
-                        <p className="font-medium">
-                          {isSpectator
-                            ? `${user?.username} ${language === "ar" ? "(مشاهدة)" : "(Watching)"}`
-                            : `${user?.username} ${t("challenge.you")}`}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">
+                            {isSpectator
+                              ? `${user?.username} ${language === "ar" ? "(مشاهدة)" : "(Watching)"}`
+                              : `${user?.username} ${t("challenge.you")}`}
+                          </p>
+                          {selfResultMeta && (
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] ${selfResultMeta.className}`}
+                            >
+                              {selfResultMeta.label}
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           {isSpectator
                             ? language === "ar"
