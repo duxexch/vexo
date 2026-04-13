@@ -176,6 +176,46 @@ export const MAX_FAILED_ATTEMPTS = 5;
 export const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync("vex_dummy_password_for_timing_equalization", 12);
 
+function readIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name];
+  const parsed = Number.parseInt(raw || "", 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, parsed));
+}
+
+const ONE_CLICK_RECOVERY_GRACE_HOURS = readIntEnv("ONE_CLICK_RECOVERY_GRACE_HOURS", 24, 1, 24 * 30);
+
+export function hasVerifiedRecoveryChannel(user: Pick<User, "email" | "phone" | "emailVerified" | "phoneVerified">): boolean {
+  const emailReady = Boolean(user.email && user.email.trim().length > 0 && user.emailVerified);
+  const phoneReady = Boolean(user.phone && user.phone.trim().length > 0 && user.phoneVerified);
+  return emailReady || phoneReady;
+}
+
+export function requiresOneClickRecoveryBootstrap(user: Pick<User, "registrationType" | "createdAt" | "email" | "phone" | "emailVerified" | "phoneVerified">): boolean {
+  if (user.registrationType !== "account") {
+    return false;
+  }
+
+  if (hasVerifiedRecoveryChannel(user)) {
+    return false;
+  }
+
+  const hasAnyRecoveryContact = Boolean(
+    (user.email && user.email.trim().length > 0)
+    || (user.phone && user.phone.trim().length > 0),
+  );
+
+  // If a contact exists, login OTP flows can still verify ownership.
+  if (hasAnyRecoveryContact) {
+    return false;
+  }
+
+  const accountAgeMs = Date.now() - new Date(user.createdAt).getTime();
+  return accountAgeMs >= ONE_CLICK_RECOVERY_GRACE_HOURS * 60 * 60 * 1000;
+}
+
 /**
  * Equalize login timing for unknown accounts to reduce username/account enumeration via timing.
  */

@@ -561,6 +561,11 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
 
     const room = voiceRooms.get(matchId);
     if (room) {
+      const mappedSocket = room.get(ws.userId);
+      if (mappedSocket !== ws) {
+        return;
+      }
+
       room.delete(ws.userId);
       incrementVoiceTelemetryCounter("leaveProcessed");
       // Notify peer that user left

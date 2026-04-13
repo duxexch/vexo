@@ -17,12 +17,12 @@ import {
   createSession,
   validatePasswordStrength,
 } from "./helpers";
-import { isSafeEmailAddress, sanitizePlainText } from "../../lib/input-security";
+import { sanitizePlainText } from "../../lib/input-security";
 
 export function registerUsernameRegistrationRoutes(app: Express) {
   app.post("/api/auth/register", registrationRateLimiter, async (req: Request, res: Response) => {
     try {
-      const { username, password, email, firstName, lastName, referralCode } = req.body;
+      const { username, password, email, phone, firstName, lastName, referralCode } = req.body;
 
       // Input validation
       if (!username || typeof username !== 'string' || username.trim().length < 3 || username.trim().length > 30) {
@@ -38,8 +38,14 @@ export function registerUsernameRegistrationRoutes(app: Express) {
       if (!pwCheck.valid) {
         return res.status(400).json({ error: pwCheck.error });
       }
-      if (email && (typeof email !== 'string' || email.length > 254 || !isSafeEmailAddress(email))) {
-        return res.status(400).json({ error: "Invalid email format" });
+
+      // SECURITY: Keep identifier-based signup centralized in OTP-gated flows.
+      // Legacy username registration is now strictly username/password only.
+      if ((typeof email === "string" && email.trim().length > 0) || (typeof phone === "string" && phone.trim().length > 0)) {
+        return res.status(400).json({
+          error: "Use the email/phone signup flow with verification code.",
+          errorCode: "IDENTIFIER_SIGNUP_REQUIRED",
+        });
       }
       if (firstName && (typeof firstName !== 'string' || firstName.length > 50)) {
         return res.status(400).json({ error: "First name must be under 50 characters" });
@@ -86,7 +92,6 @@ export function registerUsernameRegistrationRoutes(app: Express) {
       const user = await storage.createUser({
         username: username.trim(),
         password: hashedPassword,
-        email: sanitize(email),
         firstName: sanitize(firstName),
         lastName: sanitize(lastName),
         referredBy,
@@ -123,7 +128,7 @@ export function registerUsernameRegistrationRoutes(app: Express) {
       emitSystemAlert({
         title: 'New User Registered',
         titleAr: 'مستخدم جديد مسجل',
-        message: `New registration: ${user.username} (ID: ${user.id})${email ? ` email: ${email}` : ''}`,
+        message: `New registration: ${user.username} (ID: ${user.id})`,
         messageAr: `تسجيل جديد: ${user.username} (رقم: ${user.id})`,
         severity: 'info',
         deepLink: '/admin/users',

@@ -180,7 +180,8 @@ export function setupWebSocket(server: Server) {
       // Clean up voice rooms on disconnect
       if (ws.userId) {
         voiceRooms.forEach((room, matchId) => {
-          if (room.has(ws.userId!)) {
+          const mappedSocket = room.get(ws.userId!);
+          if (mappedSocket && mappedSocket === ws) {
             room.delete(ws.userId!);
             // Notify remaining peers
             room.forEach((socket) => {

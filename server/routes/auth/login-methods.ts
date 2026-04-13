@@ -23,9 +23,29 @@ import {
     handleFailedLogin,
     handleSuccessfulLogin,
     generate2FAChallenge,
+    requiresOneClickRecoveryBootstrap,
 } from "./helpers";
 
 type LoginOtpUser = NonNullable<Awaited<ReturnType<typeof storage.getUserByAccountId>>>;
+
+function isPendingIdentifierVerificationUser(user: LoginOtpUser): boolean {
+    if (user.status !== "inactive" || Boolean(user.accountDeletedAt) || Boolean(user.accountDisabledAt)) {
+        return false;
+    }
+
+    const pendingEmailVerification = user.registrationType === "email"
+        && Boolean(user.email)
+        && !Boolean(user.emailVerified);
+    const pendingPhoneVerification = user.registrationType === "phone"
+        && Boolean(user.phone)
+        && !Boolean(user.phoneVerified);
+
+    return pendingEmailVerification || pendingPhoneVerification;
+}
+
+function isEligibleForIdentifierOtpLogin(user: LoginOtpUser): boolean {
+    return user.status === "active" || isPendingIdentifierVerificationUser(user);
+}
 
 export function registerAlternativeLoginRoutes(app: Express) {
     const beginIdentifierOtpLogin = async (
@@ -98,6 +118,13 @@ export function registerAlternativeLoginRoutes(app: Express) {
                 return res.status(403).json({ error: "Account is not active" });
             }
 
+            if (requiresOneClickRecoveryBootstrap(user)) {
+                return res.status(403).json({
+                    error: "Recovery contact is required. Add and verify email or phone to continue.",
+                    errorCode: "RECOVERY_CHANNEL_REQUIRED",
+                });
+            }
+
             const otpFlowHandled = await beginIdentifierOtpLogin(req, res, user);
             if (otpFlowHandled) {
                 return;
@@ -166,7 +193,7 @@ export function registerAlternativeLoginRoutes(app: Express) {
                 return handleFailedLogin(user, res, req);
             }
 
-            if (user.status !== "active" || Boolean(user.accountDeletedAt)) {
+            if (!isEligibleForIdentifierOtpLogin(user)) {
                 return res.status(403).json({ error: "Account is not active" });
             }
 
@@ -207,7 +234,7 @@ export function registerAlternativeLoginRoutes(app: Express) {
                 return handleFailedLogin(user, res, req);
             }
 
-            if (user.status !== "active" || Boolean(user.accountDeletedAt)) {
+            if (!isEligibleForIdentifierOtpLogin(user)) {
                 return res.status(403).json({ error: "Account is not active" });
             }
 
@@ -239,7 +266,12 @@ export function registerAlternativeLoginRoutes(app: Express) {
             }
 
             const user = await storage.getUser(challenge.uid);
-            if (!user || user.status !== "active" || Boolean(user.accountDeletedAt)) {
+            if (!user || Boolean(user.accountDeletedAt)) {
+                return res.status(400).json({ error: "Invalid or expired challenge token" });
+            }
+
+            const pendingVerificationUser = isPendingIdentifierVerificationUser(user);
+            if (user.status !== "active" && !pendingVerificationUser) {
                 return res.status(400).json({ error: "Invalid or expired challenge token" });
             }
 
@@ -286,7 +318,12 @@ export function registerAlternativeLoginRoutes(app: Express) {
             }
 
             const user = await storage.getUser(challenge.uid);
-            if (!user || user.status !== "active" || Boolean(user.accountDeletedAt)) {
+            if (!user || Boolean(user.accountDeletedAt)) {
+                return res.status(400).json({ error: "Invalid or expired challenge token" });
+            }
+
+            const pendingVerificationUser = isPendingIdentifierVerificationUser(user);
+            if (user.status !== "active" && !pendingVerificationUser) {
                 return res.status(400).json({ error: "Invalid or expired challenge token" });
             }
 
@@ -300,13 +337,21 @@ export function registerAlternativeLoginRoutes(app: Express) {
                 return res.status(400).json({ error: "Invalid verification code" });
             }
 
-            if (otpVerification.matchedMethod) {
-                if (otpVerification.matchedMethod === "email" && !user.emailVerified) {
-                    await storage.updateUser(user.id, { emailVerified: true });
-                }
-                if (otpVerification.matchedMethod === "phone" && !user.phoneVerified) {
-                    await storage.updateUser(user.id, { phoneVerified: true });
-                }
+            const userPatch: Partial<LoginOtpUser> = {};
+            if (pendingVerificationUser) {
+                userPatch.status = "active";
+                userPatch.accountDisabledAt = null;
+            }
+
+            if (otpVerification.matchedMethod === "email" && !user.emailVerified) {
+                userPatch.emailVerified = true;
+            }
+            if (otpVerification.matchedMethod === "phone" && !user.phoneVerified) {
+                userPatch.phoneVerified = true;
+            }
+
+            if (Object.keys(userPatch).length > 0) {
+                await storage.updateUser(user.id, userPatch);
             }
 
             const refreshedUser = await storage.getUser(user.id);

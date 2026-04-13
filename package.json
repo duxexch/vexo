@@ -37,6 +37,7 @@
     "security:audit": "npm audit --audit-level=high",
     "security:smoke": "node scripts/security-smoke.mjs",
     "security:smoke:auth-matrix": "node scripts/regression-auth-nondisclosure.mjs --matrix",
+    "security:smoke:auth-account-lifecycle": "node scripts/smoke-auth-account-lifecycle.mjs",
     "security:regression:auth-nondisclosure": "node scripts/regression-auth-nondisclosure.mjs",
     "security:smoke:challenges": "node scripts/smoke-challenge-permissions.mjs",
     "security:smoke:challenges:deterministic": "node scripts/smoke-challenge-permissions.mjs --reset-sensitive-limiter",

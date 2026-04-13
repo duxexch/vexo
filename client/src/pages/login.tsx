@@ -35,6 +35,16 @@ interface AuthSettings {
   twitterLoginEnabled: boolean;
 }
 
+const DEFAULT_AUTH_SETTINGS: AuthSettings = {
+  oneClickEnabled: true,
+  phoneLoginEnabled: true,
+  emailLoginEnabled: true,
+  googleLoginEnabled: false,
+  facebookLoginEnabled: false,
+  telegramLoginEnabled: false,
+  twitterLoginEnabled: false,
+};
+
 interface SocialPlatform {
   id: string;
   name: string;
@@ -87,13 +97,12 @@ export default function LoginPage() {
   const { t, dir } = useI18n();
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [authSettings, setAuthSettings] = useState<AuthSettings | null>(null);
+  const [authSettings, setAuthSettings] = useState<AuthSettings>(DEFAULT_AUTH_SETTINGS);
   const [socialPlatforms, setSocialPlatforms] = useState<SocialPlatform[]>([]);
 
   // Read referral code from URL (?ref=xxx)
   const referralCodeFromUrl = new URLSearchParams(window.location.search).get("ref") || "";
   const getEnabledTabs = () => {
-    if (!authSettings) return ["account"];
     const tabs: string[] = [];
     if (authSettings.oneClickEnabled !== false) tabs.push("one-click");
     tabs.push("account");
@@ -106,10 +115,6 @@ export default function LoginPage() {
   const currentTab = activeTab && enabledTabs.includes(activeTab) ? activeTab : enabledTabs[0];
 
   const isSocialPlatformEnabledInAuthSettings = (platformName: string): boolean => {
-    if (!authSettings) {
-      return true;
-    }
-
     switch (platformName.trim().toLowerCase()) {
       case "google":
         return authSettings.googleLoginEnabled !== false;

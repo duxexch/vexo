@@ -161,7 +161,7 @@ export function registerIdentifierRoutes(app: Express) {
         password: hashedPassword,
         accountId,
         role: "player",
-        status: "active",
+        status: normalizedType === "account" ? "active" : "inactive",
         emailVerified: false,
         phoneVerified: false,
         registrationType: normalizedType,

@@ -4,8 +4,8 @@ import { getErrorMessage } from "./helpers";
 import { storage } from "../storage";
 import { sendNotification } from "../websocket";
 import { db } from "../db";
-import { activeSessions } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import { activeSessions, users } from "@shared/schema";
+import { and, eq, isNull } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
@@ -151,15 +151,28 @@ export function registerSecurityRoutes(app: Express): void {
 
       const safeReason = validated.reason ? sanitizePlainText(validated.reason, { maxLength: 200 }) : "";
 
-      await storage.updateUser(user.id, {
-        status: "inactive",
-        accountDisabledAt: new Date(),
-        isOnline: false,
-        lastActiveAt: new Date(),
-        passwordChangedAt: new Date(),
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-      });
+      const now = new Date();
+      const [disableTransition] = await db.update(users)
+        .set({
+          status: "inactive",
+          accountDisabledAt: now,
+          isOnline: false,
+          lastActiveAt: now,
+          passwordChangedAt: now,
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(users.id, user.id),
+          eq(users.status, "active"),
+          isNull(users.accountDeletedAt),
+        ))
+        .returning({ id: users.id });
+
+      if (!disableTransition) {
+        return res.status(409).json({ error: "Account state changed, please retry" });
+      }
 
       await storage.revokeAllUserSessions(user.id);
       await db.update(activeSessions)
@@ -211,6 +224,9 @@ export function registerSecurityRoutes(app: Express): void {
       if (user.accountDeletedAt) {
         return res.status(400).json({ error: "Account is already marked as deleted" });
       }
+      if (user.status !== "active") {
+        return res.status(400).json({ error: "Account must be active to request deletion" });
+      }
 
       const passwordOk = await bcrypt.compare(validated.password, user.password);
       if (!passwordOk) {
@@ -228,17 +244,30 @@ export function registerSecurityRoutes(app: Express): void {
 
       const safeReason = validated.reason ? sanitizePlainText(validated.reason, { maxLength: 500 }) : "";
 
-      await storage.updateUser(user.id, {
-        status: "inactive",
-        accountDeletedAt: new Date(),
-        accountDeletionReason: safeReason || null,
-        accountDisabledAt: null,
-        isOnline: false,
-        lastActiveAt: new Date(),
-        passwordChangedAt: new Date(),
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-      });
+      const now = new Date();
+      const [deleteTransition] = await db.update(users)
+        .set({
+          status: "inactive",
+          accountDeletedAt: now,
+          accountDeletionReason: safeReason || null,
+          accountDisabledAt: null,
+          isOnline: false,
+          lastActiveAt: now,
+          passwordChangedAt: now,
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(users.id, user.id),
+          eq(users.status, "active"),
+          isNull(users.accountDeletedAt),
+        ))
+        .returning({ id: users.id });
+
+      if (!deleteTransition) {
+        return res.status(409).json({ error: "Account state changed, please retry" });
+      }
 
       await storage.revokeAllUserSessions(user.id);
       await db.update(activeSessions)
