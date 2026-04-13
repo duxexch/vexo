@@ -266,8 +266,8 @@ export default function GamesCatalogPage() {
   };
 
   return (
-    <div className="min-h-screen">
-      <div className="relative overflow-hidden bg-gradient-to-br from-background via-muted/30 to-background py-12 px-4">
+    <div className="min-h-[100svh]">
+      <div className="relative overflow-hidden bg-gradient-to-br from-background via-muted/30 to-background px-3 py-10 sm:px-4 sm:py-12">
         <div className="absolute inset-0 bg-grid-pattern opacity-5" />
         <img
           src="/icons/vex-gaming-logo-512x512.png"
@@ -319,7 +319,7 @@ export default function GamesCatalogPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-8 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {GAME_CATALOG.map((game) => {
             const liveCount = getGameLiveCount(game.key);
@@ -381,7 +381,7 @@ export default function GamesCatalogPage() {
 
                   <div className="flex gap-2">
                     <Button
-                      className="flex-1 gap-2"
+                      className="flex-1 min-h-[44px] gap-2"
                       onClick={(e) => {
                         e.stopPropagation();
                         handlePlayNow(game.key);
@@ -393,7 +393,7 @@ export default function GamesCatalogPage() {
                     </Button>
                     <Button
                       variant="outline"
-                      className="gap-2"
+                      className="min-h-[44px] gap-2"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleWatchLive(game.key);
@@ -524,7 +524,7 @@ export default function GamesCatalogPage() {
                   </p>
                 </div>
               </div>
-              <Button variant="outline" onClick={() => navigate("/lobby?tab=live")} data-testid="button-view-all-live">
+              <Button className="min-h-[44px] w-full sm:w-auto" variant="outline" onClick={() => navigate("/lobby?tab=live")} data-testid="button-view-all-live">
                 {t('catalog.viewAll')}
               </Button>
             </div>
@@ -606,11 +606,11 @@ export default function GamesCatalogPage() {
                 {t('catalog.readyDesc')}
               </p>
               <div className="flex gap-3 justify-center flex-wrap">
-                <Button size="lg" onClick={() => navigate("/lobby")} className="gap-2" data-testid="button-start-playing">
+                <Button size="lg" onClick={() => navigate("/lobby")} className="w-full sm:w-auto min-h-[44px] gap-2" data-testid="button-start-playing">
                   <Zap className="w-5 h-5" />
                   {t('catalog.startPlaying')}
                 </Button>
-                <Button size="lg" variant="outline" onClick={() => navigate("/lobby?tab=live")} className="gap-2" data-testid="button-watch-matches">
+                <Button size="lg" variant="outline" onClick={() => navigate("/lobby?tab=live")} className="w-full sm:w-auto min-h-[44px] gap-2" data-testid="button-watch-matches">
                   <Eye className="w-5 h-5" />
                   {t('catalog.watchMatches')}
                 </Button>

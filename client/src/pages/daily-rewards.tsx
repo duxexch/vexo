@@ -147,9 +147,9 @@ export default function DailyRewardsPage() {
   const totalEarned = parseFloat(status?.totalEarned || "0");
 
   return (
-    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-3xl mx-auto" dir={dir}>
+    <div className="max-w-3xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6" dir={dir}>
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
             <Gift className="h-6 w-6 text-amber-500" />
@@ -159,7 +159,7 @@ export default function DailyRewardsPage() {
             {t('dailyRewards.description')}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 w-full sm:w-auto">
           <Badge variant="outline" className="flex items-center gap-1.5 py-1.5 px-3">
             <Flame className="h-4 w-4 text-orange-500" />
             <span className="font-semibold">{currentStreak}</span>
@@ -182,7 +182,7 @@ export default function DailyRewardsPage() {
               </p>
               <p className="font-mono text-sm sm:text-base break-all">{lastReferenceId}</p>
             </div>
-            <Button variant="outline" onClick={copyReference}>
+            <Button className="w-full sm:w-auto min-h-[44px]" variant="outline" onClick={copyReference}>
               {copiedReference ? <Check className="h-4 w-4 me-2" /> : <Copy className="h-4 w-4 me-2" />}
               {t('dailyRewards.copyReference')}
             </Button>
@@ -199,58 +199,60 @@ export default function DailyRewardsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-7 gap-1.5 sm:gap-3">
-            {schedule.map((reward, idx) => {
-              const dayStatus = getDayStatus(idx, nextDay, claimedToday);
-              const isDay7 = idx === 6;
+          <div className="overflow-x-auto pb-1">
+            <div className="grid min-w-[560px] grid-cols-7 gap-1.5 sm:gap-3">
+              {schedule.map((reward, idx) => {
+                const dayStatus = getDayStatus(idx, nextDay, claimedToday);
+                const isDay7 = idx === 6;
 
-              return (
-                <div
-                  key={idx}
-                  className={`
+                return (
+                  <div
+                    key={idx}
+                    className={`
                     relative flex flex-col items-center gap-1 sm:gap-2 p-2 sm:p-3 rounded-xl border-2 transition-all
                     ${dayStatus === 'claimed'
-                      ? 'border-primary/50 bg-primary/5'
-                      : dayStatus === 'available'
-                        ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/20'
-                        : 'border-muted bg-muted/30 opacity-60'}
+                        ? 'border-primary/50 bg-primary/5'
+                        : dayStatus === 'available'
+                          ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/20'
+                          : 'border-muted bg-muted/30 opacity-60'}
                     ${isDay7 ? 'ring-2 ring-amber-500/30' : ''}
                   `}
-                >
-                  {/* Day number */}
-                  <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">
-                    {t('dailyRewards.day', { day: String(reward.day) })}
-                  </span>
+                  >
+                    {/* Day number */}
+                    <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">
+                      {t('dailyRewards.day', { day: String(reward.day) })}
+                    </span>
 
-                  {/* Icon */}
-                  <div className={`
+                    {/* Icon */}
+                    <div className={`
                     p-1.5 sm:p-2 rounded-full
                     ${dayStatus === 'claimed' ? 'bg-primary/10' : dayStatus === 'available' ? 'bg-amber-500/20' : 'bg-muted'}
                   `}>
-                    {isDay7 ? (
-                      <Trophy className={`h-4 w-4 sm:h-5 sm:w-5 ${dayStatus === 'claimed' ? 'text-primary' : 'text-amber-500'}`} />
-                    ) : (
-                      getDayIcon(idx, nextDay, claimedToday, currentStreak)
-                    )}
-                  </div>
+                      {isDay7 ? (
+                        <Trophy className={`h-4 w-4 sm:h-5 sm:w-5 ${dayStatus === 'claimed' ? 'text-primary' : 'text-amber-500'}`} />
+                      ) : (
+                        getDayIcon(idx, nextDay, claimedToday, currentStreak)
+                      )}
+                    </div>
 
-                  {/* Amount */}
-                  <span className={`
+                    {/* Amount */}
+                    <span className={`
                     text-xs sm:text-sm font-bold
                     ${dayStatus === 'claimed' ? 'text-primary' : dayStatus === 'available' ? 'text-amber-500' : 'text-muted-foreground'}
                   `}>
-                    {reward.amount}
-                  </span>
+                      {reward.amount}
+                    </span>
 
-                  {/* Claimed checkmark */}
-                  {dayStatus === 'claimed' && (
-                    <div className="absolute -top-1 -right-1 sm:-top-1.5 sm:-right-1.5 bg-primary rounded-full p-0.5">
-                      <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-white" />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                    {/* Claimed checkmark */}
+                    {dayStatus === 'claimed' && (
+                      <div className="absolute -top-1 -right-1 sm:-top-1.5 sm:-right-1.5 bg-primary rounded-full p-0.5">
+                        <Check className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-white" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -290,7 +292,7 @@ export default function DailyRewardsPage() {
               </div>
               <Button
                 size="lg"
-                className="w-full max-w-xs text-lg font-semibold"
+                className="w-full max-w-xs min-h-[44px] text-lg font-semibold"
                 onClick={() => claimMutation.mutate()}
                 disabled={claimMutation.isPending}
               >

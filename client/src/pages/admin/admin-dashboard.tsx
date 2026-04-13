@@ -120,7 +120,7 @@ export default function AdminDashboardPage() {
   ];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-[100svh] space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
@@ -153,7 +153,7 @@ export default function AdminDashboardPage() {
                     <h4 className="font-medium mb-2">Users</h4>
                     <div className="space-y-2">
                       {searchResults.users.map((user: { id: string; username?: string; email?: string; status?: string }) => (
-                        <div key={user.id} className="flex items-center justify-between p-2 rounded bg-muted/50">
+                        <div key={user.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-2 rounded bg-muted/50">
                           <div>
                             <span className="font-medium">{user.username}</span>
                             <span className="text-muted-foreground ms-2">({user.email})</span>
@@ -171,7 +171,7 @@ export default function AdminDashboardPage() {
                     <h4 className="font-medium mb-2">Transactions</h4>
                     <div className="space-y-2">
                       {searchResults.transactions.map((tx: { id: string; type?: string; amount?: string | number; status?: string; referenceId?: string | null }) => (
-                        <div key={tx.id} className="flex items-center justify-between p-2 rounded bg-muted/50">
+                        <div key={tx.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-2 rounded bg-muted/50">
                           <div>
                             <span>{tx.type} - ${tx.amount}</span>
                             <p className="text-xs text-muted-foreground">Ref: {tx.referenceId || tx.id}</p>
@@ -187,7 +187,7 @@ export default function AdminDashboardPage() {
                     <h4 className="font-medium mb-2">Project Currency Ledger</h4>
                     <div className="space-y-2">
                       {searchResults.currencyLedger.map((entry: { id: string; type?: string; amount?: string | number; referenceId?: string | null; referenceType?: string | null; description?: string | null }) => (
-                        <div key={entry.id} className="flex items-center justify-between gap-3 p-2 rounded bg-muted/50">
+                        <div key={entry.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 p-2 rounded bg-muted/50">
                           <div className="min-w-0">
                             <p className="font-medium">{entry.type} - {entry.amount}</p>
                             <p className="text-xs text-muted-foreground truncate">{entry.description || entry.referenceType || "Ledger entry"}</p>
@@ -198,6 +198,7 @@ export default function AdminDashboardPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="min-h-[40px] min-w-[40px]"
                               onClick={() => copyText(entry.referenceId || entry.id)}
                               aria-label="Copy ledger reference"
                             >

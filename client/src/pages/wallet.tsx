@@ -517,7 +517,7 @@ export default function WalletPage() {
   };
 
   return (
-    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+    <div className="min-h-[100svh] space-y-4 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.12),transparent_42%)] p-3 sm:space-y-6 sm:p-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
@@ -734,7 +734,7 @@ export default function WalletPage() {
                 </h4>
                 <div className="space-y-2">
                   {currencyConversions.slice(0, 5).map((conv) => (
-                    <div key={conv.id} className="flex items-center justify-between text-sm p-3 bg-muted/50 rounded-lg" data-testid={`row-conversion-${conv.id}`}>
+                    <div key={conv.id} className="text-sm p-3 bg-muted/50 rounded-lg" data-testid={`row-conversion-${conv.id}`}>
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-full bg-background">
                           <ArrowRightLeft className="h-4 w-4 text-primary" />
@@ -757,6 +757,7 @@ export default function WalletPage() {
                         </div>
                       </div>
                       <Badge
+                        className="mt-3 sm:mt-0"
                         variant={conv.status === 'completed' ? 'default' : conv.status === 'pending' ? 'secondary' : 'destructive'}
                       >
                         {conv.status === 'completed' && <CheckCircle className="h-3 w-3 me-1" />}
@@ -787,7 +788,7 @@ export default function WalletPage() {
           ) : recentTransactions.length > 0 ? (
             <div className="space-y-3">
               {recentTransactions.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg" data-testid={`row-transaction-${tx.id}`}>
+                <div key={tx.id} className="rounded-lg bg-muted/50 p-3" data-testid={`row-transaction-${tx.id}`}>
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-full bg-background">
                       {getTransactionIcon(tx.type)}
@@ -799,7 +800,7 @@ export default function WalletPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="mt-3 flex items-center justify-between gap-3 sm:mt-0 sm:justify-end">
                     <span className={`font-bold ${['deposit', 'win', 'bonus', 'reward', 'refund'].includes(tx.type) ? 'text-green-500' : 'text-red-500'}`}>
                       {['deposit', 'win', 'bonus', 'reward', 'refund'].includes(tx.type) ? '+' : '-'}{formatWalletAmount(tx.amount)}
                     </span>
@@ -815,7 +816,7 @@ export default function WalletPage() {
       </Card>
 
       <Dialog open={showDeposit} onOpenChange={setShowDeposit}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ArrowDownToLine className="h-5 w-5 text-green-500" />
@@ -823,7 +824,7 @@ export default function WalletPage() {
             </DialogTitle>
             <DialogDescription>{t('wallet.depositDesc')}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 pb-1">
             <div>
               <Label>{t('wallet.amount')}</Label>
               <Input
@@ -965,7 +966,7 @@ export default function WalletPage() {
       </Dialog>
 
       <Dialog open={showWithdraw} onOpenChange={setShowWithdraw}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ArrowUpFromLine className="h-5 w-5 text-red-500" />
@@ -973,7 +974,7 @@ export default function WalletPage() {
             </DialogTitle>
             <DialogDescription>{t('wallet.withdrawDesc')}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 pb-1">
             <div className="p-3 bg-muted rounded-lg text-sm">
               <span className="text-muted-foreground">{t('wallet.availableBalance')}: </span>
               <span className="font-bold text-primary">{walletCurrencySymbol}{availableWalletBalance.toFixed(2)} {walletCurrencyCode}</span>
@@ -1059,7 +1060,7 @@ export default function WalletPage() {
 
       {currencySettings?.isActive && (
         <Dialog open={showConvert} onOpenChange={setShowConvert}>
-          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Coins className="h-5 w-5 text-primary" />
@@ -1080,7 +1081,7 @@ export default function WalletPage() {
                 )}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 pb-1">
               <div className="p-3 bg-muted rounded-lg text-sm">
                 <span className="text-muted-foreground">Available Balance: </span>
                 <span className="font-bold text-primary">{walletCurrencySymbol}{availableWalletBalance.toFixed(2)} {walletCurrencyCode}</span>

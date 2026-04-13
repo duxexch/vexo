@@ -144,21 +144,21 @@ export default function SupportPage() {
   const activeContacts = contacts?.filter(c => c.isActive) || [];
 
   return (
-    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6" dir={dir}>
-      <div className="flex items-center gap-3">
+    <div className="min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6" dir={dir}>
+      <div className="flex items-start sm:items-center gap-3">
         <Headset className="h-8 w-8 text-primary" />
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-support-title">
+          <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-support-title">
             {t('support.title')}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm sm:text-base text-muted-foreground">
             {t('support.subtitle')}
           </p>
         </div>
       </div>
 
       {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3].map(i => (
             <Card key={i} className="animate-pulse">
               <CardContent className="p-6">
@@ -178,7 +178,7 @@ export default function SupportPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {activeContacts
             .sort((a, b) => a.displayOrder - b.displayOrder)
             .map(contact => {
@@ -206,7 +206,7 @@ export default function SupportPage() {
                         </p>
                         <Button
                           asChild
-                          className={`w-full ${bgColor} text-white`}
+                          className={`w-full min-h-[44px] ${bgColor} text-white`}
                           data-testid={`button-contact-${contact.id}`}
                         >
                           <a
@@ -228,7 +228,7 @@ export default function SupportPage() {
         </div>
       )}
 
-      <Card>
+      <Card className="border-border/70">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5" />
@@ -247,7 +247,7 @@ export default function SupportPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border-border/70">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BookOpen className="h-5 w-5" />

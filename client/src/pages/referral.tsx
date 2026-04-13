@@ -168,14 +168,14 @@ export default function ReferralPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="min-h-[40svh] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-3xl mx-auto" dir={dir}>
+    <div className="max-w-3xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6" dir={dir}>
       {/* Header */}
       <div>
         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
@@ -188,7 +188,7 @@ export default function ReferralPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>
           <CardContent className="p-3 sm:p-4 text-center">
             <Users className="h-5 w-5 mx-auto mb-1 text-primary" />
@@ -231,24 +231,24 @@ export default function ReferralPage() {
             <Input
               value={referralLink}
               readOnly
-              className="font-mono text-sm"
+              className="font-mono text-xs sm:text-sm min-h-[44px]"
               onClick={() => copyToClipboard(referralLink)}
             />
             <Button
               variant="outline"
               size="icon"
               onClick={() => copyToClipboard(referralLink)}
-              className="shrink-0"
+              className="shrink-0 min-h-[44px] min-w-[44px]"
             >
               {copied ? <CheckCircle className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
             </Button>
           </div>
-          <div className="flex gap-2">
-            <Button className="flex-1" onClick={shareLink}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Button className="w-full min-h-[44px]" onClick={shareLink}>
               <Share2 className="h-4 w-4 me-2" />
               {t('referral.shareLink')}
             </Button>
-            <Button variant="outline" className="flex-1" onClick={() => copyToClipboard(referralCode)}>
+            <Button variant="outline" className="w-full min-h-[44px]" onClick={() => copyToClipboard(referralCode)}>
               <Copy className="h-4 w-4 me-2" />
               {t('referral.copyCode')}: {referralCode}
             </Button>
@@ -327,7 +327,7 @@ export default function ReferralPage() {
           <CardContent>
             <div className="space-y-2">
               {(referralData?.referrals ?? []).map((ref: Record<string, unknown>, idx: number) => (
-                <div key={idx} className="flex items-center justify-between text-sm p-2 rounded bg-muted/30">
+                <div key={idx} className="flex items-center justify-between gap-2 text-sm p-2 rounded bg-muted/30">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                       <span className="text-xs font-bold text-primary">
@@ -383,9 +383,9 @@ export default function ReferralPage() {
             </div>
 
             {(marketerData.recentEvents?.length ?? 0) > 0 && (
-              <div className="space-y-2 max-h-64 overflow-auto">
+              <div className="space-y-2 max-h-[55svh] sm:max-h-64 overflow-auto">
                 {marketerData.recentEvents.slice(0, 20).map((event) => (
-                  <div key={event.id} className="rounded border p-2 text-sm flex items-center justify-between gap-2">
+                  <div key={event.id} className="rounded border p-2 text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <div>
                       <p className="font-medium">{String(event.referred_username || "Referral user")}</p>
                       <p className="text-xs text-muted-foreground uppercase">

@@ -925,7 +925,7 @@ export default function ChallengesPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto min-h-[100svh] space-y-5 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.12),transparent_42%)] p-3 sm:p-4 md:p-6 sm:space-y-6">
       <BackButton className="mb-2" />
 
       {/* Header Section */}
@@ -937,12 +937,12 @@ export default function ChallengesPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">{t('challenges.description')}</p>
         </div>
-        <div className="flex gap-2 flex-shrink-0">
-          <Button variant="outline" size="sm" onClick={() => setShowGiftShop(true)} data-testid="button-gift-shop">
+        <div className="flex w-full gap-2 sm:w-auto sm:flex-shrink-0">
+          <Button variant="outline" size="sm" className="min-h-[44px] flex-1 sm:flex-none" onClick={() => setShowGiftShop(true)} data-testid="button-gift-shop">
             <ShoppingBag className="h-4 w-4 sm:me-2" />
             <span className="hidden sm:inline">{t('challenges.giftShop')}</span>
           </Button>
-          <Button size="sm" onClick={handleOpenCreateDialog} data-testid="button-create-challenge">
+          <Button size="sm" className="min-h-[44px] flex-1 sm:flex-none" onClick={handleOpenCreateDialog} data-testid="button-create-challenge">
             <Swords className="h-4 w-4 sm:me-2" />
             <span className="hidden sm:inline">{t('challenges.createChallenge')}</span>
           </Button>
@@ -1018,7 +1018,7 @@ export default function ChallengesPage() {
           <Button
             variant={gameFilter.length > 0 ? "default" : "outline"}
             size="icon"
-            className="h-10 w-10 shrink-0 relative"
+            className="h-10 w-10 min-h-[44px] min-w-[44px] shrink-0 relative"
             onClick={handleOpenFilter}
             data-testid="button-open-filter"
           >
@@ -1110,11 +1110,11 @@ export default function ChallengesPage() {
               </div>
             </ScrollArea>
           </div>
-          <DialogFooter className="flex gap-2 sm:gap-2">
-            <Button variant="outline" className="flex-1" onClick={handleCancelFilter}>
+          <DialogFooter className="sticky bottom-0 z-10 border-t bg-background px-0 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex gap-2 sm:gap-2">
+            <Button variant="outline" className="flex-1 min-h-11" onClick={handleCancelFilter}>
               {t('common.cancel')}
             </Button>
-            <Button className="flex-1" onClick={handleConfirmFilter}>
+            <Button className="flex-1 min-h-11" onClick={handleConfirmFilter}>
               <Check className="h-4 w-4 me-2" />
               {t('common.confirm')}
               {pendingGameFilter.length > 0 && ` (${pendingGameFilter.length})`}
@@ -1155,7 +1155,7 @@ export default function ChallengesPage() {
               ) : isErrorPublic ? (
                 <QueryErrorState error={errorPublic} onRetry={() => refetchPublic()} compact />
               ) : filterChallenges(publicChallenges).length > 0 ? (
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {filterChallenges(publicChallenges).map(challenge => {
                     const GameIcon = getGameIcon(challenge.gameType);
                     return (
@@ -1244,7 +1244,7 @@ export default function ChallengesPage() {
                               <span>{t('challenges.prize')}: {formatChallengeAmountText(challenge.betAmount * 2, challenge.currencyType)}</span>
                             </div>
                           </div>
-                          <Button className="w-full" onClick={() => handleSpectate(challenge)} data-testid={`button-spectate-${challenge.id}`}>
+                          <Button className="w-full min-h-[44px]" onClick={() => handleSpectate(challenge)} data-testid={`button-spectate-${challenge.id}`}>
                             <Eye className="h-4 w-4 me-2" />
                             {t('challenges.watchAndBet')}
                           </Button>
@@ -1275,8 +1275,8 @@ export default function ChallengesPage() {
                   return (
                     <Card key={challenge.id} data-testid={`card-challenge-${challenge.id}`}>
                       <CardContent className="p-4">
-                        <div className="flex items-center justify-between gap-4 flex-wrap">
-                          <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
                             <div className="p-2 rounded-full bg-primary/20">
                               <GameIcon className="h-5 w-5 text-primary" />
                             </div>
@@ -1315,15 +1315,15 @@ export default function ChallengesPage() {
                               <RatingBadge rating={challenge.player1Rating} />
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-end">
+                          <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+                            <div className="text-end min-w-0">
                               <p className="font-bold text-lg">{formatChallengeAmountText(challenge.betAmount, challenge.currencyType)}</p>
                               <p className="text-xs text-muted-foreground flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
                                 {challenge.timeLimit}s
                               </p>
                             </div>
-                            <Button onClick={() => joinChallengeMutation.mutate(challenge)} data-testid={`button-join-${challenge.id}`}>
+                            <Button className="min-h-[44px]" onClick={() => joinChallengeMutation.mutate(challenge)} data-testid={`button-join-${challenge.id}`}>
                               <Play className="h-4 w-4 me-1" />
                               {t('challenges.join')}
                             </Button>
@@ -1375,8 +1375,8 @@ export default function ChallengesPage() {
                   return (
                     <Card key={challenge.id} data-testid={`card-my-challenge-${challenge.id}`}>
                       <CardContent className="p-4">
-                        <div className="flex items-center justify-between gap-4 flex-wrap">
-                          <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
                             <div className="p-2 rounded-full bg-primary/20">
                               <GameIcon className="h-5 w-5 text-primary" />
                             </div>
@@ -1392,7 +1392,7 @@ export default function ChallengesPage() {
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 flex-wrap justify-end">
+                          <div className="flex w-full items-center gap-2 flex-wrap sm:w-auto sm:justify-end">
                             <Badge variant={
                               challenge.status === 'active' ? 'default' :
                                 challenge.status === 'completed' ? 'secondary' :
@@ -1404,6 +1404,7 @@ export default function ChallengesPage() {
                             {canPlay && (
                               <Button
                                 size="sm"
+                                className="min-h-[44px]"
                                 onClick={() => handlePlayChallenge(challenge)}
                                 data-testid={`button-play-${challenge.id}`}
                               >
@@ -1415,6 +1416,7 @@ export default function ChallengesPage() {
                               <Button
                                 variant={withdrawButtonVariant}
                                 size="sm"
+                                className="min-h-[44px]"
                                 onClick={() => {
                                   setActiveChallenge(challenge);
                                   setShowWithdrawDialog(true);
@@ -1445,7 +1447,7 @@ export default function ChallengesPage() {
 
       {/* Create Challenge Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={handleCreateDialogOpenChange}>
-        <DialogContent className="max-w-md max-h-[92vh] overflow-hidden p-0">
+        <DialogContent className="max-w-md p-0">
           <DialogHeader className="px-4 sm:px-6 pt-4 sm:pt-5">
             <DialogTitle className="flex items-center gap-2">
               <Swords className="h-5 w-5" />
@@ -1453,7 +1455,7 @@ export default function ChallengesPage() {
             </DialogTitle>
             <DialogDescription>{t('challenges.createDescription')}</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="h-[calc(92vh-9.5rem)] px-4 sm:px-6">
+          <ScrollArea className="h-[calc(100dvh-15rem)] sm:h-[calc(100dvh-17rem)] px-4 sm:px-6">
             <div className="space-y-3 pb-3">
               <div ref={gameSectionRef}>
                 <Label>{t('challenges.selectGame')}</Label>
@@ -1853,7 +1855,7 @@ export default function ChallengesPage() {
 
       {/* Withdraw Dialog */}
       <Dialog open={showWithdrawDialog} onOpenChange={setShowWithdrawDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           {(() => {
             const isWaitingLeaveAction = Boolean(
               activeChallenge
@@ -1910,11 +1912,12 @@ export default function ChallengesPage() {
                     )}
                   </div>
                 )}
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowWithdrawDialog(false)}>
+                <DialogFooter className="sticky bottom-0 z-10 border-t bg-background px-0 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                  <Button className="w-full sm:w-auto min-h-11" variant="outline" onClick={() => setShowWithdrawDialog(false)}>
                     {t('common.cancel')}
                   </Button>
                   <Button
+                    className="w-full sm:w-auto min-h-11"
                     variant={activeChallenge?.status === 'active' || !isWaitingLeaveAction ? 'destructive' : 'outline'}
                     onClick={() => activeChallenge && withdrawChallengeMutation.mutate(activeChallenge.id)}
                     disabled={withdrawChallengeMutation.isPending}
@@ -1975,7 +1978,7 @@ export default function ChallengesPage() {
 
             <div>
               <Label>{language === 'ar' ? 'مبلغ التحويل (USD)' : 'Conversion Amount (USD)'}</Label>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2">
                 <Input
                   type="number"
                   min="1"
@@ -1987,6 +1990,7 @@ export default function ChallengesPage() {
                 <Button
                   type="button"
                   variant="outline"
+                  className="min-h-[44px] sm:min-h-9"
                   onClick={() => setQuickConvertAmount(String(Math.max(Number(projectCurrencySettings?.minConversionAmount || 1), Number(fundingUsdNeeded.toFixed(2) || 0))))}
                 >
                   {language === 'ar' ? 'اقتراح' : 'Suggest'}
@@ -2001,12 +2005,13 @@ export default function ChallengesPage() {
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConvertDialog(false)}>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-2">
+            <Button className="w-full sm:w-auto min-h-11" variant="outline" onClick={() => setShowConvertDialog(false)}>
               {t('common.cancel')}
             </Button>
             <Button
               variant="outline"
+              className="w-full sm:w-auto min-h-11"
               onClick={() => {
                 setShowConvertDialog(false);
                 setShowDepositDialog(true);
@@ -2015,6 +2020,7 @@ export default function ChallengesPage() {
               {language === 'ar' ? 'فتح نافذة الإيداع' : 'Open Deposit Popup'}
             </Button>
             <Button
+              className="w-full sm:w-auto min-h-11"
               onClick={() => quickConvertMutation.mutate(quickConvertAmount)}
               disabled={quickConvertDisabled}
               data-testid="button-popup-quick-convert"
@@ -2060,7 +2066,7 @@ export default function ChallengesPage() {
                 }}
                 disabled={!hasActivePaymentMethod}
                 data-testid="button-open-p2p-market"
-                className="w-full"
+                className="w-full min-h-11"
               >
                 {t('nav.p2p')}
               </Button>
@@ -2071,12 +2077,12 @@ export default function ChallengesPage() {
                   setLocation(`/wallet?modal=deposit&amount=${suggestedDeposit.toFixed(2)}`);
                 }}
                 data-testid="button-open-wallet-deposit"
-                className="w-full"
+                className="w-full min-h-11"
               >
                 {language === 'ar' ? 'فتح كارت الإيداع' : 'Open Deposit Card'}
               </Button>
             </div>
-            <Button variant="outline" onClick={() => setShowDepositDialog(false)} className="w-full">
+            <Button variant="outline" onClick={() => setShowDepositDialog(false)} className="w-full min-h-11">
               {t('common.cancel')}
             </Button>
           </DialogFooter>

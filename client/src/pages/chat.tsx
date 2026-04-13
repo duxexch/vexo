@@ -536,10 +536,10 @@ export default function ChatPage() {
   const dateGroups = getMessageDateGroups();
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)]">
       {/* =================== Conversation List =================== */}
       <div className={cn(
-        "border-e flex flex-col bg-muted/30 w-full md:w-80",
+        "border-e flex flex-col bg-muted/40 w-full md:w-80",
         mobileShowMessages ? "hidden md:flex" : "flex"
       )}>
         <div className="p-3 sm:p-4 border-b">
@@ -579,7 +579,7 @@ export default function ChatPage() {
                     key={conv.otherUserId}
                     onClick={() => handleSelectConversation(conv.otherUserId)}
                     className={cn(
-                      "w-full p-3 min-h-[44px] rounded-lg text-start hover:bg-accent/50 active:bg-accent transition-colors",
+                      "w-full p-3 min-h-[48px] rounded-xl text-start hover:bg-accent/50 active:bg-accent transition-colors",
                       activeConversation === conv.otherUserId ? "bg-sidebar-accent" : "bg-transparent"
                     )}
                     data-testid={`chat-conversation-${conv.otherUserId}`}
@@ -643,7 +643,7 @@ export default function ChatPage() {
         ) : (
           <>
             {/* ======= Chat Header ======= */}
-            <div className="p-3 sm:p-4 border-b flex items-center gap-3">
+            <div className="p-3 sm:p-4 border-b flex items-center gap-2 sm:gap-3">
               <Button
                 variant="ghost" size="icon"
                 className="md:hidden shrink-0 min-h-[44px] min-w-[44px]"
@@ -688,10 +688,10 @@ export default function ChatPage() {
                   )}
                 </p>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8"
+                    <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px] min-w-[44px]"
                       onClick={() => { setShowChatSearch(!showChatSearch); setChatSearchQuery(""); }}>
                       <Search className="h-4 w-4" />
                     </Button>
@@ -700,7 +700,7 @@ export default function ChatPage() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowPinSetup(true)}>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px] min-w-[44px]" onClick={() => setShowPinSetup(true)}>
                       <Lock className={cn("h-4 w-4", hasPinEnabled ? "text-emerald-500" : "text-muted-foreground")} />
                     </Button>
                   </TooltipTrigger>
@@ -715,7 +715,7 @@ export default function ChatPage() {
                     <Button
                       variant={autoTranslate ? "default" : "ghost"}
                       size="icon"
-                      className={cn("h-8 w-8", autoTranslate && "text-primary-foreground")}
+                      className={cn("h-9 w-9 min-h-[44px] min-w-[44px]", autoTranslate && "text-primary-foreground")}
                       onClick={() => setAutoTranslate(!autoTranslate)}
                     >
                       <Languages className="h-4 w-4" />
@@ -729,7 +729,7 @@ export default function ChatPage() {
                 {/* Language selector */}
                 <DropdownMenu open={showLanguageSelector} onOpenChange={setShowLanguageSelector}>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 px-2 text-xs gap-1 text-foreground">
+                    <Button variant="outline" size="sm" className="h-9 px-2 text-xs gap-1 text-foreground shrink-0">
                       <span className="max-w-[60px] truncate">{currentLanguageInfo?.nativeName || targetLanguage}</span>
                       <ChevronDown className="h-3 w-3" />
                     </Button>
@@ -770,7 +770,7 @@ export default function ChatPage() {
                 {/* Bubble style presets */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px] min-w-[44px] shrink-0">
                       <Palette className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -811,7 +811,7 @@ export default function ChatPage() {
             )}
 
             {/* ======= Messages Area ======= */}
-            <div className="flex-1 overflow-y-auto p-4 relative" onScroll={handleScroll} ref={scrollAreaRef}>
+            <div className="flex-1 overflow-y-auto p-2 sm:p-4 relative" onScroll={handleScroll} ref={scrollAreaRef}>
               {/* Load more indicator */}
               {loadingMore && (
                 <div className="text-center py-2">
@@ -1084,7 +1084,7 @@ export default function ChatPage() {
               {showScrollDown && (
                 <button
                   onClick={scrollToBottom}
-                  className="fixed bottom-24 end-8 z-10 bg-background border shadow-lg rounded-full p-2 hover:bg-accent transition-colors"
+                  className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] end-4 sm:end-8 z-10 bg-background border shadow-lg rounded-full p-2 hover:bg-accent transition-colors"
                 >
                   <ChevronDown className="h-5 w-5" />
                 </button>
@@ -1114,7 +1114,7 @@ export default function ChatPage() {
             )}
 
             {/* ======= Input Area ======= */}
-            <div className="p-3 sm:p-4 border-t">
+            <div className="p-3 sm:p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               {activeConversationPendingCount > 0 && (
                 <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -1172,7 +1172,7 @@ export default function ChatPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="flex gap-2 items-end">
+                <div className="flex gap-1.5 sm:gap-2 items-end">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button

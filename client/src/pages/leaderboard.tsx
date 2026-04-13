@@ -80,10 +80,10 @@ export default function LeaderboardPage() {
   };
 
   return (
-    <div className="container max-w-4xl mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6" dir={dir}>
+    <div className="container max-w-4xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6" dir={dir}>
       <div className="flex items-center gap-4">
         <BackButton />
-        <h1 className="text-2xl font-bold flex items-center gap-2">
+        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
           <Trophy className="w-6 h-6 text-amber-500" />
           {t('leaderboard.title')}
         </h1>
@@ -92,7 +92,7 @@ export default function LeaderboardPage() {
       {myRank && (
         <Card className="bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-full bg-primary/20">
                   <Medal className="w-6 h-6 text-primary" />
@@ -105,6 +105,7 @@ export default function LeaderboardPage() {
               <Button
                 variant="outline"
                 size="sm"
+                className="w-full sm:w-auto min-h-[40px]"
                 onClick={() => navigate('/profile')}
                 data-testid="button-view-profile"
               >
@@ -161,18 +162,18 @@ export default function LeaderboardPage() {
       </div>
 
       <Tabs value={sortBy} onValueChange={setSortBy} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 gap-1">
-          <TabsTrigger value="wins" data-testid="tab-wins">
+        <TabsList className="grid w-full grid-cols-3 gap-1 h-auto p-1">
+          <TabsTrigger className="text-xs sm:text-sm" value="wins" data-testid="tab-wins">
             <Trophy className="w-4 h-4 me-2" />
-            {t('leaderboard.byWins')}
+            <span className="hidden sm:inline">{t('leaderboard.byWins')}</span>
           </TabsTrigger>
-          <TabsTrigger value="earnings" data-testid="tab-earnings">
+          <TabsTrigger className="text-xs sm:text-sm" value="earnings" data-testid="tab-earnings">
             <DollarSign className="w-4 h-4 me-2" />
-            {t('leaderboard.byEarnings')}
+            <span className="hidden sm:inline">{t('leaderboard.byEarnings')}</span>
           </TabsTrigger>
-          <TabsTrigger value="streak" data-testid="tab-streak">
+          <TabsTrigger className="text-xs sm:text-sm" value="streak" data-testid="tab-streak">
             <Flame className="w-4 h-4 me-2" />
-            {t('leaderboard.byStreak')}
+            <span className="hidden sm:inline">{t('leaderboard.byStreak')}</span>
           </TabsTrigger>
         </TabsList>
 
@@ -193,7 +194,7 @@ export default function LeaderboardPage() {
               ) : isError ? (
                 <QueryErrorState error={error} onRetry={() => refetch()} compact />
               ) : leaderboard && leaderboard.length > 0 ? (
-                <ScrollArea className="h-[500px]">
+                <ScrollArea className="h-[60svh] sm:h-[500px]">
                   <div className="space-y-2">
                     {leaderboard.map((player, index) => {
                       const isCurrentUser = player.id === user?.id;
@@ -203,7 +204,7 @@ export default function LeaderboardPage() {
                       return (
                         <div
                           key={player.id}
-                          className={`flex items-center gap-4 p-3 rounded-lg transition-all hover-elevate cursor-pointer ${isCurrentUser ? 'bg-primary/10 border border-primary/20' : 'bg-muted/50'
+                          className={`flex items-center gap-2 sm:gap-4 p-3 rounded-lg transition-all hover-elevate cursor-pointer ${isCurrentUser ? 'bg-primary/10 border border-primary/20' : 'bg-muted/50'
                             }`}
                           onClick={() => navigate(`/player/${player.id}`)}
                           data-testid={`row-player-${player.id}`}
@@ -219,7 +220,7 @@ export default function LeaderboardPage() {
                             )}
                           </div>
 
-                          <Avatar className="w-10 h-10 shrink-0">
+                          <Avatar className="w-9 h-9 sm:w-10 sm:h-10 shrink-0">
                             <AvatarImage src={player.profilePicture} />
                             <AvatarFallback>
                               {player.nickname?.[0] || player.username[0]}
@@ -269,7 +270,7 @@ export default function LeaderboardPage() {
                             )}
                           </div>
 
-                          <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
+                          <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground shrink-0" />
                         </div>
                       );
                     })}

@@ -185,9 +185,9 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-3xl mx-auto" dir={dir}>
+    <div className="max-w-3xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6" dir={dir}>
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-3">
           <BellRing className="h-6 w-6 text-primary" />
           <div>
@@ -201,11 +201,12 @@ export default function NotificationsPage() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full sm:w-auto gap-2">
           {unreadCount > 0 && (
             <Button
               variant="outline"
               size="sm"
+              className="w-full sm:w-auto min-h-[44px]"
               onClick={() => markAllAsReadMutation.mutate()}
               disabled={markAllAsReadMutation.isPending}
             >
@@ -217,18 +218,18 @@ export default function NotificationsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[160px] max-w-[280px]">
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative w-full sm:flex-1 sm:min-w-[220px] sm:max-w-[320px]">
           <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
             placeholder={t('notifications.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 text-xs ps-8"
+            className="h-10 sm:h-8 text-xs ps-8"
           />
         </div>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-[140px] h-8 text-xs">
+          <SelectTrigger className="w-full sm:w-[160px] h-10 sm:h-8 text-xs sm:text-sm">
             <Filter className="h-3 w-3 me-1" />
             <SelectValue placeholder={t('notifications.type')} />
           </SelectTrigger>
@@ -242,7 +243,7 @@ export default function NotificationsPage() {
           </SelectContent>
         </Select>
         <Select value={readFilter} onValueChange={setReadFilter}>
-          <SelectTrigger className="w-[130px] h-8 text-xs">
+          <SelectTrigger className="w-full sm:w-[150px] h-10 sm:h-8 text-xs sm:text-sm">
             <SelectValue placeholder={t('notifications.status')} />
           </SelectTrigger>
           <SelectContent>
@@ -255,7 +256,7 @@ export default function NotificationsPage() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 text-xs"
+            className="h-10 sm:h-8 text-xs"
             onClick={() => { setTypeFilter("all"); setReadFilter("all"); setSearchQuery(""); }}
           >
             {t('notifications.clearFilters')}
@@ -322,7 +323,7 @@ export default function NotificationsPage() {
                                 <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-2" />
                               )}
                             </div>
-                            <div className="flex items-center gap-2 mt-2">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-2">
                               <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", typeColor)}>
                                 {isAr ? typeLabels[notification.type]?.ar : typeLabels[notification.type]?.en}
                               </Badge>
@@ -359,6 +360,7 @@ export default function NotificationsPage() {
               <Button
                 variant="outline"
                 size="sm"
+                className="min-h-[44px]"
                 onClick={() => setPage((p) => p + 1)}
                 disabled={isFetching}
               >

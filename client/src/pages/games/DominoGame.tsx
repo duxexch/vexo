@@ -329,15 +329,15 @@ export default function DominoGame() {
 
   if (error && !dominoState) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-3 text-center">
         <AlertCircle className="w-12 h-12 text-destructive" />
         <p className="text-destructive">{error}</p>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setLocation('/challenges')} data-testid="button-back-challenges">
+        <div className="flex w-full max-w-sm flex-col gap-2 sm:flex-row">
+          <Button className="min-h-[44px] w-full sm:w-auto" variant="outline" onClick={() => setLocation('/challenges')} data-testid="button-back-challenges">
             <ArrowLeft className="w-4 h-4 me-2" />
             {t('common.back')}
           </Button>
-          <Button onClick={forceReconnect} data-testid="button-reconnect">
+          <Button className="min-h-[44px] w-full sm:w-auto" onClick={forceReconnect} data-testid="button-reconnect">
             <RefreshCw className="w-4 h-4 me-2" />
             {t('common.reconnect')}
           </Button>
@@ -367,7 +367,7 @@ export default function DominoGame() {
   }
 
   return (
-    <div className="vex-arcade-stage container mx-auto px-4 py-6 max-w-6xl">
+    <div className="vex-arcade-stage container mx-auto max-w-6xl min-h-[100svh] px-3 sm:px-4 pt-4 sm:pt-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       {/* ── Cinematic Game Start ── */}
       {showCinematic && !gameResult && (
         <GameStartCinematic
@@ -394,7 +394,7 @@ export default function DominoGame() {
               }}
               aria-label={t('common.back')}
               data-testid="button-back"
-              className="vex-arcade-btn vex-arcade-btn--icon"
+              className="vex-arcade-btn vex-arcade-btn--icon min-h-[44px] min-w-[44px]"
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -424,7 +424,7 @@ export default function DominoGame() {
                 <WifiOff className="w-3 h-3" />
               )}
             </Badge>
-            <Button variant="outline" size="icon" onClick={handleShare} aria-label={t('domino.shareGame')} data-testid="button-share" className="vex-arcade-btn vex-arcade-btn--icon">
+            <Button variant="outline" size="icon" onClick={handleShare} aria-label={t('domino.shareGame')} data-testid="button-share" className="vex-arcade-btn vex-arcade-btn--icon min-h-[44px] min-w-[44px]">
               <Share2 className="w-4 h-4" />
             </Button>
           </div>

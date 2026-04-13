@@ -1258,7 +1258,7 @@ export default function ChallengeWatchPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-[100svh] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -1312,14 +1312,15 @@ export default function ChallengeWatchPage() {
               : "An unexpected error occurred.");
 
     return (
-      <div className="p-6">
+      <div className="p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <Card>
           <CardContent className="pt-6 text-center space-y-4">
             <p className="font-semibold">{title}</p>
             <p className="text-sm text-muted-foreground">{description}</p>
-            <div className="flex items-center justify-center gap-2">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
               <Button
                 variant="outline"
+                className="w-full sm:w-auto min-h-[44px]"
                 onClick={() =>
                   queryClient.invalidateQueries({
                     queryKey: [`/api/challenges/${challengeId}`],
@@ -1329,6 +1330,7 @@ export default function ChallengeWatchPage() {
                 {language === "ar" ? "إعادة المحاولة" : "Retry"}
               </Button>
               <Button
+                className="w-full sm:w-auto min-h-[44px]"
                 onClick={() =>
                   setLocation(isUnauthorized ? "/login" : "/challenges")
                 }
@@ -1350,13 +1352,13 @@ export default function ChallengeWatchPage() {
 
   if (!challenge) {
     return (
-      <div className="p-6">
+      <div className="p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <Card>
           <CardContent className="pt-6 text-center">
             <p>
               {language === "ar" ? "التحدي غير موجود" : "Challenge not found"}
             </p>
-            <Button className="mt-4" onClick={() => setLocation("/challenges")}>
+            <Button className="mt-4 min-h-[44px]" onClick={() => setLocation("/challenges")}>
               {language === "ar" ? "العودة للتحديات" : "Back to Challenges"}
             </Button>
           </CardContent>
@@ -1779,10 +1781,10 @@ export default function ChallengeWatchPage() {
 
   return (
     <div
-      className="vex-arcade-stage vex-arcade-stage--tabletop min-h-screen bg-background"
+      className="vex-arcade-stage vex-arcade-stage--tabletop min-h-[100svh] bg-background"
       dir={isRTL ? "rtl" : "ltr"}
     >
-      <div className="flex flex-col lg:flex-row min-h-screen">
+      <div className="flex min-h-[100svh] flex-col lg:flex-row">
         <div className="flex-1 flex flex-col overflow-hidden">
           <header className="vex-arcade-header flex flex-wrap items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
@@ -1847,7 +1849,7 @@ export default function ChallengeWatchPage() {
 
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             <ScrollArea className="flex-1">
-              <div className="p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6 flex flex-col items-center">
+              <div className="p-2.5 sm:p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6 flex flex-col items-center">
                 {showTwoPlayerAvatarLanes && (
                   <div className={playerInfoWidthClass}>
                     <div
@@ -2537,7 +2539,7 @@ export default function ChallengeWatchPage() {
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <button
                               onClick={() =>
                                 setSelectedPlayer(challenge.player1Id)
@@ -2649,7 +2651,7 @@ export default function ChallengeWatchPage() {
                                   )
                                 }
                               >
-                                <TabsList className="grid w-full grid-cols-2">
+                                <TabsList className="grid h-auto w-full grid-cols-2">
                                   <TabsTrigger
                                     value="instant"
                                     className="gap-2"
@@ -2782,10 +2784,10 @@ export default function ChallengeWatchPage() {
                                 </div>
                               )}
 
-                              <div className="flex gap-2">
+                              <div className="flex flex-col sm:flex-row gap-2">
                                 <Button
                                   variant="outline"
-                                  className="vex-arcade-btn flex-1"
+                                  className="vex-arcade-btn flex-1 min-h-[44px]"
                                   onClick={() => {
                                     setSelectedPlayer(null);
                                     setSupportAmount("");
@@ -2795,7 +2797,7 @@ export default function ChallengeWatchPage() {
                                   {language === "ar" ? "إلغاء" : "Cancel"}
                                 </Button>
                                 <Button
-                                  className="vex-arcade-btn flex-1 gap-2"
+                                  className="vex-arcade-btn flex-1 min-h-[44px] gap-2"
                                   onClick={handleAddSupport}
                                   disabled={
                                     !supportAmount ||
@@ -2841,7 +2843,7 @@ export default function ChallengeWatchPage() {
                         {supports.map((support) => (
                           <div
                             key={support.id}
-                            className="flex items-center justify-between p-2 bg-muted/50 rounded-lg"
+                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-2 bg-muted/50 rounded-lg"
                             data-testid={`support-entry-${support.id}`}
                           >
                             <div className="flex items-center gap-2">
@@ -2976,7 +2978,7 @@ export default function ChallengeWatchPage() {
       </div>
 
       <Dialog open={showMobileChat} onOpenChange={setShowMobileChat}>
-        <DialogContent className="overflow-hidden p-0 sm:max-w-md lg:hidden">
+        <DialogContent className="max-w-[calc(100vw-0.75rem)] overflow-hidden rounded-2xl p-0 sm:max-w-md lg:hidden">
           <DialogHeader className="border-b px-4 py-3">
             <DialogTitle className="flex items-center gap-2 text-base">
               <MessageCircle className="h-4 w-4 text-primary" />
@@ -3022,8 +3024,9 @@ export default function ChallengeWatchPage() {
 
           <div className="border-t px-4 py-3">
             {user ? (
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
                 <Input
+                  className="min-h-[44px]"
                   value={mobileChatInput}
                   onChange={(e) => setMobileChatInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -3040,7 +3043,7 @@ export default function ChallengeWatchPage() {
                   maxLength={300}
                 />
                 <Button
-                  className="vex-arcade-btn"
+                  className="vex-arcade-btn min-h-[44px]"
                   onClick={() => sendLiveChatMessage(mobileChatInput)}
                   disabled={!mobileChatInput.trim()}
                 >

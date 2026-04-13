@@ -317,10 +317,10 @@ export default function TransactionsPage() {
   const isAgentOrAdmin = user?.role === "admin" || user?.role === "agent";
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-bold">{t('transactions.title')}</h1>
-        <div className="flex gap-2 flex-wrap">
+    <div className="min-h-[100svh] space-y-5 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.12),transparent_42%)] p-3 sm:space-y-6 sm:p-6">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+        <h1 className="text-xl font-bold sm:text-2xl">{t('transactions.title')}</h1>
+        <div className="flex w-full gap-2 sm:w-auto sm:flex-wrap">
           <Dialog open={depositOpen} onOpenChange={(open) => {
             setDepositOpen(open);
             if (!open) resetDepositForm();
@@ -330,7 +330,7 @@ export default function TransactionsPage() {
                 <ArrowDownCircle className="me-2 h-4 w-4" /> {t('transactions.deposit')}
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>{t('transactions.depositFunds')}</DialogTitle>
                 <DialogDescription>
@@ -339,7 +339,7 @@ export default function TransactionsPage() {
               </DialogHeader>
 
               {depositStep === 'method' && (
-                <div className="space-y-4">
+                <div className="space-y-4 pb-1">
                   <div className="space-y-2">
                     <Label>{t('transactions.selectMethod')}</Label>
                     <Select
@@ -405,7 +405,7 @@ export default function TransactionsPage() {
               )}
 
               {depositStep === 'details' && selectedMethod && (
-                <div className="space-y-4">
+                <div className="space-y-4 pb-1">
                   <Card className="bg-primary/10 border-primary/20">
                     <CardContent className="p-4">
                       <div className="flex items-start gap-3">
@@ -500,14 +500,14 @@ export default function TransactionsPage() {
                 <ArrowUpCircle className="me-2 h-4 w-4" /> {t('transactions.withdraw')}
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>{t('transactions.requestWithdrawal')}</DialogTitle>
                 <DialogDescription>
                   {t('transactions.enterWithdrawAmount')}
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="space-y-4 pb-1">
                 <div className="space-y-2">
                   <Label>{t('transactions.selectMethod')}</Label>
                   <Select
@@ -581,7 +581,7 @@ export default function TransactionsPage() {
       </div>
 
       <Tabs defaultValue="all">
-        <TabsList>
+        <TabsList className="w-full justify-start gap-1 overflow-x-auto whitespace-nowrap">
           <TabsTrigger value="all" data-testid="tab-all-transactions">{t('transactions.myTransactions')}</TabsTrigger>
           {isAgentOrAdmin && <TabsTrigger value="pending" data-testid="tab-pending">{t('transactions.pending')} ({pendingTx?.length || 0})</TabsTrigger>}
         </TabsList>
@@ -595,7 +595,7 @@ export default function TransactionsPage() {
                   return (
                     <div
                       key={tx.id}
-                      className="flex items-center justify-between gap-4 p-4"
+                      className="flex flex-col items-start justify-between gap-4 p-4 sm:flex-row sm:items-center"
                       data-testid={`row-transaction-${tx.id}`}
                     >
                       <div className="flex items-center gap-3">
@@ -624,7 +624,7 @@ export default function TransactionsPage() {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-end">
                         <span className={`font-bold ${tx.type === "deposit" || tx.type === "win" || tx.type === "bonus" ? "text-primary" : "text-destructive"}`}>
                           {tx.type === "deposit" || tx.type === "win" || tx.type === "bonus" ? "+" : "-"}${tx.amount}
                         </span>
@@ -657,7 +657,7 @@ export default function TransactionsPage() {
                     return (
                       <div
                         key={tx.id}
-                        className="flex items-center justify-between gap-4 p-4"
+                        className="flex flex-col items-start justify-between gap-4 p-4 sm:flex-row sm:items-center"
                         data-testid={`row-pending-${tx.id}`}
                       >
                         <div className="flex items-center gap-3">
@@ -686,7 +686,7 @@ export default function TransactionsPage() {
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex w-full items-center gap-2 flex-wrap sm:w-auto sm:justify-end">
                           <span className="font-bold">${tx.amount}</span>
                           <Button
                             size="sm"

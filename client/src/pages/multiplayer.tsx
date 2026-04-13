@@ -345,15 +345,15 @@ export default function MultiplayerPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl space-y-6">
-      <div className="flex items-center justify-between gap-3 mb-6">
+    <div className="container mx-auto max-w-4xl min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6">
+      <div className="flex items-start sm:items-center justify-between gap-3 mb-2 sm:mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
             <Gamepad2 className="w-5 h-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold" data-testid="text-multiplayer-title">{t("multiplayer.title")}</h1>
-            <p className="text-muted-foreground">{t("multiplayer.subtitle")}</p>
+            <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-multiplayer-title">{t("multiplayer.title")}</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">{t("multiplayer.subtitle")}</p>
           </div>
         </div>
         <div className="hidden sm:flex items-center gap-3 text-sm text-muted-foreground">
@@ -367,6 +367,16 @@ export default function MultiplayerPage() {
         </div>
       </div>
 
+      <div className="sm:hidden">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 text-xs">
+          <Wifi className="h-3 w-3" />
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="font-medium">
+            {matchmakingStatus?.queueCount || 0} {t("multiplayer.inQueue")}
+          </span>
+        </div>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>{t("multiplayer.selectGame")}</CardTitle>
@@ -374,7 +384,7 @@ export default function MultiplayerPage() {
         </CardHeader>
         <CardContent>
           <Select value={selectedGameId} onValueChange={setSelectedGameId}>
-            <SelectTrigger data-testid="select-game">
+            <SelectTrigger className="min-h-[44px]" data-testid="select-game">
               <SelectValue placeholder={t("multiplayer.chooseGame")} />
             </SelectTrigger>
             <SelectContent>
@@ -405,6 +415,7 @@ export default function MultiplayerPage() {
               </div>
               <Button
                 variant="outline"
+                className="min-h-[44px]"
                 onClick={() => cancelMatchmakingMutation.mutate()}
                 data-testid="button-cancel-search"
               >
@@ -430,7 +441,7 @@ export default function MultiplayerPage() {
                 <span>{t("multiplayer.playersOnline")}</span>
               </div>
               <Button
-                className="w-full"
+                className="w-full min-h-[44px]"
                 onClick={handleJoinRandom}
                 disabled={joinRandomMutation.isPending || !selectedGameId}
                 data-testid="button-join-random"
@@ -455,7 +466,7 @@ export default function MultiplayerPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <Tabs value={friendSelectionMode} onValueChange={(v) => setFriendSelectionMode(v as 'list' | 'manual')}>
-                <TabsList className="w-full">
+                <TabsList className="w-full h-auto p-1 grid grid-cols-2 gap-1">
                   <TabsTrigger value="list" className="flex-1" data-testid="tab-friend-list">
                     <UserCheck className="w-4 h-4 me-1" />
                     {t("multiplayer.friendsList")}
@@ -468,7 +479,7 @@ export default function MultiplayerPage() {
 
                 <TabsContent value="list" className="mt-4">
                   {friends.length > 0 ? (
-                    <ScrollArea className="h-48 border rounded-lg">
+                    <ScrollArea className="h-56 border rounded-lg">
                       <div className="p-2 space-y-1">
                         {friends.map((friend: FriendItem) => (
                           <div
@@ -522,7 +533,7 @@ export default function MultiplayerPage() {
               </Tabs>
 
               <Button
-                className="w-full"
+                className="w-full min-h-[44px]"
                 onClick={handleInviteFriend}
                 disabled={inviteFriendMutation.isPending || !selectedGameId ||
                   (friendSelectionMode === 'list' ? !selectedFriend : !friendAccountId)}
@@ -550,7 +561,7 @@ export default function MultiplayerPage() {
             {matchmakingStatus.pendingInvites.map((invite: { id: string; createdAt: string;[key: string]: unknown }) => (
               <div
                 key={invite.id}
-                className="flex items-center justify-between p-3 bg-muted rounded-md"
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-muted rounded-md"
                 data-testid={`invite-${invite.id}`}
               >
                 <div className="flex items-center gap-3">
@@ -562,9 +573,10 @@ export default function MultiplayerPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex w-full sm:w-auto items-center gap-2">
                   <Button
                     size="sm"
+                    className="flex-1 sm:flex-none min-h-[40px]"
                     onClick={() => acceptMatchMutation.mutate(invite.id)}
                     disabled={acceptMatchMutation.isPending}
                     data-testid={`button-accept-${invite.id}`}
@@ -575,6 +587,7 @@ export default function MultiplayerPage() {
                   <Button
                     size="sm"
                     variant="outline"
+                    className="flex-1 sm:flex-none min-h-[40px]"
                     onClick={() => declineMatchMutation.mutate(invite.id)}
                     disabled={declineMatchMutation.isPending}
                     data-testid={`button-decline-${invite.id}`}
@@ -598,7 +611,7 @@ export default function MultiplayerPage() {
             {matchmakingStatus.activeMatches.map((match: { id: string; startedAt: string;[key: string]: unknown }) => (
               <div
                 key={match.id}
-                className="flex items-center justify-between p-3 bg-muted rounded-md"
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-muted rounded-md"
                 data-testid={`match-${match.id}`}
               >
                 <div className="flex items-center gap-3">
@@ -607,6 +620,7 @@ export default function MultiplayerPage() {
                 </div>
                 <Button
                   size="sm"
+                  className="w-full sm:w-auto min-h-[40px]"
                   data-testid={`button-play-${match.id}`}
                   onClick={() => openMatchRoute(match as MatchInfo)}
                 >
@@ -619,7 +633,7 @@ export default function MultiplayerPage() {
       )}
 
       <Dialog open={matchFoundDialog} onOpenChange={setMatchFoundDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Gamepad2 className="w-5 h-5 text-primary" />
@@ -629,8 +643,8 @@ export default function MultiplayerPage() {
           </DialogHeader>
           {foundMatch && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-3 p-4 bg-muted rounded-lg">
+                <div className="flex items-center justify-between gap-3">
                   <Avatar>
                     <AvatarImage src={foundMatch.player1?.avatarUrl} />
                     <AvatarFallback>{foundMatch.player1?.username?.charAt(0).toUpperCase()}</AvatarFallback>
@@ -640,8 +654,8 @@ export default function MultiplayerPage() {
                     <p className="text-sm text-muted-foreground">{t("multiplayer.level")} {foundMatch.player1?.vipLevel || 1}</p>
                   </div>
                 </div>
-                <span className="text-xl font-bold text-muted-foreground">{t("lobby.versus")}</span>
-                <div className="flex items-center gap-3">
+                <div className="text-center text-lg font-bold text-muted-foreground">{t("lobby.versus")}</div>
+                <div className="flex items-center justify-between gap-3">
                   <div className="text-end">
                     <p className="font-medium">{foundMatch.player2?.username}</p>
                     <p className="text-sm text-muted-foreground">{t("multiplayer.level")} {foundMatch.player2?.vipLevel || 1}</p>

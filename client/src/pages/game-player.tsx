@@ -267,9 +267,9 @@ export default function GamePlayerPage() {
   const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+      containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => { });
     } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => { });
     }
   }, []);
 
@@ -298,16 +298,16 @@ export default function GamePlayerPage() {
 
   if (state === "error") {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="flex flex-col items-center justify-center min-h-[70svh] gap-4 p-4 text-center">
         <AlertTriangle className="h-12 w-12 text-destructive" />
         <h2 className="text-xl font-bold">{t("game_load_failed") || "Failed to load game"}</h2>
         <p className="text-muted-foreground text-center max-w-md">{error}</p>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setLocation("/games")}>
+        <div className="grid w-full max-w-sm grid-cols-1 sm:grid-cols-2 gap-2">
+          <Button className="min-h-[44px]" variant="outline" onClick={() => setLocation("/games")}>
             <ArrowLeft className="h-4 w-4 me-1 rtl-flip" />
             {t("back") || "Back"}
           </Button>
-          <Button onClick={startSession}>
+          <Button className="min-h-[44px]" onClick={startSession}>
             <RotateCcw className="h-4 w-4 me-1" />
             {t("retry") || "Retry"}
           </Button>
@@ -318,7 +318,7 @@ export default function GamePlayerPage() {
 
   if (state === "loading" || !session) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="flex flex-col items-center justify-center min-h-[70svh] gap-4 p-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
         <p className="text-muted-foreground">{t("loading_game") || "Loading game..."}</p>
       </div>
@@ -326,9 +326,9 @@ export default function GamePlayerPage() {
   }
 
   return (
-    <div ref={containerRef} className="flex flex-col h-[calc(100vh-64px)] bg-background">
+    <div ref={containerRef} className="flex flex-col h-[100svh] bg-background">
       {/* Top Bar */}
-      <div className="flex items-center justify-between px-3 py-2 bg-card border-b shrink-0">
+      <div className="flex items-center justify-between gap-2 px-2 sm:px-3 py-2 bg-card border-b shrink-0">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => {
             if (state === "playing") {
@@ -336,18 +336,18 @@ export default function GamePlayerPage() {
             } else {
               setLocation("/games");
             }
-          }}>
+          }} className="min-h-[44px] min-w-[44px]">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <div className="font-medium text-sm leading-tight">{gameName}</div>
-            <div className="text-xs text-muted-foreground">
+            <div className="font-medium text-sm leading-tight line-clamp-1 max-w-[46vw] sm:max-w-none">{gameName}</div>
+            <div className="text-xs text-muted-foreground line-clamp-1 max-w-[46vw] sm:max-w-none">
               {t("balance") || "Balance"}: ${Number(currentBalance).toFixed(2)}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={toggleFullscreen} title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}>
+          <Button className="min-h-[44px] min-w-[44px]" variant="ghost" size="icon" onClick={toggleFullscreen} title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}>
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
         </div>
@@ -380,12 +380,12 @@ export default function GamePlayerPage() {
             <p className="text-sm text-muted-foreground">
               {t("balance") || "Balance"}: ${Number(currentBalance).toFixed(2)}
             </p>
-            <div className="flex gap-2 justify-center">
-              <Button variant="outline" onClick={() => setLocation("/games")}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 justify-center">
+              <Button className="min-h-[44px]" variant="outline" onClick={() => setLocation("/games")}>
                 <ArrowLeft className="h-4 w-4 me-1 rtl-flip" />
                 {t("back_to_games") || "Games"}
               </Button>
-              <Button onClick={() => {
+              <Button className="min-h-[44px]" onClick={() => {
                 setState("loading");
                 startSession();
               }}>

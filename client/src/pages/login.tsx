@@ -1296,7 +1296,7 @@ export default function LoginPage() {
   return (
     <main
       id="main-content"
-      className="relative flex min-h-screen items-start justify-center overflow-y-auto bg-background p-4 pt-20 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:pt-4"
+      className="relative flex min-h-[100svh] supports-[min-height:100dvh]:min-h-[100dvh] items-start justify-center overflow-y-auto bg-background p-4 pt-20 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:pt-4"
       dir={dir}
     >
       <div
@@ -1309,7 +1309,7 @@ export default function LoginPage() {
         </div>
         <ThemeToggle />
       </div>
-      <Card className="w-full max-w-md border-primary/20">
+      <Card className="w-full max-w-md border-primary/20 overflow-hidden shadow-sm sm:shadow-md">
         <div className="p-6 text-center border-b border-border">
           <div className="flex justify-center mb-4">
             <VexLogo size={64} />
@@ -1318,9 +1318,9 @@ export default function LoginPage() {
           <p className="text-muted-foreground text-sm mt-1">{t('auth.gamingTrading')}</p>
         </div>
 
-        <CardContent className="p-0">
+        <CardContent className="p-0 max-h-[calc(100svh-8.5rem)] supports-[max-height:100dvh]:max-h-[calc(100dvh-8.5rem)] overflow-y-auto overscroll-contain">
           <Tabs value={currentTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full rounded-none border-b border-border h-auto p-0 bg-transparent flex items-stretch overflow-x-auto">
+            <TabsList className="sticky top-0 z-10 w-full rounded-none border-b border-border h-auto p-0 bg-background/95 backdrop-blur flex items-stretch overflow-x-auto">
               {enabledTabs.includes("one-click") && (
                 <TabsTrigger
                   value="one-click"
@@ -1654,7 +1654,7 @@ export default function LoginPage() {
       </Card>
 
       <Dialog open={showCredentialsModal} onOpenChange={setShowCredentialsModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-primary">
               <Check className="w-5 h-5" />
@@ -1798,7 +1798,7 @@ export default function LoginPage() {
       </Dialog>
 
       <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="w-5 h-5" />
@@ -1904,7 +1904,7 @@ export default function LoginPage() {
       </Dialog>
 
       <Dialog open={showIdentifierOtpModal} onOpenChange={setShowIdentifierOtpModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="w-5 h-5 text-primary" />
@@ -1980,7 +1980,7 @@ export default function LoginPage() {
       </Dialog>
 
       <Dialog open={showTwoFactorModal} onOpenChange={setShowTwoFactorModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="w-5 h-5 text-primary" />
@@ -2018,7 +2018,7 @@ export default function LoginPage() {
       </Dialog>
 
       <Dialog open={showCreateAccountModal} onOpenChange={setShowCreateAccountModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {pendingRegistration?.type === "email"
@@ -2077,7 +2077,7 @@ export default function LoginPage() {
       </Dialog>
 
       <Dialog open={showAccountNotFoundModal} onOpenChange={setShowAccountNotFoundModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <User className="w-5 h-5 text-destructive" />
@@ -2125,7 +2125,7 @@ export default function LoginPage() {
       </Dialog>
 
       <Dialog open={showNicknameModal} onOpenChange={(open) => { if (!open) setShowNicknameModal(false); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <User className="w-5 h-5 text-primary" />

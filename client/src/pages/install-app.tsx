@@ -146,13 +146,13 @@ export default function InstallAppPage() {
   }, [screenshots.length]);
 
   return (
-    <div className="min-h-[80vh] px-4 py-6" dir={dir}>
+    <div className="min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] px-4 py-4 sm:py-6 pb-[max(1rem,env(safe-area-inset-bottom))]" dir={dir}>
       <div className="max-w-2xl mx-auto space-y-6">
 
         {/* ══════════════════════════════════════════════════════════════
             ██  HERO SECTION — animated gradient with floating icons  ██
             ══════════════════════════════════════════════════════════════ */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-emerald-500/10 border border-primary/20 p-8 md:p-10 text-center">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 via-primary/10 to-emerald-500/10 border border-primary/20 p-5 sm:p-8 md:p-10 text-center">
           {/* Floating decorative elements */}
           <div className="absolute -top-12 -right-12 w-40 h-40 bg-primary/10 rounded-full blur-2xl animate-pulse" />
           <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl animate-pulse" style={{ animationDelay: '1s' }} />
@@ -208,7 +208,7 @@ export default function InstallAppPage() {
               </div>
               <button
                 onClick={handleShare}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-background/60 backdrop-blur rounded-full border border-border/50 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
+                className="inline-flex min-h-[40px] items-center gap-1.5 px-3 py-1.5 bg-background/60 backdrop-blur rounded-full border border-border/50 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
               >
                 <Share2 className="w-3 h-3" />
                 {t('install.shareApp')}
@@ -256,7 +256,7 @@ export default function InstallAppPage() {
                 {t('install.installedDesc')}
               </p>
               <div className="flex justify-center gap-3 pt-2">
-                <Button variant="outline" size="sm" onClick={handleShare} className="gap-1.5">
+                <Button variant="outline" size="sm" onClick={handleShare} className="gap-1.5 min-h-[40px]">
                   <Share2 className="w-3.5 h-3.5" />
                   {t('install.shareWithFriends')}
                 </Button>
@@ -468,7 +468,7 @@ export default function InstallAppPage() {
                   <a
                     href="/downloads/VEX-official-release.apk"
                     download
-                    className="flex items-center justify-center gap-2 w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/20"
+                    className="flex min-h-[44px] items-center justify-center gap-2 w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/20"
                   >
                     <ArrowDown className="w-5 h-5" />
                     {t('install.downloadApk')}
@@ -712,7 +712,7 @@ export default function InstallAppPage() {
               size="lg"
               onClick={handleInstall}
               disabled={installing}
-              className="px-10 py-6 text-base bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/20 rounded-xl"
+              className="w-full sm:w-auto px-10 py-6 text-base bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg shadow-green-500/20 rounded-xl"
             >
               <Download className="me-2 h-5 w-5" />
               {t('install.downloadNowFree')}
@@ -723,7 +723,7 @@ export default function InstallAppPage() {
 
       {/* ── Floating Install FAB ── */}
       {showPwa && isInstallable && !isInstalled && !showSuccess && (
-        <div className="fixed bottom-6 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
           <Button
             size="lg"
             onClick={handleInstall}

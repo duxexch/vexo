@@ -28,8 +28,8 @@ export function LegalDocumentLayout({
     const isAr = language === "ar";
 
     return (
-        <div className="min-h-screen bg-background py-8 px-4" dir={dir}>
-            <div className="absolute top-4 end-4">
+        <div className="min-h-[100svh] bg-background bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] px-4 py-6 sm:py-8 pb-[max(1rem,env(safe-area-inset-bottom))]" dir={dir}>
+            <div className="absolute top-[max(0.75rem,env(safe-area-inset-top))] end-4 z-10">
                 <ThemeToggle />
             </div>
             <div className="max-w-3xl mx-auto">
@@ -37,17 +37,17 @@ export function LegalDocumentLayout({
                     variant="ghost"
                     size="sm"
                     onClick={() => setLocation("/login")}
-                    className="mb-4"
+                    className="mb-4 min-h-[44px]"
                 >
                     {isAr ? <ArrowRight className="me-2 h-4 w-4" /> : <ArrowLeft className="me-2 h-4 w-4" />}
                     {isAr ? "العودة لتسجيل الدخول" : "Back to Login"}
                 </Button>
 
                 <Card className="border-primary/20">
-                    <CardContent className="p-6 md:p-10">
+                    <CardContent className="p-4 sm:p-6 md:p-10">
                         <div className="flex items-center gap-3 mb-6">
-                            <Icon className="w-8 h-8 text-primary" />
-                            <h1 className="text-2xl md:text-3xl font-bold text-foreground">
+                            <Icon className="h-7 w-7 sm:h-8 sm:w-8 text-primary" />
+                            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">
                                 {isAr ? titleAr : titleEn}
                             </h1>
                         </div>

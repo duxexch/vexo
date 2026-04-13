@@ -240,20 +240,20 @@ export default function ChessGame() {
 
   if (gameType && gameType !== 'chess') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-3 text-center">
         <AlertCircle className="w-12 h-12 text-destructive" />
         <p className="text-destructive font-medium">{t('chess.wrongGameType')}</p>
-        <Button onClick={() => setLocation('/games')} data-testid="button-back-games">{t('common.back')}</Button>
+        <Button className="min-h-[44px] w-full sm:w-auto" onClick={() => setLocation('/games')} data-testid="button-back-games">{t('common.back')}</Button>
       </div>
     );
   }
 
   if (gameState && !isValidChessState) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-3 text-center">
         <AlertCircle className="w-12 h-12 text-destructive" />
         <p className="text-destructive font-medium">{t('chess.invalidGameState')}</p>
-        <Button onClick={forceReconnect} data-testid="button-retry">{t('common.retry')}</Button>
+        <Button className="min-h-[44px] w-full sm:w-auto" onClick={forceReconnect} data-testid="button-retry">{t('common.retry')}</Button>
       </div>
     );
   }
@@ -271,10 +271,10 @@ export default function ChessGame() {
 
   if (connectionStatus === 'error') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-3 text-center">
         <WifiOff className="w-12 h-12 text-destructive" />
         <p className="text-destructive font-medium">{error || t('chess.connectionError')}</p>
-        <Button onClick={forceReconnect} data-testid="button-retry">{t('common.retry')}</Button>
+        <Button className="min-h-[44px] w-full sm:w-auto" onClick={forceReconnect} data-testid="button-retry">{t('common.retry')}</Button>
       </div>
     );
   }
@@ -289,7 +289,7 @@ export default function ChessGame() {
     : (chessState?.capturedPieces?.black || []);
 
   return (
-    <div className="vex-arcade-stage container mx-auto px-3 sm:px-4 py-4 max-w-7xl">
+    <div className="vex-arcade-stage container mx-auto min-h-[100svh] max-w-7xl px-3 sm:px-4 pt-3 sm:pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       {/* ── Cinematic Game Start ── */}
       {showCinematic && !gameResult && (
         <GameStartCinematic
@@ -311,7 +311,7 @@ export default function ChessGame() {
             onClick={() => setLocation('/games')}
             aria-label="Go back"
             data-testid="button-back"
-            className="vex-arcade-btn vex-arcade-btn--icon shrink-0"
+            className="vex-arcade-btn vex-arcade-btn--icon shrink-0 min-h-[44px] min-w-[44px]"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>

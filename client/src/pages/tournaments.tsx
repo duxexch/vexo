@@ -193,11 +193,11 @@ function TournamentListView() {
   const displayList = listTab === 'all' ? tournaments : tournaments.filter(t => t.isRegistered);
 
   return (
-    <div className="container max-w-4xl mx-auto p-4 space-y-6" dir={dir}>
-      <div className="flex items-center gap-4">
+    <div className="container max-w-4xl mx-auto min-h-[100svh] p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-5 sm:space-y-6" dir={dir}>
+      <div className="flex items-start sm:items-center gap-3 sm:gap-4">
         <BackButton />
         <div className="flex-1">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
             <Trophy className="w-6 h-6 text-amber-500" />
             {en ? 'Tournaments' : 'البطولات'}
           </h1>
@@ -213,6 +213,7 @@ function TournamentListView() {
           <Button
             variant={listTab === 'all' ? 'default' : 'outline'}
             size="sm"
+            className="flex-1 min-h-[44px]"
             onClick={() => setListTab('all')}
           >
             <Trophy className="w-4 h-4 me-1" />
@@ -221,6 +222,7 @@ function TournamentListView() {
           <Button
             variant={listTab === 'mine' ? 'default' : 'outline'}
             size="sm"
+            className="flex-1 min-h-[44px]"
             onClick={() => setListTab('mine')}
           >
             <Filter className="w-4 h-4 me-1" />
@@ -264,13 +266,13 @@ function TournamentListView() {
                 onClick={() => navigate(`/tournaments/${t.id}`)}
               >
                 <CardContent className="p-4">
-                  <div className="flex items-start gap-4">
-                    <div className={`p-3 rounded-xl bg-gradient-to-br from-muted to-muted/50`}>
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-muted to-muted/50`}>
                       <GameIcon className={`w-8 h-8 ${gameInfo.color}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-lg truncate">
+                        <h3 className="font-bold text-base sm:text-lg truncate">
                           {en ? t.name : t.nameAr}
                         </h3>
                         <Badge className={`${STATUS_COLORS[t.status] || 'bg-gray-500'} text-white`}>
@@ -307,7 +309,7 @@ function TournamentListView() {
                         {isUpcoming && t.startsAt && <TournamentCountdown startsAt={t.startsAt} />}
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground mt-2" />
+                    <ChevronRight className="hidden sm:block w-5 h-5 text-muted-foreground mt-2" />
                   </div>
                 </CardContent>
               </Card>
@@ -355,8 +357,8 @@ function TournamentDetailView({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div className="container max-w-4xl mx-auto p-4 space-y-6" dir={dir}>
-        <div className="flex items-center gap-4">
+      <div className="container max-w-4xl mx-auto min-h-[100svh] p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-5 sm:space-y-6" dir={dir}>
+        <div className="flex items-start sm:items-center gap-3 sm:gap-4">
           <BackButton />
           <Skeleton className="h-8 w-48" />
         </div>
@@ -368,8 +370,8 @@ function TournamentDetailView({ id }: { id: string }) {
 
   if (!tournament) {
     return (
-      <div className="container max-w-4xl mx-auto p-4" dir={dir}>
-        <div className="flex items-center gap-4 mb-6">
+      <div className="container max-w-4xl mx-auto min-h-[100svh] p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))]" dir={dir}>
+        <div className="flex items-start sm:items-center gap-3 sm:gap-4 mb-6">
           <BackButton />
         </div>
         <Card>
@@ -413,12 +415,12 @@ function TournamentDetailView({ id }: { id: string }) {
   };
 
   return (
-    <div className="container max-w-5xl mx-auto p-4 space-y-6" dir={dir}>
-      <div className="flex items-center gap-4">
+    <div className="container max-w-5xl mx-auto min-h-[100svh] p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-5 sm:space-y-6" dir={dir}>
+      <div className="flex items-start sm:items-center gap-3 sm:gap-4">
         <BackButton />
         <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{en ? tournament.name : tournament.nameAr}</h1>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-xl sm:text-2xl font-bold">{en ? tournament.name : tournament.nameAr}</h1>
             <Badge className={`${STATUS_COLORS[tournament.status]} text-white`}>
               {statusLabel(tournament.status)}
             </Badge>
@@ -471,7 +473,7 @@ function TournamentDetailView({ id }: { id: string }) {
       {/* Register/Withdraw */}
       {user && (canRegister || canWithdraw) && (
         <Card>
-          <CardContent className="p-4 flex items-center justify-between">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h3 className="font-semibold">
                 {canRegister
@@ -490,7 +492,7 @@ function TournamentDetailView({ id }: { id: string }) {
               <Button
                 onClick={() => registerMutation.mutate()}
                 disabled={registerMutation.isPending}
-                className="bg-gradient-to-r from-green-500 to-emerald-600"
+                className="w-full sm:w-auto min-h-[44px] bg-gradient-to-r from-green-500 to-emerald-600"
               >
                 <Swords className="w-4 h-4 me-2" />
                 {en ? 'Register' : 'تسجيل'}
@@ -500,6 +502,7 @@ function TournamentDetailView({ id }: { id: string }) {
                 variant="destructive"
                 onClick={() => withdrawMutation.mutate()}
                 disabled={withdrawMutation.isPending}
+                className="w-full sm:w-auto min-h-[44px]"
               >
                 {en ? 'Withdraw' : 'انسحاب'}
               </Button>
@@ -509,7 +512,7 @@ function TournamentDetailView({ id }: { id: string }) {
       )}
 
       <Tabs defaultValue={tournament.matches.length > 0 ? "bracket" : "participants"} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 gap-1">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1">
           <TabsTrigger value="bracket">
             <Swords className="w-4 h-4 me-2" />
             {en ? 'Bracket' : 'الشجرة'}
@@ -549,15 +552,13 @@ function TournamentDetailView({ id }: { id: string }) {
                         return (
                           <div
                             key={match.id}
-                            className={`rounded-lg border overflow-hidden ${
-                              isComplete ? 'border-muted' : 'border-primary/30'
-                            }`}
+                            className={`rounded-lg border overflow-hidden ${isComplete ? 'border-muted' : 'border-primary/30'
+                              }`}
                             style={{ marginBottom: `${(Math.pow(2, round - 1) - 1) * 64}px` }}
                           >
                             {/* Player 1 */}
-                            <div className={`flex items-center justify-between px-3 py-2 text-sm ${
-                              isP1Winner ? 'bg-green-500/10 font-semibold' : 'bg-muted/30'
-                            }`}>
+                            <div className={`flex items-center justify-between px-3 py-2 text-sm ${isP1Winner ? 'bg-green-500/10 font-semibold' : 'bg-muted/30'
+                              }`}>
                               <span className={`truncate max-w-[140px] ${!match.player1Id && 'text-muted-foreground italic'}`}>
                                 {p1Name}
                               </span>
@@ -567,9 +568,8 @@ function TournamentDetailView({ id }: { id: string }) {
                             </div>
                             <div className="border-t border-muted" />
                             {/* Player 2 */}
-                            <div className={`flex items-center justify-between px-3 py-2 text-sm ${
-                              isP2Winner ? 'bg-green-500/10 font-semibold' : 'bg-muted/30'
-                            }`}>
+                            <div className={`flex items-center justify-between px-3 py-2 text-sm ${isP2Winner ? 'bg-green-500/10 font-semibold' : 'bg-muted/30'
+                              }`}>
                               <span className={`truncate max-w-[140px] ${!match.player2Id && 'text-muted-foreground italic'}`}>
                                 {p2Name}
                               </span>
@@ -614,45 +614,44 @@ function TournamentDetailView({ id }: { id: string }) {
                   {tournament.participants
                     .sort((a, b) => (a.placement ?? 999) - (b.placement ?? 999))
                     .map((p, idx) => (
-                    <div
-                      key={p.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg ${
-                        p.isEliminated ? 'bg-muted/30 opacity-60' : 'bg-muted/50'
-                      }`}
-                    >
-                      <span className="text-sm font-mono w-8 text-center text-muted-foreground">
-                        #{p.seed || idx + 1}
-                      </span>
-                      <Avatar className="w-8 h-8">
-                        <AvatarImage src={p.profilePicture || undefined} />
-                        <AvatarFallback>{(p.nickname || p.username)[0]}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium text-sm truncate block">
-                          {p.nickname || p.username}
+                      <div
+                        key={p.id}
+                        className={`flex flex-wrap sm:flex-nowrap items-center gap-3 p-3 rounded-lg ${p.isEliminated ? 'bg-muted/30 opacity-60' : 'bg-muted/50'
+                          }`}
+                      >
+                        <span className="text-sm font-mono w-8 text-center text-muted-foreground">
+                          #{p.seed || idx + 1}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          {p.wins}W - {p.losses}L
-                        </span>
+                        <Avatar className="w-8 h-8">
+                          <AvatarImage src={p.profilePicture || undefined} />
+                          <AvatarFallback>{(p.nickname || p.username)[0]}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium text-sm truncate block">
+                            {p.nickname || p.username}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {p.wins}W - {p.losses}L
+                          </span>
+                        </div>
+                        {p.placement === 1 && (
+                          <Badge className="bg-amber-500">
+                            <Trophy className="w-3 h-3 me-1" /> 1st
+                          </Badge>
+                        )}
+                        {p.placement === 2 && (
+                          <Badge className="bg-gray-400">2nd</Badge>
+                        )}
+                        {p.placement === 3 && (
+                          <Badge className="bg-amber-700">3rd</Badge>
+                        )}
+                        {p.isEliminated && !p.placement && (
+                          <Badge variant="outline" className="text-red-500 border-red-500">
+                            {en ? 'Eliminated' : 'مُقصى'}
+                          </Badge>
+                        )}
                       </div>
-                      {p.placement === 1 && (
-                        <Badge className="bg-amber-500">
-                          <Trophy className="w-3 h-3 me-1" /> 1st
-                        </Badge>
-                      )}
-                      {p.placement === 2 && (
-                        <Badge className="bg-gray-400">2nd</Badge>
-                      )}
-                      {p.placement === 3 && (
-                        <Badge className="bg-amber-700">3rd</Badge>
-                      )}
-                      {p.isEliminated && !p.placement && (
-                        <Badge variant="outline" className="text-red-500 border-red-500">
-                          {en ? 'Eliminated' : 'مُقصى'}
-                        </Badge>
-                      )}
-                    </div>
-                  ))}
+                    ))}
                 </div>
               )}
             </CardContent>

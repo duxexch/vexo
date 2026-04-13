@@ -73,7 +73,7 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen overflow-y-auto bg-background p-4 pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex sm:items-center sm:justify-center">
+    <div className="min-h-[100svh] overflow-y-auto bg-background p-3 sm:p-4 pt-5 sm:pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex sm:items-center sm:justify-center">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">

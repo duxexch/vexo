@@ -1,7 +1,8 @@
 {
     "recommendations": [
         "redis.redis-for-vscode",
-        "ms-dotnettools.vscode-dotnet-runtime"
+        "ms-dotnettools.vscode-dotnet-runtime",
+        "yzhang.markdown-all-in-one"
     ],
     "unwantedRecommendations": [
         "amitpatole.mcp-marketplace",

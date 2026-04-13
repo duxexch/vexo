@@ -2312,12 +2312,12 @@ function SecuritySection() {
               {sessions.map((session) => (
                 <div
                   key={session.id}
-                  className="flex items-center justify-between gap-4 p-3 rounded-lg bg-muted/50"
+                  className="flex flex-col gap-3 rounded-lg bg-muted/50 p-3 sm:flex-row sm:items-center sm:justify-between"
                   data-testid={`session-item-${session.id}`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex w-full items-center gap-3 sm:w-auto">
                     {getDeviceIcon(session.deviceInfo)}
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-medium flex items-center gap-2">
                         {session.deviceInfo || t("settings.unknownDevice")}
                         {session.isCurrent && (
@@ -2327,7 +2327,7 @@ function SecuritySection() {
                           </Badge>
                         )}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground break-all sm:break-normal">
                         {session.ipAddress} • {t("settings.lastActive")}: {format(new Date(session.lastActiveAt), "PPp")}
                       </p>
                     </div>
@@ -2336,6 +2336,7 @@ function SecuritySection() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="self-end min-h-[44px] min-w-[44px]"
                       onClick={() => revokeSessionMutation.mutate(session.id)}
                       disabled={revokeSessionMutation.isPending}
                       aria-label="Revoke session"
@@ -2383,17 +2384,17 @@ function SecuritySection() {
               {loginHistory.slice(0, 10).map((entry) => (
                 <div
                   key={entry.id}
-                  className="flex items-center justify-between gap-4 py-2 border-b last:border-0"
+                  className="flex flex-col gap-2 border-b py-2 last:border-0 sm:flex-row sm:items-center sm:justify-between"
                   data-testid={`login-history-${entry.id}`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <Globe className="h-4 w-4 text-muted-foreground" />
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm">{entry.ipAddress || t("settings.unknownIP")}</p>
                       <p className="text-xs text-muted-foreground truncate max-w-[200px]">{entry.userAgent || t("settings.unknownDevice")}</p>
                     </div>
                   </div>
-                  <div className="text-end">
+                  <div className="text-start sm:text-end">
                     <Badge variant={entry.status === "success" ? "default" : "destructive"} className="text-xs">
                       {entry.status === "success" ? t("common.success") : t("settings.failed")}
                     </Badge>
@@ -2530,26 +2531,26 @@ export default function SettingsPage() {
   const { t } = useI18n();
 
   return (
-    <div className="container max-w-4xl mx-auto p-3 sm:p-6">
+    <div className="container max-w-4xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] p-3 sm:p-6">
       <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6" data-testid="text-settings-title">{t("nav.settings")}</h1>
 
       <Tabs defaultValue="profile" className="space-y-4 sm:space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="profile" data-testid="tab-profile">
+        <TabsList className="w-full justify-start gap-1 overflow-x-auto whitespace-nowrap rounded-xl p-1">
+          <TabsTrigger value="profile" className="min-h-[44px] min-w-[8rem]" data-testid="tab-profile">
             <User className="h-4 w-4 sm:me-2" />
-            <span className="hidden sm:inline">{t("settings.profile")}</span>
+            <span className="text-xs sm:text-sm">{t("settings.profile")}</span>
           </TabsTrigger>
-          <TabsTrigger value="preferences" data-testid="tab-preferences">
+          <TabsTrigger value="preferences" className="min-h-[44px] min-w-[8rem]" data-testid="tab-preferences">
             <Settings2 className="h-4 w-4 sm:me-2" />
-            <span className="hidden sm:inline">{t("settings.preferences")}</span>
+            <span className="text-xs sm:text-sm">{t("settings.preferences")}</span>
           </TabsTrigger>
-          <TabsTrigger value="privacy" data-testid="tab-privacy">
+          <TabsTrigger value="privacy" className="min-h-[44px] min-w-[8rem]" data-testid="tab-privacy">
             <Globe className="h-4 w-4 sm:me-2" />
-            <span className="hidden sm:inline">{t("settings.privacy") || "Privacy"}</span>
+            <span className="text-xs sm:text-sm">{t("settings.privacy") || "Privacy"}</span>
           </TabsTrigger>
-          <TabsTrigger value="security" data-testid="tab-security">
+          <TabsTrigger value="security" className="min-h-[44px] min-w-[8rem]" data-testid="tab-security">
             <Shield className="h-4 w-4 sm:me-2" />
-            <span className="hidden sm:inline">{t("settings.security")}</span>
+            <span className="text-xs sm:text-sm">{t("settings.security")}</span>
           </TabsTrigger>
         </TabsList>
 

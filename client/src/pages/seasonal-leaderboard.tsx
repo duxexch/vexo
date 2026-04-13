@@ -144,7 +144,7 @@ export default function SeasonalLeaderboardPage() {
 
   if (seasonsLoading) {
     return (
-      <div className="container max-w-4xl mx-auto p-4 space-y-6" dir={dir}>
+      <div className="container max-w-4xl mx-auto min-h-[100svh] p-3 sm:p-4 space-y-4 sm:space-y-6" dir={dir}>
         <div className="flex items-center gap-4">
           <BackButton />
           <Skeleton className="h-8 w-48" />
@@ -158,18 +158,18 @@ export default function SeasonalLeaderboardPage() {
   const currentSeason = leaderboardData?.season || activeSeason;
 
   return (
-    <div className="container max-w-4xl mx-auto p-4 space-y-6" dir={dir}>
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="container max-w-4xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6" dir={dir}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-4">
           <BackButton />
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
             <Trophy className="w-6 h-6 text-primary" />
             {t('seasons.leaderboard')}
           </h1>
         </div>
 
         <Select value={effectiveSeasonId} onValueChange={setSelectedSeasonId}>
-          <SelectTrigger className="w-[200px]" data-testid="select-season">
+          <SelectTrigger className="w-full sm:w-[220px] min-h-[44px]" data-testid="select-season">
             <SelectValue placeholder={t('seasons.selectSeason')} />
           </SelectTrigger>
           <SelectContent>
@@ -190,7 +190,7 @@ export default function SeasonalLeaderboardPage() {
       {currentSeason && (
         <Card className="overflow-hidden">
           <div className="h-2 bg-gradient-to-r from-primary to-primary/50" />
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -220,7 +220,7 @@ export default function SeasonalLeaderboardPage() {
             {myStats && myStats.gamesPlayed > 0 && (
               <div className="mt-4 p-4 bg-muted/50 rounded-lg">
                 <h3 className="text-sm font-medium mb-3">{t('seasons.yourStats')}</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-center">
                   <div>
                     <div className="text-2xl font-bold text-primary">
                       {myStats.gamesWon}
@@ -275,7 +275,7 @@ export default function SeasonalLeaderboardPage() {
               <p className="text-sm mt-2">{t('seasons.beFirst')}</p>
             </div>
           ) : (
-            <ScrollArea className="h-[500px]">
+            <ScrollArea className="h-[60svh] sm:h-[500px]">
               <div className="space-y-2">
                 {leaderboardData?.leaderboard.map((entry) => {
                   const RankIcon = entry.rank <= 3 ? RANK_ICONS[entry.rank - 1] : null;
@@ -285,7 +285,7 @@ export default function SeasonalLeaderboardPage() {
                   return (
                     <div
                       key={entry.userId}
-                      className={`flex items-center gap-4 p-4 rounded-lg transition-colors hover-elevate cursor-pointer ${isCurrentUser ? 'bg-primary/10 border border-primary/20' : 'bg-muted/30'
+                      className={`flex items-center gap-2 sm:gap-4 p-3 sm:p-4 rounded-lg transition-colors hover-elevate cursor-pointer ${isCurrentUser ? 'bg-primary/10 border border-primary/20' : 'bg-muted/30'
                         }`}
                       onClick={() => navigate(`/player/${entry.user.id}`)}
                       data-testid={`leaderboard-entry-${entry.rank}`}
@@ -300,7 +300,7 @@ export default function SeasonalLeaderboardPage() {
                         )}
                       </div>
 
-                      <Avatar className="h-10 w-10">
+                      <Avatar className="h-9 w-9 sm:h-10 sm:w-10">
                         <AvatarImage src={entry.user.profilePicture || undefined} />
                         <AvatarFallback>
                           {(entry.user.nickname || entry.user.username)[0].toUpperCase()}
@@ -316,7 +316,7 @@ export default function SeasonalLeaderboardPage() {
                             </Badge>
                           )}
                         </div>
-                        <div className="text-sm text-muted-foreground flex items-center gap-3">
+                        <div className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2 sm:gap-3">
                           <span className="flex items-center gap-1">
                             <Trophy className="w-3 h-3" />
                             {entry.gamesWon} {t('seasons.wins')}
@@ -332,7 +332,7 @@ export default function SeasonalLeaderboardPage() {
                         </div>
                       </div>
 
-                      <div className="text-end">
+                      <div className="text-end shrink-0">
                         <div className="flex items-center gap-1 text-green-500 font-medium">
                           <DollarSign className="w-4 h-4" />
                           {formatCurrency(entry.totalEarnings)}
@@ -342,7 +342,7 @@ export default function SeasonalLeaderboardPage() {
                         </div>
                       </div>
 
-                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                      <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
                     </div>
                   );
                 })}
@@ -355,6 +355,7 @@ export default function SeasonalLeaderboardPage() {
       <div className="flex justify-center">
         <Button
           variant="outline"
+          className="min-h-[44px]"
           onClick={() => navigate('/leaderboard')}
           data-testid="button-view-alltime"
         >

@@ -34,7 +34,7 @@ export default function GamesPage() {
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -188,7 +188,7 @@ export default function GamesPage() {
   }
 
   return (
-    <div dir={dir} className="p-6 space-y-6">
+    <div dir={dir} className="min-h-[100svh] space-y-5 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.12),transparent_42%)] p-3 sm:space-y-6 sm:p-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <BackButton fallbackPath="/dashboard" />
@@ -224,8 +224,8 @@ export default function GamesPage() {
                     required
                   />
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>{t('games.category')}</Label>
                     <Select value={formData.category} onValueChange={(v) => setFormData(p => ({ ...p, category: v }))}>
@@ -241,7 +241,7 @@ export default function GamesPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>{t('games.volatilityLabel')}</Label>
                     <Select value={formData.volatility} onValueChange={(v) => setFormData(p => ({ ...p, volatility: v }))}>
@@ -256,8 +256,8 @@ export default function GamesPage() {
                     </Select>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>{t('games.rtpPercent')}</Label>
                     <Input
@@ -281,8 +281,8 @@ export default function GamesPage() {
                     />
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>{t('games.minAmount')}</Label>
                     <Input
@@ -306,7 +306,7 @@ export default function GamesPage() {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label>{t('games.statusLabel')}</Label>
                   <Select value={formData.status} onValueChange={(v) => setFormData(p => ({ ...p, status: v }))}>
@@ -320,7 +320,7 @@ export default function GamesPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 <Button
                   type="submit"
                   className="w-full"
@@ -338,7 +338,7 @@ export default function GamesPage() {
         )}
       </div>
 
-      <div className="relative max-w-md">
+      <div className="relative w-full max-w-md">
         <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           data-testid="input-search-games"
@@ -349,7 +349,7 @@ export default function GamesPage() {
         />
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {categories.map((cat) => (
           <Button
             key={cat.value}
@@ -357,7 +357,7 @@ export default function GamesPage() {
             size="sm"
             onClick={() => setCategoryFilter(cat.value)}
             data-testid={`filter-category-${cat.value}`}
-            className="gap-2"
+            className="gap-2 shrink-0"
           >
             {cat.value !== "all" && getCategoryIcon(cat.value)}
             {cat.label}
@@ -373,8 +373,8 @@ export default function GamesPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {mostPlayedGames.map((game, index) => (
-              <Card 
-                key={game.id} 
+              <Card
+                key={game.id}
                 data-testid={`card-featured-game-${game.id}`}
                 className="relative overflow-hidden border-primary/20 bg-gradient-to-br from-card to-card/80 hover-elevate"
               >
@@ -403,7 +403,7 @@ export default function GamesPage() {
                   </div>
                   <div className="flex gap-2">
                     <Badge variant="outline" className="text-xs">{game.rtp}% {t('games.rtp')}</Badge>
-                    <Badge 
+                    <Badge
                       variant={game.status === "active" ? "default" : "secondary"}
                       className={`text-xs ${game.status === "active" ? "bg-primary" : ""}`}
                     >
@@ -430,9 +430,9 @@ export default function GamesPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredGames.map((game) => (
-            <Card 
-              key={game.id} 
-              data-testid={`card-game-${game.id}`} 
+            <Card
+              key={game.id}
+              data-testid={`card-game-${game.id}`}
               className="group hover-elevate transition-all duration-200"
             >
               <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
@@ -457,7 +457,7 @@ export default function GamesPage() {
                   <Badge variant="outline" className="text-xs">{game.volatility} {t('games.volatilityLabel')}</Badge>
                   <Badge variant="outline" className="text-xs">{game.rtp}% {t('games.rtp')}</Badge>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="p-2 rounded-md bg-muted/50">
                     <span className="text-muted-foreground text-xs block">{t('games.minBet')}</span>
@@ -468,7 +468,7 @@ export default function GamesPage() {
                     <span className="font-medium">${game.maxBet}</span>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center justify-between text-sm border-t pt-3">
                   <div className="flex items-center gap-1 text-muted-foreground">
                     <TrendingUp className="h-3 w-3" />
@@ -478,7 +478,7 @@ export default function GamesPage() {
                     ${parseFloat(game.totalVolume).toLocaleString()} {t('games.vol')}
                   </div>
                 </div>
-                
+
                 {isAdmin && (
                   <div className="flex gap-2 pt-2 border-t">
                     <Button
@@ -507,7 +507,7 @@ export default function GamesPage() {
           ))}
         </div>
       </div>
-      
+
       {filteredGames.length === 0 && (
         <Card>
           <CardContent className="p-12 text-center">
@@ -516,8 +516,8 @@ export default function GamesPage() {
             </div>
             <h3 className="font-semibold mb-1">{t('games.noGamesFound')}</h3>
             <p className="text-muted-foreground text-sm">
-              {searchQuery || categoryFilter !== "all" 
-                ? t('games.tryAdjusting') 
+              {searchQuery || categoryFilter !== "all"
+                ? t('games.tryAdjusting')
                 : t('games.addFirstGame')}
             </p>
           </CardContent>

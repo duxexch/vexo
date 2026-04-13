@@ -60,7 +60,7 @@ function UserCard({
 
   return (
     <div
-      className="group relative flex items-center gap-3 p-3 rounded-xl 
+      className="group relative flex items-start sm:items-center gap-2.5 sm:gap-3 p-3 rounded-xl 
                  bg-card/50 border border-border/40 hover:border-primary/30
                  hover:bg-card/80 transition-all duration-200"
       data-testid={`card-user-${user.id}`}
@@ -99,7 +99,7 @@ function UserCard({
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-1.5 flex-shrink-0">
+      <div className="flex items-center gap-1.5 flex-wrap justify-end flex-shrink-0">
         {actionType === "friend" && (
           <>
             <Button
@@ -738,8 +738,8 @@ export default function FriendsPage() {
   };
 
   return (
-    <div className="min-h-full" dir={dir}>
-      <div className="max-w-lg mx-auto px-3 py-4 space-y-4">
+    <div className="min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)]" dir={dir}>
+      <div className="max-w-xl mx-auto px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4">
 
         {/* Header */}
         <div className="space-y-1">

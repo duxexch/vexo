@@ -2147,7 +2147,7 @@ export default function ChallengeGamePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-[100svh] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -2201,14 +2201,15 @@ export default function ChallengeGamePage() {
               : "An unexpected error occurred.");
 
     return (
-      <div className="p-6">
+      <div className="p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <Card>
           <CardContent className="pt-6 text-center space-y-4">
             <p className="font-semibold">{title}</p>
             <p className="text-sm text-muted-foreground">{description}</p>
-            <div className="flex items-center justify-center gap-2">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
               <Button
                 variant="outline"
+                className="w-full sm:w-auto min-h-[44px]"
                 onClick={() =>
                   queryClient.invalidateQueries({
                     queryKey: [`/api/challenges/${challengeId}`],
@@ -2218,6 +2219,7 @@ export default function ChallengeGamePage() {
                 {language === "ar" ? "إعادة المحاولة" : "Retry"}
               </Button>
               <Button
+                className="w-full sm:w-auto min-h-[44px]"
                 onClick={() =>
                   setLocation(isUnauthorized ? "/login" : "/challenges")
                 }
@@ -2239,11 +2241,11 @@ export default function ChallengeGamePage() {
 
   if (!challenge) {
     return (
-      <div className="p-6">
+      <div className="p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <Card>
           <CardContent className="pt-6 text-center">
             <p>{t("challenge.notFound")}</p>
-            <Button className="mt-4" onClick={() => setLocation("/challenges")}>
+            <Button className="mt-4 min-h-[44px]" onClick={() => setLocation("/challenges")}>
               {t("challenge.backToChallenges")}
             </Button>
           </CardContent>
@@ -2254,7 +2256,7 @@ export default function ChallengeGamePage() {
 
   if (serverRole === null && wsConnState === "connecting") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+      <div className="min-h-[100svh] flex flex-col items-center justify-center gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-muted-foreground">
           {t("challenge.determiningRole")}
@@ -2509,7 +2511,7 @@ export default function ChallengeGamePage() {
   };
 
   return (
-    <div className="vex-arcade-stage vex-arcade-stage--tabletop min-h-screen bg-background">
+    <div className="vex-arcade-stage vex-arcade-stage--tabletop min-h-[100svh] bg-background">
       {/* Reconnection overlay */}
       {wsConnState === "reconnecting" && (
         <div className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-center gap-4 backdrop-blur-sm">
@@ -2520,7 +2522,7 @@ export default function ChallengeGamePage() {
           <p className="text-white/60 text-sm">{t("challenge.dontClose")}</p>
         </div>
       )}
-      <div className="flex flex-col lg:flex-row h-screen">
+      <div className="flex min-h-[100svh] flex-col lg:flex-row">
         <div className="flex-1 flex flex-col">
           <header className="vex-arcade-header flex flex-wrap items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
@@ -3203,12 +3205,12 @@ export default function ChallengeGamePage() {
 
               {canPlayActions && gameSession?.status === "playing" && (
                 <div
-                  className={`${isChessGame || isBackgammonGame ? "mt-2" : "mt-4"} flex gap-2 items-center`}
+                  className={`${isChessGame || isBackgammonGame ? "mt-2" : "mt-4"} flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:justify-start`}
                 >
                   <Button
                     variant="destructive"
                     size="sm"
-                    className="vex-arcade-btn"
+                    className="vex-arcade-btn min-h-[44px]"
                     onClick={() => setShowResignDialog(true)}
                     data-testid="button-resign"
                   >
@@ -3223,7 +3225,7 @@ export default function ChallengeGamePage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="vex-arcade-btn"
+                        className="vex-arcade-btn min-h-[44px]"
                         onClick={sendOfferDraw}
                         data-testid="button-offer-draw"
                       >
@@ -3240,12 +3242,12 @@ export default function ChallengeGamePage() {
 
                   {/* Draw offered by opponent — accept/decline */}
                   {drawOffered && drawOffered !== user?.id && (
-                    <div className="flex gap-1 items-center">
+                    <div className="flex flex-wrap gap-1 items-center justify-center sm:justify-start">
                       <Badge>{t("challenge.drawOffer")}</Badge>
                       <Button
                         size="sm"
                         variant="default"
-                        className="vex-arcade-btn"
+                        className="vex-arcade-btn min-h-[40px]"
                         onClick={() => sendRespondDraw(true)}
                       >
                         {t("challenge.accept")}
@@ -3253,7 +3255,7 @@ export default function ChallengeGamePage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="vex-arcade-btn"
+                        className="vex-arcade-btn min-h-[40px]"
                         onClick={() => sendRespondDraw(false)}
                       >
                         {t("challenge.decline")}
@@ -3372,7 +3374,7 @@ export default function ChallengeGamePage() {
       )}
 
       <Dialog open={showMobileChat} onOpenChange={setShowMobileChat}>
-        <DialogContent className="overflow-hidden p-0 sm:max-w-md lg:hidden">
+        <DialogContent className="max-w-[calc(100vw-0.75rem)] overflow-hidden rounded-2xl p-0 sm:max-w-md lg:hidden">
           <DialogHeader className="border-b px-4 py-3">
             <DialogTitle className="flex items-center gap-2 text-base">
               <MessageCircle className="h-4 w-4 text-primary" />
@@ -3383,7 +3385,7 @@ export default function ChallengeGamePage() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="relative h-[58vh] px-2 pb-2">
+          <div className="relative h-[min(65vh,32rem)] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             <GameChat
               messages={
                 messages as unknown as {
@@ -3735,7 +3737,7 @@ export default function ChallengeGamePage() {
       </Dialog>
 
       {showQuickConvertCard && currencyPolicy?.projectOnly && (
-        <div className="fixed bottom-4 end-4 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-4 shadow-xl">
+        <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] end-4 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-4 shadow-xl">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-semibold">
@@ -3752,6 +3754,7 @@ export default function ChallengeGamePage() {
             <Button
               variant="ghost"
               size="icon"
+              className="min-h-[40px] min-w-[40px]"
               onClick={() => setShowQuickConvertCard(false)}
             >
               <X className="h-4 w-4" />

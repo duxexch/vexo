@@ -126,10 +126,10 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
   const welcomeName = String(user?.nickname || user?.username || '');
 
   return (
-    <div className="p-3 sm:p-6 space-y-3 sm:space-y-6" dir={dir}>
+    <div className="min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3 sm:space-y-6" dir={dir}>
       {/* Online Status Bar */}
       {platformStats && (
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>
@@ -146,7 +146,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
           )}
         </div>
       )}
-      <h1 className="text-xl sm:text-2xl font-bold">{t('dashboard.welcome')}, {welcomeName}</h1>
+      <h1 className="text-xl sm:text-2xl font-bold break-words">{t('dashboard.welcome')}, {welcomeName}</h1>
 
       {/* Balance & Account Summary */}
       <Card>
@@ -155,6 +155,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
           <Button
             variant="ghost"
             size="icon"
+            className="min-h-[44px] min-w-[44px]"
             onClick={toggleBalanceVisibility}
             aria-label={isBalanceHidden ? t('dashboard.showBalance') : t('dashboard.hideBalance')}
             data-testid="button-toggle-dashboard-balance"
@@ -163,9 +164,9 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
           </Button>
         </CardHeader>
         <CardContent className="p-3 sm:p-6 pt-0 space-y-4 text-xs font-medium">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <span className="text-muted-foreground">{t('common.balance')}</span>
-            <span className="text-3xl font-bold text-primary balance-glow" data-testid="text-dashboard-balance">
+            <span className="text-2xl sm:text-3xl font-bold text-primary balance-glow break-all" data-testid="text-dashboard-balance">
               {isBalanceHidden ? '******' : formatCurrency(balance)}
             </span>
           </div>
@@ -284,7 +285,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
       {activeChallengesCount > 0 && (
         <Link href="/challenges">
           <Card className="hover-elevate cursor-pointer border-orange-500/30 bg-orange-500/5">
-            <CardContent className="p-3 sm:p-4 flex items-center justify-between">
+            <CardContent className="p-3 sm:p-4 flex items-center justify-between gap-2">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-full bg-orange-500/10">
                   <Trophy className="h-5 w-5 text-orange-500" />
@@ -305,11 +306,11 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
       )}
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
         {quickActions.map((action) => (
           <Link key={action.url} href={action.url}>
             <Card className="hover-elevate cursor-pointer">
-              <CardContent className="p-3 sm:p-4 flex flex-col items-center gap-2 text-center">
+              <CardContent className="p-3 sm:p-4 min-h-[112px] flex flex-col items-center justify-center gap-2 text-center">
                 <div className={`p-3 rounded-full ${action.color}`}>
                   <action.icon className="h-6 w-6" />
                 </div>
@@ -344,7 +345,7 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="p-3 sm:p-6 space-y-3 sm:space-y-6" dir={dir}>
+      <div className="min-h-[100svh] p-3 sm:p-6 space-y-3 sm:space-y-6" dir={dir}>
         <Skeleton className="h-8 w-48" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {[...Array(8)].map((_, i) => (
@@ -426,7 +427,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="p-3 sm:p-6 space-y-3 sm:space-y-6" dir={dir}>
+    <div className="min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3 sm:space-y-6" dir={dir}>
       <div className="flex items-center justify-between gap-3 sm:gap-4 flex-wrap">
         <h1 className="text-xl sm:text-2xl font-bold">{t('dashboard.adminTitle')}</h1>
         <Badge variant="outline" className="text-primary border-primary">

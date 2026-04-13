@@ -121,18 +121,18 @@ export default function GameHistoryPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-[100svh] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6">
       <div className="flex items-center gap-3">
         <BackButton />
         <History className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold">
+        <h1 className="text-xl sm:text-2xl font-bold">
           {t('gameHistory.title')}
         </h1>
       </div>
@@ -195,7 +195,7 @@ export default function GameHistoryPage() {
               const iconImageUrl = cfg?.iconUrl;
               return (
                 <Card key={c.id} className="hover-elevate cursor-pointer">
-                  <CardContent className="p-3 flex items-center gap-3" onClick={() => navigate(`/challenge/${c.id}/play`)}>
+                  <CardContent className="p-3 flex flex-wrap sm:flex-nowrap items-center gap-3" onClick={() => navigate(`/challenge/${c.id}/play`)}>
                     {iconImageUrl ? (
                       <div className="h-8 w-8 shrink-0 rounded-md bg-muted/60 p-1">
                         <img src={iconImageUrl} alt="" className="h-full w-full object-contain" loading="lazy" decoding="async" />
@@ -211,7 +211,7 @@ export default function GameHistoryPage() {
                         vs {c.player1Id === user?.id ? c.player2Name || "..." : c.player1Name || "..."}
                       </p>
                     </div>
-                    <Badge variant="secondary">{formatChallengeAmountText(c.betAmount, c.currencyType)}</Badge>
+                    <Badge variant="secondary" className="ms-auto sm:ms-0">{formatChallengeAmountText(c.betAmount, c.currencyType)}</Badge>
                     <Badge className="bg-green-500/20 text-green-500">
                       {t('gameHistory.live')}
                     </Badge>
@@ -225,7 +225,7 @@ export default function GameHistoryPage() {
 
       {/* Completed Games */}
       <div>
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
           <h2 className="text-lg font-semibold">
             {t('gameHistory.completedGames')}
             {completed.length !== allCompleted.length && (
@@ -234,9 +234,9 @@ export default function GameHistoryPage() {
               </span>
             )}
           </h2>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto">
             <Select value={gameFilter} onValueChange={setGameFilter}>
-              <SelectTrigger className="w-[130px] h-8 text-xs">
+              <SelectTrigger className="w-full sm:w-[150px] h-10 sm:h-8 text-xs sm:text-sm">
                 <SelectValue placeholder={t('gameHistory.game')} />
               </SelectTrigger>
               <SelectContent>
@@ -249,7 +249,7 @@ export default function GameHistoryPage() {
               </SelectContent>
             </Select>
             <Select value={resultFilter} onValueChange={setResultFilter}>
-              <SelectTrigger className="w-[110px] h-8 text-xs">
+              <SelectTrigger className="w-full sm:w-[130px] h-10 sm:h-8 text-xs sm:text-sm">
                 <SelectValue placeholder={t('gameHistory.result')} />
               </SelectTrigger>
               <SelectContent>
@@ -270,7 +270,7 @@ export default function GameHistoryPage() {
           </Card>
         ) : (
           <>
-            <ScrollArea className="max-h-[60vh]">
+            <ScrollArea className="max-h-[55svh] sm:max-h-[60vh]">
               <div className="space-y-2 pe-2">
                 {completed.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(c => {
                   const result = getResult(c);
@@ -281,7 +281,7 @@ export default function GameHistoryPage() {
 
                   return (
                     <Card key={c.id} className="animate-list-enter">
-                      <CardContent className="p-3 flex items-center gap-3">
+                      <CardContent className="p-3 flex flex-col sm:flex-row sm:items-center gap-3">
                         <div className={cn(
                           "p-2 rounded-lg shrink-0",
                           result === "win" ? "bg-green-500/10" : result === "loss" ? "bg-red-500/10" : "bg-muted"
@@ -335,7 +335,7 @@ export default function GameHistoryPage() {
                             {formatDate(c.createdAt)}
                           </p>
                         </div>
-                        <div className="text-end shrink-0">
+                        <div className="text-end sm:text-end self-end sm:self-auto shrink-0">
                           <p className={cn(
                             "font-mono font-bold text-sm",
                             result === "win" ? "text-green-500" : result === "loss" ? "text-red-500" : "text-muted-foreground"
@@ -355,6 +355,7 @@ export default function GameHistoryPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="min-h-[40px] min-w-[40px]"
                   disabled={page <= 1}
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                 >
@@ -366,6 +367,7 @@ export default function GameHistoryPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="min-h-[40px] min-w-[40px]"
                   disabled={page >= Math.ceil(completed.length / ITEMS_PER_PAGE)}
                   onClick={() => setPage(p => Math.min(Math.ceil(completed.length / ITEMS_PER_PAGE), p + 1))}
                 >

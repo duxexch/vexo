@@ -142,7 +142,7 @@ const ChallengeRow = memo(function ChallengeRow({
 
   return (
     <div
-      className={`relative flex items-center gap-4 p-4 rounded-lg bg-card/50 hover-elevate transition-all ${isNew ? 'ring-2 ring-primary' : ''}`}
+      className={`relative flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-4 rounded-lg bg-card/50 hover-elevate transition-all ${isNew ? 'ring-2 ring-primary' : ''}`}
       data-testid={`row-challenge-${challenge.id}`}
     >
       {isNew && (
@@ -195,11 +195,12 @@ const ChallengeRow = memo(function ChallengeRow({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex w-full sm:w-auto items-center gap-2 sm:shrink-0">
         {type === 'yours' && (
           <Button
             variant="outline"
             size="sm"
+            className="w-full sm:w-auto min-h-[40px]"
             onClick={() => onResume(challenge.id)}
             data-testid={`button-resume-${challenge.id}`}
           >
@@ -210,6 +211,7 @@ const ChallengeRow = memo(function ChallengeRow({
         {type === 'open' && (
           <Button
             size="sm"
+            className="w-full sm:w-auto min-h-[40px]"
             onClick={() => onJoin(challenge.id)}
             disabled={isJoining}
             data-testid={`button-join-${challenge.id}`}
@@ -228,6 +230,7 @@ const ChallengeRow = memo(function ChallengeRow({
           <Button
             variant="outline"
             size="sm"
+            className="w-full sm:w-auto min-h-[40px]"
             onClick={() => onWatch(challenge.id)}
             data-testid={`button-watch-${challenge.id}`}
           >
@@ -313,7 +316,7 @@ const GameCard = memo(function GameCard({
 
           <Button
             size="sm"
-            className="w-full"
+            className="w-full min-h-[44px]"
             onClick={(e) => { e.stopPropagation(); onQuickMatch(gameType); }}
             data-testid={`button-quickmatch-${gameType}`}
           >
@@ -511,16 +514,16 @@ export default function GameLobbyPage() {
   }, [quickMatchGame, availableChallenges, user?.id, quickMatchBet, joinChallengeMutation, createChallengeMutation]);
 
   return (
-    <div className="min-h-screen p-4 md:p-6 space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+    <div className="min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6">
+      <div className="flex items-start sm:items-center justify-between flex-wrap gap-3 sm:gap-4">
         <div className="flex items-center gap-4">
           <BackButton data-testid="button-back" />
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
               <Gamepad2 className="w-7 h-7 text-primary" />
               {t('lobby.title')}
             </h1>
-            <p className="text-muted-foreground text-sm flex items-center gap-2">
+            <p className="text-muted-foreground text-xs sm:text-sm flex items-center gap-2 flex-wrap">
               {t('lobby.subtitle')}
               <span className="inline-flex items-center gap-1 text-xs">
                 <span className="relative flex h-2 w-2">
@@ -532,9 +535,9 @@ export default function GameLobbyPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full sm:w-auto items-center gap-2 sm:gap-3">
           {(user?.freePlayCount ?? 0) > 0 && (
-            <Badge variant="default" className="text-sm py-1.5 px-3" data-testid="badge-free-plays">
+            <Badge variant="default" className="text-xs sm:text-sm py-1.5 px-3" data-testid="badge-free-plays">
               <Gift className="w-4 h-4 me-1.5" />
               {user?.freePlayCount} {t('lobby.freePlays')}
             </Badge>
@@ -542,12 +545,13 @@ export default function GameLobbyPage() {
           <Button
             variant="outline"
             size="icon"
+            className="min-h-[44px] min-w-[44px]"
             onClick={handleRefresh}
             data-testid="button-refresh"
           >
             <RefreshCw className="w-4 h-4" />
           </Button>
-          <Button onClick={() => navigate('/challenges')} data-testid="button-create-challenge">
+          <Button className="flex-1 sm:flex-none min-h-[44px]" onClick={() => navigate('/challenges')} data-testid="button-create-challenge">
             <Sparkles className="w-4 h-4 me-2" />
             {t('lobby.createChallenge')}
           </Button>
@@ -577,13 +581,14 @@ export default function GameLobbyPage() {
         })}
       </div>
 
-      <Card className="p-4">
+      <Card className="p-3 sm:p-4">
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-muted-foreground me-2">{t('lobby.gameType')}:</span>
             <Button
               variant={selectedGame === null ? "default" : "outline"}
               size="sm"
+              className="min-h-[40px]"
               onClick={() => setSelectedGame(null)}
               data-testid="button-filter-all"
             >
@@ -600,7 +605,7 @@ export default function GameLobbyPage() {
                   variant={isSelected ? "default" : "outline"}
                   size="sm"
                   onClick={() => setSelectedGame(isSelected ? null : gameType)}
-                  className={`gap-2 ${isSelected ? '' : config.color}`}
+                  className={`gap-2 min-h-[40px] ${isSelected ? '' : config.color}`}
                   data-testid={`button-filter-${gameType}`}
                 >
                   <Icon className="w-4 h-4" />
@@ -622,6 +627,7 @@ export default function GameLobbyPage() {
                 key={preset.key}
                 variant={stakePreset === preset.key ? "default" : "outline"}
                 size="sm"
+                className="min-h-[40px]"
                 onClick={() => handleStakePreset(preset)}
                 data-testid={`button-stake-${preset.key}`}
               >
@@ -655,7 +661,7 @@ export default function GameLobbyPage() {
       </Card>
 
       <Tabs defaultValue={savedPrefs.defaultTab} className="w-full" onValueChange={(value) => savePreferences({ defaultTab: value })}>
-        <TabsList className="w-full justify-start mb-4 h-auto p-1 flex-wrap gap-1">
+        <TabsList className="mb-4 h-auto w-full justify-start gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <TabsTrigger value="yours" className="flex items-center gap-2" data-testid="tab-yours">
             <User className="w-4 h-4" />
             {t('lobby.yourChallenges')}
@@ -689,7 +695,7 @@ export default function GameLobbyPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[400px]">
+              <ScrollArea className="h-[360px] sm:h-[400px]">
                 {loadingAvailable ? (
                   <GameCardSkeletonGrid count={3} />
                 ) : isErrorAvailable ? (
@@ -732,7 +738,7 @@ export default function GameLobbyPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[400px]">
+              <ScrollArea className="h-[360px] sm:h-[400px]">
                 {loadingAvailable ? (
                   <GameCardSkeletonGrid count={3} />
                 ) : isErrorAvailable ? (
@@ -778,7 +784,7 @@ export default function GameLobbyPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[400px]">
+              <ScrollArea className="h-[360px] sm:h-[400px]">
                 {loadingLive ? (
                   <GameCardSkeletonGrid count={3} />
                 ) : isErrorLive ? (
@@ -811,7 +817,7 @@ export default function GameLobbyPage() {
       </Tabs>
 
       <Dialog open={showQuickMatch} onOpenChange={setShowQuickMatch}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-primary" />
@@ -843,7 +849,7 @@ export default function GameLobbyPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">{t('lobby.betAmount')}</label>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                   <Slider
                     value={[quickMatchBet]}
                     onValueChange={(value) => setQuickMatchBet(value[0])}
@@ -861,11 +867,12 @@ export default function GameLobbyPage() {
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowQuickMatch(false)} data-testid="button-cancel-quickmatch">
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button className="w-full sm:w-auto min-h-[44px]" variant="outline" onClick={() => setShowQuickMatch(false)} data-testid="button-cancel-quickmatch">
               {t('common.cancel')}
             </Button>
             <Button
+              className="w-full sm:w-auto min-h-[44px]"
               onClick={startQuickMatch}
               disabled={createChallengeMutation.isPending || joinChallengeMutation.isPending}
               data-testid="button-start-quickmatch"

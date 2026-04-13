@@ -235,7 +235,7 @@ export default function P2PProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="p-4 md:p-6 max-w-5xl mx-auto">
+      <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 max-w-5xl mx-auto">
         <div className="animate-pulse space-y-4">
           <div className="h-32 bg-muted rounded-lg" />
           <div className="h-64 bg-muted rounded-lg" />
@@ -246,7 +246,7 @@ export default function P2PProfilePage() {
 
   if (!profile) {
     return (
-      <div className="p-4 md:p-6 max-w-5xl mx-auto">
+      <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 max-w-5xl mx-auto">
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
@@ -263,9 +263,9 @@ export default function P2PProfilePage() {
     : 0;
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6">
+    <div className="min-h-[100svh] max-w-5xl mx-auto bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6">
       <Card>
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-6">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-4">
               <Avatar className="h-20 w-20">
@@ -297,7 +297,7 @@ export default function P2PProfilePage() {
             </div>
             {isOwnProfile && (
               <Link href="/p2p/settings">
-                <Button variant="outline" data-testid="button-edit-profile">
+                <Button className="min-h-[44px]" variant="outline" data-testid="button-edit-profile">
                   <Settings className="h-4 w-4 me-2" />
                   {t('p2p.profile.settings')}
                 </Button>
@@ -324,7 +324,7 @@ export default function P2PProfilePage() {
         </CardContent>
       </Card>
 
-      <div className="grid md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card data-testid="card-trades-stat">
           <CardContent className="p-4 text-center">
             <p className="text-3xl font-bold">{formatLocalizedNumber(profile.metrics.totalTrades, numberLocale, 0, 0)}</p>
@@ -355,7 +355,7 @@ export default function P2PProfilePage() {
       </div>
 
       <Tabs defaultValue="overview">
-        <TabsList className="flex-wrap">
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <TabsTrigger value="overview">{t('p2p.profile.overview')}</TabsTrigger>
           <TabsTrigger value="trades">{t('p2p.profile.recentTrades')}</TabsTrigger>
           <TabsTrigger value="payment">{t('p2p.profile.paymentMethods')}</TabsTrigger>
@@ -547,7 +547,7 @@ export default function P2PProfilePage() {
             <CardContent>
               <div className="space-y-3">
                 {profile.recentTrades.map(trade => (
-                  <div key={trade.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg" data-testid={`trade-${trade.id}`}>
+                  <div key={trade.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-muted/50 rounded-lg" data-testid={`trade-${trade.id}`}>
                     <div className="flex items-center gap-3">
                       <Badge variant={trade.type === 'buy' ? 'default' : 'secondary'}>
                         {trade.type === 'buy' ? <ArrowDownRight className="h-3 w-3 me-1" /> : <ArrowUpRight className="h-3 w-3 me-1" />}
@@ -581,7 +581,7 @@ export default function P2PProfilePage() {
                 {profile.paymentMethods.map(method => {
                   const Icon = PAYMENT_ICONS[method.type] || CreditCard;
                   return (
-                    <div key={method.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg" data-testid={`payment-${method.id}`}>
+                    <div key={method.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-muted/50 rounded-lg" data-testid={`payment-${method.id}`}>
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-full bg-primary/20">
                           <Icon className="h-5 w-5 text-primary" />

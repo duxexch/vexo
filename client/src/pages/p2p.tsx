@@ -3829,21 +3829,21 @@ export default function P2PPage() {
   const { t, dir } = useI18n();
 
   return (
-    <div className="overflow-x-hidden p-2 md:p-3" dir={dir}>
+    <div className="min-h-[100svh] overflow-x-hidden bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-2 md:p-3 pb-[max(1rem,env(safe-area-inset-bottom))]" dir={dir}>
       <div className="mb-4 flex items-start justify-between gap-2 sm:gap-4 flex-wrap">
         <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-p2p-title">{t('nav.p2p')}</h1>
           <p className="text-sm sm:text-base text-muted-foreground">{t('p2p.description')}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full sm:w-auto gap-2">
           <Link href="/p2p/profile/me">
-            <Button variant="outline" size="sm" className="min-h-[44px] sm:min-h-0" data-testid="button-p2p-profile">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto min-h-[44px] sm:min-h-0" data-testid="button-p2p-profile">
               <User className="h-4 w-4 sm:me-2" />
               <span className="hidden sm:inline">{t('p2p.profile.myProfile')}</span>
             </Button>
           </Link>
           <Link href="/p2p/settings">
-            <Button variant="outline" size="sm" className="min-h-[44px] sm:min-h-0" data-testid="button-p2p-settings">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto min-h-[44px] sm:min-h-0" data-testid="button-p2p-settings">
               <Settings className="h-4 w-4 sm:me-2" />
               <span className="hidden sm:inline">{t('p2p.settings.title')}</span>
             </Button>
@@ -3854,7 +3854,7 @@ export default function P2PPage() {
       <div>
         <div className="pt-2">
           <Tabs defaultValue="marketplace">
-            <TabsList className="mb-4 flex-wrap h-auto gap-1">
+            <TabsList className="mb-4 h-auto w-full justify-start gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <TabsTrigger value="marketplace" data-testid="tab-marketplace">
                 {t('p2p.marketplace')}
               </TabsTrigger>

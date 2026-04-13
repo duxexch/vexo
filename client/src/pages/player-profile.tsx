@@ -239,8 +239,8 @@ export default function PlayerProfilePage() {
 
   if (statsLoading) {
     return (
-      <div className="container max-w-4xl mx-auto p-4 space-y-6" dir={dir}>
-        <div className="flex items-center gap-4">
+      <div className="container max-w-4xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] p-3 sm:p-4 space-y-6" dir={dir}>
+        <div className="flex items-center gap-3 sm:gap-4">
           <BackButton />
           <Skeleton className="h-8 w-48" />
         </div>
@@ -261,10 +261,10 @@ export default function PlayerProfilePage() {
 
   if (!stats) {
     return (
-      <div className="container max-w-4xl mx-auto p-4" dir={dir}>
-        <div className="flex items-center gap-4 mb-6">
+      <div className="container max-w-4xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] p-3 sm:p-4" dir={dir}>
+        <div className="flex items-center gap-3 sm:gap-4 mb-6">
           <BackButton />
-          <h1 className="text-2xl font-bold">{t('profile.title')}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">{t('profile.title')}</h1>
         </div>
         <Card>
           <CardContent className="p-8 text-center">
@@ -305,15 +305,15 @@ export default function PlayerProfilePage() {
   };
 
   return (
-    <div className="container max-w-4xl mx-auto p-4 space-y-6" dir={dir}>
-      <div className="flex items-center gap-4">
+    <div className="container max-w-4xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] p-3 sm:p-4 space-y-6" dir={dir}>
+      <div className="flex items-center gap-3 sm:gap-4">
         <BackButton />
-        <h1 className="text-2xl font-bold">{isOwnProfile ? t('profile.myProfile') : t('profile.title')}</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">{isOwnProfile ? t('profile.myProfile') : t('profile.title')}</h1>
       </div>
 
       <Card className="overflow-hidden">
         <div
-          className="h-48 relative"
+          className="h-40 sm:h-48 relative"
           style={{
             background: stats.coverPhoto
               ? `url(${stats.coverPhoto}) center/cover no-repeat`
@@ -325,7 +325,7 @@ export default function PlayerProfilePage() {
           )}
         </div>
         <CardContent className="relative pt-0 pb-6 px-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 -mt-16">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 -mt-14 sm:-mt-16">
             <Avatar className="w-32 h-32 border-4 border-background shadow-lg">
               <AvatarImage src={stats.profilePicture} />
               <AvatarFallback className="text-3xl bg-muted">
@@ -374,9 +374,9 @@ export default function PlayerProfilePage() {
             </div>
 
             {!isOwnProfile && user && (
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex w-full sm:w-auto gap-2 flex-wrap">
                 <Button
-                  className="bg-gradient-to-r from-primary to-primary/80"
+                  className="min-h-[44px] flex-1 sm:flex-none bg-gradient-to-r from-primary to-primary/80"
                   onClick={() => navigate(`/challenges?opponent=${userId}`)}
                   data-testid="button-challenge-player"
                 >
@@ -385,6 +385,7 @@ export default function PlayerProfilePage() {
                 </Button>
                 <Button
                   variant="outline"
+                  className="min-h-[44px] flex-1 sm:flex-none"
                   onClick={() => navigate(`/chat?user=${userId}`)}
                   data-testid="button-message-player"
                 >
@@ -394,6 +395,7 @@ export default function PlayerProfilePage() {
                 <Button
                   variant={isBlocked ? "default" : "outline"}
                   size="default"
+                  className="min-h-[44px] flex-1 sm:flex-none"
                   onClick={() => blockMutation.mutate(isBlocked ? 'unblock' : 'block')}
                   disabled={blockMutation.isPending}
                   data-testid="button-block-user"
@@ -413,6 +415,7 @@ export default function PlayerProfilePage() {
                 <Button
                   variant={isMuted ? "default" : "outline"}
                   size="default"
+                  className="min-h-[44px] flex-1 sm:flex-none"
                   onClick={() => muteMutation.mutate(isMuted ? 'unmute' : 'mute')}
                   disabled={muteMutation.isPending}
                   data-testid="button-mute-user"
@@ -435,7 +438,7 @@ export default function PlayerProfilePage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
         <Card className="hover-elevate">
           <CardContent className="p-4 text-center">
             <Gamepad2 className="w-8 h-8 mx-auto text-indigo-500 mb-2" />
@@ -467,23 +470,23 @@ export default function PlayerProfilePage() {
         <Card className="hover-elevate">
           <CardContent className="p-4 text-center">
             <DollarSign className="w-8 h-8 mx-auto text-green-500 mb-2" />
-            <div className="text-2xl font-bold">{formatCurrency(stats.totalEarnings)}</div>
+            <div className="text-lg sm:text-2xl font-bold break-words">{formatCurrency(stats.totalEarnings)}</div>
             <div className="text-sm text-muted-foreground">{t('profile.earnings')}</div>
           </CardContent>
         </Card>
       </div>
 
       <Tabs defaultValue="stats" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 gap-1">
-          <TabsTrigger value="stats" data-testid="tab-stats">
+        <TabsList className="w-full justify-start gap-1 overflow-x-auto whitespace-nowrap rounded-xl p-1">
+          <TabsTrigger value="stats" className="min-h-[44px] min-w-[8rem]" data-testid="tab-stats">
             <TrendingUp className="w-4 h-4 me-2" />
             {t('profile.gameStats')}
           </TabsTrigger>
-          <TabsTrigger value="achievements" data-testid="tab-achievements">
+          <TabsTrigger value="achievements" className="min-h-[44px] min-w-[8rem]" data-testid="tab-achievements">
             <Award className="w-4 h-4 me-2" />
             {t('profile.achievements')}
           </TabsTrigger>
-          <TabsTrigger value="history" data-testid="tab-history">
+          <TabsTrigger value="history" className="min-h-[44px] min-w-[8rem]" data-testid="tab-history">
             <Clock className="w-4 h-4 me-2" />
             {t('profile.matchHistory')}
           </TabsTrigger>
@@ -504,14 +507,14 @@ export default function PlayerProfilePage() {
 
                 return (
                   <div key={game.game} className="space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-2">
                         <Icon className={`w-5 h-5 ${config.color}`} />
                         <span className="font-medium">
                           {language === 'ar' ? config.nameAr : config.name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-3 text-xs sm:text-sm text-muted-foreground">
                         <span>{game.played} {t('profile.played')}</span>
                         <span className="text-primary">{game.won} {t('profile.won')}</span>
                         <span>{game.winRate}%</span>

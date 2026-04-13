@@ -280,13 +280,13 @@ export default function AuthCallbackPage() {
   }, [setLocation]);
 
   return (
-    <div className="relative min-h-screen overflow-y-auto bg-gradient-to-b from-slate-100 via-slate-50 to-white">
+    <div className="relative min-h-[100svh] overflow-y-auto bg-gradient-to-b from-slate-100 via-slate-50 to-white">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-28 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-cyan-200/40 blur-3xl" />
         <div className="absolute -bottom-32 right-8 h-72 w-72 rounded-full bg-indigo-200/40 blur-3xl" />
       </div>
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-5 py-8">
+      <div className="relative mx-auto flex min-h-[100svh] w-full max-w-md items-center justify-center px-4 sm:px-5 py-6 sm:py-8 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="w-full rounded-3xl border border-slate-200/80 bg-white/85 p-8 shadow-[0_22px_60px_-24px_rgba(15,23,42,0.45)] backdrop-blur-sm">
           <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
             <VexLogo size={56} className="rounded-2xl" alt="VEX" />

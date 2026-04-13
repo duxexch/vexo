@@ -197,20 +197,20 @@ export default function FreePage() {
   const totalEarnings = (rewards.totalDailyEarnings + rewards.totalAdEarnings + rewards.totalReferralEarnings).toFixed(2);
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-start sm:items-center gap-3 mb-2 sm:mb-4">
         <div className="p-2 rounded-lg bg-primary/20">
           <Gift className="w-6 h-6 text-primary" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">{isAr ? 'المكافآت المجانية' : 'Free Rewards'}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">{isAr ? 'المكافآت المجانية' : 'Free Rewards'}</h1>
           <p className="text-muted-foreground text-sm">{isAr ? 'اكسب عملة المشروع يومياً' : 'Earn project coins daily'}</p>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
         <Card>
           <CardContent className="p-4 text-center">
             <Coins className="w-8 h-8 mx-auto mb-2 text-green-500" />
@@ -257,7 +257,7 @@ export default function FreePage() {
       )}
 
       <Tabs defaultValue="daily" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-4 h-auto p-1 gap-1">
           <TabsTrigger value="daily">
             <Calendar className="w-4 h-4 me-1" />
             <span className="hidden sm:inline">{isAr ? 'يومي' : 'Daily'}</span>
@@ -287,7 +287,7 @@ export default function FreePage() {
               <CardDescription>{isAr ? 'سجل دخولك يومياً واحصل على مكافآت متزايدة' : 'Log in daily for increasing rewards'}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-muted rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-full bg-primary/20">
                     <Coins className="w-6 h-6 text-primary" />
@@ -300,6 +300,7 @@ export default function FreePage() {
                   </div>
                 </div>
                 <Button
+                  className="w-full sm:w-auto min-h-[44px]"
                   onClick={() => claimDailyMutation.mutate()}
                   disabled={rewards.dailyBonus.claimed || claimDailyMutation.isPending}
                 >
@@ -334,7 +335,7 @@ export default function FreePage() {
                   const isPast = dayNum < rewards.dailyBonus.nextDay;
                   return (
                     <div key={dayNum} className={`text-center p-2 rounded-lg border text-xs ${isCurrent ? 'border-primary bg-primary/10 font-bold' :
-                        isPast ? 'bg-muted text-muted-foreground' : 'border-dashed'
+                      isPast ? 'bg-muted text-muted-foreground' : 'border-dashed'
                       }`}>
                       <p className="font-medium">{isAr ? `ي${dayNum}` : `D${dayNum}`}</p>
                       <p className="text-primary">{amount}</p>
@@ -365,7 +366,7 @@ export default function FreePage() {
               <CardDescription>{isAr ? 'شاهد إعلانات واكسب رصيد' : 'Watch ads to earn balance'}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-muted rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-full bg-orange-500/20">
                     <Coins className="w-6 h-6 text-orange-500" />
@@ -376,6 +377,7 @@ export default function FreePage() {
                   </div>
                 </div>
                 <Button
+                  className="w-full sm:w-auto min-h-[44px]"
                   onClick={() => watchAdMutation.mutate()}
                   disabled={rewards.adsWatched >= rewards.maxAdsPerDay || watchAdMutation.isPending}
                   variant="outline"
@@ -433,9 +435,9 @@ export default function FreePage() {
                   <Input
                     value={referralCode}
                     readOnly
-                    className="font-mono font-bold text-lg"
+                    className="font-mono font-bold text-base sm:text-lg min-h-[44px]"
                   />
-                  <Button variant="outline" size="icon" onClick={copyCode}>
+                  <Button className="min-h-[44px] min-w-[44px]" variant="outline" size="icon" onClick={copyCode}>
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </Button>
                 </div>
@@ -444,24 +446,24 @@ export default function FreePage() {
               {/* Referral Link */}
               <div className="p-4 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground mb-2">{isAr ? 'رابط الإحالة' : 'Referral Link'}</p>
-                <div className="flex items-center gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] items-center gap-2">
                   <Input
                     value={referralLink}
                     readOnly
-                    className="font-mono text-sm"
+                    className="font-mono text-xs sm:text-sm min-h-[44px]"
                     dir="ltr"
                   />
-                  <Button variant="outline" size="icon" onClick={copyLink}>
+                  <Button className="min-h-[44px] min-w-[44px]" variant="outline" size="icon" onClick={copyLink}>
                     {copiedLink ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
                   </Button>
-                  <Button size="icon" onClick={shareReferral}>
+                  <Button className="min-h-[44px] min-w-[44px]" size="icon" onClick={shareReferral}>
                     <Share2 className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
 
               {/* Reward Info */}
-              <div className="flex items-center justify-between p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
                 <div>
                   <p className="font-bold text-blue-500 text-lg">{rewards.referralReward.toFixed(2)}</p>
                   <p className="text-xs text-muted-foreground">{isAr ? 'لكل إحالة ناجحة' : 'per referral'}</p>
@@ -506,7 +508,7 @@ export default function FreePage() {
               {rewards.freeGames.length > 0 ? (
                 <div className="grid gap-3">
                   {rewards.freeGames.map((game) => (
-                    <div key={game.id} className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                    <div key={game.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-muted rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-lg bg-purple-500/20">
                           <Gamepad2 className="w-5 h-5 text-purple-500" />
@@ -516,7 +518,7 @@ export default function FreePage() {
                           <p className="text-xs text-muted-foreground">{isAr ? 'مجاني' : 'Free to play'}</p>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => { window.location.href = `/game-lobby/${game.id}`; }}>
+                      <Button className="w-full sm:w-auto min-h-[40px]" variant="outline" size="sm" onClick={() => { window.location.href = `/game-lobby/${game.id}`; }}>
                         <Play className="w-4 h-4 me-1" />
                         {isAr ? 'العب' : 'Play'}
                       </Button>
@@ -537,7 +539,7 @@ export default function FreePage() {
 
       {/* Share Dialog */}
       <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{isAr ? 'مشاركة رابط الإحالة' : 'Share Referral Link'}</DialogTitle>
             <DialogDescription>{isAr ? 'شارك الرابط للحصول على مكافآت' : 'Share to earn rewards'}</DialogDescription>
@@ -551,12 +553,12 @@ export default function FreePage() {
               <p className="text-sm text-muted-foreground mb-1">{isAr ? 'رابط الإحالة' : 'Referral Link'}</p>
               <Input value={referralLink} readOnly className="font-mono text-sm" dir="ltr" />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Button onClick={copyCode} variant="outline">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Button className="min-h-[44px]" onClick={copyCode} variant="outline">
                 <Copy className="w-4 h-4 me-2" />
                 {isAr ? 'نسخ الكود' : 'Copy Code'}
               </Button>
-              <Button onClick={copyLink}>
+              <Button className="min-h-[44px]" onClick={copyLink}>
                 <Link2 className="w-4 h-4 me-2" />
                 {isAr ? 'نسخ الرابط' : 'Copy Link'}
               </Button>

@@ -619,7 +619,7 @@ export default function P2PSettingsPage() {
 
   if (loadingSettings) {
     return (
-      <div className="p-4 md:p-6 max-w-4xl mx-auto">
+      <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
         <div className="animate-pulse space-y-4">
           <div className="h-12 bg-muted rounded-lg w-1/3" />
           <div className="h-64 bg-muted rounded-lg" />
@@ -629,10 +629,10 @@ export default function P2PSettingsPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+    <div className="min-h-[100svh] max-w-4xl mx-auto bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/p2p">
-          <Button variant="ghost" size="icon">
+          <Button className="min-h-[44px] min-w-[44px]" variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
         </Link>
@@ -740,6 +740,7 @@ export default function P2PSettingsPage() {
                 </Badge>
 
                 <Button
+                  className="min-h-[44px]"
                   variant="outline"
                   onClick={() => updateSettingsMutation.mutate({ p2pUsername: normalizedUsernameDraft } as Partial<P2PSettings>)}
                   disabled={!canSaveP2PUsername}
@@ -784,7 +785,7 @@ export default function P2PSettingsPage() {
               <CardDescription>{t('p2p.settings.tradeLimitsDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>{t('p2p.settings.minBuy')}</Label>
                   <Input
@@ -914,7 +915,7 @@ export default function P2PSettingsPage() {
                 <CardTitle>{t('p2p.settings.paymentMethods')}</CardTitle>
                 <CardDescription>{t('p2p.settings.paymentMethodsDesc')}</CardDescription>
               </div>
-              <Button onClick={() => setShowAddPayment(true)} data-testid="button-add-payment">
+              <Button className="min-h-[44px]" onClick={() => setShowAddPayment(true)} data-testid="button-add-payment">
                 <Plus className="h-4 w-4 me-2" />
                 {t('p2p.settings.addPayment')}
               </Button>
@@ -930,7 +931,7 @@ export default function P2PSettingsPage() {
                     const typeInfo = PAYMENT_TYPES.find(t => t.value === method.type);
                     const Icon = typeInfo?.icon || CreditCard;
                     return (
-                      <div key={method.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg" data-testid={`payment-method-${method.id}`}>
+                      <div key={method.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-muted/50 rounded-lg" data-testid={`payment-method-${method.id}`}>
                         <div className="flex items-center gap-3">
                           <div className="p-2 rounded-full bg-primary/20">
                             <Icon className="h-5 w-5 text-primary" />
@@ -952,6 +953,7 @@ export default function P2PSettingsPage() {
                           </div>
                         </div>
                         <Button
+                          className="min-h-[40px] min-w-[40px]"
                           variant="ghost"
                           size="icon"
                           onClick={() => deletePaymentMutation.mutate(method.id)}
