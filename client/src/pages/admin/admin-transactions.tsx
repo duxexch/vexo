@@ -164,7 +164,7 @@ export default function AdminTransactionsPage() {
           : (isArabic ? "تم رفض المعاملة" : "Transaction rejected"),
       });
 
-          queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts/unread-by-section"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts/unread-entities"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/alerts/count"] });
@@ -283,7 +283,7 @@ export default function AdminTransactionsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-4 md:p-6 space-y-4">
+      <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 space-y-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="animate-pulse space-y-4">
           <div className="h-8 w-52 bg-muted rounded" />
           <div className="h-24 bg-muted rounded" />
@@ -294,7 +294,7 @@ export default function AdminTransactionsPage() {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="admin-transactions-title">
           <Wallet className="h-6 w-6 text-primary" />
@@ -346,7 +346,7 @@ export default function AdminTransactionsPage() {
               <Input
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
-                className="ps-9"
+                className="min-h-[44px] ps-9"
                 placeholder={isArabic ? "بحث ذكي: مرجع، مستخدم، مبلغ، حالة..." : "Smart search: reference, user, amount, status..."}
                 data-testid="admin-transactions-smart-search"
               />
@@ -354,7 +354,7 @@ export default function AdminTransactionsPage() {
           </div>
 
           <Tabs value={filterStatus} onValueChange={(value) => setFilterStatus(value as TransactionStatusFilter)}>
-            <TabsList>
+            <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <TabsTrigger value="all">{isArabic ? "الكل" : "All"}</TabsTrigger>
               <TabsTrigger value="pending">{isArabic ? "معلقة" : "Pending"}</TabsTrigger>
               <TabsTrigger value="completed">{isArabic ? "مقبولة" : "Approved"}</TabsTrigger>
@@ -363,7 +363,7 @@ export default function AdminTransactionsPage() {
           </Tabs>
 
           <Tabs value={filterType} onValueChange={(value) => setFilterType(value as TransactionTypeFilter)}>
-            <TabsList>
+            <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <TabsTrigger value="all">{isArabic ? "الكل" : "All"}</TabsTrigger>
               <TabsTrigger value="deposit">{isArabic ? "إيداع" : "Deposits"}</TabsTrigger>
               <TabsTrigger value="withdrawal">{isArabic ? "سحب" : "Withdrawals"}</TabsTrigger>
@@ -438,7 +438,7 @@ export default function AdminTransactionsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6"
+                        className="h-8 w-8"
                         onClick={() => copyReference(displayReference)}
                         data-testid={`copy-reference-${transaction.id}`}
                       >
@@ -467,6 +467,7 @@ export default function AdminTransactionsPage() {
                               min="0.01"
                               max="1000000"
                               step="0.01"
+                              className="min-h-[44px]"
                               value={getAmountValue(transaction)}
                               onChange={(e) => {
                                 const nextValue = e.target.value;
@@ -482,6 +483,7 @@ export default function AdminTransactionsPage() {
                             </p>
                             <Textarea
                               rows={2}
+                              className="min-h-[92px]"
                               value={notes[transaction.id] || ""}
                               onChange={(e) => setNotes((prev) => ({ ...prev, [transaction.id]: e.target.value }))}
                               placeholder={isArabic ? "سبب الرفض أو ملاحظة للعميل" : "Reason or internal note"}
@@ -490,9 +492,10 @@ export default function AdminTransactionsPage() {
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 justify-end">
+                        <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
                           <Button
                             variant="destructive"
+                            className="min-h-[44px] w-full sm:w-auto"
                             onClick={() => handleProcess(transaction, "rejected")}
                             disabled={isBusy}
                             data-testid={`reject-transaction-${transaction.id}`}
@@ -501,6 +504,7 @@ export default function AdminTransactionsPage() {
                             {isArabic ? "رفض" : "Reject"}
                           </Button>
                           <Button
+                            className="min-h-[44px] w-full sm:w-auto"
                             onClick={() => handleProcess(transaction, "completed")}
                             disabled={isBusy || !isValidApprovedAmount(transaction)}
                             data-testid={`approve-transaction-${transaction.id}`}

@@ -124,15 +124,15 @@ export default function AdminAntiCheatPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div>
-        <h1 className="text-3xl font-bold">Anti-Cheat System</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">Anti-Cheat System</h1>
         <p className="text-muted-foreground">Monitor and prevent fraudulent activity</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Flagged Users</p>
@@ -146,7 +146,7 @@ export default function AdminAntiCheatPage() {
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Under Review</p>
@@ -160,7 +160,7 @@ export default function AdminAntiCheatPage() {
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Banned Today</p>
@@ -174,7 +174,7 @@ export default function AdminAntiCheatPage() {
         </Card>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Pending Actions</p>
@@ -200,7 +200,7 @@ export default function AdminAntiCheatPage() {
             {suspiciousPatterns.map((pattern) => (
               <div
                 key={pattern.type}
-                className="flex items-center justify-between p-4 rounded-lg border"
+                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 rounded-lg border"
               >
                 <div className="flex items-center gap-4">
                   <div className={`p-2 rounded-lg ${pattern.severity === 'high' ? 'bg-red-500/10' :
@@ -222,11 +222,12 @@ export default function AdminAntiCheatPage() {
                     <p className="text-sm text-muted-foreground">{pattern.description}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center justify-between sm:justify-end gap-4">
                   <span className="text-lg font-bold">{pattern.count}</span>
                   <Button
                     size="sm"
                     variant="outline"
+                    className="min-h-[40px]"
                     onClick={() => handleReviewPattern(pattern.type)}
                     data-testid={`button-review-${pattern.type.toLowerCase().replace(/\s+/g, '-')}`}
                   >
@@ -248,7 +249,7 @@ export default function AdminAntiCheatPage() {
             {filteredEvents.slice(0, 8).map((activity: { user_id: string; type: string; amount: string; reference_id?: string; created_at: string }, index: number) => (
               <div
                 key={index}
-                className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg bg-muted/50"
               >
                 <div className="flex items-center gap-3">
                   <Badge variant={getSeverityColor(activity.type === "gift_sent" ? "high" : "medium")}>
@@ -264,7 +265,7 @@ export default function AdminAntiCheatPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-muted-foreground">{new Date(activity.created_at).toLocaleString()}</span>
-                  <Button size="sm" variant="ghost" onClick={() => setSelectedActivity(activity)}>
+                  <Button size="sm" variant="ghost" className="min-h-[40px] min-w-[40px]" onClick={() => setSelectedActivity(activity)}>
                     <Eye className="h-4 w-4" />
                   </Button>
                 </div>
@@ -280,7 +281,7 @@ export default function AdminAntiCheatPage() {
       </Card>
 
       <Dialog open={Boolean(selectedActivity)} onOpenChange={(open) => !open && setSelectedActivity(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-[calc(100vw-0.75rem)] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Flagged Event Details</DialogTitle>
             <DialogDescription>

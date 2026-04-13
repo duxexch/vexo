@@ -146,7 +146,7 @@ export default function AdminUsersPage() {
       if (data.lastName) filteredData.lastName = data.lastName;
       if (data.role) filteredData.role = data.role;
       if (data.status) filteredData.status = data.status;
-      
+
       return adminFetch(`/api/admin/users/${id}`, {
         method: "PATCH",
         body: JSON.stringify(filteredData),
@@ -269,9 +269,9 @@ export default function AdminUsersPage() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({ 
-        title: variables.banned ? "P2P Banned" : "P2P Unbanned", 
-        description: variables.banned ? "User banned from P2P trading" : "User can now use P2P trading" 
+      toast({
+        title: variables.banned ? "P2P Banned" : "P2P Unbanned",
+        description: variables.banned ? "User banned from P2P trading" : "User can now use P2P trading"
       });
       closeDialog();
     },
@@ -392,7 +392,7 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-[100svh] space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold">User Management</h1>
@@ -402,7 +402,7 @@ export default function AdminUsersPage() {
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search users..."
-            className="ps-10"
+            className="min-h-[44px] ps-10"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             data-testid="input-search-users"
@@ -419,7 +419,7 @@ export default function AdminUsersPage() {
               ))}
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto sm:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -437,9 +437,131 @@ export default function AdminUsersPage() {
                   {filteredUsers?.map((user: UserType) => {
                     const hasUnreadAlert = unreadEntityIds.has(String(user.id));
                     return (
-                    <TableRow key={user.id} className={`hover-elevate cursor-pointer ${hasUnreadAlert ? 'bg-primary/5 border-s-2 border-s-primary/40' : ''}`} onClick={() => handleUserRowClick(user)}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
+                      <TableRow key={user.id} className={`hover-elevate cursor-pointer ${hasUnreadAlert ? 'bg-primary/5 border-s-2 border-s-primary/40' : ''}`} onClick={() => handleUserRowClick(user)}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10 shrink-0">
+                              <AvatarImage src={user.profilePicture} />
+                              <AvatarFallback>
+                                {user.username.substring(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <div className="font-medium flex items-center gap-2">
+                                <span className="truncate max-w-[180px] font-semibold" dir="auto" title={user.username}>
+                                  {user.username}
+                                </span>
+                                {user.p2pBanned && (
+                                  <Badge variant="secondary" className="text-xs bg-orange-500/10 text-orange-500 shrink-0">
+                                    P2P
+                                  </Badge>
+                                )}
+                              </div>
+                              {user.nickname && user.nickname !== user.username && (
+                                <div className="text-xs text-muted-foreground truncate" dir="auto">
+                                  {user.nickname}
+                                </div>
+                              )}
+                              <div className="text-xs text-muted-foreground truncate">
+                                {user.email || user.phone || user.id.slice(0, 8)}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {user.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusColor(user.status)} className="capitalize">
+                            {user.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {formatCurrency(user.balance)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 text-sm">
+                            <Gamepad2 className="h-3 w-3 text-muted-foreground" />
+                            {user.gamesPlayed ?? 0}
+                            <Trophy className="h-3 w-3 text-yellow-500 ms-2" />
+                            {user.gamesWon ?? 0}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10">
+                            VIP {user.vipLevel ?? 0}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDate(user.createdAt)}
+                        </TableCell>
+                        <TableCell className="text-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="icon" data-testid={`button-user-actions-${user.id}`}>
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openUserView(user); }}>
+                                <Eye className="h-4 w-4 me-2" />
+                                View Profile
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("reward"); }}>
+                                <Gift className="h-4 w-4 me-2" />
+                                Send Reward
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("balance"); }}>
+                                <DollarSign className="h-4 w-4 me-2" />
+                                Adjust Balance
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {(user.status === "banned" || user.status === "suspended") ? (
+                                <DropdownMenuItem
+                                  onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("unban"); }}
+                                  className="text-green-500"
+                                >
+                                  <Shield className="h-4 w-4 me-2" />
+                                  Activate User
+                                </DropdownMenuItem>
+                              ) : (
+                                <>
+                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("suspend"); }}>
+                                    <Clock className="h-4 w-4 me-2" />
+                                    Suspend User
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("ban"); }}
+                                    className="text-destructive"
+                                  >
+                                    <Ban className="h-4 w-4 me-2" />
+                                    Ban User
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("p2pBan"); }}>
+                                <ArrowLeftRight className="h-4 w-4 me-2" />
+                                {user.p2pBanned ? "Unban P2P" : "Ban from P2P"}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+
+              <div className="space-y-3 p-3 sm:hidden">
+                {filteredUsers?.map((user: UserType) => {
+                  const hasUnreadAlert = unreadEntityIds.has(String(user.id));
+                  return (
+                    <div key={`mobile-${user.id}`} className={`rounded-lg border p-3 ${hasUnreadAlert ? 'bg-primary/5 border-primary/40' : ''}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <button type="button" className="flex min-w-0 items-center gap-3 text-start" onClick={() => handleUserRowClick(user)}>
                           <Avatar className="h-10 w-10 shrink-0">
                             <AvatarImage src={user.profilePicture} />
                             <AvatarFallback>
@@ -447,60 +569,13 @@ export default function AdminUsersPage() {
                             </AvatarFallback>
                           </Avatar>
                           <div className="min-w-0">
-                            <div className="font-medium flex items-center gap-2">
-                              <span className="truncate max-w-[180px] font-semibold" dir="auto" title={user.username}>
-                                {user.username}
-                              </span>
-                              {user.p2pBanned && (
-                                <Badge variant="secondary" className="text-xs bg-orange-500/10 text-orange-500 shrink-0">
-                                  P2P
-                                </Badge>
-                              )}
-                            </div>
-                            {user.nickname && user.nickname !== user.username && (
-                              <div className="text-xs text-muted-foreground truncate" dir="auto">
-                                {user.nickname}
-                              </div>
-                            )}
-                            <div className="text-xs text-muted-foreground truncate">
-                              {user.email || user.phone || user.id.slice(0, 8)}
-                            </div>
+                            <p className="truncate font-semibold" dir="auto">{user.username}</p>
+                            <p className="truncate text-xs text-muted-foreground">{user.email || user.phone || user.id.slice(0, 8)}</p>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {user.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusColor(user.status)} className="capitalize">
-                          {user.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {formatCurrency(user.balance)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
-                          <Gamepad2 className="h-3 w-3 text-muted-foreground" />
-                          {user.gamesPlayed ?? 0}
-                          <Trophy className="h-3 w-3 text-yellow-500 ms-2" />
-                          {user.gamesWon ?? 0}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10">
-                          VIP {user.vipLevel ?? 0}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(user.createdAt)}
-                      </TableCell>
-                      <TableCell className="text-end">
+                        </button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" data-testid={`button-user-actions-${user.id}`}>
+                            <Button variant="ghost" size="icon" className="min-h-[40px] min-w-[40px]" data-testid={`button-user-actions-mobile-${user.id}`}>
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -518,42 +593,18 @@ export default function AdminUsersPage() {
                               <DollarSign className="h-4 w-4 me-2" />
                               Adjust Balance
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {(user.status === "banned" || user.status === "suspended") ? (
-                              <DropdownMenuItem 
-                                onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("unban"); }}
-                                className="text-green-500"
-                              >
-                                <Shield className="h-4 w-4 me-2" />
-                                Activate User
-                              </DropdownMenuItem>
-                            ) : (
-                              <>
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("suspend"); }}>
-                                  <Clock className="h-4 w-4 me-2" />
-                                  Suspend User
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("ban"); }}
-                                  className="text-destructive"
-                                >
-                                  <Ban className="h-4 w-4 me-2" />
-                                  Ban User
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionDialog("p2pBan"); }}>
-                              <ArrowLeftRight className="h-4 w-4 me-2" />
-                              {user.p2pBanned ? "Unban P2P" : "Ban from P2P"}
-                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="capitalize">{user.role}</Badge>
+                        <Badge variant={getStatusColor(user.status)} className="capitalize">{user.status}</Badge>
+                        <Badge variant="outline">{formatCurrency(user.balance)}</Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
               {filteredUsers?.length === 0 && (
                 <div className="p-6 text-center text-muted-foreground">
@@ -566,7 +617,7 @@ export default function AdminUsersPage() {
       </Card>
 
       <Sheet open={viewUserSheet} onOpenChange={setViewUserSheet}>
-        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))]">
           <SheetHeader>
             <div className="flex items-center justify-between">
               <SheetTitle>User Profile</SheetTitle>
@@ -619,7 +670,7 @@ export default function AdminUsersPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Card className="p-4">
                   <div className="text-sm text-muted-foreground">Balance</div>
                   <div className="text-2xl font-bold text-primary">
@@ -641,7 +692,7 @@ export default function AdminUsersPage() {
                 </h4>
 
                 <div className="grid gap-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Username</Label>
                       {editMode ? (
@@ -668,7 +719,7 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>First Name</Label>
                       {editMode ? (
@@ -695,7 +746,7 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="flex items-center gap-1">
                         <Mail className="h-3 w-3" />
@@ -729,7 +780,7 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="flex items-center gap-1">
                         <Shield className="h-3 w-3" />
@@ -784,7 +835,7 @@ export default function AdminUsersPage() {
                   <DollarSign className="h-4 w-4" />
                   Financial Summary
                 </h4>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="p-3 bg-muted rounded-lg">
                     <div className="text-xs text-muted-foreground">Total Deposited</div>
                     <div className="font-semibold text-green-500">
@@ -817,7 +868,7 @@ export default function AdminUsersPage() {
                   <Calendar className="h-4 w-4" />
                   Account Info
                 </h4>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="p-3 bg-muted rounded-lg">
                     <div className="text-xs text-muted-foreground">Joined</div>
                     <div className="font-semibold">{formatDate(selectedUser.createdAt)}</div>
@@ -851,7 +902,7 @@ export default function AdminUsersPage() {
       </Sheet>
 
       <Dialog open={actionDialog !== null} onOpenChange={() => closeDialog()}>
-        <DialogContent>
+        <DialogContent className="max-w-[calc(100vw-0.75rem)] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {actionDialog === "ban" && "Ban User"}
@@ -919,10 +970,11 @@ export default function AdminUsersPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>
+            <Button className="min-h-[44px]" variant="outline" onClick={closeDialog}>
               Cancel
             </Button>
             <Button
+              className="min-h-[44px]"
               onClick={handleAction}
               variant={actionDialog === "ban" ? "destructive" : actionDialog === "unban" ? "default" : "default"}
               disabled={

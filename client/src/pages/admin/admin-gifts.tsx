@@ -181,16 +181,16 @@ export default function AdminGiftsPage() {
     const previewIconPath = toSafeIconPath(form.iconUrl);
 
     return (
-        <div className="p-6 space-y-6">
+        <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
-                    <h1 className="text-2xl font-bold flex items-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
                         <Gift className="h-7 w-7 text-primary" />
                         Gift Catalog
                     </h1>
                     <p className="text-muted-foreground">Manage game gifts, upload icon images, and set prices in project currency.</p>
                 </div>
-                <Badge variant="outline">{gifts.length} gifts</Badge>
+                <Badge className="w-fit" variant="outline">{gifts.length} gifts</Badge>
             </div>
 
             <Card>
@@ -272,15 +272,15 @@ export default function AdminGiftsPage() {
 
                     <div className="space-y-2">
                         <Label htmlFor="gift-icon-file">Gift Icon Image</Label>
-                        <div className="flex flex-wrap gap-2 items-center">
+                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                             <Input
                                 id="gift-icon-file"
                                 type="file"
                                 accept="image/*"
                                 onChange={handleIconFileChange}
-                                className="max-w-sm"
+                                className="w-full sm:max-w-sm"
                             />
-                            <Button type="button" variant="secondary" disabled={uploadIconMutation.isPending}>
+                            <Button className="min-h-[40px] w-full sm:w-auto" type="button" variant="secondary" disabled={uploadIconMutation.isPending}>
                                 <Upload className="h-4 w-4 me-2" />
                                 {uploadIconMutation.isPending ? "Uploading..." : "Upload"}
                             </Button>
@@ -298,7 +298,7 @@ export default function AdminGiftsPage() {
                         )}
                     </div>
 
-                    <Button onClick={handleCreateGift} disabled={createGiftMutation.isPending || uploadIconMutation.isPending}>
+                    <Button className="min-h-[44px] w-full sm:w-auto" onClick={handleCreateGift} disabled={createGiftMutation.isPending || uploadIconMutation.isPending}>
                         <Plus className="h-4 w-4 me-2" />
                         {createGiftMutation.isPending ? "Saving..." : "Save Gift"}
                     </Button>

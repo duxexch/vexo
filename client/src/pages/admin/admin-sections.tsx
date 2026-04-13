@@ -95,7 +95,7 @@ export default function AdminSectionsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="min-h-[100svh] p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="animate-pulse space-y-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-24 bg-muted rounded-lg" />
@@ -106,9 +106,9 @@ export default function AdminSectionsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div>
-        <h1 className="text-3xl font-bold">Section Controls</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">Section Controls</h1>
         <p className="text-muted-foreground">Enable or disable sections of the application</p>
       </div>
 
@@ -118,9 +118,9 @@ export default function AdminSectionsPage() {
           const Icon = sectionIcons[sectionKey] || Settings;
           return (
             <Card key={section.id}>
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start sm:items-center gap-3 sm:gap-4">
                     <div className="p-3 rounded-lg bg-primary/10">
                       <Icon className="h-5 w-5 text-primary" />
                     </div>
@@ -138,10 +138,11 @@ export default function AdminSectionsPage() {
                   </div>
                   <Switch
                     checked={section.isEnabled}
-                    onCheckedChange={(checked) => 
+                    onCheckedChange={(checked) =>
                       toggleMutation.mutate({ id: section.id, isEnabled: checked })
                     }
                     disabled={toggleMutation.isPending}
+                    className="data-[state=checked]:bg-primary"
                     data-testid={`switch-section-${sectionKey}`}
                   />
                 </div>

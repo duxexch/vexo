@@ -67,7 +67,7 @@ export default function AdminAnalyticsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="animate-pulse space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map((i) => (
@@ -80,16 +80,16 @@ export default function AdminAnalyticsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div>
-        <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">Analytics Dashboard</h1>
         <p className="text-muted-foreground">Platform performance and user behavior insights</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {kpiCards.map((kpi) => (
           <Card key={kpi.title}>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{kpi.title}</p>
@@ -125,7 +125,7 @@ export default function AdminAnalyticsPage() {
               {popularGames.map((game: { name: string; plays?: number; revenue?: string | number }, index: number) => (
                 <div
                   key={game.name}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                  className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg bg-muted/50"
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-lg font-bold text-muted-foreground w-6">
@@ -152,7 +152,7 @@ export default function AdminAnalyticsPage() {
             <CardDescription>Key metrics about user activity</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 grid-cols-2">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
               <div className="p-4 rounded-lg bg-muted/50">
                 <p className="text-sm text-muted-foreground">New Users</p>
                 <p className="text-2xl font-bold">{userBehavior.newUsers}</p>
@@ -199,13 +199,13 @@ export default function AdminAnalyticsPage() {
               { time: "10:30 AM", event: "Support ticket opened", type: "support" },
               { time: "10:25 AM", event: "User won $1,200 jackpot", type: "win" },
             ].map((item, index) => (
-              <div key={index} className="flex items-center gap-4">
-                <div className="w-20 text-sm text-muted-foreground">{item.time}</div>
-                <div className="w-2 h-2 rounded-full bg-primary" />
-                <div className="flex-1">
+              <div key={index} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+                <div className="w-auto sm:w-20 text-sm text-muted-foreground">{item.time}</div>
+                <div className="hidden sm:block w-2 h-2 rounded-full bg-primary" />
+                <div className="flex-1 rounded-md bg-muted/40 px-3 py-2 sm:bg-transparent sm:px-0 sm:py-0">
                   <p className="text-sm">{item.event}</p>
                 </div>
-                <Badge variant="outline">{item.type}</Badge>
+                <Badge className="w-fit" variant="outline">{item.type}</Badge>
               </div>
             ))}
           </div>

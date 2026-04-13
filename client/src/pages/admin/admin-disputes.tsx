@@ -216,7 +216,7 @@ export default function AdminDisputesPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
+      <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="animate-pulse space-y-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-24 bg-muted rounded-lg" />
@@ -227,15 +227,15 @@ export default function AdminDisputesPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div>
-        <h1 className="text-3xl font-bold">P2P Disputes</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">P2P Disputes</h1>
         <p className="text-muted-foreground">Manage and resolve P2P trading disputes</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Total Disputes</p>
@@ -246,7 +246,7 @@ export default function AdminDisputesPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Pending</p>
@@ -257,7 +257,7 @@ export default function AdminDisputesPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">In Review</p>
@@ -268,7 +268,7 @@ export default function AdminDisputesPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Resolved</p>
@@ -296,7 +296,7 @@ export default function AdminDisputesPage() {
           const hasUnreadAlert = unreadEntityIds.has(String(dispute.id));
           return (
             <Card key={dispute.id} className={`transition-colors ${hasUnreadAlert ? 'border-s-2 border-s-primary/40 bg-primary/5' : (dispute.status === 'pending' || dispute.status === 'open' ? 'border-s-2 border-s-yellow-500/50 bg-yellow-500/5' : '')}`}>
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -326,6 +326,7 @@ export default function AdminDisputesPage() {
                   </div>
                   <div className="flex gap-2">
                     <Button
+                      className="min-h-[44px]"
                       size="sm"
                       variant="outline"
                       onClick={() => {
@@ -357,7 +358,7 @@ export default function AdminDisputesPage() {
       </div>
 
       <Dialog open={selectedDispute !== null} onOpenChange={() => setSelectedDispute(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-[calc(100vw-0.75rem)] sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Dispute Details</DialogTitle>
           </DialogHeader>
@@ -369,148 +370,149 @@ export default function AdminDisputesPage() {
                 if (!activeDispute) return null;
                 return (
                   <>
-              <div className="p-4 bg-muted rounded-lg space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge variant={getStatusColor(activeDispute.status)}>
-                    {activeDispute.status}
-                  </Badge>
-                  <Badge variant={getPriorityColor(activeDispute.status === "open" ? "high" : activeDispute.status === "investigating" ? "medium" : "low")}>
-                    {activeDispute.status === "open" ? "high" : activeDispute.status === "investigating" ? "medium" : "low"}
-                  </Badge>
-                </div>
-                <h3 className="font-semibold">{activeDispute.reason || "P2P Dispute"}</h3>
-                <p className="text-sm">{activeDispute.description}</p>
-                <div className="flex gap-4 text-sm text-muted-foreground">
-                  <span>Initiator: {activeDispute.initiatorName || activeDispute.initiatorId}</span>
-                  <span>Respondent: {activeDispute.respondentName || activeDispute.respondentId}</span>
-                  <span>Created: {new Date(activeDispute.createdAt).toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Evidence ({disputeDetails?.evidence?.length || 0})
-                </Label>
-
-                {disputeDetailsLoading ? (
-                  <p className="text-sm text-muted-foreground">Loading evidence...</p>
-                ) : !disputeDetails?.evidence || disputeDetails.evidence.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No evidence uploaded for this dispute.</p>
-                ) : (
-                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    {disputeDetails.evidence.map((ev) => (
-                      <div key={ev.id} className="rounded-md border p-3 space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{ev.fileName}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {ev.evidenceType} • {new Date(ev.createdAt).toLocaleString()}
-                            </p>
-                            {ev.verifiedAt && (
-                              <p className="text-xs text-muted-foreground">
-                                Verified by {ev.verifiedByName || ev.verifiedBy || "admin"} at {new Date(ev.verifiedAt).toLocaleString()}
-                              </p>
-                            )}
-                          </div>
-                          <Badge variant={ev.isVerified ? "default" : "outline"}>
-                            {ev.isVerified ? "verified" : "unverified"}
-                          </Badge>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button asChild variant="outline" size="sm">
-                            <a href={ev.fileUrl} target="_blank" rel="noreferrer">
-                              <ExternalLink className="h-4 w-4 me-1" />
-                              Open
-                            </a>
-                          </Button>
-
-                          {activeDispute.status !== "resolved" && activeDispute.status !== "closed" && (
-                            <Button
-                              size="sm"
-                              variant={ev.isVerified ? "outline" : "default"}
-                              disabled={verifyEvidenceMutation.isPending}
-                              onClick={() => verifyEvidenceMutation.mutate({
-                                disputeId: activeDispute.id,
-                                evidenceId: ev.id,
-                                isVerified: !ev.isVerified,
-                              })}
-                            >
-                              {ev.isVerified ? (
-                                <>
-                                  <ShieldX className="h-4 w-4 me-1" />
-                                  Mark Unverified
-                                </>
-                              ) : (
-                                <>
-                                  <ShieldCheck className="h-4 w-4 me-1" />
-                                  Verify Evidence
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
+                    <div className="p-4 bg-muted rounded-lg space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={getStatusColor(activeDispute.status)}>
+                          {activeDispute.status}
+                        </Badge>
+                        <Badge variant={getPriorityColor(activeDispute.status === "open" ? "high" : activeDispute.status === "investigating" ? "medium" : "low")}>
+                          {activeDispute.status === "open" ? "high" : activeDispute.status === "investigating" ? "medium" : "low"}
+                        </Badge>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {activeDispute.status !== "resolved" && activeDispute.status !== "closed" && (
-                <>
-                  <div className="space-y-2">
-                    <Label>Resolution Type</Label>
-                    <Select value={resolutionType} onValueChange={setResolutionType}>
-                      <SelectTrigger data-testid="select-resolution-type">
-                        <SelectValue placeholder="Select resolution" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="resolved">Resolve dispute and settle trade</SelectItem>
-                        <SelectItem value="investigating">Escalate to investigation</SelectItem>
-                        <SelectItem value="closed">Close dispute (post-settlement only)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {resolutionType === "resolved" && (
-                    <div className="space-y-2">
-                      <Label>Winner</Label>
-                      <Select value={winnerId} onValueChange={setWinnerId}>
-                        <SelectTrigger data-testid="select-dispute-winner">
-                          <SelectValue placeholder="Select winner" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={activeDispute.initiatorId}>
-                            {activeDispute.initiatorName || activeDispute.initiatorId} (initiator)
-                          </SelectItem>
-                          <SelectItem value={activeDispute.respondentId}>
-                            {activeDispute.respondentName || activeDispute.respondentId} (respondent)
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <h3 className="font-semibold">{activeDispute.reason || "P2P Dispute"}</h3>
+                      <p className="text-sm">{activeDispute.description}</p>
+                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm text-muted-foreground">
+                        <span>Initiator: {activeDispute.initiatorName || activeDispute.initiatorId}</span>
+                        <span>Respondent: {activeDispute.respondentName || activeDispute.respondentId}</span>
+                        <span>Created: {new Date(activeDispute.createdAt).toLocaleString()}</span>
+                      </div>
                     </div>
-                  )}
 
-                  <div className="space-y-2">
-                    <Label>Admin Notes</Label>
-                    <Textarea
-                      placeholder="Enter resolution notes..."
-                      value={resolution}
-                      onChange={(e) => setResolution(e.target.value)}
-                      rows={4}
-                      data-testid="input-resolution-notes"
-                    />
-                  </div>
-                </>
-              )}
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <FileText className="h-4 w-4" />
+                        Evidence ({disputeDetails?.evidence?.length || 0})
+                      </Label>
 
-              {activeDispute.resolution && (
-                <div className="p-4 bg-green-500/10 rounded-lg">
-                  <p className="text-sm font-medium text-green-500">Resolution</p>
-                  <p className="text-sm mt-1">{activeDispute.resolution}</p>
-                </div>
-              )}
+                      {disputeDetailsLoading ? (
+                        <p className="text-sm text-muted-foreground">Loading evidence...</p>
+                      ) : !disputeDetails?.evidence || disputeDetails.evidence.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No evidence uploaded for this dispute.</p>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {disputeDetails.evidence.map((ev) => (
+                            <div key={ev.id} className="rounded-md border p-3 space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium truncate">{ev.fileName}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {ev.evidenceType} • {new Date(ev.createdAt).toLocaleString()}
+                                  </p>
+                                  {ev.verifiedAt && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Verified by {ev.verifiedByName || ev.verifiedBy || "admin"} at {new Date(ev.verifiedAt).toLocaleString()}
+                                    </p>
+                                  )}
+                                </div>
+                                <Badge variant={ev.isVerified ? "default" : "outline"}>
+                                  {ev.isVerified ? "verified" : "unverified"}
+                                </Badge>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button asChild variant="outline" size="sm">
+                                  <a href={ev.fileUrl} target="_blank" rel="noreferrer">
+                                    <ExternalLink className="h-4 w-4 me-1" />
+                                    Open
+                                  </a>
+                                </Button>
+
+                                {activeDispute.status !== "resolved" && activeDispute.status !== "closed" && (
+                                  <Button
+                                    className="min-h-[40px]"
+                                    size="sm"
+                                    variant={ev.isVerified ? "outline" : "default"}
+                                    disabled={verifyEvidenceMutation.isPending}
+                                    onClick={() => verifyEvidenceMutation.mutate({
+                                      disputeId: activeDispute.id,
+                                      evidenceId: ev.id,
+                                      isVerified: !ev.isVerified,
+                                    })}
+                                  >
+                                    {ev.isVerified ? (
+                                      <>
+                                        <ShieldX className="h-4 w-4 me-1" />
+                                        Mark Unverified
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ShieldCheck className="h-4 w-4 me-1" />
+                                        Verify Evidence
+                                      </>
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {activeDispute.status !== "resolved" && activeDispute.status !== "closed" && (
+                      <>
+                        <div className="space-y-2">
+                          <Label>Resolution Type</Label>
+                          <Select value={resolutionType} onValueChange={setResolutionType}>
+                            <SelectTrigger data-testid="select-resolution-type">
+                              <SelectValue placeholder="Select resolution" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="resolved">Resolve dispute and settle trade</SelectItem>
+                              <SelectItem value="investigating">Escalate to investigation</SelectItem>
+                              <SelectItem value="closed">Close dispute (post-settlement only)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {resolutionType === "resolved" && (
+                          <div className="space-y-2">
+                            <Label>Winner</Label>
+                            <Select value={winnerId} onValueChange={setWinnerId}>
+                              <SelectTrigger data-testid="select-dispute-winner">
+                                <SelectValue placeholder="Select winner" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={activeDispute.initiatorId}>
+                                  {activeDispute.initiatorName || activeDispute.initiatorId} (initiator)
+                                </SelectItem>
+                                <SelectItem value={activeDispute.respondentId}>
+                                  {activeDispute.respondentName || activeDispute.respondentId} (respondent)
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          <Label>Admin Notes</Label>
+                          <Textarea
+                            placeholder="Enter resolution notes..."
+                            value={resolution}
+                            onChange={(e) => setResolution(e.target.value)}
+                            rows={4}
+                            data-testid="input-resolution-notes"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {activeDispute.resolution && (
+                      <div className="p-4 bg-green-500/10 rounded-lg">
+                        <p className="text-sm font-medium text-green-500">Resolution</p>
+                        <p className="text-sm mt-1">{activeDispute.resolution}</p>
+                      </div>
+                    )}
                   </>
                 );
               })()}
@@ -518,11 +520,12 @@ export default function AdminDisputesPage() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedDispute(null)}>
+            <Button className="min-h-[44px] w-full sm:w-auto" variant="outline" onClick={() => setSelectedDispute(null)}>
               Close
             </Button>
             {selectedDispute?.status !== "resolved" && selectedDispute?.status !== "closed" && (
               <Button
+                className="min-h-[44px] w-full sm:w-auto"
                 onClick={handleResolve}
                 disabled={!resolution || !resolutionType || (resolutionType === "resolved" && !winnerId) || resolveMutation.isPending}
                 data-testid="button-submit-resolution"

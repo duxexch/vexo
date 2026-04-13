@@ -316,7 +316,7 @@ export default function AdminTournamentsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -332,11 +332,11 @@ export default function AdminTournamentsPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
             <Trophy className="h-6 w-6 text-primary" />
             Tournament Management
           </h1>
@@ -344,7 +344,7 @@ export default function AdminTournamentsPage() {
             Create, manage, and run tournaments
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
+        <Button className="min-h-[44px] w-full sm:w-auto" onClick={() => setShowCreate(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Create Tournament
         </Button>
@@ -372,17 +372,20 @@ export default function AdminTournamentsPage() {
       </div>
 
       {/* Filter */}
-      <div className="flex gap-2 flex-wrap">
-        {["all", "upcoming", "registration", "in_progress", "completed", "cancelled"].map((s) => (
-          <Button
-            key={s}
-            variant={filter === s ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilter(s)}
-          >
-            {s === "all" ? "All" : STATUS_LABELS[s] || s}
-          </Button>
-        ))}
+      <div className="overflow-x-auto pb-1">
+        <div className="flex w-max min-w-full gap-2">
+          {["all", "upcoming", "registration", "in_progress", "completed", "cancelled"].map((s) => (
+            <Button
+              key={s}
+              variant={filter === s ? "default" : "outline"}
+              size="sm"
+              className="min-h-[40px] whitespace-nowrap"
+              onClick={() => setFilter(s)}
+            >
+              {s === "all" ? "All" : STATUS_LABELS[s] || s}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {/* Tournament List */}
@@ -403,7 +406,7 @@ export default function AdminTournamentsPage() {
                 className="hover-elevate cursor-pointer"
                 onClick={() => setSelectedTournament(tournament)}
               >
-                <CardContent className="p-4 flex items-center gap-4">
+                <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                   <div className="text-2xl">{gameInfo?.icon || "🎮"}</div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -433,7 +436,7 @@ export default function AdminTournamentsPage() {
                       )}
                     </div>
                   </div>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  <ChevronRight className="hidden sm:block h-5 w-5 text-muted-foreground" />
                 </CardContent>
               </Card>
             );
@@ -443,13 +446,13 @@ export default function AdminTournamentsPage() {
 
       {/* =================== CREATE TOURNAMENT DIALOG =================== */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[calc(100vw-0.75rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Tournament</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             {/* Names */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Name (EN) *</Label>
                 <Input
@@ -470,7 +473,7 @@ export default function AdminTournamentsPage() {
             </div>
 
             {/* Descriptions */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Description (EN)</Label>
                 <Textarea
@@ -493,7 +496,7 @@ export default function AdminTournamentsPage() {
             </div>
 
             {/* Game Type & Format */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Game Type *</Label>
                 <Select value={form.gameType} onValueChange={(v) => setForm({ ...form, gameType: v })}>
@@ -526,7 +529,7 @@ export default function AdminTournamentsPage() {
             </div>
 
             {/* Player Limits */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Min Players</Label>
                 <Input
@@ -548,7 +551,7 @@ export default function AdminTournamentsPage() {
             </div>
 
             {/* Entry Fee & Prize Pool */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Entry Fee ($)</Label>
                 <Input
@@ -577,7 +580,7 @@ export default function AdminTournamentsPage() {
               <h4 className="text-sm font-semibold flex items-center gap-2">
                 <Calendar className="h-4 w-4" /> Registration Period
               </h4>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Registration Opens</Label>
                   <Input
@@ -602,7 +605,7 @@ export default function AdminTournamentsPage() {
               <h4 className="text-sm font-semibold flex items-center gap-2">
                 <Clock className="h-4 w-4" /> Tournament Schedule
               </h4>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Start Date & Time *</Label>
                   <Input
@@ -624,8 +627,9 @@ export default function AdminTournamentsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button className="min-h-[44px] w-full sm:w-auto" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button
+              className="min-h-[44px] w-full sm:w-auto"
               onClick={() => createMutation.mutate(form)}
               disabled={createMutation.isPending || !form.name || !form.nameAr || !form.gameType}
             >
@@ -641,7 +645,7 @@ export default function AdminTournamentsPage() {
 
       {/* =================== TOURNAMENT DETAIL DIALOG =================== */}
       <Dialog open={!!selectedTournament} onOpenChange={(open) => !open && setSelectedTournament(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[calc(100vw-0.75rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-primary" />
@@ -669,7 +673,7 @@ export default function AdminTournamentsPage() {
               </div>
 
               {/* Stats Grid */}
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <Card>
                   <CardContent className="p-3 text-center">
                     <Users className="h-4 w-4 mx-auto mb-1 text-blue-500" />
@@ -707,7 +711,7 @@ export default function AdminTournamentsPage() {
               {/* Dates Info */}
               <Card>
                 <CardContent className="p-3">
-                  <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                     <div>
                       <span className="text-muted-foreground">Registration:</span>{" "}
                       {formatDate(tournamentDetail.registrationStartsAt)} — {formatDate(tournamentDetail.registrationEndsAt)}
@@ -725,6 +729,7 @@ export default function AdminTournamentsPage() {
                 {/* Open Registration */}
                 {tournamentDetail.status === "upcoming" && (
                   <Button
+                    className="min-h-[44px]"
                     variant="outline"
                     onClick={() => statusMutation.mutate({ id: tournamentDetail.id, status: "registration" })}
                     disabled={statusMutation.isPending}
@@ -736,6 +741,7 @@ export default function AdminTournamentsPage() {
                 {/* Start Tournament (from registration or upcoming) */}
                 {(tournamentDetail.status === "registration" || tournamentDetail.status === "upcoming") && (
                   <Button
+                    className="min-h-[44px]"
                     onClick={() => startMutation.mutate(tournamentDetail.id)}
                     disabled={startMutation.isPending}
                   >
@@ -750,6 +756,7 @@ export default function AdminTournamentsPage() {
                 {/* Cancel (for upcoming, registration, or in_progress) */}
                 {["upcoming", "registration", "in_progress"].includes(tournamentDetail.status) && (
                   <Button
+                    className="min-h-[44px]"
                     variant="destructive"
                     onClick={() => statusMutation.mutate({ id: tournamentDetail.id, status: "cancelled" })}
                     disabled={statusMutation.isPending}
@@ -761,7 +768,7 @@ export default function AdminTournamentsPage() {
                 {/* Delete (always available) */}
                 <Button
                   variant="outline"
-                  className="text-red-500 border-red-500/30 hover:bg-red-500/10"
+                  className="min-h-[44px] text-red-500 border-red-500/30 hover:bg-red-500/10"
                   onClick={(e) => {
                     e.stopPropagation();
                     setDeleteTarget(tournamentDetail);
@@ -834,9 +841,8 @@ export default function AdminTournamentsPage() {
                       return (
                         <div
                           key={match.id}
-                          className={`flex items-center gap-3 p-2 rounded-lg border text-sm ${
-                            isComplete || isBye ? "bg-muted/30" : canReport ? "bg-amber-500/5 border-amber-500/30" : ""
-                          }`}
+                          className={`flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-2 rounded-lg border text-sm ${isComplete || isBye ? "bg-muted/30" : canReport ? "bg-amber-500/5 border-amber-500/30" : ""
+                            }`}
                         >
                           <div className="text-xs text-muted-foreground w-8">R{match.round}</div>
                           <div className="flex-1 flex items-center gap-2">
@@ -870,6 +876,7 @@ export default function AdminTournamentsPage() {
                             <Button
                               size="sm"
                               variant="outline"
+                              className="min-h-[40px]"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setResultForm({
@@ -903,7 +910,7 @@ export default function AdminTournamentsPage() {
         open={!!resultForm.matchId}
         onOpenChange={(open) => !open && setResultForm({ matchId: "", winnerId: "", p1Score: "0", p2Score: "0" })}
       >
-        <DialogContent>
+        <DialogContent className="max-w-[calc(100vw-0.75rem)] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Report Match Result</DialogTitle>
           </DialogHeader>
@@ -922,10 +929,10 @@ export default function AdminTournamentsPage() {
               return (
                 <>
                   <Label>Select Winner</Label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Button
                       variant={resultForm.winnerId === match.player1Id ? "default" : "outline"}
-                      className="h-16 flex-col gap-1"
+                      className="min-h-[56px] flex-col gap-1"
                       onClick={() => setResultForm({ ...resultForm, winnerId: match.player1Id || "" })}
                     >
                       <Crown className="h-4 w-4" />
@@ -933,14 +940,14 @@ export default function AdminTournamentsPage() {
                     </Button>
                     <Button
                       variant={resultForm.winnerId === match.player2Id ? "default" : "outline"}
-                      className="h-16 flex-col gap-1"
+                      className="min-h-[56px] flex-col gap-1"
                       onClick={() => setResultForm({ ...resultForm, winnerId: match.player2Id || "" })}
                     >
                       <Crown className="h-4 w-4" />
                       {p2?.nickname || p2?.username || "Player 2"}
                     </Button>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label>{p1?.nickname || p1?.username || "Player 1"} Score</Label>
                       <Input
@@ -966,12 +973,14 @@ export default function AdminTournamentsPage() {
           </div>
           <DialogFooter>
             <Button
+              className="min-h-[44px] w-full sm:w-auto"
               variant="outline"
               onClick={() => setResultForm({ matchId: "", winnerId: "", p1Score: "0", p2Score: "0" })}
             >
               Cancel
             </Button>
             <Button
+              className="min-h-[44px] w-full sm:w-auto"
               onClick={() => reportResultMutation.mutate()}
               disabled={reportResultMutation.isPending || !resultForm.winnerId}
             >

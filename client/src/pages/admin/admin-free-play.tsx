@@ -740,11 +740,11 @@ export default function AdminFreePlayPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="min-h-[100svh] space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
             <Gift className="w-6 h-6 text-green-500" />
             Free Play Management
           </h1>
@@ -755,6 +755,7 @@ export default function AdminFreePlayPage() {
         <Button
           variant="outline"
           size="sm"
+          className="min-h-[40px] w-full sm:w-auto"
           onClick={() => {
             queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play"] });
           }}
@@ -827,24 +828,26 @@ export default function AdminFreePlayPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <TabsList className="grid grid-cols-4 w-full md:max-w-xl">
-            <TabsTrigger value="daily" className="flex items-center gap-1">
-              <Calendar className="w-4 h-4" /> Daily
-            </TabsTrigger>
-            <TabsTrigger value="ads" className="flex items-center gap-1">
-              <Tv className="w-4 h-4" /> Ads
-            </TabsTrigger>
-            <TabsTrigger value="referral" className="flex items-center gap-1">
-              <Users className="w-4 h-4" /> Referral
-            </TabsTrigger>
-            <TabsTrigger value="games" className="flex items-center gap-1">
-              <Gamepad2 className="w-4 h-4" /> Games
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto pb-1">
+            <TabsList className="inline-grid grid-cols-4 min-w-[30rem] md:min-w-0 md:w-full md:max-w-xl">
+              <TabsTrigger value="daily" className="flex items-center gap-1">
+                <Calendar className="w-4 h-4" /> Daily
+              </TabsTrigger>
+              <TabsTrigger value="ads" className="flex items-center gap-1">
+                <Tv className="w-4 h-4" /> Ads
+              </TabsTrigger>
+              <TabsTrigger value="referral" className="flex items-center gap-1">
+                <Users className="w-4 h-4" /> Referral
+              </TabsTrigger>
+              <TabsTrigger value="games" className="flex items-center gap-1">
+                <Gamepad2 className="w-4 h-4" /> Games
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <div className="flex items-center gap-2">
             <Input
-              className="w-24"
+              className="w-full sm:w-24"
               type="number"
               min="1"
               value={leaderboardWindowDays}
@@ -852,7 +855,7 @@ export default function AdminFreePlayPage() {
               placeholder="Days"
             />
             <Input
-              className="w-24"
+              className="w-full sm:w-24"
               type="number"
               min="1"
               value={leaderboardLimit}
@@ -909,7 +912,7 @@ export default function AdminFreePlayPage() {
               ) : dailyLeaderboard?.rows?.length ? (
                 <div className="space-y-2">
                   {dailyLeaderboard.rows.map((row, idx) => (
-                    <div key={String(row.user_id)} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div key={String(row.user_id)} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg">
                       <div>
                         <p className="text-sm font-semibold">#{idx + 1} {row.nickname || row.username}</p>
                         <p className="text-xs text-muted-foreground">@{row.username}</p>
@@ -958,7 +961,7 @@ export default function AdminFreePlayPage() {
                 </CardTitle>
                 <CardDescription>Create image/video/link campaigns and monitor performance</CardDescription>
               </div>
-              <Button onClick={openCreateCampaign}>
+              <Button className="min-h-[40px]" onClick={openCreateCampaign}>
                 <Plus className="w-4 h-4 mr-2" /> New Campaign
               </Button>
             </CardHeader>
@@ -977,11 +980,12 @@ export default function AdminFreePlayPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge variant={campaign.is_active ? "default" : "outline"}>{campaign.is_active ? "Active" : "Inactive"}</Badge>
-                            <Button size="sm" variant="outline" onClick={() => openEditCampaign(campaign)}>
+                            <Button size="sm" className="min-h-[40px]" variant="outline" onClick={() => openEditCampaign(campaign)}>
                               <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
                             </Button>
                             <Button
                               size="sm"
+                              className="min-h-[40px]"
                               variant="destructive"
                               onClick={() => deleteCampaignMut.mutate(campaign.id)}
                               disabled={deleteCampaignMut.isPending}
@@ -1018,7 +1022,7 @@ export default function AdminFreePlayPage() {
               ) : adsLeaderboard?.rows?.length ? (
                 <div className="space-y-2">
                   {adsLeaderboard.rows.map((row, idx) => (
-                    <div key={String(row.user_id)} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div key={String(row.user_id)} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg">
                       <div>
                         <p className="text-sm font-semibold">#{idx + 1} {row.nickname || row.username}</p>
                         <p className="text-xs text-muted-foreground">@{row.username}</p>
@@ -1174,7 +1178,7 @@ export default function AdminFreePlayPage() {
               ) : referralLeaderboard?.rows?.length ? (
                 <div className="space-y-2">
                   {referralLeaderboard.rows.map((row, idx) => (
-                    <div key={String(row.user_id)} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div key={String(row.user_id)} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg">
                       <div>
                         <p className="text-sm font-semibold">#{idx + 1} {row.nickname || row.username}</p>
                         <p className="text-xs text-muted-foreground">@{row.username}</p>
@@ -1186,6 +1190,7 @@ export default function AdminFreePlayPage() {
                         </div>
                         <Button
                           size="sm"
+                          className="min-h-[40px]"
                           variant={selectedReferrerId === String(row.user_id) ? "default" : "outline"}
                           onClick={() => selectReferrer(String(row.user_id))}
                         >
@@ -1386,7 +1391,7 @@ export default function AdminFreePlayPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {topReferrers.map((r: { userId: string; nickname?: string; username?: string; referralCount?: number; totalRewards?: string | number }, idx: number) => (
-                  <div key={r.userId} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div key={r.userId} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg">
                     <div>
                       <p className="text-sm font-semibold">#{idx + 1} {r.nickname || r.username}</p>
                       <p className="text-xs text-muted-foreground">@{r.username}</p>
@@ -1415,7 +1420,7 @@ export default function AdminFreePlayPage() {
               ) : gamesLeaderboard?.rows?.length ? (
                 <div className="space-y-2">
                   {gamesLeaderboard.rows.map((row, idx) => (
-                    <div key={String(row.user_id)} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div key={String(row.user_id)} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg">
                       <div>
                         <p className="text-sm font-semibold">#{idx + 1} {row.nickname || row.username}</p>
                         <p className="text-xs text-muted-foreground">@{row.username}</p>
@@ -1445,7 +1450,7 @@ export default function AdminFreePlayPage() {
               ) : activity?.length ? (
                 <div className="space-y-2 max-h-[420px] overflow-auto">
                   {activity.map((item: { type: string; username?: string; details?: string; amount: string | number; date: string }, idx: number) => (
-                    <div key={`${item.type}-${item.date}-${idx}`} className="flex items-center justify-between p-2 rounded-lg border">
+                    <div key={`${item.type}-${item.date}-${idx}`} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-2 rounded-lg border">
                       <div>
                         <p className="text-sm font-medium">{item.username || "Unknown user"}</p>
                         <p className="text-xs text-muted-foreground">{item.details || "No details"}</p>
@@ -1467,7 +1472,7 @@ export default function AdminFreePlayPage() {
       </Tabs>
 
       <Dialog open={isCampaignDialogOpen} onOpenChange={setIsCampaignDialogOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-[calc(100vw-0.75rem)] sm:max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingCampaignId ? "Edit Ad Campaign" : "Create Ad Campaign"}</DialogTitle>
             <DialogDescription>Manage ad metadata, media asset, target URL, and ordering.</DialogDescription>
@@ -1509,9 +1514,9 @@ export default function AdminFreePlayPage() {
             <div className="space-y-1.5">
               <Label>Asset URL</Label>
               <Input value={adForm.assetUrl} onChange={(e) => setAdForm((prev) => ({ ...prev, assetUrl: e.target.value }))} />
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <Input type="file" accept="image/*,video/*" onChange={handleCampaignAssetUpload} disabled={adAssetUploading} />
-                <Button variant="outline" disabled={adAssetUploading}>{adAssetUploading ? "Uploading..." : "Upload"}</Button>
+                <Button className="min-h-[40px]" variant="outline" disabled={adAssetUploading}>{adAssetUploading ? "Uploading..." : "Upload"}</Button>
               </div>
             </div>
 
@@ -1540,8 +1545,9 @@ export default function AdminFreePlayPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCampaignDialogOpen(false)}>Cancel</Button>
+            <Button className="min-h-[44px] w-full sm:w-auto" variant="outline" onClick={() => setIsCampaignDialogOpen(false)}>Cancel</Button>
             <Button
+              className="min-h-[44px] w-full sm:w-auto"
               onClick={saveCampaign}
               disabled={createCampaignMut.isPending || updateCampaignMut.isPending}
             >

@@ -54,15 +54,15 @@ Scope baseline: docs/MOBILE_UI_FULL_INVENTORY_2026-04-13.md
 ## Admin Routes
 1. /admin : done in this pass
 2. /admin/dashboard : done in this pass
-3. /admin/users : pending
-4. /admin/transactions : pending
-5. /admin/sections : pending
-6. /admin/anti-cheat : pending
-7. /admin/analytics : pending
-8. /admin/disputes : pending
-9. /admin/tournaments : pending
-10. /admin/free-play : pending
-11. /admin/gifts : pending
+3. /admin/users : done in this pass
+4. /admin/transactions : done in this pass
+5. /admin/sections : done in this pass
+6. /admin/anti-cheat : done
+7. /admin/analytics : done
+8. /admin/disputes : done
+9. /admin/tournaments : done
+10. /admin/free-play : done
+11. /admin/gifts : done
 12. /admin/p2p : pending
 13. /admin/currency : pending
 14. /admin/support : pending
