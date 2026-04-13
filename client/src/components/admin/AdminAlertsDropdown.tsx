@@ -95,7 +95,20 @@ export function AdminAlertsDropdown() {
     },
   });
 
-  const navigateToDeepLink = useCallback((deepLink: string | null | undefined) => {
+  const navigateToDeepLink = useCallback((alert: Pick<AdminAlert, "deepLink" | "entityType" | "entityId">) => {
+    let deepLink = alert.deepLink;
+
+    if (alert.entityType === "support_ticket" && alert.entityId) {
+      try {
+        const parsed = new URL(deepLink || "/admin/chat-management", window.location.origin);
+        parsed.searchParams.set("tab", "support");
+        parsed.searchParams.set("ticketId", alert.entityId);
+        deepLink = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      } catch {
+        deepLink = `/admin/chat-management?tab=support&ticketId=${encodeURIComponent(alert.entityId)}`;
+      }
+    }
+
     if (!deepLink) return;
 
     try {
@@ -167,7 +180,7 @@ export function AdminAlertsDropdown() {
 
         browserNotification.onclick = () => {
           window.focus();
-          navigateToDeepLink(alert.deepLink);
+          navigateToDeepLink(alert);
           browserNotification.close();
         };
 
@@ -290,7 +303,7 @@ export function AdminAlertsDropdown() {
       markReadMutation.mutate(alert.id);
     }
 
-    navigateToDeepLink(alert.deepLink);
+    navigateToDeepLink(alert);
     setIsOpen(false);
   };
 

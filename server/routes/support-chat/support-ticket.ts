@@ -6,13 +6,17 @@ import { db } from "../../db";
 import { eq, and, or, desc, count } from "drizzle-orm";
 import { supportTickets, supportMessages, supportAutoReplies } from "@shared/schema";
 
+function buildSam9IntakeGreeting(): string {
+  return "مرحباً، أنا sam9 من دعم VEX. أرسل لي وصف المشكلة بالتفصيل (الجهاز/النظام، آخر خطوة قبل المشكلة، ورسالة الخطأ إن وجدت) وسأقترح لك حلولاً مباشرة. ويمكنك في أي وقت الضغط على زر التحويل للدعم البشري.";
+}
+
 export function registerSupportTicketRoutes(app: Express): void {
 
   // Get or create support ticket for current user
   app.get("/api/support-chat/ticket", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.id;
-      
+
       // Find existing open/active ticket
       let [ticket] = await db.select().from(supportTickets)
         .where(and(
@@ -46,6 +50,16 @@ export function registerSupportTicketRoutes(app: Express): void {
             isRead: false,
           });
         }
+
+        // Force a deterministic SAM9 onboarding flow for every new support ticket.
+        await db.insert(supportMessages).values({
+          ticketId: ticket.id,
+          senderId: "sam9",
+          senderType: "system",
+          content: buildSam9IntakeGreeting(),
+          isAutoReply: true,
+          isRead: false,
+        });
       }
 
       res.json(ticket);
@@ -103,7 +117,7 @@ export async function getAutoReply(input: string): Promise<string | null> {
 
     if (input === "welcome") {
       const welcome = replies.find(r => r.trigger === "welcome");
-      return welcome?.response || "مرحباً بك في دعم VEX! كيف يمكننا مساعدتك؟";
+      return welcome?.response || "مرحباً بك في دعم VEX. أنا sam9 وسأجمع تفاصيل مشكلتك وأقترح لك الحلول خطوة بخطوة.";
     }
 
     for (const reply of replies) {

@@ -4,7 +4,7 @@ import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import { db } from "../../db";
 import { eq, and, or, desc, count } from "drizzle-orm";
-import { supportTickets, supportMessages } from "@shared/schema";
+import { supportTickets, supportMessages, users } from "@shared/schema";
 import { emitAdminAlert } from "../../lib/admin-alerts";
 import { broadcastAdminAlert } from "../../websocket";
 import { logger } from "../../lib/logger";
@@ -45,9 +45,9 @@ function shouldEscalateToLiveChat(
 function buildLiveChatOfferMessage(input: string): string {
   const looksArabic = /[\u0600-\u06FF]/.test(input);
   if (looksArabic) {
-    return "حاول sam9 مساعدتك لكن يحتاج تدخل بشري الآن. إذا أردت التحويل لمحادثة حية مع فريق الدعم، اكتب: (محادثة حية).";
+    return "حاول sam9 مساعدتك لكن هذه الحالة تحتاج تدخل بشري الآن. اضغط زر (تحويل للدعم البشري) داخل الدردشة، أو اكتب: (محادثة حية).";
   }
-  return "sam9 tried to help, but this case needs a human specialist. If you want to transfer to live chat with support, reply with: (live chat).";
+  return "sam9 tried to help, but this case needs a human specialist now. Press the (Human Support) button in chat, or reply with: (live chat).";
 }
 
 function buildDataCollectionMessage(input: string): string {
@@ -56,6 +56,20 @@ function buildDataCollectionMessage(input: string): string {
     return "تمام، هساعدك خطوة بخطوة. عشان أحلها أسرع: اكتب الجهاز/النظام، آخر خطوة قبل المشكلة، ورسالة الخطأ إن وجدت.";
   }
   return "Got it, I can help step by step. To diagnose faster, share your device/platform, last action before the issue, and any error message/code.";
+}
+
+function buildHumanSupportActivatedMessage(): string {
+  return "تم تحويل المحادثة للدعم البشري. سيتوقف sam9 عن الرد الآن وسيكمل معك فريق الدعم مباشرة.";
+}
+
+function resolvePreferredUsername(input: { username?: string | null; nickname?: string | null; userId: string }): string {
+  if (input.username && input.username.trim().length > 0) {
+    return input.username.trim();
+  }
+  if (input.nickname && input.nickname.trim().length > 0) {
+    return input.nickname.trim();
+  }
+  return input.userId;
 }
 
 function buildSam9Reply(aiReply: string, sourceMessage: string): string {
@@ -136,6 +150,20 @@ export function registerSupportMessageRoutes(app: Express): void {
       if (!ticket) return res.status(404).json({ error: "Ticket not found" });
       if (ticket.status === "closed") return res.status(400).json({ error: "Ticket is closed" });
 
+      const [senderUser] = await db.select({
+        username: users.username,
+        nickname: users.nickname,
+      }).from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      const preferredUsername = resolvePreferredUsername({
+        username: senderUser?.username ?? null,
+        nickname: senderUser?.nickname ?? null,
+        userId,
+      });
+      const isHumanSupportMode = ticket.status === "active";
+
       // Insert message — SECURITY: normalize to safe plain text before persistence
       const safeContent = sanitizePlainText(content, { maxLength: 2000 })
         || sanitizePlainText(mediaName, { maxLength: 200, fallback: "Attachment" });
@@ -153,78 +181,82 @@ export function registerSupportMessageRoutes(app: Express): void {
       }).returning();
 
       // Update ticket
+      const nextTicketStatus = isHumanSupportMode ? "active" : "waiting";
       await db.update(supportTickets)
-        .set({ lastMessageAt: new Date(), status: "waiting", updatedAt: new Date() })
+        .set({ lastMessageAt: new Date(), status: nextTicketStatus, updatedAt: new Date() })
         .where(eq(supportTickets.id, ticketId));
 
-      const [userTurnRow] = await db.select({ count: count() })
-        .from(supportMessages)
-        .where(and(
-          eq(supportMessages.ticketId, ticketId),
-          eq(supportMessages.senderType, "user"),
-        ));
-      const userTurns = Number(userTurnRow?.count || 1);
+      if (!isHumanSupportMode) {
+        const [userTurnRow] = await db.select({ count: count() })
+          .from(supportMessages)
+          .where(and(
+            eq(supportMessages.ticketId, ticketId),
+            eq(supportMessages.senderType, "user"),
+          ));
+        const userTurns = Number(userTurnRow?.count || 1);
 
-      // sam9 tries first. If unresolved, offer live chat handoff.
-      const autoReplyInput = (content || "").trim().toLowerCase();
-      const aiSupport = autoReplyInput
-        ? await chatWithAiAgentSupport({ ticketId, userId, message: safeContent })
-        : null;
+        // sam9 tries first. If unresolved, offer live chat handoff.
+        const autoReplyInput = (content || "").trim().toLowerCase();
+        const aiSupport = autoReplyInput
+          ? await chatWithAiAgentSupport({ ticketId, userId, message: safeContent })
+          : null;
 
-      const aiReply = sanitizePlainText(aiSupport?.reply, { maxLength: 1600, fallback: "" });
-      const hasAiReply = aiReply.trim().length > 0;
-      const escalateToLiveChat = shouldEscalateToLiveChat(aiReply, safeContent, userTurns, {
-        resolved: aiSupport?.resolved,
-        escalateToLiveChat: aiSupport?.escalateToLiveChat,
-        confidence: aiSupport?.confidence,
-      });
-
-      if (hasAiReply && !escalateToLiveChat) {
-        await db.insert(supportMessages).values({
-          ticketId,
-          senderId: "sam9",
-          senderType: "system",
-          content: buildSam9Reply(aiReply, safeContent),
-          isAutoReply: true,
-          isRead: false,
+        const aiReply = sanitizePlainText(aiSupport?.reply, { maxLength: 1600, fallback: "" });
+        const hasAiReply = aiReply.trim().length > 0;
+        const escalateToLiveChat = shouldEscalateToLiveChat(aiReply, safeContent, userTurns, {
+          resolved: aiSupport?.resolved,
+          escalateToLiveChat: aiSupport?.escalateToLiveChat,
+          confidence: aiSupport?.confidence,
         });
-      } else {
-        const keywordReply = autoReplyInput ? await getAutoReply(autoReplyInput) : null;
 
-        if (keywordReply) {
+        if (hasAiReply && !escalateToLiveChat) {
           await db.insert(supportMessages).values({
             ticketId,
             senderId: "sam9",
             senderType: "system",
-            content: buildSam9Reply(keywordReply, safeContent),
-            isAutoReply: true,
-            isRead: false,
-          });
-        }
-
-        if (escalateToLiveChat) {
-          await db.insert(supportMessages).values({
-            ticketId,
-            senderId: "sam9",
-            senderType: "system",
-            content: buildLiveChatOfferMessage(safeContent),
+            content: buildSam9Reply(aiReply, safeContent),
             isAutoReply: true,
             isRead: false,
           });
         } else {
-          await db.insert(supportMessages).values({
-            ticketId,
-            senderId: "sam9",
-            senderType: "system",
-            content: buildDataCollectionMessage(safeContent),
-            isAutoReply: true,
-            isRead: false,
-          });
+          const keywordReply = autoReplyInput ? await getAutoReply(autoReplyInput) : null;
+
+          if (keywordReply) {
+            await db.insert(supportMessages).values({
+              ticketId,
+              senderId: "sam9",
+              senderType: "system",
+              content: buildSam9Reply(keywordReply, safeContent),
+              isAutoReply: true,
+              isRead: false,
+            });
+          }
+
+          if (escalateToLiveChat) {
+            await db.insert(supportMessages).values({
+              ticketId,
+              senderId: "sam9",
+              senderType: "system",
+              content: buildLiveChatOfferMessage(safeContent),
+              isAutoReply: true,
+              isRead: false,
+            });
+          } else {
+            await db.insert(supportMessages).values({
+              ticketId,
+              senderId: "sam9",
+              senderType: "system",
+              content: buildDataCollectionMessage(safeContent),
+              isAutoReply: true,
+              isRead: false,
+            });
+          }
         }
       }
 
       // Notify admin (persist to DB + broadcast via websocket)
-      const supportPreview = safeContent.substring(0, 100);
+      const supportPreview = `${preferredUsername}: ${safeContent.substring(0, 100)}`;
+      const supportDeepLink = `/admin/chat-management?tab=support&ticketId=${encodeURIComponent(ticketId)}`;
       emitAdminAlert({
         type: "support_message",
         title: "New Support Message",
@@ -234,7 +266,7 @@ export function registerSupportMessageRoutes(app: Express): void {
         severity: "info",
         entityType: "support_ticket",
         entityId: ticketId,
-        deepLink: "/admin/chat-management",
+        deepLink: supportDeepLink,
       }).catch((err) => {
         // Fallback: if DB insert fails, still broadcast via WebSocket so admin sees it in real-time
         logger.error('[Support] emitAdminAlert failed, using fallback broadcast', new Error(err.message));
@@ -248,12 +280,89 @@ export function registerSupportMessageRoutes(app: Express): void {
           severity: "info",
           entityType: "support_ticket",
           entityId: ticketId,
-          deepLink: "/admin/chat-management",
+          deepLink: supportDeepLink,
           createdAt: new Date(),
         });
       });
 
       res.json(message);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/support-chat/tickets/:ticketId/request-human-support", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { ticketId } = req.params;
+
+      const [ticket] = await db.select().from(supportTickets)
+        .where(and(eq(supportTickets.id, ticketId), eq(supportTickets.userId, userId)))
+        .limit(1);
+
+      if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+      if (ticket.status === "closed") return res.status(400).json({ error: "Ticket is closed" });
+
+      const [senderUser] = await db.select({
+        username: users.username,
+        nickname: users.nickname,
+      }).from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      const preferredUsername = resolvePreferredUsername({
+        username: senderUser?.username ?? null,
+        nickname: senderUser?.nickname ?? null,
+        userId,
+      });
+
+      if (ticket.status !== "active") {
+        await db.update(supportTickets)
+          .set({ status: "active", updatedAt: new Date(), lastMessageAt: new Date() })
+          .where(eq(supportTickets.id, ticketId));
+
+        await db.insert(supportMessages).values({
+          ticketId,
+          senderId: "system",
+          senderType: "system",
+          content: buildHumanSupportActivatedMessage(),
+          isAutoReply: true,
+          isRead: false,
+        });
+
+        const supportDeepLink = `/admin/chat-management?tab=support&ticketId=${encodeURIComponent(ticketId)}`;
+        const alertMessage = `User ${preferredUsername} requested human support`;
+        const alertMessageAr = `المستخدم ${preferredUsername} طلب التحويل إلى الدعم البشري`;
+
+        emitAdminAlert({
+          type: "support_message",
+          title: "Human Support Request",
+          titleAr: "طلب دعم بشري",
+          message: alertMessage,
+          messageAr: alertMessageAr,
+          severity: "warning",
+          entityType: "support_ticket",
+          entityId: ticketId,
+          deepLink: supportDeepLink,
+        }).catch((err) => {
+          logger.error('[Support] human handoff alert failed, using fallback broadcast', new Error(err.message));
+          broadcastAdminAlert({
+            id: crypto.randomUUID(),
+            type: "support_message",
+            title: "Human Support Request",
+            titleAr: "طلب دعم بشري",
+            message: alertMessage,
+            messageAr: alertMessageAr,
+            severity: "warning",
+            entityType: "support_ticket",
+            entityId: ticketId,
+            deepLink: supportDeepLink,
+            createdAt: new Date(),
+          });
+        });
+      }
+
+      res.json({ success: true, status: "active" });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

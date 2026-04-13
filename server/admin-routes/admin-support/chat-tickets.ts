@@ -20,6 +20,8 @@ export function registerChatTicketsRoutes(app: Express) {
           id: users.id,
           username: users.username,
           nickname: users.nickname,
+          email: users.email,
+          phone: users.phone,
           profilePicture: users.profilePicture,
         },
         unreadCount: sql<number>`(SELECT COUNT(*) FROM support_messages WHERE ticket_id = ${supportTickets.id} AND sender_type = 'user' AND is_read = false)`,
@@ -44,6 +46,9 @@ export function registerChatTicketsRoutes(app: Express) {
         createdAt: r.ticket.createdAt,
         username: r.user?.username,
         nickname: r.user?.nickname,
+        displayUsername: r.user?.username || r.user?.nickname || r.ticket.userId,
+        email: r.user?.email,
+        phone: r.user?.phone,
         profilePicture: r.user?.profilePicture,
         unreadCount: Number(r.unreadCount) || 0,
       }));
@@ -63,6 +68,9 @@ export function registerChatTicketsRoutes(app: Express) {
           id: users.id,
           username: users.username,
           nickname: users.nickname,
+          email: users.email,
+          phone: users.phone,
+          createdAt: users.createdAt,
           profilePicture: users.profilePicture,
         },
       })

@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { useMessageTranslation } from "@/hooks/use-message-translation";
 import {
   MessageCircle, X, Send, Loader2, Headphones, MinusCircle,
-  Mail, Phone, ExternalLink, Paperclip, Image, FileText, Download, XCircle, Languages, ChevronDown,
+  Mail, Phone, ExternalLink, Paperclip, Image, FileText, Download, XCircle, Languages, ChevronDown, ArrowRight,
 } from "lucide-react";
 
 interface SupportMessage {
@@ -142,7 +142,19 @@ export function SupportChatWidget({ isLoggedIn = false }: { isLoggedIn?: boolean
     },
   });
 
+  const requestHumanSupportMutation = useMutation({
+    mutationFn: () => supportFetch(`/api/support-chat/tickets/${ticket!.id}/request-human-support`, {
+      method: "POST",
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["support-ticket"] });
+      queryClient.invalidateQueries({ queryKey: ["support-messages", ticket?.id] });
+      queryClient.invalidateQueries({ queryKey: ["support-unread"] });
+    },
+  });
+
   const messages = messagesData?.messages || [];
+  const isHumanSupportMode = ticket?.status === "active";
 
   // Auto-translate incoming admin/system messages when enabled
   useEffect(() => {
@@ -360,10 +372,10 @@ export function SupportChatWidget({ isLoggedIn = false }: { isLoggedIn?: boolean
               >
                 <div
                   className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${msg.senderType === "user"
-                      ? "bg-primary text-primary-foreground rounded-ee-sm"
-                      : msg.senderType === "system"
-                        ? "bg-muted text-muted-foreground rounded-es-sm italic"
-                        : "bg-card border border-border text-card-foreground rounded-es-sm"
+                    ? "bg-primary text-primary-foreground rounded-ee-sm"
+                    : msg.senderType === "system"
+                      ? "bg-muted text-muted-foreground rounded-es-sm italic"
+                      : "bg-card border border-border text-card-foreground rounded-es-sm"
                     }`}
                 >
                   {msg.senderType === "admin" && (
@@ -433,6 +445,27 @@ export function SupportChatWidget({ isLoggedIn = false }: { isLoggedIn?: boolean
               </p>
             ) : (
               <div className="space-y-2">
+                {!isHumanSupportMode ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-center gap-2 h-9"
+                    onClick={() => requestHumanSupportMutation.mutate()}
+                    disabled={requestHumanSupportMutation.isPending}
+                  >
+                    {requestHumanSupportMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ArrowRight className="h-4 w-4" />
+                    )}
+                    تحويل للدعم البشري
+                  </Button>
+                ) : (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800 rounded-md px-2 py-1.5">
+                    تم التحويل للدعم البشري. sam9 متوقف الآن وسيكمل فريق الدعم معك.
+                  </p>
+                )}
+
                 {/* Media preview */}
                 {mediaPreview && (
                   <div className="relative flex items-center gap-2 p-2 rounded-lg bg-muted/50 border">

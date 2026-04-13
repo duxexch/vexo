@@ -14,6 +14,7 @@ import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useMessageTranslation } from "@/hooks/use-message-translation";
 import { playSound } from "@/hooks/use-sound-effects";
+import { useLocation } from "wouter";
 import {
   MessageCircle, BarChart3, Shield, Trash2, Search, Ban, X, Plus, Eye,
   MessageSquare, Users, Clock, AlertTriangle, Settings, Filter,
@@ -32,6 +33,10 @@ interface SupportTicket {
   id: string;
   nickname?: string;
   username?: string;
+  displayUsername?: string;
+  email?: string;
+  phone?: string;
+  userId?: string;
   unreadCount: number;
   status?: string;
   lastMessage?: string;
@@ -200,10 +205,22 @@ async function adminFetch(url: string, options: RequestInit = {}) {
   return res.json();
 }
 
+function resolvePreferredUsername(user?: { username?: unknown; nickname?: unknown; id?: unknown }, fallback = "مستخدم") {
+  const username = typeof user?.username === "string" ? user.username.trim() : "";
+  if (username) return username;
+
+  const nickname = typeof user?.nickname === "string" ? user.nickname.trim() : "";
+  if (nickname) return nickname;
+
+  const id = typeof user?.id === "string" ? user.id : "";
+  return id || fallback;
+}
+
 export default function AdminChatPage() {
   const { toast } = useToast();
   const { t } = useI18n();
   const queryClient = useQueryClient();
+  const [location, setLocation] = useLocation();
   const [newBannedWord, setNewBannedWord] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -226,6 +243,25 @@ export default function AdminChatPage() {
   const [aiDataQueryFrom, setAiDataQueryFrom] = useState("");
   const [aiDataQueryTo, setAiDataQueryTo] = useState("");
   const [aiActivePreset, setAiActivePreset] = useState("top-games");
+
+  useEffect(() => {
+    const queryStart = location.indexOf("?");
+    if (queryStart === -1) return;
+
+    const search = location.slice(queryStart + 1);
+    const params = new URLSearchParams(search);
+    const tab = params.get("tab");
+    const ticketId = params.get("ticketId");
+
+    if (tab && ["overview", "support", "monitor", "filter", "settings", "ai-agent"].includes(tab)) {
+      setActiveTab(tab);
+    }
+
+    if (ticketId && ticketId.trim().length > 0) {
+      setActiveTab("support");
+      setSelectedTicketId(ticketId);
+    }
+  }, [location]);
 
   // WebSocket for real-time support message notifications
   useEffect(() => {
@@ -268,7 +304,16 @@ export default function AdminChatPage() {
                 tag: 'vex-admin-support',
                 requireInteraction: true,
               });
-              browserNotif.onclick = () => { window.focus(); browserNotif.close(); };
+              browserNotif.onclick = () => {
+                window.focus();
+                const entityId = typeof data.data?.entityId === "string" ? data.data.entityId : "";
+                if (entityId) {
+                  setActiveTab("support");
+                  setSelectedTicketId(entityId);
+                  setLocation(`/admin/chat-management?tab=support&ticketId=${encodeURIComponent(entityId)}`);
+                }
+                browserNotif.close();
+              };
               setTimeout(() => browserNotif.close(), 15000);
             } catch { }
           }
@@ -328,12 +373,18 @@ export default function AdminChatPage() {
             createdAt: t.createdAt,
             username: u.username,
             nickname: u.nickname,
+            displayUsername: r.displayUsername || u.username || u.nickname || t.userId,
+            email: r.email || u.email,
+            phone: r.phone || u.phone,
             profilePicture: u.profilePicture,
             unreadCount: Number(r.unreadCount) || 0,
           } as SupportTicket;
         }
         // Already flat format
-        return r as SupportTicket;
+        return {
+          ...(r as SupportTicket),
+          displayUsername: (r as SupportTicket).displayUsername || (r as SupportTicket).username || (r as SupportTicket).nickname || (r as SupportTicket).userId,
+        } as SupportTicket;
       });
     },
     enabled: activeTab === "support",
@@ -1343,7 +1394,7 @@ export default function AdminChatPage() {
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-medium text-sm truncate">
-                            {ticket.nickname || ticket.username}
+                            {ticket.displayUsername || ticket.username || ticket.nickname || ticket.userId || "مستخدم"}
                           </span>
                           <div className="flex items-center gap-1">
                             {ticket.unreadCount > 0 && (
@@ -1391,11 +1442,14 @@ export default function AdminChatPage() {
                         </Button>
                         <div>
                           <CardTitle className="text-base">
-                            {ticketDetail?.user?.nickname || ticketDetail?.user?.username || "مستخدم"}
+                            {resolvePreferredUsername(ticketDetail?.user as { username?: unknown; nickname?: unknown; id?: unknown })}
                           </CardTitle>
                           <CardDescription className="text-xs">
-                            {ticketDetail?.user?.email || ticketDetail?.user?.id}
+                            @{resolvePreferredUsername(ticketDetail?.user as { username?: unknown; nickname?: unknown; id?: unknown }, "user")}
                           </CardDescription>
+                          <p className="text-[11px] text-muted-foreground">
+                            {ticketDetail?.user?.email || ticketDetail?.user?.phone || ticketDetail?.user?.id}
+                          </p>
                         </div>
                       </div>
                       <div className="flex gap-1">
@@ -2332,7 +2386,7 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
               <div className="space-y-1">
                 {mediaSettings.blockedUsers.map((u: ChatFeatureUser) => (
                   <div key={u.id} className="flex items-center justify-between text-sm bg-muted/50 rounded p-1.5">
-                    <span className="truncate">{u.nickname || u.username || u.id}</span>
+                    <span className="truncate">{u.username || u.nickname || u.id}</span>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleUnblockUser(u.id || '')}>
                       <X className="h-3 w-3" />
                     </Button>
