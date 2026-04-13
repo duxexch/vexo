@@ -32,19 +32,7 @@ import {
   CheckCircle,
   FileText,
 } from "lucide-react";
-
-function getAdminToken() {
-  return localStorage.getItem("adminToken");
-}
-
-async function adminFetch(url: string) {
-  const token = getAdminToken();
-  const res = await fetch(url, {
-    headers: { "x-admin-token": token || "" },
-  });
-  if (!res.ok) throw new Error("Failed to fetch");
-  return res.json();
-}
+import { adminFetch } from "@/lib/admin-api";
 
 interface AuditLogEntry {
   id: string;

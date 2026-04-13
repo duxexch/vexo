@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { adminFetch } from "@/lib/admin-api";
 import {
   Users,
   DollarSign,
@@ -11,19 +12,6 @@ import {
   Gamepad2,
   ArrowUpRight,
 } from "lucide-react";
-
-function getAdminToken() {
-  return localStorage.getItem("adminToken");
-}
-
-async function adminFetch(url: string) {
-  const token = getAdminToken();
-  const res = await fetch(url, {
-    headers: { "x-admin-token": token || "" },
-  });
-  if (!res.ok) throw new Error("Failed to fetch");
-  return res.json();
-}
 
 export default function AdminAnalyticsPage() {
   const { data: analytics, isLoading } = useQuery({

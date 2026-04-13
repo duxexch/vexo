@@ -214,6 +214,34 @@ export default function TransactionsPage() {
   const selectedMethod = paymentMethods?.find(m => m.id === paymentMethod);
   const selectedWithdrawalMethod = withdrawalPaymentMethods.find((m) => m.id === withdrawMethodId);
 
+  const renderMethodOption = (method: CountryPaymentMethod) => (
+    <div className="flex items-center gap-2">
+      <span>{method.name}</span>
+      <Badge variant="outline" className="text-xs">{method.type}</Badge>
+    </div>
+  );
+
+  const renderMethodLimits = (method: Pick<CountryPaymentMethod, "minAmount" | "maxAmount" | "processingTime">) => (
+    <Card className="bg-muted/50">
+      <CardContent className="p-4 space-y-2">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">{t('transactions.minAmount')}</span>
+          <span className="font-medium">${method.minAmount}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">{t('transactions.maxAmount')}</span>
+          <span className="font-medium">${method.maxAmount}</span>
+        </div>
+        {method.processingTime ? (
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">{t('transactions.processingTime')}</span>
+            <span className="font-medium">{method.processingTime}</span>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+
   useEffect(() => {
     if (!depositOpen) return;
     if (depositStep === 'method') {
@@ -327,10 +355,7 @@ export default function TransactionsPage() {
                       <SelectContent>
                         {paymentMethods?.map((method) => (
                           <SelectItem key={method.id} value={method.id}>
-                            <div className="flex items-center gap-2">
-                              <span>{method.name}</span>
-                              <Badge variant="outline" className="text-xs">{method.type}</Badge>
-                            </div>
+                            {renderMethodOption(method)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -338,22 +363,11 @@ export default function TransactionsPage() {
                   </div>
 
                   {selectedMethod && (
-                    <Card className="bg-muted/50">
-                      <CardContent className="p-4 space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{t('transactions.minAmount')}</span>
-                          <span className="font-medium">${selectedMethod.minAmount}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{t('transactions.maxAmount')}</span>
-                          <span className="font-medium">${selectedMethod.maxAmount}</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{t('transactions.processingTime')}</span>
-                          <span className="font-medium">{selectedMethod.processingTime || 'Varies'}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    renderMethodLimits({
+                      minAmount: selectedMethod.minAmount,
+                      maxAmount: selectedMethod.maxAmount,
+                      processingTime: selectedMethod.processingTime || 'Varies',
+                    })
                   )}
 
                   <div className="space-y-2">
@@ -509,10 +523,7 @@ export default function TransactionsPage() {
                     <SelectContent>
                       {withdrawalPaymentMethods.map((method) => (
                         <SelectItem key={method.id} value={method.id}>
-                          <div className="flex items-center gap-2">
-                            <span>{method.name}</span>
-                            <Badge variant="outline" className="text-xs">{method.type}</Badge>
-                          </div>
+                          {renderMethodOption(method)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -520,18 +531,7 @@ export default function TransactionsPage() {
                 </div>
 
                 {selectedWithdrawalMethod && (
-                  <Card className="bg-muted/50">
-                    <CardContent className="p-4 space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{t('transactions.minAmount')}</span>
-                        <span className="font-medium">${selectedWithdrawalMethod.minAmount}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{t('transactions.maxAmount')}</span>
-                        <span className="font-medium">${selectedWithdrawalMethod.maxAmount}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  renderMethodLimits(selectedWithdrawalMethod)
                 )}
 
                 <div className="space-y-2">

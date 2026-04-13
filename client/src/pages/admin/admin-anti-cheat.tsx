@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { adminFetch } from "@/lib/admin-api";
 import {
   Shield,
   AlertTriangle,
@@ -15,19 +16,6 @@ import {
   Zap,
   Copy,
 } from "lucide-react";
-
-function getAdminToken() {
-  return localStorage.getItem("adminToken");
-}
-
-async function adminFetch(url: string) {
-  const token = getAdminToken();
-  const res = await fetch(url, {
-    headers: { "x-admin-token": token || "" },
-  });
-  if (!res.ok) throw new Error("Failed to fetch");
-  return res.json();
-}
 
 export default function AdminAntiCheatPage() {
   const { toast } = useToast();
