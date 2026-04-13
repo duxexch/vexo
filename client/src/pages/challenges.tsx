@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -132,6 +132,15 @@ interface ChallengeGame {
   status: string;
 }
 
+interface MultiplayerGameIconMeta {
+  id: string;
+  key: string;
+  nameEn: string;
+  iconName?: string;
+  iconUrl?: string;
+  updatedAt?: string;
+}
+
 interface ProjectCurrencySettings {
   currencyName: string;
   currencySymbol: string;
@@ -194,6 +203,23 @@ function RatingBadge({ rating }: { rating?: PlayerRating }) {
       {rating.winRate}% ({rating.wins}W/{rating.losses}L)
     </Badge>
   );
+}
+
+function isImagePath(value?: string | null): value is string {
+  if (!value) return false;
+  const normalized = value.trim();
+  if (!normalized) return false;
+  return normalized.startsWith("/") || /^https?:\/\//i.test(normalized);
+}
+
+function normalizeGameToken(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function withVersionSuffix(url: string, versionSeed?: string): string {
+  if (!versionSeed) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}v=${encodeURIComponent(versionSeed)}`;
 }
 
 export default function ChallengesPage() {
@@ -362,6 +388,42 @@ export default function ChallengesPage() {
       return res.json();
     },
   });
+
+  const { data: multiplayerGamesIconMeta = [] } = useQuery<MultiplayerGameIconMeta[]>({
+    queryKey: ['/api/multiplayer-games'],
+    queryFn: async () => {
+      const res = await fetch('/api/multiplayer-games');
+      if (!res.ok) throw new Error('Failed to load multiplayer game icons');
+      return res.json();
+    },
+  });
+
+  const challengeIconImageMap = useMemo(() => {
+    const map = new Map<string, string>();
+
+    for (const game of multiplayerGamesIconMeta) {
+      const rawIconUrl = typeof game.iconUrl === 'string' ? game.iconUrl.trim() : '';
+      const rawIconName = typeof game.iconName === 'string' ? game.iconName.trim() : '';
+
+      const imagePath = isImagePath(rawIconUrl)
+        ? rawIconUrl
+        : isImagePath(rawIconName)
+          ? rawIconName
+          : '';
+
+      if (!imagePath) continue;
+
+      const versionSeed = game.updatedAt
+        ? String(new Date(game.updatedAt).getTime())
+        : game.id;
+      const versionedPath = withVersionSuffix(imagePath, versionSeed);
+
+      map.set(normalizeGameToken(game.key), versionedPath);
+      map.set(normalizeGameToken(game.nameEn), versionedPath);
+    }
+
+    return map;
+  }, [multiplayerGamesIconMeta]);
 
   const refreshChallengeQueries = () => {
     queryClient.invalidateQueries({ queryKey: ['/api/challenges'] });
@@ -1403,6 +1465,7 @@ export default function ChallengesPage() {
                   ) : challengeGames.map(game => {
                     const Icon = getGameIconByName(game.name);
                     const gameKey = game.name.toLowerCase();
+                    const iconImageUrl = challengeIconImageMap.get(normalizeGameToken(game.name));
                     return (
                       <Button
                         key={game.id}
@@ -1414,7 +1477,13 @@ export default function ChallengesPage() {
                         }}
                         data-testid={`button-game-${gameKey}`}
                       >
-                        <Icon className="h-6 w-6 mb-1" />
+                        {iconImageUrl ? (
+                          <span className="mb-1 inline-flex h-6 w-6 items-center justify-center overflow-hidden rounded-sm">
+                            <img src={iconImageUrl} alt="" className="h-full w-full object-contain" loading="lazy" decoding="async" />
+                          </span>
+                        ) : (
+                          <Icon className="h-6 w-6 mb-1" />
+                        )}
                         <span>{game.name}</span>
                       </Button>
                     );

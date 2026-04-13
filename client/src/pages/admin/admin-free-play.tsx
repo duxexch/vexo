@@ -329,7 +329,7 @@ function formatDateTime(value?: string | null): string {
 export default function AdminFreePlayPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("daily");
+  const [activeTab, setActiveTab] = useState("referral");
   const [leaderboardWindowDays, setLeaderboardWindowDays] = useState("30");
   const [leaderboardLimit, setLeaderboardLimit] = useState("20");
   const [selectedReferrerId, setSelectedReferrerId] = useState("");
@@ -434,6 +434,17 @@ export default function AdminFreePlayPage() {
       setReferrerCommissionRate(String(referrerDetails.affiliate.commissionRate));
     }
   }, [referrerDetails?.affiliate?.commissionRate]);
+
+  useEffect(() => {
+    if (selectedReferrerId || !topReferrers?.length) {
+      return;
+    }
+
+    const firstReferrerId = String(topReferrers[0]?.userId || "");
+    if (firstReferrerId) {
+      setSelectedReferrerId(firstReferrerId);
+    }
+  }, [selectedReferrerId, topReferrers]);
 
   useEffect(() => {
     if (!marketerDetails?.affiliate) {
