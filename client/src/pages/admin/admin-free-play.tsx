@@ -177,6 +177,78 @@ interface ReferrerDetailsResponse {
   }>;
 }
 
+interface MarketerOverviewResponse {
+  summary: {
+    total_marketers: number;
+    approved_marketers: number;
+    pending_marketers: number;
+    revoked_marketers: number;
+    total_commissions: string;
+    total_pending: string;
+    total_withdrawable: string;
+    total_paid: string;
+  };
+  topMarketers: Array<{
+    user_id: string;
+    username: string;
+    nickname?: string | null;
+    total_referrals: number;
+    total_commission_earned: string;
+    pending_commission: string;
+    total_withdrawable_commission: string;
+  }>;
+}
+
+interface MarketerDetailsResponse {
+  user: {
+    id: string;
+    username: string;
+    nickname?: string | null;
+    status: string;
+  };
+  affiliate: {
+    id: string;
+    marketerStatus: string;
+    cpaEnabled: boolean;
+    cpaAmount: string;
+    revshareEnabled: boolean;
+    revshareRate: string;
+    commissionHoldDays: number;
+    minQualifiedDeposits: string;
+    minQualifiedWagered: string;
+    minQualifiedGames: number;
+    totalCommissionEarned: string;
+    pendingCommission: string;
+    totalWithdrawableCommission: string;
+    totalPaidCommission: string;
+  } | null;
+  referralStats: {
+    invited_total: number;
+    invited_active: number;
+    invited_deposits: string;
+    invited_wagered: string;
+    invited_games: number;
+  };
+  commissionStats: {
+    total_amount: string;
+    on_hold_amount: string;
+    released_amount: string;
+    cpa_amount: string;
+    revshare_amount: string;
+    events_count: number;
+  };
+  recentEvents: Array<{
+    id: string;
+    reward_type: string;
+    reward_status: string;
+    reward_amount: string;
+    hold_until?: string | null;
+    released_at?: string | null;
+    created_at: string;
+    referred_username?: string | null;
+  }>;
+}
+
 interface FreePlayAdsCampaign {
   id: string;
   title: string;
@@ -262,6 +334,14 @@ export default function AdminFreePlayPage() {
   const [leaderboardLimit, setLeaderboardLimit] = useState("20");
   const [selectedReferrerId, setSelectedReferrerId] = useState("");
   const [referrerCommissionRate, setReferrerCommissionRate] = useState("5.00");
+  const [marketerCpaEnabled, setMarketerCpaEnabled] = useState(true);
+  const [marketerRevshareEnabled, setMarketerRevshareEnabled] = useState(true);
+  const [marketerCpaAmount, setMarketerCpaAmount] = useState("5.00");
+  const [marketerRevshareRate, setMarketerRevshareRate] = useState("10.00");
+  const [marketerHoldDays, setMarketerHoldDays] = useState("7");
+  const [marketerMinDeposit, setMarketerMinDeposit] = useState("0.00");
+  const [marketerMinWagered, setMarketerMinWagered] = useState("0.00");
+  const [marketerMinGames, setMarketerMinGames] = useState("0");
   const [isCampaignDialogOpen, setIsCampaignDialogOpen] = useState(false);
   const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
   const [adAssetUploading, setAdAssetUploading] = useState(false);
@@ -328,6 +408,17 @@ export default function AdminFreePlayPage() {
     enabled: selectedReferrerId.length > 0,
   });
 
+  const { data: marketerOverview } = useQuery<MarketerOverviewResponse>({
+    queryKey: ["/api/admin/free-play/marketers/overview"],
+    queryFn: () => adminFetch("/api/admin/free-play/marketers/overview"),
+  });
+
+  const { data: marketerDetails, isLoading: marketerDetailsLoading } = useQuery<MarketerDetailsResponse>({
+    queryKey: ["/api/admin/free-play/marketers", selectedReferrerId],
+    queryFn: () => adminFetch(`/api/admin/free-play/marketers/${selectedReferrerId}/details`),
+    enabled: selectedReferrerId.length > 0,
+  });
+
   const { data: adsCampaigns, isLoading: adsCampaignsLoading } = useQuery<FreePlayAdsCampaignsResponse>({
     queryKey: ["/api/admin/free-play/ads/campaigns", windowDaysValue],
     queryFn: () => adminFetch(`/api/admin/free-play/ads/campaigns?windowDays=${windowDaysValue}`),
@@ -343,6 +434,20 @@ export default function AdminFreePlayPage() {
       setReferrerCommissionRate(String(referrerDetails.affiliate.commissionRate));
     }
   }, [referrerDetails?.affiliate?.commissionRate]);
+
+  useEffect(() => {
+    if (!marketerDetails?.affiliate) {
+      return;
+    }
+    setMarketerCpaEnabled(marketerDetails.affiliate.cpaEnabled !== false);
+    setMarketerRevshareEnabled(marketerDetails.affiliate.revshareEnabled !== false);
+    setMarketerCpaAmount(String(marketerDetails.affiliate.cpaAmount || "5.00"));
+    setMarketerRevshareRate(String(marketerDetails.affiliate.revshareRate || "10.00"));
+    setMarketerHoldDays(String(marketerDetails.affiliate.commissionHoldDays ?? 7));
+    setMarketerMinDeposit(String(marketerDetails.affiliate.minQualifiedDeposits || "0.00"));
+    setMarketerMinWagered(String(marketerDetails.affiliate.minQualifiedWagered || "0.00"));
+    setMarketerMinGames(String(marketerDetails.affiliate.minQualifiedGames ?? 0));
+  }, [marketerDetails?.affiliate]);
 
   // Local state for settings form
   const [localSettings, setLocalSettings] = useState<Record<string, string>>({});
@@ -382,6 +487,55 @@ export default function AdminFreePlayPage() {
     },
     onError: (err: Error) => {
       toast({ title: "Failed to update commission", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateMarketerConfigMut = useMutation({
+    mutationFn: (payload: {
+      userId: string;
+      cpaEnabled: boolean;
+      revshareEnabled: boolean;
+      cpaAmount: string;
+      revshareRate: string;
+      commissionHoldDays: string;
+      minQualifiedDeposits: string;
+      minQualifiedWagered: string;
+      minQualifiedGames: string;
+    }) => adminPut(`/api/admin/free-play/marketers/${payload.userId}/config`, payload),
+    onSuccess: () => {
+      toast({ title: "Marketer configuration updated" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/marketers", selectedReferrerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/marketers/overview"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to update marketer config", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const marketerBadgeMut = useMutation({
+    mutationFn: (payload: { userId: string; action: "grant" | "revoke" }) =>
+      adminPost(`/api/admin/free-play/marketers/${payload.userId}/badge`, { action: payload.action }),
+    onSuccess: (_data, variables) => {
+      toast({ title: variables.action === "grant" ? "Marketer badge granted" : "Marketer badge revoked" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/marketers", selectedReferrerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/marketers/overview"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Badge action failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const syncMarketerMut = useMutation({
+    mutationFn: (payload: { userId?: string; releaseOnly?: boolean }) =>
+      adminPost("/api/admin/free-play/marketers/sync", payload),
+    onSuccess: () => {
+      toast({ title: "Marketer sync finished" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/marketers", selectedReferrerId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/marketers/overview"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/free-play/referrals", selectedReferrerId] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Sync failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -472,6 +626,25 @@ export default function AdminFreePlayPage() {
     }
 
     updateCommissionMut.mutate({ userId: selectedReferrerId, commissionRate: referrerCommissionRate });
+  };
+
+  const handleMarketerConfigSave = () => {
+    if (!selectedReferrerId) {
+      toast({ title: "Select a marketer first", variant: "destructive" });
+      return;
+    }
+
+    updateMarketerConfigMut.mutate({
+      userId: selectedReferrerId,
+      cpaEnabled: marketerCpaEnabled,
+      revshareEnabled: marketerRevshareEnabled,
+      cpaAmount: marketerCpaAmount,
+      revshareRate: marketerRevshareRate,
+      commissionHoldDays: marketerHoldDays,
+      minQualifiedDeposits: marketerMinDeposit,
+      minQualifiedWagered: marketerMinWagered,
+      minQualifiedGames: marketerMinGames,
+    });
   };
 
   const handleCampaignAssetUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -917,6 +1090,69 @@ export default function AdminFreePlayPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
+                <Medal className="w-4 h-4 text-sky-500" /> Marketer Program Overview
+              </CardTitle>
+              <CardDescription>CPA + RevShare health, pending balances, and top marketers</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3 rounded border">
+                  <p className="text-xs text-muted-foreground">Approved</p>
+                  <p className="text-xl font-bold">{Number(marketerOverview?.summary?.approved_marketers || 0)}</p>
+                </div>
+                <div className="p-3 rounded border">
+                  <p className="text-xs text-muted-foreground">Pending</p>
+                  <p className="text-xl font-bold">{Number(marketerOverview?.summary?.pending_marketers || 0)}</p>
+                </div>
+                <div className="p-3 rounded border">
+                  <p className="text-xs text-muted-foreground">Total Pending</p>
+                  <p className="text-xl font-bold">{formatProjectCoins(marketerOverview?.summary?.total_pending || 0)}</p>
+                </div>
+                <div className="p-3 rounded border">
+                  <p className="text-xs text-muted-foreground">Total Withdrawable</p>
+                  <p className="text-xl font-bold">{formatProjectCoins(marketerOverview?.summary?.total_withdrawable || 0)}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => syncMarketerMut.mutate({ userId: selectedReferrerId || undefined, releaseOnly: false })}
+                  disabled={syncMarketerMut.isPending}
+                >
+                  {syncMarketerMut.isPending ? "Syncing..." : "Run RevShare Sync"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => syncMarketerMut.mutate({ userId: selectedReferrerId || undefined, releaseOnly: true })}
+                  disabled={syncMarketerMut.isPending}
+                >
+                  {syncMarketerMut.isPending ? "Processing..." : "Release Eligible"}
+                </Button>
+              </div>
+
+              {(marketerOverview?.topMarketers?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  {marketerOverview!.topMarketers.slice(0, 5).map((row, idx) => (
+                    <div key={row.user_id} className="border rounded-lg p-3 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold">#{idx + 1} {row.nickname || row.username}</p>
+                        <p className="text-xs text-muted-foreground">@{row.username}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">{formatProjectCoins(row.total_commission_earned || 0)}</p>
+                        <p className="text-xs text-muted-foreground">{Number(row.total_referrals || 0)} referrals</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
                 <Crown className="w-4 h-4 text-yellow-500" /> Referral Leaderboard
               </CardTitle>
               <CardDescription>Select a referrer to open deep analytics and update commission</CardDescription>
@@ -1006,6 +1242,127 @@ export default function AdminFreePlayPage() {
                   </>
                 ) : (
                   <div className="text-center text-muted-foreground py-6">No details found for selected referrer</div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {!!selectedReferrerId && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-sky-500" /> Marketer Controls
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {marketerDetailsLoading ? (
+                  <div className="text-center text-muted-foreground py-4">Loading marketer details...</div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                      <div className="p-3 rounded border">
+                        <p className="text-xs text-muted-foreground">Status</p>
+                        <p className="text-xl font-bold capitalize">{marketerDetails?.affiliate?.marketerStatus || "pending"}</p>
+                      </div>
+                      <div className="p-3 rounded border">
+                        <p className="text-xs text-muted-foreground">Total</p>
+                        <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.total_amount || 0)}</p>
+                      </div>
+                      <div className="p-3 rounded border">
+                        <p className="text-xs text-muted-foreground">On Hold</p>
+                        <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.on_hold_amount || 0)}</p>
+                      </div>
+                      <div className="p-3 rounded border">
+                        <p className="text-xs text-muted-foreground">Released</p>
+                        <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.released_amount || 0)}</p>
+                      </div>
+                      <div className="p-3 rounded border">
+                        <p className="text-xs text-muted-foreground">RevShare</p>
+                        <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.revshare_amount || 0)}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>CPA Enabled</Label>
+                        <div className="flex items-center h-10 px-3 border rounded-md justify-between">
+                          <span className="text-sm">Active</span>
+                          <Switch checked={marketerCpaEnabled} onCheckedChange={setMarketerCpaEnabled} />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>CPA Amount</Label>
+                        <Input value={marketerCpaAmount} onChange={(e) => setMarketerCpaAmount(e.target.value)} type="number" min="0" step="0.01" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>RevShare Enabled</Label>
+                        <div className="flex items-center h-10 px-3 border rounded-md justify-between">
+                          <span className="text-sm">Active</span>
+                          <Switch checked={marketerRevshareEnabled} onCheckedChange={setMarketerRevshareEnabled} />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>RevShare %</Label>
+                        <Input value={marketerRevshareRate} onChange={(e) => setMarketerRevshareRate(e.target.value)} type="number" min="0" max="100" step="0.01" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Hold Days</Label>
+                        <Input value={marketerHoldDays} onChange={(e) => setMarketerHoldDays(e.target.value)} type="number" min="0" max="120" step="1" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Min Deposit</Label>
+                        <Input value={marketerMinDeposit} onChange={(e) => setMarketerMinDeposit(e.target.value)} type="number" min="0" step="0.01" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Min Wagered</Label>
+                        <Input value={marketerMinWagered} onChange={(e) => setMarketerMinWagered(e.target.value)} type="number" min="0" step="0.01" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Min Games</Label>
+                        <Input value={marketerMinGames} onChange={(e) => setMarketerMinGames(e.target.value)} type="number" min="0" step="1" />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => marketerBadgeMut.mutate({ userId: selectedReferrerId, action: "grant" })}
+                        disabled={marketerBadgeMut.isPending}
+                      >
+                        Grant Marketer Badge
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => marketerBadgeMut.mutate({ userId: selectedReferrerId, action: "revoke" })}
+                        disabled={marketerBadgeMut.isPending}
+                      >
+                        Revoke Marketer Badge
+                      </Button>
+                      <Button onClick={handleMarketerConfigSave} disabled={updateMarketerConfigMut.isPending}>
+                        {updateMarketerConfigMut.isPending ? "Saving..." : "Save Marketer Config"}
+                      </Button>
+                    </div>
+
+                    {(marketerDetails?.recentEvents?.length ?? 0) > 0 && (
+                      <div className="space-y-2 max-h-[300px] overflow-auto">
+                        {marketerDetails!.recentEvents.slice(0, 20).map((event) => (
+                          <div key={event.id} className="border rounded-lg p-2 flex items-center justify-between text-sm">
+                            <div>
+                              <p className="font-medium">{event.referred_username || "Referral"}</p>
+                              <p className="text-xs text-muted-foreground uppercase">{event.reward_type} • {event.reward_status}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold">{formatProjectCoins(event.reward_amount || 0)}</p>
+                              <p className="text-xs text-muted-foreground">{formatDateTime(event.created_at)}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>

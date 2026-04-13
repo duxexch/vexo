@@ -49,6 +49,8 @@ export type AdminAlertType = (typeof adminAlertTypeEnum.enumValues)[number];
 export type AdminAlertSeverity = (typeof adminAlertSeverityEnum.enumValues)[number];
 export type CurrencyConversionStatus = (typeof currencyConversionStatusEnum.enumValues)[number];
 export type CurrencyLedgerType = (typeof currencyLedgerTypeEnum.enumValues)[number];
+export type ReferralRewardType = (typeof referralRewardTypeEnum.enumValues)[number];
+export type ReferralRewardStatus = (typeof referralRewardStatusEnum.enumValues)[number];
 export type P2pDisputeStatus = (typeof p2pDisputeStatusEnum.enumValues)[number];
 export type TournamentStatus = (typeof tournamentStatusEnum.enumValues)[number];
 export type SupportTicketStatus = (typeof supportTicketStatusEnum.enumValues)[number];
@@ -270,11 +272,26 @@ export const affiliates = pgTable("affiliates", {
   userId: varchar("user_id").notNull().references(() => users.id),
   affiliateCode: text("affiliate_code").notNull().unique(),
   referralLink: text("referral_link"),
+  marketerStatus: text("marketer_status").notNull().default("pending"),
+  marketerBadgeGrantedAt: timestamp("marketer_badge_granted_at"),
+  marketerBadgeGrantedBy: varchar("marketer_badge_granted_by").references(() => users.id),
   commissionRate: decimal("commission_rate", { precision: 5, scale: 2 }).notNull().default("5.00"),
+  cpaEnabled: boolean("cpa_enabled").notNull().default(true),
+  cpaAmount: decimal("cpa_amount", { precision: 15, scale: 2 }).notNull().default("5.00"),
+  revshareEnabled: boolean("revshare_enabled").notNull().default(true),
+  revshareRate: decimal("revshare_rate", { precision: 7, scale: 4 }).notNull().default("10.0000"),
+  commissionHoldDays: integer("commission_hold_days").notNull().default(7),
+  minQualifiedDeposits: decimal("min_qualified_deposits", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  minQualifiedWagered: decimal("min_qualified_wagered", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  minQualifiedGames: integer("min_qualified_games").notNull().default(0),
   totalReferrals: integer("total_referrals").notNull().default(0),
   activeReferrals: integer("active_referrals").notNull().default(0),
   totalCommissionEarned: decimal("total_commission_earned", { precision: 15, scale: 2 }).notNull().default("0.00"),
   pendingCommission: decimal("pending_commission", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalCpaEarned: decimal("total_cpa_earned", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalRevshareEarned: decimal("total_revshare_earned", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalWithdrawableCommission: decimal("total_withdrawable_commission", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalPaidCommission: decimal("total_paid_commission", { precision: 15, scale: 2 }).notNull().default("0.00"),
   totalClicks: integer("total_clicks").notNull().default(0),
   totalRegistrations: integer("total_registrations").notNull().default(0),
   totalDeposits: integer("total_deposits").notNull().default(0),
@@ -285,6 +302,7 @@ export const affiliates = pgTable("affiliates", {
 }, (table) => [
   uniqueIndex("idx_affiliates_user_id").on(table.userId),
   index("idx_affiliates_code").on(table.affiliateCode),
+  index("idx_affiliates_marketer_status").on(table.marketerStatus),
 ]);
 
 export const affiliatesRelations = relations(affiliates, ({ one, many }) => ({
@@ -3729,15 +3747,44 @@ export const adWatchLogRelations = relations(adWatchLog, ({ one }) => ({
 
 // ==================== REFERRAL REWARDS LOG ====================
 
+export const referralRewardTypeEnum = pgEnum("referral_reward_type", ["cpa", "revshare", "adjustment"]);
+export const referralRewardStatusEnum = pgEnum("referral_reward_status", ["on_hold", "released", "paid", "reversed"]);
+
 export const referralRewardsLog = pgTable("referral_rewards_log", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   referrerId: varchar("referrer_id").notNull().references(() => users.id),
   referredId: varchar("referred_id").notNull().references(() => users.id),
   rewardAmount: decimal("reward_amount", { precision: 10, scale: 2 }).notNull(),
+  rewardType: referralRewardTypeEnum("reward_type").notNull().default("cpa"),
+  rewardStatus: referralRewardStatusEnum("reward_status").notNull().default("released"),
+  holdUntil: timestamp("hold_until"),
+  releasedAt: timestamp("released_at"),
+  sourceType: text("source_type"),
+  sourceId: text("source_id"),
+  eventReference: text("event_reference"),
+  metadata: text("metadata"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("referral_rewards_referrer_idx").on(table.referrerId),
   index("referral_rewards_referred_idx").on(table.referredId),
+  index("referral_rewards_type_idx").on(table.rewardType),
+  index("referral_rewards_status_idx").on(table.rewardStatus),
+  index("referral_rewards_hold_until_idx").on(table.holdUntil),
+  uniqueIndex("referral_rewards_event_ref_unique").on(table.eventReference),
+]);
+
+export const affiliateReferralSnapshots = pgTable("affiliate_referral_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  affiliateId: varchar("affiliate_id").notNull().references(() => affiliates.id, { onDelete: "cascade" }),
+  referredId: varchar("referred_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  lastNetRevenue: decimal("last_net_revenue", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  lastSyncedAt: timestamp("last_synced_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_affiliate_referral_snapshots_unique").on(table.affiliateId, table.referredId),
+  index("idx_affiliate_referral_snapshots_affiliate").on(table.affiliateId),
+  index("idx_affiliate_referral_snapshots_referred").on(table.referredId),
 ]);
 
 // ==================== SUPPORT CHAT ====================

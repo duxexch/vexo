@@ -31,8 +31,56 @@ type ReferralApiResponse = {
   };
   earnings?: {
     totalRewards: string;
+    pendingRewards?: string;
+    totalCpa?: string;
+    totalRevshare?: string;
     rewardEvents: number;
   };
+  marketer?: {
+    marketerStatus: string;
+    isApproved: boolean;
+    cpaEnabled: boolean;
+    cpaAmount: string;
+    revshareEnabled: boolean;
+    revshareRate: string;
+    commissionHoldDays: number;
+    totalCommissionEarned: string;
+    pendingCommission: string;
+    totalWithdrawableCommission: string;
+  } | null;
+};
+
+type MarketerDetailsResponse = {
+  isMarketer: boolean;
+  affiliate: {
+    marketerStatus: string;
+    cpaEnabled: boolean;
+    cpaAmount: string;
+    revshareEnabled: boolean;
+    revshareRate: string;
+    commissionHoldDays: number;
+    totalCommissionEarned: string;
+    pendingCommission: string;
+    totalWithdrawableCommission: string;
+  } | null;
+  summary: {
+    total_events: number;
+    total_amount: string;
+    on_hold_amount: string;
+    released_amount: string;
+    cpa_amount: string;
+    revshare_amount: string;
+  } | null;
+  recentEvents: Array<{
+    id: string;
+    referred_username?: string;
+    reward_type: "cpa" | "revshare" | "adjustment";
+    reward_status: "on_hold" | "released" | "paid" | "reversed";
+    reward_amount: string;
+    hold_until?: string | null;
+    released_at?: string | null;
+    created_at: string;
+  }>;
 };
 
 const REFERRAL_MILESTONE_COUNTS = [1, 3, 5, 10, 25];
@@ -50,6 +98,18 @@ export default function ReferralPage() {
     queryFn: async () => {
       const res = await fetch("/api/me/referrals", { headers });
       if (!res.ok) return { referralCount: 0, referrals: [] } as ReferralApiResponse;
+      return res.json();
+    },
+    enabled: !!user?.id,
+  });
+
+  const { data: marketerData } = useQuery<MarketerDetailsResponse>({
+    queryKey: ["/api/me/marketer"],
+    queryFn: async () => {
+      const res = await fetch("/api/me/marketer", { headers });
+      if (!res.ok) {
+        return { isMarketer: false, affiliate: null, summary: null, recentEvents: [] } as MarketerDetailsResponse;
+      }
       return res.json();
     },
     enabled: !!user?.id,
@@ -214,10 +274,10 @@ export default function ReferralPage() {
                 <div
                   key={idx}
                   className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${isCompleted
-                      ? "border-primary/30 bg-primary/5"
-                      : isCurrent
-                        ? "border-amber-500/30 bg-amber-500/5"
-                        : "border-muted bg-muted/20 opacity-60"
+                    ? "border-primary/30 bg-primary/5"
+                    : isCurrent
+                      ? "border-amber-500/30 bg-amber-500/5"
+                      : "border-muted bg-muted/20 opacity-60"
                     }`}
                 >
                   <div className={`p-2 rounded-full ${isCompleted ? "bg-primary/10" : isCurrent ? "bg-amber-500/10" : "bg-muted"
@@ -282,6 +342,66 @@ export default function ReferralPage() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {marketerData?.isMarketer && marketerData.affiliate && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Award className="h-4 w-4" />
+              Marketer Program
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+              <div className="rounded border p-2">
+                <p className="text-xs text-muted-foreground">Status</p>
+                <p className="font-semibold capitalize">{marketerData.affiliate.marketerStatus}</p>
+              </div>
+              <div className="rounded border p-2">
+                <p className="text-xs text-muted-foreground">Withdrawable</p>
+                <p className="font-semibold">{formatProjectCoins(Number.parseFloat(marketerData.affiliate.totalWithdrawableCommission || "0"))}</p>
+              </div>
+              <div className="rounded border p-2">
+                <p className="text-xs text-muted-foreground">On Hold</p>
+                <p className="font-semibold">{formatProjectCoins(Number.parseFloat(marketerData.affiliate.pendingCommission || "0"))}</p>
+              </div>
+              <div className="rounded border p-2">
+                <p className="text-xs text-muted-foreground">Total Earned</p>
+                <p className="font-semibold">{formatProjectCoins(Number.parseFloat(marketerData.affiliate.totalCommissionEarned || "0"))}</p>
+              </div>
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              CPA: {marketerData.affiliate.cpaEnabled ? formatProjectCoins(Number.parseFloat(marketerData.affiliate.cpaAmount || "0")) : "Disabled"}
+              {" • "}
+              RevShare: {marketerData.affiliate.revshareEnabled ? `${Number.parseFloat(marketerData.affiliate.revshareRate || "0").toFixed(2)}%` : "Disabled"}
+              {" • "}
+              Hold Days: {marketerData.affiliate.commissionHoldDays}
+            </div>
+
+            {(marketerData.recentEvents?.length ?? 0) > 0 && (
+              <div className="space-y-2 max-h-64 overflow-auto">
+                {marketerData.recentEvents.slice(0, 20).map((event) => (
+                  <div key={event.id} className="rounded border p-2 text-sm flex items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{String(event.referred_username || "Referral user")}</p>
+                      <p className="text-xs text-muted-foreground uppercase">
+                        {event.reward_type} • {event.reward_status}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold">{formatProjectCoins(Number.parseFloat(event.reward_amount || "0"))}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(event.created_at).toLocaleDateString(language === "ar" ? "ar-SA" : undefined)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

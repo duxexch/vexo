@@ -3,7 +3,7 @@ import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
 import { eq, desc, and, or } from "drizzle-orm";
-import { users, liveGameSessions, gameplaySettings, referralRewardsLog } from "@shared/schema";
+import { affiliates, users, liveGameSessions, gameplaySettings, referralRewardsLog } from "@shared/schema";
 import { sql } from "drizzle-orm";
 import { getBadgeEntitlementForUser } from "../../lib/user-badge-entitlements";
 
@@ -95,7 +95,7 @@ export function registerStatsProfileRoutes(app: Express): void {
       const referrals = await db.select({ id: users.id, username: users.username, createdAt: users.createdAt })
         .from(users).where(eq(users.referredBy, userId)).orderBy(desc(users.createdAt)).limit(50);
 
-      const [settingsRows, referralSummaryRows] = await Promise.all([
+      const [settingsRows, referralSummaryRows, affiliateRows] = await Promise.all([
         db.select({ key: gameplaySettings.key, value: gameplaySettings.value })
           .from(gameplaySettings)
           .where(or(
@@ -104,11 +104,15 @@ export function registerStatsProfileRoutes(app: Express): void {
             eq(gameplaySettings.key, "referral_reward_rate_percent"),
           )),
         db.select({
-          totalRewards: sql<string>`COALESCE(SUM(${referralRewardsLog.rewardAmount}), '0')`,
+          totalRewards: sql<string>`COALESCE(SUM(CASE WHEN ${referralRewardsLog.rewardStatus} IN ('released', 'paid') THEN ${referralRewardsLog.rewardAmount}::numeric ELSE 0 END), '0')`,
+          pendingRewards: sql<string>`COALESCE(SUM(CASE WHEN ${referralRewardsLog.rewardStatus} = 'on_hold' THEN ${referralRewardsLog.rewardAmount}::numeric ELSE 0 END), '0')`,
+          totalCpa: sql<string>`COALESCE(SUM(CASE WHEN ${referralRewardsLog.rewardType} = 'cpa' THEN ${referralRewardsLog.rewardAmount}::numeric ELSE 0 END), '0')`,
+          totalRevshare: sql<string>`COALESCE(SUM(CASE WHEN ${referralRewardsLog.rewardType} = 'revshare' THEN ${referralRewardsLog.rewardAmount}::numeric ELSE 0 END), '0')`,
           rewardEvents: sql<number>`COUNT(*)`,
         })
           .from(referralRewardsLog)
           .where(eq(referralRewardsLog.referrerId, userId)),
+        db.select().from(affiliates).where(eq(affiliates.userId, userId)).limit(1),
       ]);
 
       const settingsMap = settingsRows.reduce<Record<string, string>>((acc, row) => {
@@ -123,6 +127,7 @@ export function registerStatsProfileRoutes(app: Express): void {
         ? (rewardAmount * (rewardRatePercent / 100))
         : 0;
       const referralSummary = referralSummaryRows[0];
+      const affiliateProfile = affiliateRows[0];
 
       res.json({
         referralCount: referrals.length,
@@ -136,11 +141,90 @@ export function registerStatsProfileRoutes(app: Express): void {
         },
         earnings: {
           totalRewards: Number(referralSummary?.totalRewards || 0).toFixed(2),
+          pendingRewards: Number(referralSummary?.pendingRewards || 0).toFixed(2),
+          totalCpa: Number(referralSummary?.totalCpa || 0).toFixed(2),
+          totalRevshare: Number(referralSummary?.totalRevshare || 0).toFixed(2),
           rewardEvents: Number(referralSummary?.rewardEvents || 0),
         },
+        marketer: affiliateProfile ? {
+          marketerStatus: affiliateProfile.marketerStatus,
+          isApproved: affiliateProfile.marketerStatus === "approved",
+          cpaEnabled: affiliateProfile.cpaEnabled,
+          cpaAmount: affiliateProfile.cpaAmount,
+          revshareEnabled: affiliateProfile.revshareEnabled,
+          revshareRate: affiliateProfile.revshareRate,
+          commissionHoldDays: affiliateProfile.commissionHoldDays,
+          totalCommissionEarned: affiliateProfile.totalCommissionEarned,
+          pendingCommission: affiliateProfile.pendingCommission,
+          totalWithdrawableCommission: affiliateProfile.totalWithdrawableCommission,
+        } : null,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/me/marketer", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const [affiliate] = await db.select().from(affiliates).where(eq(affiliates.userId, userId)).limit(1);
+
+      if (!affiliate) {
+        return res.json({ isMarketer: false, affiliate: null, summary: null, recentEvents: [] });
+      }
+
+      const [summary] = await db.execute(sql`
+        SELECT
+          COUNT(*)::int AS total_events,
+          COALESCE(SUM(reward_amount::numeric), 0)::text AS total_amount,
+          COALESCE(SUM(CASE WHEN reward_status = 'on_hold' THEN reward_amount::numeric ELSE 0 END), 0)::text AS on_hold_amount,
+          COALESCE(SUM(CASE WHEN reward_status IN ('released', 'paid') THEN reward_amount::numeric ELSE 0 END), 0)::text AS released_amount,
+          COALESCE(SUM(CASE WHEN reward_type = 'cpa' THEN reward_amount::numeric ELSE 0 END), 0)::text AS cpa_amount,
+          COALESCE(SUM(CASE WHEN reward_type = 'revshare' THEN reward_amount::numeric ELSE 0 END), 0)::text AS revshare_amount
+        FROM referral_rewards_log
+        WHERE referrer_id = ${userId}
+      `).then((result) => result.rows as Array<Record<string, unknown>>);
+
+      const [invitedSummary] = await db.execute(sql`
+        SELECT
+          COUNT(*)::int AS invited_total,
+          COUNT(*) FILTER (WHERE status = 'active')::int AS invited_active,
+          COALESCE(SUM(total_deposited::numeric), 0)::text AS invited_deposits,
+          COALESCE(SUM(total_wagered::numeric), 0)::text AS invited_wagered,
+          COALESCE(SUM(games_played), 0)::int AS invited_games
+        FROM users
+        WHERE referred_by = ${userId}
+      `).then((result) => result.rows as Array<Record<string, unknown>>);
+
+      const recentEvents = await db.execute(sql`
+        SELECT
+          rr.id,
+          rr.referred_id,
+          u.username AS referred_username,
+          rr.reward_type,
+          rr.reward_status,
+          rr.reward_amount,
+          rr.hold_until,
+          rr.released_at,
+          rr.source_type,
+          rr.source_id,
+          rr.created_at
+        FROM referral_rewards_log rr
+        LEFT JOIN users u ON u.id = rr.referred_id
+        WHERE rr.referrer_id = ${userId}
+        ORDER BY rr.created_at DESC
+        LIMIT 100
+      `).then((result) => result.rows as Array<Record<string, unknown>>);
+
+      return res.json({
+        isMarketer: true,
+        affiliate,
+        summary,
+        invitedSummary,
+        recentEvents,
+      });
+    } catch (error: unknown) {
+      return res.status(500).json({ error: getErrorMessage(error) });
     }
   });
 

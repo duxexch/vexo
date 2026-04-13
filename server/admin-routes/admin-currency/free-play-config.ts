@@ -19,11 +19,31 @@ const FREE_PLAY_SETTING_KEYS = new Set([
   'referral_reward_rate_percent',
   'freePlayLimit',
   'free_play_limit',
+  'marketer_cpa_enabled',
+  'marketer_cpa_amount',
+  'marketer_revshare_enabled',
+  'marketer_revshare_rate_percent',
+  'marketer_commission_hold_days',
+  'marketer_min_referred_deposit',
+  'marketer_min_referred_wagered',
+  'marketer_min_referred_games',
 ]);
 
-const REWARD_AMOUNT_KEYS = new Set(['ad_reward_amount', 'referral_reward_amount']);
-const NON_NEGATIVE_INTEGER_KEYS = new Set(['max_ads_per_day', 'freePlayLimit', 'free_play_limit']);
-const PERCENT_KEYS = new Set(['referral_reward_rate_percent']);
+const REWARD_AMOUNT_KEYS = new Set([
+  'ad_reward_amount',
+  'referral_reward_amount',
+  'marketer_cpa_amount',
+  'marketer_min_referred_deposit',
+  'marketer_min_referred_wagered',
+]);
+const NON_NEGATIVE_INTEGER_KEYS = new Set([
+  'max_ads_per_day',
+  'freePlayLimit',
+  'free_play_limit',
+  'marketer_commission_hold_days',
+  'marketer_min_referred_games',
+]);
+const PERCENT_KEYS = new Set(['referral_reward_rate_percent', 'marketer_revshare_rate_percent']);
 
 function sanitizeSettingValue(key: string, rawValue: unknown): string {
   if (REWARD_AMOUNT_KEYS.has(key)) {
@@ -154,11 +174,20 @@ export function registerFreePlayConfigRoutes(app: Express) {
         .from(adWatchLog);
 
       // Referral stats
-      const [referralsToday] = await db.select({ count: sql<number>`count(*)`, total: sql<string>`COALESCE(SUM(${referralRewardsLog.rewardAmount}), '0')` })
+      const [referralsToday] = await db.select({
+        count: sql<number>`count(*)`,
+        total: sql<string>`COALESCE(SUM(CASE WHEN ${referralRewardsLog.rewardStatus} IN ('released', 'paid') THEN ${referralRewardsLog.rewardAmount}::numeric ELSE 0 END), '0')`,
+      })
         .from(referralRewardsLog).where(gte(referralRewardsLog.createdAt, todayStart));
-      const [referralsWeek] = await db.select({ count: sql<number>`count(*)`, total: sql<string>`COALESCE(SUM(${referralRewardsLog.rewardAmount}), '0')` })
+      const [referralsWeek] = await db.select({
+        count: sql<number>`count(*)`,
+        total: sql<string>`COALESCE(SUM(CASE WHEN ${referralRewardsLog.rewardStatus} IN ('released', 'paid') THEN ${referralRewardsLog.rewardAmount}::numeric ELSE 0 END), '0')`,
+      })
         .from(referralRewardsLog).where(gte(referralRewardsLog.createdAt, weekStart));
-      const [referralsAll] = await db.select({ count: sql<number>`count(*)`, total: sql<string>`COALESCE(SUM(${referralRewardsLog.rewardAmount}), '0')` })
+      const [referralsAll] = await db.select({
+        count: sql<number>`count(*)`,
+        total: sql<string>`COALESCE(SUM(CASE WHEN ${referralRewardsLog.rewardStatus} IN ('released', 'paid') THEN ${referralRewardsLog.rewardAmount}::numeric ELSE 0 END), '0')`,
+      })
         .from(referralRewardsLog);
 
       const dailyTotal = parseFloat(dailyClaimsAll?.total || '0');

@@ -14,7 +14,7 @@ export function registerFreePlayActivityRoutes(app: Express) {
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
       const type = req.query.type as string;
 
-      let activities: { type: string; details: string; date: string | Date; userId?: string; username?: string; amount?: number | string | null; [key: string]: unknown }[] = [];
+      let activities: { type: string; details: string; date: string | Date; userId?: string; username?: string; amount?: number | string | null;[key: string]: unknown }[] = [];
 
       if (!type || type === 'daily') {
         const dailyClaims = await db.select({
@@ -66,6 +66,8 @@ export function registerFreePlayActivityRoutes(app: Express) {
           referrerId: referralRewardsLog.referrerId,
           referredId: referralRewardsLog.referredId,
           amount: referralRewardsLog.rewardAmount,
+          rewardType: referralRewardsLog.rewardType,
+          rewardStatus: referralRewardsLog.rewardStatus,
           date: referralRewardsLog.createdAt,
         }).from(referralRewardsLog).orderBy(desc(referralRewardsLog.createdAt)).limit(limit);
 
@@ -77,7 +79,7 @@ export function registerFreePlayActivityRoutes(app: Express) {
             userId: r.referrerId,
             username: referrer?.username || 'Unknown',
             amount: r.amount,
-            details: `Referred ${referred?.username || 'Unknown'}`,
+            details: `${String(r.rewardType).toUpperCase()} (${r.rewardStatus}) - ${referred?.username || 'Unknown'}`,
             date: r.date,
           });
         }
@@ -96,13 +98,13 @@ export function registerFreePlayActivityRoutes(app: Express) {
     try {
       const topReferrers = await db.select({
         referrerId: referralRewardsLog.referrerId,
-        totalRewards: sql<string>`SUM(${referralRewardsLog.rewardAmount})`,
+        totalRewards: sql<string>`SUM(CASE WHEN ${referralRewardsLog.rewardStatus} IN ('released', 'paid') THEN ${referralRewardsLog.rewardAmount}::numeric ELSE 0 END)`,
         referralCount: sql<number>`count(*)`,
       })
-      .from(referralRewardsLog)
-      .groupBy(referralRewardsLog.referrerId)
-      .orderBy(desc(sql`count(*)`))
-      .limit(20);
+        .from(referralRewardsLog)
+        .groupBy(referralRewardsLog.referrerId)
+        .orderBy(desc(sql`count(*)`))
+        .limit(20);
 
       const result = [];
       for (const r of topReferrers) {

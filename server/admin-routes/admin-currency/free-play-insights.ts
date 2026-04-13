@@ -173,7 +173,8 @@ export function registerFreePlayInsightsRoutes(app: Express) {
             u.last_active_at AS last_active_at,
             COUNT(rr.id)::int AS activity_count,
             COUNT(DISTINCT rr.referred_id)::int AS successful_referrals,
-            COALESCE(SUM(rr.reward_amount::numeric), 0)::text AS total_rewards,
+            COALESCE(SUM(CASE WHEN rr.reward_status IN ('released', 'paid') THEN rr.reward_amount::numeric ELSE 0 END), 0)::text AS total_rewards,
+            COALESCE(SUM(CASE WHEN rr.reward_status = 'on_hold' THEN rr.reward_amount::numeric ELSE 0 END), 0)::text AS pending_rewards,
             (
               SELECT COUNT(*)::int
               FROM users iu
@@ -283,7 +284,8 @@ export function registerFreePlayInsightsRoutes(app: Express) {
       const [referralEarned] = await db.execute(sql`
         SELECT
           COUNT(*)::int AS reward_events,
-          COALESCE(SUM(reward_amount::numeric), 0)::text AS total_rewards,
+          COALESCE(SUM(CASE WHEN reward_status IN ('released', 'paid') THEN reward_amount::numeric ELSE 0 END), 0)::text AS total_rewards,
+          COALESCE(SUM(CASE WHEN reward_status = 'on_hold' THEN reward_amount::numeric ELSE 0 END), 0)::text AS pending_rewards,
           MAX(created_at) AS last_reward_at
         FROM referral_rewards_log
         WHERE referrer_id = ${userId}
@@ -353,6 +355,7 @@ export function registerFreePlayInsightsRoutes(app: Express) {
           referral: {
             rewardEvents: Number(referralEarned?.reward_events || 0),
             totalRewards: toDecimalString(referralEarned?.total_rewards),
+            pendingRewards: toDecimalString(referralEarned?.pending_rewards),
             lastRewardAt: referralEarned?.last_reward_at || null,
             invitedTotal: Number(invitedSummary?.invited_total || 0),
             invitedActive: Number(invitedSummary?.invited_active || 0),
@@ -424,7 +427,10 @@ export function registerFreePlayInsightsRoutes(app: Express) {
 
       const [commissionTotals] = await db.execute(sql`
         SELECT
-          COALESCE(SUM(reward_amount::numeric), 0)::text AS total_commissions,
+          COALESCE(SUM(CASE WHEN reward_status IN ('released', 'paid') THEN reward_amount::numeric ELSE 0 END), 0)::text AS total_commissions,
+          COALESCE(SUM(CASE WHEN reward_status = 'on_hold' THEN reward_amount::numeric ELSE 0 END), 0)::text AS pending_commissions,
+          COALESCE(SUM(CASE WHEN reward_type = 'cpa' THEN reward_amount::numeric ELSE 0 END), 0)::text AS total_cpa,
+          COALESCE(SUM(CASE WHEN reward_type = 'revshare' THEN reward_amount::numeric ELSE 0 END), 0)::text AS total_revshare,
           COUNT(*)::int AS commission_events,
           MAX(created_at) AS last_commission_at
         FROM referral_rewards_log
@@ -444,12 +450,14 @@ export function registerFreePlayInsightsRoutes(app: Express) {
           u.total_won,
           u.games_played,
           u.created_at,
-          COALESCE(rr.commission_generated, 0)::text AS commission_generated
+          COALESCE(rr.commission_generated, 0)::text AS commission_generated,
+          COALESCE(rr.pending_commission_generated, 0)::text AS pending_commission_generated
         FROM users u
         LEFT JOIN (
           SELECT
             referred_id,
-            SUM(reward_amount::numeric) AS commission_generated
+            SUM(CASE WHEN reward_status IN ('released', 'paid') THEN reward_amount::numeric ELSE 0 END) AS commission_generated,
+            SUM(CASE WHEN reward_status = 'on_hold' THEN reward_amount::numeric ELSE 0 END) AS pending_commission_generated
           FROM referral_rewards_log
           WHERE referrer_id = ${userId}
           GROUP BY referred_id
@@ -471,6 +479,9 @@ export function registerFreePlayInsightsRoutes(app: Express) {
           totalInvitedEarnings: toDecimalString(summary?.invited_total_earnings),
           totalInvitedGames: Number(summary?.invited_total_games || 0),
           totalCommissions: toDecimalString(commissionTotals?.total_commissions),
+          pendingCommissions: toDecimalString(commissionTotals?.pending_commissions),
+          totalCpa: toDecimalString(commissionTotals?.total_cpa),
+          totalRevshare: toDecimalString(commissionTotals?.total_revshare),
           commissionEvents: Number(commissionTotals?.commission_events || 0),
           lastCommissionAt: commissionTotals?.last_commission_at || null,
         },

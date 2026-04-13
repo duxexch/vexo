@@ -67,7 +67,10 @@ export function registerRewardStatusRoutes(app: Express): void {
         .from(users).where(eq(users.referredBy, userId));
 
       // --- Referral earnings ---
-      const [refEarnings] = await db.select({ total: sql<string>`COALESCE(SUM(${referralRewardsLog.rewardAmount}), '0')` })
+      const [refEarnings] = await db.select({
+        total: sql<string>`COALESCE(SUM(CASE WHEN ${referralRewardsLog.rewardStatus} IN ('released', 'paid') THEN ${referralRewardsLog.rewardAmount}::numeric ELSE 0 END), '0')`,
+        pending: sql<string>`COALESCE(SUM(CASE WHEN ${referralRewardsLog.rewardStatus} = 'on_hold' THEN ${referralRewardsLog.rewardAmount}::numeric ELSE 0 END), '0')`,
+      })
         .from(referralRewardsLog).where(eq(referralRewardsLog.referrerId, userId));
 
       // --- Daily bonus total earned ---
@@ -112,6 +115,7 @@ export function registerRewardStatusRoutes(app: Express): void {
           ? Number((referralRewardAmount * (referralRewardRatePercent / 100)).toFixed(2))
           : 0,
         totalReferralEarnings: parseFloat(refEarnings?.total || '0'),
+        pendingReferralEarnings: parseFloat(refEarnings?.pending || '0'),
         totalDailyEarnings: parseFloat(dailyEarnings?.total || '0'),
         freeGames,
         freePlayLimit,

@@ -3,13 +3,13 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { users, gameplaySettings, referralRewardsLog, projectCurrencyWallets, projectCurrencyLedger } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { registrationRateLimiter } from "../middleware";
 import { JWT_USER_SECRET, JWT_USER_EXPIRY } from "../../lib/auth-config";
 import { emitSystemAlert } from "../../lib/admin-alerts";
-import { sendNotification } from "../../websocket";
 import { toSafeUser } from "../../lib/safe-user";
+import { processReferralRegistrationCommission } from "../../lib/affiliate-commissions";
 import {
   getErrorMessage,
   getSessionFingerprint,
@@ -18,7 +18,6 @@ import {
   validatePasswordStrength,
 } from "./helpers";
 import { isSafeEmailAddress, sanitizePlainText } from "../../lib/input-security";
-import { createRewardReference } from "../../lib/reward-reference";
 
 export function registerUsernameRegistrationRoutes(app: Express) {
   app.post("/api/auth/register", registrationRateLimiter, async (req: Request, res: Response) => {
@@ -64,10 +63,6 @@ export function registerUsernameRegistrationRoutes(app: Express) {
         const affiliate = await storage.getAffiliateByCode(referralCode);
         if (affiliate) {
           referredBy = affiliate.userId;
-          await storage.updateAffiliate(affiliate.id, {
-            totalReferrals: affiliate.totalReferrals + 1,
-            totalRegistrations: affiliate.totalRegistrations + 1,
-          });
         } else {
           // Also support referral by accountId or username
           const [referrer] = await db.select({ id: users.id })
@@ -103,84 +98,12 @@ export function registerUsernameRegistrationRoutes(app: Express) {
       // Give referral reward to the referrer
       if (referredBy) {
         try {
-          const [rewardSetting] = await db.select().from(gameplaySettings)
-            .where(eq(gameplaySettings.key, 'referral_reward_amount')).limit(1);
-          const [rateSetting] = await db.select().from(gameplaySettings)
-            .where(eq(gameplaySettings.key, 'referral_reward_rate_percent')).limit(1);
-          const rewardAmount = rewardSetting ? rewardSetting.value : '5.00';
-          const rewardRatePercent = rateSetting ? rateSetting.value : '100.00';
-          const [enabledSetting] = await db.select().from(gameplaySettings)
-            .where(eq(gameplaySettings.key, 'referral_reward_enabled')).limit(1);
-          const isEnabled = !enabledSetting || enabledSetting.value !== 'false';
-          const baseRewardValue = Number.parseFloat(rewardAmount);
-          const rewardRateValue = Number.parseFloat(rewardRatePercent);
-          const effectiveRewardValue = Number.isFinite(baseRewardValue) && Number.isFinite(rewardRateValue)
-            ? (baseRewardValue * (rewardRateValue / 100))
-            : 0;
-
-          if (isEnabled && effectiveRewardValue > 0) {
-            const referralReferenceId = createRewardReference("referral");
-            await db.transaction(async (tx) => {
-              await tx.insert(referralRewardsLog).values({
-                referrerId: referredBy!,
-                referredId: user.id,
-                rewardAmount: effectiveRewardValue.toFixed(2),
-              });
-
-              await tx.execute(sql`
-                INSERT INTO project_currency_wallets (user_id)
-                VALUES (${referredBy!})
-                ON CONFLICT (user_id) DO NOTHING
-              `);
-
-              const [wallet] = await tx.select()
-                .from(projectCurrencyWallets)
-                .where(eq(projectCurrencyWallets.userId, referredBy!))
-                .for('update');
-
-              if (!wallet) {
-                throw new Error('Referrer wallet not found');
-              }
-
-              const rewardValue = effectiveRewardValue;
-              const balanceBefore = parseFloat(wallet.totalBalance || '0');
-              const earnedBefore = parseFloat(wallet.earnedBalance || '0');
-              const balanceAfter = (balanceBefore + rewardValue).toFixed(2);
-
-              await tx.update(projectCurrencyWallets)
-                .set({
-                  earnedBalance: (earnedBefore + rewardValue).toFixed(2),
-                  totalBalance: balanceAfter,
-                  totalEarned: (parseFloat(wallet.totalEarned || '0') + rewardValue).toFixed(2),
-                  updatedAt: new Date(),
-                })
-                .where(eq(projectCurrencyWallets.id, wallet.id));
-
-              await tx.insert(projectCurrencyLedger).values({
-                userId: referredBy!,
-                walletId: wallet.id,
-                type: 'bonus',
-                amount: rewardValue.toFixed(2),
-                balanceBefore: balanceBefore.toFixed(2),
-                balanceAfter,
-                referenceId: referralReferenceId,
-                referenceType: 'referral_reward',
-                description: `Referral reward for inviting ${username.trim()}`,
-              });
-            });
-
-            // Notify referrer about their bonus
-            sendNotification(referredBy!, {
-              type: 'transaction',
-              priority: 'normal',
-              title: 'Referral Bonus Earned!',
-              titleAr: 'مكافأة إحالة!',
-              message: `You earned ${effectiveRewardValue.toFixed(2)} project coins because your referral "${username.trim()}" joined!`,
-              messageAr: `حصلت على ${effectiveRewardValue.toFixed(2)} من عملات المشروع لأن المُحال "${username.trim()}" انضم!`,
-              link: '/wallet',
-              metadata: JSON.stringify({ action: 'referral_bonus', amount: effectiveRewardValue.toFixed(2), referredUsername: username.trim(), referenceId: referralReferenceId }),
-            }).catch(() => { });
-          }
+          await processReferralRegistrationCommission({
+            referrerId: referredBy,
+            referredId: user.id,
+            referredUsername: username.trim(),
+            legacyDescription: `Referral reward for inviting ${username.trim()}`,
+          });
         } catch (rewardError) {
           console.error("Error giving referral reward:", rewardError);
         }
