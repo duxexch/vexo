@@ -9,6 +9,8 @@ import {
     normalizeDominoChallengePlayerView,
     type DominoTile,
 } from "../shared/domino-challenge-adapter";
+import { createErrorHelpers } from "./lib/smoke-helpers";
+import { requestJson as smokeRequestJson } from "./lib/smoke-http";
 
 const SMOKE_USER_AGENT = "smoke-domino-challenge-adapter-contract/1.0";
 
@@ -43,25 +45,7 @@ interface WsMessage {
     [key: string]: unknown;
 }
 
-class SmokeError extends Error {
-    details?: unknown;
-
-    constructor(message: string, details?: unknown) {
-        super(message);
-        this.name = "SmokeError";
-        this.details = details;
-    }
-}
-
-function fail(message: string, details?: unknown): never {
-    throw new SmokeError(message, details);
-}
-
-function assertCondition(condition: unknown, message: string, details?: unknown): asserts condition {
-    if (!condition) {
-        fail(message, details);
-    }
-}
+const { fail, assertCondition } = createErrorHelpers("SmokeError");
 
 function parseArgs(argv: string[]): CliOptions {
     const args: CliOptions = {
@@ -119,47 +103,13 @@ function expandWsMessages(parsed: WsMessage | null): WsMessage[] {
     return parsed ? [parsed] : [];
 }
 
-async function requestJson(options: {
+const requestJson = (options: {
     baseUrl: string;
     path: string;
     method?: string;
     body?: unknown;
     timeoutMs: number;
-}): Promise<{ status: number; ok: boolean; json: unknown; text: string }> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
-
-    try {
-        const response = await fetch(`${options.baseUrl}${options.path}`, {
-            method: options.method || "GET",
-            headers: {
-                "Content-Type": "application/json",
-                "User-Agent": SMOKE_USER_AGENT,
-            },
-            body: options.body ? JSON.stringify(options.body) : undefined,
-            signal: controller.signal,
-        });
-
-        const text = await response.text();
-        let json: unknown = null;
-        if (text) {
-            try {
-                json = JSON.parse(text);
-            } catch {
-                json = { raw: text };
-            }
-        }
-
-        return {
-            status: response.status,
-            ok: response.ok,
-            json,
-            text,
-        };
-    } finally {
-        clearTimeout(timeout);
-    }
-}
+}) => smokeRequestJson({ ...options, userAgent: SMOKE_USER_AGENT });
 
 async function login(options: {
     baseUrl: string;

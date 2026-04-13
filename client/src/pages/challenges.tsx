@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useGuidedFocus } from "@/hooks/use-guided-focus";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -223,6 +224,14 @@ export default function ChallengesPage() {
   const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [fundingShortageProject, setFundingShortageProject] = useState(0);
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
+
+  const gameSectionRef = useRef<HTMLDivElement | null>(null);
+  const stakeInputRef = useRef<HTMLInputElement | null>(null);
+  const friendInputRef = useRef<HTMLInputElement | null>(null);
+  const languageNativeInputRef = useRef<HTMLInputElement | null>(null);
+  const languageTargetInputRef = useRef<HTMLInputElement | null>(null);
+  const languagePointsInputRef = useRef<HTMLInputElement | null>(null);
+  const createChallengeButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const multiPlayerGames = ['domino', 'tarneeb', 'baloot'];
   const sam9SupportedGames = ['domino', 'backgammon', 'tarneeb', 'baloot'];
@@ -613,6 +622,7 @@ export default function ChallengesPage() {
     setCurrencyType(currencyPolicy?.projectOnly ? 'project' : 'usd');
     setShowAdvancedCreateOptions(false);
   };
+  const { focusAndScroll, queueFocus } = useGuidedFocus();
 
   const handleOpenCreateDialog = () => {
     if (!user) {
@@ -635,6 +645,18 @@ export default function ChallengesPage() {
     }
   };
 
+  useEffect(() => {
+    if (!showCreateDialog) return;
+    if (!selectedGame) return;
+    queueFocus(stakeInputRef.current);
+  }, [showCreateDialog, selectedGame]);
+
+  useEffect(() => {
+    if (!showCreateDialog) return;
+    if (!selectedGame) return;
+    setShowAdvancedCreateOptions(true);
+  }, [showCreateDialog, selectedGame]);
+
   const handleCreateChallenge = () => {
     if (!user) {
       setShowCreateDialog(false);
@@ -644,10 +666,16 @@ export default function ChallengesPage() {
 
     if (!selectedGame || (!betAmount && !isSam9FriendlyFixedFee)) {
       toast({ title: t('common.error'), description: t('challenges.fillAll'), variant: "destructive" });
+      if (!selectedGame) {
+        focusAndScroll(gameSectionRef.current);
+      } else {
+        focusAndScroll(stakeInputRef.current);
+      }
       return;
     }
     if (opponentType === 'friend' && !friendAccountId) {
       toast({ title: t('common.error'), description: t('challenges.enterFriendId'), variant: "destructive" });
+      focusAndScroll(friendInputRef.current);
       return;
     }
 
@@ -662,6 +690,11 @@ export default function ChallengesPage() {
           description: t('challenges.languageDuel.invalidLanguageCode'),
           variant: 'destructive',
         });
+        if (!languageCodeRegex.test(nativeCode)) {
+          focusAndScroll(languageNativeInputRef.current);
+        } else {
+          focusAndScroll(languageTargetInputRef.current);
+        }
         return;
       }
 
@@ -671,6 +704,7 @@ export default function ChallengesPage() {
           description: t('challenges.languageDuel.pointsToWinRange'),
           variant: 'destructive',
         });
+        focusAndScroll(languagePointsInputRef.current);
         return;
       }
     }
@@ -689,6 +723,7 @@ export default function ChallengesPage() {
             : `Challenge amount must be between $${min} and $${max}`,
           variant: "destructive"
         });
+        focusAndScroll(stakeInputRef.current);
         return;
       }
     }
@@ -1358,7 +1393,7 @@ export default function ChallengesPage() {
           </DialogHeader>
           <ScrollArea className="h-[calc(92vh-9.5rem)] px-4 sm:px-6">
             <div className="space-y-3 pb-3">
-              <div>
+              <div ref={gameSectionRef}>
                 <Label>{t('challenges.selectGame')}</Label>
                 <div className="grid grid-cols-2 gap-2 mt-2">
                   {loadingGames ? (
@@ -1373,7 +1408,10 @@ export default function ChallengesPage() {
                         key={game.id}
                         variant={selectedGame === gameKey ? "default" : "outline"}
                         className="h-auto py-2.5 flex-col gap-1"
-                        onClick={() => setSelectedGame(gameKey)}
+                        onClick={() => {
+                          setSelectedGame(gameKey);
+                          queueFocus(stakeInputRef.current);
+                        }}
                         data-testid={`button-game-${gameKey}`}
                       >
                         <Icon className="h-6 w-6 mb-1" />
@@ -1389,10 +1427,22 @@ export default function ChallengesPage() {
                 <div className="relative mt-2">
                   <Coins className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
+                    ref={stakeInputRef}
                     type="number"
                     value={betAmount}
                     onChange={(e) => setBetAmount(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      e.preventDefault();
+                      if (opponentType === 'friend') {
+                        queueFocus(friendInputRef.current);
+                        return;
+                      }
+                      queueFocus(createChallengeButtonRef.current);
+                    }}
                     placeholder="10.00"
+                    inputMode="decimal"
+                    enterKeyHint={opponentType === 'friend' ? 'next' : 'done'}
                     className="ps-10"
                     disabled={isSam9FriendlyFixedFee}
                     data-testid="input-stake-amount"
@@ -1575,9 +1625,16 @@ export default function ChallengesPage() {
                     <div>
                       <Label>{t('settings.language')}</Label>
                       <Input
+                        ref={languageNativeInputRef}
                         value={languageDuelNativeLanguageCode}
                         onChange={(e) => setLanguageDuelNativeLanguageCode(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          queueFocus(languageTargetInputRef.current);
+                        }}
                         placeholder="ar"
+                        enterKeyHint="next"
                         className="mt-2"
                         data-testid="input-language-duel-native"
                       />
@@ -1585,9 +1642,16 @@ export default function ChallengesPage() {
                     <div>
                       <Label>{t('admin.announcements.columnTarget')}</Label>
                       <Input
+                        ref={languageTargetInputRef}
                         value={languageDuelTargetLanguageCode}
                         onChange={(e) => setLanguageDuelTargetLanguageCode(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          queueFocus(languagePointsInputRef.current);
+                        }}
                         placeholder="en"
+                        enterKeyHint="next"
                         className="mt-2"
                         data-testid="input-language-duel-target"
                       />
@@ -1615,11 +1679,19 @@ export default function ChallengesPage() {
                     <div>
                       <Label>{t('baloot.targetPoints')}</Label>
                       <Input
+                        ref={languagePointsInputRef}
                         type="number"
                         min={3}
                         max={30}
                         value={languageDuelPointsToWin}
                         onChange={(e) => setLanguageDuelPointsToWin(Number(e.target.value) || 10)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          queueFocus(createChallengeButtonRef.current);
+                        }}
+                        inputMode="numeric"
+                        enterKeyHint="done"
                         className="mt-2"
                         data-testid="input-language-duel-points"
                       />
@@ -1676,9 +1748,16 @@ export default function ChallengesPage() {
                   <div>
                     <Label>{t('challenges.friendAccountId')}</Label>
                     <Input
+                      ref={friendInputRef}
                       value={friendAccountId}
                       onChange={(e) => setFriendAccountId(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        queueFocus(createChallengeButtonRef.current);
+                      }}
                       placeholder={t('challenges.enterAccountId')}
+                      enterKeyHint="done"
                       className="mt-2"
                       data-testid="input-friend-id"
                     />
@@ -1687,11 +1766,16 @@ export default function ChallengesPage() {
               </div>
             </div>
           </ScrollArea>
-          <DialogFooter className="px-4 sm:px-6 pb-4 sm:pb-5 pt-3 border-t bg-background">
-            <Button variant="outline" onClick={() => handleCreateDialogOpenChange(false)}>
+          <DialogFooter className="sticky bottom-0 z-10 px-4 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5 pt-3 border-t bg-background">
+            <Button className="w-full sm:w-auto min-h-11" variant="outline" onClick={() => handleCreateDialogOpenChange(false)}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={handleCreateChallenge} disabled={createChallengeMutation.isPending}>
+            <Button
+              ref={createChallengeButtonRef}
+              className="w-full sm:w-auto min-h-11"
+              onClick={handleCreateChallenge}
+              disabled={createChallengeMutation.isPending}
+            >
               {t('challenges.create')}
             </Button>
           </DialogFooter>

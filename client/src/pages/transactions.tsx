@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth, useAuthHeaders } from "@/lib/auth";
@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useGuidedFocus } from "@/hooks/use-guided-focus";
 import type { Transaction, CountryPaymentMethod } from "@shared/schema";
 import { ArrowDownCircle, ArrowUpCircle, Clock, CheckCircle, XCircle, Loader2, Wallet, Copy, AlertCircle } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -33,6 +34,18 @@ export default function TransactionsPage() {
   const [paymentReference, setPaymentReference] = useState("");
   const [walletNumber, setWalletNumber] = useState("");
   const [depositStep, setDepositStep] = useState<'method' | 'details' | 'confirm'>('method');
+  const depositMethodTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const depositAmountInputRef = useRef<HTMLInputElement | null>(null);
+  const depositContinueButtonRef = useRef<HTMLButtonElement | null>(null);
+  const paymentReferenceInputRef = useRef<HTMLInputElement | null>(null);
+  const walletNumberInputRef = useRef<HTMLInputElement | null>(null);
+  const depositSubmitButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const withdrawMethodTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const withdrawAmountInputRef = useRef<HTMLInputElement | null>(null);
+  const withdrawSubmitButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const { focusAndScroll, queueFocus } = useGuidedFocus();
 
   const { data: transactions, isLoading } = useQuery<Transaction[]>({
     queryKey: ["/api/transactions"],
@@ -128,8 +141,101 @@ export default function TransactionsPage() {
     setDepositStep('method');
   };
 
+  const isDepositAmountValid = (value: string) => {
+    const parsed = parseFloat(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return false;
+    }
+
+    if (!selectedMethod) {
+      return true;
+    }
+
+    const min = parseFloat(selectedMethod.minAmount);
+    const max = parseFloat(selectedMethod.maxAmount);
+    if (Number.isFinite(min) && parsed < min) {
+      return false;
+    }
+    if (Number.isFinite(max) && parsed > max) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleDepositContinue = () => {
+    if (!paymentMethod) {
+      focusAndScroll(depositMethodTriggerRef.current);
+      return;
+    }
+
+    if (!isDepositAmountValid(amount)) {
+      focusAndScroll(depositAmountInputRef.current);
+      return;
+    }
+
+    setDepositStep('details');
+  };
+
+  const handleDepositSubmit = () => {
+    if (!paymentReference.trim()) {
+      focusAndScroll(paymentReferenceInputRef.current);
+      return;
+    }
+
+    depositMutation.mutate({
+      amount,
+      paymentMethod: selectedMethod?.name || paymentMethod,
+      paymentReference: paymentReference.trim(),
+      walletNumber: walletNumber.trim() || undefined,
+    });
+  };
+
+  const handleWithdrawSubmit = () => {
+    if (!withdrawMethodId) {
+      focusAndScroll(withdrawMethodTriggerRef.current);
+      return;
+    }
+
+    const parsed = parseFloat(withdrawAmount);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      focusAndScroll(withdrawAmountInputRef.current);
+      return;
+    }
+
+    if (parsed > parseFloat(user?.balance || "0")) {
+      focusAndScroll(withdrawAmountInputRef.current);
+      return;
+    }
+
+    withdrawMutation.mutate({ amount: withdrawAmount, paymentMethodId: withdrawMethodId });
+  };
+
   const selectedMethod = paymentMethods?.find(m => m.id === paymentMethod);
   const selectedWithdrawalMethod = withdrawalPaymentMethods.find((m) => m.id === withdrawMethodId);
+
+  useEffect(() => {
+    if (!depositOpen) return;
+    if (depositStep === 'method') {
+      if (paymentMethod) {
+        queueFocus(depositAmountInputRef.current);
+        return;
+      }
+      queueFocus(depositMethodTriggerRef.current);
+      return;
+    }
+
+    queueFocus(paymentReferenceInputRef.current);
+  }, [depositOpen, depositStep, paymentMethod]);
+
+  useEffect(() => {
+    if (!withdrawOpen) return;
+    if (!withdrawMethodId) {
+      queueFocus(withdrawMethodTriggerRef.current);
+      return;
+    }
+    queueFocus(withdrawAmountInputRef.current);
+  }, [withdrawOpen, withdrawMethodId]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -196,7 +302,7 @@ export default function TransactionsPage() {
                 <ArrowDownCircle className="me-2 h-4 w-4" /> {t('transactions.deposit')}
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{t('transactions.depositFunds')}</DialogTitle>
                 <DialogDescription>
@@ -208,8 +314,14 @@ export default function TransactionsPage() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>{t('transactions.selectMethod')}</Label>
-                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                      <SelectTrigger data-testid="select-payment-method">
+                    <Select
+                      value={paymentMethod}
+                      onValueChange={(value) => {
+                        setPaymentMethod(value);
+                        queueFocus(depositAmountInputRef.current);
+                      }}
+                    >
+                      <SelectTrigger ref={depositMethodTriggerRef} data-testid="select-payment-method">
                         <SelectValue placeholder={t('transactions.chooseMethod')} />
                       </SelectTrigger>
                       <SelectContent>
@@ -247,21 +359,30 @@ export default function TransactionsPage() {
                   <div className="space-y-2">
                     <Label>{t('transactions.amount')} ($)</Label>
                     <Input
+                      ref={depositAmountInputRef}
                       type="number"
                       data-testid="input-deposit-amount"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        queueFocus(depositContinueButtonRef.current);
+                      }}
                       placeholder={selectedMethod ? `${selectedMethod.minAmount} - ${selectedMethod.maxAmount}` : t('transactions.enterAmount')}
                       min={selectedMethod?.minAmount || "10"}
                       max={selectedMethod?.maxAmount || "10000"}
                       step="0.01"
+                      inputMode="decimal"
+                      enterKeyHint="done"
                     />
                   </div>
 
                   <Button
+                    ref={depositContinueButtonRef}
                     className="w-full"
-                    onClick={() => setDepositStep('details')}
-                    disabled={!paymentMethod || !amount || (selectedMethod && (parseFloat(amount) < parseFloat(selectedMethod.minAmount) || parseFloat(amount) > parseFloat(selectedMethod.maxAmount)))}
+                    onClick={handleDepositContinue}
+                    disabled={!paymentMethod || !amount || !isDepositAmountValid(amount)}
                     data-testid="button-next-step"
                   >
                     {t('transactions.continue')}
@@ -288,10 +409,21 @@ export default function TransactionsPage() {
                   <div className="space-y-2">
                     <Label>{t('transactions.paymentReference')}</Label>
                     <Input
+                      ref={paymentReferenceInputRef}
                       data-testid="input-payment-reference"
                       value={paymentReference}
                       onChange={(e) => setPaymentReference(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        if (walletNumber.trim()) {
+                          queueFocus(walletNumberInputRef.current);
+                          return;
+                        }
+                        queueFocus(depositSubmitButtonRef.current);
+                      }}
                       placeholder={t('transactions.enterReference')}
+                      enterKeyHint={walletNumber.trim() ? 'next' : 'done'}
                     />
                     <p className="text-xs text-muted-foreground">
                       {t('transactions.referenceNote')}
@@ -301,30 +433,33 @@ export default function TransactionsPage() {
                   <div className="space-y-2">
                     <Label>{t('transactions.walletNumber')}</Label>
                     <Input
+                      ref={walletNumberInputRef}
                       data-testid="input-wallet-number"
                       value={walletNumber}
                       onChange={(e) => setWalletNumber(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        queueFocus(depositSubmitButtonRef.current);
+                      }}
                       placeholder={t('transactions.senderWallet')}
+                      enterKeyHint="done"
                     />
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 sticky bottom-0 bg-background pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                     <Button
                       variant="outline"
                       onClick={() => setDepositStep('method')}
-                      className="flex-1"
+                      className="flex-1 min-h-11"
                     >
                       {t('transactions.back')}
                     </Button>
                     <Button
+                      ref={depositSubmitButtonRef}
                       className="flex-1"
                       data-testid="button-submit-deposit"
-                      onClick={() => depositMutation.mutate({
-                        amount,
-                        paymentMethod: selectedMethod.name,
-                        paymentReference,
-                        walletNumber: walletNumber || undefined
-                      })}
+                      onClick={handleDepositSubmit}
                       disabled={depositMutation.isPending || !paymentReference}
                     >
                       {depositMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
@@ -351,7 +486,7 @@ export default function TransactionsPage() {
                 <ArrowUpCircle className="me-2 h-4 w-4" /> {t('transactions.withdraw')}
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{t('transactions.requestWithdrawal')}</DialogTitle>
                 <DialogDescription>
@@ -361,8 +496,14 @@ export default function TransactionsPage() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>{t('transactions.selectMethod')}</Label>
-                  <Select value={withdrawMethodId} onValueChange={setWithdrawMethodId}>
-                    <SelectTrigger data-testid="select-withdraw-method">
+                  <Select
+                    value={withdrawMethodId}
+                    onValueChange={(value) => {
+                      setWithdrawMethodId(value);
+                      queueFocus(withdrawAmountInputRef.current);
+                    }}
+                  >
+                    <SelectTrigger ref={withdrawMethodTriggerRef} data-testid="select-withdraw-method">
                       <SelectValue placeholder={t('transactions.chooseMethod')} />
                     </SelectTrigger>
                     <SelectContent>
@@ -396,23 +537,32 @@ export default function TransactionsPage() {
                 <div className="space-y-2">
                   <Label>{t('transactions.amount')} ($)</Label>
                   <Input
+                    ref={withdrawAmountInputRef}
                     type="number"
                     data-testid="input-withdraw-amount"
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      e.preventDefault();
+                      queueFocus(withdrawSubmitButtonRef.current);
+                    }}
                     placeholder={t('transactions.enterAmount')}
                     min="20"
                     step="0.01"
                     max={user?.balance}
+                    inputMode="decimal"
+                    enterKeyHint="done"
                   />
                   <p className="text-sm text-muted-foreground">
                     {t('transactions.availableBalance')}: <span className="text-primary font-medium">${parseFloat(user?.balance || "0").toFixed(2)}</span>
                   </p>
                 </div>
                 <Button
+                  ref={withdrawSubmitButtonRef}
                   className="w-full"
                   data-testid="button-submit-withdraw"
-                  onClick={() => withdrawMutation.mutate({ amount: withdrawAmount, paymentMethodId: withdrawMethodId })}
+                  onClick={handleWithdrawSubmit}
                   disabled={withdrawMutation.isPending || !withdrawAmount || !withdrawMethodId || parseFloat(withdrawAmount) > parseFloat(user?.balance || "0")}
                 >
                   {withdrawMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}

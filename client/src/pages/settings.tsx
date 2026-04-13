@@ -7,6 +7,7 @@ import { useAuth, useAuthHeaders } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useGuidedFocus } from "@/hooks/use-guided-focus";
 import { WORLD_CURRENCIES, formatCurrencyLabel } from "@/lib/currencies";
 
 // Hook so PreferencesSection can access (avoids prop drilling)
@@ -148,6 +149,12 @@ function ProfileSection() {
   const [editingContact, setEditingContact] = useState<"email" | "phone" | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
+  const phoneInputRef = useRef<HTMLInputElement | null>(null);
+  const profileSubmitButtonRef = useRef<HTMLButtonElement | null>(null);
+  const profileSecurityCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const profileSecurityConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
+  const { focusAndScroll, queueFocus } = useGuidedFocus();
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -175,6 +182,15 @@ function ProfileSection() {
     });
     setEditingContact(null);
   }, [form, user?.firstName, user?.lastName, user?.email, user?.phone]);
+
+  useEffect(() => {
+    if (!editingContact) return;
+    if (editingContact === "email") {
+      queueFocus(emailInputRef.current);
+      return;
+    }
+    queueFocus(phoneInputRef.current);
+  }, [editingContact]);
 
   const maskEmailValue = (value: string): string => {
     const normalized = value.trim();
@@ -309,6 +325,7 @@ function ProfileSection() {
       }
 
       setSecurityOtpSent(true);
+      queueFocus(profileSecurityCodeInputRef.current);
       toast({
         title: t("common.success"),
         description: data?.message || t("settings.otpSent"),
@@ -326,9 +343,30 @@ function ProfileSection() {
     updateProfileMutation.mutate(data);
   };
 
+  const handleProfileInvalid = (errors: Partial<Record<keyof ProfileFormValues, unknown>>) => {
+    if (errors.firstName) {
+      form.setFocus("firstName");
+      return;
+    }
+    if (errors.lastName) {
+      form.setFocus("lastName");
+      return;
+    }
+    if (errors.email) {
+      queueFocus(emailInputRef.current);
+      return;
+    }
+    if (errors.phone) {
+      queueFocus(phoneInputRef.current);
+    }
+  };
+
   const handleConfirmSecureProfileUpdate = () => {
     if (!pendingSecureUpdate) return;
-    if (!selectedSecurityMethod || securityCode.trim().length < 4) return;
+    if (!selectedSecurityMethod || securityCode.trim().length < 4) {
+      focusAndScroll(profileSecurityCodeInputRef.current);
+      return;
+    }
 
     updateProfileMutation.mutate({
       ...pendingSecureUpdate,
@@ -498,7 +536,7 @@ function ProfileSection() {
           </div>
         </div>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleProfileSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleProfileSubmit, handleProfileInvalid)} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -507,7 +545,17 @@ function ProfileSection() {
                   <FormItem>
                     <FormLabel>{t("settings.firstName")}</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder={t("settings.firstNamePlaceholder")} data-testid="input-firstname" />
+                      <Input
+                        {...field}
+                        placeholder={t("settings.firstNamePlaceholder")}
+                        data-testid="input-firstname"
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          form.setFocus("lastName");
+                        }}
+                        enterKeyHint="next"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -520,7 +568,17 @@ function ProfileSection() {
                   <FormItem>
                     <FormLabel>{t("settings.lastName")}</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder={t("settings.lastNamePlaceholder")} data-testid="input-lastname" />
+                      <Input
+                        {...field}
+                        placeholder={t("settings.lastNamePlaceholder")}
+                        data-testid="input-lastname"
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          queueFocus(emailInputRef.current || profileSubmitButtonRef.current);
+                        }}
+                        enterKeyHint="next"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -563,7 +621,19 @@ function ProfileSection() {
                   ) : (
                     <>
                       <FormControl>
-                        <Input {...field} type="email" placeholder="email@example.com" data-testid="input-email" />
+                        <Input
+                          {...field}
+                          ref={emailInputRef}
+                          type="email"
+                          placeholder="email@example.com"
+                          data-testid="input-email"
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.preventDefault();
+                            queueFocus(phoneInputRef.current || profileSubmitButtonRef.current);
+                          }}
+                          enterKeyHint="next"
+                        />
                       </FormControl>
                       {user?.email && editingContact === "email" && (
                         <div className="flex justify-end">
@@ -620,7 +690,20 @@ function ProfileSection() {
                   ) : (
                     <>
                       <FormControl>
-                        <Input {...field} type="tel" placeholder="+1234567890" data-testid="input-phone" />
+                        <Input
+                          {...field}
+                          ref={phoneInputRef}
+                          type="tel"
+                          placeholder="+1234567890"
+                          data-testid="input-phone"
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter") return;
+                            e.preventDefault();
+                            queueFocus(profileSubmitButtonRef.current);
+                          }}
+                          inputMode="tel"
+                          enterKeyHint="done"
+                        />
                       </FormControl>
                       {user?.phone && editingContact === "phone" && (
                         <div className="flex justify-end">
@@ -641,7 +724,13 @@ function ProfileSection() {
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={updateProfileMutation.isPending} data-testid="button-save-profile">
+            <Button
+              ref={profileSubmitButtonRef}
+              type="submit"
+              className="w-full sm:w-auto min-h-11"
+              disabled={updateProfileMutation.isPending}
+              data-testid="button-save-profile"
+            >
               {updateProfileMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
               {t("common.save")}
             </Button>
@@ -699,10 +788,17 @@ function ProfileSection() {
                       : t("settings.verificationCodeLabel")}
                   </Label>
                   <Input
+                    ref={profileSecurityCodeInputRef}
                     value={securityCode}
                     onChange={(e) => setSecurityCode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      queueFocus(profileSecurityConfirmButtonRef.current);
+                    }}
                     placeholder={t("settings.otpPlaceholder")}
                     inputMode="numeric"
+                    enterKeyHint="done"
                     maxLength={12}
                     data-testid="input-profile-security-code"
                   />
@@ -720,6 +816,7 @@ function ProfileSection() {
                     {t("common.cancel")}
                   </Button>
                   <Button
+                    ref={profileSecurityConfirmButtonRef}
                     type="button"
                     onClick={handleConfirmSecureProfileUpdate}
                     disabled={updateProfileMutation.isPending || securityCode.trim().length < 4}
@@ -759,6 +856,9 @@ function VerificationSection() {
     email: 0,
     phone: 0,
   });
+  const otpInputRef = useRef<HTMLInputElement | null>(null);
+  const otpVerifyButtonRef = useRef<HTMLButtonElement | null>(null);
+  const { focusAndScroll, queueFocus } = useGuidedFocus();
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -769,6 +869,11 @@ function VerificationSection() {
       window.clearInterval(intervalId);
     };
   }, []);
+
+  useEffect(() => {
+    if (!showOtpInput) return;
+    queueFocus(otpInputRef.current);
+  }, [showOtpInput]);
 
   const getContactTypeLabel = (type: "email" | "phone") => {
     return type === "email" ? t("settings.contactTypeEmail") : t("settings.contactTypePhone");
@@ -855,7 +960,10 @@ function VerificationSection() {
   };
 
   const handleVerifyOtp = async () => {
-    if (!verifyingType || !otpCode) return;
+    if (!verifyingType || !otpCode) {
+      focusAndScroll(otpInputRef.current);
+      return;
+    }
 
     setIsVerifying(true);
     try {
@@ -953,11 +1061,18 @@ function VerificationSection() {
             <div className="space-y-2">
               <Label>{t('settings.verificationCodeLabel')}</Label>
               <Input
+                ref={otpInputRef}
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  queueFocus(otpVerifyButtonRef.current);
+                }}
                 placeholder={t('settings.otpPlaceholder')}
                 inputMode="numeric"
                 className="h-12 text-center font-mono text-lg tracking-[0.3em]"
+                enterKeyHint="done"
                 maxLength={expectedOtpLength}
                 data-testid="input-otp-code"
               />
@@ -992,6 +1107,7 @@ function VerificationSection() {
                 {t('common.cancel')}
               </Button>
               <Button
+                ref={otpVerifyButtonRef}
                 onClick={handleVerifyOtp}
                 disabled={isVerifying || otpCode.length !== expectedOtpLength}
                 className="flex-1"
@@ -1521,6 +1637,17 @@ function SecuritySection() {
   const [newBackupCodes, setNewBackupCodes] = useState<string[]>([]);
   const [disableTwoFactorPassword, setDisableTwoFactorPassword] = useState("");
   const [gmailBackupPassword, setGmailBackupPassword] = useState("");
+  const changePasswordButtonRef = useRef<HTMLButtonElement | null>(null);
+  const twoFactorVerifySetupButtonRef = useRef<HTMLButtonElement | null>(null);
+  const gmailBackupPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const gmailBackupButtonRef = useRef<HTMLButtonElement | null>(null);
+  const disableTwoFactorPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const disableTwoFactorButtonRef = useRef<HTMLButtonElement | null>(null);
+  const withdrawalNewPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const withdrawalConfirmPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const withdrawalLoginPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const withdrawalSetButtonRef = useRef<HTMLButtonElement | null>(null);
+  const { focusAndScroll, queueFocus } = useGuidedFocus();
 
   const normalizedEmail = (user?.email || "").trim().toLowerCase();
   const hasLinkedGmail = normalizedEmail.endsWith("@gmail.com") || normalizedEmail.endsWith("@googlemail.com");
@@ -1728,6 +1855,24 @@ function SecuritySection() {
     },
   });
 
+  const handlePasswordSubmit = (data: PasswordFormValues) => {
+    changePasswordMutation.mutate(data);
+  };
+
+  const handlePasswordInvalid = (errors: Partial<Record<keyof PasswordFormValues, unknown>>) => {
+    if (errors.currentPassword) {
+      passwordForm.setFocus("currentPassword");
+      return;
+    }
+    if (errors.newPassword) {
+      passwordForm.setFocus("newPassword");
+      return;
+    }
+    if (errors.confirmPassword) {
+      passwordForm.setFocus("confirmPassword");
+    }
+  };
+
   const setWithdrawalPasswordMutation = useMutation({
     mutationFn: async (data: { password: string; loginPassword: string }) => {
       const res = await fetch("/api/user/withdrawal-password", {
@@ -1794,6 +1939,34 @@ function SecuritySection() {
     },
   });
 
+  useEffect(() => {
+    if (!showSetWithdrawalPassword) return;
+    queueFocus(withdrawalNewPasswordInputRef.current);
+  }, [showSetWithdrawalPassword]);
+
+  const handleSetWithdrawalPassword = () => {
+    if (withdrawalPasswordForm.newPassword !== withdrawalPasswordForm.confirmPassword) {
+      toast({ title: t("common.error"), description: t('validation.passwordsMismatch'), variant: "destructive" });
+      focusAndScroll(withdrawalConfirmPasswordInputRef.current);
+      return;
+    }
+    if (!withdrawalPasswordForm.newPassword) {
+      toast({ title: t("common.error"), description: t('validation.fillAllFields'), variant: "destructive" });
+      focusAndScroll(withdrawalNewPasswordInputRef.current);
+      return;
+    }
+    if (!withdrawalPasswordForm.currentLoginPassword) {
+      toast({ title: t("common.error"), description: t('validation.fillAllFields'), variant: "destructive" });
+      focusAndScroll(withdrawalLoginPasswordInputRef.current);
+      return;
+    }
+
+    setWithdrawalPasswordMutation.mutate({
+      password: withdrawalPasswordForm.newPassword,
+      loginPassword: withdrawalPasswordForm.currentLoginPassword
+    });
+  };
+
   const getDeviceIcon = (deviceInfo: string) => {
     const lower = deviceInfo?.toLowerCase() || "";
     if (lower.includes("mobile") || lower.includes("android") || lower.includes("iphone")) {
@@ -1817,7 +1990,7 @@ function SecuritySection() {
         </CardHeader>
         <CardContent>
           <Form {...passwordForm}>
-            <form onSubmit={passwordForm.handleSubmit((data) => changePasswordMutation.mutate(data))} className="space-y-4">
+            <form onSubmit={passwordForm.handleSubmit(handlePasswordSubmit, handlePasswordInvalid)} className="space-y-4">
               <FormField
                 control={passwordForm.control}
                 name="currentPassword"
@@ -1825,7 +1998,17 @@ function SecuritySection() {
                   <FormItem>
                     <FormLabel>{t("settings.currentPassword")}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" data-testid="input-current-password" />
+                      <Input
+                        {...field}
+                        type="password"
+                        data-testid="input-current-password"
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          passwordForm.setFocus("newPassword");
+                        }}
+                        enterKeyHint="next"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1838,7 +2021,17 @@ function SecuritySection() {
                   <FormItem>
                     <FormLabel>{t("settings.newPassword")}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" data-testid="input-new-password" />
+                      <Input
+                        {...field}
+                        type="password"
+                        data-testid="input-new-password"
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          passwordForm.setFocus("confirmPassword");
+                        }}
+                        enterKeyHint="next"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1851,13 +2044,23 @@ function SecuritySection() {
                   <FormItem>
                     <FormLabel>{t("settings.confirmPassword")}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" data-testid="input-confirm-password" />
+                      <Input
+                        {...field}
+                        type="password"
+                        data-testid="input-confirm-password"
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          queueFocus(changePasswordButtonRef.current);
+                        }}
+                        enterKeyHint="done"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" disabled={changePasswordMutation.isPending} data-testid="button-change-password">
+              <Button ref={changePasswordButtonRef} type="submit" disabled={changePasswordMutation.isPending} data-testid="button-change-password">
                 {changePasswordMutation.isPending && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                 {t("settings.updatePassword")}
               </Button>
@@ -1942,13 +2145,20 @@ function SecuritySection() {
                       maxLength={6}
                       value={twoFactorSetupCode}
                       onChange={(e) => setTwoFactorSetupCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter") return;
+                        e.preventDefault();
+                        queueFocus(twoFactorVerifySetupButtonRef.current);
+                      }}
                       placeholder={t("settings.otpPlaceholder")}
+                      enterKeyHint="done"
                       data-testid="input-two-factor-setup-code"
                     />
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-2">
                     <Button
+                      ref={twoFactorVerifySetupButtonRef}
                       onClick={() => verifyTwoFactorSetupMutation.mutate()}
                       disabled={verifyTwoFactorSetupMutation.isPending || twoFactorSetupCode.length !== 6}
                       data-testid="button-two-factor-verify-setup"
@@ -2019,16 +2229,24 @@ function SecuritySection() {
                     <div className="space-y-2">
                       <Label htmlFor="gmail-backup-password">{t("settings.gmailBackupPassword")}</Label>
                       <Input
+                        ref={gmailBackupPasswordInputRef}
                         id="gmail-backup-password"
                         type="password"
                         value={gmailBackupPassword}
                         onChange={(e) => setGmailBackupPassword(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          queueFocus(gmailBackupButtonRef.current);
+                        }}
                         placeholder={t("settings.currentPassword")}
+                        enterKeyHint="done"
                         data-testid="input-gmail-backup-password"
                       />
                     </div>
 
                     <Button
+                      ref={gmailBackupButtonRef}
                       onClick={() => sendGmailBackupMutation.mutate()}
                       disabled={sendGmailBackupMutation.isPending || !hasLinkedGmail || !gmailBackupPassword}
                       data-testid="button-send-gmail-backup"
@@ -2044,15 +2262,23 @@ function SecuritySection() {
                     <div className="space-y-2">
                       <Label htmlFor="disable-two-factor-password">{t("settings.twoFactorDisablePassword")}</Label>
                       <Input
+                        ref={disableTwoFactorPasswordInputRef}
                         id="disable-two-factor-password"
                         type="password"
                         value={disableTwoFactorPassword}
                         onChange={(e) => setDisableTwoFactorPassword(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          queueFocus(disableTwoFactorButtonRef.current);
+                        }}
                         placeholder={t("settings.currentPassword")}
+                        enterKeyHint="done"
                         data-testid="input-disable-two-factor-password"
                       />
                     </div>
                     <Button
+                      ref={disableTwoFactorButtonRef}
                       variant="destructive"
                       onClick={() => disableTwoFactorMutation.mutate()}
                       disabled={disableTwoFactorMutation.isPending || !disableTwoFactorPassword}
@@ -2219,51 +2445,60 @@ function SecuritySection() {
               <div className="space-y-2">
                 <Label htmlFor="withdrawal-new-password">{t('settings.newWithdrawalPassword')}</Label>
                 <Input
+                  ref={withdrawalNewPasswordInputRef}
                   id="withdrawal-new-password"
                   type="password"
                   value={withdrawalPasswordForm.newPassword}
                   onChange={(e) => setWithdrawalPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    queueFocus(withdrawalConfirmPasswordInputRef.current);
+                  }}
                   placeholder={t('settings.newWithdrawalPasswordPlaceholder')}
+                  enterKeyHint="next"
                   data-testid="input-withdrawal-new-password"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="withdrawal-confirm-password">{t('settings.confirmWithdrawalPassword')}</Label>
                 <Input
+                  ref={withdrawalConfirmPasswordInputRef}
                   id="withdrawal-confirm-password"
                   type="password"
                   value={withdrawalPasswordForm.confirmPassword}
                   onChange={(e) => setWithdrawalPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    queueFocus(withdrawalLoginPasswordInputRef.current);
+                  }}
                   placeholder={t('settings.confirmWithdrawalPasswordPlaceholder')}
+                  enterKeyHint="next"
                   data-testid="input-withdrawal-confirm-password"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="withdrawal-login-password">{t('settings.currentLoginPassword')}</Label>
                 <Input
+                  ref={withdrawalLoginPasswordInputRef}
                   id="withdrawal-login-password"
                   type="password"
                   value={withdrawalPasswordForm.currentLoginPassword}
                   onChange={(e) => setWithdrawalPasswordForm(prev => ({ ...prev, currentLoginPassword: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    queueFocus(withdrawalSetButtonRef.current);
+                  }}
                   placeholder={t('settings.loginPasswordPlaceholder')}
+                  enterKeyHint="done"
                   data-testid="input-withdrawal-login-password"
                 />
               </div>
               <Button
-                onClick={() => {
-                  if (withdrawalPasswordForm.newPassword !== withdrawalPasswordForm.confirmPassword) {
-                    toast({ title: t("common.error"), description: t('validation.passwordsMismatch'), variant: "destructive" });
-                    return;
-                  }
-                  if (!withdrawalPasswordForm.newPassword || !withdrawalPasswordForm.currentLoginPassword) {
-                    toast({ title: t("common.error"), description: t('validation.fillAllFields'), variant: "destructive" });
-                    return;
-                  }
-                  setWithdrawalPasswordMutation.mutate({
-                    password: withdrawalPasswordForm.newPassword,
-                    loginPassword: withdrawalPasswordForm.currentLoginPassword
-                  });
-                }}
+                ref={withdrawalSetButtonRef}
+                onClick={handleSetWithdrawalPassword}
                 disabled={setWithdrawalPasswordMutation.isPending}
                 data-testid="button-set-withdrawal-password"
               >

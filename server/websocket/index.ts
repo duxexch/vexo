@@ -13,6 +13,7 @@ import { handleVoice } from "./voice";
 import { handleChallengeGames } from "./challenge-games";
 import { trackUserOffline } from "../lib/redis";
 import { redisRateLimit } from "../lib/redis";
+import { checkWsUpgradeRateLimit, isWsOriginAllowed, rejectWsUpgrade } from "../lib/ws-upgrade-guard";
 import { createWsProtocolError, type WebSocketProtocolError, validateWebSocketEnvelope } from "./validation";
 
 const challengeMessageTypes = new Set([
@@ -64,12 +65,29 @@ export function setupWebSocket(server: Server) {
   const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false, maxPayload: 64 * 1024 });
 
   // Register upgrade handler — safe with multiple WebSocket servers
-  server.on('upgrade', (request, socket, head) => {
+  server.on('upgrade', async (request, socket, head) => {
     const pathname = new URL(request.url || '/', `http://${request.headers.host}`).pathname;
     if (pathname === '/ws') {
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit('connection', ws, request);
-      });
+      try {
+        const origin = typeof request.headers.origin === "string" ? request.headers.origin : undefined;
+        if (!isWsOriginAllowed(origin)) {
+          rejectWsUpgrade(socket, 403);
+          return;
+        }
+
+        const connLimit = await checkWsUpgradeRateLimit(request, "ws:general:conn:ip", 20, 10_000);
+        if (!connLimit.allowed) {
+          rejectWsUpgrade(socket, 429);
+          return;
+        }
+
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit('connection', ws, request);
+        });
+      } catch (error) {
+        logger.warn(`[WS] Upgrade rejected: ${error instanceof Error ? error.message : String(error)}`);
+        socket.destroy();
+      }
     }
     // Don't destroy for non-matching — other handlers or Vite HMR may process it
   });

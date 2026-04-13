@@ -11,6 +11,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useGuidedFocus } from "@/hooks/use-guided-focus";
 import { Loader2, Copy, Check, CheckCircle2, Smartphone, Mail, User, Zap, KeyRound, Share2, Globe, AlertTriangle } from "lucide-react";
 import { VexLogo } from "@/components/vex-logo";
 import { SiGoogle, SiFacebook, SiTelegram, SiWhatsapp, SiX, SiApple, SiDiscord, SiLinkedin, SiGithub, SiTiktok, SiInstagram } from "react-icons/si";
@@ -182,6 +183,32 @@ export default function LoginPage() {
   // Terms & privacy agreement state
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showTermsVisualWarning, setShowTermsVisualWarning] = useState(false);
+
+  const accountIdInputRef = useRef<HTMLInputElement | null>(null);
+  const accountPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const accountLoginButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const phoneInputRef = useRef<HTMLInputElement | null>(null);
+  const phonePasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const phoneLoginButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
+  const emailPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const emailLoginButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const forgotIdentifierInputRef = useRef<HTMLInputElement | null>(null);
+  const forgotRequestButtonRef = useRef<HTMLButtonElement | null>(null);
+  const resetCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const newPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const confirmPasswordInputRef = useRef<HTMLInputElement | null>(null);
+  const resetPasswordButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const identifierOtpCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const identifierOtpVerifyButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const twoFactorCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const twoFactorVerifyButtonRef = useRef<HTMLButtonElement | null>(null);
+  const { focusAndScroll, queueFocus } = useGuidedFocus();
 
   const clearSocialLoginLock = (resetLoading: boolean = true) => {
     socialLoginLockRef.current = null;
@@ -641,6 +668,43 @@ export default function LoginPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (currentTab === "account") {
+      queueFocus(accountIdInputRef.current);
+      return;
+    }
+
+    if (currentTab === "phone") {
+      queueFocus(phoneInputRef.current);
+      return;
+    }
+
+    if (currentTab === "email") {
+      queueFocus(emailInputRef.current);
+    }
+  }, [currentTab]);
+
+  useEffect(() => {
+    if (!showForgotPassword) return;
+
+    if (forgotPasswordStep === "request") {
+      queueFocus(forgotIdentifierInputRef.current);
+      return;
+    }
+
+    queueFocus(resetCodeInputRef.current);
+  }, [showForgotPassword, forgotPasswordStep]);
+
+  useEffect(() => {
+    if (!showIdentifierOtpModal) return;
+    queueFocus(identifierOtpCodeInputRef.current);
+  }, [showIdentifierOtpModal]);
+
+  useEffect(() => {
+    if (!showTwoFactorModal) return;
+    queueFocus(twoFactorCodeInputRef.current);
+  }, [showTwoFactorModal]);
+
   const getOrCreateAutoCreateClientId = (): string => {
     try {
       const existing = localStorage.getItem(AUTO_CREATE_CLIENT_ID_STORAGE_KEY);
@@ -805,7 +869,10 @@ export default function LoginPage() {
 
   const handleIdentifierOtpVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifierOtpChallengeToken || !identifierOtpCode.trim()) return;
+    if (!identifierOtpChallengeToken || !identifierOtpCode.trim()) {
+      focusAndScroll(identifierOtpCodeInputRef.current);
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -821,7 +888,10 @@ export default function LoginPage() {
 
   const handleTwoFactorVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!twoFactorChallengeToken || !twoFactorCode.trim()) return;
+    if (!twoFactorChallengeToken || !twoFactorCode.trim()) {
+      focusAndScroll(twoFactorCodeInputRef.current);
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -899,6 +969,7 @@ export default function LoginPage() {
       const phoneClean = phoneLoginForm.phone.trim();
       if (!/^\+?[0-9]{7,15}$/.test(phoneClean)) {
         toast({ title: t('common.error'), description: t('auth.phoneInvalidFormat'), variant: "destructive" });
+        focusAndScroll(phoneInputRef.current);
         setIsLoading(false);
         return;
       }
@@ -936,6 +1007,7 @@ export default function LoginPage() {
       // Email tab: only accept email format with @
       if (!emailLoginForm.username.includes("@")) {
         toast({ title: t('common.error'), description: t('auth.emailInvalidFormat'), variant: "destructive" });
+        focusAndScroll(emailInputRef.current);
         setIsLoading(false);
         return;
       }
@@ -1040,6 +1112,10 @@ export default function LoginPage() {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!forgotPasswordForm.identifier.trim()) {
+      focusAndScroll(forgotIdentifierInputRef.current);
+      return;
+    }
     setIsLoading(true);
     try {
       const res = await fetchWithCsrf("/api/auth/forgot-password", {
@@ -1079,6 +1155,7 @@ export default function LoginPage() {
     e.preventDefault();
     if (forgotPasswordForm.newPassword !== forgotPasswordForm.confirmPassword) {
       toast({ title: t('common.error'), description: t('auth.passwordsNoMatch'), variant: "destructive" });
+      focusAndScroll(confirmPasswordInputRef.current);
       return;
     }
     setIsLoading(true);
@@ -1314,33 +1391,47 @@ export default function LoginPage() {
                     <div className="space-y-2">
                       <Label htmlFor="accountId">{t('auth.accountId')}</Label>
                       <Input
+                        ref={accountIdInputRef}
                         id="accountId"
                         data-testid="input-account-id"
                         className="h-11"
                         value={accountLoginForm.accountId}
                         onChange={e => setAccountLoginForm(prev => ({ ...prev, accountId: e.target.value }))}
+                        onKeyDown={e => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          queueFocus(accountPasswordInputRef.current);
+                        }}
                         placeholder={t('auth.enterAccountId')}
                         autoComplete="username"
                         autoCapitalize="none"
                         spellCheck={false}
+                        enterKeyHint="next"
                         required
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="accountPassword">{t('auth.password')}</Label>
                       <Input
+                        ref={accountPasswordInputRef}
                         id="accountPassword"
                         type="password"
                         data-testid="input-account-password"
                         className="h-11"
                         value={accountLoginForm.password}
                         onChange={e => setAccountLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                        onKeyDown={e => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          queueFocus(accountLoginButtonRef.current);
+                        }}
                         placeholder={t('auth.enterPassword')}
                         autoComplete="current-password"
+                        enterKeyHint="done"
                         required
                       />
                     </div>
-                    <Button type="submit" className="h-11 w-full" disabled={isLoading} data-testid="button-account-login">
+                    <Button ref={accountLoginButtonRef} type="submit" className="h-11 w-full" disabled={isLoading} data-testid="button-account-login">
                       {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                       {t('auth.signIn')}
                     </Button>
@@ -1354,6 +1445,7 @@ export default function LoginPage() {
                     <div className="space-y-2">
                       <Label htmlFor="phone">{t('auth.phoneNumber')}</Label>
                       <Input
+                        ref={phoneInputRef}
                         id="phone"
                         type="tel"
                         data-testid="input-phone"
@@ -1364,27 +1456,41 @@ export default function LoginPage() {
                           const val = e.target.value.replace(/[^0-9+]/g, '');
                           setPhoneLoginForm(prev => ({ ...prev, phone: val }));
                         }}
+                        onKeyDown={e => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          queueFocus(phonePasswordInputRef.current);
+                        }}
                         placeholder="+1234567890"
                         pattern="^\+?[0-9]{7,15}$"
                         autoComplete="tel"
+                        inputMode="tel"
+                        enterKeyHint="next"
                         required
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="phonePassword">{t('auth.password')}</Label>
                       <Input
+                        ref={phonePasswordInputRef}
                         id="phonePassword"
                         type="password"
                         data-testid="input-phone-password"
                         className="h-11"
                         value={phoneLoginForm.password}
                         onChange={e => setPhoneLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                        onKeyDown={e => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          queueFocus(phoneLoginButtonRef.current);
+                        }}
                         placeholder={t('auth.enterPassword')}
                         autoComplete="current-password"
+                        enterKeyHint="done"
                         required
                       />
                     </div>
-                    <Button type="submit" className="h-11 w-full" disabled={isLoading} data-testid="button-phone-login">
+                    <Button ref={phoneLoginButtonRef} type="submit" className="h-11 w-full" disabled={isLoading} data-testid="button-phone-login">
                       {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                       {t('auth.signIn')}
                     </Button>
@@ -1398,34 +1504,48 @@ export default function LoginPage() {
                     <div className="space-y-2">
                       <Label htmlFor="username">{t('auth.usernameEmail')}</Label>
                       <Input
+                        ref={emailInputRef}
                         id="username"
                         data-testid="input-username"
                         className="h-11"
                         value={emailLoginForm.username}
                         onChange={e => setEmailLoginForm(prev => ({ ...prev, username: e.target.value }))}
+                        onKeyDown={e => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          queueFocus(emailPasswordInputRef.current);
+                        }}
                         placeholder={t('auth.enterUsernameEmail')}
                         autoComplete="email"
                         inputMode="email"
                         autoCapitalize="none"
                         spellCheck={false}
+                        enterKeyHint="next"
                         required
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="emailPassword">{t('auth.password')}</Label>
                       <Input
+                        ref={emailPasswordInputRef}
                         id="emailPassword"
                         type="password"
                         data-testid="input-email-password"
                         className="h-11"
                         value={emailLoginForm.password}
                         onChange={e => setEmailLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                        onKeyDown={e => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          queueFocus(emailLoginButtonRef.current);
+                        }}
                         placeholder={t('auth.enterPassword')}
                         autoComplete="current-password"
+                        enterKeyHint="done"
                         required
                       />
                     </div>
-                    <Button type="submit" className="h-11 w-full" disabled={isLoading} data-testid="button-email-login">
+                    <Button ref={emailLoginButtonRef} type="submit" className="h-11 w-full" disabled={isLoading} data-testid="button-email-login">
                       {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                       {t('auth.signIn')}
                     </Button>
@@ -1690,15 +1810,22 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <Label htmlFor="identifier">{t('auth.identifierLabel')}</Label>
                 <Input
+                  ref={forgotIdentifierInputRef}
                   id="identifier"
                   data-testid="input-forgot-identifier"
                   value={forgotPasswordForm.identifier}
                   onChange={e => setForgotPasswordForm(prev => ({ ...prev, identifier: e.target.value }))}
+                  onKeyDown={e => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    queueFocus(forgotRequestButtonRef.current);
+                  }}
                   placeholder={t('auth.enterIdentifier')}
+                  enterKeyHint="done"
                   required
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-request-reset">
+              <Button ref={forgotRequestButtonRef} type="submit" className="w-full" disabled={isLoading} data-testid="button-request-reset">
                 {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                 {t('auth.requestReset')}
               </Button>
@@ -1708,40 +1835,61 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <Label htmlFor="resetCode">{t('settings.verificationCodeLabel')}</Label>
                 <Input
+                  ref={resetCodeInputRef}
                   id="resetCode"
                   data-testid="input-reset-code"
                   value={resetToken}
                   onChange={e => setResetToken(e.target.value.trim())}
+                  onKeyDown={e => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    queueFocus(newPasswordInputRef.current);
+                  }}
                   placeholder={t('settings.otpPlaceholder')}
                   autoCapitalize="characters"
+                  enterKeyHint="next"
                   required
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="newPassword">{t('auth.newPassword')}</Label>
                 <Input
+                  ref={newPasswordInputRef}
                   id="newPassword"
                   type="password"
                   data-testid="input-new-password"
                   value={forgotPasswordForm.newPassword}
                   onChange={e => setForgotPasswordForm(prev => ({ ...prev, newPassword: e.target.value }))}
+                  onKeyDown={e => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    queueFocus(confirmPasswordInputRef.current);
+                  }}
                   placeholder={t('auth.enterNewPassword')}
+                  enterKeyHint="next"
                   required
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">{t('auth.confirmPassword')}</Label>
                 <Input
+                  ref={confirmPasswordInputRef}
                   id="confirmPassword"
                   type="password"
                   data-testid="input-confirm-password"
                   value={forgotPasswordForm.confirmPassword}
                   onChange={e => setForgotPasswordForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  onKeyDown={e => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    queueFocus(resetPasswordButtonRef.current);
+                  }}
                   placeholder={t('auth.confirmNewPassword')}
+                  enterKeyHint="done"
                   required
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-reset-password">
+              <Button ref={resetPasswordButtonRef} type="submit" className="w-full" disabled={isLoading} data-testid="button-reset-password">
                 {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                 {t('auth.resetPassword')}
               </Button>
@@ -1767,11 +1915,18 @@ export default function LoginPage() {
             <div className="space-y-2">
               <Label htmlFor="identifier-otp-code">{t('settings.verificationCodeLabel')}</Label>
               <Input
+                ref={identifierOtpCodeInputRef}
                 id="identifier-otp-code"
                 value={identifierOtpCode}
                 onChange={(e) => setIdentifierOtpCode(e.target.value.replace(/\s+/g, ""))}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  queueFocus(identifierOtpVerifyButtonRef.current);
+                }}
                 placeholder={t('settings.otpPlaceholder')}
                 inputMode="numeric"
+                enterKeyHint="done"
                 required
               />
             </div>
@@ -1810,7 +1965,7 @@ export default function LoginPage() {
               >
                 {t('settings.resendCode')}
               </Button>
-              <Button type="submit" className="flex-1" disabled={isLoading}>
+              <Button ref={identifierOtpVerifyButtonRef} type="submit" className="flex-1" disabled={isLoading}>
                 {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
                 {t('settings.verify')}
               </Button>
@@ -1834,15 +1989,22 @@ export default function LoginPage() {
             <div className="space-y-2">
               <Label htmlFor="two-factor-code">{t('settings.twoFactorCode')}</Label>
               <Input
+                ref={twoFactorCodeInputRef}
                 id="two-factor-code"
                 value={twoFactorCode}
                 onChange={(e) => setTwoFactorCode(e.target.value.replace(/\s+/g, ""))}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  queueFocus(twoFactorVerifyButtonRef.current);
+                }}
                 placeholder={t('settings.otpPlaceholder')}
                 inputMode="numeric"
+                enterKeyHint="done"
                 required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button ref={twoFactorVerifyButtonRef} type="submit" className="w-full" disabled={isLoading}>
               {isLoading && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
               {t('settings.verify')}
             </Button>

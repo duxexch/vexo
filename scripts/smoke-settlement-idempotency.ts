@@ -4,16 +4,9 @@ import crypto from "node:crypto";
 import { pool, closePool } from "../server/db";
 import { settleChallengePayout, settleDrawPayout } from "../server/lib/payout";
 import { closeRedisConnections } from "../server/lib/redis";
+import { createErrorHelpers } from "./lib/smoke-helpers";
 
-class SmokeError extends Error {
-    details?: unknown;
-
-    constructor(message: string, details?: unknown) {
-        super(message);
-        this.name = "SmokeError";
-        this.details = details;
-    }
-}
+const { fail, assertCondition } = createErrorHelpers("SmokeError");
 
 interface CliOptions {
     keepData: boolean;
@@ -70,16 +63,6 @@ function parseArgs(argv: string[]): CliOptions {
     }
 
     return options;
-}
-
-function fail(message: string, details?: unknown): never {
-    throw new SmokeError(message, details);
-}
-
-function assertCondition(condition: unknown, message: string, details?: unknown): asserts condition {
-    if (!condition) {
-        fail(message, details);
-    }
 }
 
 function assertNumberEqual(actual: number, expected: number, message: string, tolerance = 1e-9): void {

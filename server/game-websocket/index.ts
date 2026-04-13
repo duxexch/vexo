@@ -2,6 +2,8 @@ import { WebSocketServer } from 'ws';
 import { Server } from 'http';
 import { moveRateLimiter, resignRateLimiter } from '../lib/rate-limiter';
 import { redisRateLimit } from '../lib/redis';
+import { logger } from '../lib/logger';
+import { checkWsUpgradeRateLimit, isWsOriginAllowed, rejectWsUpgrade } from '../lib/ws-upgrade-guard';
 import type { AuthenticatedWebSocket } from './types';
 import { send, sendError } from './utils';
 import { handleAuthenticate, handleJoinGame, handleSpectate } from './auth-join';
@@ -22,14 +24,31 @@ export function setupGameWebSocket(server: Server): WebSocketServer {
 
   // Register upgrade handler via the shared routing mechanism
   // (see server/index.ts for the centralized upgrade router)
-  server.on('upgrade', (request, socket, head) => {
+  server.on('upgrade', async (request, socket, head) => {
     const pathname = new URL(request.url || '/', `http://${request.headers.host}`).pathname;
     if (pathname === '/ws/game') {
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        const gameWs = ws as AuthenticatedWebSocket;
-        gameWs.userAgent = typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : undefined;
-        wss.emit('connection', ws, request);
-      });
+      try {
+        const origin = typeof request.headers.origin === 'string' ? request.headers.origin : undefined;
+        if (!isWsOriginAllowed(origin)) {
+          rejectWsUpgrade(socket, 403);
+          return;
+        }
+
+        const connLimit = await checkWsUpgradeRateLimit(request, 'ws:game:conn:ip', 20, 10_000);
+        if (!connLimit.allowed) {
+          rejectWsUpgrade(socket, 429);
+          return;
+        }
+
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          const gameWs = ws as AuthenticatedWebSocket;
+          gameWs.userAgent = typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : undefined;
+          wss.emit('connection', ws, request);
+        });
+      } catch (error) {
+        logger.warn(`[GameWS] Upgrade rejected: ${error instanceof Error ? error.message : String(error)}`);
+        socket.destroy();
+      }
     }
     // Don't destroy the socket here — let other handlers process it
   });
@@ -86,7 +105,7 @@ export function setupGameWebSocket(server: Server): WebSocketServer {
 
         await handleMessage(ws, validation.data);
       } catch (error) {
-        console.error('[GameWS] Message handler error:', error);
+        logger.error('[GameWS] Message handler error', error instanceof Error ? error : new Error(String(error)));
         const protocolError = createGameWsProtocolError('Invalid message format', 'invalid_format');
         sendError(ws, protocolError.message, protocolError.code);
       }
@@ -97,7 +116,7 @@ export function setupGameWebSocket(server: Server): WebSocketServer {
     });
 
     ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+      logger.error('WebSocket error', error instanceof Error ? error : new Error(String(error)));
       handleDisconnect(ws);
     });
   });

@@ -4,7 +4,6 @@ import { setupWebSocket } from "./websocket";
 import { trackError } from "./lib/health";
 import { logger, requestLogger } from "./lib/logger";
 import { registerModularRoutes } from "./routes/index";
-import { authMiddleware, type AuthRequest } from "./routes/middleware";
 import { apiRateLimiter, attackProtectionLimiter } from "./setup/rate-limiters";
 import { runDatabaseSeeds } from "./setup/seeds";
 import { runAdminBootstrap } from "./setup/admin-bootstrap";
@@ -23,14 +22,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Register modular routes (health, auth, users, games, transactions, p2p, challenges, etc.)
   registerModularRoutes(app);
-
-  // ==================== GAME PLAY ROUTES (REMOVED - single-player games deleted) ====================
-  app.post("/api/games/:id/play", authMiddleware, async (_req: AuthRequest, res: Response) => {
-    res.status(410).json({ error: "Single-player games have been removed" });
-  });
-  app.get("/api/games/:id/history", authMiddleware, async (_req: AuthRequest, res: Response) => {
-    res.json([]);
-  });
 
   // ==================== DATABASE SEEDS ====================
   runDatabaseSeeds();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useGuidedFocus } from "@/hooks/use-guided-focus";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { queryClient, financialQueryOptions } from "@/lib/queryClient";
@@ -124,6 +125,21 @@ export default function WalletPage() {
   const [depositCurrency, setDepositCurrency] = useState("USD");
   const { isHidden: isBalanceHidden } = useBalance();
 
+  const depositAmountInputRef = useRef<HTMLInputElement | null>(null);
+  const depositCurrencyTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const depositPaymentSectionRef = useRef<HTMLDivElement | null>(null);
+  const paymentReferenceInputRef = useRef<HTMLInputElement | null>(null);
+  const walletNumberInputRef = useRef<HTMLInputElement | null>(null);
+  const depositConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const withdrawAmountInputRef = useRef<HTMLInputElement | null>(null);
+  const withdrawPaymentSectionRef = useRef<HTMLDivElement | null>(null);
+  const withdrawConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const convertAmountInputRef = useRef<HTMLInputElement | null>(null);
+  const convertConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
+  const { focusAndScroll, queueFocus, focusFirstInteractiveIn } = useGuidedFocus();
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const modal = params.get("modal");
@@ -220,6 +236,21 @@ export default function WalletPage() {
       return depositConfig.defaultDepositCurrency || depositConfig.allowedDepositCurrencies[0] || 'USD';
     });
   }, [depositConfig]);
+
+  useEffect(() => {
+    if (!showDeposit) return;
+    queueFocus(depositAmountInputRef.current);
+  }, [showDeposit]);
+
+  useEffect(() => {
+    if (!showWithdraw) return;
+    queueFocus(withdrawAmountInputRef.current);
+  }, [showWithdraw]);
+
+  useEffect(() => {
+    if (!showConvert) return;
+    queueFocus(convertAmountInputRef.current);
+  }, [showConvert]);
 
   const depositFxPreview = useMemo(() => {
     if (!depositConfig?.usdRateByCurrency) {
@@ -372,6 +403,72 @@ export default function WalletPage() {
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
     }
   });
+
+  const handleDepositSubmit = () => {
+    const parsedAmount = parseFloat(depositAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      focusAndScroll(depositAmountInputRef.current);
+      return;
+    }
+
+    if (!depositCurrency) {
+      focusAndScroll(depositCurrencyTriggerRef.current);
+      return;
+    }
+
+    if (!depositPaymentMethod) {
+      focusFirstInteractiveIn(depositPaymentSectionRef.current);
+      return;
+    }
+
+    if (!paymentReference.trim()) {
+      focusAndScroll(paymentReferenceInputRef.current);
+      return;
+    }
+
+    depositMutation.mutate({
+      amount: parsedAmount,
+      paymentMethod: depositPaymentMethod,
+      paymentReference: paymentReference.trim(),
+      walletNumber: walletNumber.trim() || undefined,
+      currency: depositCurrency,
+    });
+  };
+
+  const handleWithdrawSubmit = () => {
+    const parsedAmount = parseFloat(withdrawAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      focusAndScroll(withdrawAmountInputRef.current);
+      return;
+    }
+
+    if (parsedAmount > availableWalletBalance) {
+      focusAndScroll(withdrawAmountInputRef.current);
+      return;
+    }
+
+    if (!withdrawPaymentMethod) {
+      focusFirstInteractiveIn(withdrawPaymentSectionRef.current);
+      return;
+    }
+
+    withdrawMutation.mutate({ amount: parsedAmount, paymentMethodId: withdrawPaymentMethod });
+  };
+
+  const handleConvertSubmit = () => {
+    const parsedAmount = parseFloat(convertAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      focusAndScroll(convertAmountInputRef.current);
+      return;
+    }
+
+    if (parsedAmount < convertMinWalletAmount || parsedAmount > convertMaxWalletAmount || parsedAmount > availableWalletBalance) {
+      focusAndScroll(convertAmountInputRef.current);
+      return;
+    }
+
+    convertMutation.mutate({ amount: convertAmount });
+  };
 
   const recentTransactions = Array.isArray(transactions) ? transactions : [];
 
@@ -718,7 +815,7 @@ export default function WalletPage() {
       </Card>
 
       <Dialog open={showDeposit} onOpenChange={setShowDeposit}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ArrowDownToLine className="h-5 w-5 text-green-500" />
@@ -730,10 +827,18 @@ export default function WalletPage() {
             <div>
               <Label>{t('wallet.amount')}</Label>
               <Input
+                ref={depositAmountInputRef}
                 type="number"
                 value={depositAmount}
                 onChange={(e) => setDepositAmount(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  queueFocus(depositCurrencyTriggerRef.current);
+                }}
                 placeholder="0.00"
+                inputMode="decimal"
+                enterKeyHint="next"
                 className="mt-2"
                 data-testid="input-deposit-amount"
               />
@@ -754,7 +859,11 @@ export default function WalletPage() {
             <div>
               <Label>{language === 'ar' ? 'عملة الإيداع' : 'Deposit Currency'}</Label>
               <Select value={depositCurrency} onValueChange={setDepositCurrency} disabled={Boolean(depositConfig?.isBalanceCurrencyLocked)}>
-                <SelectTrigger className="mt-2" data-testid="select-deposit-currency">
+                <SelectTrigger
+                  ref={depositCurrencyTriggerRef}
+                  className="mt-2"
+                  data-testid="select-deposit-currency"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -781,7 +890,7 @@ export default function WalletPage() {
             </div>
             <div>
               <Label>{t('wallet.paymentMethod')}</Label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
+              <div ref={depositPaymentSectionRef} className="grid grid-cols-2 gap-2 mt-2">
                 {paymentMethods.map(method => {
                   const Icon = method.icon;
                   return (
@@ -789,7 +898,10 @@ export default function WalletPage() {
                       key={method.id}
                       variant={depositPaymentMethod === method.id ? "default" : "outline"}
                       className="h-auto py-3 flex-col"
-                      onClick={() => setDepositPaymentMethod(method.id)}
+                      onClick={() => {
+                        setDepositPaymentMethod(method.id);
+                        queueFocus(paymentReferenceInputRef.current);
+                      }}
                       data-testid={`button-method-${method.id}`}
                     >
                       <Icon className="h-5 w-5 mb-1" />
@@ -802,32 +914,46 @@ export default function WalletPage() {
             <div>
               <Label>{language === 'ar' ? 'رقم المرجع / إيصال الدفع' : 'Payment Reference / Receipt'}</Label>
               <Input
+                ref={paymentReferenceInputRef}
                 value={paymentReference}
                 onChange={(e) => setPaymentReference(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  if (!walletNumber.trim()) {
+                    queueFocus(depositConfirmButtonRef.current);
+                    return;
+                  }
+                  queueFocus(walletNumberInputRef.current);
+                }}
                 placeholder={language === 'ar' ? 'أدخل رقم المرجع أو رقم الإيصال' : 'Enter receipt or reference number'}
+                enterKeyHint={walletNumber.trim() ? 'next' : 'done'}
                 className="mt-2"
               />
             </div>
             <div>
               <Label>{language === 'ar' ? 'رقم المحفظة / الحساب المرسل' : 'Sender Wallet / Account Number'}</Label>
               <Input
+                ref={walletNumberInputRef}
                 value={walletNumber}
                 onChange={(e) => setWalletNumber(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  queueFocus(depositConfirmButtonRef.current);
+                }}
                 placeholder={language === 'ar' ? 'رقم المحفظة أو الحساب المرسل منه' : 'Your wallet or account number'}
+                enterKeyHint="done"
                 className="mt-2"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeposit(false)}>{t('common.cancel')}</Button>
+          <DialogFooter className="sticky bottom-0 z-10 px-4 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5 pt-3 border-t bg-background">
+            <Button className="w-full sm:w-auto min-h-11" variant="outline" onClick={() => setShowDeposit(false)}>{t('common.cancel')}</Button>
             <Button
-              onClick={() => depositMutation.mutate({
-                amount: parseFloat(depositAmount),
-                paymentMethod: depositPaymentMethod,
-                paymentReference,
-                walletNumber: walletNumber || undefined,
-                currency: depositCurrency,
-              })}
+              ref={depositConfirmButtonRef}
+              className="w-full sm:w-auto min-h-11"
+              onClick={handleDepositSubmit}
               disabled={!depositAmount || !depositPaymentMethod || !paymentReference || !depositCurrency || depositMutation.isPending}
               data-testid="button-confirm-deposit"
             >
@@ -839,7 +965,7 @@ export default function WalletPage() {
       </Dialog>
 
       <Dialog open={showWithdraw} onOpenChange={setShowWithdraw}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ArrowUpFromLine className="h-5 w-5 text-red-500" />
@@ -855,10 +981,18 @@ export default function WalletPage() {
             <div>
               <Label>{t('wallet.amount')}</Label>
               <Input
+                ref={withdrawAmountInputRef}
                 type="number"
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  focusFirstInteractiveIn(withdrawPaymentSectionRef.current);
+                }}
                 placeholder="0.00"
+                inputMode="decimal"
+                enterKeyHint="next"
                 className="mt-2"
                 data-testid="input-withdraw-amount"
               />
@@ -886,7 +1020,7 @@ export default function WalletPage() {
             </div>
             <div>
               <Label>{t('wallet.paymentMethod')}</Label>
-              <div className="grid grid-cols-2 gap-2 mt-2">
+              <div ref={withdrawPaymentSectionRef} className="grid grid-cols-2 gap-2 mt-2">
                 {withdrawalPaymentMethods.map(method => {
                   const Icon = getMethodIcon(method.type);
                   return (
@@ -894,7 +1028,10 @@ export default function WalletPage() {
                       key={method.id}
                       variant={withdrawPaymentMethod === method.id ? "default" : "outline"}
                       className="h-auto py-3 flex-col"
-                      onClick={() => setWithdrawPaymentMethod(method.id)}
+                      onClick={() => {
+                        setWithdrawPaymentMethod(method.id);
+                        queueFocus(withdrawConfirmButtonRef.current);
+                      }}
                     >
                       <Icon className="h-5 w-5 mb-1" />
                       <span className="text-xs">{method.name}</span>
@@ -904,10 +1041,12 @@ export default function WalletPage() {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowWithdraw(false)}>{t('common.cancel')}</Button>
+          <DialogFooter className="sticky bottom-0 z-10 px-4 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5 pt-3 border-t bg-background">
+            <Button className="w-full sm:w-auto min-h-11" variant="outline" onClick={() => setShowWithdraw(false)}>{t('common.cancel')}</Button>
             <Button
-              onClick={() => withdrawMutation.mutate({ amount: parseFloat(withdrawAmount), paymentMethodId: withdrawPaymentMethod })}
+              ref={withdrawConfirmButtonRef}
+              className="w-full sm:w-auto min-h-11"
+              onClick={handleWithdrawSubmit}
               disabled={!withdrawAmount || !withdrawPaymentMethod || withdrawMutation.isPending || parseFloat(withdrawAmount) > availableWalletBalance}
               data-testid="button-confirm-withdraw"
             >
@@ -920,7 +1059,7 @@ export default function WalletPage() {
 
       {currencySettings?.isActive && (
         <Dialog open={showConvert} onOpenChange={setShowConvert}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Coins className="h-5 w-5 text-primary" />
@@ -949,13 +1088,21 @@ export default function WalletPage() {
               <div>
                 <Label>Amount ({walletCurrencyCode})</Label>
                 <Input
+                  ref={convertAmountInputRef}
                   type="number"
                   step="0.01"
                   min={convertMinWalletAmount > 0 ? convertMinWalletAmount : undefined}
                   max={convertMaxWalletAmount > 0 ? convertMaxWalletAmount : undefined}
                   value={convertAmount}
                   onChange={(e) => setConvertAmount(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    queueFocus(convertConfirmButtonRef.current);
+                  }}
                   placeholder={`Min: ${walletCurrencySymbol}${convertMinWalletAmount.toFixed(2)} ${walletCurrencyCode}`}
+                  inputMode="decimal"
+                  enterKeyHint="done"
                   className="mt-2"
                   data-testid="input-convert-amount"
                 />
@@ -999,10 +1146,12 @@ export default function WalletPage() {
                 </div>
               )}
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowConvert(false)}>{t('common.cancel')}</Button>
+            <DialogFooter className="sticky bottom-0 z-10 px-4 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5 pt-3 border-t bg-background">
+              <Button className="w-full sm:w-auto min-h-11" variant="outline" onClick={() => setShowConvert(false)}>{t('common.cancel')}</Button>
               <Button
-                onClick={() => convertMutation.mutate({ amount: convertAmount })}
+                ref={convertConfirmButtonRef}
+                className="w-full sm:w-auto min-h-11"
+                onClick={handleConvertSubmit}
                 disabled={
                   !convertAmount ||
                   parseFloat(convertAmount) <= 0 ||

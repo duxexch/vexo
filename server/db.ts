@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
+import { logger } from "./lib/logger";
 
 const { Pool } = pg;
 
@@ -38,13 +39,13 @@ export const pool = new Pool(poolConfig);
 
 // Handle pool errors gracefully
 pool.on("error", (err) => {
-  console.error("[DB POOL ERROR]", err.message);
+  logger.error("[DB POOL ERROR]", err);
   // Don't exit - let the pool recover
 });
 
 pool.on("connect", () => {
   if (!isProduction) {
-    console.log("[DB] New client connected to pool");
+    logger.debug("[DB] New client connected to pool");
   }
 });
 
@@ -52,7 +53,7 @@ export const db = drizzle(pool, { schema });
 
 // Graceful shutdown helper
 export async function closePool(): Promise<void> {
-  console.log("[DB] Closing connection pool...");
+  logger.info("[DB] Closing connection pool...");
   await pool.end();
-  console.log("[DB] Connection pool closed");
+  logger.info("[DB] Connection pool closed");
 }

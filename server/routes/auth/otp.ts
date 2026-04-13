@@ -140,9 +140,13 @@ export function registerOtpRoutes(app: Express) {
         });
       }
 
-      // Log OTP only in explicit dev mode
+      // In dev mode, log metadata only (never the OTP secret itself).
       if (IS_DEV_MODE) {
-        console.log(`[OTP] Code for ${contactType} ${contactValue}: ${otpCode}`);
+        logger.info("[OTP] Verification code generated", {
+          userId,
+          contactType,
+          expiresInMinutes: otpExpiryMinutes,
+        });
       }
 
       // Deliver OTP via email or SMS

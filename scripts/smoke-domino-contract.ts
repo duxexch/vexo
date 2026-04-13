@@ -1,26 +1,9 @@
 #!/usr/bin/env tsx
 
 import { DominoEngine } from "../server/game-engines/domino/engine";
+import { createErrorHelpers } from "./lib/smoke-helpers";
 
-class SmokeError extends Error {
-    details?: unknown;
-
-    constructor(message: string, details?: unknown) {
-        super(message);
-        this.name = "SmokeError";
-        this.details = details;
-    }
-}
-
-function fail(message: string, details?: unknown): never {
-    throw new SmokeError(message, details);
-}
-
-function assertCondition(condition: unknown, message: string, details?: unknown): asserts condition {
-    if (!condition) {
-        fail(message, details);
-    }
-}
+const { fail, assertCondition } = createErrorHelpers("SmokeError");
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
     if (actual !== expected) {

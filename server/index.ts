@@ -122,6 +122,14 @@ const publicFileRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const uploadRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "Too many upload requests, please slow down" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const gameWss = setupGameWebSocket(httpServer);
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -287,6 +295,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     : ['http://localhost:3001', 'http://localhost:3000', 'http://127.0.0.1:3001'];
 
   const origin = req.headers.origin;
+  res.setHeader('Vary', 'Origin');
   if (origin && allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
@@ -561,7 +570,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
     });
 
     // General-purpose file upload endpoint (base64 → MinIO or disk)
-    app.post("/api/upload", async (req: Request, res: Response) => {
+    app.post("/api/upload", uploadRateLimiter, async (req: Request, res: Response) => {
       try {
         // Verify auth token for both user and admin upload paths.
         let authenticated = false;
@@ -681,7 +690,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
           fileSize: buffer.length,
         });
       } catch (error: unknown) {
-        console.error("[Upload] Error:", getErrorMessage(error));
+        logger.error("[Upload] Error", new Error(getErrorMessage(error)));
         res.status(500).json({ error: "Failed to upload file" });
       }
     });
@@ -709,7 +718,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         ip: req.ip,
         userAgent: req.get('user-agent'),
       };
-      console.error("[ERROR]", JSON.stringify(errorLog));
+      logger.error("[ERROR] Unhandled request error", undefined, errorLog);
 
       // Only send response if headers haven't been sent
       if (!res.headersSent) {
@@ -754,7 +763,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
               log("Redis connected successfully", "redis");
             }
           } catch (err: unknown) {
-            console.error("[Redis] Init warning:", err instanceof Error ? err.message : String(err));
+            logger.error("[Redis] Init warning", new Error(err instanceof Error ? err.message : String(err)));
           }
         }
 
@@ -776,7 +785,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         `);
           log("DB enum support_message verified", "db");
         } catch (err: unknown) {
-          console.error("[DB] Enum migration warning:", err instanceof Error ? err.message : String(err));
+          logger.error("[DB] Enum migration warning", new Error(err instanceof Error ? err.message : String(err)));
         }
 
         // Ensure support_messages has media columns
@@ -789,7 +798,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         `);
           log("DB support media columns verified", "db");
         } catch (err: unknown) {
-          console.error("[DB] Media columns migration warning:", err instanceof Error ? err.message : String(err));
+          logger.error("[DB] Media columns migration warning", new Error(err instanceof Error ? err.message : String(err)));
         }
 
         // Ensure transactions have a globally unique public reference for user-facing support and copy flows.
@@ -806,7 +815,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         `);
           log("DB transactions public references verified", "db");
         } catch (err: unknown) {
-          console.error("[DB] Transactions public reference migration warning:", err instanceof Error ? err.message : String(err));
+          logger.error("[DB] Transactions public reference migration warning", new Error(err instanceof Error ? err.message : String(err)));
         }
 
         // Ensure chat_messages has Telegram-grade feature columns
@@ -821,7 +830,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
         `);
           log("DB chat_messages Telegram columns verified", "db");
         } catch (err: unknown) {
-          console.error("[DB] Chat columns migration warning:", err instanceof Error ? err.message : String(err));
+          logger.error("[DB] Chat columns migration warning", new Error(err instanceof Error ? err.message : String(err)));
         }
 
         // Seed multiplayer games, gift catalog, and free play settings (runs on both dev and production)
@@ -852,8 +861,7 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
       },
     );
   } catch (error: unknown) {
-    console.error('[FATAL] Server startup failed:', getErrorMessage(error));
-    console.error(error instanceof Error ? error.stack : error);
+    logger.fatal('[FATAL] Server startup failed', error instanceof Error ? error : new Error(getErrorMessage(error)));
     process.exit(1);
   }
 })();
