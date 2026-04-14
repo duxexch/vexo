@@ -1,4 +1,4 @@
-# Mobile UI Page-by-Page Tracker
+ه# Mobile UI Page-by-Page Tracker
 
 Date: 2026-04-13
 Scope baseline: docs/MOBILE_UI_FULL_INVENTORY_2026-04-13.md
