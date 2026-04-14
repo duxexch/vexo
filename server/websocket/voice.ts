@@ -1,7 +1,7 @@
 import { WebSocket } from "ws";
 import { db } from "../db";
-import { challenges, gameMatches, liveGameSessions } from "@shared/schema";
-import { desc, eq } from "drizzle-orm";
+import { challenges, chatCallSessions, gameMatches, liveGameSessions } from "@shared/schema";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { redisRateLimit } from "../lib/redis";
 import type { AuthenticatedSocket } from "./shared";
@@ -213,9 +213,63 @@ function toUniqueParticipantIds(values: Array<string | null | undefined>): strin
 type VoiceAccessResolution = {
   participantIds: string[];
   userRole: "player" | "spectator";
+  roomKind: "match" | "challenge" | "private_call";
+  callSessionId?: string;
 };
 
+function parsePrivateCallRoomId(roomId: string): string | null {
+  if (!roomId.startsWith("private:")) {
+    return null;
+  }
+
+  const sessionId = roomId.slice("private:".length).trim();
+  return sessionId.length > 0 ? sessionId : null;
+}
+
+async function resolvePrivateCallAccess(roomId: string, userId: string): Promise<VoiceAccessResolution | null> {
+  const sessionId = parsePrivateCallRoomId(roomId);
+  if (!sessionId) {
+    return null;
+  }
+
+  const [session] = await db
+    .select({
+      id: chatCallSessions.id,
+      callerId: chatCallSessions.callerId,
+      receiverId: chatCallSessions.receiverId,
+      status: chatCallSessions.status,
+    })
+    .from(chatCallSessions)
+    .where(
+      and(
+        eq(chatCallSessions.id, sessionId),
+        eq(chatCallSessions.status, "active"),
+        or(
+          eq(chatCallSessions.callerId, userId),
+          eq(chatCallSessions.receiverId, userId),
+        ),
+      ),
+    )
+    .limit(1);
+
+  if (!session) {
+    return null;
+  }
+
+  return {
+    participantIds: toUniqueParticipantIds([session.callerId, session.receiverId]),
+    userRole: "player",
+    roomKind: "private_call",
+    callSessionId: session.id,
+  };
+}
+
 async function resolveVoiceAccess(roomId: string, userId: string): Promise<VoiceAccessResolution | null> {
+  const privateCallAccess = await resolvePrivateCallAccess(roomId, userId);
+  if (privateCallAccess) {
+    return privateCallAccess;
+  }
+
   const [match] = await db
     .select({
       player1Id: gameMatches.player1Id,
@@ -233,6 +287,7 @@ async function resolveVoiceAccess(roomId: string, userId: string): Promise<Voice
     return {
       participantIds,
       userRole: "player",
+      roomKind: "match",
     };
   }
 
@@ -287,6 +342,7 @@ async function resolveVoiceAccess(roomId: string, userId: string): Promise<Voice
     return {
       participantIds,
       userRole: "player",
+      roomKind: "challenge",
     };
   }
 
@@ -295,6 +351,7 @@ async function resolveVoiceAccess(roomId: string, userId: string): Promise<Voice
     return {
       participantIds,
       userRole: "spectator",
+      roomKind: "challenge",
     };
   }
 
@@ -375,6 +432,23 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
       }));
 
     voiceRooms.get(matchId)!.set(ws.userId, ws);
+
+    if (access.roomKind === "private_call" && access.callSessionId && room.size >= 2) {
+      await db
+        .update(chatCallSessions)
+        .set({
+          connectedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(chatCallSessions.id, access.callSessionId),
+            eq(chatCallSessions.status, "active"),
+            sql`${chatCallSessions.connectedAt} IS NULL`,
+          ),
+        );
+    }
+
     incrementVoiceTelemetryCounter("joinAccepted");
 
     logger.info("[VoiceWS] voice_join accepted", {

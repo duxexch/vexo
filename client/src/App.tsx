@@ -61,6 +61,7 @@ import { prefetchPage } from "@/components/PrefetchLink";
 import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { SupportChatWidget } from "@/components/support-chat-widget";
+import { PrivateCallLayerProvider } from "@/components/chat/private-call-layer";
 
 import NotFound from "@/pages/not-found";
 import AdminLayout from "@/pages/admin/admin-layout";
@@ -443,48 +444,50 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <NotificationProvider>
-      <SidebarProvider style={style as React.CSSProperties}>
-        <div className="flex h-screen w-full" dir={dir}>
-          <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[200] focus:p-3 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:m-2">
-            {t('nav.skipToContent') || 'Skip to content'}
-          </a>
-          <AppSidebar side={sidebarSide} />
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <header className="flex items-center justify-between gap-4 p-3 border-b bg-background sticky top-0 z-50">
-              <SidebarTrigger className="h-10 w-10" aria-label={t('nav.navigation') || 'Navigation'} data-testid="button-sidebar-toggle" />
-              <div className="flex items-center gap-3 flex-wrap">
-                <Link href="/wallet">
-                  <Button variant="outline" size="sm" className="gap-2" aria-label={t('nav.wallet') || 'Wallet'} data-testid="button-header-wallet">
-                    <Wallet className="h-4 w-4" />
-                    <span className="hidden sm:inline">{t('nav.wallet')}</span>
-                  </Button>
-                </Link>
-                <ThemeToggle />
-                <NotificationBell />
-                <LanguageSwitcher />
-              </div>
-            </header>
-            <main id="main-content" className="flex-1 overflow-auto pb-16 md:pb-0 animate-page-enter">
-              {children}
-            </main>
-            <BottomNavigation onChatToggle={toggleChat} isChatOpen={isChatOpen} />
-          </div>
-          {isChatOpen && (
-            <div className="fixed inset-0 z-[100] md:hidden" onClick={toggleChat}>
-              <div className="absolute inset-0 bg-black/50" />
-              <div
-                className="absolute bottom-16 start-0 end-0 h-[70vh] bg-background rounded-t-xl overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Suspense fallback={<PageLoader />}>
-                  <ChatPage />
-                </Suspense>
-              </div>
+      <PrivateCallLayerProvider>
+        <SidebarProvider style={style as React.CSSProperties}>
+          <div className="flex h-screen w-full" dir={dir}>
+            <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[200] focus:p-3 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:m-2">
+              {t('nav.skipToContent') || 'Skip to content'}
+            </a>
+            <AppSidebar side={sidebarSide} />
+            <div className="flex flex-col flex-1 overflow-hidden">
+              <header className="flex items-center justify-between gap-4 p-3 border-b bg-background sticky top-0 z-50">
+                <SidebarTrigger className="h-10 w-10" aria-label={t('nav.navigation') || 'Navigation'} data-testid="button-sidebar-toggle" />
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Link href="/wallet">
+                    <Button variant="outline" size="sm" className="gap-2" aria-label={t('nav.wallet') || 'Wallet'} data-testid="button-header-wallet">
+                      <Wallet className="h-4 w-4" />
+                      <span className="hidden sm:inline">{t('nav.wallet')}</span>
+                    </Button>
+                  </Link>
+                  <ThemeToggle />
+                  <NotificationBell />
+                  <LanguageSwitcher />
+                </div>
+              </header>
+              <main id="main-content" className="flex-1 overflow-auto pb-16 md:pb-0 animate-page-enter">
+                {children}
+              </main>
+              <BottomNavigation onChatToggle={toggleChat} isChatOpen={isChatOpen} />
             </div>
-          )}
-        </div>
-        <SupportChatWidget isLoggedIn={true} />
-      </SidebarProvider>
+            {isChatOpen && (
+              <div className="fixed inset-0 z-[100] md:hidden" onClick={toggleChat}>
+                <div className="absolute inset-0 bg-black/50" />
+                <div
+                  className="absolute bottom-16 start-0 end-0 h-[70vh] bg-background rounded-t-xl overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatPage />
+                  </Suspense>
+                </div>
+              </div>
+            )}
+          </div>
+          <SupportChatWidget isLoggedIn={true} />
+        </SidebarProvider>
+      </PrivateCallLayerProvider>
     </NotificationProvider>
   );
 }

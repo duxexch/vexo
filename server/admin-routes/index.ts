@@ -15,6 +15,7 @@ import { registerAdminChallengesRoutes } from "./admin-challenges";
 import { registerAdminChatMediaRoutes } from "./chat-media";
 import { registerAdminChatAutoDeleteRoutes } from "./chat-auto-delete";
 import { registerAdminChatPinRoutes } from "./chat-pin";
+import { registerAdminChatCallRoutes } from "./chat-calls";
 import { registerAdminAiAgentRoutes } from "./admin-ai-agent";
 import { registerAdminPaymentSecurityRoutes } from "./admin-payment-security";
 import { registerAdminGiftsRoutes } from "./admin-gifts";
@@ -44,6 +45,7 @@ export function registerAdminRoutes(app: Express) {
   registerAdminChatMediaRoutes(app);
   registerAdminChatAutoDeleteRoutes(app);
   registerAdminChatPinRoutes(app);
+  registerAdminChatCallRoutes(app);
   registerAdminAiAgentRoutes(app);
   registerAdminPaymentSecurityRoutes(app);
   registerAdminGiftsRoutes(app);

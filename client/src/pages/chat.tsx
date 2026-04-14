@@ -5,7 +5,9 @@ import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { useSoundEffects } from "@/hooks/use-sound-effects";
 import { useChatPin } from "@/hooks/use-chat-pin";
-import { useChatMedia, useChatAutoDelete } from "@/hooks/use-chat-features";
+import { useChatMedia, useChatAutoDelete, useChatCallPricing } from "@/hooks/use-chat-features";
+import { CHAT_CALL_QUEUED_START_PROCESSED_EVENT } from "@/lib/chat-call-ops-queue";
+import { usePrivateCallLayer } from "@/components/chat/private-call-layer";
 import { useMessageTranslation } from "@/hooks/use-message-translation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Send, Check, CheckCheck, Loader2, AlertCircle, Search, Timer, ArrowLeft, Shield, Lock, Paperclip, Reply, Trash2, Pencil, Smile, X, CornerDownRight, Mic, MicOff, ChevronDown, Languages, Palette } from "lucide-react";
+import { MessageCircle, Send, Check, CheckCheck, Loader2, AlertCircle, Search, Timer, ArrowLeft, Shield, Lock, Paperclip, Reply, Trash2, Pencil, Smile, X, CornerDownRight, Mic, MicOff, ChevronDown, Languages, Palette, Phone, Video, PhoneOff } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -89,6 +91,48 @@ function getInitials(user: { firstName?: string | null; lastName?: string | null
   return user.username?.substring(0, 2).toUpperCase() || "??";
 }
 
+const VOICE_MIME_CANDIDATES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/ogg;codecs=opus",
+  "audio/ogg",
+  "audio/mp4",
+];
+
+function normalizeMimeType(mimeType: string | null | undefined): string {
+  return (mimeType || "").split(";")[0].trim().toLowerCase();
+}
+
+function getPreferredVoiceMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") {
+    return undefined;
+  }
+
+  return VOICE_MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+}
+
+function getVoiceFileExtension(mimeType: string): string {
+  const normalized = normalizeMimeType(mimeType);
+  if (normalized === "audio/ogg") {
+    return "ogg";
+  }
+  if (normalized === "audio/mp4") {
+    return "m4a";
+  }
+  return "webm";
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const result = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string) || "");
+    reader.onerror = () => reject(reader.error || new Error("file_read_failed"));
+    reader.readAsDataURL(blob);
+  });
+
+  return result.split(",")[1] || result;
+}
+
 export default function ChatPage() {
   const { t } = useI18n();
   const { user, token } = useAuth();
@@ -103,8 +147,36 @@ export default function ChatPage() {
   } = useChat();
 
   const { isLocked, hasPinEnabled, unlock, setupPin, pinStatus, loading: pinLoading } = useChatPin();
-  const { hasMediaAccess, uploading, uploadProgress, uploadMedia, purchase: purchaseMedia } = useChatMedia();
-  const { hasAutoDelete, deleteAfterMinutes, purchase: purchaseAutoDelete, updateSettings } = useChatAutoDelete();
+  const {
+    hasMediaAccess,
+    uploading,
+    uploadProgress,
+    uploadMedia,
+    purchase: purchaseMedia,
+    price: mediaPrice,
+    userBalance: mediaWalletBalance,
+  } = useChatMedia();
+  const {
+    hasAutoDelete,
+    deleteAfterMinutes,
+    purchase: purchaseAutoDelete,
+    updateSettings,
+    price: autoDeletePrice,
+    userBalance: autoDeleteWalletBalance,
+  } = useChatAutoDelete();
+  const {
+    voicePricePerMinute,
+    videoPricePerMinute,
+    currencySymbol: callCurrencySymbol,
+    canStartVoiceCall,
+    canStartVideoCall,
+    activeSession: activeCallSession,
+    endingSession: endingCallSession,
+    startCallSession,
+    endCallSession,
+    refreshStatus: refreshCallStatus,
+  } = useChatCallPricing();
+  const { startOutgoingCall, endCurrentCall, activeSessionId } = usePrivateCallLayer();
   const {
     getDisplayText, getTranslatedText, hasTranslation, toggleTranslation, isTranslating: isTranslatingMsg,
     isShowingOriginal, autoTranslate, setAutoTranslate, translateMessage,
@@ -130,6 +202,9 @@ export default function ChatPage() {
   const [langSearchQuery, setLangSearchQuery] = useState("");
   const [directConversationUser, setDirectConversationUser] = useState<DirectConversationUser | null>(null);
   const [bubbleStyle, setBubbleStyle] = useState<BubbleStylePreset>(() => getSavedBubbleStyle());
+  const [composerError, setComposerError] = useState<string | null>(null);
+  const [isVoiceUploading, setIsVoiceUploading] = useState(false);
+  const [callTimerTick, setCallTimerTick] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -163,11 +238,74 @@ export default function ChatPage() {
     () => activeConversationPending.filter((item) => item.status === "pending").length,
     [activeConversationPending]
   );
+  const hasTypedMessage = messageInput.trim().length > 0;
   const activeUserProfile = activeUser || (
     activeConversation && preselectedConversationUserId && activeConversation === preselectedConversationUserId
       ? directConversationUser
       : null
   );
+  const activeConversationReceiver = useMemo(() => {
+    if (!activeUserProfile) {
+      return null;
+    }
+
+    return {
+      id: activeUserProfile.id,
+      username: activeUserProfile.username,
+      firstName: activeUserProfile.firstName,
+      lastName: activeUserProfile.lastName,
+      avatarUrl: activeUserProfile.avatarUrl,
+      accountId: activeUserProfile.accountId,
+    };
+  }, [activeUserProfile]);
+
+  const isCurrentConversationCallSession = useMemo(() => {
+    if (!activeConversation || !activeCallSession) {
+      return false;
+    }
+
+    return activeConversation === activeCallSession.callerId || activeConversation === activeCallSession.receiverId;
+  }, [activeCallSession, activeConversation]);
+
+  const canJoinRecoveredCall = useMemo(() => {
+    if (!isCurrentConversationCallSession || !activeCallSession?.id) {
+      return false;
+    }
+    return activeSessionId !== activeCallSession.id;
+  }, [activeCallSession?.id, activeSessionId, isCurrentConversationCallSession]);
+
+  const activeCallElapsedSeconds = useMemo(() => {
+    if (!activeCallSession?.startedAt) {
+      return 0;
+    }
+
+    const startedAtMs = new Date(activeCallSession.startedAt).getTime();
+    if (!Number.isFinite(startedAtMs)) {
+      return 0;
+    }
+
+    return Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000));
+  }, [activeCallSession, callTimerTick]);
+
+  const activeCallEstimatedMinutes = useMemo(() => {
+    if (!isCurrentConversationCallSession) {
+      return 0;
+    }
+    return Math.max(1, Math.ceil(activeCallElapsedSeconds / 60));
+  }, [activeCallElapsedSeconds, isCurrentConversationCallSession]);
+
+  const activeCallEstimatedCost = useMemo(() => {
+    if (!activeCallSession || !isCurrentConversationCallSession) {
+      return 0;
+    }
+    return Number((activeCallEstimatedMinutes * activeCallSession.ratePerMinute).toFixed(2));
+  }, [activeCallEstimatedMinutes, activeCallSession, isCurrentConversationCallSession]);
+
+  const formattedActiveCallElapsed = useMemo(() => {
+    const minutes = Math.floor(activeCallElapsedSeconds / 60);
+    const seconds = activeCallElapsedSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }, [activeCallElapsedSeconds]);
   const isActiveUserOnline = activeConversation ? onlineUsers.has(activeConversation) : false;
   const activeUserLastSeen = activeConversation ? lastSeenMap.get(activeConversation) : null;
 
@@ -264,6 +402,72 @@ export default function ChatPage() {
     window.localStorage.setItem(BUBBLE_STYLE_STORAGE_KEY, bubbleStyle);
   }, [bubbleStyle]);
 
+  useEffect(() => {
+    if (!activeCallSession?.id) {
+      setCallTimerTick(0);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setCallTimerTick((prev) => prev + 1);
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [activeCallSession?.id]);
+
+  useEffect(() => {
+    if (!activeConversation) {
+      return;
+    }
+    void refreshCallStatus();
+  }, [activeConversation, refreshCallStatus]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleQueuedStartProcessed = (event: Event) => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+
+      const detail = (event as CustomEvent<{
+        receiverId?: string;
+        session?: {
+          id: string;
+          callType: 'voice' | 'video';
+          callerId: string;
+          receiverId: string;
+          ratePerMinute: number;
+        };
+      }>).detail;
+
+      if (!detail?.session?.id || !detail.receiverId || !activeConversation || detail.receiverId !== activeConversation) {
+        return;
+      }
+
+      if (activeSessionId === detail.session.id) {
+        return;
+      }
+
+      void startOutgoingCall({
+        sessionId: detail.session.id,
+        peerUserId: detail.receiverId,
+        callType: detail.session.callType,
+        ratePerMinute: Number(detail.session.ratePerMinute || 0),
+        isCaller: detail.session.callerId === user?.id,
+      }).then(() => refreshCallStatus());
+    };
+
+    window.addEventListener(CHAT_CALL_QUEUED_START_PROCESSED_EVENT, handleQueuedStartProcessed as EventListener);
+    return () => {
+      window.removeEventListener(CHAT_CALL_QUEUED_START_PROCESSED_EVENT, handleQueuedStartProcessed as EventListener);
+    };
+  }, [activeConversation, activeSessionId, refreshCallStatus, startOutgoingCall, user?.id]);
+
   // Mark incoming messages as read when visible
   useEffect(() => {
     if (!activeConversation || !user) return;
@@ -335,10 +539,12 @@ export default function ChatPage() {
 
     if (!messageInput.trim()) return;
 
+    setComposerError(null);
     sendMessage(activeConversation, messageInput.trim(), "text", undefined, {
       isDisappearing: disappearingMode,
       disappearAfterRead: disappearingMode,
       replyToId: replyTo?.id,
+      receiverUser: activeConversationReceiver,
     });
     setMessageInput("");
     setReplyTo(null);
@@ -347,15 +553,91 @@ export default function ChatPage() {
 
   const handleMediaUpload = async (file: File) => {
     if (!activeConversation) return;
+    setComposerError(null);
     const result = await uploadMedia(file, activeConversation);
     if (result.success && result.url) {
       const isVideo = file.type.startsWith("video/");
       sendMessage(activeConversation, "", isVideo ? "video" : "image", result.url, {
         replyToId: replyTo?.id,
+        receiverUser: activeConversationReceiver,
       });
       setReplyTo(null);
+      return;
     }
+
+    setComposerError(result.error || t('support.uploadFailed'));
   };
+
+  const handleStartCallSession = useCallback(async (callType: 'voice' | 'video') => {
+    if (!activeConversation) {
+      return;
+    }
+
+    setComposerError(null);
+    const result = await startCallSession(activeConversation, callType);
+    if (!result.success) {
+      setComposerError(result.error || t('common.failed'));
+      return;
+    }
+
+    if (result.session?.id) {
+      await startOutgoingCall({
+        sessionId: result.session.id,
+        peerUserId: activeConversation,
+        callType,
+        ratePerMinute: Number(result.session.ratePerMinute || (callType === 'voice' ? voicePricePerMinute : videoPricePerMinute) || 0),
+      });
+    }
+
+    await refreshCallStatus();
+  }, [activeConversation, refreshCallStatus, startCallSession, startOutgoingCall, t, videoPricePerMinute, voicePricePerMinute]);
+
+  const handleEndCallSession = useCallback(async () => {
+    if (!activeCallSession?.id) {
+      return;
+    }
+
+    setComposerError(null);
+    let result: { success: boolean; error?: string };
+
+    try {
+      result = activeSessionId === activeCallSession.id
+        ? await (async () => {
+          await endCurrentCall();
+          return { success: true } as const;
+        })()
+        : await endCallSession(activeCallSession.id);
+    } catch {
+      result = { success: false, error: t('common.failed') };
+    }
+
+    if (!result.success) {
+      setComposerError(result.error || t('common.failed'));
+      return;
+    }
+
+    await refreshCallStatus();
+  }, [activeCallSession?.id, activeSessionId, endCallSession, endCurrentCall, refreshCallStatus, t]);
+
+  const handleJoinRecoveredCall = useCallback(async () => {
+    if (!activeConversation || !activeCallSession?.id) {
+      return;
+    }
+
+    setComposerError(null);
+    try {
+      await startOutgoingCall({
+        sessionId: activeCallSession.id,
+        peerUserId: activeConversation,
+        callType: activeCallSession.callType,
+        ratePerMinute: Number(activeCallSession.ratePerMinute || 0),
+        isCaller: activeCallSession.callerId === user?.id,
+      });
+      await refreshCallStatus();
+    } catch {
+      setComposerError(t('common.failed'));
+    }
+  }, [activeCallSession, activeConversation, refreshCallStatus, startOutgoingCall, t, user?.id]);
 
   const handleInputChange = (value: string) => {
     setMessageInput(value);
@@ -403,9 +685,22 @@ export default function ChatPage() {
 
   // Voice recording
   const startRecording = async () => {
+    if (!activeConversation) {
+      return;
+    }
+
+    const authToken = token || localStorage.getItem("pwm_token") || "";
+    const preferredMimeType = getPreferredVoiceMimeType();
+    const conversationId = activeConversation;
+    const replyToId = replyTo?.id;
+    const receiverUser = activeConversationReceiver;
+
     try {
+      setComposerError(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const mediaRecorder = preferredMimeType
+        ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -414,36 +709,52 @@ export default function ChatPage() {
       };
 
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const uploadMimeType = normalizeMimeType(mediaRecorder.mimeType || preferredMimeType || "audio/webm") || "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: uploadMimeType });
         stream.getTracks().forEach(t => t.stop());
 
-        if (audioBlob.size > 0 && activeConversation) {
-          // Convert to base64 and send
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64 = (reader.result as string).split(',')[1];
-            // Upload as media
-            fetch('/api/chat/media/upload', {
+        if (audioBlob.size > 0 && conversationId) {
+          setIsVoiceUploading(true);
+
+          try {
+            const base64 = await blobToBase64(audioBlob);
+            const response = await fetch('/api/chat/media/upload', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('pwm_token')}`,
+                'Authorization': `Bearer ${authToken}`,
               },
               body: JSON.stringify({
                 data: base64,
-                mimeType: 'audio/webm',
-                fileName: `voice_${Date.now()}.webm`,
+                mimeType: uploadMimeType,
+                fileName: `voice_${Date.now()}.${getVoiceFileExtension(uploadMimeType)}`,
               }),
-            }).then(r => r.json()).then(data => {
-              if (data.mediaUrl && activeConversation) {
-                sendMessage(activeConversation, "", "voice", data.mediaUrl);
-              }
-            }).catch(console.error);
-          };
-          reader.readAsDataURL(audioBlob);
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.mediaUrl) {
+              throw new Error(String(data.error || data.message || t('support.uploadFailed')));
+            }
+
+            sendMessage(conversationId, "", "voice", data.mediaUrl, {
+              replyToId,
+              receiverUser,
+            });
+            setReplyTo(null);
+          } catch (err) {
+            console.error("Failed to send voice message:", err);
+            setComposerError(
+              err instanceof Error && err.message
+                ? err.message
+                : t('support.uploadFailed')
+            );
+          } finally {
+            setIsVoiceUploading(false);
+          }
         }
 
         setRecordingTime(0);
+        audioChunksRef.current = [];
         if (recordingIntervalRef.current) clearInterval(recordingIntervalRef.current);
       };
 
@@ -455,6 +766,12 @@ export default function ChatPage() {
       }, 1000);
     } catch (err) {
       console.error("Failed to start recording:", err);
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        setComposerError(t('challenge.voiceMicPermissionNeeded'));
+        return;
+      }
+
+      setComposerError(t('common.failed'));
     }
   };
 
@@ -698,6 +1015,78 @@ export default function ChatPage() {
                   </TooltipTrigger>
                   <TooltipContent><p>{t('chat.searchInChat')}</p></TooltipContent>
                 </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 min-h-[44px] min-w-[44px]"
+                      disabled={!activeConversation || !!activeCallSession || !canStartVoiceCall}
+                      onClick={() => void handleStartCallSession('voice')}
+                    >
+                      <Phone className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{`${t('challenge.voiceStart')} • ${voicePricePerMinute} ${callCurrencySymbol}`}</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 min-h-[44px] min-w-[44px]"
+                      disabled={!activeConversation || !!activeCallSession || !canStartVideoCall}
+                      onClick={() => void handleStartCallSession('video')}
+                    >
+                      <Video className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{`${t('chat.video')} • ${videoPricePerMinute} ${callCurrencySymbol}`}</p>
+                  </TooltipContent>
+                </Tooltip>
+
+                {canJoinRecoveredCall && activeCallSession && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 min-h-[44px] min-w-[44px]"
+                        onClick={() => void handleJoinRecoveredCall()}
+                      >
+                        <Phone className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{t('common.accept')}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
+                {isCurrentConversationCallSession && activeCallSession && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 min-h-[44px] min-w-[44px] text-destructive"
+                        disabled={endingCallSession}
+                        onClick={() => void handleEndCallSession()}
+                      >
+                        {endingCallSession ? <Loader2 className="h-4 w-4 animate-spin" /> : <PhoneOff className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{t('common.cancel')}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px] min-w-[44px]" onClick={() => setShowPinSetup(true)}>
@@ -788,6 +1177,46 @@ export default function ChatPage() {
                 </DropdownMenu>
               </div>
             </div>
+
+            {isCurrentConversationCallSession && activeCallSession && (
+              <div className="border-b bg-primary/5 px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Badge variant="outline" className="h-6 gap-1 text-[10px]">
+                      {activeCallSession.callType === 'voice' ? <Phone className="h-3 w-3" /> : <Video className="h-3 w-3" />}
+                      {activeCallSession.callType === 'voice' ? t('challenge.voiceStart') : t('chat.video')}
+                    </Badge>
+                    <span className="font-mono text-primary">{formattedActiveCallElapsed}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span className="whitespace-nowrap">{`${activeCallSession.ratePerMinute} ${callCurrencySymbol}`}</span>
+                    <span className="font-medium text-foreground">{`~ ${activeCallEstimatedCost} ${callCurrencySymbol}`}</span>
+                    <span className="text-[10px]">({activeCallEstimatedMinutes})</span>
+                    {canJoinRecoveredCall && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => void handleJoinRecoveredCall()}
+                      >
+                        <Phone className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      disabled={endingCallSession}
+                      onClick={() => void handleEndCallSession()}
+                    >
+                      {endingCallSession ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PhoneOff className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ======= In-chat Search Bar ======= */}
             {showChatSearch && (
@@ -1115,10 +1544,16 @@ export default function ChatPage() {
 
             {/* ======= Input Area ======= */}
             <div className="p-3 sm:p-4 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              {activeConversationPendingCount > 0 && (
+              {(activeConversationPendingCount > 0 || isVoiceUploading) && (
                 <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   <span>{t("common.loading")}</span>
+                </div>
+              )}
+
+              {composerError && (
+                <div className="mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-xs text-destructive">
+                  {composerError}
                 </div>
               )}
 
@@ -1172,74 +1607,79 @@ export default function ChatPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="flex gap-1.5 sm:gap-2 items-end">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant={disappearingMode ? "default" : "ghost"} size="icon"
-                        onClick={() => setDisappearingMode(!disappearingMode)}
-                        className={cn("shrink-0 h-10 w-10", disappearingMode && "text-primary-foreground")}
-                        data-testid="button-toggle-disappearing"
-                      >
-                        <Timer className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{disappearingMode ? t("chat.disappearingModeOff") : t("chat.disappearingModeOn")}</p>
-                    </TooltipContent>
-                  </Tooltip>
-
-                  <MediaUploadButton
-                    hasAccess={hasMediaAccess}
-                    uploading={uploading}
-                    uploadProgress={uploadProgress}
-                    onUpload={handleMediaUpload}
-                    onPurchaseClick={() => setShowMediaPurchase(true)}
-                    disabled={!activeConversation}
-                  />
-
-                  <AutoDeleteToggle
-                    hasAccess={hasAutoDelete}
-                    isActive={hasAutoDelete}
-                    deleteAfterMinutes={deleteAfterMinutes}
-                    onToggle={() => { }}
-                    onPurchaseClick={() => setShowAutoDeletePurchase(true)}
-                    onSettingsClick={() => setShowAutoDeleteSettings(true)}
-                  />
-
-                  <Input
-                    ref={messageInputRef}
-                    value={messageInput}
-                    onChange={(e) => handleInputChange(e.target.value)}
-                    onKeyDown={handleKeyPress}
-                    placeholder={editingMsg ? t('chat.editMessagePlaceholder') : replyTo ? t('chat.replyPlaceholder') : t("chat.typeMessage")}
-                    className="flex-1 min-h-[44px] rounded-full px-4"
-                    data-testid="input-chat-message"
-                  />
-
-                  {messageInput.trim() || editingMsg ? (
-                    <Button
-                      onClick={handleSendMessage}
-                      disabled={!messageInput.trim() && !editingMsg}
-                      className="min-h-[44px] min-w-[44px] rounded-full"
-                      data-testid="button-send-message"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  ) : (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:overflow-visible sm:pb-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
-                          variant="ghost" size="icon"
-                          onClick={startRecording}
-                          className="min-h-[44px] min-w-[44px] rounded-full hover:bg-destructive/10 hover:text-destructive"
+                          variant={disappearingMode ? "default" : "ghost"} size="icon"
+                          onClick={() => setDisappearingMode(!disappearingMode)}
+                          className={cn("shrink-0 h-10 w-10", disappearingMode && "text-primary-foreground")}
+                          data-testid="button-toggle-disappearing"
                         >
-                          <Mic className="h-5 w-5" />
+                          <Timer className="h-4 w-4" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent><p>{t('chat.voiceMessage')}</p></TooltipContent>
+                      <TooltipContent>
+                        <p>{disappearingMode ? t("chat.disappearingModeOff") : t("chat.disappearingModeOn")}</p>
+                      </TooltipContent>
                     </Tooltip>
-                  )}
+
+                    <MediaUploadButton
+                      hasAccess={hasMediaAccess}
+                      uploading={uploading}
+                      uploadProgress={uploadProgress}
+                      onUpload={handleMediaUpload}
+                      onPurchaseClick={() => setShowMediaPurchase(true)}
+                      disabled={!activeConversation}
+                    />
+
+                    <AutoDeleteToggle
+                      hasAccess={hasAutoDelete}
+                      isActive={hasAutoDelete}
+                      deleteAfterMinutes={deleteAfterMinutes}
+                      onToggle={() => { }}
+                      onPurchaseClick={() => setShowAutoDeletePurchase(true)}
+                      onSettingsClick={() => setShowAutoDeleteSettings(true)}
+                    />
+                  </div>
+
+                  <div className="flex min-w-0 flex-1 items-end gap-1.5 sm:gap-2">
+                    <Input
+                      ref={messageInputRef}
+                      value={messageInput}
+                      onChange={(e) => handleInputChange(e.target.value)}
+                      onKeyDown={handleKeyPress}
+                      placeholder={editingMsg ? t('chat.editMessagePlaceholder') : replyTo ? t('chat.replyPlaceholder') : t("chat.typeMessage")}
+                      className="min-w-0 flex-1 min-h-[44px] rounded-full px-4"
+                      data-testid="input-chat-message"
+                    />
+
+                    {hasTypedMessage || editingMsg ? (
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={!hasTypedMessage && !editingMsg}
+                        className="min-h-[44px] min-w-[44px] rounded-full"
+                        data-testid="button-send-message"
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost" size="icon"
+                            onClick={startRecording}
+                            disabled={isVoiceUploading}
+                            className="min-h-[44px] min-w-[44px] rounded-full hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <Mic className="h-5 w-5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>{t('chat.voiceMessage')}</p></TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1251,11 +1691,15 @@ export default function ChatPage() {
       <PinSetupDialog open={showPinSetup} onOpenChange={setShowPinSetup} onSetup={setupPin} />
       <MediaPurchaseDialog
         open={showMediaPurchase} onOpenChange={setShowMediaPurchase}
-        onPurchase={purchaseMedia} userBalance={user?.balance ? Number(user.balance) : 0}
+        onPurchase={purchaseMedia}
+        price={mediaPrice}
+        userBalance={mediaWalletBalance}
       />
       <AutoDeletePurchaseDialog
         open={showAutoDeletePurchase} onOpenChange={setShowAutoDeletePurchase}
-        onPurchase={purchaseAutoDelete} userBalance={user?.balance ? Number(user.balance) : 0}
+        onPurchase={purchaseAutoDelete}
+        price={autoDeletePrice}
+        userBalance={autoDeleteWalletBalance}
       />
       <AutoDeleteSettingsDialog
         open={showAutoDeleteSettings} onOpenChange={setShowAutoDeleteSettings}

@@ -19,7 +19,7 @@ import {
   MessageCircle, BarChart3, Shield, Trash2, Search, Ban, X, Plus, Eye,
   MessageSquare, Users, Clock, AlertTriangle, Settings, Filter,
   Headphones, Send, RefreshCw, CheckCircle2, XCircle, Bot, ArrowLeft, Loader2,
-  Paperclip, FileText, Download, Image, Languages, ChevronDown,
+  Paperclip, FileText, Download, Image, Languages, ChevronDown, PhoneCall, Video,
 } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -1924,7 +1924,7 @@ export default function AdminChatPage() {
 
         {/* Features Tab - Media, Auto-Delete, PIN Management */}
         <TabsContent value="features" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {/* Media Management */}
             <Card className={DATA_CARD_CLASS}>
               <CardHeader>
@@ -1954,6 +1954,21 @@ export default function AdminChatPage() {
                   featureType="auto-delete"
                   toast={toast}
                 />
+              </CardContent>
+            </Card>
+
+            {/* Voice / Video Call Pricing */}
+            <Card className={DATA_CARD_CLASS}>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <PhoneCall className="h-4 w-4" />
+                  <Video className="h-4 w-4" />
+                  تسعير المكالمات
+                </CardTitle>
+                <CardDescription>تسعير الدقيقة للمكالمات الخاصة الصوتية والمرئية</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <AdminCallPricingSection toast={toast} />
               </CardContent>
             </Card>
 
@@ -2217,6 +2232,116 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
           </div>
         </ScrollArea>
       )}
+    </div>
+  );
+}
+
+function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
+  const [voicePrice, setVoicePrice] = useState("");
+  const [videoPrice, setVideoPrice] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const { data: stats, refetch, isFetching } = useQuery({
+    queryKey: ["admin-chat-calls-stats"],
+    queryFn: () => adminFetch("/api/admin/chat/calls/stats"),
+  });
+
+  const handleSave = async () => {
+    const payload: Record<string, number> = {};
+
+    if (voicePrice.trim()) {
+      const parsed = Number(voicePrice);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        toast({ title: "خطأ", description: "سعر الدقيقة الصوتية غير صالح", variant: "destructive" });
+        return;
+      }
+      payload.voicePricePerMinute = Number(parsed.toFixed(2));
+    }
+
+    if (videoPrice.trim()) {
+      const parsed = Number(videoPrice);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        toast({ title: "خطأ", description: "سعر الدقيقة المرئية غير صالح", variant: "destructive" });
+        return;
+      }
+      payload.videoPricePerMinute = Number(parsed.toFixed(2));
+    }
+
+    if (!Object.keys(payload).length) {
+      toast({ title: "تنبيه", description: "أدخل قيمة واحدة على الأقل" });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await adminFetch("/api/admin/chat/calls/pricing", {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      setVoicePrice("");
+      setVideoPrice("");
+      toast({ title: "تم تحديث تسعير المكالمات" });
+      refetch();
+    } catch (err: unknown) {
+      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-2 text-sm">
+        <div className="rounded-2xl bg-muted p-2 text-center">
+          <div className="text-lg font-bold">{stats?.voicePricePerMinute ?? 0}</div>
+          <div className="text-muted-foreground text-xs">سعر دقيقة الصوت</div>
+        </div>
+        <div className="rounded-2xl bg-muted p-2 text-center">
+          <div className="text-lg font-bold">{stats?.videoPricePerMinute ?? 0}</div>
+          <div className="text-muted-foreground text-xs">سعر دقيقة الفيديو</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-xl border border-slate-200/70 p-2 text-center dark:border-slate-800">
+          <div className="font-semibold">{stats?.totals?.voiceMinutes ?? 0}</div>
+          <div className="text-muted-foreground">دقائق صوت مفوترة</div>
+        </div>
+        <div className="rounded-xl border border-slate-200/70 p-2 text-center dark:border-slate-800">
+          <div className="font-semibold">{stats?.totals?.videoMinutes ?? 0}</div>
+          <div className="text-muted-foreground">دقائق فيديو مفوترة</div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="سعر دقيقة الصوت"
+          value={voicePrice}
+          onChange={(e) => setVoicePrice(e.target.value)}
+          className={INPUT_SURFACE_CLASS}
+        />
+        <Input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="سعر دقيقة الفيديو"
+          value={videoPrice}
+          onChange={(e) => setVideoPrice(e.target.value)}
+          className={INPUT_SURFACE_CLASS}
+        />
+      </div>
+
+      <Button
+        className={cn(BUTTON_3D_PRIMARY_CLASS, "w-full gap-1.5")}
+        disabled={saving || isFetching}
+        onClick={handleSave}
+      >
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+        تحديث الأسعار
+      </Button>
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import type { Express, Response } from "express";
 import { db } from "../../db";
-import { users, chatAutoDeletePermissions, chatMessages, transactions } from "@shared/schema";
+import { chatAutoDeletePermissions, chatMessages, projectCurrencyLedger, projectCurrencyWallets } from "@shared/schema";
 import { eq, and, lt, isNotNull, sql } from "drizzle-orm";
 import { deleteFile } from "../../lib/minio-client";
 import { logger } from "../../lib/logger";
 import type { AuthRequest } from "../middleware";
+import { storage } from "../../storage";
 import { getErrorMessage, getConfigNumber, getConfigValue, checkRateLimit, type AuthMiddleware } from "./helpers";
 
 /** Auto-delete permission routes — status, purchase, settings + cleanup cron */
@@ -22,8 +23,9 @@ export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddl
       const price = await getConfigNumber("chat_auto_delete_price", 50);
       const systemEnabled = await getConfigValue("chat_auto_delete_enabled", "true");
 
-      const [user] = await db.select({ balance: users.balance })
-        .from(users).where(eq(users.id, userId));
+      const currencySettings = await storage.getProjectCurrencySettings();
+      const wallet = await storage.getOrCreateProjectCurrencyWallet(userId);
+      const walletBalance = parseFloat(wallet.totalBalance || "0");
 
       const isEnabled = permission?.autoDeleteEnabled && !permission.revokedAt &&
         (!permission.expiresAt || permission.expiresAt > new Date());
@@ -33,8 +35,10 @@ export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddl
         systemEnabled: systemEnabled === "true",
         deleteAfterMinutes: permission?.deleteAfterMinutes || 60,
         price,
-        userBalance: parseFloat(user?.balance || "0"),
-        canAfford: parseFloat(user?.balance || "0") >= price,
+        userBalance: walletBalance,
+        canAfford: walletBalance >= price,
+        currencySymbol: currencySettings?.currencySymbol || "VEX",
+        currencyName: currencySettings?.currencyName || "VEX Coin",
         availableIntervals: [1, 5, 15, 30, 60, 1440],
         grantedBy: permission?.grantedBy,
         expiresAt: permission?.expiresAt,
@@ -68,29 +72,71 @@ export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddl
         return res.status(400).json({ error: "You already have auto-delete permission" });
       }
 
-      // SECURITY: Atomic purchase with transaction + row lock to prevent double-spend
-      await db.transaction(async (tx) => {
-        const [user] = await tx.select({ balance: users.balance })
-          .from(users).where(eq(users.id, userId)).for('update');
+      const currencySettings = await storage.getProjectCurrencySettings();
+      if (!currencySettings?.isActive) {
+        return res.status(400).json({ error: "Project currency is not enabled" });
+      }
 
-        const balBefore = parseFloat(user?.balance || "0");
-        if (balBefore < price) {
-          throw new Error("Insufficient balance");
+      let newBalance = 0;
+
+      // Atomic purchase with project currency wallet debit + permission grant
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`
+          INSERT INTO project_currency_wallets (user_id)
+          VALUES (${userId})
+          ON CONFLICT (user_id) DO NOTHING
+        `);
+
+        const [wallet] = await tx.select()
+          .from(projectCurrencyWallets)
+          .where(eq(projectCurrencyWallets.userId, userId))
+          .for('update');
+
+        if (!wallet) {
+          throw new Error("Project currency wallet not found");
         }
 
-        await tx.update(users)
-          .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) - ${price})::text` })
-          .where(eq(users.id, userId));
+        let earnedBalance = parseFloat(wallet.earnedBalance || "0");
+        let purchasedBalance = parseFloat(wallet.purchasedBalance || "0");
+        const totalBalance = earnedBalance + purchasedBalance;
+        if (totalBalance < price) {
+          throw new Error("Insufficient project currency balance");
+        }
 
-        await tx.insert(transactions).values({
+        let remaining = price;
+        if (earnedBalance >= remaining) {
+          earnedBalance -= remaining;
+          remaining = 0;
+        } else {
+          remaining -= earnedBalance;
+          earnedBalance = 0;
+          purchasedBalance -= remaining;
+        }
+
+        const balanceBefore = parseFloat(wallet.totalBalance || "0");
+        const balanceAfter = earnedBalance + purchasedBalance;
+        newBalance = balanceAfter;
+
+        await tx.update(projectCurrencyWallets)
+          .set({
+            earnedBalance: earnedBalance.toFixed(2),
+            purchasedBalance: purchasedBalance.toFixed(2),
+            totalBalance: balanceAfter.toFixed(2),
+            totalSpent: (parseFloat(wallet.totalSpent || "0") + price).toFixed(2),
+            updatedAt: new Date(),
+          })
+          .where(eq(projectCurrencyWallets.id, wallet.id));
+
+        await tx.insert(projectCurrencyLedger).values({
           userId,
-          type: "commission",
+          walletId: wallet.id,
+          type: "admin_adjustment",
           amount: (-price).toString(),
-          balanceBefore: balBefore.toString(),
-          balanceAfter: (balBefore - price).toString(),
-          status: "completed",
-          description: "شراء ميزة المسح التلقائي للرسائل",
-          referenceId: `chat_auto_delete_${userId}`,
+          balanceBefore: balanceBefore.toFixed(2),
+          balanceAfter: balanceAfter.toFixed(2),
+          referenceId: `chat_auto_delete_purchase:${userId}`,
+          referenceType: "chat_auto_delete_purchase",
+          description: "Purchased auto-delete permission for private chat",
         });
 
         if (existing) {
@@ -112,9 +158,19 @@ export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddl
         }
       });
 
-      res.json({ success: true, message: "Auto-delete permission purchased successfully" });
+      res.json({
+        success: true,
+        message: "Auto-delete permission purchased successfully",
+        newBalance,
+        currencySymbol: currencySettings.currencySymbol,
+        currencyName: currencySettings.currencyName,
+      });
     } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
+      const message = getErrorMessage(error);
+      if (message.includes("Insufficient")) {
+        return res.status(400).json({ error: message });
+      }
+      res.status(500).json({ error: message });
     }
   });
 

@@ -214,16 +214,48 @@ async function sendWebPushToUser(
     return;
   }
 
+  let metadataPayload: Record<string, unknown> = {};
+  if (notification.metadata) {
+    try {
+      const parsed = JSON.parse(notification.metadata);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        metadataPayload = parsed as Record<string, unknown>;
+      }
+    } catch {
+      metadataPayload = {};
+    }
+  }
+
+  const metadataEvent = typeof metadataPayload.event === "string" ? metadataPayload.event : "";
+  const isIncomingPrivateCall = metadataEvent === "private_call_invite";
+  const pushNotificationType = isIncomingPrivateCall ? "private_call_invite" : notification.type;
+  const pushTag = isIncomingPrivateCall && typeof metadataPayload.sessionId === "string"
+    ? `vex-call-${metadataPayload.sessionId}`
+    : `notification-${notification.id}`;
+
+  const actions = isIncomingPrivateCall
+    ? [
+      { action: "open_call", title: "Open Call" },
+      { action: "dismiss", title: "Dismiss" },
+    ]
+    : [{ action: "dismiss", title: "Dismiss" }];
+
   const payload = JSON.stringify({
     title: notification.title,
     body: notification.message,
     icon: "/icons/icon-192x192.png",
     badge: "/icons/icon-72x72.png",
-    tag: `notification-${notification.id}`,
+    tag: pushTag,
+    priority: notification.priority,
+    notificationType: pushNotificationType,
+    soundType: isIncomingPrivateCall ? "challenge" : notification.type,
+    actions,
     data: {
       url: notification.link || "/notifications",
       notificationId: notification.id,
-      type: notification.type,
+      type: pushNotificationType,
+      event: metadataEvent || undefined,
+      sessionId: typeof metadataPayload.sessionId === "string" ? metadataPayload.sessionId : undefined,
       createdAt: notification.createdAt,
     },
   });

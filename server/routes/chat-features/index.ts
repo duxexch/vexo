@@ -4,6 +4,7 @@ import { registerE2EERoutes } from "./e2ee";
 import { registerMediaRoutes } from "./media";
 import { registerAutoDeleteRoutes } from "./auto-delete";
 import { registerPinLockRoutes } from "./pin-lock";
+import { registerCallRoutes } from "./calls";
 
 export { isPinUnlocked } from "./pin-lock";
 
@@ -12,4 +13,5 @@ export function registerChatFeatureRoutes(app: Express, authMiddleware: AuthMidd
   registerMediaRoutes(app, authMiddleware);
   registerAutoDeleteRoutes(app, authMiddleware);
   registerPinLockRoutes(app, authMiddleware);
+  registerCallRoutes(app, authMiddleware);
 }

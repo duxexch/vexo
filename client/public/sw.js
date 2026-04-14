@@ -177,6 +177,9 @@ self.addEventListener('push', (event) => {
     chat: '/icons/vex-gaming-logo-192x192.png',
     challenge: '/icons/vex-gaming-logo-192x192.png',
     support: '/icons/vex-gaming-logo-192x192.png',
+    private_call_invite: '/icons/vex-gaming-logo-192x192.png',
+    private_call_ended: '/icons/vex-gaming-logo-192x192.png',
+    private_call_missed: '/icons/vex-gaming-logo-192x192.png',
   };
 
   // Map priority to vibration pattern
@@ -223,6 +226,9 @@ self.addEventListener('notificationclick', (event) => {
   const action = event.action;
 
   if (action === 'dismiss') return;
+  if (action && action !== 'open_call') {
+    return;
+  }
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {

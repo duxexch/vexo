@@ -187,6 +187,18 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
 
   // SECURITY: Limit attachmentUrl length
   const safeAttachmentUrl = attachmentUrl ? String(attachmentUrl).slice(0, 2048) : undefined;
+  if (isMediaMessage && !safeAttachmentUrl) {
+    if (dedupeKey) {
+      await getRedisClient().del(dedupeKey).catch(() => { });
+    }
+    ws.send(JSON.stringify({
+      type: "chat_error",
+      error: "Attachment is required for media messages",
+      code: "attachment_required",
+      clientMessageId,
+    }));
+    return;
+  }
 
   // Use cached block/mute lists instead of 2 DB queries per message
   const [senderLists, recipientLists] = await Promise.all([

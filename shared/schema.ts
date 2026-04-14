@@ -3949,3 +3949,68 @@ export const chatAutoDeletePermissions = pgTable("chat_auto_delete_permissions",
 export const chatAutoDeletePermissionsRelations = relations(chatAutoDeletePermissions, ({ one }) => ({
   user: one(users, { fields: [chatAutoDeletePermissions.userId], references: [users.id] }),
 }));
+
+// ==================== CHAT CALL SESSIONS ====================
+
+export const chatCallSessions = pgTable("chat_call_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  callerId: varchar("caller_id").notNull().references(() => users.id),
+  receiverId: varchar("receiver_id").notNull().references(() => users.id),
+  callType: text("call_type").notNull(), // voice | video
+  status: text("status").notNull().default("active"), // active | ended | cancelled
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  connectedAt: timestamp("connected_at"),
+  endedAt: timestamp("ended_at"),
+  endedBy: varchar("ended_by").references(() => users.id),
+  durationSeconds: integer("duration_seconds"),
+  billedMinutes: integer("billed_minutes").notNull().default(0),
+  ratePerMinute: decimal("rate_per_minute", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalCharged: decimal("total_charged", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  chargedFromWalletId: varchar("charged_from_wallet_id"),
+  ledgerEntryId: varchar("ledger_entry_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_chat_call_sessions_caller").on(table.callerId),
+  index("idx_chat_call_sessions_receiver").on(table.receiverId),
+  index("idx_chat_call_sessions_status").on(table.status),
+  index("idx_chat_call_sessions_started_at").on(table.startedAt),
+  check("chk_chat_call_type", sql`${table.callType} IN ('voice', 'video')`),
+  check("chk_chat_call_status", sql`${table.status} IN ('active', 'ended', 'cancelled')`),
+  check("chk_chat_call_billed_minutes_non_negative", sql`${table.billedMinutes} >= 0`),
+  check("chk_chat_call_total_charged_non_negative", sql`${table.totalCharged} >= 0`),
+  foreignKey({
+    name: "chat_call_sessions_wallet_fk",
+    columns: [table.chargedFromWalletId],
+    foreignColumns: [projectCurrencyWallets.id],
+  }),
+  foreignKey({
+    name: "chat_call_sessions_ledger_fk",
+    columns: [table.ledgerEntryId],
+    foreignColumns: [projectCurrencyLedger.id],
+  }),
+]);
+
+export const chatCallSessionsRelations = relations(chatCallSessions, ({ one }) => ({
+  caller: one(users, { fields: [chatCallSessions.callerId], references: [users.id] }),
+  receiver: one(users, { fields: [chatCallSessions.receiverId], references: [users.id] }),
+  endedByUser: one(users, { fields: [chatCallSessions.endedBy], references: [users.id] }),
+  chargedFromWallet: one(projectCurrencyWallets, {
+    fields: [chatCallSessions.chargedFromWalletId],
+    references: [projectCurrencyWallets.id],
+  }),
+  ledgerEntry: one(projectCurrencyLedger, {
+    fields: [chatCallSessions.ledgerEntryId],
+    references: [projectCurrencyLedger.id],
+  }),
+}));
+
+export const insertChatCallSessionSchema = createInsertSchema(chatCallSessions).omit({
+  id: true,
+  startedAt: true,
+  connectedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertChatCallSession = z.infer<typeof insertChatCallSessionSchema>;
+export type ChatCallSession = typeof chatCallSessions.$inferSelect;

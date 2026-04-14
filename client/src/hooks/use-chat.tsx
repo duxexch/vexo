@@ -22,6 +22,7 @@ interface PendingOutboundChatMessage {
   createdAt: number;
   attempts: number;
   lastAttemptAt: number;
+  receiverUser?: ChatConversationUserSnapshot | null;
 }
 
 interface OutgoingMessageStatusItem {
@@ -53,7 +54,7 @@ function buildOutgoingPreview(content: string, messageType: string): string {
   return "[message]";
 }
 
-interface ChatUser {
+export interface ChatConversationUserSnapshot {
   id: string;
   username: string;
   firstName: string | null;
@@ -66,7 +67,7 @@ interface ChatUser {
 
 interface Conversation {
   otherUserId: string;
-  otherUser: ChatUser;
+  otherUser: ChatConversationUserSnapshot;
   lastMessage: ChatMessage;
   unreadCount: number;
 }
@@ -89,6 +90,7 @@ interface SendMessageOptions {
   isDisappearing?: boolean;
   disappearAfterRead?: boolean;
   replyToId?: string;
+  receiverUser?: ChatConversationUserSnapshot | null;
 }
 
 interface UseChatReturn extends ChatState {
@@ -113,6 +115,19 @@ function sortConversationsByLastMessage(conversations: Conversation[]): Conversa
     const bTime = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
     return bTime - aTime;
   });
+}
+
+function buildConversationFromReceiver(
+  receiverId: string,
+  receiverUser: ChatConversationUserSnapshot,
+  lastMessage: ChatMessage
+): Conversation {
+  return {
+    otherUserId: receiverId,
+    otherUser: receiverUser,
+    lastMessage,
+    unreadCount: 0,
+  };
 }
 
 export function useChat(): UseChatReturn {
@@ -204,6 +219,98 @@ export function useChat(): UseChatReturn {
       pendingOutgoing: pendingSnapshot,
     }));
   }, []);
+
+  const sendMessageViaRestFallback = useCallback(
+    async (entry: PendingOutboundChatMessage, clientMessageId: string) => {
+      if (!token) {
+        pendingOutboundRef.current.set(clientMessageId, {
+          ...entry,
+          status: "failed",
+        });
+        syncPendingOutgoingState();
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/chat/${encodeURIComponent(entry.payload.receiverId)}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            content: entry.payload.content,
+            messageType: entry.payload.messageType,
+            attachmentUrl: entry.payload.attachmentUrl,
+          }),
+        });
+
+        const data = await response.json().catch(() => ({} as Record<string, unknown>));
+        if (!response.ok) {
+          const message = typeof data?.error === "string"
+            ? data.error
+            : typeof data?.message === "string"
+              ? data.message
+              : "Failed to send message";
+          throw new Error(message);
+        }
+
+        pendingOutboundRef.current.delete(clientMessageId);
+        syncPendingOutgoingState();
+
+        const sentMessage = data as ChatMessage;
+        let needsConversationRefresh = false;
+
+        setState((prev) => {
+          if (prev.messages.some((m) => m.id === sentMessage.id)) {
+            return prev;
+          }
+
+          const otherUserId = String(sentMessage.receiverId || entry.payload.receiverId || "");
+          const receiverSnapshot = entry.receiverUser ?? null;
+          const hasConversation = prev.conversations.some((conv) => conv.otherUserId === otherUserId);
+          if (!hasConversation && !receiverSnapshot) {
+            needsConversationRefresh = true;
+          }
+
+          const nextConversations = sortConversationsByLastMessage(
+            hasConversation
+              ? prev.conversations.map((conv) =>
+                conv.otherUserId === otherUserId
+                  ? { ...conv, lastMessage: sentMessage }
+                  : conv
+              )
+              : receiverSnapshot
+                ? [
+                  buildConversationFromReceiver(otherUserId, receiverSnapshot, sentMessage),
+                  ...prev.conversations,
+                ]
+                : prev.conversations
+          );
+
+          return {
+            ...prev,
+            messages: [...prev.messages, sentMessage],
+            conversations: nextConversations,
+          };
+        });
+
+        if (needsConversationRefresh) {
+          void fetchConversations();
+        }
+      } catch {
+        const pending = pendingOutboundRef.current.get(clientMessageId);
+        if (pending) {
+          pendingOutboundRef.current.set(clientMessageId, {
+            ...pending,
+            status: "failed",
+          });
+          syncPendingOutgoingState();
+        }
+      }
+    },
+    [fetchConversations, syncPendingOutgoingState, token]
+  );
 
   const flushPendingOutboundMessages = useCallback(() => {
     const now = Date.now();
@@ -353,6 +460,9 @@ export function useChat(): UseChatReturn {
             break;
 
           case "chat_message_sent":
+            const pendingEntry = typeof data?.clientMessageId === "string" && data.clientMessageId.trim().length > 0
+              ? pendingOutboundRef.current.get(data.clientMessageId.trim())
+              : undefined;
             if (typeof data?.clientMessageId === "string" && data.clientMessageId.trim().length > 0) {
               pendingOutboundRef.current.delete(data.clientMessageId.trim());
               syncPendingOutgoingState();
@@ -363,15 +473,24 @@ export function useChat(): UseChatReturn {
 
               const sentMessage = data.data;
               const otherUserId = String(sentMessage.receiverId || "");
-              if (!prev.conversations.some((conv) => conv.otherUserId === otherUserId)) {
+              const receiverSnapshot = pendingEntry?.receiverUser ?? null;
+              const hasConversation = prev.conversations.some((conv) => conv.otherUserId === otherUserId);
+              if (!hasConversation && !receiverSnapshot) {
                 needsConversationRefresh = true;
               }
               const nextConversations = sortConversationsByLastMessage(
-                prev.conversations.map((conv) =>
-                  conv.otherUserId === otherUserId
-                    ? { ...conv, lastMessage: sentMessage }
-                    : conv
-                )
+                hasConversation
+                  ? prev.conversations.map((conv) =>
+                    conv.otherUserId === otherUserId
+                      ? { ...conv, lastMessage: sentMessage }
+                      : conv
+                  )
+                  : receiverSnapshot
+                    ? [
+                      buildConversationFromReceiver(otherUserId, receiverSnapshot, sentMessage),
+                      ...prev.conversations,
+                    ]
+                    : prev.conversations
               );
 
               return {
@@ -603,6 +722,7 @@ export function useChat(): UseChatReturn {
         createdAt: now,
         attempts: 0,
         lastAttemptAt: 0,
+        receiverUser: options?.receiverUser ?? null,
       });
       syncPendingOutgoingState();
 
@@ -614,13 +734,17 @@ export function useChat(): UseChatReturn {
           createdAt: now,
           attempts: 1,
           lastAttemptAt: now,
+          receiverUser: options?.receiverUser ?? null,
         });
         syncPendingOutgoingState();
       } else {
-        connectWebSocket();
+        const pendingEntry = pendingOutboundRef.current.get(clientMessageId);
+        if (pendingEntry) {
+          void sendMessageViaRestFallback(pendingEntry, clientMessageId);
+        }
       }
     },
-    [connectWebSocket, sendChatPayload, syncPendingOutgoingState]
+    [sendChatPayload, sendMessageViaRestFallback, syncPendingOutgoingState]
   );
 
   const retryPendingMessage = useCallback(

@@ -28,6 +28,13 @@ export async function getConfigNumber(key: string, defaultValue: number): Promis
   return parseInt(val) || defaultValue;
 }
 
+/** Get a decimal system config value with fallback */
+export async function getConfigDecimal(key: string, defaultValue: number): Promise<number> {
+  const val = await getConfigValue(key, String(defaultValue));
+  const parsed = Number.parseFloat(val);
+  return Number.isFinite(parsed) ? parsed : defaultValue;
+}
+
 /** Rate limiter map and check function */
 const rateLimits = new Map<string, { count: number; resetAt: number }>();
 
@@ -53,9 +60,15 @@ export function checkRateLimit(key: string, maxCount: number, windowMs: number):
   return true;
 }
 
+export function normalizeMimeType(value: string): string {
+  return String(value || "").split(";")[0].trim().toLowerCase();
+}
+
 /** Validate file magic bytes match declared MIME type */
 export function validateMagicBytes(buffer: Buffer, mimeType: string): boolean {
   if (buffer.length < 4) return false;
+
+  const normalizedMimeType = normalizeMimeType(mimeType);
 
   const checks: Record<string, (b: Buffer) => boolean> = {
     'image/jpeg': (b) => b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF,
@@ -67,8 +80,14 @@ export function validateMagicBytes(buffer: Buffer, mimeType: string): boolean {
       (b[0] === 0x00 && b[1] === 0x00 && b[2] === 0x00)
     ),
     'video/webm': (b) => b[0] === 0x1A && b[1] === 0x45 && b[2] === 0xDF && b[3] === 0xA3,
+    'audio/webm': (b) => b[0] === 0x1A && b[1] === 0x45 && b[2] === 0xDF && b[3] === 0xA3,
+    'audio/ogg': (b) => b[0] === 0x4F && b[1] === 0x67 && b[2] === 0x67 && b[3] === 0x53,
+    'audio/mp4': (b) => b.length > 7 && (
+      (b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) ||
+      (b[0] === 0x00 && b[1] === 0x00 && b[2] === 0x00)
+    ),
   };
 
-  const checker = checks[mimeType];
+  const checker = checks[normalizedMimeType];
   return checker ? checker(buffer) : false;
 }

@@ -40,6 +40,7 @@ export function registerChatMessagingRoutes(app: Express): void {
       const senderId = req.user!.id;
       const receiverId = req.params.userId;
       const { content, messageType = "text", attachmentUrl } = req.body;
+      const isMediaMessage = messageType && messageType !== "text";
 
       // SECURITY: Validate receiverId
       if (!receiverId || receiverId.length > 100) {
@@ -67,13 +68,13 @@ export function registerChatMessagingRoutes(app: Express): void {
         return res.status(403).json({ error: "Chat is currently disabled" });
       }
 
-      if (!content || typeof content !== 'string' || content.trim() === "") {
+      if (!isMediaMessage && (!content || typeof content !== 'string')) {
         return res.status(400).json({ error: "Message content is required" });
       }
 
       // SECURITY: Normalize incoming user text into safe plain text
-      const sanitizedContent = sanitizePlainText(content, { maxLength: 2000 });
-      if (!sanitizedContent) {
+      const sanitizedContent = content ? sanitizePlainText(content, { maxLength: 2000 }) : "";
+      if (!sanitizedContent && !isMediaMessage) {
         return res.status(400).json({ error: "Message content is required" });
       }
 
@@ -94,6 +95,9 @@ export function registerChatMessagingRoutes(app: Express): void {
 
       // SECURITY: Limit attachmentUrl
       const safeAttachmentUrl = attachmentUrl ? String(attachmentUrl).slice(0, 2048) : undefined;
+      if (isMediaMessage && !safeAttachmentUrl) {
+        return res.status(400).json({ error: "Attachment is required for media messages" });
+      }
 
       const [message] = await db.insert(chatMessages).values({
         senderId,

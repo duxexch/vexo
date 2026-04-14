@@ -181,6 +181,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     const safeLink = normalizeSafeNotificationLink(notification.link);
     const metadata = getNotificationMetadata(notification);
     const metadataEvent = typeof metadata?.event === "string" ? metadata.event : null;
+    const metadataSessionId = typeof metadata?.sessionId === "string" ? metadata.sessionId : null;
+    const isPrivateCallInvite = metadataEvent === "private_call_invite";
     const chatSenderId = typeof metadata?.senderId === "string" ? metadata.senderId : null;
     const urlParams = new URLSearchParams(window.location.search);
     const openChatUser = urlParams.get("user");
@@ -205,14 +207,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     // Show professional popup notification (VexNotificationPopup)
     window.dispatchEvent(new CustomEvent("vex-show-popup", {
       detail: {
-        type: notification.type || "system",
+        type: isPrivateCallInvite ? "challenge" : (notification.type || "system"),
         priority: notification.priority || "normal",
         title: notification.title,
         titleAr,
         message: notification.message,
         messageAr,
         link: safeLink || undefined,
-        duration: notification.priority === "urgent" ? 10000 : notification.priority === "high" ? 7000 : 5000,
+        duration: isPrivateCallInvite ? 15000 : (notification.priority === "urgent" ? 10000 : notification.priority === "high" ? 7000 : 5000),
       },
     }));
 
@@ -228,16 +230,24 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               body: message,
               icon: '/icons/vex-gaming-logo-192x192.png',
               badge: '/icons/vex-gaming-logo-96x96.png',
-              tag: `vex-${notification.type}-${notification.id}`,
-              renotify: true,
-              requireInteraction: notification.priority === 'urgent',
+              tag: isPrivateCallInvite && metadataSessionId
+                ? `vex-private-call-${metadataSessionId}`
+                : `vex-${notification.type}-${notification.id}`,
+              renotify: !!isPrivateCallInvite,
+              requireInteraction: isPrivateCallInvite || notification.priority === 'urgent',
               vibrate: notification.priority === 'urgent' ? [200, 80, 200, 80, 200] :
                 notification.priority === 'high' ? [200, 100, 200] : [150, 80, 150],
               data: {
                 url: safeLink || '/',
-                notificationType: notification.type,
-                soundType: notification.type,
+                notificationType: isPrivateCallInvite ? 'private_call_invite' : notification.type,
+                soundType: isPrivateCallInvite ? 'challenge' : notification.type,
               },
+              actions: isPrivateCallInvite
+                ? [
+                  { action: 'open_call', title: languageRef.current === 'ar' ? 'فتح المكالمة' : 'Open call' },
+                  { action: 'dismiss', title: languageRef.current === 'ar' ? 'إغلاق' : 'Dismiss' },
+                ]
+                : [{ action: 'dismiss', title: languageRef.current === 'ar' ? 'إغلاق' : 'Dismiss' }],
               dir: languageRef.current === 'ar' ? 'rtl' : 'ltr',
               lang: languageRef.current || 'en',
               silent: false,
@@ -250,7 +260,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             body: message,
             icon: '/icons/vex-gaming-logo-192x192.png',
             tag: `vex-${notification.id}`,
-            requireInteraction: notification.priority === 'urgent',
+            requireInteraction: isPrivateCallInvite || notification.priority === 'urgent',
           });
           browserNotif.onclick = () => {
             window.focus();
