@@ -98,10 +98,10 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: false,
     // Themed splash & navigation bars
     useLegacyBridge: false,
-    // App Links verification for trusted installs
+    // Keep this aligned with android/app/signing.properties so update builds always use the same certificate.
     buildOptions: {
-      keystorePath: 'vex-release-key.jks',
-      keystoreAlias: 'vex',
+      keystorePath: 'android/keystore/vex-release-official.jks',
+      keystoreAlias: 'vex_release_official',
     },
   },
 };

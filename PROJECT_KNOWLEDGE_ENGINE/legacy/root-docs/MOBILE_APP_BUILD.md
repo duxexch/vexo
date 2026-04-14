@@ -89,27 +89,29 @@ npx cap sync
 
 ### 5.1 إنشاء مفتاح التوقيع (مرة واحدة فقط):
 
+إذا كان التطبيق لديه نسخة مثبتة بالفعل عند المستخدمين أو تم رفعه سابقاً، **لا تنشئ مفتاحاً جديداً**. يجب استخدام نفس مفتاح التوقيع في كل تحديث، وإلا سيرفض Android التحديث فوق النسخة الحالية وسيجبر المستخدم على حذف التطبيق أولاً.
+
 ```bash
 keytool -genkey -v \
-  -keystore vex-release-key.jks \
+    -keystore android/keystore/vex-release-official.jks \
   -keyalg RSA \
   -keysize 2048 \
   -validity 10000 \
-  -alias vex \
+    -alias vex_release_official \
   -storepass YOUR_STORE_PASSWORD \
   -keypass YOUR_KEY_PASSWORD \
   -dname "CN=VEX Platform, OU=Mobile, O=VEX, L=Riyadh, ST=Riyadh, C=SA"
 ```
 
-> **مهم جداً**: احفظ ملف `vex-release-key.jks` وكلمات المرور في مكان آمن. لو ضاع المفتاح مش هتقدر تحدث التطبيق على Google Play.
+> **مهم جداً**: احفظ ملف `android/keystore/vex-release-official.jks` وكلمات المرور في مكان آمن. لو ضاع المفتاح مش هتقدر تحدث التطبيق على Google Play أو فوق النسخ المثبتة حالياً.
 
 ### 5.2 إعداد Gradle للتوقيع:
 
 أنشئ ملف `android/app/signing.properties`:
 ```properties
-storeFile=../../vex-release-key.jks
+storeFile=../keystore/vex-release-official.jks
 storePassword=YOUR_STORE_PASSWORD
-keyAlias=vex
+keyAlias=vex_release_official
 keyPassword=YOUR_KEY_PASSWORD
 ```
 
@@ -192,20 +194,25 @@ android:usesCleartextTraffic="false"
 # فتح Android Studio
 npx cap open android
 
-# أو من سطر الأوامر:
-cd android
-./gradlew bundleRelease
+# أو من جذر المشروع بأمر موحد يختار JDK متوافق تلقائياً:
+npm run mobile:android:bundle
 
 # الملف في: android/app/build/outputs/bundle/release/app-release.aab
 ```
 
 ### APK للتوزيع المباشر:
 ```bash
-cd android
-./gradlew assembleRelease
+npm run mobile:android:assemble
 
 # الملف في: android/app/build/outputs/apk/release/app-release.apk
 ```
+
+### تنظيف Build Android بنفس بيئة Java الصحيحة:
+```bash
+npm run mobile:android:clean
+```
+
+> أوامر `mobile:android:*` تضبط `JAVA_HOME` تلقائياً على JDK 21 متوافق قبل تشغيل Gradle، حتى لا يعود خطأ `Unsupported class file major version 69` أثناء البناء المحلي.
 
 ---
 
@@ -229,7 +236,7 @@ cd android
 
 ### الحصول على SHA256 fingerprint:
 ```bash
-keytool -list -v -keystore vex-release-key.jks -alias vex | grep SHA256
+keytool -list -v -keystore android/keystore/vex-release-official.jks -alias vex_release_official | grep SHA256
 ```
 
 ---
@@ -356,7 +363,7 @@ npx cap open ios
 ```bash
 npm run build
 npx cap sync
-cd android && ./gradlew bundleRelease
+npm run mobile:android:bundle
 ```
 
 ---
@@ -365,7 +372,8 @@ cd android && ./gradlew bundleRelease
 
 ```bash
 npx cap doctor                                    # فحص حالة Capacitor
-cd android && ./gradlew clean && ./gradlew bundleRelease  # تنظيف وإعادة بناء
+npm run mobile:android:clean
+npm run mobile:android:bundle                    # تنظيف وإعادة بناء
 npx cap update                                     # تحديث plugins
 ```
 
@@ -381,12 +389,12 @@ npx cap update                                     # تحديث plugins
 | `client/public/icons/` | أيقونات التطبيق |
 | `android/` | مشروع Android Studio |
 | `ios/` | مشروع Xcode |
-| `vex-release-key.jks` | مفتاح التوقيع (لا ترفعه لـ Git!) |
+| `android/keystore/vex-release-official.jks` | مفتاح التوقيع (لا ترفعه لـ Git!) |
 
 ---
 
 ## ملاحظات أمان
 
-1. **لا ترفع** `vex-release-key.jks` أو `signing.properties` على Git
+1. **لا ترفع** `android/keystore/vex-release-official.jks` أو `signing.properties` على Git
 2. `webContentsDebuggingEnabled: false` في الإنتاج (معطل بالفعل)
 3. احفظ نسخة احتياطية من مفتاح التوقيع في مكان آمن
