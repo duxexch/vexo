@@ -15,6 +15,7 @@ import { broadcastSystemEvent, challengeGameRooms } from "../websocket";
 import { logger } from "../lib/logger";
 import { runAdaptiveAiHealthCheck } from "../lib/adaptive-ai";
 import { sendAiAgentLearningEvent } from "../lib/ai-agent-client";
+import { startMarketerCommissionScheduler } from "../lib/marketer-commission-scheduler";
 import { getGameEngine } from "../game-engines";
 import type { MoveData } from "../game-engines/types";
 import { settleChallengePayout, settleDrawPayout } from "../lib/payout";
@@ -272,6 +273,9 @@ function selectTarneebTimeoutAutoMove(validMoves: MoveData[]): MoveData | null {
 }
 
 export function startSchedulers(): void {
+  // ==================== MARKETER COMMISSION SCHEDULER ====================
+  startMarketerCommissionScheduler();
+
   // ==================== SCHEDULED CONFIG CHANGES SCHEDULER ====================
   const SCHEDULER_INTERVAL = 5 * 60 * 1000; // 5 minutes (was 30s — too frequent)
 

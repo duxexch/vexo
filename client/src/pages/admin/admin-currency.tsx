@@ -9,13 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { ProjectCurrencyAmount, ProjectCurrencySymbol } from "@/components/ProjectCurrencySymbol";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import {
-  Coins, Settings2, TrendingUp, Users, Clock, Check, X, AlertCircle,
+  Coins, Settings2, TrendingUp, Users, Clock, Check, X,
   RefreshCw, DollarSign, ArrowRightLeft, History, Loader2
 } from "lucide-react";
 import { format } from "date-fns";
@@ -91,6 +91,31 @@ interface DepositFxCurrenciesResponse {
   operationalCurrencies: string[];
   missingRateCurrencies: string[];
   balanceCurrency: string;
+}
+
+const SURFACE_CARD_CLASS = "rounded-[24px] border border-slate-200/80 bg-gradient-to-b from-white via-slate-50 to-slate-100/70 shadow-[0_14px_40px_-24px_rgba(15,23,42,0.55)] dark:border-slate-800/80 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950";
+const STAT_CARD_CLASS = `${SURFACE_CARD_CLASS} overflow-hidden`;
+const BUTTON_3D_CLASS = "rounded-xl border border-slate-300/80 bg-gradient-to-b from-white to-slate-100 text-slate-900 shadow-[0_8px_0_0_rgba(148,163,184,0.5)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(148,163,184,0.45)] hover:brightness-105 dark:border-slate-700 dark:from-slate-800 dark:to-slate-900 dark:text-slate-100 dark:shadow-[0_8px_0_0_rgba(15,23,42,0.82)]";
+const BUTTON_3D_PRIMARY_CLASS = "rounded-xl border border-sky-600 bg-gradient-to-b from-sky-400 via-sky-500 to-sky-700 text-white shadow-[0_8px_0_0_rgba(3,105,161,0.58)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(3,105,161,0.52)] hover:brightness-105";
+const BUTTON_3D_DANGER_CLASS = "rounded-xl border border-red-700 bg-gradient-to-b from-red-500 via-red-600 to-red-800 text-white shadow-[0_8px_0_0_rgba(127,29,29,0.58)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(127,29,29,0.52)] hover:brightness-105";
+const INPUT_SURFACE_CLASS = "min-h-[46px] rounded-xl border-slate-200/80 bg-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_10px_24px_-20px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-900";
+const TEXTAREA_SURFACE_CLASS = "min-h-[120px] rounded-xl border-slate-200/80 bg-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_10px_24px_-20px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-900";
+const TAB_LIST_CLASS = "inline-flex w-max min-w-full rounded-[26px] border border-slate-200/80 bg-white/90 p-1.5 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-950/80 md:w-auto";
+const TAB_TRIGGER_CLASS = "min-h-[44px] rounded-[18px] px-4 py-2 text-sm font-semibold data-[state=active]:bg-gradient-to-b data-[state=active]:from-sky-400 data-[state=active]:to-sky-700 data-[state=active]:text-white data-[state=active]:shadow-[0_6px_0_0_rgba(3,105,161,0.5)]";
+const DIALOG_SURFACE_CLASS = "max-w-[calc(100vw-1rem)] sm:max-w-2xl rounded-[28px] border border-slate-200/80 bg-gradient-to-b from-white via-slate-50 to-slate-100 p-0 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.55)] dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950";
+const SETTING_ROW_CLASS = "flex items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white/70 p-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60";
+const SECTION_PANEL_CLASS = "rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-[0_12px_28px_-22px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60";
+const DATA_CARD_CLASS = "rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-[0_12px_28px_-22px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60";
+const TABLE_WRAP_CLASS = "hidden md:block overflow-x-auto rounded-[24px] border border-slate-200/80 bg-white/70 shadow-[0_14px_40px_-24px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-950/60";
+
+function getConversionStatusVariant(status: Conversion["status"]): "default" | "secondary" | "destructive" {
+  if (status === "completed") return "default";
+  if (status === "rejected") return "destructive";
+  return "secondary";
+}
+
+function formatUsd(value: string | number | null | undefined): string {
+  return `$${parseFloat(String(value ?? 0)).toFixed(2)}`;
 }
 
 export default function AdminCurrencyPage() {
@@ -323,6 +348,12 @@ export default function AdminCurrencyPage() {
   };
 
   const pendingConversions = conversions?.filter(c => c.status === "pending") || [];
+  const selectedConversion = conversions?.find((conversion) => conversion.id === selectedConversionId) ?? null;
+  const surfaceCardClass = SURFACE_CARD_CLASS;
+  const statCardClass = STAT_CARD_CLASS;
+  const button3dClass = BUTTON_3D_CLASS;
+  const button3dPrimaryClass = BUTTON_3D_PRIMARY_CLASS;
+  const button3dDangerClass = BUTTON_3D_DANGER_CLASS;
 
   if (settingsLoading) {
     return (
@@ -333,10 +364,10 @@ export default function AdminCurrencyPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 space-y-5 md:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
             <Coins className="h-6 w-6 text-primary" />
             Project Currency Management
           </h1>
@@ -347,6 +378,7 @@ export default function AdminCurrencyPage() {
         <Button
           variant="outline"
           size="sm"
+          className={button3dClass}
           onClick={() => {
             queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/settings"] });
             queryClient.invalidateQueries({ queryKey: ["/api/admin/project-currency/conversions"] });
@@ -361,8 +393,8 @@ export default function AdminCurrencyPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <Card className={statCardClass}>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-sm font-medium">Total Wallets</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -375,7 +407,7 @@ export default function AdminCurrencyPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={statCardClass}>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-sm font-medium">USD Converted</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -388,7 +420,7 @@ export default function AdminCurrencyPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={statCardClass}>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-sm font-medium">Total Converted</CardTitle>
             <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
@@ -401,7 +433,7 @@ export default function AdminCurrencyPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-green-500/30 bg-green-500/5">
+        <Card className={`${statCardClass} border-green-500/30 bg-green-500/5 dark:border-green-500/20`}>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-sm font-medium text-green-600">Total Commissions</CardTitle>
             <DollarSign className="h-4 w-4 text-green-500" />
@@ -414,7 +446,7 @@ export default function AdminCurrencyPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={statCardClass}>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-sm font-medium">Pending Approvals</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
@@ -427,7 +459,7 @@ export default function AdminCurrencyPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={statCardClass}>
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-sm font-medium">In Circulation</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -442,30 +474,32 @@ export default function AdminCurrencyPage() {
       </div>
 
       <Tabs defaultValue="settings" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="settings" data-testid="tab-currency-settings">
-            <Settings2 className="h-4 w-4 me-2" />
-            Settings
-          </TabsTrigger>
-          <TabsTrigger value="pending" data-testid="tab-pending-conversions">
-            <Clock className="h-4 w-4 me-2" />
-            Pending ({pendingConversions.length})
-          </TabsTrigger>
-          <TabsTrigger value="history" data-testid="tab-conversion-history">
-            <History className="h-4 w-4 me-2" />
-            History
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-1">
+          <TabsList className={TAB_LIST_CLASS}>
+            <TabsTrigger className={TAB_TRIGGER_CLASS} value="settings" data-testid="tab-currency-settings">
+              <Settings2 className="h-4 w-4 me-2" />
+              Settings
+            </TabsTrigger>
+            <TabsTrigger className={TAB_TRIGGER_CLASS} value="pending" data-testid="tab-pending-conversions">
+              <Clock className="h-4 w-4 me-2" />
+              Pending ({pendingConversions.length})
+            </TabsTrigger>
+            <TabsTrigger className={TAB_TRIGGER_CLASS} value="history" data-testid="tab-conversion-history">
+              <History className="h-4 w-4 me-2" />
+              History
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="settings">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <Card className={surfaceCardClass}>
               <CardHeader>
                 <CardTitle>Currency Configuration</CardTitle>
                 <CardDescription>Basic currency settings and branding</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center justify-between gap-4">
+                <div className={SETTING_ROW_CLASS}>
                   <div>
                     <Label>Currency Active</Label>
                     <p className="text-xs text-muted-foreground">Enable/disable project currency</p>
@@ -481,6 +515,7 @@ export default function AdminCurrencyPage() {
                   <Label htmlFor="currencyName">Currency Name</Label>
                   <Input
                     id="currencyName"
+                    className={INPUT_SURFACE_CLASS}
                     defaultValue={settings?.currencyName || "VEX Coin"}
                     onBlur={(e) => handleSettingChange("currencyName", e.target.value)}
                     data-testid="input-currency-name"
@@ -491,6 +526,7 @@ export default function AdminCurrencyPage() {
                   <Label htmlFor="currencySymbol">Currency Symbol</Label>
                   <Input
                     id="currencySymbol"
+                    className={INPUT_SURFACE_CLASS}
                     defaultValue={settings?.currencySymbol || "v"}
                     onBlur={(e) => handleSettingChange("currencySymbol", e.target.value)}
                     data-testid="input-currency-symbol"
@@ -507,6 +543,7 @@ export default function AdminCurrencyPage() {
                     id="exchangeRate"
                     type="number"
                     step="0.01"
+                    className={INPUT_SURFACE_CLASS}
                     defaultValue={settings?.exchangeRate || "1.00"}
                     onBlur={(e) => handleSettingChange("exchangeRate", e.target.value)}
                     data-testid="input-exchange-rate"
@@ -519,7 +556,7 @@ export default function AdminCurrencyPage() {
                     value={settings?.approvalMode || "automatic"}
                     onValueChange={(value) => handleSettingChange("approvalMode", value)}
                   >
-                    <SelectTrigger data-testid="select-approval-mode">
+                    <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-approval-mode">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -537,7 +574,7 @@ export default function AdminCurrencyPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={surfaceCardClass}>
               <CardHeader>
                 <CardTitle>Conversion Limits</CardTitle>
                 <CardDescription>Set limits for currency conversions</CardDescription>
@@ -549,6 +586,7 @@ export default function AdminCurrencyPage() {
                     id="minConversion"
                     type="number"
                     step="0.01"
+                    className={INPUT_SURFACE_CLASS}
                     defaultValue={settings?.minConversionAmount || "1.00"}
                     onBlur={(e) => handleSettingChange("minConversionAmount", e.target.value)}
                     data-testid="input-min-conversion"
@@ -561,6 +599,7 @@ export default function AdminCurrencyPage() {
                     id="maxConversion"
                     type="number"
                     step="0.01"
+                    className={INPUT_SURFACE_CLASS}
                     defaultValue={settings?.maxConversionAmount || "10000.00"}
                     onBlur={(e) => handleSettingChange("maxConversionAmount", e.target.value)}
                     data-testid="input-max-conversion"
@@ -573,6 +612,7 @@ export default function AdminCurrencyPage() {
                     id="dailyUserLimit"
                     type="number"
                     step="0.01"
+                    className={INPUT_SURFACE_CLASS}
                     defaultValue={settings?.dailyConversionLimitPerUser || "5000.00"}
                     onBlur={(e) => handleSettingChange("dailyConversionLimitPerUser", e.target.value)}
                     data-testid="input-daily-user-limit"
@@ -585,6 +625,7 @@ export default function AdminCurrencyPage() {
                     id="dailyPlatformLimit"
                     type="number"
                     step="0.01"
+                    className={INPUT_SURFACE_CLASS}
                     defaultValue={settings?.dailyConversionLimitPlatform || "100000.00"}
                     onBlur={(e) => handleSettingChange("dailyConversionLimitPlatform", e.target.value)}
                     data-testid="input-daily-platform-limit"
@@ -600,6 +641,7 @@ export default function AdminCurrencyPage() {
                     id="commissionRate"
                     type="number"
                     step="0.001"
+                    className={INPUT_SURFACE_CLASS}
                     defaultValue={(parseFloat(settings?.conversionCommissionRate || "0") * 100).toFixed(1)}
                     onBlur={(e) => handleSettingChange("conversionCommissionRate", (parseFloat(e.target.value) / 100).toString())}
                     data-testid="input-commission-rate"
@@ -611,13 +653,13 @@ export default function AdminCurrencyPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={surfaceCardClass}>
               <CardHeader>
                 <CardTitle>Usage Settings</CardTitle>
                 <CardDescription>Configure where project currency can be used</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2 border rounded-lg p-3 bg-muted/30">
+                <div className={SECTION_PANEL_CLASS}>
                   <div>
                     <Label>Gameplay & Gifts Currency Mode</Label>
                     <p className="text-xs text-muted-foreground">
@@ -627,7 +669,7 @@ export default function AdminCurrencyPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <Button
                       type="button"
-                      variant="default"
+                      className={button3dPrimaryClass}
                       onClick={() => updatePlayGiftPolicyMutation.mutate()}
                       disabled={updatePlayGiftPolicyMutation.isPending}
                       data-testid="button-project-only-play-gifts"
@@ -637,6 +679,7 @@ export default function AdminCurrencyPage() {
                     <Button
                       type="button"
                       variant="outline"
+                      className={button3dClass}
                       disabled
                       data-testid="button-mixed-play-gifts-disabled"
                     >
@@ -648,7 +691,7 @@ export default function AdminCurrencyPage() {
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between gap-4">
+                <div className={SETTING_ROW_CLASS}>
                   <div>
                     <Label>Use in Games</Label>
                     <p className="text-xs text-muted-foreground">Allow using project currency for game entries</p>
@@ -661,7 +704,7 @@ export default function AdminCurrencyPage() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between gap-4">
+                <div className={SETTING_ROW_CLASS}>
                   <div>
                     <Label>Use in P2P Trading</Label>
                     <p className="text-xs text-muted-foreground">Allow using project currency in P2P trades</p>
@@ -674,7 +717,7 @@ export default function AdminCurrencyPage() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between gap-4">
+                <div className={SETTING_ROW_CLASS}>
                   <div>
                     <Label>Allow Earned Balance</Label>
                     <p className="text-xs text-muted-foreground">Users can earn currency through activities</p>
@@ -689,7 +732,7 @@ export default function AdminCurrencyPage() {
               </CardContent>
             </Card>
 
-            <Card className="lg:col-span-2">
+            <Card className={`${surfaceCardClass} xl:col-span-2`}>
               <CardHeader>
                 <CardTitle>Deposit FX Currencies</CardTitle>
                 <CardDescription>
@@ -702,23 +745,23 @@ export default function AdminCurrencyPage() {
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
                 ) : depositFxCurrencies?.currencies?.length ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Code</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Rate (1 USD = X)</TableHead>
-                        <TableHead>Active</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                  <>
+                    <div className="space-y-3 md:hidden">
                       {depositFxCurrencies.currencies.map((currency) => (
-                        <TableRow key={currency.code} data-testid={`row-deposit-fx-${currency.code}`}>
-                          <TableCell className="font-semibold">{currency.code}</TableCell>
-                          <TableCell>{currency.name}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
+                        <div key={currency.code} className={DATA_CARD_CLASS} data-testid={`row-deposit-fx-${currency.code}`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold">{currency.code}</p>
+                              <p className="text-sm text-muted-foreground">{currency.name}</p>
+                            </div>
+                            <Badge variant={currency.isOperational ? "default" : "destructive"}>
+                              {currency.isOperational ? "Operational" : "Unavailable"}
+                            </Badge>
+                          </div>
+
+                          <div className="mt-4 space-y-3">
+                            <div className="grid gap-2">
+                              <Label>Rate (1 USD = X)</Label>
                               <Input
                                 type="number"
                                 step="0.000001"
@@ -733,33 +776,93 @@ export default function AdminCurrencyPage() {
                                 onBlur={() => handleDepositRateBlur(currency.code)}
                                 disabled={updateDepositFxCurrencyMutation.isPending}
                                 data-testid={`input-deposit-fx-rate-${currency.code}`}
-                                className="w-40"
+                                className={INPUT_SURFACE_CLASS}
                               />
-                              <span className="text-xs text-muted-foreground">{currency.code}</span>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <Switch
-                              checked={currency.isActive}
-                              onCheckedChange={(checked) => {
-                                updateDepositFxCurrencyMutation.mutate({
-                                  code: currency.code,
-                                  isActive: checked,
-                                });
-                              }}
-                              disabled={updateDepositFxCurrencyMutation.isPending}
-                              data-testid={`switch-deposit-fx-active-${currency.code}`}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={currency.isOperational ? "default" : "destructive"}>
-                              {currency.isOperational ? "Operational" : "Unavailable"}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
+
+                            <div className={SETTING_ROW_CLASS}>
+                              <div>
+                                <Label>Active</Label>
+                                <p className="text-xs text-muted-foreground">{currency.code}</p>
+                              </div>
+                              <Switch
+                                checked={currency.isActive}
+                                onCheckedChange={(checked) => {
+                                  updateDepositFxCurrencyMutation.mutate({
+                                    code: currency.code,
+                                    isActive: checked,
+                                  });
+                                }}
+                                disabled={updateDepositFxCurrencyMutation.isPending}
+                                data-testid={`switch-deposit-fx-active-${currency.code}`}
+                              />
+                            </div>
+                          </div>
+                        </div>
                       ))}
-                    </TableBody>
-                  </Table>
+                    </div>
+
+                    <div className={TABLE_WRAP_CLASS}>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Code</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead>Rate (1 USD = X)</TableHead>
+                            <TableHead>Active</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {depositFxCurrencies.currencies.map((currency) => (
+                            <TableRow key={currency.code} data-testid={`row-deposit-fx-${currency.code}-desktop`}>
+                              <TableCell className="font-semibold">{currency.code}</TableCell>
+                              <TableCell>{currency.name}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    step="0.000001"
+                                    value={depositRateDrafts[currency.code] ?? ""}
+                                    onChange={(event) => {
+                                      const nextValue = event.target.value;
+                                      setDepositRateDrafts((prev) => ({
+                                        ...prev,
+                                        [currency.code]: nextValue,
+                                      }));
+                                    }}
+                                    onBlur={() => handleDepositRateBlur(currency.code)}
+                                    disabled={updateDepositFxCurrencyMutation.isPending}
+                                    data-testid={`input-deposit-fx-rate-${currency.code}-desktop`}
+                                    className={`${INPUT_SURFACE_CLASS} w-40`}
+                                  />
+                                  <span className="text-xs text-muted-foreground">{currency.code}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Switch
+                                  checked={currency.isActive}
+                                  onCheckedChange={(checked) => {
+                                    updateDepositFxCurrencyMutation.mutate({
+                                      code: currency.code,
+                                      isActive: checked,
+                                    });
+                                  }}
+                                  disabled={updateDepositFxCurrencyMutation.isPending}
+                                  data-testid={`switch-deposit-fx-active-${currency.code}-desktop`}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={currency.isOperational ? "default" : "destructive"}>
+                                  {currency.isOperational ? "Operational" : "Unavailable"}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
                 ) : (
                   <div className="text-sm text-muted-foreground">No deposit currencies configured.</div>
                 )}
@@ -769,7 +872,7 @@ export default function AdminCurrencyPage() {
         </TabsContent>
 
         <TabsContent value="pending">
-          <Card>
+          <Card className={surfaceCardClass}>
             <CardHeader>
               <CardTitle>Pending Conversions</CardTitle>
               <CardDescription>Review and approve/reject pending conversion requests</CardDescription>
@@ -781,76 +884,140 @@ export default function AdminCurrencyPage() {
                   <p>No pending conversions</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Base Amount</TableHead>
-                      <TableHead>
-                        <span className="inline-flex items-center gap-1">
-                          <span>Net</span>
-                          <ProjectCurrencySymbol className="text-xs" />
-                        </span>
-                      </TableHead>
-                      <TableHead>Commission</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  <div className="space-y-3 md:hidden">
                     {pendingConversions.map((conv) => (
-                      <TableRow key={conv.id} data-testid={`row-conversion-${conv.id}`}>
-                        <TableCell>
+                      <div key={conv.id} className={DATA_CARD_CLASS} data-testid={`row-conversion-${conv.id}`}>
+                        <div className="flex items-start justify-between gap-3">
                           <div>
                             <div className="font-medium">{conv.user?.displayName || conv.user?.username}</div>
                             <div className="text-xs text-muted-foreground">@{conv.user?.username}</div>
                           </div>
-                        </TableCell>
-                        <TableCell>${parseFloat(conv.baseCurrencyAmount).toFixed(2)}</TableCell>
-                        <TableCell className="font-medium text-primary">
-                          <ProjectCurrencyAmount amount={conv.netAmount} symbolClassName="text-sm" />
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          ${parseFloat(conv.commissionAmount).toFixed(2)}
-                        </TableCell>
-                        <TableCell>{format(new Date(conv.createdAt), "PPp")}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => approveMutation.mutate(conv.id)}
-                              disabled={approveMutation.isPending}
-                              data-testid={`button-approve-${conv.id}`}
-                            >
-                              <Check className="h-4 w-4 me-1" />
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => {
-                                setSelectedConversionId(conv.id);
-                                setRejectDialogOpen(true);
-                              }}
-                              disabled={rejectMutation.isPending}
-                              data-testid={`button-reject-${conv.id}`}
-                            >
-                              <X className="h-4 w-4 me-1" />
-                              Reject
-                            </Button>
+                          <Badge variant={getConversionStatusVariant(conv.status)}>{conv.status}</Badge>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div className={SECTION_PANEL_CLASS}>
+                            <p className="text-xs text-muted-foreground">Base Amount</p>
+                            <p className="mt-1 font-semibold">{formatUsd(conv.baseCurrencyAmount)}</p>
                           </div>
-                        </TableCell>
-                      </TableRow>
+                          <div className={SECTION_PANEL_CLASS}>
+                            <p className="text-xs text-muted-foreground inline-flex items-center gap-1">Net <ProjectCurrencySymbol className="text-xs" /></p>
+                            <div className="mt-1 font-semibold text-primary">
+                              <ProjectCurrencyAmount amount={conv.netAmount} symbolClassName="text-sm" />
+                            </div>
+                          </div>
+                          <div className={SECTION_PANEL_CLASS}>
+                            <p className="text-xs text-muted-foreground">Commission</p>
+                            <p className="mt-1 font-semibold">{formatUsd(conv.commissionAmount)}</p>
+                          </div>
+                          <div className={SECTION_PANEL_CLASS}>
+                            <p className="text-xs text-muted-foreground">Date</p>
+                            <p className="mt-1 font-semibold text-sm">{format(new Date(conv.createdAt), "PPp")}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                          <Button
+                            className={button3dPrimaryClass}
+                            onClick={() => approveMutation.mutate(conv.id)}
+                            disabled={approveMutation.isPending}
+                            data-testid={`button-approve-${conv.id}`}
+                          >
+                            <Check className="h-4 w-4 me-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            className={button3dDangerClass}
+                            onClick={() => {
+                              setSelectedConversionId(conv.id);
+                              setRejectDialogOpen(true);
+                            }}
+                            disabled={rejectMutation.isPending}
+                            data-testid={`button-reject-${conv.id}`}
+                          >
+                            <X className="h-4 w-4 me-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+
+                  <div className={TABLE_WRAP_CLASS}>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>User</TableHead>
+                          <TableHead>Base Amount</TableHead>
+                          <TableHead>
+                            <span className="inline-flex items-center gap-1">
+                              <span>Net</span>
+                              <ProjectCurrencySymbol className="text-xs" />
+                            </span>
+                          </TableHead>
+                          <TableHead>Commission</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {pendingConversions.map((conv) => (
+                          <TableRow key={conv.id} data-testid={`row-conversion-${conv.id}-desktop`}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{conv.user?.displayName || conv.user?.username}</div>
+                                <div className="text-xs text-muted-foreground">@{conv.user?.username}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{formatUsd(conv.baseCurrencyAmount)}</TableCell>
+                            <TableCell className="font-medium text-primary">
+                              <ProjectCurrencyAmount amount={conv.netAmount} symbolClassName="text-sm" />
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {formatUsd(conv.commissionAmount)}
+                            </TableCell>
+                            <TableCell>{format(new Date(conv.createdAt), "PPp")}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  className={button3dPrimaryClass}
+                                  onClick={() => approveMutation.mutate(conv.id)}
+                                  disabled={approveMutation.isPending}
+                                  data-testid={`button-approve-${conv.id}-desktop`}
+                                >
+                                  <Check className="h-4 w-4 me-1" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className={button3dDangerClass}
+                                  onClick={() => {
+                                    setSelectedConversionId(conv.id);
+                                    setRejectDialogOpen(true);
+                                  }}
+                                  disabled={rejectMutation.isPending}
+                                  data-testid={`button-reject-${conv.id}-desktop`}
+                                >
+                                  <X className="h-4 w-4 me-1" />
+                                  Reject
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="history">
-          <Card>
+          <Card className={surfaceCardClass}>
             <CardHeader>
               <CardTitle>Conversion History</CardTitle>
               <CardDescription>All conversion requests and their outcomes</CardDescription>
@@ -866,80 +1033,142 @@ export default function AdminCurrencyPage() {
                   <p>No conversion history</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Base Amount</TableHead>
-                      <TableHead>
-                        <span className="inline-flex items-center gap-1">
-                          <span>Net</span>
-                          <ProjectCurrencySymbol className="text-xs" />
-                        </span>
-                      </TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Reviewed By</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                <>
+                  <div className="space-y-3 md:hidden">
                     {conversions?.map((conv) => (
-                      <TableRow key={conv.id} data-testid={`row-history-${conv.id}`}>
-                        <TableCell>
+                      <div key={conv.id} className={DATA_CARD_CLASS} data-testid={`row-history-${conv.id}`}>
+                        <div className="flex items-start justify-between gap-3">
                           <div>
                             <div className="font-medium">{conv.user?.displayName || conv.user?.username}</div>
                             <div className="text-xs text-muted-foreground">@{conv.user?.username}</div>
                           </div>
-                        </TableCell>
-                        <TableCell>${parseFloat(conv.baseCurrencyAmount).toFixed(2)}</TableCell>
-                        <TableCell className="font-medium">
-                          <ProjectCurrencyAmount amount={conv.netAmount} symbolClassName="text-sm" />
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              conv.status === "completed" ? "default" :
-                                conv.status === "pending" ? "secondary" :
-                                  conv.status === "rejected" ? "destructive" :
-                                    "secondary"
-                            }
-                          >
-                            {conv.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{format(new Date(conv.createdAt), "PPp")}</TableCell>
-                        <TableCell>
-                          {conv.approver ? (
-                            <span className="text-muted-foreground">@{conv.approver.username}</span>
-                          ) : conv.status === "completed" ? (
-                            <span className="text-muted-foreground">Automatic</span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
+                          <Badge variant={getConversionStatusVariant(conv.status)}>{conv.status}</Badge>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div className={SECTION_PANEL_CLASS}>
+                            <p className="text-xs text-muted-foreground">Base Amount</p>
+                            <p className="mt-1 font-semibold">{formatUsd(conv.baseCurrencyAmount)}</p>
+                          </div>
+                          <div className={SECTION_PANEL_CLASS}>
+                            <p className="text-xs text-muted-foreground inline-flex items-center gap-1">Net <ProjectCurrencySymbol className="text-xs" /></p>
+                            <div className="mt-1 font-semibold">
+                              <ProjectCurrencyAmount amount={conv.netAmount} symbolClassName="text-sm" />
+                            </div>
+                          </div>
+                          <div className={SECTION_PANEL_CLASS}>
+                            <p className="text-xs text-muted-foreground">Date</p>
+                            <p className="mt-1 text-sm font-semibold">{format(new Date(conv.createdAt), "PPp")}</p>
+                          </div>
+                          <div className={SECTION_PANEL_CLASS}>
+                            <p className="text-xs text-muted-foreground">Reviewed By</p>
+                            <p className="mt-1 text-sm font-semibold">
+                              {conv.approver ? `@${conv.approver.username}` : conv.status === "completed" ? "Automatic" : "-"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+
+                  <div className={TABLE_WRAP_CLASS}>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>User</TableHead>
+                          <TableHead>Base Amount</TableHead>
+                          <TableHead>
+                            <span className="inline-flex items-center gap-1">
+                              <span>Net</span>
+                              <ProjectCurrencySymbol className="text-xs" />
+                            </span>
+                          </TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Reviewed By</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {conversions?.map((conv) => (
+                          <TableRow key={conv.id} data-testid={`row-history-${conv.id}-desktop`}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{conv.user?.displayName || conv.user?.username}</div>
+                                <div className="text-xs text-muted-foreground">@{conv.user?.username}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>{formatUsd(conv.baseCurrencyAmount)}</TableCell>
+                            <TableCell className="font-medium">
+                              <ProjectCurrencyAmount amount={conv.netAmount} symbolClassName="text-sm" />
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={getConversionStatusVariant(conv.status)}>
+                                {conv.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{format(new Date(conv.createdAt), "PPp")}</TableCell>
+                            <TableCell>
+                              {conv.approver ? (
+                                <span className="text-muted-foreground">@{conv.approver.username}</span>
+                              ) : conv.status === "completed" ? (
+                                <span className="text-muted-foreground">Automatic</span>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
-      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+      <Dialog open={rejectDialogOpen} onOpenChange={(open) => {
+        setRejectDialogOpen(open);
+        if (!open) {
+          setRejectReason("");
+          setSelectedConversionId(null);
+        }
+      }}>
+        <DialogContent className={DIALOG_SURFACE_CLASS}>
+          <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
             <DialogTitle>Reject Conversion</DialogTitle>
             <DialogDescription>
               The user's base currency balance will be refunded. Please provide a reason.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 px-6 py-5">
+            {selectedConversion ? (
+              <div className={SECTION_PANEL_CLASS}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">{selectedConversion.user?.displayName || selectedConversion.user?.username}</p>
+                    <p className="text-xs text-muted-foreground">@{selectedConversion.user?.username}</p>
+                  </div>
+                  <Badge variant={getConversionStatusVariant(selectedConversion.status)}>{selectedConversion.status}</Badge>
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Base Amount</p>
+                    <p className="font-semibold">{formatUsd(selectedConversion.baseCurrencyAmount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground inline-flex items-center gap-1">Net <ProjectCurrencySymbol className="text-xs" /></p>
+                    <div className="font-semibold"><ProjectCurrencyAmount amount={selectedConversion.netAmount} symbolClassName="text-sm" /></div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="grid gap-2">
               <Label htmlFor="rejectReason">Rejection Reason</Label>
               <Textarea
                 id="rejectReason"
+                className={TEXTAREA_SURFACE_CLASS}
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
                 placeholder="Enter reason for rejection..."
@@ -947,18 +1176,18 @@ export default function AdminCurrencyPage() {
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>
+          <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <Button variant="outline" className={button3dClass} onClick={() => setRejectDialogOpen(false)}>
               Cancel
             </Button>
             <Button
-              variant="destructive"
+              className={button3dDangerClass}
               onClick={() => {
                 if (selectedConversionId) {
                   rejectMutation.mutate({ id: selectedConversionId, reason: rejectReason });
                 }
               }}
-              disabled={rejectMutation.isPending}
+              disabled={rejectMutation.isPending || rejectReason.trim().length === 0}
               data-testid="button-confirm-reject"
             >
               {rejectMutation.isPending ? <Loader2 className="h-4 w-4 me-2 animate-spin" /> : null}

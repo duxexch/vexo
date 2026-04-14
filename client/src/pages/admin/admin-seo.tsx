@@ -88,6 +88,14 @@ const defaultSeoSettings: SeoSettings = {
   localeOverrides: {},
 };
 
+const SURFACE_CARD_CLASS = "rounded-[28px] border border-slate-200/70 bg-white/95 shadow-[0_18px_50px_-24px_rgba(15,23,42,0.35)] backdrop-blur dark:border-slate-800/70 dark:bg-slate-950/90";
+const STAT_CARD_CLASS = `${SURFACE_CARD_CLASS} overflow-hidden`;
+const DATA_CARD_CLASS = `${SURFACE_CARD_CLASS} overflow-hidden`;
+const BUTTON_3D_PRIMARY_CLASS = "rounded-2xl border border-sky-500 bg-sky-500 px-4 py-2 font-semibold text-white shadow-[0_8px_0_0_rgba(3,105,161,0.45)] transition-transform duration-150 hover:-translate-y-0.5 hover:bg-sky-400 active:translate-y-1 active:shadow-[0_3px_0_0_rgba(3,105,161,0.45)]";
+const INPUT_SURFACE_CLASS = "h-12 rounded-2xl border-slate-200 bg-white/90 shadow-none focus-visible:ring-2 focus-visible:ring-sky-200 dark:border-slate-700 dark:bg-slate-900/80 dark:focus-visible:ring-sky-900";
+const TEXTAREA_SURFACE_CLASS = "rounded-2xl border-slate-200 bg-white/90 shadow-none focus-visible:ring-2 focus-visible:ring-sky-200 dark:border-slate-700 dark:bg-slate-900/80 dark:focus-visible:ring-sky-900";
+const PREVIEW_PANEL_CLASS = "rounded-[24px] border border-slate-200/80 bg-slate-50/90 p-4 dark:border-slate-800 dark:bg-slate-900/60";
+
 export default function AdminSeoPage() {
   const { toast } = useToast();
   const { language } = useI18n();
@@ -108,6 +116,9 @@ export default function AdminSeoPage() {
   }, [seoData]);
 
   const coveredLanguageCount = languages.length;
+  const analyticsConfiguredCount = [settings.googleAnalyticsId, settings.facebookPixelId].filter(Boolean).length;
+  const socialLinksCount = [settings.twitterHandle, settings.facebookUrl, settings.instagramUrl].filter(Boolean).length;
+  const seoCoverageCount = [settings.siteTitle, settings.siteDescription, settings.canonicalUrl, settings.ogTitle, settings.ogDescription].filter(Boolean).length;
 
   const saveMutation = useMutation({
     mutationFn: async (data: Partial<SeoSettings>) => {
@@ -187,65 +198,127 @@ export default function AdminSeoPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6">
-        <div>
-          <Skeleton className="h-8 w-64 mb-2" />
-          <Skeleton className="h-4 w-96" />
+      <div className="space-y-5 p-3 sm:p-4 md:p-6">
+        <div className={`${SURFACE_CARD_CLASS} p-6`}>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="rounded-[24px] border border-slate-200/70 p-5 dark:border-slate-800">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="mt-4 h-4 w-full" />
+                <Skeleton className="mt-2 h-4 w-2/3" />
+              </div>
+            ))}
+          </div>
         </div>
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-96 w-full" />
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Search className="h-8 w-8" />
-          {isArabic ? "إدارة SEO" : "SEO Management"}
-        </h1>
-        <p className="text-muted-foreground">
-          {isArabic
-            ? "إدارة إعدادات محركات البحث والبيانات الوصفية"
-            : "Manage search engine optimization and metadata settings"}
-        </p>
-        <div className="mt-3 inline-flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-sm">
-          <Globe className="h-4 w-4 text-primary" />
-          <span>
-            {isArabic
-              ? `تغطية اللغات: ${coveredLanguageCount}/${coveredLanguageCount} (Fallback تلقائي مفعل لكل اللغات)`
-              : `Language coverage: ${coveredLanguageCount}/${coveredLanguageCount} (automatic fallback enabled for all languages)`}
-          </span>
+    <div className="space-y-5 p-3 sm:p-4 md:p-6">
+      <div className={`${SURFACE_CARD_CLASS} px-5 py-5 sm:px-6 sm:py-6`}>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-gradient-to-b from-sky-400 to-sky-700 text-white shadow-[0_10px_0_0_rgba(3,105,161,0.45)]">
+              <Search className="h-7 w-7" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl flex items-center gap-2">
+                {isArabic ? "إدارة SEO" : "SEO Management"}
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+                {isArabic
+                  ? "إدارة إعدادات محركات البحث والبيانات الوصفية"
+                  : "Manage search engine optimization and metadata settings"}
+              </p>
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-700 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-300">
+            <Globe className="h-4 w-4" />
+            <span>
+              {isArabic
+                ? `تغطية اللغات: ${coveredLanguageCount}/${coveredLanguageCount}`
+                : `Language coverage: ${coveredLanguageCount}/${coveredLanguageCount}`}
+            </span>
+          </div>
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="meta" className="flex items-center gap-2" data-testid="tab-meta">
-            <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">{isArabic ? "العلامات الوصفية" : "Meta Tags"}</span>
-          </TabsTrigger>
-          <TabsTrigger value="og" className="flex items-center gap-2" data-testid="tab-og">
-            <Share2 className="h-4 w-4" />
-            <span className="hidden sm:inline">{isArabic ? "Open Graph" : "Open Graph"}</span>
-          </TabsTrigger>
-          <TabsTrigger value="technical" className="flex items-center gap-2" data-testid="tab-technical">
-            <Code className="h-4 w-4" />
-            <span className="hidden sm:inline">{isArabic ? "تقني" : "Technical"}</span>
-          </TabsTrigger>
-          <TabsTrigger value="analytics" className="flex items-center gap-2" data-testid="tab-analytics">
-            <BarChart3 className="h-4 w-4" />
-            <span className="hidden sm:inline">{isArabic ? "التحليلات" : "Analytics"}</span>
-          </TabsTrigger>
-          <TabsTrigger value="jsonld" className="flex items-center gap-2" data-testid="tab-jsonld">
-            <Globe className="h-4 w-4" />
-            <span className="hidden sm:inline">{isArabic ? "البيانات المنظمة" : "Structured Data"}</span>
-          </TabsTrigger>
-        </TabsList>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-sky-100 p-3 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+              <Globe className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">{isArabic ? "اللغات" : "Languages"}</p>
+              <p className="mt-1 text-2xl font-bold">{coveredLanguageCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">{isArabic ? "حقول SEO المعبأة" : "SEO Fields Filled"}</p>
+              <p className="mt-1 text-2xl font-bold">{seoCoverageCount}/5</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-amber-100 p-3 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+              <BarChart3 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">{isArabic ? "تكاملات التحليل" : "Analytics Links"}</p>
+              <p className="mt-1 text-2xl font-bold">{analyticsConfiguredCount}/2</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-violet-100 p-3 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">
+              <Share2 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">{isArabic ? "روابط اجتماعية" : "Social Links"}</p>
+              <p className="mt-1 text-2xl font-bold">{socialLinksCount}/3</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
+        <div className={`${SURFACE_CARD_CLASS} p-3`}>
+          <TabsList className="grid w-full grid-cols-2 gap-2 rounded-[24px] bg-slate-100/80 p-1.5 md:grid-cols-5 dark:bg-slate-900/80">
+            <TabsTrigger value="meta" className="flex items-center gap-2" data-testid="tab-meta">
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">{isArabic ? "العلامات الوصفية" : "Meta Tags"}</span>
+            </TabsTrigger>
+            <TabsTrigger value="og" className="flex items-center gap-2" data-testid="tab-og">
+              <Share2 className="h-4 w-4" />
+              <span className="hidden sm:inline">{isArabic ? "Open Graph" : "Open Graph"}</span>
+            </TabsTrigger>
+            <TabsTrigger value="technical" className="flex items-center gap-2" data-testid="tab-technical">
+              <Code className="h-4 w-4" />
+              <span className="hidden sm:inline">{isArabic ? "تقني" : "Technical"}</span>
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2" data-testid="tab-analytics">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">{isArabic ? "التحليلات" : "Analytics"}</span>
+            </TabsTrigger>
+            <TabsTrigger value="jsonld" className="flex items-center gap-2" data-testid="tab-jsonld">
+              <Globe className="h-4 w-4" />
+              <span className="hidden sm:inline">{isArabic ? "البيانات المنظمة" : "Structured Data"}</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="meta" className="space-y-6">
-          <Card>
+          <Card className={SURFACE_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
@@ -265,6 +338,7 @@ export default function AdminSeoPage() {
                   value={settings.siteTitle}
                   onChange={(e) => updateSetting("siteTitle", e.target.value)}
                   placeholder={isArabic ? "اسم موقعك" : "Your Site Name"}
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-site-title"
                 />
                 <p className="text-xs text-muted-foreground">
@@ -280,6 +354,7 @@ export default function AdminSeoPage() {
                   onChange={(e) => updateSetting("siteDescription", e.target.value)}
                   placeholder={isArabic ? "وصف موجز لموقعك..." : "A brief description of your site..."}
                   rows={3}
+                  className={TEXTAREA_SURFACE_CLASS}
                   data-testid="input-site-description"
                 />
                 <p className="text-xs text-muted-foreground">
@@ -296,6 +371,7 @@ export default function AdminSeoPage() {
                   onChange={(e) => updateSetting("siteKeywords", e.target.value)}
                   placeholder={isArabic ? "كلمة1, كلمة2, كلمة3" : "keyword1, keyword2, keyword3"}
                   rows={2}
+                  className={TEXTAREA_SURFACE_CLASS}
                   data-testid="input-site-keywords"
                 />
                 <p className="text-xs text-muted-foreground">
@@ -305,6 +381,7 @@ export default function AdminSeoPage() {
 
               <div className="flex justify-end pt-4">
                 <Button
+                  className={BUTTON_3D_PRIMARY_CLASS}
                   onClick={() => handleSave("meta")}
                   disabled={saveMutation.isPending}
                   data-testid="button-save-meta"
@@ -320,7 +397,7 @@ export default function AdminSeoPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={SURFACE_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Eye className="h-5 w-5" />
@@ -328,7 +405,7 @@ export default function AdminSeoPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="p-4 bg-muted/30 rounded-lg space-y-1">
+              <div className={`${PREVIEW_PANEL_CLASS} space-y-1`}>
                 <p className="text-blue-500 text-lg hover:underline cursor-pointer">
                   {settings.siteTitle || (isArabic ? "عنوان موقعك" : "Your Site Title")}
                 </p>
@@ -344,7 +421,7 @@ export default function AdminSeoPage() {
         </TabsContent>
 
         <TabsContent value="og" className="space-y-6">
-          <Card>
+          <Card className={SURFACE_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Share2 className="h-5 w-5" />
@@ -364,6 +441,7 @@ export default function AdminSeoPage() {
                   value={settings.ogTitle}
                   onChange={(e) => updateSetting("ogTitle", e.target.value)}
                   placeholder={isArabic ? "عنوان للمشاركة الاجتماعية" : "Title for social sharing"}
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-og-title"
                 />
               </div>
@@ -376,6 +454,7 @@ export default function AdminSeoPage() {
                   onChange={(e) => updateSetting("ogDescription", e.target.value)}
                   placeholder={isArabic ? "وصف للمشاركة الاجتماعية..." : "Description for social sharing..."}
                   rows={3}
+                  className={TEXTAREA_SURFACE_CLASS}
                   data-testid="input-og-description"
                 />
               </div>
@@ -387,6 +466,7 @@ export default function AdminSeoPage() {
                   value={settings.ogImage}
                   onChange={(e) => updateSetting("ogImage", e.target.value)}
                   placeholder="https://yoursite.com/og-image.jpg"
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-og-image"
                 />
                 <p className="text-xs text-muted-foreground">
@@ -401,6 +481,7 @@ export default function AdminSeoPage() {
                   value={settings.ogType}
                   onChange={(e) => updateSetting("ogType", e.target.value)}
                   placeholder="website"
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-og-type"
                 />
                 <p className="text-xs text-muted-foreground">
@@ -410,6 +491,7 @@ export default function AdminSeoPage() {
 
               <div className="flex justify-end pt-4">
                 <Button
+                  className={BUTTON_3D_PRIMARY_CLASS}
                   onClick={() => handleSave("og")}
                   disabled={saveMutation.isPending}
                   data-testid="button-save-og"
@@ -425,7 +507,7 @@ export default function AdminSeoPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={SURFACE_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Eye className="h-5 w-5" />
@@ -433,8 +515,8 @@ export default function AdminSeoPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="border rounded-lg overflow-hidden max-w-md">
-                <div className="h-40 bg-muted flex items-center justify-center">
+              <div className={`${PREVIEW_PANEL_CLASS} max-w-md overflow-hidden p-0`}>
+                <div className="flex h-40 items-center justify-center bg-muted">
                   {settings.ogImage ? (
                     <img
                       src={settings.ogImage}
@@ -448,7 +530,7 @@ export default function AdminSeoPage() {
                     </span>
                   )}
                 </div>
-                <div className="p-3 space-y-1">
+                <div className="space-y-1 p-3">
                   <p className="font-semibold text-sm">
                     {settings.ogTitle || settings.siteTitle || (isArabic ? "عنوان OG" : "OG Title")}
                   </p>
@@ -465,7 +547,7 @@ export default function AdminSeoPage() {
         </TabsContent>
 
         <TabsContent value="technical" className="space-y-6">
-          <Card>
+          <Card className={SURFACE_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Link className="h-5 w-5" />
@@ -485,13 +567,14 @@ export default function AdminSeoPage() {
                   value={settings.canonicalUrl}
                   onChange={(e) => updateSetting("canonicalUrl", e.target.value)}
                   placeholder="https://yoursite.com"
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-canonical-url"
                 />
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={SURFACE_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
@@ -512,7 +595,7 @@ export default function AdminSeoPage() {
                   onChange={(e) => updateSetting("robotsContent", e.target.value)}
                   placeholder="index, follow"
                   rows={4}
-                  className="font-mono text-sm"
+                  className={`${TEXTAREA_SURFACE_CLASS} font-mono text-sm`}
                   data-testid="input-robots-content"
                 />
                 <p className="text-xs text-muted-foreground">
@@ -522,7 +605,7 @@ export default function AdminSeoPage() {
                 </p>
               </div>
 
-              <div className="p-3 bg-muted/30 rounded-lg">
+              <div className={PREVIEW_PANEL_CLASS}>
                 <p className="text-sm font-medium mb-2 flex items-center gap-2">
                   <AlertCircle className="h-4 w-4" />
                   {isArabic ? "قيم شائعة:" : "Common directives:"}
@@ -536,7 +619,7 @@ export default function AdminSeoPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={SURFACE_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Globe className="h-5 w-5" />
@@ -549,7 +632,7 @@ export default function AdminSeoPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+              <div className={`${PREVIEW_PANEL_CLASS} flex items-center justify-between`}>
                 <div>
                   <Label className="text-base">{isArabic ? "تفعيل خريطة الموقع" : "Enable Sitemap"}</Label>
                   <p className="text-sm text-muted-foreground">
@@ -567,6 +650,7 @@ export default function AdminSeoPage() {
 
               <div className="flex justify-end pt-4">
                 <Button
+                  className={BUTTON_3D_PRIMARY_CLASS}
                   onClick={() => handleSave("technical")}
                   disabled={saveMutation.isPending}
                   data-testid="button-save-technical"
@@ -584,7 +668,7 @@ export default function AdminSeoPage() {
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
-          <Card>
+          <Card className={SURFACE_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <SiGoogle className="h-5 w-5" />
@@ -604,6 +688,7 @@ export default function AdminSeoPage() {
                   value={settings.googleAnalyticsId}
                   onChange={(e) => updateSetting("googleAnalyticsId", e.target.value)}
                   placeholder="G-XXXXXXXXXX or UA-XXXXXXXX-X"
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-google-analytics-id"
                 />
                 <p className="text-xs text-muted-foreground">
@@ -615,7 +700,7 @@ export default function AdminSeoPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={SURFACE_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <SiFacebook className="h-5 w-5" />
@@ -635,13 +720,14 @@ export default function AdminSeoPage() {
                   value={settings.facebookPixelId}
                   onChange={(e) => updateSetting("facebookPixelId", e.target.value)}
                   placeholder="XXXXXXXXXXXXXXX"
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-facebook-pixel-id"
                 />
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={SURFACE_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Share2 className="h-5 w-5" />
@@ -664,6 +750,7 @@ export default function AdminSeoPage() {
                   value={settings.twitterHandle}
                   onChange={(e) => updateSetting("twitterHandle", e.target.value)}
                   placeholder="@yourusername"
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-twitter-handle"
                 />
               </div>
@@ -678,6 +765,7 @@ export default function AdminSeoPage() {
                   value={settings.facebookUrl}
                   onChange={(e) => updateSetting("facebookUrl", e.target.value)}
                   placeholder="https://facebook.com/yourpage"
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-facebook-url"
                 />
               </div>
@@ -692,12 +780,14 @@ export default function AdminSeoPage() {
                   value={settings.instagramUrl}
                   onChange={(e) => updateSetting("instagramUrl", e.target.value)}
                   placeholder="https://instagram.com/youraccount"
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-instagram-url"
                 />
               </div>
 
               <div className="flex justify-end pt-4">
                 <Button
+                  className={BUTTON_3D_PRIMARY_CLASS}
                   onClick={() => handleSave("analytics")}
                   disabled={saveMutation.isPending}
                   data-testid="button-save-analytics"
@@ -715,7 +805,7 @@ export default function AdminSeoPage() {
         </TabsContent>
 
         <TabsContent value="jsonld" className="space-y-6">
-          <Card>
+          <Card className={SURFACE_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Code className="h-5 w-5" />
@@ -728,7 +818,7 @@ export default function AdminSeoPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+              <div className={`${PREVIEW_PANEL_CLASS} flex items-center justify-between`}>
                 <div>
                   <Label className="text-base">{isArabic ? "تفعيل JSON-LD" : "Enable JSON-LD"}</Label>
                   <p className="text-sm text-muted-foreground">
@@ -751,6 +841,7 @@ export default function AdminSeoPage() {
                   value={settings.organizationName}
                   onChange={(e) => updateSetting("organizationName", e.target.value)}
                   placeholder={isArabic ? "اسم شركتك" : "Your Company Name"}
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-organization-name"
                 />
               </div>
@@ -762,12 +853,13 @@ export default function AdminSeoPage() {
                   value={settings.organizationLogo}
                   onChange={(e) => updateSetting("organizationLogo", e.target.value)}
                   placeholder="https://yoursite.com/logo.png"
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-organization-logo"
                 />
               </div>
 
               {settings.jsonLdEnabled && (
-                <Card className="bg-muted/30">
+                <Card className={DATA_CARD_CLASS}>
                   <CardHeader className="py-3">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <Eye className="h-4 w-4" />
@@ -775,7 +867,7 @@ export default function AdminSeoPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="py-3">
-                    <pre className="text-xs bg-background p-3 rounded overflow-x-auto">
+                    <pre className="overflow-x-auto rounded-2xl bg-background p-3 text-xs">
                       {JSON.stringify({
                         "@context": "https://schema.org",
                         "@type": "Organization",
@@ -795,6 +887,7 @@ export default function AdminSeoPage() {
 
               <div className="flex justify-end pt-4">
                 <Button
+                  className={BUTTON_3D_PRIMARY_CLASS}
                   onClick={() => handleSave("jsonld")}
                   disabled={saveMutation.isPending}
                   data-testid="button-save-jsonld"

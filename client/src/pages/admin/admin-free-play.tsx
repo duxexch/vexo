@@ -1263,126 +1263,132 @@ export default function AdminFreePlayPage() {
             </Card>
           )}
 
-          {!!selectedReferrerId && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Crown className="w-4 h-4 text-sky-500" /> Marketer Controls
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {marketerDetailsLoading ? (
-                  <div className="text-center text-muted-foreground py-4">Loading marketer details...</div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                      <div className="p-3 rounded border">
-                        <p className="text-xs text-muted-foreground">Status</p>
-                        <p className="text-xl font-bold capitalize">{marketerDetails?.affiliate?.marketerStatus || "pending"}</p>
-                      </div>
-                      <div className="p-3 rounded border">
-                        <p className="text-xs text-muted-foreground">Total</p>
-                        <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.total_amount || 0)}</p>
-                      </div>
-                      <div className="p-3 rounded border">
-                        <p className="text-xs text-muted-foreground">On Hold</p>
-                        <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.on_hold_amount || 0)}</p>
-                      </div>
-                      <div className="p-3 rounded border">
-                        <p className="text-xs text-muted-foreground">Released</p>
-                        <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.released_amount || 0)}</p>
-                      </div>
-                      <div className="p-3 rounded border">
-                        <p className="text-xs text-muted-foreground">RevShare</p>
-                        <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.revshare_amount || 0)}</p>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Crown className="w-4 h-4 text-sky-500" /> Marketer Controls
+              </CardTitle>
+              <CardDescription>
+                Controls are always visible. Select a referrer from Referral Leaderboard to apply badge/config actions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {marketerDetailsLoading ? (
+                <div className="text-center text-muted-foreground py-4">Loading marketer details...</div>
+              ) : (
+                <>
+                  {!selectedReferrerId && (
+                    <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                      Select a referrer first to load marketer details and enable action buttons.
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="p-3 rounded border">
+                      <p className="text-xs text-muted-foreground">Status</p>
+                      <p className="text-xl font-bold capitalize">{marketerDetails?.affiliate?.marketerStatus || "pending"}</p>
+                    </div>
+                    <div className="p-3 rounded border">
+                      <p className="text-xs text-muted-foreground">Total</p>
+                      <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.total_amount || 0)}</p>
+                    </div>
+                    <div className="p-3 rounded border">
+                      <p className="text-xs text-muted-foreground">On Hold</p>
+                      <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.on_hold_amount || 0)}</p>
+                    </div>
+                    <div className="p-3 rounded border">
+                      <p className="text-xs text-muted-foreground">Released</p>
+                      <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.released_amount || 0)}</p>
+                    </div>
+                    <div className="p-3 rounded border">
+                      <p className="text-xs text-muted-foreground">RevShare</p>
+                      <p className="text-xl font-bold">{formatProjectCoins(marketerDetails?.commissionStats?.revshare_amount || 0)}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>CPA Enabled</Label>
+                      <div className="flex items-center h-10 px-3 border rounded-md justify-between">
+                        <span className="text-sm">Active</span>
+                        <Switch checked={marketerCpaEnabled} onCheckedChange={setMarketerCpaEnabled} />
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                      <div className="space-y-1.5">
-                        <Label>CPA Enabled</Label>
-                        <div className="flex items-center h-10 px-3 border rounded-md justify-between">
-                          <span className="text-sm">Active</span>
-                          <Switch checked={marketerCpaEnabled} onCheckedChange={setMarketerCpaEnabled} />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>CPA Amount</Label>
-                        <Input value={marketerCpaAmount} onChange={(e) => setMarketerCpaAmount(e.target.value)} type="number" min="0" step="0.01" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>RevShare Enabled</Label>
-                        <div className="flex items-center h-10 px-3 border rounded-md justify-between">
-                          <span className="text-sm">Active</span>
-                          <Switch checked={marketerRevshareEnabled} onCheckedChange={setMarketerRevshareEnabled} />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>RevShare %</Label>
-                        <Input value={marketerRevshareRate} onChange={(e) => setMarketerRevshareRate(e.target.value)} type="number" min="0" max="100" step="0.01" />
+                    <div className="space-y-1.5">
+                      <Label>CPA Amount</Label>
+                      <Input value={marketerCpaAmount} onChange={(e) => setMarketerCpaAmount(e.target.value)} type="number" min="0" step="0.01" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>RevShare Enabled</Label>
+                      <div className="flex items-center h-10 px-3 border rounded-md justify-between">
+                        <span className="text-sm">Active</span>
+                        <Switch checked={marketerRevshareEnabled} onCheckedChange={setMarketerRevshareEnabled} />
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                      <div className="space-y-1.5">
-                        <Label>Hold Days</Label>
-                        <Input value={marketerHoldDays} onChange={(e) => setMarketerHoldDays(e.target.value)} type="number" min="0" max="120" step="1" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Min Deposit</Label>
-                        <Input value={marketerMinDeposit} onChange={(e) => setMarketerMinDeposit(e.target.value)} type="number" min="0" step="0.01" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Min Wagered</Label>
-                        <Input value={marketerMinWagered} onChange={(e) => setMarketerMinWagered(e.target.value)} type="number" min="0" step="0.01" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Min Games</Label>
-                        <Input value={marketerMinGames} onChange={(e) => setMarketerMinGames(e.target.value)} type="number" min="0" step="1" />
-                      </div>
+                    <div className="space-y-1.5">
+                      <Label>RevShare %</Label>
+                      <Input value={marketerRevshareRate} onChange={(e) => setMarketerRevshareRate(e.target.value)} type="number" min="0" max="100" step="0.01" />
                     </div>
+                  </div>
 
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => marketerBadgeMut.mutate({ userId: selectedReferrerId, action: "grant" })}
-                        disabled={marketerBadgeMut.isPending}
-                      >
-                        Grant Marketer Badge
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => marketerBadgeMut.mutate({ userId: selectedReferrerId, action: "revoke" })}
-                        disabled={marketerBadgeMut.isPending}
-                      >
-                        Revoke Marketer Badge
-                      </Button>
-                      <Button onClick={handleMarketerConfigSave} disabled={updateMarketerConfigMut.isPending}>
-                        {updateMarketerConfigMut.isPending ? "Saving..." : "Save Marketer Config"}
-                      </Button>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Hold Days</Label>
+                      <Input value={marketerHoldDays} onChange={(e) => setMarketerHoldDays(e.target.value)} type="number" min="0" max="120" step="1" />
                     </div>
+                    <div className="space-y-1.5">
+                      <Label>Min Deposit</Label>
+                      <Input value={marketerMinDeposit} onChange={(e) => setMarketerMinDeposit(e.target.value)} type="number" min="0" step="0.01" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Min Wagered</Label>
+                      <Input value={marketerMinWagered} onChange={(e) => setMarketerMinWagered(e.target.value)} type="number" min="0" step="0.01" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Min Games</Label>
+                      <Input value={marketerMinGames} onChange={(e) => setMarketerMinGames(e.target.value)} type="number" min="0" step="1" />
+                    </div>
+                  </div>
 
-                    {(marketerDetails?.recentEvents?.length ?? 0) > 0 && (
-                      <div className="space-y-2 max-h-[300px] overflow-auto">
-                        {marketerDetails!.recentEvents.slice(0, 20).map((event) => (
-                          <div key={event.id} className="border rounded-lg p-2 flex items-center justify-between text-sm">
-                            <div>
-                              <p className="font-medium">{event.referred_username || "Referral"}</p>
-                              <p className="text-xs text-muted-foreground uppercase">{event.reward_type} • {event.reward_status}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-semibold">{formatProjectCoins(event.reward_amount || 0)}</p>
-                              <p className="text-xs text-muted-foreground">{formatDateTime(event.created_at)}</p>
-                            </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => marketerBadgeMut.mutate({ userId: selectedReferrerId, action: "grant" })}
+                      disabled={marketerBadgeMut.isPending || !selectedReferrerId}
+                    >
+                      Grant Marketer Badge
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => marketerBadgeMut.mutate({ userId: selectedReferrerId, action: "revoke" })}
+                      disabled={marketerBadgeMut.isPending || !selectedReferrerId}
+                    >
+                      Revoke Marketer Badge
+                    </Button>
+                    <Button onClick={handleMarketerConfigSave} disabled={updateMarketerConfigMut.isPending || !selectedReferrerId}>
+                      {updateMarketerConfigMut.isPending ? "Saving..." : "Save Marketer Config"}
+                    </Button>
+                  </div>
+
+                  {(marketerDetails?.recentEvents?.length ?? 0) > 0 && (
+                    <div className="space-y-2 max-h-[300px] overflow-auto">
+                      {marketerDetails!.recentEvents.slice(0, 20).map((event) => (
+                        <div key={event.id} className="border rounded-lg p-2 flex items-center justify-between text-sm">
+                          <div>
+                            <p className="font-medium">{event.referred_username || "Referral"}</p>
+                            <p className="text-xs text-muted-foreground uppercase">{event.reward_type} • {event.reward_status}</p>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                          <div className="text-right">
+                            <p className="font-semibold">{formatProjectCoins(event.reward_amount || 0)}</p>
+                            <p className="text-xs text-muted-foreground">{formatDateTime(event.created_at)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
 
           {!selectedReferrerId && topReferrers?.length ? (
             <Card>

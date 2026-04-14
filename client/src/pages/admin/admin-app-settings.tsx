@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -82,9 +82,15 @@ const loginMethods = [
   { method: "twitter", icon: SiX, label: "Twitter/X", labelAr: "تويتر/إكس" },
 ];
 
+const SURFACE_CARD_CLASS = "rounded-[24px] border border-slate-200/80 bg-gradient-to-b from-white via-slate-50 to-slate-100/70 shadow-[0_14px_40px_-24px_rgba(15,23,42,0.55)] dark:border-slate-800/80 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950";
+const BUTTON_3D_PRIMARY_CLASS = "rounded-xl border border-sky-600 bg-gradient-to-b from-sky-400 via-sky-500 to-sky-700 text-white shadow-[0_8px_0_0_rgba(3,105,161,0.58)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(3,105,161,0.52)] hover:brightness-105";
+const INPUT_SURFACE_CLASS = "min-h-[46px] rounded-xl border-slate-200/80 bg-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_10px_24px_-20px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-900";
+const SETTING_ROW_CLASS = "flex flex-col items-start gap-4 rounded-2xl border border-slate-200/80 bg-white/70 p-4 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60 sm:flex-row sm:items-center sm:justify-between";
+const ACCORDION_ITEM_CLASS = "rounded-2xl border border-slate-200/80 bg-white/75 px-4 shadow-[0_12px_28px_-22px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60";
+
 function SectionSkeleton() {
   return (
-    <Card>
+    <Card className={SURFACE_CARD_CLASS}>
       <CardHeader>
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-4 w-72 mt-2" />
@@ -103,7 +109,7 @@ function SectionSkeleton() {
 
 export default function AdminAppSettingsPage() {
   const { toast } = useToast();
-  const { t, language } = useI18n();
+  const { language } = useI18n();
   const isArabic = language === "ar";
 
   const [brandingForm, setBrandingForm] = useState({
@@ -123,20 +129,21 @@ export default function AdminAppSettingsPage() {
     showAppStore: true,
   });
   const [isDownloadingAab, setIsDownloadingAab] = useState(false);
+  const [hasHydratedSettings, setHasHydratedSettings] = useState(false);
 
-  const { data: appSettings, isLoading: loadingAppSettings } = useQuery({
+  const { data: appSettings, isLoading: loadingAppSettings } = useQuery<AppSetting[]>({
     queryKey: ["/api/admin/app-settings"],
     queryFn: () => adminFetch("/api/admin/app-settings"),
   });
 
-  const { data: loginConfigs, isLoading: loadingLoginConfigs } = useQuery({
+  const { data: loginConfigs, isLoading: loadingLoginConfigs } = useQuery<LoginMethodConfig[]>({
     queryKey: ["/api/admin/login-configs"],
     queryFn: () => adminFetch("/api/admin/login-configs"),
   });
 
-  useState(() => {
-    if (appSettings) {
-      const settings = appSettings as AppSetting[];
+  useEffect(() => {
+    if (appSettings && !hasHydratedSettings) {
+      const settings = appSettings;
       const getVal = (key: string) => settings.find((s) => s.key === key)?.value || "";
       const getValAr = (key: string) => settings.find((s) => s.key === key)?.valueAr || "";
       setBrandingForm({
@@ -154,8 +161,9 @@ export default function AdminAppSettingsPage() {
         showGooglePlay: getVal("store_show_google_play") !== "false",
         showAppStore: getVal("store_show_apple") !== "false",
       });
+      setHasHydratedSettings(true);
     }
-  });
+  }, [appSettings, hasHydratedSettings]);
 
   const updateAppSettingMutation = useMutation({
     mutationFn: async ({ key, value, valueAr, category }: { key: string; value: string; valueAr?: string; category?: string }) => {
@@ -288,26 +296,35 @@ export default function AdminAppSettingsPage() {
   };
 
   const getLoginConfig = (method: string): LoginMethodConfig | undefined => {
-    return (loginConfigs as LoginMethodConfig[])?.find((c) => c.method === method);
+    return loginConfigs?.find((c) => c.method === method);
   };
 
   const isSaving = updateAppSettingMutation.isPending ||
     updateLoginConfigMutation.isPending;
 
+  const surfaceCardClass = SURFACE_CARD_CLASS;
+  const button3dPrimaryClass = BUTTON_3D_PRIMARY_CLASS;
+
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Settings className="h-8 w-8" />
-          {isArabic ? "إعدادات التطبيق" : "App Settings"}
-        </h1>
-        <p className="text-muted-foreground">
-          {isArabic ? "إدارة إعدادات التطبيق والعلامة التجارية وطرق تسجيل الدخول" : "Manage app configuration, branding, and login methods"}
-        </p>
+    <div className="p-3 sm:p-4 md:p-6 space-y-5 md:space-y-6">
+      <div className={`${surfaceCardClass} px-5 py-5 sm:px-6 sm:py-6`}>
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-gradient-to-b from-sky-400 to-sky-700 text-white shadow-[0_10px_0_0_rgba(3,105,161,0.45)]">
+            <Settings className="h-7 w-7" />
+          </div>
+          <div>
+            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
+              {isArabic ? "إعدادات التطبيق" : "App Settings"}
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+              {isArabic ? "إدارة إعدادات التطبيق والعلامة التجارية وطرق تسجيل الدخول" : "Manage app configuration, branding, and login methods"}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-6">
-        <Card>
+        <Card className={surfaceCardClass}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Palette className="h-5 w-5" />
@@ -334,6 +351,7 @@ export default function AdminAppSettingsPage() {
                     <Label htmlFor="appName">{isArabic ? "اسم التطبيق (إنجليزي)" : "App Name (English)"}</Label>
                     <Input
                       id="appName"
+                      className={INPUT_SURFACE_CLASS}
                       value={brandingForm.appName}
                       onChange={(e) => setBrandingForm((prev) => ({ ...prev, appName: e.target.value }))}
                       placeholder="VEX Gaming"
@@ -344,6 +362,7 @@ export default function AdminAppSettingsPage() {
                     <Label htmlFor="appNameAr">{isArabic ? "اسم التطبيق (عربي)" : "App Name (Arabic)"}</Label>
                     <Input
                       id="appNameAr"
+                      className={INPUT_SURFACE_CLASS}
                       value={brandingForm.appNameAr}
                       onChange={(e) => setBrandingForm((prev) => ({ ...prev, appNameAr: e.target.value }))}
                       placeholder="فيكس للألعاب"
@@ -357,6 +376,7 @@ export default function AdminAppSettingsPage() {
                   <Label htmlFor="appIconUrl">{isArabic ? "رابط شعار التطبيق" : "App Icon/Logo URL"}</Label>
                   <Input
                     id="appIconUrl"
+                    className={INPUT_SURFACE_CLASS}
                     value={brandingForm.appIconUrl}
                     onChange={(e) => setBrandingForm((prev) => ({ ...prev, appIconUrl: e.target.value }))}
                     placeholder="https://example.com/logo.png"
@@ -370,6 +390,7 @@ export default function AdminAppSettingsPage() {
                     <div className="flex gap-2">
                       <Input
                         id="primaryColor"
+                        className={INPUT_SURFACE_CLASS}
                         value={brandingForm.primaryColor}
                         onChange={(e) => setBrandingForm((prev) => ({ ...prev, primaryColor: e.target.value }))}
                         placeholder="#00c853"
@@ -379,7 +400,7 @@ export default function AdminAppSettingsPage() {
                         type="color"
                         value={brandingForm.primaryColor || "#00c853"}
                         onChange={(e) => setBrandingForm((prev) => ({ ...prev, primaryColor: e.target.value }))}
-                        className="w-10 h-10 rounded cursor-pointer border"
+                        className="h-11 w-11 shrink-0 cursor-pointer rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900"
                       />
                     </div>
                   </div>
@@ -388,6 +409,7 @@ export default function AdminAppSettingsPage() {
                     <div className="flex gap-2">
                       <Input
                         id="secondaryColor"
+                        className={INPUT_SURFACE_CLASS}
                         value={brandingForm.secondaryColor}
                         onChange={(e) => setBrandingForm((prev) => ({ ...prev, secondaryColor: e.target.value }))}
                         placeholder="#ff9800"
@@ -397,7 +419,7 @@ export default function AdminAppSettingsPage() {
                         type="color"
                         value={brandingForm.secondaryColor || "#ff9800"}
                         onChange={(e) => setBrandingForm((prev) => ({ ...prev, secondaryColor: e.target.value }))}
-                        className="w-10 h-10 rounded cursor-pointer border"
+                        className="h-11 w-11 shrink-0 cursor-pointer rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900"
                       />
                     </div>
                   </div>
@@ -406,6 +428,7 @@ export default function AdminAppSettingsPage() {
                     <div className="flex gap-2">
                       <Input
                         id="accentColor"
+                        className={INPUT_SURFACE_CLASS}
                         value={brandingForm.accentColor}
                         onChange={(e) => setBrandingForm((prev) => ({ ...prev, accentColor: e.target.value }))}
                         placeholder="#1a2332"
@@ -415,7 +438,7 @@ export default function AdminAppSettingsPage() {
                         type="color"
                         value={brandingForm.accentColor || "#1a2332"}
                         onChange={(e) => setBrandingForm((prev) => ({ ...prev, accentColor: e.target.value }))}
-                        className="w-10 h-10 rounded cursor-pointer border"
+                        className="h-11 w-11 shrink-0 cursor-pointer rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900"
                       />
                     </div>
                   </div>
@@ -423,6 +446,7 @@ export default function AdminAppSettingsPage() {
 
                 <div className="flex justify-end pt-4">
                   <Button
+                    className={button3dPrimaryClass}
                     onClick={saveBranding}
                     disabled={isSaving}
                     data-testid="button-save-branding"
@@ -436,10 +460,7 @@ export default function AdminAppSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* ══════════════════════════════════════════════════════════════
-            ██  STORE LINKS & DOWNLOAD BUTTONS  ██
-            ══════════════════════════════════════════════════════════════ */}
-        <Card>
+        <Card className={surfaceCardClass}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Download className="h-5 w-5" />
@@ -468,7 +489,7 @@ export default function AdminAppSettingsPage() {
                   </h3>
                   <div className="grid gap-3">
                     {/* PWA Toggle */}
-                    <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                    <div className={SETTING_ROW_CLASS}>
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded bg-green-500/10">
                           <Download className="h-4 w-4 text-green-500" />
@@ -488,7 +509,7 @@ export default function AdminAppSettingsPage() {
                     </div>
 
                     {/* Google Play Toggle */}
-                    <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                    <div className={SETTING_ROW_CLASS}>
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded bg-blue-500/10">
                           <svg viewBox="0 0 24 24" className="h-4 w-4 text-blue-500" fill="currentColor">
@@ -510,7 +531,7 @@ export default function AdminAppSettingsPage() {
                     </div>
 
                     {/* App Store Toggle */}
-                    <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                    <div className={SETTING_ROW_CLASS}>
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded bg-gray-500/10">
                           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
@@ -545,12 +566,12 @@ export default function AdminAppSettingsPage() {
                         {isArabic ? "رابط جوجل بلاي" : "Google Play URL"}
                       </Label>
                       <Input
+                        className={`${INPUT_SURFACE_CLASS} ${!storeForm.showGooglePlay ? "opacity-60" : ""}`}
                         value={storeForm.googlePlayUrl}
                         onChange={(e) => setStoreForm((prev) => ({ ...prev, googlePlayUrl: e.target.value }))}
                         placeholder="https://play.google.com/store/apps/details?id=..."
                         dir="ltr"
                         disabled={!storeForm.showGooglePlay}
-                        className={!storeForm.showGooglePlay ? "opacity-50" : ""}
                       />
                     </div>
                     <div className="space-y-2">
@@ -559,12 +580,12 @@ export default function AdminAppSettingsPage() {
                         {isArabic ? "رابط آبل ستور" : "App Store URL"}
                       </Label>
                       <Input
+                        className={`${INPUT_SURFACE_CLASS} ${!storeForm.showAppStore ? "opacity-60" : ""}`}
                         value={storeForm.appStoreUrl}
                         onChange={(e) => setStoreForm((prev) => ({ ...prev, appStoreUrl: e.target.value }))}
                         placeholder="https://apps.apple.com/app/..."
                         dir="ltr"
                         disabled={!storeForm.showAppStore}
-                        className={!storeForm.showAppStore ? "opacity-50" : ""}
                       />
                     </div>
                   </div>
@@ -586,7 +607,7 @@ export default function AdminAppSettingsPage() {
                       type="button"
                       onClick={downloadAdminAab}
                       disabled={isDownloadingAab}
-                      className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white"
+                      className="w-full rounded-xl border border-orange-600 bg-gradient-to-b from-orange-400 to-amber-600 text-white shadow-[0_8px_0_0_rgba(180,83,9,0.45)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(180,83,9,0.4)] hover:brightness-105 sm:w-auto"
                     >
                       {isDownloadingAab ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Download className="h-4 w-4 me-2" />}
                       {isArabic ? "تنزيل AAB" : "Download AAB"}
@@ -596,6 +617,7 @@ export default function AdminAppSettingsPage() {
 
                 <div className="flex justify-end pt-4">
                   <Button
+                    className={button3dPrimaryClass}
                     onClick={saveStoreLinks}
                     disabled={isSaving}
                   >
@@ -608,7 +630,7 @@ export default function AdminAppSettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={surfaceCardClass}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
@@ -632,16 +654,16 @@ export default function AdminAppSettingsPage() {
                 ))}
               </div>
             ) : (
-              <Accordion type="multiple" className="w-full">
+              <Accordion type="multiple" className="w-full space-y-3">
                 {loginMethods.map((lm) => {
                   const config = getLoginConfig(lm.method);
                   const Icon = lm.icon;
                   return (
-                    <AccordionItem key={lm.method} value={lm.method}>
-                      <AccordionTrigger className="hover:no-underline">
+                    <AccordionItem key={lm.method} value={lm.method} className={ACCORDION_ITEM_CLASS}>
+                      <AccordionTrigger className="py-4 hover:no-underline">
                         <div className="flex items-center justify-between gap-4 w-full pe-4">
                           <div className="flex items-center gap-3">
-                            <div className="p-2 rounded bg-muted">
+                            <div className="rounded-2xl bg-slate-100 p-2 dark:bg-slate-800">
                               <Icon className="h-4 w-4" />
                             </div>
                             <span className="font-medium">{isArabic ? lm.labelAr : lm.label}</span>
@@ -658,8 +680,8 @@ export default function AdminAppSettingsPage() {
                         </div>
                       </AccordionTrigger>
                       <AccordionContent className="pt-4 space-y-4">
-                        <div className="grid gap-4 md:grid-cols-3 p-4 bg-muted/30 rounded-lg">
-                          <div className="flex items-center gap-2">
+                        <div className="grid gap-4 rounded-2xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-900/60 md:grid-cols-3">
+                          <div className="flex items-center justify-between gap-3 md:block">
                             <Label htmlFor={`otp-${lm.method}`}>{isArabic ? "تفعيل OTP" : "Enable OTP"}</Label>
                             <Switch
                               id={`otp-${lm.method}`}
@@ -678,7 +700,7 @@ export default function AdminAppSettingsPage() {
                                 updateLoginConfigMutation.mutate({ method: lm.method, otpLength: parseInt(val) })
                               }
                             >
-                              <SelectTrigger data-testid={`select-otp-length-${lm.method}`}>
+                              <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid={`select-otp-length-${lm.method}`}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -697,7 +719,7 @@ export default function AdminAppSettingsPage() {
                                 updateLoginConfigMutation.mutate({ method: lm.method, otpExpiryMinutes: parseInt(val) })
                               }
                             >
-                              <SelectTrigger data-testid={`select-otp-expiry-${lm.method}`}>
+                              <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid={`select-otp-expiry-${lm.method}`}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>

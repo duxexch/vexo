@@ -1,4 +1,5 @@
 import { WebSocket } from "ws";
+import { randomUUID } from "crypto";
 import { db } from "../db";
 import { notifications, userPreferences } from "@shared/schema";
 import type { AuthenticatedSocket } from "./shared";
@@ -96,6 +97,35 @@ export async function sendNotification(userId: string, notification: {
     }
   }
 
+  // Ensure financial notifications always carry a copyable reference ID in metadata.
+  let metadataPayload: Record<string, unknown> = {};
+  if (notification.metadata) {
+    try {
+      const parsed = JSON.parse(notification.metadata);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        metadataPayload = parsed as Record<string, unknown>;
+      }
+    } catch {
+      metadataPayload = { rawMetadata: notification.metadata };
+    }
+  }
+
+  if (notification.type === "transaction") {
+    const existingReference = [
+      metadataPayload.referenceId,
+      metadataPayload.reference,
+      metadataPayload.transactionReference,
+      metadataPayload.publicReference,
+      metadataPayload.ref,
+    ].find((value) => typeof value === "string" && value.trim().length > 0) as string | undefined;
+
+    const financialReference = existingReference || `FIN-${randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
+    metadataPayload = {
+      ...metadataPayload,
+      referenceId: financialReference,
+    };
+  }
+
   // Sanitize link field — only allow safe relative paths or https URLs
   let safeLink = notification.link;
   if (safeLink) {
@@ -120,6 +150,10 @@ export async function sendNotification(userId: string, notification: {
     else if (!safeLink.startsWith('/') && !safeLink.startsWith('https://')) {
       safeLink = undefined;
     }
+
+    if (!safeLink && notification.type === "transaction") {
+      safeLink = "/transactions";
+    }
   }
 
   // Enforce max lengths to prevent storage DoS
@@ -127,7 +161,9 @@ export async function sendNotification(userId: string, notification: {
   const titleAr = notification.titleAr?.substring(0, 500);
   const message = notification.message?.substring(0, 2000) || '';
   const messageAr = notification.messageAr?.substring(0, 2000);
-  const metadata = notification.metadata?.substring(0, 5000);
+  const metadata = Object.keys(metadataPayload).length > 0
+    ? JSON.stringify(metadataPayload).substring(0, 5000)
+    : undefined;
 
   const [created] = await db.insert(notifications).values({
     userId,

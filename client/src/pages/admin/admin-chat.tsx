@@ -29,6 +29,15 @@ import {
 
 const adminToken = () => localStorage.getItem("adminToken") || "";
 
+const SURFACE_CARD_CLASS = "rounded-[28px] border border-slate-200/70 bg-white/95 shadow-[0_18px_50px_-24px_rgba(15,23,42,0.35)] backdrop-blur dark:border-slate-800/70 dark:bg-slate-950/90";
+const STAT_CARD_CLASS = `${SURFACE_CARD_CLASS} overflow-hidden`;
+const DATA_CARD_CLASS = `${SURFACE_CARD_CLASS} overflow-hidden`;
+const BUTTON_3D_CLASS = "rounded-2xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-[0_8px_0_0_rgba(226,232,240,0.95)] transition-transform duration-150 hover:-translate-y-0.5 active:translate-y-1 active:shadow-[0_3px_0_0_rgba(226,232,240,0.95)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:shadow-[0_8px_0_0_rgba(15,23,42,0.95)]";
+const BUTTON_3D_PRIMARY_CLASS = "rounded-2xl border border-sky-500 bg-sky-500 px-4 py-2 font-semibold text-white shadow-[0_8px_0_0_rgba(3,105,161,0.45)] transition-transform duration-150 hover:-translate-y-0.5 hover:bg-sky-400 active:translate-y-1 active:shadow-[0_3px_0_0_rgba(3,105,161,0.45)]";
+const BUTTON_3D_DESTRUCTIVE_CLASS = "rounded-2xl border border-red-500 bg-red-500 px-4 py-2 font-semibold text-white shadow-[0_8px_0_0_rgba(185,28,28,0.35)] transition-transform duration-150 hover:-translate-y-0.5 hover:bg-red-400 active:translate-y-1 active:shadow-[0_3px_0_0_rgba(185,28,28,0.35)]";
+const INPUT_SURFACE_CLASS = "h-12 rounded-2xl border-slate-200 bg-white/90 shadow-none focus-visible:ring-2 focus-visible:ring-sky-200 dark:border-slate-700 dark:bg-slate-900/80 dark:focus-visible:ring-sky-900";
+const DIALOG_SURFACE_CLASS = "rounded-[28px] border border-slate-200/80 bg-white/98 p-0 shadow-[0_24px_80px_-28px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-950/98";
+
 interface SupportTicket {
   id: string;
   nickname?: string;
@@ -815,39 +824,43 @@ export default function AdminChatPage() {
   const chatEnabled = settingsMap["chat_enabled"] !== "false";
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <MessageCircle className="h-7 w-7 text-primary" />
-            إدارة الدردشة
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            مراقبة وإدارة جميع أنظمة الدردشة في المنصة
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Label htmlFor="chat-toggle" className="text-sm">تفعيل الدردشة</Label>
-          <Switch
-            id="chat-toggle"
-            checked={chatEnabled}
-            onCheckedChange={(checked) => {
-              updateSettingMutation.mutate({
-                key: "chat_enabled",
-                value: checked ? "true" : "false",
-              });
-            }}
-          />
+    <div className="max-w-7xl mx-auto space-y-5 p-3 sm:p-4 md:p-6">
+      <div className={`${SURFACE_CARD_CLASS} px-5 py-5 sm:px-6 sm:py-6`}>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-gradient-to-b from-sky-400 to-sky-700 text-white shadow-[0_10px_0_0_rgba(3,105,161,0.45)]">
+              <MessageCircle className="h-7 w-7" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">إدارة الدردشة</h1>
+              <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+                مراقبة وإدارة جميع أنظمة الدردشة في المنصة
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-[24px] border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
+            <Label htmlFor="chat-toggle" className="text-sm font-medium">تفعيل الدردشة</Label>
+            <Switch
+              id="chat-toggle"
+              checked={chatEnabled}
+              onCheckedChange={(checked) => {
+                updateSettingMutation.mutate({
+                  key: "chat_enabled",
+                  value: checked ? "true" : "false",
+                });
+              }}
+            />
+          </div>
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-7">
-          <TabsTrigger value="overview" className="gap-1.5">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="flex w-full gap-2 overflow-x-auto rounded-[24px] border border-slate-200/80 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-950">
+          <TabsTrigger value="overview" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <BarChart3 className="h-4 w-4" />
             نظرة عامة
           </TabsTrigger>
-          <TabsTrigger value="support" className="gap-1.5 relative">
+          <TabsTrigger value="support" className="relative min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Headphones className="h-4 w-4" />
             دردشات الدعم
             {(supportStats?.unreadFromUsers || 0) > 0 && (
@@ -856,23 +869,23 @@ export default function AdminChatPage() {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="messages" className="gap-1.5">
+          <TabsTrigger value="messages" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Eye className="h-4 w-4" />
             مراقبة الرسائل
           </TabsTrigger>
-          <TabsTrigger value="ai-agent" className="gap-1.5">
+          <TabsTrigger value="ai-agent" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Bot className="h-4 w-4" />
             مساعد AI
           </TabsTrigger>
-          <TabsTrigger value="features" className="gap-1.5">
+          <TabsTrigger value="features" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Shield className="h-4 w-4" />
             الميزات
           </TabsTrigger>
-          <TabsTrigger value="filter" className="gap-1.5">
+          <TabsTrigger value="filter" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Filter className="h-4 w-4" />
             فلتر الكلمات
           </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-1.5">
+          <TabsTrigger value="settings" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Settings className="h-4 w-4" />
             الإعدادات
           </TabsTrigger>
@@ -880,43 +893,43 @@ export default function AdminChatPage() {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <Card>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 text-blue-500" />
                 <p className="text-2xl font-bold">{stats?.totalPrivateMessages || 0}</p>
                 <p className="text-xs text-muted-foreground">إجمالي الرسائل الخاصة</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <MessageCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
                 <p className="text-2xl font-bold">{stats?.totalGameMessages || 0}</p>
                 <p className="text-xs text-muted-foreground">رسائل الألعاب</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <Clock className="h-8 w-8 mx-auto mb-2 text-amber-500" />
                 <p className="text-2xl font-bold">{stats?.todayPrivateMessages || 0}</p>
                 <p className="text-xs text-muted-foreground">رسائل خاصة اليوم</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <Clock className="h-8 w-8 mx-auto mb-2 text-orange-500" />
                 <p className="text-2xl font-bold">{stats?.todayGameMessages || 0}</p>
                 <p className="text-xs text-muted-foreground">رسائل ألعاب اليوم</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <Users className="h-8 w-8 mx-auto mb-2 text-purple-500" />
                 <p className="text-2xl font-bold">{stats?.activeChattersLast24h || 0}</p>
                 <p className="text-xs text-muted-foreground">متحدثون نشطون (24 ساعة)</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <Filter className="h-8 w-8 mx-auto mb-2 text-red-500" />
                 <p className="text-2xl font-bold">{stats?.bannedWordsCount || 0}</p>
@@ -925,22 +938,22 @@ export default function AdminChatPage() {
             </Card>
           </div>
 
-          <Card>
+          <Card className={DATA_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="text-lg">حالة الدردشة</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
                 <span>حالة النظام</span>
                 <Badge variant={chatEnabled ? "default" : "destructive"}>
                   {chatEnabled ? "مفعّل" : "معطّل"}
                 </Badge>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
                 <span>الحد الأقصى لطول الرسالة</span>
                 <span className="font-mono">{settingsMap["max_message_length"] || "2000"}</span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
                 <span>حد معدل الرسائل</span>
                 <span className="font-mono">{settingsMap["chat_rate_limit"] || "5 / 3s"}</span>
               </div>
@@ -950,7 +963,7 @@ export default function AdminChatPage() {
 
         {/* AI Agent Tab */}
         <TabsContent value="ai-agent" className="space-y-4">
-          <Card>
+          <Card className={DATA_CARD_CLASS}>
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center justify-between">
                 <span className="flex items-center gap-2">
@@ -958,9 +971,7 @@ export default function AdminChatPage() {
                   تقارير خدمة الذكاء الاصطناعي
                 </span>
                 <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
+                  className={cn(BUTTON_3D_CLASS, "gap-1.5")}
                   onClick={() => {
                     refetchAiAgentReport();
                     refetchAiAgentCapabilities();
@@ -983,27 +994,27 @@ export default function AdminChatPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="rounded-md border p-3">
+                <div className="rounded-2xl border border-slate-200/80 p-3 dark:border-slate-800">
                   <p className="text-xs text-muted-foreground mb-1">المصدر</p>
                   <Badge variant={aiAgentReport?.source === "ai-service" ? "default" : "secondary"}>
                     {aiAgentReport?.source === "ai-service" ? "ai-service" : "fallback"}
                   </Badge>
                 </div>
-                <div className="rounded-md border p-3">
+                <div className="rounded-2xl border border-slate-200/80 p-3 dark:border-slate-800">
                   <p className="text-xs text-muted-foreground mb-1">إجمالي الأحداث</p>
                   <p className="text-lg font-semibold">{aiAgentReport?.external?.report?.learning?.totalEvents ?? 0}</p>
                 </div>
-                <div className="rounded-md border p-3">
+                <div className="rounded-2xl border border-slate-200/80 p-3 dark:border-slate-800">
                   <p className="text-xs text-muted-foreground mb-1">مباريات متتبعة</p>
                   <p className="text-lg font-semibold">{aiAgentReport?.external?.report?.performance?.totalGames ?? aiAgentReport?.localFallback?.summary?.totalTrackedMoves ?? 0}</p>
                 </div>
-                <div className="rounded-md border p-3">
+                <div className="rounded-2xl border border-slate-200/80 p-3 dark:border-slate-800">
                   <p className="text-xs text-muted-foreground mb-1">نسبة فوز البوت</p>
                   <p className="text-lg font-semibold">{aiAgentReport?.external?.report?.performance?.aiWinRate ?? 0}%</p>
                 </div>
               </div>
 
-              <div className="rounded-md border p-3 text-xs text-muted-foreground space-y-1">
+              <div className="rounded-2xl border border-slate-200/80 p-3 text-xs text-muted-foreground space-y-1 dark:border-slate-800">
                 <p>Connection: {aiAgentReport?.connection?.enabled ? "enabled" : "disabled"}</p>
                 <p>Endpoint: {aiAgentReport?.connection?.baseUrl || "-"}</p>
                 <p>Timeout: {aiAgentReport?.connection?.timeoutMs || 0} ms</p>
@@ -1013,7 +1024,7 @@ export default function AdminChatPage() {
           </Card>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card>
+            <Card className={DATA_CARD_CLASS}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Shield className="h-5 w-5" />
@@ -1056,7 +1067,7 @@ export default function AdminChatPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={DATA_CARD_CLASS}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <BarChart3 className="h-5 w-5" />
@@ -1102,7 +1113,7 @@ export default function AdminChatPage() {
             </Card>
           </div>
 
-          <Card>
+          <Card className={DATA_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Search className="h-5 w-5" />
@@ -1168,7 +1179,7 @@ export default function AdminChatPage() {
                     setAiDataQueryGameType(e.target.value);
                   }}
                   placeholder="gameType"
-                  className="h-8 text-xs"
+                  className="h-8 text-xs rounded-xl"
                 />
                 <Input
                   value={aiDataQueryFrom}
@@ -1177,7 +1188,7 @@ export default function AdminChatPage() {
                     setAiDataQueryFrom(e.target.value);
                   }}
                   type="date"
-                  className="h-8 text-xs"
+                  className="h-8 text-xs rounded-xl"
                 />
                 <Input
                   value={aiDataQueryTo}
@@ -1186,7 +1197,7 @@ export default function AdminChatPage() {
                     setAiDataQueryTo(e.target.value);
                   }}
                   type="date"
-                  className="h-8 text-xs"
+                  className="h-8 text-xs rounded-xl"
                 />
                 <Button
                   type="button"
@@ -1199,14 +1210,14 @@ export default function AdminChatPage() {
                 </Button>
               </div>
 
-              <div className="rounded-md border p-3 text-xs text-muted-foreground space-y-1">
+              <div className="rounded-2xl border border-slate-200/80 p-3 text-xs text-muted-foreground space-y-1 dark:border-slate-800">
                 <p>source: {aiAgentDataQueryMutation.data?.source || "-"}</p>
                 <p>generatedAt: {aiAgentDataQueryMutation.data?.generatedAt ? new Date(aiAgentDataQueryMutation.data.generatedAt).toLocaleString("ar-EG") : "-"}</p>
                 <p>query: {JSON.stringify(aiAgentDataQueryMutation.data?.query || { groupBy: aiDataQueryGroupBy, metric: "results" })}</p>
                 <p>rows: {aiDataQueryRows.length}</p>
               </div>
 
-              <ScrollArea className="h-[280px] rounded-md border">
+              <ScrollArea className="h-[280px] rounded-[24px] border border-slate-200/80 dark:border-slate-800">
                 <div className="min-w-[640px] p-3">
                   {aiAgentDataQueryMutation.isPending && (
                     <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
@@ -1256,7 +1267,7 @@ export default function AdminChatPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={DATA_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <MessageCircle className="h-5 w-5" />
@@ -1267,7 +1278,7 @@ export default function AdminChatPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <ScrollArea className="h-[320px] rounded-md border p-3">
+              <ScrollArea className="h-[320px] rounded-[24px] border border-slate-200/80 p-3 dark:border-slate-800">
                 <div className="space-y-2">
                   {aiAgentConversation.length === 0 && (
                     <p className="text-sm text-muted-foreground">
@@ -1302,6 +1313,7 @@ export default function AdminChatPage() {
                   value={aiAgentPrompt}
                   onChange={(e) => setAiAgentPrompt(e.target.value)}
                   placeholder="اسأل عن تقارير AI أو مشاكل اللعب المنفرد..."
+                  className={INPUT_SURFACE_CLASS}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -1309,7 +1321,7 @@ export default function AdminChatPage() {
                     }
                   }}
                 />
-                <Button onClick={handleAiAgentSend} disabled={aiAgentChatMutation.isPending || !aiAgentPrompt.trim()} className="gap-1.5">
+                <Button onClick={handleAiAgentSend} disabled={aiAgentChatMutation.isPending || !aiAgentPrompt.trim()} className={cn(BUTTON_3D_PRIMARY_CLASS, "gap-1.5")}>
                   <Send className="h-4 w-4" />
                   إرسال
                 </Button>
@@ -1321,29 +1333,29 @@ export default function AdminChatPage() {
         {/* Support Chat Tab */}
         <TabsContent value="support" className="space-y-4">
           {/* Support Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <Headphones className="h-7 w-7 mx-auto mb-2 text-yellow-500" />
                 <p className="text-2xl font-bold">{supportStats?.waiting || 0}</p>
                 <p className="text-xs text-muted-foreground">بانتظار الرد</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <MessageCircle className="h-7 w-7 mx-auto mb-2 text-green-500" />
                 <p className="text-2xl font-bold">{supportStats?.active || 0}</p>
                 <p className="text-xs text-muted-foreground">محادثات نشطة</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <Clock className="h-7 w-7 mx-auto mb-2 text-blue-500" />
                 <p className="text-2xl font-bold">{supportStats?.todayTickets || 0}</p>
                 <p className="text-xs text-muted-foreground">تذاكر اليوم</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <CheckCircle2 className="h-7 w-7 mx-auto mb-2 text-gray-500" />
                 <p className="text-2xl font-bold">{supportStats?.closed || 0}</p>
@@ -1354,14 +1366,14 @@ export default function AdminChatPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Tickets List */}
-            <Card className="lg:col-span-1">
+            <Card className={`${DATA_CARD_CLASS} lg:col-span-1`}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center justify-between">
                   <span className="flex items-center gap-2">
                     <Headphones className="h-4 w-4" />
                     التذاكر
                   </span>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => refetchTickets()}>
+                  <Button className={`${BUTTON_3D_CLASS} h-9 w-9 p-0`} onClick={() => refetchTickets()}>
                     <RefreshCw className="h-3.5 w-3.5" />
                   </Button>
                 </CardTitle>
@@ -1426,7 +1438,7 @@ export default function AdminChatPage() {
             </Card>
 
             {/* Conversation View */}
-            <Card className="lg:col-span-2">
+            <Card className={`${DATA_CARD_CLASS} lg:col-span-2`}>
               {!selectedTicketId ? (
                 <div className="flex flex-col items-center justify-center h-[500px] text-muted-foreground gap-3">
                   <Headphones className="h-12 w-12 opacity-30" />
@@ -1437,7 +1449,7 @@ export default function AdminChatPage() {
                   <CardHeader className="pb-2 border-b">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelectedTicketId(null)}>
+                        <Button className={`${BUTTON_3D_CLASS} h-9 w-9 p-0`} onClick={() => setSelectedTicketId(null)}>
                           <ArrowLeft className="h-4 w-4" />
                         </Button>
                         <div>
@@ -1454,21 +1466,16 @@ export default function AdminChatPage() {
                       </div>
                       <div className="flex gap-1">
                         <Button
-                          variant={autoTranslate ? "default" : "outline"}
-                          size="sm"
-                          className="gap-1 text-xs"
+                          className={cn(autoTranslate ? BUTTON_3D_PRIMARY_CLASS : BUTTON_3D_CLASS, "gap-1 text-xs")}
                           onClick={() => setAutoTranslate(!autoTranslate)}
                           title={t('chat.autoTranslate')}
                         >
                           <Languages className="h-3.5 w-3.5" />
                           {t('chat.autoTranslate')}
                         </Button>
-                        {/* Language selector for admin */}
                         <div className="relative">
                           <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-1 text-xs"
+                            className={cn(BUTTON_3D_CLASS, "gap-1 text-xs")}
                             onClick={() => setShowAdminLangMenu(!showAdminLangMenu)}
                           >
                             {currentLanguageInfo?.nativeName?.slice(0, 6) || targetLanguage}
@@ -1506,9 +1513,7 @@ export default function AdminChatPage() {
                         </div>
                         {ticketDetail?.ticket?.status !== "closed" ? (
                           <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-1 text-xs text-destructive"
+                            className={cn(BUTTON_3D_CLASS, "gap-1 text-xs text-destructive")}
                             onClick={() => closeTicketMutation.mutate(selectedTicketId)}
                             disabled={closeTicketMutation.isPending}
                           >
@@ -1517,9 +1522,7 @@ export default function AdminChatPage() {
                           </Button>
                         ) : (
                           <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-1 text-xs"
+                            className={cn(BUTTON_3D_CLASS, "gap-1 text-xs")}
                             onClick={() => reopenTicketMutation.mutate(selectedTicketId)}
                             disabled={reopenTicketMutation.isPending}
                           >
@@ -1650,9 +1653,7 @@ export default function AdminChatPage() {
                             }}
                           />
                           <Button
-                            variant="ghost"
-                            size="icon"
-                            className="shrink-0"
+                            className={`${BUTTON_3D_CLASS} h-10 w-10 shrink-0 p-0`}
                             onClick={() => adminFileInputRef.current?.click()}
                             disabled={adminUploading || replyMutation.isPending}
                             title="إرفاق ملف"
@@ -1663,7 +1664,7 @@ export default function AdminChatPage() {
                             value={supportReply}
                             onChange={(e) => setSupportReply(e.target.value)}
                             placeholder="اكتب ردك..."
-                            className="flex-1"
+                            className={`${INPUT_SURFACE_CLASS} flex-1`}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey && (supportReply.trim() || adminMediaPreview)) {
                                 e.preventDefault();
@@ -1672,7 +1673,7 @@ export default function AdminChatPage() {
                             }}
                           />
                           <Button
-                            size="icon"
+                            className={`${BUTTON_3D_PRIMARY_CLASS} h-10 w-10 p-0`}
                             onClick={handleAdminSendReply}
                             disabled={(!supportReply.trim() && !adminMediaPreview) || replyMutation.isPending || adminUploading}
                           >
@@ -1688,7 +1689,7 @@ export default function AdminChatPage() {
           </div>
 
           {/* Auto Replies Section */}
-          <Card>
+          <Card className={DATA_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Bot className="h-5 w-5" />
@@ -1700,14 +1701,14 @@ export default function AdminChatPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Add new auto-reply */}
-              <div className="grid gap-3 md:grid-cols-4 p-3 border rounded-lg bg-muted/30">
+              <div className="grid gap-3 rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4 md:grid-cols-4 dark:border-slate-800 dark:bg-slate-900/60">
                 <div>
                   <Label className="text-xs mb-1 block">الكلمة المفتاحية</Label>
                   <Input
                     placeholder="مثال: سحب، إيداع، welcome"
                     value={newAutoTrigger}
                     onChange={(e) => setNewAutoTrigger(e.target.value)}
-                    className="text-sm"
+                    className={cn(INPUT_SURFACE_CLASS, "text-sm")}
                   />
                 </div>
                 <div>
@@ -1716,7 +1717,7 @@ export default function AdminChatPage() {
                     placeholder="الرد التلقائي..."
                     value={newAutoResponse}
                     onChange={(e) => setNewAutoResponse(e.target.value)}
-                    className="text-sm"
+                    className={cn(INPUT_SURFACE_CLASS, "text-sm")}
                   />
                 </div>
                 <div>
@@ -1725,7 +1726,7 @@ export default function AdminChatPage() {
                     placeholder="Auto reply..."
                     value={newAutoResponseAr}
                     onChange={(e) => setNewAutoResponseAr(e.target.value)}
-                    className="text-sm"
+                    className={cn(INPUT_SURFACE_CLASS, "text-sm")}
                   />
                 </div>
                 <div className="flex items-end">
@@ -1740,7 +1741,7 @@ export default function AdminChatPage() {
                       }
                     }}
                     disabled={!newAutoTrigger.trim() || !newAutoResponse.trim() || addAutoReplyMutation.isPending}
-                    className="w-full gap-1.5"
+                    className={cn(BUTTON_3D_PRIMARY_CLASS, "w-full gap-1.5")}
                   >
                     <Plus className="h-4 w-4" />
                     إضافة
@@ -1758,7 +1759,7 @@ export default function AdminChatPage() {
                   </p>
                 )}
                 {autoReplies?.map((reply: AutoReply) => (
-                  <div key={reply.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div key={reply.id} className="flex items-center justify-between rounded-[24px] border border-slate-200/80 p-3 dark:border-slate-800">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <Badge variant="outline" className="text-xs">{reply.trigger}</Badge>
@@ -1773,20 +1774,20 @@ export default function AdminChatPage() {
                       />
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                          <Button className={`${BUTTON_3D_DESTRUCTIVE_CLASS} h-8 w-8 p-0 text-destructive-foreground`}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </AlertDialogTrigger>
-                        <AlertDialogContent>
+                        <AlertDialogContent className={DIALOG_SURFACE_CLASS}>
                           <AlertDialogHeader>
                             <AlertDialogTitle>حذف الرد التلقائي؟</AlertDialogTitle>
                             <AlertDialogDescription>سيتم حذف هذا الرد التلقائي نهائياً.</AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                            <AlertDialogCancel className={BUTTON_3D_CLASS}>إلغاء</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={() => deleteAutoReplyMutation.mutate(reply.id)}
-                              className="bg-destructive text-destructive-foreground"
+                              className={BUTTON_3D_DESTRUCTIVE_CLASS}
                             >
                               حذف
                             </AlertDialogAction>
@@ -1803,7 +1804,7 @@ export default function AdminChatPage() {
 
         {/* Messages Monitoring Tab */}
         <TabsContent value="messages" className="space-y-4">
-          <Card>
+          <Card className={DATA_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Eye className="h-5 w-5" />
@@ -1847,7 +1848,7 @@ export default function AdminChatPage() {
 
         {/* Word Filter Tab */}
         <TabsContent value="filter" className="space-y-4">
-          <Card>
+          <Card className={DATA_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Shield className="h-5 w-5" />
@@ -1863,6 +1864,7 @@ export default function AdminChatPage() {
                   placeholder="أضف كلمة جديدة..."
                   value={newBannedWord}
                   onChange={(e) => setNewBannedWord(e.target.value)}
+                  className={INPUT_SURFACE_CLASS}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && newBannedWord.trim()) {
                       addBannedWordMutation.mutate(newBannedWord.trim());
@@ -1876,7 +1878,7 @@ export default function AdminChatPage() {
                     }
                   }}
                   disabled={!newBannedWord.trim() || addBannedWordMutation.isPending}
-                  className="gap-1.5"
+                  className={cn(BUTTON_3D_PRIMARY_CLASS, "gap-1.5")}
                 >
                   <Plus className="h-4 w-4" />
                   إضافة
@@ -1909,7 +1911,7 @@ export default function AdminChatPage() {
                 )}
               </div>
 
-              <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+              <div className="mt-4 rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
                 <p className="text-sm text-muted-foreground">
                   <AlertTriangle className="h-4 w-4 inline me-1" />
                   الكلمات المحظورة يتم استبدالها تلقائياً بـ *** في جميع الرسائل.
@@ -1924,7 +1926,7 @@ export default function AdminChatPage() {
         <TabsContent value="features" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
             {/* Media Management */}
-            <Card>
+            <Card className={DATA_CARD_CLASS}>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   📷 إدارة الوسائط
@@ -1940,7 +1942,7 @@ export default function AdminChatPage() {
             </Card>
 
             {/* Auto-Delete Management */}
-            <Card>
+            <Card className={DATA_CARD_CLASS}>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   ⏱️ إدارة الحذف التلقائي
@@ -1956,7 +1958,7 @@ export default function AdminChatPage() {
             </Card>
 
             {/* PIN Management */}
-            <Card>
+            <Card className={DATA_CARD_CLASS}>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   🔐 إدارة رموز PIN
@@ -1970,7 +1972,7 @@ export default function AdminChatPage() {
           </div>
 
           {/* Support Chat Media Settings */}
-          <Card>
+          <Card className={DATA_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 📎 وسائط دردشة الدعم
@@ -1983,7 +1985,7 @@ export default function AdminChatPage() {
           </Card>
 
           {/* Privacy Notice */}
-          <Card className="border-emerald-500/30 bg-emerald-500/5">
+          <Card className={`${DATA_CARD_CLASS} border-emerald-500/30 bg-emerald-500/5`}>
             <CardContent className="pt-6">
               <div className="flex items-start gap-3">
                 <Shield className="h-6 w-6 text-emerald-500 shrink-0 mt-0.5" />
@@ -2001,7 +2003,7 @@ export default function AdminChatPage() {
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-4">
-          <Card>
+          <Card className={DATA_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Settings className="h-5 w-5" />
@@ -2035,7 +2037,7 @@ export default function AdminChatPage() {
                   <Input
                     type="number"
                     defaultValue={settingsMap["max_message_length"] || "2000"}
-                    className="w-32"
+                    className={cn(INPUT_SURFACE_CLASS, "w-32")}
                     onBlur={(e) => {
                       const val = parseInt(e.target.value);
                       if (val > 0 && val <= 10000) {
@@ -2058,7 +2060,7 @@ export default function AdminChatPage() {
                   <Input
                     type="number"
                     defaultValue={settingsMap["chat_rate_limit"] || "5"}
-                    className="w-32"
+                    className={cn(INPUT_SURFACE_CLASS, "w-32")}
                     onBlur={(e) => {
                       const val = parseInt(e.target.value);
                       if (val > 0 && val <= 100) {
@@ -2075,7 +2077,7 @@ export default function AdminChatPage() {
 
               <Separator />
 
-              <div className="space-y-2 p-4 border border-emerald-500/20 rounded-lg bg-emerald-500/5">
+              <div className="space-y-2 rounded-[24px] border border-emerald-500/20 bg-emerald-500/5 p-4">
                 <Label className="text-emerald-700 dark:text-emerald-400">خصوصية الرسائل الخاصة</Label>
                 <p className="text-sm text-muted-foreground">
                   بسبب التشفير الطرفي الكامل (E2EE)، لا يمكن للنظام حذف أو قراءة الرسائل الخاصة من لوحة الإدارة.
@@ -2088,7 +2090,7 @@ export default function AdminChatPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </div >
   );
 }
 
@@ -2158,11 +2160,11 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
     <div className="space-y-4">
       {/* Stats */}
       <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className="bg-muted rounded p-2 text-center">
+        <div className="rounded-2xl bg-muted p-2 text-center">
           <div className="text-lg font-bold">{stats?.totalEnabled || 0}</div>
           <div className="text-muted-foreground text-xs">مفعّلين</div>
         </div>
-        <div className="bg-muted rounded p-2 text-center">
+        <div className="rounded-2xl bg-muted p-2 text-center">
           <div className="text-lg font-bold">{stats?.currentPrice || "—"}</div>
           <div className="text-muted-foreground text-xs">السعر</div>
         </div>
@@ -2175,9 +2177,9 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
           placeholder="السعر الجديد"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
-          className="flex-1"
+          className={`${INPUT_SURFACE_CLASS} flex-1`}
         />
-        <Button size="sm" onClick={handleUpdatePrice} disabled={!price.trim()}>
+        <Button size="sm" className={BUTTON_3D_PRIMARY_CLASS} onClick={handleUpdatePrice} disabled={!price.trim()}>
           تحديث
         </Button>
       </div>
@@ -2190,9 +2192,9 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
           placeholder="ID المستخدم"
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
-          className="flex-1"
+          className={`${INPUT_SURFACE_CLASS} flex-1`}
         />
-        <Button size="sm" onClick={handleGrant} disabled={loading || !userId.trim()}>
+        <Button size="sm" className={BUTTON_3D_PRIMARY_CLASS} onClick={handleGrant} disabled={loading || !userId.trim()}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "منح"}
         </Button>
       </div>
@@ -2202,11 +2204,11 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
         <ScrollArea className="h-32">
           <div className="space-y-1">
             {stats.users.map((u: ChatFeatureUser) => (
-              <div key={u.userId} className="flex items-center justify-between text-sm bg-muted/50 rounded p-1.5">
+              <div key={u.userId} className="flex items-center justify-between rounded-2xl bg-muted/50 p-1.5 text-sm">
                 <span className="truncate">{u.username || u.userId}</span>
                 <div className="flex items-center gap-1">
                   <Badge variant="outline" className="text-[10px]">{u.grantedBy}</Badge>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRevoke(u.userId)}>
+                  <Button className={`${BUTTON_3D_CLASS} h-6 w-6 p-0`} onClick={() => handleRevoke(u.userId)}>
                     <X className="h-3 w-3" />
                   </Button>
                 </div>
@@ -2251,15 +2253,15 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
           placeholder="ID المستخدم"
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
-          className="flex-1"
+          className={`${INPUT_SURFACE_CLASS} flex-1`}
         />
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button size="sm" variant="destructive" disabled={loading || !userId.trim()}>
+            <Button size="sm" className={BUTTON_3D_DESTRUCTIVE_CLASS} disabled={loading || !userId.trim()}>
               إعادة تعيين
             </Button>
           </AlertDialogTrigger>
-          <AlertDialogContent>
+          <AlertDialogContent className={DIALOG_SURFACE_CLASS}>
             <AlertDialogHeader>
               <AlertDialogTitle>إعادة تعيين PIN</AlertDialogTitle>
               <AlertDialogDescription>
@@ -2267,8 +2269,8 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>إلغاء</AlertDialogCancel>
-              <AlertDialogAction onClick={handleReset}>
+              <AlertDialogCancel className={BUTTON_3D_CLASS}>إلغاء</AlertDialogCancel>
+              <AlertDialogAction className={BUTTON_3D_DESTRUCTIVE_CLASS} onClick={handleReset}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "تأكيد"}
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -2276,7 +2278,7 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
         </AlertDialog>
       </div>
 
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded p-3">
+      <div className="rounded-[24px] border border-amber-500/20 bg-amber-500/10 p-3">
         <p className="text-xs text-muted-foreground">
           ⚠️ إعادة التعيين ستزيل حماية PIN من محادثات المستخدم.
           استخدم فقط عندما يطلب المستخدم ذلك عبر الدعم الفني.
@@ -2346,7 +2348,7 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
   return (
     <div className="space-y-4">
       {/* Global toggle */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between rounded-[24px] border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
         <div>
           <Label className="text-sm font-medium">تفعيل الوسائط عالمياً</Label>
           <p className="text-xs text-muted-foreground">السماح لجميع المستخدمين بإرسال وسائط في الدعم</p>
@@ -2368,9 +2370,9 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
             placeholder="ID المستخدم"
             value={blockUserId}
             onChange={(e) => setBlockUserId(e.target.value)}
-            className="flex-1"
+            className={`${INPUT_SURFACE_CLASS} flex-1`}
           />
-          <Button size="sm" onClick={handleBlockUser} disabled={loading || !blockUserId.trim()} variant="destructive">
+          <Button size="sm" className={BUTTON_3D_DESTRUCTIVE_CLASS} onClick={handleBlockUser} disabled={loading || !blockUserId.trim()}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "حظر"}
           </Button>
         </div>
@@ -2385,9 +2387,9 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
             <ScrollArea className="max-h-32">
               <div className="space-y-1">
                 {mediaSettings.blockedUsers.map((u: ChatFeatureUser) => (
-                  <div key={u.id} className="flex items-center justify-between text-sm bg-muted/50 rounded p-1.5">
+                  <div key={u.id} className="flex items-center justify-between rounded-2xl bg-muted/50 p-1.5 text-sm">
                     <span className="truncate">{u.username || u.nickname || u.id}</span>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleUnblockUser(u.id || '')}>
+                    <Button className={`${BUTTON_3D_CLASS} h-6 w-6 p-0`} onClick={() => handleUnblockUser(u.id || '')}>
                       <X className="h-3 w-3" />
                     </Button>
                   </div>
@@ -2398,7 +2400,7 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
         </>
       )}
 
-      <div className="bg-blue-500/10 border border-blue-500/20 rounded p-3">
+      <div className="rounded-[24px] border border-blue-500/20 bg-blue-500/10 p-3">
         <p className="text-xs text-muted-foreground">
           💡 يمكن للمشرف إرسال وسائط دائماً. هذا التحكم يخص المستخدمين فقط.
         </p>

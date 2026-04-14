@@ -50,6 +50,8 @@ import {
   X,
   Check,
   Shield,
+  Copy,
+  Wallet,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -113,6 +115,66 @@ interface UserType {
   lastLoginAt?: string;
 }
 
+interface FinancialTimelineEntry {
+  id: string;
+  source: "fiat" | "project";
+  currencyCode: string;
+  type: string;
+  status: string;
+  signedAmount: number;
+  absoluteAmount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  reference: string;
+  description: string;
+  link: string;
+  createdAt: string;
+}
+
+interface FinancialNotificationEntry {
+  id: string;
+  title: string;
+  titleAr?: string | null;
+  message: string;
+  messageAr?: string | null;
+  link: string;
+  isRead: boolean;
+  priority: string;
+  reference: string;
+  createdAt: string;
+}
+
+interface UserFinancialOverviewResponse {
+  user: UserType;
+  projectWallet: {
+    purchasedBalance: string;
+    earnedBalance: string;
+    totalBalance: string;
+    totalConverted: string;
+    totalSpent: string;
+    totalEarned: string;
+    lockedBalance: string;
+  } | null;
+  metrics: {
+    fiatBalance: number;
+    fiatCurrencyCode: string;
+    projectBalance: number;
+    fiatCredits: number;
+    fiatDebits: number;
+    projectCredits: number;
+    projectDebits: number;
+    fiatNet: number;
+    projectNet: number;
+  };
+  profileIndex: Array<{
+    key: string;
+    label: string;
+    value: string;
+  }>;
+  financialTimeline: FinancialTimelineEntry[];
+  transactionNotifications: FinancialNotificationEntry[];
+}
+
 export default function AdminUsersPage() {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
@@ -124,6 +186,7 @@ export default function AdminUsersPage() {
   const [viewUserSheet, setViewUserSheet] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<UserType>>({});
+  const [userDataSearch, setUserDataSearch] = useState("");
 
   // Alert-based highlighting: fetch entity IDs that have unread alerts for this section
   const { data: unreadData } = useUnreadAlertEntities("/admin/users");
@@ -133,6 +196,12 @@ export default function AdminUsersPage() {
   const { data: users, isLoading } = useQuery({
     queryKey: ["/api/admin/users"],
     queryFn: () => adminFetch("/api/admin/users"),
+  });
+
+  const { data: selectedUserOverview, isLoading: selectedUserOverviewLoading } = useQuery<UserFinancialOverviewResponse>({
+    queryKey: ["/api/admin/users", selectedUser?.id, "financial-overview", userDataSearch],
+    queryFn: () => adminFetch(`/api/admin/users/${selectedUser!.id}/financial-overview?search=${encodeURIComponent(userDataSearch)}&limit=300`),
+    enabled: viewUserSheet && !!selectedUser?.id,
   });
 
   const updateUserMutation = useMutation({
@@ -339,6 +408,7 @@ export default function AdminUsersPage() {
     });
     setViewUserSheet(true);
     setEditMode(false);
+    setUserDataSearch("");
   };
 
   // When clicking a user row, mark its alert as read (if any), then open user view
@@ -389,6 +459,20 @@ export default function AdminUsersPage() {
 
   const formatCurrency = (value: string | number | undefined | null): string => {
     return `$${safeNumber(value).toFixed(2)}`;
+  };
+
+  const copyReference = async (reference: string) => {
+    try {
+      await navigator.clipboard.writeText(reference);
+      toast({ title: "Reference copied", description: reference });
+    } catch {
+      toast({ title: "Copy failed", description: "Could not copy reference", variant: "destructive" });
+    }
+  };
+
+  const openUserSection = (target: string) => {
+    if (!target || !target.startsWith("/")) return;
+    window.open(target, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -643,6 +727,41 @@ export default function AdminUsersPage() {
 
           {selectedUser && (
             <div className="mt-6 space-y-6">
+              <div className="space-y-2">
+                <Label>User-scoped Search</Label>
+                <div className="relative">
+                  <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="min-h-[44px] ps-10"
+                    placeholder="Search profile fields, references, and financial activity for this user"
+                    value={userDataSearch}
+                    onChange={(event) => setUserDataSearch(event.target.value)}
+                    data-testid="input-user-financial-search"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Search className="h-4 w-4" />
+                  Indexed User Data
+                </h4>
+                {selectedUserOverviewLoading ? (
+                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading indexed user data...</div>
+                ) : !selectedUserOverview?.profileIndex?.length ? (
+                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">No indexed fields matched this user filter.</div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedUserOverview.profileIndex.map((item) => (
+                      <div key={item.key} className="rounded border p-2">
+                        <p className="text-[11px] text-muted-foreground">{item.label}</p>
+                        <p className="text-sm font-medium break-words" dir="auto">{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
                 <Avatar className="h-16 w-16">
                   <AvatarImage src={selectedUser.profilePicture} />
@@ -674,7 +793,7 @@ export default function AdminUsersPage() {
                 <Card className="p-4">
                   <div className="text-sm text-muted-foreground">Balance</div>
                   <div className="text-2xl font-bold text-primary">
-                    {formatCurrency(selectedUser.balance)}
+                    {formatCurrency(selectedUserOverview?.metrics?.fiatBalance ?? selectedUser.balance)}
                   </div>
                 </Card>
                 <Card className="p-4">
@@ -861,6 +980,163 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3 bg-muted rounded-lg">
+                    <div className="text-xs text-muted-foreground">Real Currency Net (credits - debits)</div>
+                    <div className={`font-semibold ${safeNumber(selectedUserOverview?.metrics?.fiatNet) >= 0 ? "text-green-500" : "text-red-500"}`}>
+                      {formatCurrency(selectedUserOverview?.metrics?.fiatNet || 0)}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-muted rounded-lg">
+                    <div className="text-xs text-muted-foreground">Project Currency Net (credits - debits)</div>
+                    <div className={`font-semibold ${safeNumber(selectedUserOverview?.metrics?.projectNet) >= 0 ? "text-green-500" : "text-red-500"}`}>
+                      {safeNumber(selectedUserOverview?.metrics?.projectNet).toFixed(2)} VEX
+                    </div>
+                  </div>
+                </div>
+
+                {selectedUserOverview?.projectWallet && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3 bg-muted rounded-lg">
+                      <div className="text-xs text-muted-foreground">Project Wallet Total</div>
+                      <div className="font-semibold text-primary">{safeNumber(selectedUserOverview.projectWallet.totalBalance).toFixed(2)} VEX</div>
+                    </div>
+                    <div className="p-3 bg-muted rounded-lg">
+                      <div className="text-xs text-muted-foreground">Purchased Balance</div>
+                      <div className="font-semibold">{safeNumber(selectedUserOverview.projectWallet.purchasedBalance).toFixed(2)} VEX</div>
+                    </div>
+                    <div className="p-3 bg-muted rounded-lg">
+                      <div className="text-xs text-muted-foreground">Earned Balance</div>
+                      <div className="font-semibold">{safeNumber(selectedUserOverview.projectWallet.earnedBalance).toFixed(2)} VEX</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Wallet className="h-4 w-4" />
+                  Financial Movement Log
+                </h4>
+
+                {selectedUserOverviewLoading ? (
+                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading financial movement log...</div>
+                ) : !selectedUserOverview?.financialTimeline?.length ? (
+                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">No financial movements found for this user/filter.</div>
+                ) : (
+                  <div className="space-y-2 max-h-[340px] overflow-y-auto">
+                    {selectedUserOverview.financialTimeline.map((entry) => (
+                      <div key={entry.id} className="rounded-lg border p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={entry.signedAmount >= 0 ? "default" : "destructive"}>
+                              {entry.signedAmount >= 0 ? "credit" : "debit"}
+                            </Badge>
+                            <Badge variant="outline">{entry.source === "project" ? "project currency" : "real currency"}</Badge>
+                            <Badge variant="outline">{entry.type}</Badge>
+                          </div>
+                          <div className={`font-semibold ${entry.signedAmount >= 0 ? "text-green-500" : "text-red-500"}`}>
+                            {entry.signedAmount >= 0 ? "+" : "-"}
+                            {entry.absoluteAmount.toFixed(2)} {entry.currencyCode}
+                          </div>
+                        </div>
+
+                        <div className="mt-2 text-sm text-muted-foreground">
+                          {entry.description || "No description"}
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span>Before: {entry.balanceBefore.toFixed(2)}</span>
+                          <span>After: {entry.balanceAfter.toFixed(2)}</span>
+                          <span>Status: {entry.status}</span>
+                          <span>{new Date(entry.createdAt).toLocaleString()}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 px-2 text-[11px]"
+                            onClick={() => openUserSection(entry.link || "/transactions")}
+                          >
+                            Open Section
+                          </Button>
+                        </div>
+
+                        <div className="mt-2 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-2 py-1 text-xs">
+                          <span className="font-medium text-primary">Ref:</span>
+                          <span className="font-mono">{entry.reference}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                            onClick={() => copyReference(entry.reference)}
+                            data-testid={`button-copy-financial-ref-${entry.id}`}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="font-semibold flex items-center gap-2">
+                  <Gift className="h-4 w-4" />
+                  Financial Notifications
+                </h4>
+
+                {selectedUserOverviewLoading ? (
+                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">Loading transaction notifications...</div>
+                ) : !selectedUserOverview?.transactionNotifications?.length ? (
+                  <div className="rounded-lg border p-4 text-sm text-muted-foreground">No financial notifications found for this user/filter.</div>
+                ) : (
+                  <div className="space-y-2 max-h-[260px] overflow-y-auto">
+                    {selectedUserOverview.transactionNotifications.map((item) => (
+                      <div key={item.id} className="rounded-lg border p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold">{item.title}</p>
+                            <p className="text-xs text-muted-foreground">{item.message}</p>
+                          </div>
+                          <Badge variant={item.isRead ? "outline" : "default"}>{item.isRead ? "read" : "unread"}</Badge>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span>Priority: {item.priority}</span>
+                          <span>{new Date(item.createdAt).toLocaleString()}</span>
+                          <span>Link: {item.link || "/transactions"}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-6 px-2 text-[11px]"
+                            onClick={() => openUserSection(item.link || "/transactions")}
+                          >
+                            Open Section
+                          </Button>
+                        </div>
+
+                        <div className="mt-2 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-2 py-1 text-xs">
+                          <span className="font-medium text-primary">Ref:</span>
+                          <span className="font-mono">{item.reference}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                            onClick={() => copyReference(item.reference)}
+                            data-testid={`button-copy-notification-ref-${item.id}`}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4">

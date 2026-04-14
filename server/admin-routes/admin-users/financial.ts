@@ -1,13 +1,22 @@
 import type { Express, Response } from "express";
 import { storage } from "../../storage";
-import { users } from "@shared/schema";
+import { users, transactions } from "@shared/schema";
 import { sendNotification } from "../../websocket";
 import { db } from "../../db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 import { toSafeUser } from "../../lib/safe-user";
 
 export function registerUserFinancialRoutes(app: Express) {
+
+  const parseNumeric = (value: unknown): number => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    if (typeof value === "string") {
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
 
   // Adjust user balance (add or subtract)
   app.post("/api/admin/users/:id/balance-adjust", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
@@ -33,28 +42,62 @@ export function registerUserFinancialRoutes(app: Express) {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const currentBalance = parseFloat(user.balance);
-      const newBalance = type === "add" ? currentBalance + adjustAmount : currentBalance - adjustAmount;
+      const adjustmentResult = await db.transaction(async (tx) => {
+        const signedDelta = type === "add" ? adjustAmount : -adjustAmount;
 
-      if (newBalance < 0) {
-        return res.status(400).json({ error: "Balance cannot be negative" });
+        const updateQuery = type === "add"
+          ? sql`
+            UPDATE users
+            SET balance = balance + ${adjustAmount}, updated_at = NOW()
+            WHERE id = ${id}
+            RETURNING *
+          `
+          : sql`
+            UPDATE users
+            SET balance = balance - ${adjustAmount}, updated_at = NOW()
+            WHERE id = ${id} AND balance >= ${adjustAmount}
+            RETURNING *
+          `;
+
+        const updateRows = await tx.execute(updateQuery);
+        const updatedUser = (updateRows.rows as Record<string, unknown>[])[0];
+        if (!updatedUser) {
+          return { success: false as const, error: "Balance cannot be negative" };
+        }
+
+        const balanceAfter = parseNumeric(updatedUser.balance);
+        const balanceBefore = balanceAfter - signedDelta;
+        const internalReference = `admin_balance_adjust:${id}:${Date.now()}`;
+
+        const [createdTransaction] = await tx.insert(transactions).values({
+          userId: id,
+          type: type === "add" ? "bonus" : "withdrawal",
+          status: "completed",
+          amount: adjustAmount.toFixed(2),
+          balanceBefore: balanceBefore.toFixed(2),
+          balanceAfter: balanceAfter.toFixed(2),
+          description: `Admin adjustment: ${reason}`,
+          adminNote: reason,
+          referenceId: internalReference,
+        }).returning();
+
+        return {
+          success: true as const,
+          updatedUser,
+          createdTransaction,
+          balanceBefore,
+          balanceAfter,
+        };
+      });
+
+      if (!adjustmentResult.success) {
+        return res.status(400).json({ error: adjustmentResult.error });
       }
 
-      const [updated] = await db.update(users)
-        .set({ balance: String(newBalance), updatedAt: new Date() })
-        .where(eq(users.id, id))
-        .returning();
-
-      await storage.createTransaction({
-        userId: id,
-        type: type === "add" ? "bonus" : "withdrawal",
-        status: "completed",
-        amount: String(adjustAmount),
-        balanceBefore: String(currentBalance),
-        balanceAfter: String(newBalance),
-        description: `Admin adjustment: ${reason}`,
-        adminNote: reason
-      });
+      const updated = adjustmentResult.updatedUser;
+      const createdTransaction = adjustmentResult.createdTransaction;
+      const currentBalance = adjustmentResult.balanceBefore;
+      const newBalance = adjustmentResult.balanceAfter;
 
       await logAdminAction(req.admin!.id, "user_balance_adjust", "user", id, {
         previousValue: String(currentBalance),
@@ -71,7 +114,14 @@ export function registerUserFinancialRoutes(app: Express) {
         message: `$${adjustAmount.toFixed(2)} has been ${adjustLabel.en} your account. Reason: ${reason}`,
         messageAr: `$${adjustAmount.toFixed(2)} ${adjustLabel.ar} حسابك. السبب: ${reason}`,
         link: '/wallet',
-        metadata: JSON.stringify({ type: 'balance_adjust', amount: adjustAmount, balanceAfter: newBalance }),
+        metadata: JSON.stringify({
+          type: 'balance_adjust',
+          amount: adjustAmount,
+          balanceAfter: newBalance,
+          transactionId: createdTransaction.id,
+          referenceId: createdTransaction.publicReference,
+          internalReferenceId: createdTransaction.referenceId,
+        }),
       }).catch(() => { });
 
       res.json(toSafeUser(updated));
@@ -91,7 +141,6 @@ export function registerUserFinancialRoutes(app: Express) {
         return res.status(404).json({ error: "User not found" });
       }
 
-      const currentBalance = parseFloat(user.balance);
       const rewardAmount = parseFloat(amount);
 
       if (isNaN(rewardAmount) || rewardAmount <= 0 || rewardAmount > 1000000) {
@@ -102,23 +151,52 @@ export function registerUserFinancialRoutes(app: Express) {
         return res.status(400).json({ error: "A reason is required (minimum 3 characters)" });
       }
 
-      const newBalance = currentBalance + rewardAmount;
+      const rewardResult = await db.transaction(async (tx) => {
+        const updateRows = await tx.execute(sql`
+          UPDATE users
+          SET balance = balance + ${rewardAmount}, updated_at = NOW()
+          WHERE id = ${id}
+          RETURNING *
+        `);
 
-      const [updated] = await db.update(users)
-        .set({ balance: String(newBalance), updatedAt: new Date() })
-        .where(eq(users.id, id))
-        .returning();
+        const updatedUser = (updateRows.rows as Record<string, unknown>[])[0];
+        if (!updatedUser) {
+          return { success: false as const, error: "User not found" };
+        }
 
-      await storage.createTransaction({
-        userId: id,
-        type: "bonus",
-        status: "completed",
-        amount: String(rewardAmount),
-        balanceBefore: String(currentBalance),
-        balanceAfter: String(newBalance),
-        description: `Reward: ${reason}`,
-        adminNote: `Sent by admin: ${reason}`
+        const newBalance = parseNumeric(updatedUser.balance);
+        const currentBalance = newBalance - rewardAmount;
+        const internalReference = `admin_reward:${id}:${Date.now()}`;
+
+        const [createdTransaction] = await tx.insert(transactions).values({
+          userId: id,
+          type: "bonus",
+          status: "completed",
+          amount: rewardAmount.toFixed(2),
+          balanceBefore: currentBalance.toFixed(2),
+          balanceAfter: newBalance.toFixed(2),
+          description: `Reward: ${reason}`,
+          adminNote: `Sent by admin: ${reason}`,
+          referenceId: internalReference,
+        }).returning();
+
+        return {
+          success: true as const,
+          updatedUser,
+          createdTransaction,
+          currentBalance,
+          newBalance,
+        };
       });
+
+      if (!rewardResult.success) {
+        return res.status(404).json({ error: rewardResult.error });
+      }
+
+      const updated = rewardResult.updatedUser;
+      const createdTransaction = rewardResult.createdTransaction;
+      const currentBalance = rewardResult.currentBalance;
+      const newBalance = rewardResult.newBalance;
 
       await logAdminAction(req.admin!.id, "reward_sent", "user", id, {
         newValue: String(rewardAmount),
@@ -126,14 +204,22 @@ export function registerUserFinancialRoutes(app: Express) {
       }, req);
 
       await sendNotification(id, {
-        type: 'promotion',
+        type: 'transaction',
         priority: 'high',
         title: 'Reward Received! 🎁',
         titleAr: 'حصلت على مكافأة! 🎁',
         message: `You received a $${rewardAmount.toFixed(2)} reward! Reason: ${reason}`,
         messageAr: `حصلت على مكافأة بقيمة $${rewardAmount.toFixed(2)}! السبب: ${reason}`,
         link: '/wallet',
-        metadata: JSON.stringify({ type: 'reward', amount: rewardAmount }),
+        metadata: JSON.stringify({
+          type: 'reward',
+          amount: rewardAmount,
+          balanceBefore: currentBalance,
+          balanceAfter: newBalance,
+          transactionId: createdTransaction.id,
+          referenceId: createdTransaction.publicReference,
+          internalReferenceId: createdTransaction.referenceId,
+        }),
       }).catch(() => { });
 
       res.json({ ...toSafeUser(updated), rewardSent: rewardAmount });

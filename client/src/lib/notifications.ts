@@ -15,6 +15,42 @@ export interface AppNotification {
   createdAt: string;
 }
 
+export function parseNotificationMetadata(metadata: string | null | undefined): Record<string, unknown> {
+  if (!metadata || typeof metadata !== "string") return {};
+  try {
+    const parsed = JSON.parse(metadata);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+export function getFinancialNotificationReference(notification: AppNotification): string | null {
+  const metadata = parseNotificationMetadata(notification.metadata);
+  const candidates = [
+    metadata.referenceId,
+    metadata.reference,
+    metadata.transactionReference,
+    metadata.publicReference,
+    metadata.ref,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  if (notification.type === "transaction") {
+    return `NTX-${notification.id.slice(0, 8).toUpperCase()}`;
+  }
+
+  return null;
+}
+
 /** Defense-in-depth: validate notification links on client side before navigation */
 export function normalizeSafeNotificationLink(link: string | null | undefined): string | null {
   if (!link || typeof link !== 'string') return null;

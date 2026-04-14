@@ -52,6 +52,16 @@ import {
 } from "lucide-react";
 import { SiGoogle, SiFacebook, SiTelegram, SiWhatsapp, SiX, SiApple, SiDiscord, SiLinkedin, SiGithub, SiTiktok, SiInstagram } from "react-icons/si";
 
+const SURFACE_CARD_CLASS = "rounded-[28px] border border-slate-200/70 bg-white/95 shadow-[0_18px_50px_-24px_rgba(15,23,42,0.35)] backdrop-blur dark:border-slate-800/70 dark:bg-slate-950/90";
+const STAT_CARD_CLASS = `${SURFACE_CARD_CLASS} overflow-hidden`;
+const DATA_CARD_CLASS = `${SURFACE_CARD_CLASS} overflow-hidden`;
+const BUTTON_3D_CLASS = "rounded-2xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-[0_8px_0_0_rgba(226,232,240,0.95)] transition-transform duration-150 hover:-translate-y-0.5 active:translate-y-1 active:shadow-[0_3px_0_0_rgba(226,232,240,0.95)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:shadow-[0_8px_0_0_rgba(15,23,42,0.95)]";
+const BUTTON_3D_PRIMARY_CLASS = "rounded-2xl border border-sky-500 bg-sky-500 px-4 py-2 font-semibold text-white shadow-[0_8px_0_0_rgba(3,105,161,0.45)] transition-transform duration-150 hover:-translate-y-0.5 hover:bg-sky-400 active:translate-y-1 active:shadow-[0_3px_0_0_rgba(3,105,161,0.45)]";
+const BUTTON_3D_DESTRUCTIVE_CLASS = "rounded-2xl border border-red-500 bg-red-500 px-4 py-2 font-semibold text-white shadow-[0_8px_0_0_rgba(185,28,28,0.35)] transition-transform duration-150 hover:-translate-y-0.5 hover:bg-red-400 active:translate-y-1 active:shadow-[0_3px_0_0_rgba(185,28,28,0.35)]";
+const INPUT_SURFACE_CLASS = "h-12 rounded-2xl border-slate-200 bg-white/90 shadow-none focus-visible:ring-2 focus-visible:ring-sky-200 dark:border-slate-700 dark:bg-slate-900/80 dark:focus-visible:ring-sky-900";
+const TEXTAREA_SURFACE_CLASS = "min-h-[110px] rounded-2xl border-slate-200 bg-white/90 shadow-none focus-visible:ring-2 focus-visible:ring-sky-200 dark:border-slate-700 dark:bg-slate-900/80 dark:focus-visible:ring-sky-900";
+const DIALOG_SURFACE_CLASS = "max-h-[92vh] overflow-y-auto rounded-[32px] border border-slate-200/80 bg-white/98 p-0 shadow-[0_24px_80px_-28px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-950/98 sm:max-w-3xl";
+
 function getAdminToken() {
   return localStorage.getItem("adminToken");
 }
@@ -388,29 +398,25 @@ function PlatformCard({
   const sourceConflict = runtime?.oauth?.credentials?.conflicts?.[0] || runtime?.conflicts?.[0];
 
   return (
-    <Card className="relative overflow-visible hover-elevate">
+    <Card className={`${DATA_CARD_CLASS} relative overflow-visible`}>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${platform.isEnabled ? 'bg-primary/10' : 'bg-muted'}`}>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex items-start gap-3">
+            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${platform.isEnabled ? 'bg-primary/10' : 'bg-muted'}`}>
               <Icon className={`w-6 h-6 ${platform.isEnabled ? 'text-primary' : 'text-muted-foreground'}`} />
             </div>
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                {isArabic ? platform.displayNameAr || platform.displayName : platform.displayName}
+            <div className="min-w-0">
+              <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                <span className="truncate">{isArabic ? platform.displayNameAr || platform.displayName : platform.displayName}</span>
                 <Badge variant={platform.isEnabled ? "default" : "secondary"} className="text-xs">
-                  {platform.isEnabled
-                    ? (isArabic ? "مفعّل" : "Enabled")
-                    : (isArabic ? "معطّل" : "Disabled")}
+                  {platform.isEnabled ? (isArabic ? "مفعّل" : "Enabled") : (isArabic ? "معطّل" : "Disabled")}
                 </Badge>
                 {platform.isEnabled && oauthReady !== null && (
                   <Badge
                     variant={oauthReady ? "outline" : "destructive"}
                     className={`text-xs ${oauthReady ? 'border-green-500 text-green-600' : ''}`}
                   >
-                    {oauthReady
-                      ? (isArabic ? "OAuth جاهز" : "OAuth Ready")
-                      : (isArabic ? "OAuth غير جاهز" : "OAuth Not Ready")}
+                    {oauthReady ? (isArabic ? "OAuth جاهز" : "OAuth Ready") : (isArabic ? "OAuth غير جاهز" : "OAuth Not Ready")}
                   </Badge>
                 )}
                 {platform.isEnabled && otpReady !== null && (
@@ -418,9 +424,7 @@ function PlatformCard({
                     variant={otpReady ? "outline" : "destructive"}
                     className={`text-xs ${otpReady ? 'border-green-500 text-green-600' : ''}`}
                   >
-                    {otpReady
-                      ? (isArabic ? "OTP جاهز" : "OTP Ready")
-                      : (isArabic ? "OTP غير جاهز" : "OTP Not Ready")}
+                    {otpReady ? (isArabic ? "OTP جاهز" : "OTP Ready") : (isArabic ? "OTP غير جاهز" : "OTP Not Ready")}
                   </Badge>
                 )}
                 {platform.isEnabled && runtime?.oauth.enabled && (
@@ -432,64 +436,41 @@ function PlatformCard({
                   </Badge>
                 )}
               </CardTitle>
-              <CardDescription className="text-xs mt-0.5 flex items-center gap-2">
+              <CardDescription className="mt-1 flex flex-wrap items-center gap-2 text-xs">
                 {platform.type === "oauth" && (
                   <Badge variant="outline" className="text-xs">
-                    <Shield className="w-3 h-3 me-1" />
+                    <Shield className="me-1 w-3 h-3" />
                     {isArabic ? "تسجيل دخول" : "Login"}
                   </Badge>
                 )}
                 {platform.type === "otp" && (
                   <Badge variant="outline" className="text-xs">
-                    <MessageSquare className="w-3 h-3 me-1" />
+                    <MessageSquare className="me-1 w-3 h-3" />
                     OTP
                   </Badge>
                 )}
                 {platform.type === "both" && (
                   <>
                     <Badge variant="outline" className="text-xs">
-                      <Shield className="w-3 h-3 me-1" />
+                      <Shield className="me-1 w-3 h-3" />
                       {isArabic ? "تسجيل دخول" : "Login"}
                     </Badge>
                     <Badge variant="outline" className="text-xs">
-                      <MessageSquare className="w-3 h-3 me-1" />
+                      <MessageSquare className="me-1 w-3 h-3" />
                       OTP
                     </Badge>
                   </>
                 )}
               </CardDescription>
-              {platform.isEnabled && runtimeIssues.length > 0 && (
-                <p className="text-xs text-destructive mt-1">
-                  {runtimeIssues[0]}
-                </p>
-              )}
-              {platform.isEnabled && runtimeWarnings.length > 0 && (
-                <p className="text-xs text-amber-600 mt-1 flex items-start gap-1">
-                  <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                  <span>{runtimeWarnings[0]}</span>
-                </p>
-              )}
-              {platform.isEnabled && sourceConflict && (
-                <p className="text-xs text-destructive mt-1 flex items-start gap-1">
-                  <AlertTriangle className="w-3 h-3 mt-0.5 shrink-0" />
-                  <span>{sourceConflict.reason}</span>
-                </p>
-              )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onEdit}
-              data-testid={`button-edit-${platform.name}`}
-            >
-              <Settings2 className="w-4 h-4 me-1" />
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button className={BUTTON_3D_CLASS} onClick={onEdit} data-testid={`button-edit-${platform.name}`}>
+              <Settings2 className="me-2 w-4 h-4" />
               {isArabic ? "الإعدادات" : "Settings"}
             </Button>
             <Button
-              variant={platform.isEnabled ? "destructive" : "default"}
-              size="sm"
+              className={platform.isEnabled ? BUTTON_3D_DESTRUCTIVE_CLASS : BUTTON_3D_PRIMARY_CLASS}
               onClick={onToggle}
               disabled={isToggling}
               data-testid={`button-toggle-${platform.name}`}
@@ -498,28 +479,54 @@ function PlatformCard({
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : platform.isEnabled ? (
                 <>
-                  <PowerOff className="w-4 h-4 me-1" />
+                  <PowerOff className="me-2 w-4 h-4" />
                   {isArabic ? "إيقاف" : "Disable"}
                 </>
               ) : (
                 <>
-                  <Power className="w-4 h-4 me-1" />
+                  <Power className="me-2 w-4 h-4" />
                   {isArabic ? "تفعيل" : "Enable"}
                 </>
               )}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onDelete}
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              data-testid={`button-delete-${platform.name}`}
-            >
-              <Trash2 className="w-4 h-4" />
+            <Button className={`${BUTTON_3D_CLASS} h-10 w-10 p-0`} onClick={onDelete} data-testid={`button-delete-${platform.name}`}>
+              <Trash2 className="w-4 h-4 text-destructive" />
             </Button>
           </div>
         </div>
       </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">{isArabic ? "النوع" : "Type"}</p>
+            <p className="mt-2 text-sm font-semibold">{platform.type.toUpperCase()}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">{isArabic ? "أولوية المصدر" : "Source Priority"}</p>
+            <p className="mt-2 text-sm font-semibold">{resolveResolutionModeLabel(runtime?.oauth?.credentials?.resolutionMode, isArabic)}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">{isArabic ? "جاهزية التشغيل" : "Runtime"}</p>
+            <p className="mt-2 text-sm font-semibold">{runtime?.runtimeReady ? (isArabic ? "جاهز" : "Ready") : (isArabic ? "يحتاج إعداد" : "Needs setup")}</p>
+          </div>
+        </div>
+
+        {platform.isEnabled && runtimeIssues.length > 0 && (
+          <p className="text-xs text-destructive mt-1">{runtimeIssues[0]}</p>
+        )}
+        {platform.isEnabled && runtimeWarnings.length > 0 && (
+          <p className="mt-1 flex items-start gap-1 text-xs text-amber-600">
+            <AlertTriangle className="mt-0.5 w-3 h-3 shrink-0" />
+            <span>{runtimeWarnings[0]}</span>
+          </p>
+        )}
+        {platform.isEnabled && sourceConflict && (
+          <p className="mt-1 flex items-start gap-1 text-xs text-destructive">
+            <AlertTriangle className="mt-0.5 w-3 h-3 shrink-0" />
+            <span>{sourceConflict.reason}</span>
+          </p>
+        )}
+      </CardContent>
     </Card>
   );
 }
@@ -639,293 +646,298 @@ function PlatformSettingsDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Settings2 className="w-5 h-5" />
-            {isArabic ? `إعدادات ${platform.displayNameAr || platform.displayName}` : `${platform.displayName} Settings`}
-          </DialogTitle>
-          <DialogDescription>
-            {isArabic
-              ? "قم بتكوين إعدادات المصادقة والتكامل لهذه المنصة"
-              : "Configure authentication and integration settings for this platform"}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className={DIALOG_SURFACE_CLASS}>
+        <div className="space-y-4 p-5 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="w-5 h-5" />
+              {isArabic ? `إعدادات ${platform.displayNameAr || platform.displayName}` : `${platform.displayName} Settings`}
+            </DialogTitle>
+            <DialogDescription>
+              {isArabic
+                ? "قم بتكوين إعدادات المصادقة والتكامل لهذه المنصة"
+                : "Configure authentication and integration settings for this platform"}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="pt-4 space-y-3">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <Shield className="w-4 h-4" />
-                {isArabic ? "مصدر الإعدادات + التوافق" : "Config Source + Compatibility"}
-              </div>
+          <div className="space-y-4 py-1">
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="pt-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Shield className="w-4 h-4" />
+                  {isArabic ? "مصدر الإعدادات + التوافق" : "Config Source + Compatibility"}
+                </div>
 
-              {platform.runtime?.oauth.enabled && (
-                <div className="space-y-1">
+                {platform.runtime?.oauth.enabled && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">
+                      {isArabic
+                        ? `نمط حل المصدر: ${resolveResolutionModeLabel(platform.runtime.oauth.credentials.resolutionMode, isArabic)}`
+                        : `Resolution mode: ${resolveResolutionModeLabel(platform.runtime.oauth.credentials.resolutionMode, isArabic)}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {isArabic
+                        ? `المصدر الفعلي الحالي: ${resolveConfigSourceLabel(platform.runtime.configSource, isArabic)}`
+                        : `Effective source: ${resolveConfigSourceLabel(platform.runtime.configSource, isArabic)}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {platform.runtime.oauth.credentials.selectedReason}
+                    </p>
+                  </div>
+                )}
+
+                {platform.runtime?.envFallback?.fields && platform.runtime.envFallback.fields.length > 0 && (
                   <p className="text-xs text-muted-foreground">
+                    {isArabic ? "متغيرات ENV المرتبطة:" : "Related ENV variables:"} {platform.runtime.envFallback.fields.join(", ")}
+                  </p>
+                )}
+
+                {(platform.runtime?.warnings || []).slice(0, 2).map((warning, index) => (
+                  <div key={`${platform.id}-warning-${index}`} className="text-xs text-amber-700 flex items-start gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span>{warning}</span>
+                  </div>
+                ))}
+
+                {(platform.runtime?.oauth?.credentials?.conflicts || []).map((conflict, index) => (
+                  <div key={`${platform.id}-conflict-${index}`} className="text-xs text-destructive flex items-start gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span>{conflict.reason}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Accordion type="single" collapsible className="w-full rounded-[24px] border px-3">
+              <AccordionItem value="oauth-flow">
+                <AccordionTrigger>
+                  {isArabic ? "تدفق تسجيل الدخول (ويب + تطبيق)" : "Login Flow (Web + App)"}
+                </AccordionTrigger>
+                <AccordionContent className="space-y-1 text-xs text-muted-foreground">
+                  <p>
                     {isArabic
-                      ? `نمط حل المصدر: ${resolveResolutionModeLabel(platform.runtime.oauth.credentials.resolutionMode, isArabic)}`
-                      : `Resolution mode: ${resolveResolutionModeLabel(platform.runtime.oauth.credentials.resolutionMode, isArabic)}`}
+                      ? "الويب: الضغط على أيقونة Google يفتح نافذة منبثقة OAuth ثم يتم التأكيد والعودة تلقائيا."
+                      : "Web: clicking Google icon opens OAuth popup, confirms login, then returns automatically."}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p>
                     {isArabic
-                      ? `المصدر الفعلي الحالي: ${resolveConfigSourceLabel(platform.runtime.configSource, isArabic)}`
-                      : `Effective source: ${resolveConfigSourceLabel(platform.runtime.configSource, isArabic)}`}
+                      ? "التطبيق: يتم فتح متصفح النظام ثم العودة عبر /auth/callback لإكمال تسجيل الدخول بشكل آمن."
+                      : "App: system browser is used, then it returns via /auth/callback to complete secure sign-in."}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {platform.runtime.oauth.credentials.selectedReason}
+                </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="env-policy">
+                <AccordionTrigger>
+                  {isArabic ? "سياسة Admin مقابل .env" : "Admin vs .env Policy"}
+                </AccordionTrigger>
+                <AccordionContent className="space-y-1 text-xs text-muted-foreground">
+                  <p>
+                    {isArabic
+                      ? "الأولوية قابلة للتغيير لكل منصة: ENV أولاً أو الأدمن أولاً."
+                      : "Precedence is configurable per provider: ENV-first or Admin-first."}
                   </p>
-                </div>
-              )}
+                  <p>
+                    {isArabic
+                      ? "عند وجود قيم مختلفة بين المصدرين ستظهر تحذيرات تعارض مع السبب والمصدر الفعلي المستخدم."
+                      : "When ENV and Admin values differ, conflict diagnostics will explain why and which source is active."}
+                  </p>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
 
-              {platform.runtime?.envFallback?.fields && platform.runtime.envFallback.fields.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {isArabic ? "متغيرات ENV المرتبطة:" : "Related ENV variables:"} {platform.runtime.envFallback.fields.join(", ")}
-                </p>
-              )}
-
-              {(platform.runtime?.warnings || []).slice(0, 2).map((warning, index) => (
-                <div key={`${platform.id}-warning-${index}`} className="text-xs text-amber-700 flex items-start gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                  <span>{warning}</span>
-                </div>
-              ))}
-
-              {(platform.runtime?.oauth?.credentials?.conflicts || []).map((conflict, index) => (
-                <div key={`${platform.id}-conflict-${index}`} className="text-xs text-destructive flex items-start gap-1">
-                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                  <span>{conflict.reason}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Accordion type="single" collapsible className="w-full border rounded-md px-3">
-            <AccordionItem value="oauth-flow">
-              <AccordionTrigger>
-                {isArabic ? "تدفق تسجيل الدخول (ويب + تطبيق)" : "Login Flow (Web + App)"}
-              </AccordionTrigger>
-              <AccordionContent className="space-y-1 text-xs text-muted-foreground">
-                <p>
-                  {isArabic
-                    ? "الويب: الضغط على أيقونة Google يفتح نافذة منبثقة OAuth ثم يتم التأكيد والعودة تلقائيا."
-                    : "Web: clicking Google icon opens OAuth popup, confirms login, then returns automatically."}
-                </p>
-                <p>
-                  {isArabic
-                    ? "التطبيق: يتم فتح متصفح النظام ثم العودة عبر /auth/callback لإكمال تسجيل الدخول بشكل آمن."
-                    : "App: system browser is used, then it returns via /auth/callback to complete secure sign-in."}
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-
-            <AccordionItem value="env-policy">
-              <AccordionTrigger>
-                {isArabic ? "سياسة Admin مقابل .env" : "Admin vs .env Policy"}
-              </AccordionTrigger>
-              <AccordionContent className="space-y-1 text-xs text-muted-foreground">
-                <p>
-                  {isArabic
-                    ? "الأولوية قابلة للتغيير لكل منصة: ENV أولاً أو الأدمن أولاً."
-                    : "Precedence is configurable per provider: ENV-first or Admin-first."}
-                </p>
-                <p>
-                  {isArabic
-                    ? "عند وجود قيم مختلفة بين المصدرين ستظهر تحذيرات تعارض مع السبب والمصدر الفعلي المستخدم."
-                    : "When ENV and Admin values differ, conflict diagnostics will explain why and which source is active."}
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-
-          <div className="grid gap-4">
-            <div className="flex items-center justify-between">
-              <Label>{isArabic ? "نوع الاستخدام" : "Usage Type"}</Label>
-              <Select
-                value={formData.type || platform.type}
-                onValueChange={(value) => setFormData({ ...formData, type: value as "oauth" | "otp" | "both" })}
-              >
-                <SelectTrigger className="w-48" data-testid="select-platform-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {oauthSupported && <SelectItem value="oauth">{isArabic ? "تسجيل دخول فقط" : "Login Only"}</SelectItem>}
-                  {otpSupported && <SelectItem value="otp">{isArabic ? "OTP فقط" : "OTP Only"}</SelectItem>}
-                  {oauthSupported && otpSupported && <SelectItem value="both">{isArabic ? "تسجيل دخول + OTP" : "Login + OTP"}</SelectItem>}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {(nextType === "oauth" || nextType === "both") && oauthSupported && (
-              <div className="space-y-2">
-                <Label>{isArabic ? "أولوية مصدر OAuth" : "OAuth Source Priority"}</Label>
+            <div className="grid gap-4">
+              <div className="flex items-center justify-between">
+                <Label>{isArabic ? "نوع الاستخدام" : "Usage Type"}</Label>
                 <Select
-                  value={formData.oauthResolutionMode || platform.runtime?.oauth?.credentials?.resolutionMode || "env-first"}
-                  onValueChange={(value) => setFormData({ ...formData, oauthResolutionMode: value as "env-first" | "admin-first" })}
+                  value={formData.type || platform.type}
+                  onValueChange={(value) => setFormData({ ...formData, type: value as "oauth" | "otp" | "both" })}
                 >
-                  <SelectTrigger data-testid="select-oauth-resolution-mode">
+                  <SelectTrigger className={`${INPUT_SURFACE_CLASS} w-48`} data-testid="select-platform-type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="env-first">{isArabic ? "ENV أولاً ثم الأدمن" : "ENV First -> Admin Fallback"}</SelectItem>
-                    <SelectItem value="admin-first">{isArabic ? "الأدمن أولاً ثم ENV" : "Admin First -> ENV Fallback"}</SelectItem>
+                    {oauthSupported && <SelectItem value="oauth">{isArabic ? "تسجيل دخول فقط" : "Login Only"}</SelectItem>}
+                    {otpSupported && <SelectItem value="otp">{isArabic ? "OTP فقط" : "OTP Only"}</SelectItem>}
+                    {oauthSupported && otpSupported && <SelectItem value="both">{isArabic ? "تسجيل دخول + OTP" : "Login + OTP"}</SelectItem>}
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] text-muted-foreground">
-                  {isArabic
-                    ? "يمكنك تغيير المصدر النشط لكل منصة. عند التعارض ستظهر تفاصيل السبب في أعلى النافذة."
-                    : "Choose the active source order per provider. Conflict diagnostics appear at the top when values diverge."}
-                </p>
               </div>
-            )}
 
-            {fieldsToRender.map((field) => (
-              <div key={field} className="space-y-2">
-                <Label htmlFor={field}>
-                  {isArabic ? (FIELD_LABELS[field]?.ar || field) : (FIELD_LABELS[field]?.en || field)}
-                </Label>
-                {field === "otpTemplate" ? (
-                  <Textarea
-                    id={field}
-                    value={(formData as Record<string, unknown>)[field] as string || ""}
-                    onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
-                    placeholder={isArabic ? "رمز التحقق الخاص بك هو: {{code}}" : "Your verification code is: {{code}}"}
-                    data-testid={`input-${field}`}
-                  />
-                ) : (
-                  <Input
-                    id={field}
-                    type={field.toLowerCase().includes("secret") || field.toLowerCase().includes("token") || field.toLowerCase().includes("key") ? "password" : "text"}
-                    value={(formData as Record<string, unknown>)[field] as string || ""}
-                    onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
-                    placeholder={isArabic ? (FIELD_LABELS[field]?.ar || field) : (FIELD_LABELS[field]?.en || field)}
-                    data-testid={`input-${field}`}
-                  />
-                )}
-                {field === "callbackUrl" && (
+              {(nextType === "oauth" || nextType === "both") && oauthSupported && (
+                <div className="space-y-2">
+                  <Label>{isArabic ? "أولوية مصدر OAuth" : "OAuth Source Priority"}</Label>
+                  <Select
+                    value={formData.oauthResolutionMode || platform.runtime?.oauth?.credentials?.resolutionMode || "env-first"}
+                    onValueChange={(value) => setFormData({ ...formData, oauthResolutionMode: value as "env-first" | "admin-first" })}
+                  >
+                    <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-oauth-resolution-mode">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="env-first">{isArabic ? "ENV أولاً ثم الأدمن" : "ENV First -> Admin Fallback"}</SelectItem>
+                      <SelectItem value="admin-first">{isArabic ? "الأدمن أولاً ثم ENV" : "Admin First -> ENV Fallback"}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <p className="text-[11px] text-muted-foreground">
                     {isArabic
-                      ? `المسار المتوقع: ${callbackExpectedPath}`
-                      : `Expected callback path: ${callbackExpectedPath}`}
+                      ? "يمكنك تغيير المصدر النشط لكل منصة. عند التعارض ستظهر تفاصيل السبب في أعلى النافذة."
+                      : "Choose the active source order per provider. Conflict diagnostics appear at the top when values diverge."}
                   </p>
-                )}
-              </div>
-            ))}
-
-            {shouldRenderOtpSection && (
-              <>
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <Label>{isArabic ? "تفعيل OTP" : "Enable OTP"}</Label>
-                    <p className="text-xs text-muted-foreground">
-                      {isArabic ? "السماح بإرسال رموز التحقق عبر هذه المنصة" : "Allow sending verification codes via this platform"}
-                    </p>
-                  </div>
-                  <Switch
-                    checked={formData.otpEnabled ?? platform.otpEnabled}
-                    onCheckedChange={(checked) => setFormData({ ...formData, otpEnabled: checked })}
-                    data-testid="switch-otp-enabled"
-                  />
                 </div>
+              )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="otpExpiry">
-                    {isArabic ? FIELD_LABELS.otpExpiry.ar : FIELD_LABELS.otpExpiry.en}
+              {fieldsToRender.map((field) => (
+                <div key={field} className="space-y-2">
+                  <Label htmlFor={field}>
+                    {isArabic ? (FIELD_LABELS[field]?.ar || field) : (FIELD_LABELS[field]?.en || field)}
                   </Label>
-                  <Input
-                    id="otpExpiry"
-                    type="number"
-                    value={formData.otpExpiry ?? platform.otpExpiry}
-                    onChange={(e) => setFormData({ ...formData, otpExpiry: parseInt(e.target.value) || 300 })}
-                    placeholder="300"
-                    data-testid="input-otp-expiry"
-                  />
+                  {field === "otpTemplate" ? (
+                    <Textarea
+                      id={field}
+                      value={(formData as Record<string, unknown>)[field] as string || ""}
+                      onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
+                      placeholder={isArabic ? "رمز التحقق الخاص بك هو: {{code}}" : "Your verification code is: {{code}}"}
+                      className={TEXTAREA_SURFACE_CLASS}
+                      data-testid={`input-${field}`}
+                    />
+                  ) : (
+                    <Input
+                      id={field}
+                      type={field.toLowerCase().includes("secret") || field.toLowerCase().includes("token") || field.toLowerCase().includes("key") ? "password" : "text"}
+                      value={(formData as Record<string, unknown>)[field] as string || ""}
+                      onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
+                      placeholder={isArabic ? (FIELD_LABELS[field]?.ar || field) : (FIELD_LABELS[field]?.en || field)}
+                      className={INPUT_SURFACE_CLASS}
+                      data-testid={`input-${field}`}
+                    />
+                  )}
+                  {field === "callbackUrl" && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {isArabic
+                        ? `المسار المتوقع: ${callbackExpectedPath}`
+                        : `Expected callback path: ${callbackExpectedPath}`}
+                    </p>
+                  )}
                 </div>
+              ))}
 
-                {platform.runtime?.otp.requiredFields && platform.runtime.otp.requiredFields.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {isArabic ? "الحقول المطلوبة للـ OTP:" : "Required OTP fields:"} {platform.runtime.otp.requiredFields.join(", ")}
-                  </p>
-                )}
-              </>
+              {shouldRenderOtpSection && (
+                <>
+                  <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
+                    <div>
+                      <Label>{isArabic ? "تفعيل OTP" : "Enable OTP"}</Label>
+                      <p className="text-xs text-muted-foreground">
+                        {isArabic ? "السماح بإرسال رموز التحقق عبر هذه المنصة" : "Allow sending verification codes via this platform"}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={formData.otpEnabled ?? platform.otpEnabled}
+                      onCheckedChange={(checked) => setFormData({ ...formData, otpEnabled: checked })}
+                      data-testid="switch-otp-enabled"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="otpExpiry">
+                      {isArabic ? FIELD_LABELS.otpExpiry.ar : FIELD_LABELS.otpExpiry.en}
+                    </Label>
+                    <Input
+                      id="otpExpiry"
+                      type="number"
+                      value={formData.otpExpiry ?? platform.otpExpiry}
+                      onChange={(e) => setFormData({ ...formData, otpExpiry: parseInt(e.target.value) || 300 })}
+                      placeholder="300"
+                      className={INPUT_SURFACE_CLASS}
+                      data-testid="input-otp-expiry"
+                    />
+                  </div>
+
+                  {platform.runtime?.otp.requiredFields && platform.runtime.otp.requiredFields.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {isArabic ? "الحقول المطلوبة للـ OTP:" : "Required OTP fields:"} {platform.runtime.otp.requiredFields.join(", ")}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
+            {verificationResult && (
+              <Card className={DATA_CARD_CLASS}>
+                <CardContent className="pt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {verificationResult.status === "ready" ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-destructive" />
+                      )}
+                      <span className="text-sm font-semibold">
+                        {verificationResult.status === "ready"
+                          ? (isArabic ? "تم التحقق: جاهز" : "Verification: Ready")
+                          : (isArabic ? "تم التحقق: يحتاج إصلاح" : "Verification: Needs fixes")}
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {verificationPassCount}/{verificationTotalCount} {isArabic ? "نجح" : "passed"}
+                    </Badge>
+                  </div>
+
+                  {verificationResult.issues.length > 0 && (
+                    <div className="space-y-1">
+                      {verificationResult.issues.slice(0, 4).map((issue, index) => (
+                        <p key={`issue-${index}`} className="text-xs text-destructive flex items-start gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                          <span>{issue}</span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="space-y-1">
+                    {verificationResult.checks.map((check, index) => (
+                      <div key={`${check.name}-${index}`} className="flex items-start justify-between gap-2 rounded-2xl border px-3 py-2 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          {check.status === "pass" ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
+                          ) : check.status === "fail" ? (
+                            <XCircle className="w-3.5 h-3.5 text-destructive" />
+                          ) : (
+                            <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+                          )}
+                          <span className="font-medium">{check.name}</span>
+                        </div>
+                        <span className="text-muted-foreground text-end">{check.detail || "-"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
 
-          {verificationResult && (
-            <Card className="border-muted">
-              <CardContent className="pt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {verificationResult.status === "ready" ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-600" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-destructive" />
-                    )}
-                    <span className="text-sm font-semibold">
-                      {verificationResult.status === "ready"
-                        ? (isArabic ? "تم التحقق: جاهز" : "Verification: Ready")
-                        : (isArabic ? "تم التحقق: يحتاج إصلاح" : "Verification: Needs fixes")}
-                    </span>
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    {verificationPassCount}/{verificationTotalCount} {isArabic ? "نجح" : "passed"}
-                  </Badge>
-                </div>
-
-                {verificationResult.issues.length > 0 && (
-                  <div className="space-y-1">
-                    {verificationResult.issues.slice(0, 4).map((issue, index) => (
-                      <p key={`issue-${index}`} className="text-xs text-destructive flex items-start gap-1">
-                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                        <span>{issue}</span>
-                      </p>
-                    ))}
-                  </div>
-                )}
-
-                <div className="space-y-1">
-                  {verificationResult.checks.map((check, index) => (
-                    <div key={`${check.name}-${index}`} className="rounded border px-2 py-1 flex items-start justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-1.5">
-                        {check.status === "pass" ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                        ) : check.status === "fail" ? (
-                          <XCircle className="w-3.5 h-3.5 text-destructive" />
-                        ) : (
-                          <Globe className="w-3.5 h-3.5 text-muted-foreground" />
-                        )}
-                        <span className="font-medium">{check.name}</span>
-                      </div>
-                      <span className="text-muted-foreground text-end">{check.detail || "-"}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <DialogFooter>
+            <Button className={BUTTON_3D_CLASS} onClick={runVerification} disabled={isVerifying || isSaving} data-testid="button-test-settings">
+              {isVerifying ? (
+                <Loader2 className="w-4 h-4 animate-spin me-2" />
+              ) : (
+                <Link2 className="w-4 h-4 me-2" />
+              )}
+              {isArabic ? "تحقق الآن" : "Verify now"}
+            </Button>
+            <Button className={BUTTON_3D_CLASS} onClick={onClose} data-testid="button-cancel-settings">
+              {isArabic ? "إلغاء" : "Cancel"}
+            </Button>
+            <Button className={BUTTON_3D_PRIMARY_CLASS} onClick={saveSettings} disabled={isSaving} data-testid="button-save-settings">
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 animate-spin me-2" />
+              ) : (
+                <Save className="w-4 h-4 me-2" />
+              )}
+              {isArabic ? "حفظ" : "Save"}
+            </Button>
+          </DialogFooter>
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={runVerification} disabled={isVerifying || isSaving} data-testid="button-test-settings">
-            {isVerifying ? (
-              <Loader2 className="w-4 h-4 animate-spin me-2" />
-            ) : (
-              <Link2 className="w-4 h-4 me-2" />
-            )}
-            {isArabic ? "تحقق الآن" : "Verify now"}
-          </Button>
-          <Button variant="outline" onClick={onClose} data-testid="button-cancel-settings">
-            {isArabic ? "إلغاء" : "Cancel"}
-          </Button>
-          <Button onClick={saveSettings} disabled={isSaving} data-testid="button-save-settings">
-            {isSaving ? (
-              <Loader2 className="w-4 h-4 animate-spin me-2" />
-            ) : (
-              <Save className="w-4 h-4 me-2" />
-            )}
-            {isArabic ? "حفظ" : "Save"}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -933,7 +945,7 @@ function PlatformSettingsDialog({
 
 export default function AdminSocialPlatformsPage() {
   const { toast } = useToast();
-  const { t, language } = useI18n();
+  const { language } = useI18n();
   const isArabic = language === "ar";
 
   const [editingPlatform, setEditingPlatform] = useState<SocialPlatform | null>(null);
@@ -1061,14 +1073,17 @@ export default function AdminSocialPlatformsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-64" />
-        </div>
-        <div className="grid gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Skeleton key={i} className="h-24 w-full" />
-          ))}
+      <div className="space-y-5 p-3 sm:p-4 md:p-6">
+        <div className={`${SURFACE_CARD_CLASS} p-6`}>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="rounded-[24px] border border-slate-200/70 p-5 dark:border-slate-800">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="mt-4 h-4 w-full" />
+                <Skeleton className="mt-2 h-4 w-2/3" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -1076,32 +1091,89 @@ export default function AdminSocialPlatformsPage() {
 
   const enabledPlatforms = platforms?.filter((p) => p.isEnabled) || [];
   const disabledPlatforms = platforms?.filter((p) => !p.isEnabled) || [];
+  const oauthPlatformsCount = (platforms || []).filter((platform) => platform.type === "oauth" || platform.type === "both").length;
+  const otpPlatformsCount = (platforms || []).filter((platform) => platform.type === "otp" || platform.type === "both").length;
+  const readyPlatformsCount = (platforms || []).filter((platform) => platform.runtime?.runtimeReady).length;
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">
-            {isArabic ? "منصات التواصل الاجتماعي" : "Social Platforms"}
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {isArabic
-              ? "إدارة منصات تسجيل الدخول وإرسال رموز التحقق OTP"
-              : "Manage login platforms and OTP verification providers"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-sm">
-            {enabledPlatforms.length} {isArabic ? "مفعّل" : "enabled"}
-          </Badge>
-          <Button onClick={() => setShowAddDialog(true)} data-testid="button-add-platform">
-            <Plus className="w-4 h-4 me-2" />
-            {isArabic ? "إضافة منصة" : "Add Platform"}
-          </Button>
+    <div className="space-y-5 p-3 sm:p-4 md:p-6">
+      <div className={`${SURFACE_CARD_CLASS} px-5 py-5 sm:px-6 sm:py-6`}>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-gradient-to-b from-sky-400 to-sky-700 text-white shadow-[0_10px_0_0_rgba(3,105,161,0.45)]">
+              <Globe className="h-7 w-7" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                {isArabic ? "منصات التواصل الاجتماعي" : "Social Platforms"}
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+                {isArabic
+                  ? "إدارة منصات تسجيل الدخول وإرسال رموز التحقق OTP"
+                  : "Manage login platforms and OTP verification providers"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="rounded-full border-sky-200 bg-sky-50 px-3 py-1 text-sm text-sky-700 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-300">
+              {enabledPlatforms.length} {isArabic ? "مفعّل" : "enabled"}
+            </Badge>
+            <Button className={BUTTON_3D_PRIMARY_CLASS} onClick={() => setShowAddDialog(true)} data-testid="button-add-platform">
+              <Plus className="w-4 h-4 me-2" />
+              {isArabic ? "إضافة منصة" : "Add Platform"}
+            </Button>
+          </div>
         </div>
       </div>
 
-      <Card className="border-primary/20 bg-primary/5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-sky-100 p-3 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+              <Globe className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">{isArabic ? "الإجمالي" : "Total"}</p>
+              <p className="mt-1 text-2xl font-bold">{platforms?.length || 0}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">{isArabic ? "جاهزة للتشغيل" : "Runtime Ready"}</p>
+              <p className="mt-1 text-2xl font-bold">{readyPlatformsCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-amber-100 p-3 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+              <Shield className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">OAuth</p>
+              <p className="mt-1 text-2xl font-bold">{oauthPlatformsCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-violet-100 p-3 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">
+              <MessageSquare className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">OTP</p>
+              <p className="mt-1 text-2xl font-bold">{otpPlatformsCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className={`${SURFACE_CARD_CLASS} border-primary/20 bg-primary/5`}>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Shield className="w-4 h-4" />
@@ -1150,108 +1222,114 @@ export default function AdminSocialPlatformsPage() {
       </Card>
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {isArabic ? "إضافة منصة جديدة" : "Add New Platform"}
-            </DialogTitle>
-            <DialogDescription>
-              {isArabic
-                ? "أدخل تفاصيل المنصة الجديدة"
-                : "Enter the details for the new platform"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">{isArabic ? "الاسم (معرف)" : "Name (identifier)"}</Label>
-              <Input
-                id="name"
-                value={newPlatform.name}
-                onChange={(e) => setNewPlatform({ ...newPlatform, name: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                placeholder="e.g., discord"
-                data-testid="input-new-platform-name"
-              />
+        <DialogContent className={`${DIALOG_SURFACE_CLASS} sm:max-w-xl`}>
+          <div className="space-y-4 p-5 sm:p-6">
+            <DialogHeader>
+              <DialogTitle>
+                {isArabic ? "إضافة منصة جديدة" : "Add New Platform"}
+              </DialogTitle>
+              <DialogDescription>
+                {isArabic
+                  ? "أدخل تفاصيل المنصة الجديدة"
+                  : "Enter the details for the new platform"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-1">
+              <div className="space-y-2">
+                <Label htmlFor="name">{isArabic ? "الاسم (معرف)" : "Name (identifier)"}</Label>
+                <Input
+                  id="name"
+                  value={newPlatform.name}
+                  onChange={(e) => setNewPlatform({ ...newPlatform, name: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
+                  placeholder="e.g., discord"
+                  className={INPUT_SURFACE_CLASS}
+                  data-testid="input-new-platform-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="displayName">{isArabic ? "اسم العرض (English)" : "Display Name"}</Label>
+                <Input
+                  id="displayName"
+                  value={newPlatform.displayName}
+                  onChange={(e) => setNewPlatform({ ...newPlatform, displayName: e.target.value })}
+                  placeholder="e.g., Discord"
+                  className={INPUT_SURFACE_CLASS}
+                  data-testid="input-new-platform-display-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="displayNameAr">{isArabic ? "اسم العرض (عربي)" : "Display Name (Arabic)"}</Label>
+                <Input
+                  id="displayNameAr"
+                  value={newPlatform.displayNameAr}
+                  onChange={(e) => setNewPlatform({ ...newPlatform, displayNameAr: e.target.value })}
+                  placeholder="ديسكورد"
+                  className={INPUT_SURFACE_CLASS}
+                  data-testid="input-new-platform-display-name-ar"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{isArabic ? "النوع" : "Type"}</Label>
+                <Select
+                  value={newPlatform.type}
+                  onValueChange={(v) => setNewPlatform({ ...newPlatform, type: v as "oauth" | "otp" | "both" })}
+                >
+                  <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-new-platform-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="oauth">OAuth</SelectItem>
+                    <SelectItem value="otp">OTP</SelectItem>
+                    <SelectItem value="both">{isArabic ? "كلاهما" : "Both"}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{isArabic ? "الأيقونة" : "Icon"}</Label>
+                <Select
+                  value={newPlatform.icon}
+                  onValueChange={(v) => setNewPlatform({ ...newPlatform, icon: v })}
+                >
+                  <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-new-platform-icon">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SiGoogle">Google</SelectItem>
+                    <SelectItem value="SiFacebook">Facebook</SelectItem>
+                    <SelectItem value="SiTelegram">Telegram</SelectItem>
+                    <SelectItem value="SiWhatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="SiX">X (Twitter)</SelectItem>
+                    <SelectItem value="SiApple">Apple</SelectItem>
+                    <SelectItem value="SiDiscord">Discord</SelectItem>
+                    <SelectItem value="SiLinkedin">LinkedIn</SelectItem>
+                    <SelectItem value="SiGithub">GitHub</SelectItem>
+                    <SelectItem value="SiTiktok">TikTok</SelectItem>
+                    <SelectItem value="SiInstagram">Instagram</SelectItem>
+                    <SelectItem value="Phone">SMS</SelectItem>
+                    <SelectItem value="Globe">{isArabic ? "عام" : "Generic"}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="displayName">{isArabic ? "اسم العرض (English)" : "Display Name"}</Label>
-              <Input
-                id="displayName"
-                value={newPlatform.displayName}
-                onChange={(e) => setNewPlatform({ ...newPlatform, displayName: e.target.value })}
-                placeholder="e.g., Discord"
-                data-testid="input-new-platform-display-name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="displayNameAr">{isArabic ? "اسم العرض (عربي)" : "Display Name (Arabic)"}</Label>
-              <Input
-                id="displayNameAr"
-                value={newPlatform.displayNameAr}
-                onChange={(e) => setNewPlatform({ ...newPlatform, displayNameAr: e.target.value })}
-                placeholder="ديسكورد"
-                data-testid="input-new-platform-display-name-ar"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{isArabic ? "النوع" : "Type"}</Label>
-              <Select
-                value={newPlatform.type}
-                onValueChange={(v) => setNewPlatform({ ...newPlatform, type: v as "oauth" | "otp" | "both" })}
+            <DialogFooter>
+              <Button className={BUTTON_3D_CLASS} onClick={() => setShowAddDialog(false)} data-testid="button-cancel-add">
+                {isArabic ? "إلغاء" : "Cancel"}
+              </Button>
+              <Button
+                className={BUTTON_3D_PRIMARY_CLASS}
+                onClick={() => createMutation.mutate(newPlatform)}
+                disabled={createMutation.isPending || !newPlatform.name || !newPlatform.displayName}
+                data-testid="button-confirm-add"
               >
-                <SelectTrigger data-testid="select-new-platform-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="oauth">OAuth</SelectItem>
-                  <SelectItem value="otp">OTP</SelectItem>
-                  <SelectItem value="both">{isArabic ? "كلاهما" : "Both"}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>{isArabic ? "الأيقونة" : "Icon"}</Label>
-              <Select
-                value={newPlatform.icon}
-                onValueChange={(v) => setNewPlatform({ ...newPlatform, icon: v })}
-              >
-                <SelectTrigger data-testid="select-new-platform-icon">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SiGoogle">Google</SelectItem>
-                  <SelectItem value="SiFacebook">Facebook</SelectItem>
-                  <SelectItem value="SiTelegram">Telegram</SelectItem>
-                  <SelectItem value="SiWhatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="SiX">X (Twitter)</SelectItem>
-                  <SelectItem value="SiApple">Apple</SelectItem>
-                  <SelectItem value="SiDiscord">Discord</SelectItem>
-                  <SelectItem value="SiLinkedin">LinkedIn</SelectItem>
-                  <SelectItem value="SiGithub">GitHub</SelectItem>
-                  <SelectItem value="SiTiktok">TikTok</SelectItem>
-                  <SelectItem value="SiInstagram">Instagram</SelectItem>
-                  <SelectItem value="Phone">SMS</SelectItem>
-                  <SelectItem value="Globe">{isArabic ? "عام" : "Generic"}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                {createMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin me-2" />
+                ) : (
+                  <Plus className="w-4 h-4 me-2" />
+                )}
+                {isArabic ? "إضافة" : "Add"}
+              </Button>
+            </DialogFooter>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)} data-testid="button-cancel-add">
-              {isArabic ? "إلغاء" : "Cancel"}
-            </Button>
-            <Button
-              onClick={() => createMutation.mutate(newPlatform)}
-              disabled={createMutation.isPending || !newPlatform.name || !newPlatform.displayName}
-              data-testid="button-confirm-add"
-            >
-              {createMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin me-2" />
-              ) : (
-                <Plus className="w-4 h-4 me-2" />
-              )}
-              {isArabic ? "إضافة" : "Add"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1261,7 +1339,7 @@ export default function AdminSocialPlatformsPage() {
             <CheckCircle2 className="w-5 h-5 text-green-500" />
             {isArabic ? "المنصات المفعّلة" : "Enabled Platforms"}
           </h2>
-          <div className="grid gap-4">
+          <div className="grid gap-4 xl:grid-cols-2">
             {enabledPlatforms.map((platform) => (
               <PlatformCard
                 key={platform.id}
@@ -1283,7 +1361,7 @@ export default function AdminSocialPlatformsPage() {
             <XCircle className="w-5 h-5 text-muted-foreground" />
             {isArabic ? "المنصات المعطّلة" : "Disabled Platforms"}
           </h2>
-          <div className="grid gap-4">
+          <div className="grid gap-4 xl:grid-cols-2">
             {disabledPlatforms.map((platform) => (
               <PlatformCard
                 key={platform.id}
@@ -1314,38 +1392,40 @@ export default function AdminSocialPlatformsPage() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deletingPlatform} onOpenChange={(open) => { if (!open) setDeletingPlatform(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-destructive">
-              {isArabic ? "حذف المنصة" : "Delete Platform"}
-            </DialogTitle>
-            <DialogDescription>
-              {isArabic
-                ? `هل أنت متأكد من حذف "${deletingPlatform?.displayName}"؟ لا يمكن التراجع عن هذا الإجراء.`
-                : `Are you sure you want to delete "${deletingPlatform?.displayName}"? This action cannot be undone.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeletingPlatform(null)}>
-              {isArabic ? "إلغاء" : "Cancel"}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (deletingPlatform) {
-                  deleteMutation.mutate(deletingPlatform.id);
-                }
-              }}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin me-2" />
-              ) : (
-                <Trash2 className="w-4 h-4 me-2" />
-              )}
-              {isArabic ? "حذف" : "Delete"}
-            </Button>
-          </DialogFooter>
+        <DialogContent className={`${DIALOG_SURFACE_CLASS} sm:max-w-sm`}>
+          <div className="space-y-4 p-5 sm:p-6">
+            <DialogHeader>
+              <DialogTitle className="text-destructive">
+                {isArabic ? "حذف المنصة" : "Delete Platform"}
+              </DialogTitle>
+              <DialogDescription>
+                {isArabic
+                  ? `هل أنت متأكد من حذف "${deletingPlatform?.displayName}"؟ لا يمكن التراجع عن هذا الإجراء.`
+                  : `Are you sure you want to delete "${deletingPlatform?.displayName}"? This action cannot be undone.`}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button className={BUTTON_3D_CLASS} onClick={() => setDeletingPlatform(null)}>
+                {isArabic ? "إلغاء" : "Cancel"}
+              </Button>
+              <Button
+                className={BUTTON_3D_DESTRUCTIVE_CLASS}
+                onClick={() => {
+                  if (deletingPlatform) {
+                    deleteMutation.mutate(deletingPlatform.id);
+                  }
+                }}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin me-2" />
+                ) : (
+                  <Trash2 className="w-4 h-4 me-2" />
+                )}
+                {isArabic ? "حذف" : "Delete"}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

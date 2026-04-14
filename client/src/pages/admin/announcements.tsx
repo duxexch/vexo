@@ -38,17 +38,18 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { 
-  Plus, 
-  Edit, 
-  Send, 
-  Archive, 
+import {
+  Plus,
+  Edit,
+  Send,
+  Archive,
   Eye,
   Megaphone,
   Pin
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLocation } from 'wouter';
+import { cn } from '@/lib/utils';
 
 type AnnouncementFormData = {
   title: string;
@@ -71,6 +72,15 @@ const defaultFormData: AnnouncementFormData = {
   isPinned: false,
   expiresAt: '',
 };
+
+const SURFACE_CARD_CLASS = 'overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/90 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.35)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/75';
+const STAT_CARD_CLASS = 'rounded-[24px] border border-slate-200/80 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950/80';
+const DATA_CARD_CLASS = `${SURFACE_CARD_CLASS} shadow-[0_18px_45px_-28px_rgba(15,23,42,0.28)]`;
+const BUTTON_3D_CLASS = 'inline-flex items-center justify-center rounded-2xl border border-slate-200/80 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-[0_10px_24px_-16px_rgba(15,23,42,0.6)] transition-all hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800';
+const BUTTON_3D_PRIMARY_CLASS = 'inline-flex items-center justify-center rounded-2xl border border-primary/20 bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-[0_14px_30px_-18px_rgba(14,116,144,0.65)] transition-all hover:-translate-y-0.5 hover:brightness-105';
+const INPUT_SURFACE_CLASS = 'rounded-2xl border-slate-200/80 bg-white/90 shadow-inner shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-950/70 dark:shadow-black/20';
+const TEXTAREA_SURFACE_CLASS = `${INPUT_SURFACE_CLASS} min-h-[140px]`;
+const DIALOG_SURFACE_CLASS = 'rounded-[30px] border border-slate-200/80 bg-white/95 shadow-[0_30px_90px_-45px_rgba(15,23,42,0.55)] dark:border-slate-800 dark:bg-slate-950/95';
 
 export default function AdminAnnouncementsPage() {
   const { user } = useAuth();
@@ -281,20 +291,57 @@ export default function AdminAnnouncementsPage() {
     }
   };
 
+  const announcementList = announcements || [];
+  const publishedCount = announcementList.filter((item) => item.status === 'published').length;
+  const draftCount = announcementList.filter((item) => item.status === 'draft').length;
+  const pinnedCount = announcementList.filter((item) => item.isPinned).length;
+
   return (
-    <div className="p-6 space-y-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Megaphone className="h-5 w-5" />
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-8 sm:p-6">
+      <section className="relative overflow-hidden rounded-[32px] border border-slate-200/80 bg-[radial-gradient(circle_at_top_right,_rgba(56,189,248,0.18),_transparent_34%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(241,245,249,0.94))] p-5 shadow-[0_28px_80px_-40px_rgba(15,23,42,0.5)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_right,_rgba(34,197,94,0.12),_transparent_30%),linear-gradient(135deg,_rgba(2,6,23,0.98),_rgba(15,23,42,0.92))]">
+        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="space-y-4">
+            <Badge variant="outline" className="w-fit rounded-full border-sky-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200">
               {t('admin.announcements.title')}
-            </CardTitle>
-            <CardDescription>{t('admin.announcements.description')}</CardDescription>
+            </Badge>
+            <div className="space-y-2">
+              <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+                <Megaphone className="h-7 w-7 text-primary" />
+                {t('admin.announcements.title')}
+              </h1>
+              <p className="max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">{t('admin.announcements.description')}</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Card className={STAT_CARD_CLASS}>
+                <CardContent className="p-0">
+                  <p className="text-xs text-muted-foreground">{t('admin.announcements.statusPublished')}</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-50">{publishedCount}</p>
+                </CardContent>
+              </Card>
+              <Card className={STAT_CARD_CLASS}>
+                <CardContent className="p-0">
+                  <p className="text-xs text-muted-foreground">{t('admin.announcements.statusDraft')}</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-50">{draftCount}</p>
+                </CardContent>
+              </Card>
+              <Card className={STAT_CARD_CLASS}>
+                <CardContent className="p-0">
+                  <p className="text-xs text-muted-foreground">{t('admin.announcements.fieldIsPinned')}</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-50">{pinnedCount}</p>
+                </CardContent>
+              </Card>
+              <Card className={STAT_CARD_CLASS}>
+                <CardContent className="p-0">
+                  <p className="text-xs text-muted-foreground">{t('nav.announcements')}</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-50">{announcementList.length}</p>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
+
+          <div className="grid w-full gap-3 sm:grid-cols-[160px_minmax(0,1fr)] xl:w-[420px]">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[140px]" data-testid="select-status-filter">
+              <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-status-filter">
                 <SelectValue placeholder={t('common.status')} />
               </SelectTrigger>
               <SelectContent>
@@ -304,127 +351,191 @@ export default function AdminAnnouncementsPage() {
                 <SelectItem value="archived">{t('admin.announcements.statusArchived')}</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={handleOpenCreate} data-testid="button-create-announcement">
-              <Plus className="h-4 w-4 me-2" />
+            <Button className={cn(BUTTON_3D_PRIMARY_CLASS, 'gap-2')} onClick={handleOpenCreate} data-testid="button-create-announcement">
+              <Plus className="h-4 w-4" />
               {t('admin.announcements.create')}
             </Button>
           </div>
-        </CardHeader>
+        </div>
+      </section>
+
+      <Card className={DATA_CARD_CLASS}>
         <CardContent>
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <Skeleton key={i} className="h-24 w-full rounded-[24px]" />
               ))}
             </div>
-          ) : !announcements?.length ? (
-            <div className="text-center py-12 text-muted-foreground">
+          ) : !announcementList.length ? (
+            <div className="rounded-[24px] border border-dashed border-slate-300/90 bg-slate-50/70 py-12 text-center text-muted-foreground dark:border-slate-700 dark:bg-slate-900/50">
               <Megaphone className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>{t('admin.announcements.noAnnouncements')}</p>
             </div>
           ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t('admin.announcements.columnTitle')}</TableHead>
-                    <TableHead>{t('admin.announcements.columnTarget')}</TableHead>
-                    <TableHead>{t('admin.announcements.columnPriority')}</TableHead>
-                    <TableHead>{t('common.status')}</TableHead>
-                    <TableHead>{t('admin.announcements.columnViews')}</TableHead>
-                    <TableHead>{t('common.date')}</TableHead>
-                    <TableHead>{t('common.actions')}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {announcements.map((announcement) => (
-                    <TableRow key={announcement.id} data-testid={`row-announcement-${announcement.id}`}>
-                      <TableCell>
+            <div className="space-y-3">
+              <div className="space-y-3 md:hidden">
+                {announcementList.map((announcement) => (
+                  <div key={announcement.id} className={STAT_CARD_CLASS} data-testid={`row-announcement-${announcement.id}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          {announcement.isPinned && (
-                            <Pin className="h-4 w-4 text-primary" />
-                          )}
-                          <span className="font-medium" data-testid={`text-title-${announcement.id}`}>
+                          {announcement.isPinned && <Pin className="h-4 w-4 text-primary" />}
+                          <span className="truncate font-medium text-slate-900 dark:text-slate-50" data-testid={`text-title-${announcement.id}`}>
                             {language === 'ar' && announcement.titleAr ? announcement.titleAr : announcement.title}
                           </span>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {getTargetLabel(announcement.target)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getPriorityBadgeVariant(announcement.priority)} className="text-xs">
-                          {announcement.priority}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusBadgeVariant(announcement.status)} data-testid={`badge-status-${announcement.id}`}>
-                          {t(`admin.announcements.status${announcement.status.charAt(0).toUpperCase() + announcement.status.slice(1)}`)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <Eye className="h-4 w-4" />
-                          <span data-testid={`text-views-${announcement.id}`}>{announcement.viewCount}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {format(new Date(announcement.createdAt), 'MMM dd, yyyy')}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleOpenEdit(announcement)}
-                            data-testid={`button-edit-${announcement.id}`}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          {announcement.status === 'draft' && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => handleOpenPublish(announcement.id)}
-                              data-testid={`button-publish-${announcement.id}`}
-                            >
-                              <Send className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {announcement.status === 'published' && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => archiveMutation.mutate(announcement.id)}
-                              data-testid={`button-archive-${announcement.id}`}
-                            >
-                              <Archive className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
+                        <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">
+                          {language === 'ar' && announcement.contentAr ? announcement.contentAr : announcement.content}
+                        </p>
+                      </div>
+                      <Badge variant={getStatusBadgeVariant(announcement.status)} data-testid={`badge-status-${announcement.id}`}>
+                        {t(`admin.announcements.status${announcement.status.charAt(0).toUpperCase() + announcement.status.slice(1)}`)}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge variant="outline" className="text-xs">{getTargetLabel(announcement.target)}</Badge>
+                      <Badge variant={getPriorityBadgeVariant(announcement.priority)} className="text-xs">{announcement.priority}</Badge>
+                      <Badge variant="outline" className="text-xs flex items-center gap-1">
+                        <Eye className="h-3.5 w-3.5" />
+                        <span data-testid={`text-views-${announcement.id}`}>{announcement.viewCount}</span>
+                      </Badge>
+                    </div>
+                    <div className="mt-3 text-xs text-muted-foreground">{format(new Date(announcement.createdAt), 'MMM dd, yyyy')}</div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        className={cn(BUTTON_3D_CLASS, 'h-9 gap-2 text-xs')}
+                        onClick={() => handleOpenEdit(announcement)}
+                        data-testid={`button-edit-${announcement.id}`}
+                      >
+                        <Edit className="h-4 w-4" />
+                        {t('common.edit')}
+                      </Button>
+                      {announcement.status === 'draft' && (
+                        <Button
+                          className={cn(BUTTON_3D_PRIMARY_CLASS, 'h-9 gap-2 text-xs')}
+                          onClick={() => handleOpenPublish(announcement.id)}
+                          data-testid={`button-publish-${announcement.id}`}
+                        >
+                          <Send className="h-4 w-4" />
+                          {t('admin.announcements.publishNow')}
+                        </Button>
+                      )}
+                      {announcement.status === 'published' && (
+                        <Button
+                          className={cn(BUTTON_3D_CLASS, 'h-9 gap-2 text-xs')}
+                          onClick={() => archiveMutation.mutate(announcement.id)}
+                          data-testid={`button-archive-${announcement.id}`}
+                        >
+                          <Archive className="h-4 w-4" />
+                          {t('admin.announcements.statusArchived')}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden overflow-x-auto rounded-[24px] border border-slate-200/80 bg-white/80 dark:border-slate-800 dark:bg-slate-950/60 md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t('admin.announcements.columnTitle')}</TableHead>
+                      <TableHead>{t('admin.announcements.columnTarget')}</TableHead>
+                      <TableHead>{t('admin.announcements.columnPriority')}</TableHead>
+                      <TableHead>{t('common.status')}</TableHead>
+                      <TableHead>{t('admin.announcements.columnViews')}</TableHead>
+                      <TableHead>{t('common.date')}</TableHead>
+                      <TableHead>{t('common.actions')}</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {announcementList.map((announcement) => (
+                      <TableRow key={announcement.id} data-testid={`row-announcement-${announcement.id}`}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {announcement.isPinned && (
+                              <Pin className="h-4 w-4 text-primary" />
+                            )}
+                            <span className="font-medium" data-testid={`text-title-${announcement.id}`}>
+                              {language === 'ar' && announcement.titleAr ? announcement.titleAr : announcement.title}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {getTargetLabel(announcement.target)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getPriorityBadgeVariant(announcement.priority)} className="text-xs">
+                            {announcement.priority}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getStatusBadgeVariant(announcement.status)} data-testid={`badge-status-${announcement.id}`}>
+                            {t(`admin.announcements.status${announcement.status.charAt(0).toUpperCase() + announcement.status.slice(1)}`)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Eye className="h-4 w-4" />
+                            <span data-testid={`text-views-${announcement.id}`}>{announcement.viewCount}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {format(new Date(announcement.createdAt), 'MMM dd, yyyy')}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              className={`${BUTTON_3D_CLASS} h-9 w-9 p-0`}
+                              onClick={() => handleOpenEdit(announcement)}
+                              data-testid={`button-edit-${announcement.id}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            {announcement.status === 'draft' && (
+                              <Button
+                                className={`${BUTTON_3D_PRIMARY_CLASS} h-9 w-9 p-0`}
+                                onClick={() => handleOpenPublish(announcement.id)}
+                                data-testid={`button-publish-${announcement.id}`}
+                              >
+                                <Send className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {announcement.status === 'published' && (
+                              <Button
+                                className={`${BUTTON_3D_CLASS} h-9 w-9 p-0`}
+                                onClick={() => archiveMutation.mutate(announcement.id)}
+                                data-testid={`button-archive-${announcement.id}`}
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className={`${DIALOG_SURFACE_CLASS} max-w-2xl max-h-[90vh] overflow-y-auto`}>
           <DialogHeader>
             <DialogTitle>
-              {editingAnnouncement 
-                ? t('admin.announcements.editTitle') 
+              {editingAnnouncement
+                ? t('admin.announcements.editTitle')
                 : t('admin.announcements.createTitle')}
             </DialogTitle>
             <DialogDescription>
-              {editingAnnouncement 
-                ? t('admin.announcements.editDescription') 
+              {editingAnnouncement
+                ? t('admin.announcements.editDescription')
                 : t('admin.announcements.createDescription')}
             </DialogDescription>
           </DialogHeader>
@@ -438,6 +549,7 @@ export default function AdminAnnouncementsPage() {
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder={t('admin.announcements.fieldTitlePlaceholder')}
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-title"
                 />
               </div>
@@ -449,6 +561,7 @@ export default function AdminAnnouncementsPage() {
                   onChange={(e) => setFormData({ ...formData, titleAr: e.target.value })}
                   placeholder={t('admin.announcements.fieldTitleArPlaceholder')}
                   dir="rtl"
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-title-ar"
                 />
               </div>
@@ -462,6 +575,7 @@ export default function AdminAnnouncementsPage() {
                 onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                 placeholder={t('admin.announcements.fieldContentPlaceholder')}
                 rows={4}
+                className={TEXTAREA_SURFACE_CLASS}
                 data-testid="textarea-content"
               />
             </div>
@@ -475,6 +589,7 @@ export default function AdminAnnouncementsPage() {
                 placeholder={t('admin.announcements.fieldContentArPlaceholder')}
                 rows={4}
                 dir="rtl"
+                className={TEXTAREA_SURFACE_CLASS}
                 data-testid="textarea-content-ar"
               />
             </div>
@@ -483,7 +598,7 @@ export default function AdminAnnouncementsPage() {
               <div className="space-y-2">
                 <Label>{t('admin.announcements.fieldTarget')}</Label>
                 <Select value={formData.target} onValueChange={(v) => setFormData({ ...formData, target: v })}>
-                  <SelectTrigger data-testid="select-target">
+                  <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-target">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -498,7 +613,7 @@ export default function AdminAnnouncementsPage() {
               <div className="space-y-2">
                 <Label>{t('admin.announcements.fieldPriority')}</Label>
                 <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v })}>
-                  <SelectTrigger data-testid="select-priority">
+                  <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-priority">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -519,6 +634,7 @@ export default function AdminAnnouncementsPage() {
                   type="datetime-local"
                   value={formData.expiresAt}
                   onChange={(e) => setFormData({ ...formData, expiresAt: e.target.value })}
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-expires-at"
                 />
               </div>
@@ -538,14 +654,14 @@ export default function AdminAnnouncementsPage() {
 
           <DialogFooter className="gap-2 flex-wrap">
             <Button
-              variant="outline"
+              className={BUTTON_3D_CLASS}
               onClick={() => setIsCreateDialogOpen(false)}
               data-testid="button-cancel-dialog"
             >
               {t('common.cancel')}
             </Button>
             <Button
-              variant="secondary"
+              className={BUTTON_3D_CLASS}
               onClick={handleSaveAsDraft}
               disabled={!formData.title || !formData.content || createMutation.isPending || updateMutation.isPending}
               data-testid="button-save-draft"
@@ -554,16 +670,18 @@ export default function AdminAnnouncementsPage() {
             </Button>
             {!editingAnnouncement && (
               <Button
+                className={cn(BUTTON_3D_PRIMARY_CLASS, 'gap-2')}
                 onClick={handleSaveAndPublish}
                 disabled={!formData.title || !formData.content || createMutation.isPending}
                 data-testid="button-save-publish"
               >
-                <Send className="h-4 w-4 me-2" />
+                <Send className="h-4 w-4" />
                 {t('admin.announcements.saveAndPublish')}
               </Button>
             )}
             {editingAnnouncement && (
               <Button
+                className={BUTTON_3D_PRIMARY_CLASS}
                 onClick={() => {
                   updateMutation.mutate({ id: editingAnnouncement.id, data: formData });
                 }}

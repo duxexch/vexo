@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -30,24 +31,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { 
-  Headset, 
-  Plus, 
-  Pencil, 
+import {
+  Headset,
+  Plus,
+  Pencil,
   Trash2,
   Save,
   X,
   MessageCircle,
   Phone,
   Mail,
-  GripVertical
 } from "lucide-react";
-import { 
-  SiWhatsapp, 
-  SiTelegram, 
-  SiFacebook, 
-  SiInstagram, 
-  SiDiscord 
+import {
+  SiWhatsapp,
+  SiTelegram,
+  SiFacebook,
+  SiInstagram,
+  SiDiscord
 } from "react-icons/si";
 import { FaTwitter } from "react-icons/fa";
 
@@ -95,6 +95,28 @@ const getIcon = (type: string) => {
   const found = contactTypes.find(t => t.value === type);
   return found?.icon || MessageCircle;
 };
+
+const SURFACE_CARD_CLASS = "rounded-[24px] border border-slate-200/80 bg-gradient-to-b from-white via-slate-50 to-slate-100/70 shadow-[0_14px_40px_-24px_rgba(15,23,42,0.55)] dark:border-slate-800/80 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950";
+const BUTTON_3D_CLASS = "rounded-xl border border-slate-300/80 bg-gradient-to-b from-white to-slate-100 text-slate-900 shadow-[0_8px_0_0_rgba(148,163,184,0.5)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(148,163,184,0.45)] hover:brightness-105 dark:border-slate-700 dark:from-slate-800 dark:to-slate-900 dark:text-slate-100 dark:shadow-[0_8px_0_0_rgba(15,23,42,0.82)]";
+const BUTTON_3D_PRIMARY_CLASS = "rounded-xl border border-sky-600 bg-gradient-to-b from-sky-400 via-sky-500 to-sky-700 text-white shadow-[0_8px_0_0_rgba(3,105,161,0.58)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(3,105,161,0.52)] hover:brightness-105";
+const BUTTON_3D_DANGER_CLASS = "rounded-xl border border-red-700 bg-gradient-to-b from-red-500 via-red-600 to-red-800 text-white shadow-[0_8px_0_0_rgba(127,29,29,0.58)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(127,29,29,0.52)] hover:brightness-105";
+const INPUT_SURFACE_CLASS = "min-h-[46px] rounded-xl border-slate-200/80 bg-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_10px_24px_-20px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-900";
+const DIALOG_SURFACE_CLASS = "max-w-[calc(100vw-1rem)] sm:max-w-2xl rounded-[28px] border border-slate-200/80 bg-gradient-to-b from-white via-slate-50 to-slate-100 p-0 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.55)] dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950";
+const DATA_CARD_CLASS = "rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-[0_12px_28px_-22px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60";
+const TABLE_WRAP_CLASS = "hidden md:block overflow-x-auto rounded-[24px] border border-slate-200/80 bg-white/70 shadow-[0_14px_40px_-24px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-950/60";
+const SETTING_ROW_CLASS = "flex items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white/70 p-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60";
+
+function getValueHint(type: string) {
+  if (type === "whatsapp") return "Enter phone number with country code";
+  if (type === "telegram") return "Enter username or link";
+  if (type === "email") return "Enter email address";
+  if (type === "phone") return "Enter phone number";
+  if (type === "facebook") return "Enter page name or link";
+  if (type === "instagram") return "Enter username";
+  if (type === "twitter") return "Enter username";
+  if (type === "discord") return "Enter invite code or link";
+  return "Enter support contact value";
+}
 
 export default function AdminSupportPage() {
   const { toast } = useToast();
@@ -184,15 +206,26 @@ export default function AdminSupportPage() {
   };
 
   const handleSubmit = () => {
-    if (!formData.label || !formData.value) {
+    const normalizedLabel = formData.label.trim();
+    const normalizedValue = formData.value.trim();
+    const normalizedDisplayOrder = Math.max(0, Number.isFinite(formData.displayOrder) ? formData.displayOrder : 0);
+
+    if (!normalizedLabel || !normalizedValue) {
       toast({ title: "Please fill all required fields", variant: "destructive" });
       return;
     }
 
+    const payload = {
+      ...formData,
+      label: normalizedLabel,
+      value: normalizedValue,
+      displayOrder: normalizedDisplayOrder,
+    };
+
     if (editingContact) {
-      updateMutation.mutate({ id: editingContact.id, data: formData });
+      updateMutation.mutate({ id: editingContact.id, data: payload });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(payload);
     }
   };
 
@@ -203,131 +236,231 @@ export default function AdminSupportPage() {
     });
   };
 
+  const sortedContacts = [...(contacts ?? [])].sort((a, b) => a.displayOrder - b.displayOrder);
+  const SelectedTypeIcon = getIcon(formData.type);
+  const surfaceCardClass = SURFACE_CARD_CLASS;
+  const button3dClass = BUTTON_3D_CLASS;
+  const button3dPrimaryClass = BUTTON_3D_PRIMARY_CLASS;
+  const button3dDangerClass = BUTTON_3D_DANGER_CLASS;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Headset className="h-8 w-8 text-primary" />
-          <div>
-            <h1 className="text-2xl font-bold" data-testid="text-admin-support-title">
-              Support Contacts Management
-            </h1>
-            <p className="text-muted-foreground">
-              Manage customer support contact methods
-            </p>
+    <div className="p-3 sm:p-4 md:p-6 space-y-5 md:space-y-6">
+      <div className={`${surfaceCardClass} px-5 py-5 sm:px-6 sm:py-6`}>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-gradient-to-b from-sky-400 to-sky-700 text-white shadow-[0_10px_0_0_rgba(3,105,161,0.45)]">
+              <Headset className="h-7 w-7" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-2xl font-bold tracking-tight sm:text-3xl" data-testid="text-admin-support-title">
+                  Support Contacts Management
+                </h1>
+                <Badge variant="outline" className="border-slate-300 bg-white/80 text-slate-700 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
+                  {sortedContacts.length}
+                </Badge>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+                Manage customer support contact methods
+              </p>
+            </div>
           </div>
+          <Button className={button3dPrimaryClass} onClick={() => setIsDialogOpen(true)} data-testid="button-add-contact">
+            <Plus className="h-4 w-4 me-2" />
+            Add Contact
+          </Button>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)} data-testid="button-add-contact">
-          <Plus className="h-4 w-4 me-2" />
-          Add Contact
-        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className={surfaceCardClass}>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>Contact Methods</CardTitle>
+          {sortedContacts.length > 0 ? (
+            <Badge variant="secondary">{sortedContacts.length}</Badge>
+          ) : null}
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
-          ) : !contacts?.length ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((item) => (
+                <Skeleton key={item} className="h-28 rounded-2xl" />
+              ))}
+            </div>
+          ) : !sortedContacts.length ? (
             <div className="text-center py-12">
               <Headset className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-2">No contacts yet</h3>
               <p className="text-muted-foreground mb-4">
                 Add your first support contact method
               </p>
-              <Button onClick={() => setIsDialogOpen(true)}>
+              <Button className={button3dPrimaryClass} onClick={() => setIsDialogOpen(true)}>
                 <Plus className="h-4 w-4 me-2" />
                 Add Contact
               </Button>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Label</TableHead>
-                  <TableHead>Value</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {contacts
-                  .sort((a, b) => a.displayOrder - b.displayOrder)
-                  .map((contact, index) => {
-                    const Icon = getIcon(contact.type);
-                    return (
-                      <TableRow key={contact.id} data-testid={`row-contact-${contact.id}`}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <GripVertical className="h-4 w-4 text-muted-foreground" />
-                            {index + 1}
+            <>
+              <div className="space-y-3 md:hidden">
+                {sortedContacts.map((contact) => {
+                  const Icon = getIcon(contact.type);
+                  return (
+                    <div key={contact.id} className={DATA_CARD_CLASS} data-testid={`row-contact-${contact.id}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300">
+                            <Icon className="h-5 w-5" />
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Icon className="h-4 w-4" />
-                            <span className="capitalize">{contact.type}</span>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold">{contact.label}</p>
+                              <Badge variant="outline" className="capitalize">{contact.type}</Badge>
+                            </div>
+                            <p className="mt-1 break-all text-sm text-muted-foreground">{contact.value}</p>
                           </div>
-                        </TableCell>
-                        <TableCell className="font-medium">{contact.label}</TableCell>
-                        <TableCell className="text-muted-foreground max-w-[200px] truncate">
-                          {contact.value}
-                        </TableCell>
-                        <TableCell>
-                          <Switch
-                            checked={contact.isActive}
-                            onCheckedChange={() => handleToggleActive(contact)}
-                            data-testid={`switch-contact-${contact.id}`}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(contact)}
-                              data-testid={`button-edit-${contact.id}`}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteMutation.mutate(contact.id)}
-                              data-testid={`button-delete-${contact.id}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-              </TableBody>
-            </Table>
+                        </div>
+                        <Badge variant={contact.isActive ? "default" : "secondary"}>
+                          {contact.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+                        <div>
+                          <p className="text-xs text-muted-foreground">#{contact.displayOrder}</p>
+                          <p className="text-sm font-medium capitalize">{contact.type}</p>
+                        </div>
+                        <Switch
+                          checked={contact.isActive}
+                          onCheckedChange={() => handleToggleActive(contact)}
+                          data-testid={`switch-contact-${contact.id}`}
+                        />
+                      </div>
+
+                      <div className="mt-4 flex gap-2">
+                        <Button
+                          className={`${button3dClass} flex-1`}
+                          onClick={() => handleEdit(contact)}
+                          data-testid={`button-edit-${contact.id}`}
+                        >
+                          <Pencil className="h-4 w-4 me-2" />
+                          Edit
+                        </Button>
+                        <Button
+                          className={`${button3dDangerClass} flex-1`}
+                          onClick={() => deleteMutation.mutate(contact.id)}
+                          disabled={deleteMutation.isPending}
+                          data-testid={`button-delete-${contact.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 me-2" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className={TABLE_WRAP_CLASS}>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Order</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Label</TableHead>
+                      <TableHead>Value</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedContacts.map((contact) => {
+                      const Icon = getIcon(contact.type);
+                      return (
+                        <TableRow key={contact.id} data-testid={`row-contact-${contact.id}-desktop`}>
+                          <TableCell>
+                            <Badge variant="outline">#{contact.displayOrder}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Icon className="h-4 w-4" />
+                              <span className="capitalize">{contact.type}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium">{contact.label}</TableCell>
+                          <TableCell className="max-w-[280px] truncate text-muted-foreground">
+                            {contact.value}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={contact.isActive ? "default" : "secondary"}>
+                              {contact.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={contact.isActive}
+                                onCheckedChange={() => handleToggleActive(contact)}
+                                data-testid={`switch-contact-${contact.id}-desktop`}
+                              />
+                              <Button
+                                className={`${button3dClass} h-10 w-10 p-0`}
+                                onClick={() => handleEdit(contact)}
+                                data-testid={`button-edit-${contact.id}-desktop`}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                className={`${button3dDangerClass} h-10 w-10 p-0`}
+                                onClick={() => deleteMutation.mutate(contact.id)}
+                                disabled={deleteMutation.isPending}
+                                data-testid={`button-delete-${contact.id}-desktop`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          resetForm();
+          return;
+        }
+
+        setIsDialogOpen(true);
+      }}>
+        <DialogContent className={DIALOG_SURFACE_CLASS}>
+          <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
             <DialogTitle>
               {editingContact ? "Edit Contact" : "Add New Contact"}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 px-6 py-5">
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/70 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300">
+                <SelectedTypeIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-medium">{editingContact ? "Edit Contact" : "Add New Contact"}</p>
+                <p className="text-sm text-muted-foreground capitalize">{formData.type}</p>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Type</Label>
               <Select
                 value={formData.type}
                 onValueChange={(value) => setFormData({ ...formData, type: value })}
               >
-                <SelectTrigger data-testid="select-contact-type">
+                <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-contact-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -346,6 +479,7 @@ export default function AdminSupportPage() {
             <div className="space-y-2">
               <Label>Label *</Label>
               <Input
+                className={INPUT_SURFACE_CLASS}
                 placeholder="e.g., Customer Support"
                 value={formData.label}
                 onChange={(e) => setFormData({ ...formData, label: e.target.value })}
@@ -356,49 +490,48 @@ export default function AdminSupportPage() {
             <div className="space-y-2">
               <Label>Value *</Label>
               <Input
+                className={INPUT_SURFACE_CLASS}
                 placeholder="e.g., +1234567890 or @username"
                 value={formData.value}
                 onChange={(e) => setFormData({ ...formData, value: e.target.value })}
                 data-testid="input-contact-value"
               />
               <p className="text-xs text-muted-foreground">
-                {formData.type === "whatsapp" && "Enter phone number with country code"}
-                {formData.type === "telegram" && "Enter username or link"}
-                {formData.type === "email" && "Enter email address"}
-                {formData.type === "phone" && "Enter phone number"}
-                {formData.type === "facebook" && "Enter page name or link"}
-                {formData.type === "instagram" && "Enter username"}
-                {formData.type === "twitter" && "Enter username"}
-                {formData.type === "discord" && "Enter invite code or link"}
+                {getValueHint(formData.type)}
               </p>
             </div>
 
             <div className="space-y-2">
               <Label>Display Order</Label>
               <Input
+                className={INPUT_SURFACE_CLASS}
                 type="number"
                 min="0"
                 value={formData.displayOrder}
-                onChange={(e) => setFormData({ ...formData, displayOrder: parseInt(e.target.value) || 0 })}
+                onChange={(e) => setFormData({ ...formData, displayOrder: Math.max(0, parseInt(e.target.value) || 0) })}
                 data-testid="input-contact-order"
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className={SETTING_ROW_CLASS}>
+              <div>
+                <Label>Active</Label>
+                <p className="text-xs text-muted-foreground">Control whether this contact is visible to users</p>
+              </div>
               <Switch
                 checked={formData.isActive}
                 onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
                 data-testid="switch-contact-active"
               />
-              <Label>Active</Label>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={resetForm}>
+          <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <Button variant="outline" className={button3dClass} onClick={resetForm}>
               <X className="h-4 w-4 me-2" />
               Cancel
             </Button>
-            <Button 
+            <Button
+              className={button3dPrimaryClass}
               onClick={handleSubmit}
               disabled={createMutation.isPending || updateMutation.isPending}
               data-testid="button-save-contact"

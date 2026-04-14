@@ -188,6 +188,15 @@ const AI_CHAT_CONTEXT_MODES: Array<{ value: AiAdminContextMode; label: string }>
   { value: "analytics", label: "ANALYTICS" },
 ];
 
+const SURFACE_CARD_CLASS = "overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/90 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.35)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/75";
+const STAT_CARD_CLASS = "rounded-[24px] border border-slate-200/80 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950/80";
+const DATA_CARD_CLASS = `${SURFACE_CARD_CLASS} shadow-[0_18px_45px_-28px_rgba(15,23,42,0.28)]`;
+const BUTTON_3D_CLASS = "inline-flex items-center justify-center rounded-2xl border border-slate-200/80 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-[0_10px_24px_-16px_rgba(15,23,42,0.6)] transition-all hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800";
+const BUTTON_3D_PRIMARY_CLASS = "inline-flex items-center justify-center rounded-2xl border border-primary/20 bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-[0_14px_30px_-18px_rgba(14,116,144,0.65)] transition-all hover:-translate-y-0.5 hover:brightness-105";
+const BUTTON_3D_DESTRUCTIVE_CLASS = "inline-flex items-center justify-center rounded-2xl border border-destructive/20 bg-destructive px-3.5 py-2 text-sm font-semibold text-destructive-foreground shadow-[0_14px_30px_-18px_rgba(190,24,93,0.6)] transition-all hover:-translate-y-0.5 hover:brightness-105";
+const INPUT_SURFACE_CLASS = "rounded-2xl border-slate-200/80 bg-white/90 shadow-inner shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-950/70 dark:shadow-black/20";
+const TEXTAREA_SURFACE_CLASS = `${INPUT_SURFACE_CLASS} min-h-[170px]`;
+
 async function adminFetch(url: string, options: RequestInit = {}) {
   const res = await fetch(url, {
     ...options,
@@ -501,53 +510,84 @@ export default function AdminSam9Page() {
   };
 
   const currentRuntimeEnabled = aiAgentRuntime?.runtime?.enabled === true;
+  const totalEvents = aiAgentReport?.external?.report?.learning?.totalEvents ?? 0;
+  const trackedGames = aiAgentReport?.external?.report?.performance?.totalGames
+    ?? aiAgentReport?.localFallback?.summary?.totalTrackedMoves
+    ?? 0;
+  const aiWinRate = aiAgentReport?.external?.report?.performance?.aiWinRate ?? 0;
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Bot className="h-7 w-7 text-primary" />
-            SAM9 Control Center
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            قسم مركزي للتحكم الكامل في SAM9: تشغيل وإيقاف، تقارير، تحليل بيانات، ومحادثة مباشرة.
-          </p>
-        </div>
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-8 sm:p-6">
+      <section className="relative overflow-hidden rounded-[32px] border border-slate-200/80 bg-[radial-gradient(circle_at_top_right,_rgba(14,165,233,0.18),_transparent_34%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(241,245,249,0.94))] p-5 shadow-[0_28px_80px_-40px_rgba(15,23,42,0.5)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_right,_rgba(56,189,248,0.15),_transparent_32%),linear-gradient(135deg,_rgba(2,6,23,0.98),_rgba(15,23,42,0.92))]">
+        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="space-y-4">
+            <Badge variant="outline" className="w-fit rounded-full border-sky-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200">
+              SAM9
+            </Badge>
+            <div className="space-y-2">
+              <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+                <Bot className="h-8 w-8 text-primary" />
+                SAM9 Control Center
+              </h1>
+              <p className="max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                قسم مركزي للتحكم الكامل في SAM9: تشغيل وإيقاف، تقارير، تحليل بيانات، ومحادثة مباشرة.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className={STAT_CARD_CLASS}>
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Runtime State</p>
+                <div className="mt-3">
+                  <Badge variant={currentRuntimeEnabled ? "default" : "destructive"} className="rounded-full px-3 py-1 text-xs">
+                    {currentRuntimeEnabled ? "RUNNING" : "STOPPED"}
+                  </Badge>
+                </div>
+              </div>
+              <div className={STAT_CARD_CLASS}>
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Source</p>
+                <p className="mt-3 text-xl font-semibold text-slate-900 dark:text-slate-50">{aiAgentReport?.source === "ai-service" ? "ai-service" : "fallback"}</p>
+              </div>
+              <div className={STAT_CARD_CLASS}>
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Total Events</p>
+                <p className="mt-3 text-xl font-semibold text-slate-900 dark:text-slate-50">{totalEvents.toLocaleString("en-US")}</p>
+              </div>
+              <div className={STAT_CARD_CLASS}>
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">AI Win Rate</p>
+                <p className="mt-3 text-xl font-semibold text-slate-900 dark:text-slate-50">{aiWinRate}%</p>
+              </div>
+            </div>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => {
-              refetchAiAgentReport();
-              refetchAiAgentCapabilities();
-              refetchAiAgentDataSummary();
-              refetchAiAgentRuntime();
-              runAiAgentDataQuery();
-            }}
-          >
-            <RefreshCw className={cn(
-              "h-4 w-4",
-              (aiAgentReportLoading || aiAgentCapabilitiesLoading || aiAgentDataSummaryLoading || aiAgentRuntimeLoading) && "animate-spin",
-            )} />
-            تحديث الكل
-          </Button>
-          <Button
-            size="sm"
-            className="gap-1.5"
-            onClick={() => selfTuneMutation.mutate()}
-            disabled={selfTuneMutation.isPending}
-          >
-            {selfTuneMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
-            Self Tune
-          </Button>
+          <div className="grid gap-2 sm:grid-cols-2 xl:w-[340px]">
+            <Button
+              className={cn(BUTTON_3D_CLASS, "w-full gap-1.5")}
+              onClick={() => {
+                refetchAiAgentReport();
+                refetchAiAgentCapabilities();
+                refetchAiAgentDataSummary();
+                refetchAiAgentRuntime();
+                runAiAgentDataQuery();
+              }}
+            >
+              <RefreshCw className={cn(
+                "h-4 w-4",
+                (aiAgentReportLoading || aiAgentCapabilitiesLoading || aiAgentDataSummaryLoading || aiAgentRuntimeLoading) && "animate-spin",
+              )} />
+              تحديث الكل
+            </Button>
+            <Button
+              className={cn(BUTTON_3D_PRIMARY_CLASS, "w-full gap-1.5")}
+              onClick={() => selfTuneMutation.mutate()}
+              disabled={selfTuneMutation.isPending}
+            >
+              {selfTuneMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+              Self Tune
+            </Button>
+          </div>
         </div>
-      </div>
+      </section>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card className="xl:col-span-2">
+        <Card className={`${DATA_CARD_CLASS} xl:col-span-2`}>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <Power className="h-5 w-5" />
@@ -558,22 +598,22 @@ export default function AdminSam9Page() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="rounded-md border p-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className={STAT_CARD_CLASS}>
                 <p className="text-xs text-muted-foreground mb-1">Runtime State</p>
                 <Badge variant={currentRuntimeEnabled ? "default" : "destructive"}>
                   {currentRuntimeEnabled ? "RUNNING" : "STOPPED"}
                 </Badge>
               </div>
-              <div className="rounded-md border p-3">
+              <div className={STAT_CARD_CLASS}>
                 <p className="text-xs text-muted-foreground mb-1">Health</p>
                 <p className="text-sm font-semibold">{String(aiAgentRuntime?.healthStatus || "-")}</p>
               </div>
-              <div className="rounded-md border p-3">
+              <div className={STAT_CARD_CLASS}>
                 <p className="text-xs text-muted-foreground mb-1">Changed By</p>
                 <p className="text-sm font-semibold break-all">{String(aiAgentRuntime?.runtime?.changedBy || "-")}</p>
               </div>
-              <div className="rounded-md border p-3">
+              <div className={STAT_CARD_CLASS}>
                 <p className="text-xs text-muted-foreground mb-1">Changed At</p>
                 <p className="text-sm font-semibold">
                   {aiAgentRuntime?.runtime?.changedAt
@@ -583,7 +623,7 @@ export default function AdminSam9Page() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
               <div className="lg:col-span-3">
                 <Label htmlFor="runtime-reason" className="text-xs text-muted-foreground">سبب التغيير (اختياري)</Label>
                 <Input
@@ -591,13 +631,12 @@ export default function AdminSam9Page() {
                   value={runtimeReason}
                   onChange={(e) => setRuntimeReason(e.target.value)}
                   placeholder="مثال: إيقاف مؤقت للصيانة"
-                  className="mt-1"
+                  className={`${INPUT_SURFACE_CLASS} mt-1`}
                 />
               </div>
-              <div className="flex gap-2 lg:justify-end items-end">
+              <div className="flex flex-wrap gap-2 lg:justify-end items-end">
                 <Button
-                  variant="default"
-                  className="gap-1.5"
+                  className={cn(BUTTON_3D_PRIMARY_CLASS, "gap-1.5")}
                   disabled={runtimeMutation.isPending || currentRuntimeEnabled}
                   onClick={() => runtimeMutation.mutate(true)}
                 >
@@ -605,8 +644,7 @@ export default function AdminSam9Page() {
                   تشغيل
                 </Button>
                 <Button
-                  variant="destructive"
-                  className="gap-1.5"
+                  className={cn(BUTTON_3D_DESTRUCTIVE_CLASS, "gap-1.5")}
                   disabled={runtimeMutation.isPending || !currentRuntimeEnabled}
                   onClick={() => runtimeMutation.mutate(false)}
                 >
@@ -616,13 +654,13 @@ export default function AdminSam9Page() {
               </div>
             </div>
 
-            <div className="rounded-md border p-3 text-xs text-muted-foreground">
+            <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4 text-xs text-muted-foreground dark:border-slate-800 dark:bg-slate-900/60">
               last reason: {aiAgentRuntime?.runtime?.reason ? String(aiAgentRuntime.runtime.reason) : "-"}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={DATA_CARD_CLASS}>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <Activity className="h-5 w-5" />
@@ -630,34 +668,30 @@ export default function AdminSam9Page() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="rounded-md border p-3">
+            <div className={STAT_CARD_CLASS}>
               <p className="text-xs text-muted-foreground mb-1">Source</p>
               <Badge variant={aiAgentReport?.source === "ai-service" ? "default" : "secondary"}>
                 {aiAgentReport?.source === "ai-service" ? "ai-service" : "fallback"}
               </Badge>
             </div>
-            <div className="rounded-md border p-3">
+            <div className={STAT_CARD_CLASS}>
               <p className="text-xs text-muted-foreground mb-1">Total Events</p>
-              <p className="text-lg font-semibold">{aiAgentReport?.external?.report?.learning?.totalEvents ?? 0}</p>
+              <p className="text-lg font-semibold">{totalEvents}</p>
             </div>
-            <div className="rounded-md border p-3">
+            <div className={STAT_CARD_CLASS}>
               <p className="text-xs text-muted-foreground mb-1">Tracked Games</p>
-              <p className="text-lg font-semibold">
-                {aiAgentReport?.external?.report?.performance?.totalGames
-                  ?? aiAgentReport?.localFallback?.summary?.totalTrackedMoves
-                  ?? 0}
-              </p>
+              <p className="text-lg font-semibold">{trackedGames}</p>
             </div>
-            <div className="rounded-md border p-3">
+            <div className={STAT_CARD_CLASS}>
               <p className="text-xs text-muted-foreground mb-1">AI Win Rate</p>
-              <p className="text-lg font-semibold">{aiAgentReport?.external?.report?.performance?.aiWinRate ?? 0}%</p>
+              <p className="text-lg font-semibold">{aiWinRate}%</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card>
+        <Card className={DATA_CARD_CLASS}>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <Shield className="h-5 w-5" />
@@ -666,25 +700,25 @@ export default function AdminSam9Page() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-md border p-2">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
                 <p className="text-muted-foreground mb-1">agentName</p>
                 <p className="font-medium">{String(aiAgentCapabilities?.capabilities?.agentName || "-")}</p>
               </div>
-              <div className="rounded-md border p-2">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
                 <p className="text-muted-foreground mb-1">privacyMode</p>
                 <p className="font-medium">{String(aiAgentCapabilities?.capabilities?.privacyMode || "-")}</p>
               </div>
-              <div className="rounded-md border p-2">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
                 <p className="text-muted-foreground mb-1">autonomousLearning</p>
                 <p className="font-medium">{aiAgentCapabilities?.capabilities?.autonomousLearning?.enabled ? "true" : "false"}</p>
               </div>
-              <div className="rounded-md border p-2">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
                 <p className="text-muted-foreground mb-1">runtimeControl</p>
                 <p className="font-medium">{aiAgentCapabilities?.capabilities?.runtimeControl?.enabled ? "true" : "false"}</p>
               </div>
             </div>
 
-            <div className="rounded-md border p-3 space-y-2">
+            <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4 space-y-2 dark:border-slate-800 dark:bg-slate-900/60">
               <p className="text-xs text-muted-foreground">autonomousLearning.methods</p>
               <div className="flex flex-wrap gap-1.5">
                 {capabilityMethods.length > 0 ? capabilityMethods.map((method) => (
@@ -693,14 +727,14 @@ export default function AdminSam9Page() {
               </div>
             </div>
 
-            <div className="rounded-md border p-3 text-xs text-muted-foreground space-y-1">
+            <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4 text-xs text-muted-foreground space-y-1 dark:border-slate-800 dark:bg-slate-900/60">
               <p>source: {aiAgentCapabilities?.source || "-"}</p>
               <p>generatedAt: {aiAgentCapabilities?.generatedAt ? new Date(aiAgentCapabilities.generatedAt).toLocaleString("ar-EG") : "-"}</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={DATA_CARD_CLASS}>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <BarChart3 className="h-5 w-5" />
@@ -710,14 +744,14 @@ export default function AdminSam9Page() {
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-2 text-xs">
               {Object.entries(aiAgentDataSummary?.summary || {}).slice(0, 8).map(([key, value]) => (
-                <div key={key} className="rounded-md border p-2">
+                <div key={key} className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
                   <p className="text-muted-foreground mb-1 truncate">{key}</p>
                   <p className="font-medium break-all">{formatAiDataCell(value)}</p>
                 </div>
               ))}
             </div>
 
-            <ScrollArea className="h-[130px] rounded-md border p-3">
+            <ScrollArea className="h-[130px] rounded-[24px] border border-slate-200/80 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
               <pre className="text-xs whitespace-pre-wrap break-words text-muted-foreground">
                 {JSON.stringify(
                   {
@@ -730,7 +764,7 @@ export default function AdminSam9Page() {
               </pre>
             </ScrollArea>
 
-            <div className="rounded-md border p-3 text-xs text-muted-foreground space-y-1">
+            <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4 text-xs text-muted-foreground space-y-1 dark:border-slate-800 dark:bg-slate-900/60">
               <p>source: {aiAgentDataSummary?.source || "-"}</p>
               <p>generatedAt: {aiAgentDataSummary?.generatedAt ? new Date(aiAgentDataSummary.generatedAt).toLocaleString("ar-EG") : "-"}</p>
             </div>
@@ -738,7 +772,7 @@ export default function AdminSam9Page() {
         </Card>
       </div>
 
-      <Card>
+      <Card className={DATA_CARD_CLASS}>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Database className="h-5 w-5" />
@@ -749,14 +783,12 @@ export default function AdminSam9Page() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {aiQueryPresets.map((preset) => (
               <Button
                 key={preset.key}
                 type="button"
-                variant={aiActivePreset === preset.key ? "default" : "outline"}
-                size="sm"
-                className="h-8 text-xs"
+                className={cn(aiActivePreset === preset.key ? BUTTON_3D_PRIMARY_CLASS : BUTTON_3D_CLASS, "h-9 shrink-0 text-xs")}
                 onClick={() => applyAiQueryPreset(preset)}
               >
                 {preset.label}
@@ -764,9 +796,7 @@ export default function AdminSam9Page() {
             ))}
             <Button
               type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs"
+              className={cn(BUTTON_3D_CLASS, "h-9 shrink-0 text-xs")}
               onClick={() => {
                 setAiActivePreset("custom");
                 setAiDataQueryGameType("");
@@ -778,15 +808,13 @@ export default function AdminSam9Page() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-2">
-            <div className="xl:col-span-2 grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-6">
+            <div className="grid grid-cols-3 gap-1 xl:col-span-2">
               {(["game", "day", "difficulty"] as const).map((groupBy) => (
                 <Button
                   key={groupBy}
                   type="button"
-                  variant={aiDataQueryGroupBy === groupBy ? "default" : "outline"}
-                  size="sm"
-                  className="h-8 text-xs"
+                  className={cn(aiDataQueryGroupBy === groupBy ? BUTTON_3D_PRIMARY_CLASS : BUTTON_3D_CLASS, "h-10 text-xs")}
                   onClick={() => {
                     setAiActivePreset("custom");
                     setAiDataQueryGroupBy(groupBy);
@@ -804,7 +832,7 @@ export default function AdminSam9Page() {
                 setAiDataQueryGameType(e.target.value);
               }}
               placeholder="gameType"
-              className="h-8 text-xs"
+              className={`${INPUT_SURFACE_CLASS} h-10 text-xs`}
             />
             <Input
               value={aiDataQueryFrom}
@@ -813,7 +841,7 @@ export default function AdminSam9Page() {
                 setAiDataQueryFrom(e.target.value);
               }}
               type="date"
-              className="h-8 text-xs"
+              className={`${INPUT_SURFACE_CLASS} h-10 text-xs`}
             />
             <Input
               value={aiDataQueryTo}
@@ -822,27 +850,48 @@ export default function AdminSam9Page() {
                 setAiDataQueryTo(e.target.value);
               }}
               type="date"
-              className="h-8 text-xs"
+              className={`${INPUT_SURFACE_CLASS} h-10 text-xs`}
             />
             <Button
               type="button"
               onClick={() => runAiAgentDataQuery()}
               disabled={aiAgentDataQueryMutation.isPending}
-              className="h-8 gap-1.5 text-xs"
+              className={cn(BUTTON_3D_PRIMARY_CLASS, "h-10 gap-1.5 text-xs")}
             >
               {aiAgentDataQueryMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
               {t("common.search")}
             </Button>
           </div>
 
-          <div className="rounded-md border p-3 text-xs text-muted-foreground space-y-1">
+          <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4 text-xs text-muted-foreground space-y-1 dark:border-slate-800 dark:bg-slate-900/60">
             <p>source: {aiAgentDataQueryMutation.data?.source || "-"}</p>
             <p>generatedAt: {aiAgentDataQueryMutation.data?.generatedAt ? new Date(aiAgentDataQueryMutation.data.generatedAt).toLocaleString("ar-EG") : "-"}</p>
             <p>query: {JSON.stringify(aiAgentDataQueryMutation.data?.query || { groupBy: aiDataQueryGroupBy, metric: "results" })}</p>
             <p>rows: {aiDataQueryRows.length}</p>
           </div>
 
-          <ScrollArea className="h-[280px] rounded-md border">
+          {!aiAgentDataQueryMutation.isPending && aiDataQueryRows.length > 0 && (
+            <div className="space-y-3 md:hidden">
+              {aiDataQueryRows.slice(0, 20).map((row, index) => (
+                <div key={`${index}-${JSON.stringify(row).slice(0, 32)}`} className={STAT_CARD_CLASS}>
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">#{index + 1}</span>
+                    <Badge variant="outline" className="text-[10px]">{aiDataQueryGroupBy}</Badge>
+                  </div>
+                  <div className="grid gap-2 text-xs">
+                    {aiDataQueryColumns.map((column) => (
+                      <div key={column} className="flex items-start justify-between gap-3 border-b border-slate-200/70 pb-2 last:border-b-0 last:pb-0 dark:border-slate-800/80">
+                        <span className="text-muted-foreground">{AI_QUERY_COLUMN_LABELS[column] || column}</span>
+                        <span className="text-right font-medium text-slate-900 dark:text-slate-100">{formatAiDataCell(row?.[column])}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <ScrollArea className="hidden h-[280px] rounded-[24px] border border-slate-200/80 bg-white/80 dark:border-slate-800 dark:bg-slate-950/60 md:block">
             <div className="min-w-[640px] p-3">
               {aiAgentDataQueryMutation.isPending && (
                 <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
@@ -893,7 +942,7 @@ export default function AdminSam9Page() {
       </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card>
+        <Card className={DATA_CARD_CLASS}>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
@@ -904,16 +953,14 @@ export default function AdminSam9Page() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="rounded-md border p-2">
+            <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
               <p className="text-[11px] text-muted-foreground mb-2">Context Mode</p>
               <div className="flex flex-wrap gap-1.5">
                 {AI_CHAT_CONTEXT_MODES.map((mode) => (
                   <Button
                     key={mode.value}
                     type="button"
-                    variant={aiAgentContextMode === mode.value ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 text-[10px]"
+                    className={cn(aiAgentContextMode === mode.value ? BUTTON_3D_PRIMARY_CLASS : BUTTON_3D_CLASS, "h-8 text-[10px]")}
                     onClick={() => setAiAgentContextMode(mode.value)}
                   >
                     {mode.label}
@@ -922,7 +969,7 @@ export default function AdminSam9Page() {
               </div>
             </div>
 
-            <ScrollArea className="h-[320px] rounded-md border p-3">
+            <ScrollArea className="h-[320px] rounded-[24px] border border-slate-200/80 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-900/60">
               <div className="space-y-2">
                 {aiAgentConversation.length === 0 && (
                   <p className="text-sm text-muted-foreground">
@@ -933,10 +980,10 @@ export default function AdminSam9Page() {
                   <div
                     key={item.id}
                     className={cn(
-                      "max-w-[90%] rounded-md px-3 py-2 text-sm",
+                      "max-w-[90%] rounded-[22px] px-3 py-2 text-sm shadow-sm",
                       item.role === "admin"
                         ? "ms-auto bg-primary text-primary-foreground"
-                        : "me-auto bg-muted",
+                        : "me-auto bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100",
                     )}
                   >
                     <p className="whitespace-pre-wrap">{item.message}</p>
@@ -951,7 +998,7 @@ export default function AdminSam9Page() {
                   </div>
                 ))}
                 {aiAgentChatMutation.isPending && (
-                  <div className="me-auto inline-flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
+                  <div className="me-auto inline-flex items-center gap-2 rounded-[20px] bg-muted px-3 py-2 text-sm">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     جاري توليد الرد...
                   </div>
@@ -964,6 +1011,7 @@ export default function AdminSam9Page() {
                 value={aiAgentPrompt}
                 onChange={(e) => setAiAgentPrompt(e.target.value)}
                 placeholder="اسأل عن تقارير AI أو مشاكل اللعب المنفرد..."
+                className={INPUT_SURFACE_CLASS}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
@@ -971,7 +1019,7 @@ export default function AdminSam9Page() {
                   }
                 }}
               />
-              <Button onClick={handleAiAgentSend} disabled={aiAgentChatMutation.isPending || !aiAgentPrompt.trim()} className="gap-1.5">
+              <Button onClick={handleAiAgentSend} disabled={aiAgentChatMutation.isPending || !aiAgentPrompt.trim()} className={cn(BUTTON_3D_PRIMARY_CLASS, "gap-1.5")}>
                 <Send className="h-4 w-4" />
                 إرسال
               </Button>
@@ -979,7 +1027,7 @@ export default function AdminSam9Page() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={DATA_CARD_CLASS}>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Zap className="h-5 w-5" />
@@ -998,6 +1046,7 @@ export default function AdminSam9Page() {
                 onChange={(e) => setSnapshotNotes(e.target.value)}
                 placeholder="اكتب الحالة الحالية أو مشاكل الإنتاج..."
                 rows={7}
+                className={TEXTAREA_SURFACE_CLASS}
               />
             </div>
 
@@ -1008,13 +1057,14 @@ export default function AdminSam9Page() {
                 value={snapshotTags}
                 onChange={(e) => setSnapshotTags(e.target.value)}
                 placeholder="sam9,production,incident"
+                className={INPUT_SURFACE_CLASS}
               />
             </div>
 
             <Separator />
 
             <Button
-              className="w-full gap-1.5"
+              className={cn(BUTTON_3D_PRIMARY_CLASS, "w-full gap-1.5")}
               onClick={() => {
                 const notes = snapshotNotes.trim();
                 const tags = snapshotTags

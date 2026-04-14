@@ -4,8 +4,9 @@ import { useLocation } from "wouter";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-import { type AppNotification, isSafeNotificationLink } from "@/lib/notifications";
+import { type AppNotification, getFinancialNotificationReference, normalizeSafeNotificationLink } from "@/lib/notifications";
 import { playSound } from "@/hooks/use-sound-effects";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -25,6 +26,7 @@ import {
   Users,
   Check,
   CheckCheck,
+  Copy,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -53,6 +55,7 @@ export function NotificationBell() {
   const { language, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [hasNewPulse, setHasNewPulse] = useState(false);
 
   const { data: unreadCountData, refetch: refetchUnreadCount } = useQuery<{ count: number }>({
@@ -136,10 +139,9 @@ export function NotificationBell() {
     if (!notification.isRead) {
       markAsReadMutation.mutate(notification.id);
     }
-    if (isSafeNotificationLink(notification.link)) {
-      navigate(notification.link);
-      setOpen(false);
-    }
+    const safeTarget = normalizeSafeNotificationLink(notification.link);
+    navigate(safeTarget || (notification.type === "transaction" ? "/transactions" : "/notifications"));
+    setOpen(false);
   };
 
   const getIcon = (type: string) => {
@@ -250,6 +252,31 @@ export function NotificationBell() {
                           <p className="text-xs text-muted-foreground mt-1">
                             {formatTime(notification.createdAt)}
                           </p>
+                          {notification.type === "transaction" && (() => {
+                            const reference = getFinancialNotificationReference(notification);
+                            if (!reference) return null;
+                            return (
+                              <div className="mt-1 inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/5 px-1.5 py-0.5 text-[10px]">
+                                <span className="font-medium text-primary">Ref:</span>
+                                <span className="font-mono">{reference}</span>
+                                <button
+                                  type="button"
+                                  className="rounded p-0.5 text-primary hover:bg-primary/10"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    navigator.clipboard.writeText(reference).then(() => {
+                                      toast({ title: "Reference copied", description: reference });
+                                    }).catch(() => {
+                                      toast({ title: "Copy failed", description: "Could not copy reference", variant: "destructive" });
+                                    });
+                                  }}
+                                  aria-label="Copy transaction reference"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </button>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -97,6 +97,26 @@ const notificationSchema = z.object({
 
 type NotificationFormData = z.infer<typeof notificationSchema>;
 
+const SURFACE_CARD_CLASS = "rounded-[24px] border border-slate-200/80 bg-gradient-to-b from-white via-slate-50 to-slate-100/70 shadow-[0_14px_40px_-24px_rgba(15,23,42,0.55)] dark:border-slate-800/80 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950";
+const STAT_CARD_CLASS = "rounded-[22px] border border-slate-200/80 bg-white/80 p-4 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.4)] dark:border-slate-800 dark:bg-slate-900/70";
+const DATA_CARD_CLASS = "rounded-[22px] border border-slate-200/80 bg-white/85 p-4 shadow-[0_14px_34px_-24px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-900/70";
+const TABLE_WRAP_CLASS = "overflow-hidden rounded-[22px] border border-slate-200/80 bg-white/85 shadow-[0_14px_32px_-24px_rgba(15,23,42,0.38)] dark:border-slate-800 dark:bg-slate-900/70";
+const BUTTON_3D_CLASS = "rounded-xl border border-slate-300/80 bg-gradient-to-b from-white to-slate-100 text-slate-900 shadow-[0_8px_0_0_rgba(148,163,184,0.5)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(148,163,184,0.45)] hover:brightness-105 dark:border-slate-700 dark:from-slate-800 dark:to-slate-900 dark:text-slate-100 dark:shadow-[0_8px_0_0_rgba(15,23,42,0.82)]";
+const BUTTON_3D_PRIMARY_CLASS = "rounded-xl border border-sky-600 bg-gradient-to-b from-sky-400 via-sky-500 to-sky-700 text-white shadow-[0_8px_0_0_rgba(3,105,161,0.58)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(3,105,161,0.52)] hover:brightness-105";
+const INPUT_SURFACE_CLASS = "min-h-[46px] rounded-xl border-slate-200/80 bg-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_10px_24px_-20px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-900";
+const TEXTAREA_SURFACE_CLASS = "min-h-[110px] rounded-xl border-slate-200/80 bg-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_10px_24px_-20px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-900";
+
+function normalizeNotificationPayload(data: NotificationFormData): NotificationFormData {
+  return {
+    ...data,
+    title: data.title.trim(),
+    titleAr: data.titleAr?.trim() || "",
+    content: data.content.trim(),
+    contentAr: data.contentAr?.trim() || "",
+    targetValue: data.targetType === "user" ? data.targetValue?.trim() || "" : "",
+  };
+}
+
 export default function AdminNotificationsPage() {
   const { toast } = useToast();
   const { language } = useI18n();
@@ -118,6 +138,7 @@ export default function AdminNotificationsPage() {
   });
 
   const watchTargetType = form.watch("targetType");
+  const watchedTargetValue = form.watch("targetValue");
 
   const { data: broadcasts, isLoading: loadingBroadcasts } = useQuery<BroadcastNotification[]>({
     queryKey: ["/api/admin/broadcast-notifications"],
@@ -140,9 +161,16 @@ export default function AdminNotificationsPage() {
   }, [users, userSearchQuery]);
 
   const selectedUser = useMemo(() => {
-    const targetValue = form.getValues("targetValue");
-    return users?.find((u) => u.id === targetValue);
-  }, [users, form.watch("targetValue")]);
+    return users?.find((u) => u.id === watchedTargetValue);
+  }, [users, watchedTargetValue]);
+
+  useEffect(() => {
+    if (watchTargetType !== "user" && watchedTargetValue) {
+      form.setValue("targetValue", "", { shouldDirty: true, shouldValidate: true });
+      setUserSearchQuery("");
+      setUserSearchOpen(false);
+    }
+  }, [form, watchTargetType, watchedTargetValue]);
 
   const sendMutation = useMutation({
     mutationFn: async (data: NotificationFormData) => {
@@ -162,6 +190,8 @@ export default function AdminNotificationsPage() {
         targetType: "all",
         targetValue: "",
       });
+      setUserSearchQuery("");
+      setUserSearchOpen(false);
     },
     onError: (error: Error) => {
       toast({ title: isArabic ? "خطأ" : "Error", description: error.message, variant: "destructive" });
@@ -169,30 +199,84 @@ export default function AdminNotificationsPage() {
   });
 
   const onSubmit = (data: NotificationFormData) => {
-    if (data.targetType === "user" && !data.targetValue) {
+    const normalizedData = normalizeNotificationPayload(data);
+    if (normalizedData.targetType === "user" && !normalizedData.targetValue) {
       toast({ title: isArabic ? "خطأ" : "Error", description: isArabic ? "يرجى اختيار مستخدم" : "Please select a user", variant: "destructive" });
       return;
     }
-    sendMutation.mutate(data);
+    sendMutation.mutate(normalizedData);
   };
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString(isArabic ? "ar" : "en");
   };
 
+  const notificationHistory = broadcasts || [];
+  const userTargetedCount = notificationHistory.filter((broadcast) => broadcast.targetType === "user").length;
+  const allUsersCount = notificationHistory.filter((broadcast) => broadcast.targetType === "all").length;
+
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold" data-testid="text-page-title">
-          {isArabic ? "إرسال الإشعارات" : "Broadcast Notifications"}
-        </h1>
-        <p className="text-muted-foreground">
-          {isArabic ? "إرسال إشعارات للمستخدمين" : "Send notifications to users"}
-        </p>
+    <div className="space-y-5 p-3 sm:p-4 md:p-6">
+      <div className={`${SURFACE_CARD_CLASS} px-5 py-5 sm:px-6 sm:py-6`}>
+        <div className="flex items-start gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-gradient-to-b from-sky-400 to-sky-700 text-white shadow-[0_10px_0_0_rgba(3,105,161,0.45)]">
+            <Bell className="h-7 w-7" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl" data-testid="text-page-title">
+              {isArabic ? "إرسال الإشعارات" : "Broadcast Notifications"}
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+              {isArabic ? "إرسال إشعارات للمستخدمين" : "Send notifications to users"}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-sky-100 p-3 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+              <History className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                {isArabic ? "السجل" : "History"}
+              </p>
+              <p className="mt-1 text-2xl font-bold">{notificationHistory.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+              <Users className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                {isArabic ? "الكل" : "All"}
+              </p>
+              <p className="mt-1 text-2xl font-bold">{allUsersCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-amber-100 p-3 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+              <User className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                {isArabic ? "مستخدم" : "User"}
+              </p>
+              <p className="mt-1 text-2xl font-bold">{userTargetedCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <Card className={SURFACE_CARD_CLASS}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Send className="h-5 w-5" />
@@ -204,7 +288,7 @@ export default function AdminNotificationsPage() {
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
                 <FormField
                   control={form.control}
                   name="targetType"
@@ -213,7 +297,7 @@ export default function AdminNotificationsPage() {
                       <FormLabel>{isArabic ? "الهدف" : "Target"}</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
-                          <SelectTrigger data-testid="select-target-type">
+                          <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-target-type">
                             <SelectValue />
                           </SelectTrigger>
                         </FormControl>
@@ -251,7 +335,7 @@ export default function AdminNotificationsPage() {
                                 variant="outline"
                                 role="combobox"
                                 className={cn(
-                                  "w-full justify-between",
+                                  `${INPUT_SURFACE_CLASS} w-full justify-between`,
                                   !field.value && "text-muted-foreground"
                                 )}
                                 data-testid="button-select-user"
@@ -261,7 +345,7 @@ export default function AdminNotificationsPage() {
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
-                          <PopoverContent className="w-full p-0" align="start">
+                          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
                             <Command>
                               <CommandInput
                                 placeholder={isArabic ? "ابحث عن مستخدم..." : "Search user..."}
@@ -305,7 +389,7 @@ export default function AdminNotificationsPage() {
                   />
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="title"
@@ -313,7 +397,7 @@ export default function AdminNotificationsPage() {
                       <FormItem>
                         <FormLabel>{isArabic ? "العنوان (إنجليزي)" : "Title (English)"}</FormLabel>
                         <FormControl>
-                          <Input {...field} data-testid="input-notification-title" />
+                          <Input {...field} className={INPUT_SURFACE_CLASS} data-testid="input-notification-title" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -326,7 +410,7 @@ export default function AdminNotificationsPage() {
                       <FormItem>
                         <FormLabel>{isArabic ? "العنوان (عربي)" : "Title (Arabic)"}</FormLabel>
                         <FormControl>
-                          <Input {...field} dir="rtl" data-testid="input-notification-title-ar" />
+                          <Input {...field} className={INPUT_SURFACE_CLASS} dir="rtl" data-testid="input-notification-title-ar" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -341,7 +425,7 @@ export default function AdminNotificationsPage() {
                     <FormItem>
                       <FormLabel>{isArabic ? "المحتوى (إنجليزي)" : "Content (English)"}</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={3} data-testid="input-notification-content" />
+                        <Textarea {...field} className={TEXTAREA_SURFACE_CLASS} rows={4} data-testid="input-notification-content" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -355,7 +439,7 @@ export default function AdminNotificationsPage() {
                     <FormItem>
                       <FormLabel>{isArabic ? "المحتوى (عربي)" : "Content (Arabic)"}</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={3} dir="rtl" data-testid="input-notification-content-ar" />
+                        <Textarea {...field} className={TEXTAREA_SURFACE_CLASS} rows={4} dir="rtl" data-testid="input-notification-content-ar" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -364,7 +448,7 @@ export default function AdminNotificationsPage() {
 
                 <Button
                   type="submit"
-                  className="w-full"
+                  className={`${BUTTON_3D_PRIMARY_CLASS} w-full`}
                   disabled={sendMutation.isPending}
                   data-testid="button-send-notification"
                 >
@@ -377,7 +461,7 @@ export default function AdminNotificationsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={SURFACE_CARD_CLASS}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <History className="h-5 w-5" />
@@ -389,57 +473,83 @@ export default function AdminNotificationsPage() {
           </CardHeader>
           <CardContent>
             {loadingBroadcasts ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-16 w-full" />
+                  <div key={i} className={DATA_CARD_CLASS}>
+                    <Skeleton className="h-5 w-36" />
+                    <Skeleton className="mt-3 h-4 w-full" />
+                    <Skeleton className="mt-2 h-4 w-24" />
+                  </div>
                 ))}
               </div>
-            ) : (
-              <div className="max-h-[500px] overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{isArabic ? "العنوان" : "Title"}</TableHead>
-                      <TableHead>{isArabic ? "الهدف" : "Target"}</TableHead>
-                      <TableHead>{isArabic ? "التاريخ" : "Date"}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {broadcasts?.map((broadcast) => (
-                      <TableRow key={broadcast.id} data-testid={`row-broadcast-${broadcast.id}`}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{isArabic && broadcast.titleAr ? broadcast.titleAr : broadcast.title}</p>
-                            <p className="text-xs text-muted-foreground line-clamp-1">
-                              {isArabic && broadcast.contentAr ? broadcast.contentAr : broadcast.content}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {broadcast.targetType === "all" ? (
-                              <><Users className="h-3 w-3 me-1" />{isArabic ? "الكل" : "All"}</>
-                            ) : (
-                              <><User className="h-3 w-3 me-1" />{isArabic ? "مستخدم" : "User"}</>
-                            )}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatDate(broadcast.sentAt)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {!broadcasts?.length && (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                          <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          {isArabic ? "لا توجد إشعارات سابقة" : "No notifications sent yet"}
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+            ) : !notificationHistory.length ? (
+              <div className={`${DATA_CARD_CLASS} py-10 text-center text-muted-foreground`}>
+                <Bell className="mx-auto mb-4 h-10 w-10 opacity-50" />
+                <p>{isArabic ? "لا توجد إشعارات سابقة" : "No notifications sent yet"}</p>
               </div>
+            ) : (
+              <>
+                <div className="space-y-3 md:hidden">
+                  {notificationHistory.map((broadcast) => (
+                    <div key={broadcast.id} className={DATA_CARD_CLASS} data-testid={`row-broadcast-${broadcast.id}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold">{isArabic && broadcast.titleAr ? broadcast.titleAr : broadcast.title}</p>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {isArabic && broadcast.contentAr ? broadcast.contentAr : broadcast.content}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
+                          {broadcast.targetType === "all" ? (
+                            <><Users className="me-1 h-3 w-3" />{isArabic ? "الكل" : "All"}</>
+                          ) : (
+                            <><User className="me-1 h-3 w-3" />{isArabic ? "مستخدم" : "User"}</>
+                          )}
+                        </Badge>
+                      </div>
+                      <p className="mt-3 text-xs text-muted-foreground">{formatDate(broadcast.sentAt)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className={`hidden max-h-[500px] overflow-y-auto md:block ${TABLE_WRAP_CLASS}`}>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{isArabic ? "العنوان" : "Title"}</TableHead>
+                        <TableHead>{isArabic ? "الهدف" : "Target"}</TableHead>
+                        <TableHead>{isArabic ? "التاريخ" : "Date"}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {notificationHistory.map((broadcast) => (
+                        <TableRow key={broadcast.id} data-testid={`row-broadcast-${broadcast.id}`}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{isArabic && broadcast.titleAr ? broadcast.titleAr : broadcast.title}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-1">
+                                {isArabic && broadcast.contentAr ? broadcast.contentAr : broadcast.content}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {broadcast.targetType === "all" ? (
+                                <><Users className="h-3 w-3 me-1" />{isArabic ? "الكل" : "All"}</>
+                              ) : (
+                                <><User className="h-3 w-3 me-1" />{isArabic ? "مستخدم" : "User"}</>
+                              )}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDate(broadcast.sentAt)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

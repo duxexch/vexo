@@ -211,6 +211,80 @@ interface FreezeProgramPayload {
   paymentMethods: FreezeProgramMethodOption[];
 }
 
+const SURFACE_CARD_CLASS = "rounded-[24px] border border-slate-200/80 bg-gradient-to-b from-white via-slate-50 to-slate-100/70 shadow-[0_14px_40px_-24px_rgba(15,23,42,0.55)] dark:border-slate-800/80 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950";
+const STAT_CARD_CLASS = `${SURFACE_CARD_CLASS} overflow-hidden`;
+const BUTTON_3D_CLASS = "rounded-xl border border-slate-300/80 bg-gradient-to-b from-white to-slate-100 text-slate-900 shadow-[0_8px_0_0_rgba(148,163,184,0.5)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(148,163,184,0.45)] hover:brightness-105 dark:border-slate-700 dark:from-slate-800 dark:to-slate-900 dark:text-slate-100 dark:shadow-[0_8px_0_0_rgba(15,23,42,0.82)]";
+const BUTTON_3D_PRIMARY_CLASS = "rounded-xl border border-sky-600 bg-gradient-to-b from-sky-400 via-sky-500 to-sky-700 text-white shadow-[0_8px_0_0_rgba(3,105,161,0.58)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(3,105,161,0.52)] hover:brightness-105";
+const BUTTON_3D_DANGER_CLASS = "rounded-xl border border-red-700 bg-gradient-to-b from-red-500 via-red-600 to-red-800 text-white shadow-[0_8px_0_0_rgba(127,29,29,0.58)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(127,29,29,0.52)] hover:brightness-105";
+const INPUT_SURFACE_CLASS = "min-h-[46px] rounded-xl border-slate-200/80 bg-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_10px_24px_-20px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-900";
+const TEXTAREA_SURFACE_CLASS = "min-h-[120px] rounded-xl border-slate-200/80 bg-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_10px_24px_-20px_rgba(15,23,42,0.45)] dark:border-slate-700 dark:bg-slate-900";
+const TAB_LIST_CLASS = "inline-flex w-max min-w-full rounded-[26px] border border-slate-200/80 bg-white/90 p-1.5 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-950/80 md:w-auto";
+const TAB_TRIGGER_CLASS = "min-h-[44px] rounded-[18px] px-4 py-2 text-sm font-semibold data-[state=active]:bg-gradient-to-b data-[state=active]:from-sky-400 data-[state=active]:to-sky-700 data-[state=active]:text-white data-[state=active]:shadow-[0_6px_0_0_rgba(3,105,161,0.5)]";
+const DIALOG_SURFACE_CLASS = "max-w-[calc(100vw-1rem)] sm:max-w-2xl rounded-[28px] border border-slate-200/80 bg-gradient-to-b from-white via-slate-50 to-slate-100 p-0 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.55)] dark:border-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950";
+
+function formatDetailLabel(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatDetailValue(key: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+
+  if (Array.isArray(value)) {
+    const hasComplexEntries = value.some((entry) => typeof entry === "object" && entry !== null);
+    if (hasComplexEntries) {
+      return JSON.stringify(value, null, 2);
+    }
+
+    return value.map((entry) => String(entry)).join(", ") || "-";
+  }
+
+  if (typeof value === "string") {
+    if (/(At|Date)$/i.test(key) && !Number.isNaN(Date.parse(value))) {
+      return new Date(value).toLocaleString();
+    }
+
+    return value;
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value, null, 2);
+  }
+
+  return String(value);
+}
+
+function DetailGrid({ data }: { data?: Record<string, unknown> | null }) {
+  if (!data) {
+    return <p className="text-sm text-muted-foreground">No details available.</p>;
+  }
+
+  const entries = Object.entries(data).filter(([, value]) => value !== undefined);
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {entries.map(([key, value]) => (
+        <div key={key} className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {formatDetailLabel(key)}
+          </p>
+          <p className="mt-2 whitespace-pre-wrap break-words text-sm font-medium text-foreground">
+            {formatDetailValue(key, value)}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const defaultCurrencyCodes = ["USD", "USDT", "EUR", "GBP", "SAR", "AED", "EGP"];
   const [testAmount, setTestAmount] = useState("");
@@ -229,6 +303,8 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
     maxAmount: "",
     allowedPaymentMethodIds: [] as string[],
   });
+  const [selectedFreezeRequest, setSelectedFreezeRequest] = useState<FreezeProgramRequest | null>(null);
+  const [freezeRejectionReason, setFreezeRejectionReason] = useState("");
 
   const { data: settings, isLoading } = useQuery<P2PSettings>({
     queryKey: ["/api/admin/p2p/settings"],
@@ -319,6 +395,8 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/freeze-program/requests"] });
+      setSelectedFreezeRequest(null);
+      setFreezeRejectionReason("");
       toast({ title: "Request Updated", description: "Freeze request status has been updated" });
     },
     onError: () => {
@@ -416,6 +494,10 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
     });
   };
 
+  const surfaceCardClass = SURFACE_CARD_CLASS;
+  const statCardClass = STAT_CARD_CLASS;
+  const button3dPrimaryClass = BUTTON_3D_PRIMARY_CLASS;
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -427,8 +509,8 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
+        <Card className={statCardClass}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-green-500/10">
@@ -442,7 +524,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={statCardClass}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-blue-500/10">
@@ -456,7 +538,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={statCardClass}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-purple-500/10">
@@ -470,7 +552,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={statCardClass}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-orange-500/10">
@@ -486,7 +568,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
       </div>
 
       {analytics?.byStatus && analytics.byStatus.length > 0 && (
-        <Card>
+        <Card className={surfaceCardClass}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Trades by Status</CardTitle>
           </CardHeader>
@@ -514,7 +596,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <Card className={surfaceCardClass}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Percent className="h-5 w-5" />
@@ -528,7 +610,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 value={settings?.feeType || "percentage"}
                 onValueChange={(value) => handleUpdateSetting("feeType", value)}
               >
-                <SelectTrigger data-testid="select-fee-type">
+                <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-fee-type">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -539,12 +621,13 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Percentage Fee (%)</Label>
                 <Input
                   type="number"
                   step="0.01"
+                  className={INPUT_SURFACE_CLASS}
                   value={parseFloat(settings?.platformFeePercentage || "0") * 100}
                   onChange={(e) => handleUpdateSetting("platformFeePercentage", (parseFloat(e.target.value) / 100).toFixed(4))}
                   disabled={settings?.feeType === "fixed"}
@@ -559,6 +642,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <Input
                   type="number"
                   step="0.01"
+                  className={INPUT_SURFACE_CLASS}
                   value={settings?.platformFeeFixed || "0"}
                   onChange={(e) => handleUpdateSetting("platformFeeFixed", e.target.value)}
                   disabled={settings?.feeType === "percentage"}
@@ -567,12 +651,13 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Minimum Fee ($)</Label>
                 <Input
                   type="number"
                   step="0.01"
+                  className={INPUT_SURFACE_CLASS}
                   value={settings?.minFee || "0"}
                   onChange={(e) => handleUpdateSetting("minFee", e.target.value)}
                   data-testid="input-min-fee"
@@ -583,6 +668,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <Input
                   type="number"
                   step="0.01"
+                  className={INPUT_SURFACE_CLASS}
                   value={settings?.maxFee || ""}
                   placeholder="No limit"
                   onChange={(e) => handleUpdateSetting("maxFee", e.target.value || null)}
@@ -596,9 +682,10 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <Calculator className="h-4 w-4" />
                 Fee Calculator
               </Label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   type="number"
+                  className={INPUT_SURFACE_CLASS}
                   placeholder="Enter trade amount"
                   value={testAmount}
                   onChange={(e) => setTestAmount(e.target.value)}
@@ -606,6 +693,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 />
                 <Button
                   variant="outline"
+                  className={BUTTON_3D_CLASS}
                   onClick={() => calculateFeeMutation.mutate(testAmount)}
                   disabled={!testAmount}
                   data-testid="button-calculate-fee"
@@ -624,7 +712,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={surfaceCardClass}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
@@ -632,11 +720,12 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Min Trade Amount ($)</Label>
                 <Input
                   type="number"
+                  className={INPUT_SURFACE_CLASS}
                   value={settings?.minTradeAmount || "10"}
                   onChange={(e) => handleUpdateSetting("minTradeAmount", e.target.value)}
                   data-testid="input-min-trade"
@@ -646,6 +735,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <Label>Max Trade Amount ($)</Label>
                 <Input
                   type="number"
+                  className={INPUT_SURFACE_CLASS}
                   value={settings?.maxTradeAmount || "100000"}
                   onChange={(e) => handleUpdateSetting("maxTradeAmount", e.target.value)}
                   data-testid="input-max-trade"
@@ -653,11 +743,12 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Escrow Timeout (hours)</Label>
                 <Input
                   type="number"
+                  className={INPUT_SURFACE_CLASS}
                   value={settings?.escrowTimeoutHours || 24}
                   onChange={(e) => handleUpdateSetting("escrowTimeoutHours", parseInt(e.target.value))}
                   data-testid="input-escrow-timeout"
@@ -667,6 +758,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <Label>Payment Timeout (minutes)</Label>
                 <Input
                   type="number"
+                  className={INPUT_SURFACE_CLASS}
                   value={settings?.paymentTimeoutMinutes || 15}
                   onChange={(e) => handleUpdateSetting("paymentTimeoutMinutes", parseInt(e.target.value))}
                   data-testid="input-payment-timeout"
@@ -758,7 +850,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
         </Card>
       </div>
 
-      <Card>
+      <Card className={surfaceCardClass}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
@@ -769,6 +861,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           <div className="space-y-2">
             <Label>Allowed Currencies For Buy Ads</Label>
             <Textarea
+              className={TEXTAREA_SURFACE_CLASS}
               value={buyCurrenciesDraft}
               onChange={(event) => setBuyCurrenciesDraft(event.target.value)}
               placeholder="USD, EUR, SAR"
@@ -778,6 +871,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
             <Button
               type="button"
               variant="outline"
+              className={BUTTON_3D_CLASS}
               onClick={() => saveCurrencyList("p2pBuyCurrencies", buyCurrenciesDraft)}
               disabled={updateSettingsMutation.isPending}
               data-testid="button-save-buy-currencies"
@@ -789,6 +883,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           <div className="space-y-2">
             <Label>Allowed Currencies For Sell Ads</Label>
             <Textarea
+              className={TEXTAREA_SURFACE_CLASS}
               value={sellCurrenciesDraft}
               onChange={(event) => setSellCurrenciesDraft(event.target.value)}
               placeholder="USD, EUR, SAR"
@@ -798,6 +893,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
             <Button
               type="button"
               variant="outline"
+              className={BUTTON_3D_CLASS}
               onClick={() => saveCurrencyList("p2pSellCurrencies", sellCurrenciesDraft)}
               disabled={updateSettingsMutation.isPending}
               data-testid="button-save-sell-currencies"
@@ -809,6 +905,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           <div className="space-y-2">
             <Label>Allowed Currencies For Deposit</Label>
             <Textarea
+              className={TEXTAREA_SURFACE_CLASS}
               value={depositCurrenciesDraft}
               onChange={(event) => setDepositCurrenciesDraft(event.target.value)}
               placeholder="USD, EUR, SAR"
@@ -818,6 +915,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
             <Button
               type="button"
               variant="outline"
+              className={BUTTON_3D_CLASS}
               onClick={() => saveCurrencyList("depositEnabledCurrencies", depositCurrenciesDraft)}
               disabled={updateSettingsMutation.isPending}
               data-testid="button-save-deposit-currencies"
@@ -829,7 +927,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
       </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <Card>
+        <Card className={surfaceCardClass}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
@@ -837,11 +935,11 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Currency</Label>
                 <Select value={selectedFreezeCurrency} onValueChange={setSelectedFreezeCurrency}>
-                  <SelectTrigger data-testid="select-freeze-currency">
+                  <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-freeze-currency">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -852,7 +950,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 </Select>
               </div>
 
-              <div className="flex items-end justify-between rounded-md border p-3">
+              <div className="flex items-end justify-between rounded-2xl border border-slate-200/80 bg-white/80 p-3 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60">
                 <div>
                   <Label>Enabled</Label>
                   <p className="text-xs text-muted-foreground">Allow users to request freeze benefit for this currency.</p>
@@ -865,12 +963,13 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Benefit Rate %</Label>
                 <Input
                   type="number"
                   step="0.001"
+                  className={INPUT_SURFACE_CLASS}
                   value={freezeDraft.benefitRatePercent}
                   onChange={(event) => setFreezeDraft((previous) => ({ ...previous, benefitRatePercent: event.target.value }))}
                   data-testid="input-freeze-benefit-rate"
@@ -881,6 +980,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <Input
                   type="number"
                   step="0.01"
+                  className={INPUT_SURFACE_CLASS}
                   value={freezeDraft.baseReductionPercent}
                   onChange={(event) => setFreezeDraft((previous) => ({ ...previous, baseReductionPercent: event.target.value }))}
                   data-testid="input-freeze-base-reduction"
@@ -891,6 +991,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <Input
                   type="number"
                   step="0.01"
+                  className={INPUT_SURFACE_CLASS}
                   value={freezeDraft.maxReductionPercent}
                   onChange={(event) => setFreezeDraft((previous) => ({ ...previous, maxReductionPercent: event.target.value }))}
                   data-testid="input-freeze-max-reduction"
@@ -901,6 +1002,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <Input
                   type="number"
                   step="0.00000001"
+                  className={INPUT_SURFACE_CLASS}
                   value={freezeDraft.minAmount}
                   onChange={(event) => setFreezeDraft((previous) => ({ ...previous, minAmount: event.target.value }))}
                   data-testid="input-freeze-min-amount"
@@ -911,6 +1013,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <Input
                   type="number"
                   step="0.00000001"
+                  className={INPUT_SURFACE_CLASS}
                   value={freezeDraft.maxAmount}
                   onChange={(event) => setFreezeDraft((previous) => ({ ...previous, maxAmount: event.target.value }))}
                   data-testid="input-freeze-max-amount"
@@ -920,7 +1023,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
 
             <div className="space-y-2">
               <Label>Allowed Payment Methods</Label>
-              <div className="max-h-44 space-y-2 overflow-auto rounded-md border p-2">
+              <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200/80 bg-white/80 p-2 dark:border-slate-800 dark:bg-slate-900/60">
                 {availableFreezePaymentMethods.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No active payment methods available.</p>
                 ) : (
@@ -930,7 +1033,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                       <button
                         key={method.id}
                         type="button"
-                        className={`w-full rounded-md border px-3 py-2 text-start text-sm ${isSelected ? "border-primary bg-primary/5" : "border-border"}`}
+                        className={`w-full rounded-xl border px-3 py-3 text-start text-sm shadow-[0_10px_24px_-22px_rgba(15,23,42,0.35)] ${isSelected ? "border-primary bg-primary/5" : "border-border bg-background/80"}`}
                         onClick={() => toggleFreezeMethod(method.id)}
                         data-testid={`freeze-method-${method.id}`}
                       >
@@ -947,6 +1050,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
             </div>
 
             <Button
+              className={button3dPrimaryClass}
               onClick={() => updateFreezeProgramMutation.mutate()}
               disabled={updateFreezeProgramMutation.isPending}
               data-testid="button-save-freeze-program"
@@ -956,7 +1060,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={surfaceCardClass}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
@@ -970,7 +1074,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 value={freezeRequestFilter}
                 onValueChange={(value) => setFreezeRequestFilter(value as typeof freezeRequestFilter)}
               >
-                <SelectTrigger data-testid="select-freeze-request-status">
+                <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-freeze-request-status">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -989,7 +1093,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <p className="text-sm text-muted-foreground">No freeze requests found.</p>
               ) : (
                 freezeRequests.map((request) => (
-                  <div key={request.id} className="rounded-md border p-3 space-y-2" data-testid={`freeze-request-${request.id}`}>
+                  <div key={request.id} className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 space-y-2 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60" data-testid={`freeze-request-${request.id}`}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-medium">{request.username} • {request.currencyCode}</div>
                       <Badge variant={request.status === "approved" ? "default" : request.status === "pending" ? "secondary" : "destructive"}>
@@ -1012,9 +1116,10 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                     ) : null}
 
                     {request.status === "pending" ? (
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <Button
                           size="sm"
+                          className={button3dPrimaryClass}
                           onClick={() => reviewFreezeRequestMutation.mutate({ requestId: request.id, decision: "approve" })}
                           disabled={reviewFreezeRequestMutation.isPending}
                           data-testid={`button-approve-freeze-${request.id}`}
@@ -1024,14 +1129,10 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                         </Button>
                         <Button
                           size="sm"
-                          variant="destructive"
+                          className={BUTTON_3D_DANGER_CLASS}
                           onClick={() => {
-                            const reason = window.prompt("Rejection reason") || "";
-                            reviewFreezeRequestMutation.mutate({
-                              requestId: request.id,
-                              decision: "reject",
-                              rejectionReason: reason,
-                            });
+                            setSelectedFreezeRequest(request);
+                            setFreezeRejectionReason("");
                           }}
                           disabled={reviewFreezeRequestMutation.isPending}
                           data-testid={`button-reject-freeze-${request.id}`}
@@ -1047,6 +1148,61 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
             </div>
           </CardContent>
         </Card>
+
+        <Dialog open={!!selectedFreezeRequest} onOpenChange={(open) => {
+          if (!open) {
+            setSelectedFreezeRequest(null);
+            setFreezeRejectionReason("");
+          }
+        }}>
+          <DialogContent className={DIALOG_SURFACE_CLASS}>
+            <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
+              <DialogTitle>Reject Freeze Request</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 px-6 py-5">
+              <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+                <p className="text-sm font-semibold">{selectedFreezeRequest?.username || "User"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedFreezeRequest?.currencyCode || "-"} • {selectedFreezeRequest?.amount || "0"}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Rejection Reason</Label>
+                <Textarea
+                  className={TEXTAREA_SURFACE_CLASS}
+                  placeholder="Enter reason for rejection"
+                  value={freezeRejectionReason}
+                  onChange={(event) => setFreezeRejectionReason(event.target.value)}
+                  data-testid="input-freeze-rejection-reason"
+                />
+              </div>
+            </div>
+            <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
+              <Button variant="outline" className={BUTTON_3D_CLASS} onClick={() => {
+                setSelectedFreezeRequest(null);
+                setFreezeRejectionReason("");
+              }}>
+                Cancel
+              </Button>
+              <Button
+                className={BUTTON_3D_DANGER_CLASS}
+                disabled={!selectedFreezeRequest || freezeRejectionReason.trim().length === 0 || reviewFreezeRequestMutation.isPending}
+                onClick={() => {
+                  if (!selectedFreezeRequest) return;
+
+                  reviewFreezeRequestMutation.mutate({
+                    requestId: selectedFreezeRequest.id,
+                    decision: "reject",
+                    rejectionReason: freezeRejectionReason.trim(),
+                  });
+                }}
+                data-testid="button-confirm-freeze-reject"
+              >
+                Reject Request
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
@@ -1345,18 +1501,23 @@ export default function AdminP2PPage() {
     return "border border-slate-700 bg-slate-800 text-slate-200";
   };
 
+  const surfaceCardClass = SURFACE_CARD_CLASS;
+  const statCardClass = STAT_CARD_CLASS;
+  const button3dClass = BUTTON_3D_CLASS;
+  const button3dPrimaryClass = BUTTON_3D_PRIMARY_CLASS;
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="p-3 sm:p-4 md:p-6 space-y-5 md:space-y-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">P2P Management</h1>
-          <p className="text-muted-foreground">Manage P2P offers, trades and disputes</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">P2P Management</h1>
+          <p className="text-sm text-muted-foreground">Manage P2P offers, trades and disputes</p>
         </div>
         <div className="relative w-full md:w-80">
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search..."
-            className="ps-10"
+            className={`${INPUT_SURFACE_CLASS} ps-10`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             data-testid="input-search-p2p"
@@ -1364,8 +1525,8 @@ export default function AdminP2PPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <Card className={statCardClass}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-primary/10">
@@ -1378,7 +1539,7 @@ export default function AdminP2PPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={statCardClass}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-green-500/10">
@@ -1391,7 +1552,7 @@ export default function AdminP2PPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={statCardClass}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-orange-500/10">
@@ -1404,7 +1565,7 @@ export default function AdminP2PPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={statCardClass}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-red-500/10">
@@ -1420,26 +1581,28 @@ export default function AdminP2PPage() {
       </div>
 
       <Tabs defaultValue="offers">
-        <TabsList>
-          <TabsTrigger value="offers" data-testid="tab-offers">Offers</TabsTrigger>
-          <TabsTrigger value="trades" data-testid="tab-trades">Trades</TabsTrigger>
-          <TabsTrigger value="disputes" data-testid="tab-disputes">
-            Disputes
-            {disputes?.filter((d: P2PDispute) => d.status === "open" || d.status === "investigating").length > 0 && (
-              <Badge variant="destructive" className="ml-2">
-                {disputes?.filter((d: P2PDispute) => d.status === "open" || d.status === "investigating").length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="permissions" data-testid="tab-ad-permissions">
-            <Shield className="h-4 w-4 me-1" />
-            Ad Permissions
-          </TabsTrigger>
-          <TabsTrigger value="settings" data-testid="tab-settings">
-            <Settings className="h-4 w-4 me-1" />
-            Settings
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-1">
+          <TabsList className={TAB_LIST_CLASS}>
+            <TabsTrigger className={TAB_TRIGGER_CLASS} value="offers" data-testid="tab-offers">Offers</TabsTrigger>
+            <TabsTrigger className={TAB_TRIGGER_CLASS} value="trades" data-testid="tab-trades">Trades</TabsTrigger>
+            <TabsTrigger className={TAB_TRIGGER_CLASS} value="disputes" data-testid="tab-disputes">
+              Disputes
+              {disputes?.filter((d: P2PDispute) => d.status === "open" || d.status === "investigating").length > 0 && (
+                <Badge variant="destructive" className="ml-2">
+                  {disputes?.filter((d: P2PDispute) => d.status === "open" || d.status === "investigating").length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger className={TAB_TRIGGER_CLASS} value="permissions" data-testid="tab-ad-permissions">
+              <Shield className="h-4 w-4 me-1" />
+              Ad Permissions
+            </TabsTrigger>
+            <TabsTrigger className={TAB_TRIGGER_CLASS} value="settings" data-testid="tab-settings">
+              <Settings className="h-4 w-4 me-1" />
+              Settings
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="offers" className="space-y-4">
           {offersLoading ? (
@@ -1451,7 +1614,7 @@ export default function AdminP2PPage() {
           ) : (
             <div className="space-y-3">
               {filteredOffers?.map((offer: P2POffer) => (
-                <Card key={offer.id}>
+                <Card key={offer.id} className={surfaceCardClass}>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between gap-4 flex-wrap">
                       <div className="flex items-center gap-4">
@@ -1479,7 +1642,7 @@ export default function AdminP2PPage() {
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" data-testid={`button-offer-actions-${offer.id}`}>
+                          <Button variant="ghost" size="icon" className={button3dClass} data-testid={`button-offer-actions-${offer.id}`}>
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -1504,7 +1667,7 @@ export default function AdminP2PPage() {
                 </Card>
               ))}
               {filteredOffers?.length === 0 && (
-                <Card>
+                <Card className={surfaceCardClass}>
                   <CardContent className="p-6 text-center">
                     <p className="text-muted-foreground">No offers found</p>
                   </CardContent>
@@ -1526,7 +1689,7 @@ export default function AdminP2PPage() {
               {filteredTrades?.map((trade: P2PTrade) => {
                 const hasUnreadAlert = unreadEntityIds.has(String(trade.id));
                 return (
-                  <Card key={trade.id} className={`transition-colors ${hasUnreadAlert ? 'border-s-2 border-s-primary/40 bg-primary/5' : (trade.status === 'pending' || trade.status === 'awaiting_payment' ? 'border-s-2 border-s-yellow-500/50 bg-yellow-500/5' : '')}`}>
+                  <Card key={trade.id} className={`${surfaceCardClass} transition-colors ${hasUnreadAlert ? 'border-s-2 border-s-primary/40 bg-primary/5' : (trade.status === 'pending' || trade.status === 'awaiting_payment' ? 'border-s-2 border-s-yellow-500/50 bg-yellow-500/5' : '')}`}>
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between gap-4 flex-wrap">
                         <div className="flex items-center gap-4">
@@ -1547,7 +1710,7 @@ export default function AdminP2PPage() {
                             </div>
                           </div>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => {
+                        <Button variant="ghost" size="icon" className={button3dClass} onClick={() => {
                           if (hasUnreadAlert) {
                             markAlertRead.mutate({ entityType: "p2p_trade", entityId: String(trade.id) });
                           }
@@ -1561,7 +1724,7 @@ export default function AdminP2PPage() {
                 );
               })}
               {filteredTrades?.length === 0 && (
-                <Card>
+                <Card className={surfaceCardClass}>
                   <CardContent className="p-6 text-center">
                     <p className="text-muted-foreground">No trades found</p>
                   </CardContent>
@@ -1572,38 +1735,38 @@ export default function AdminP2PPage() {
         </TabsContent>
 
         <TabsContent value="disputes" className="space-y-4">
-          <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-slate-100">
-            <div className="flex items-center justify-between gap-2 bg-[#f0c73f] px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
+          <div className={`${surfaceCardClass} overflow-hidden`}>
+            <div className="flex items-center justify-between gap-2 bg-gradient-to-r from-amber-300 to-yellow-500 px-3 py-2 text-slate-950 sm:px-4 sm:py-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
                 <h3 className="text-sm font-semibold sm:text-base">Disputes Control</h3>
               </div>
-              <Badge className="bg-slate-900 text-[#f0c73f] hover:bg-slate-900">
+              <Badge className="bg-slate-950 text-amber-300 hover:bg-slate-950">
                 {disputes?.length || 0}
               </Badge>
             </div>
 
             <div className="grid grid-cols-3 gap-2 p-3 sm:p-4">
-              <div className="rounded-lg border border-slate-800 bg-slate-900 p-2">
-                <p className="text-[11px] text-slate-400 sm:text-xs">Open</p>
-                <p className="mt-1 text-lg font-semibold text-slate-100">{openDisputesCount}</p>
+              <div className="rounded-xl border border-slate-200/80 bg-white/80 p-2 dark:border-slate-800 dark:bg-slate-900/60">
+                <p className="text-[11px] text-muted-foreground sm:text-xs">Open</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{openDisputesCount}</p>
               </div>
-              <div className="rounded-lg border border-slate-800 bg-slate-900 p-2">
-                <p className="text-[11px] text-slate-400 sm:text-xs">Investigating</p>
-                <p className="mt-1 text-lg font-semibold text-slate-100">{investigatingDisputesCount}</p>
+              <div className="rounded-xl border border-slate-200/80 bg-white/80 p-2 dark:border-slate-800 dark:bg-slate-900/60">
+                <p className="text-[11px] text-muted-foreground sm:text-xs">Investigating</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{investigatingDisputesCount}</p>
               </div>
-              <div className="rounded-lg border border-slate-800 bg-slate-900 p-2">
-                <p className="text-[11px] text-slate-400 sm:text-xs">Resolved</p>
-                <p className="mt-1 text-lg font-semibold text-slate-100">{resolvedDisputesCount}</p>
+              <div className="rounded-xl border border-slate-200/80 bg-white/80 p-2 dark:border-slate-800 dark:bg-slate-900/60">
+                <p className="text-[11px] text-muted-foreground sm:text-xs">Resolved</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">{resolvedDisputesCount}</p>
               </div>
             </div>
 
             <div className="p-3 pt-0 sm:p-4 sm:pt-0">
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div className="space-y-1">
-                  <Label className="text-xs text-slate-300">Status</Label>
+                  <Label className="text-xs text-muted-foreground">Status</Label>
                   <Select value={disputeStatus} onValueChange={setDisputeStatus}>
-                    <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-dispute-status">
+                    <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-dispute-status">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1617,9 +1780,9 @@ export default function AdminP2PPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs text-slate-300">Sort</Label>
+                  <Label className="text-xs text-muted-foreground">Sort</Label>
                   <Select value={disputeSortBy} onValueChange={setDisputeSortBy}>
-                    <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-dispute-sort">
+                    <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-dispute-sort">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1629,7 +1792,7 @@ export default function AdminP2PPage() {
                   </Select>
                 </div>
 
-                <div className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300 sm:self-end">
+                <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-muted-foreground dark:border-slate-800 dark:bg-slate-900/60 sm:self-end">
                   {(disputes?.length || 0)} disputes
                 </div>
               </div>
@@ -1649,39 +1812,39 @@ export default function AdminP2PPage() {
                 return (
                   <Card
                     key={dispute.id}
-                    className={`border-slate-800 bg-slate-950/80 text-slate-100 transition-colors ${hasUnreadAlert ? 'border-s-2 border-s-[#f0c73f] bg-[#f0c73f]/10' : ''} ${liveUpdateHighlight === dispute.id ? "ring-2 ring-[#f0c73f]" : ""}`}
+                    className={`${surfaceCardClass} transition-colors ${hasUnreadAlert ? 'border-s-2 border-s-amber-500 bg-amber-50/80 dark:bg-amber-500/10' : ''} ${liveUpdateHighlight === dispute.id ? 'ring-2 ring-amber-400/70' : ''}`}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between gap-4 flex-wrap">
                         <div className="flex items-center gap-4">
-                          <div className={`p-2 rounded-full ${dispute.status === "open" ? "bg-red-500/20" : dispute.status === "investigating" ? "bg-amber-500/20" : "bg-emerald-500/20"}`}>
-                            <AlertTriangle className={`h-5 w-5 ${dispute.status === "open" ? "text-red-400" : dispute.status === "investigating" ? "text-amber-300" : "text-emerald-300"}`} />
+                          <div className={`p-2 rounded-full ${dispute.status === "open" ? "bg-red-500/10" : dispute.status === "investigating" ? "bg-amber-500/10" : "bg-emerald-500/10"}`}>
+                            <AlertTriangle className={`h-5 w-5 ${dispute.status === "open" ? "text-red-500" : dispute.status === "investigating" ? "text-amber-500" : "text-emerald-500"}`} />
                           </div>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-slate-100">Dispute #{dispute.id.slice(0, 8)}</span>
+                              <span className="font-semibold text-foreground">Dispute #{dispute.id.slice(0, 8)}</span>
                               <Badge className={getDisputeStatusPillClass(dispute.status)}>
                                 {dispute.status}
                               </Badge>
                               {dispute.tradeAmount && (
-                                <Badge variant="outline" className="border-slate-700 text-slate-300">${dispute.tradeAmount}</Badge>
+                                <Badge variant="outline" className="border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300">${dispute.tradeAmount}</Badge>
                               )}
                             </div>
-                            <div className="text-sm text-slate-300">
+                            <div className="text-sm text-muted-foreground">
                               {dispute.initiatorName} vs {dispute.respondentName}
                             </div>
-                            <div className="text-xs text-slate-400 mt-1">
+                            <div className="mt-1 text-xs text-muted-foreground">
                               Reason: {dispute.reason?.slice(0, 50)}{(dispute.reason?.length ?? 0) > 50 ? "..." : ""}
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {/* Inline action buttons */}
                           {dispute.status === "open" && (
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="border border-amber-600/40 bg-amber-600/10 text-amber-200 hover:bg-amber-600/20"
+                              className={`${button3dClass} border-amber-400/70 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/20`}
                               onClick={() => { setSelectedTrade(dispute); setActionDialog("escalateDispute"); }}
                               data-testid={`button-escalate-${dispute.id}`}
                             >
@@ -1693,7 +1856,7 @@ export default function AdminP2PPage() {
                             <>
                               <Button
                                 size="sm"
-                                className="bg-[#f0c73f] text-slate-900 hover:bg-[#f5ce56]"
+                                className="rounded-xl border border-amber-500 bg-gradient-to-b from-amber-300 to-yellow-500 text-slate-950 shadow-[0_8px_0_0_rgba(176,142,35,0.5)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(176,142,35,0.45)] hover:brightness-105"
                                 onClick={() => { setSelectedTrade(dispute); setActionDialog("resolveDispute"); }}
                                 data-testid={`button-resolve-${dispute.id}`}
                               >
@@ -1703,7 +1866,7 @@ export default function AdminP2PPage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                                className={button3dClass}
                                 onClick={() => { setSelectedTrade(dispute); setActionDialog("closeDispute"); }}
                                 data-testid={`button-close-${dispute.id}`}
                               >
@@ -1714,7 +1877,7 @@ export default function AdminP2PPage() {
                           )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="text-slate-300 hover:bg-slate-800" data-testid={`button-dispute-actions-${dispute.id}`}>
+                              <Button variant="ghost" size="icon" className={button3dClass} data-testid={`button-dispute-actions-${dispute.id}`}>
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -1741,9 +1904,9 @@ export default function AdminP2PPage() {
                 );
               })}
               {disputes?.length === 0 && (
-                <Card className="border-slate-800 bg-slate-950/80 text-slate-100">
+                <Card className={surfaceCardClass}>
                   <CardContent className="p-6 text-center">
-                    <p className="text-slate-400">No disputes found</p>
+                    <p className="text-muted-foreground">No disputes found</p>
                   </CardContent>
                 </Card>
               )}
@@ -1776,7 +1939,7 @@ export default function AdminP2PPage() {
                 const monthlyLimitChanged = normalizedDraftMonthlyLimit !== normalizedCurrentMonthlyLimit;
 
                 return (
-                  <Card key={permissionUser.userId}>
+                  <Card key={permissionUser.userId} className={surfaceCardClass}>
                     <CardContent className="p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-2">
@@ -1819,9 +1982,10 @@ export default function AdminP2PPage() {
                         </div>
 
                         <div className="flex flex-col gap-2 w-full sm:w-auto">
-                          <div className="flex gap-2">
+                          <div className="flex flex-col sm:flex-row gap-2">
                             <Button
                               variant={permissionUser.verificationBypassed ? "outline" : "default"}
+                              className={permissionUser.verificationBypassed ? button3dClass : button3dPrimaryClass}
                               disabled={isUpdatingUser}
                               onClick={() => {
                                 if (permissionUser.verificationBypassed) {
@@ -1852,6 +2016,7 @@ export default function AdminP2PPage() {
 
                             <Button
                               variant={permissionUser.canTradeP2P ? "destructive" : "default"}
+                              className={!permissionUser.canTradeP2P ? button3dPrimaryClass : undefined}
                               disabled={isUpdatingUser}
                               onClick={() => updateAdPermissionMutation.mutate({
                                 userId: permissionUser.userId,
@@ -1868,6 +2033,7 @@ export default function AdminP2PPage() {
 
                             <Button
                               variant={permissionUser.canCreateOffers ? "destructive" : "default"}
+                              className={!permissionUser.canCreateOffers ? button3dPrimaryClass : undefined}
                               disabled={isUpdatingUser}
                               onClick={() => updateAdPermissionMutation.mutate({
                                 userId: permissionUser.userId,
@@ -1883,12 +2049,13 @@ export default function AdminP2PPage() {
                             </Button>
                           </div>
 
-                          <div className="flex gap-2">
+                          <div className="flex flex-col sm:flex-row gap-2">
                             <Input
                               type="number"
                               min="0"
                               step="0.01"
                               placeholder="Monthly limit"
+                              className={INPUT_SURFACE_CLASS}
                               value={monthlyLimitDraft}
                               onChange={(event) => {
                                 const nextValue = event.target.value;
@@ -1902,6 +2069,7 @@ export default function AdminP2PPage() {
 
                             <Button
                               variant="outline"
+                              className={button3dClass}
                               disabled={isUpdatingUser || !isMonthlyLimitDraftValid || !monthlyLimitChanged}
                               onClick={() => updateAdPermissionMutation.mutate({
                                 userId: permissionUser.userId,
@@ -1920,7 +2088,7 @@ export default function AdminP2PPage() {
               })}
 
               {adPermissionUsers.length === 0 && (
-                <Card>
+                <Card className={surfaceCardClass}>
                   <CardContent className="p-6 text-center">
                     <p className="text-muted-foreground">No users found</p>
                   </CardContent>
@@ -1936,25 +2104,26 @@ export default function AdminP2PPage() {
       </Tabs>
 
       <Dialog open={actionDialog === "cancelOffer"} onOpenChange={() => closeDialog()}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className={DIALOG_SURFACE_CLASS}>
+          <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
             <DialogTitle>Cancel Offer</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 px-6 py-5">
             <div className="space-y-2">
               <Label>Reason</Label>
               <Textarea
                 placeholder="Enter reason for cancellation..."
+                className={TEXTAREA_SURFACE_CLASS}
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
                 data-testid="input-cancel-reason"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>Cancel</Button>
+          <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <Button variant="outline" className={button3dClass} onClick={closeDialog}>Cancel</Button>
             <Button
-              variant="destructive"
+              className={BUTTON_3D_DANGER_CLASS}
               onClick={() => cancelOfferMutation.mutate({ id: selectedOffer?.id, reason: actionReason })}
               disabled={!actionReason}
               data-testid="button-confirm-cancel"
@@ -1966,15 +2135,15 @@ export default function AdminP2PPage() {
       </Dialog>
 
       <Dialog open={actionDialog === "resolveDispute"} onOpenChange={() => closeDialog()}>
-        <DialogContent className="border-slate-800 bg-slate-950 text-slate-100">
-          <DialogHeader>
+        <DialogContent className={DIALOG_SURFACE_CLASS}>
+          <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
             <DialogTitle>Resolve Dispute</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 px-6 py-5">
             <div className="space-y-2">
               <Label>Winner</Label>
               <Select value={resolution} onValueChange={setResolution}>
-                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-winner">
+                <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-winner">
                   <SelectValue placeholder="Select winner" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1989,15 +2158,15 @@ export default function AdminP2PPage() {
                 placeholder="Enter resolution details..."
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
-                className="border-slate-700 bg-slate-900 text-slate-100"
+                className={TEXTAREA_SURFACE_CLASS}
                 data-testid="input-resolution-notes"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={closeDialog}>Cancel</Button>
+          <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <Button variant="outline" className={button3dClass} onClick={closeDialog}>Cancel</Button>
             <Button
-              className="bg-[#f0c73f] text-slate-900 hover:bg-[#f5ce56]"
+              className="rounded-xl border border-amber-500 bg-gradient-to-b from-amber-300 to-yellow-500 text-slate-950 shadow-[0_8px_0_0_rgba(176,142,35,0.5)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(176,142,35,0.45)] hover:brightness-105"
               onClick={() => resolveDisputeMutation.mutate({
                 id: selectedTrade?.id,
                 resolution: actionReason,
@@ -2013,33 +2182,31 @@ export default function AdminP2PPage() {
       </Dialog>
 
       <Dialog open={actionDialog === "viewOffer" || actionDialog === "viewTrade" || actionDialog === "viewDispute"} onOpenChange={() => closeDialog()}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className={DIALOG_SURFACE_CLASS}>
+          <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
             <DialogTitle>
               {actionDialog === "viewOffer" && "Offer Details"}
               {actionDialog === "viewTrade" && "Trade Details"}
               {actionDialog === "viewDispute" && "Dispute Details"}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <pre className="p-4 bg-muted rounded-lg text-sm overflow-auto max-h-96">
-              {JSON.stringify(actionDialog === "viewOffer" ? selectedOffer : selectedTrade, null, 2)}
-            </pre>
+          <div className="space-y-4 px-6 py-5">
+            <DetailGrid data={(actionDialog === "viewOffer" ? selectedOffer : selectedTrade) as Record<string, unknown>} />
           </div>
-          <DialogFooter>
-            <Button onClick={closeDialog}>Close</Button>
+          <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <Button className={button3dClass} onClick={closeDialog}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Escalate Dispute Dialog */}
       <Dialog open={actionDialog === "escalateDispute"} onOpenChange={() => closeDialog()}>
-        <DialogContent className="border-slate-800 bg-slate-950 text-slate-100">
-          <DialogHeader>
+        <DialogContent className={DIALOG_SURFACE_CLASS}>
+          <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
             <DialogTitle>Escalate Dispute</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <p className="text-sm text-slate-400">
+          <div className="space-y-4 px-6 py-5">
+            <p className="text-sm text-muted-foreground">
               Escalate this dispute to investigation status. This will mark it for priority review.
             </p>
             <div className="space-y-2">
@@ -2048,15 +2215,15 @@ export default function AdminP2PPage() {
                 placeholder="Enter reason for escalation..."
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
-                className="border-slate-700 bg-slate-900 text-slate-100"
+                className={TEXTAREA_SURFACE_CLASS}
                 data-testid="input-escalate-reason"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={closeDialog}>Cancel</Button>
+          <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <Button variant="outline" className={button3dClass} onClick={closeDialog}>Cancel</Button>
             <Button
-              className="bg-[#f0c73f] text-slate-900 hover:bg-[#f5ce56]"
+              className="rounded-xl border border-amber-500 bg-gradient-to-b from-amber-300 to-yellow-500 text-slate-950 shadow-[0_8px_0_0_rgba(176,142,35,0.5)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(176,142,35,0.45)] hover:brightness-105"
               onClick={() => escalateDisputeMutation.mutate({ id: selectedTrade?.id, reason: actionReason })}
               disabled={escalateDisputeMutation.isPending}
               data-testid="button-confirm-escalate"
@@ -2069,12 +2236,12 @@ export default function AdminP2PPage() {
 
       {/* Close Dispute Dialog */}
       <Dialog open={actionDialog === "closeDispute"} onOpenChange={() => closeDialog()}>
-        <DialogContent className="border-slate-800 bg-slate-950 text-slate-100">
-          <DialogHeader>
+        <DialogContent className={DIALOG_SURFACE_CLASS}>
+          <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
             <DialogTitle>Close Dispute</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <p className="text-sm text-slate-400">
+          <div className="space-y-4 px-6 py-5">
+            <p className="text-sm text-muted-foreground">
               Close this dispute without a formal resolution. Use this for disputes that were withdrawn or resolved outside the platform.
             </p>
             <div className="space-y-2">
@@ -2083,15 +2250,15 @@ export default function AdminP2PPage() {
                 placeholder="Enter reason for closing..."
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
-                className="border-slate-700 bg-slate-900 text-slate-100"
+                className={TEXTAREA_SURFACE_CLASS}
                 data-testid="input-close-reason"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800" onClick={closeDialog}>Cancel</Button>
+          <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <Button variant="outline" className={button3dClass} onClick={closeDialog}>Cancel</Button>
             <Button
-              className="bg-slate-100 text-slate-900 hover:bg-slate-200"
+              className={button3dClass}
               onClick={() => closeDisputeMutation.mutate({ id: selectedTrade?.id, reason: actionReason })}
               disabled={!actionReason || closeDisputeMutation.isPending}
               data-testid="button-confirm-close"
@@ -2104,13 +2271,15 @@ export default function AdminP2PPage() {
 
       {/* Audit Logs Dialog */}
       <Dialog open={actionDialog === "viewLogs"} onOpenChange={() => closeDialog()}>
-        <DialogContent className="max-w-2xl border-slate-800 bg-slate-950 text-slate-100">
-          <DialogHeader>
+        <DialogContent className={`${DIALOG_SURFACE_CLASS} sm:max-w-3xl`}>
+          <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
             <DialogTitle>Dispute Audit Log</DialogTitle>
           </DialogHeader>
-          <DisputeAuditLog disputeId={selectedTrade?.id} />
-          <DialogFooter>
-            <Button onClick={closeDialog}>Close</Button>
+          <div className="px-6 py-5">
+            <DisputeAuditLog disputeId={selectedTrade?.id} />
+          </div>
+          <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <Button className={button3dClass} onClick={closeDialog}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2136,21 +2305,21 @@ function DisputeAuditLog({ disputeId }: { disputeId?: string }) {
   }
 
   if (!logs.length) {
-    return <p className="text-center text-slate-400 py-4">No audit logs found</p>;
+    return <p className="py-4 text-center text-muted-foreground">No audit logs found</p>;
   }
 
   return (
     <div className="space-y-2 max-h-96 overflow-y-auto">
       {logs.map((log: P2PAuditLog) => (
-        <div key={log.id} className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+        <div key={log.id} className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60">
           <div className="flex items-center justify-between gap-2">
-            <Badge variant="outline" className="border-slate-700 text-slate-300">{log.action}</Badge>
-            <span className="text-xs text-slate-400">
+            <Badge variant="outline" className="border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300">{log.action}</Badge>
+            <span className="text-xs text-muted-foreground">
               {new Date(log.createdAt).toLocaleString()}
             </span>
           </div>
-          <p className="mt-1 text-sm text-slate-100">{log.description}</p>
-          <p className="mt-1 text-xs text-slate-400">By: {log.username}</p>
+          <p className="mt-1 text-sm text-foreground">{log.description}</p>
+          <p className="mt-1 text-xs text-muted-foreground">By: {log.username}</p>
         </div>
       ))}
     </div>

@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 function getAdminToken() {
     return localStorage.getItem("adminToken");
@@ -171,6 +172,16 @@ const WINDOW_OPTIONS = [
     { value: "720", label: "30d" },
 ];
 
+const SURFACE_CARD_CLASS = "overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/90 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.35)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/75";
+const STAT_CARD_CLASS = "rounded-[24px] border border-slate-200/80 bg-gradient-to-br from-white via-slate-50 to-slate-100/80 p-4 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950/80";
+const DATA_CARD_CLASS = `${SURFACE_CARD_CLASS} shadow-[0_18px_45px_-28px_rgba(15,23,42,0.28)]`;
+const BUTTON_3D_CLASS = "inline-flex items-center justify-center rounded-2xl border border-slate-200/80 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-[0_10px_24px_-16px_rgba(15,23,42,0.6)] transition-all hover:-translate-y-0.5 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800";
+const BUTTON_3D_PRIMARY_CLASS = "inline-flex items-center justify-center rounded-2xl border border-primary/20 bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-[0_14px_30px_-18px_rgba(14,116,144,0.65)] transition-all hover:-translate-y-0.5 hover:brightness-105";
+const BUTTON_3D_DESTRUCTIVE_CLASS = "inline-flex items-center justify-center rounded-2xl border border-destructive/20 bg-destructive px-3.5 py-2 text-sm font-semibold text-destructive-foreground shadow-[0_14px_30px_-18px_rgba(190,24,93,0.6)] transition-all hover:-translate-y-0.5 hover:brightness-105";
+const INPUT_SURFACE_CLASS = "rounded-2xl border-slate-200/80 bg-white/90 shadow-inner shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-950/70 dark:shadow-black/20";
+const TABS_LIST_CLASS = "h-auto w-full justify-start gap-2 overflow-x-auto rounded-[24px] border border-slate-200/80 bg-white/80 p-1.5 shadow-sm dark:border-slate-800 dark:bg-slate-950/70";
+const DIALOG_SURFACE_CLASS = "max-w-6xl rounded-[30px] border border-slate-200/80 bg-white/95 shadow-[0_30px_90px_-45px_rgba(15,23,42,0.55)] dark:border-slate-800 dark:bg-slate-950/95";
+
 function formatDateTime(value?: string | null): string {
     if (!value) return "-";
     const parsed = new Date(value);
@@ -181,6 +192,13 @@ function riskBadgeVariant(level: RiskLevel): "default" | "secondary" | "destruct
     if (level === "critical" || level === "high") return "destructive";
     if (level === "medium") return "secondary";
     return "outline";
+}
+
+function riskSurfaceClass(level: RiskLevel): string {
+    if (level === "critical") return "border-rose-200 bg-rose-50/80 dark:border-rose-900/50 dark:bg-rose-950/35";
+    if (level === "high") return "border-amber-200 bg-amber-50/80 dark:border-amber-900/50 dark:bg-amber-950/35";
+    if (level === "medium") return "border-cyan-200 bg-cyan-50/80 dark:border-cyan-900/50 dark:bg-cyan-950/35";
+    return "border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900/60";
 }
 
 export default function AdminPaymentSecurityPage() {
@@ -326,85 +344,93 @@ export default function AdminPaymentSecurityPage() {
     };
 
     return (
-        <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                    <h1 className="text-2xl font-bold">Payment Security IP Control</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Smarter multi-account monitoring, risk scoring, and stronger global payment IP block controls.
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1" data-testid="payment-security-mode-caption">
-                        Mode: {isNotifyOnlyMode ? "Notify Only (manual decisions)" : "Auto Block + Manual"}
-                    </p>
+        <div className="mx-auto max-w-7xl space-y-6 p-4 pb-8 sm:p-6">
+            <section className="relative overflow-hidden rounded-[32px] border border-slate-200/80 bg-[radial-gradient(circle_at_top_right,_rgba(244,63,94,0.16),_transparent_34%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(241,245,249,0.94))] p-5 shadow-[0_28px_80px_-40px_rgba(15,23,42,0.5)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top_right,_rgba(251,113,133,0.14),_transparent_32%),linear-gradient(135deg,_rgba(2,6,23,0.98),_rgba(15,23,42,0.92))]">
+                <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="space-y-4">
+                        <Badge variant="outline" className="w-fit rounded-full border-rose-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200">
+                            Payment Security
+                        </Badge>
+                        <div className="space-y-2">
+                            <h1 className="text-3xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">Payment Security IP Control</h1>
+                            <p className="max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+                                Smarter multi-account monitoring, risk scoring, and stronger global payment IP block controls.
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400" data-testid="payment-security-mode-caption">
+                                Mode: {isNotifyOnlyMode ? "Notify Only (manual decisions)" : "Auto Block + Manual"}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="grid w-full gap-2 sm:grid-cols-2 xl:w-[420px]">
+                        <Button
+                            type="button"
+                            className={cn(isNotifyOnlyMode ? BUTTON_3D_CLASS : BUTTON_3D_PRIMARY_CLASS, "w-full gap-2")}
+                            onClick={onToggleSecurityMode}
+                            disabled={modeMutation.isPending || securityConfigLoading}
+                            data-testid="button-toggle-payment-security-mode"
+                        >
+                            {isNotifyOnlyMode ? (
+                                <Eye className="h-4 w-4" />
+                            ) : (
+                                <ShieldAlert className="h-4 w-4" />
+                            )}
+                            {isNotifyOnlyMode ? "Switch to Auto Block" : "Switch to Notify Only"}
+                        </Button>
+                        <Button className={cn(BUTTON_3D_CLASS, "w-full gap-2")} onClick={refreshAll} data-testid="button-refresh-ip-security">
+                            <RefreshCw className="h-4 w-4" /> Refresh
+                        </Button>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button
-                        type="button"
-                        variant={isNotifyOnlyMode ? "outline" : "default"}
-                        onClick={onToggleSecurityMode}
-                        disabled={modeMutation.isPending || securityConfigLoading}
-                        data-testid="button-toggle-payment-security-mode"
-                    >
-                        {isNotifyOnlyMode ? (
-                            <Eye className="h-4 w-4 me-2" />
-                        ) : (
-                            <ShieldAlert className="h-4 w-4 me-2" />
-                        )}
-                        {isNotifyOnlyMode ? "Switch to Auto Block" : "Switch to Notify Only"}
-                    </Button>
-                    <Button variant="outline" onClick={refreshAll} data-testid="button-refresh-ip-security">
-                        <RefreshCw className="h-4 w-4 me-2" /> Refresh
-                    </Button>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <Card className={STAT_CARD_CLASS}>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Active Blocks</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                            <p className="text-2xl font-bold">{overview?.activeBlocks ?? allBlockedIps.length}</p>
+                            <p className="text-xs text-muted-foreground">
+                                Auto: {overview?.autoBlocks ?? 0} • Manual: {overview?.manualBlocks ?? 0}
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className={STAT_CARD_CLASS}>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4" /> Distinct Accounts</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                            <p className="text-2xl font-bold">{overview?.uniqueAccounts ?? 0}</p>
+                            <p className="text-xs text-muted-foreground">IPs: {overview?.uniqueIps ?? 0}</p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className={STAT_CARD_CLASS}>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4" /> Payment Operations</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                            <p className="text-2xl font-bold">{overview?.operationsCount ?? 0}</p>
+                            <p className="text-xs text-muted-foreground">Window: {parsedWindowHours}h</p>
+                        </CardContent>
+                    </Card>
+
+                    <Card className={STAT_CARD_CLASS}>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4" /> Risk Snapshot</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                            <p className="text-sm font-medium">Critical: {overview?.criticalRiskIps ?? riskStats.critical}</p>
+                            <p className="text-xs text-muted-foreground">
+                                High: {overview?.highRiskIps ?? riskStats.high} • Medium+: {overview?.mediumRiskIps ?? riskStats.medium}
+                            </p>
+                        </CardContent>
+                    </Card>
                 </div>
-            </div>
+            </section>
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Active Blocks</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-2xl font-bold">{overview?.activeBlocks ?? allBlockedIps.length}</p>
-                        <p className="text-xs text-muted-foreground">
-                            Auto: {overview?.autoBlocks ?? 0} • Manual: {overview?.manualBlocks ?? 0}
-                        </p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4" /> Distinct Accounts</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-2xl font-bold">{overview?.uniqueAccounts ?? 0}</p>
-                        <p className="text-xs text-muted-foreground">IPs: {overview?.uniqueIps ?? 0}</p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4" /> Payment Operations</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-2xl font-bold">{overview?.operationsCount ?? 0}</p>
-                        <p className="text-xs text-muted-foreground">Window: {parsedWindowHours}h</p>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4" /> Risk Snapshot</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-sm font-medium">Critical: {overview?.criticalRiskIps ?? riskStats.critical}</p>
-                        <p className="text-xs text-muted-foreground">
-                            High: {overview?.highRiskIps ?? riskStats.high} • Medium+: {overview?.mediumRiskIps ?? riskStats.medium}
-                        </p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <Card>
+            <Card className={DATA_CARD_CLASS}>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Ban className="h-5 w-5" /> Manual Global IP Block
@@ -414,7 +440,7 @@ export default function AdminPaymentSecurityPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                         <div className="space-y-2">
                             <Label htmlFor="manual-ip">IP Address</Label>
                             <Input
@@ -422,6 +448,7 @@ export default function AdminPaymentSecurityPage() {
                                 value={manualIp}
                                 onChange={(e) => setManualIp(e.target.value)}
                                 placeholder="e.g. 203.0.113.18"
+                                className={INPUT_SURFACE_CLASS}
                                 data-testid="input-manual-ip"
                             />
                         </div>
@@ -432,23 +459,25 @@ export default function AdminPaymentSecurityPage() {
                                 value={manualReason}
                                 onChange={(e) => setManualReason(e.target.value)}
                                 placeholder="fraud ring / account farming / abuse pattern"
+                                className={INPUT_SURFACE_CLASS}
                                 data-testid="input-manual-reason"
                             />
                         </div>
                     </div>
                     <div className="mt-3">
                         <Button
+                            className={cn(BUTTON_3D_DESTRUCTIVE_CLASS, "gap-2")}
                             onClick={onManualBlock}
                             disabled={blockIpMutation.isPending || !manualIp.trim()}
                             data-testid="button-manual-block-ip"
                         >
-                            <ShieldAlert className="h-4 w-4 me-2" /> Block IP
+                            <ShieldAlert className="h-4 w-4" /> Block IP
                         </Button>
                     </div>
                 </CardContent>
             </Card>
 
-            <Card>
+            <Card className={DATA_CARD_CLASS}>
                 <CardContent className="pt-6">
                     <div className="grid gap-3 md:grid-cols-12">
                         <div className="relative md:col-span-6">
@@ -457,14 +486,14 @@ export default function AdminPaymentSecurityPage() {
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search by IP or block reason"
-                                className="ps-9"
+                                className={`${INPUT_SURFACE_CLASS} ps-9`}
                                 data-testid="input-search-ip-security"
                             />
                         </div>
 
                         <div className="md:col-span-2">
                             <Select value={windowHours} onValueChange={setWindowHours}>
-                                <SelectTrigger data-testid="select-window-hours">
+                                <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-window-hours">
                                     <SelectValue placeholder="Window" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -478,19 +507,19 @@ export default function AdminPaymentSecurityPage() {
                         <div className="md:col-span-4 flex items-center gap-2 justify-start md:justify-end">
                             <Button
                                 type="button"
-                                variant={flaggedOnly ? "default" : "outline"}
+                                className={cn(flaggedOnly ? BUTTON_3D_PRIMARY_CLASS : BUTTON_3D_CLASS, "gap-2")}
                                 onClick={() => setFlaggedOnly((prev) => !prev)}
                                 data-testid="button-toggle-flagged-only"
                             >
-                                <AlertTriangle className="h-4 w-4 me-2" /> Flagged Only
+                                <AlertTriangle className="h-4 w-4" /> Flagged Only
                             </Button>
                             <Button
                                 type="button"
-                                variant={activeOnlyBlocks ? "default" : "outline"}
+                                className={cn(activeOnlyBlocks ? BUTTON_3D_PRIMARY_CLASS : BUTTON_3D_CLASS, "gap-2")}
                                 onClick={() => setActiveOnlyBlocks((prev) => !prev)}
                                 data-testid="button-toggle-active-only-blocks"
                             >
-                                <Ban className="h-4 w-4 me-2" /> Active Blocks
+                                <Ban className="h-4 w-4" /> Active Blocks
                             </Button>
                         </div>
                     </div>
@@ -498,13 +527,13 @@ export default function AdminPaymentSecurityPage() {
             </Card>
 
             <Tabs defaultValue="usage" className="space-y-4">
-                <TabsList>
-                    <TabsTrigger value="usage">IP Risk Intelligence</TabsTrigger>
-                    <TabsTrigger value="blocked">Global Block Control</TabsTrigger>
+                <TabsList className={TABS_LIST_CLASS}>
+                    <TabsTrigger value="usage" className="min-w-[170px] flex-none rounded-2xl">IP Risk Intelligence</TabsTrigger>
+                    <TabsTrigger value="blocked" className="min-w-[170px] flex-none rounded-2xl">Global Block Control</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="usage">
-                    <Card>
+                    <Card className={DATA_CARD_CLASS}>
                         <CardHeader>
                             <CardTitle>Payment IP Usage Intelligence</CardTitle>
                             <CardDescription>
@@ -515,89 +544,147 @@ export default function AdminPaymentSecurityPage() {
                             {loading ? (
                                 <p className="text-sm text-muted-foreground">Loading...</p>
                             ) : allUsageRows.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">No payment IP activity found for this filter set.</p>
+                                <div className="rounded-[24px] border border-dashed border-slate-300/90 bg-slate-50/70 py-12 text-center text-sm text-muted-foreground dark:border-slate-700 dark:bg-slate-900/50">
+                                    No payment IP activity found for this filter set.
+                                </div>
                             ) : (
-                                <div className="rounded-md border overflow-x-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>IP</TableHead>
-                                                <TableHead>Accounts</TableHead>
-                                                <TableHead>Ops</TableHead>
-                                                <TableHead>Types</TableHead>
-                                                <TableHead>Token Fails</TableHead>
-                                                <TableHead>Risk</TableHead>
-                                                <TableHead>Last Seen</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead className="text-right">Actions</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {allUsageRows.map((row) => (
-                                                <TableRow key={row.ipAddress}>
-                                                    <TableCell className="font-mono text-xs">{row.ipAddress}</TableCell>
-                                                    <TableCell>{row.distinctUsers}</TableCell>
-                                                    <TableCell>{row.operationsCount}</TableCell>
-                                                    <TableCell>{row.operationTypesCount}</TableCell>
-                                                    <TableCell>{row.tokenFailures}</TableCell>
-                                                    <TableCell>
-                                                        <div className="flex flex-col gap-1">
+                                <div className="space-y-3">
+                                    <div className="space-y-3 lg:hidden">
+                                        {allUsageRows.map((row) => (
+                                            <div key={row.ipAddress} className={cn(STAT_CARD_CLASS, riskSurfaceClass(row.riskLevel))}>
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                        <p className="font-mono text-xs text-slate-600 dark:text-slate-300">{row.ipAddress}</p>
+                                                        <div className="mt-2 flex flex-wrap items-center gap-2">
                                                             <Badge variant={riskBadgeVariant(row.riskLevel)}>
                                                                 {row.riskLevel.toUpperCase()} • {row.riskScore}
                                                             </Badge>
-                                                            {row.riskReasons[0] && (
-                                                                <span className="text-xs text-muted-foreground max-w-[320px] truncate" title={row.riskReasons.join("; ")}>
-                                                                    {row.riskReasons[0]}
-                                                                </span>
-                                                            )}
+                                                            {row.isBlocked ? <Badge variant="destructive">Blocked</Badge> : <Badge variant="outline">Allowed</Badge>}
                                                         </div>
-                                                    </TableCell>
-                                                    <TableCell>{formatDateTime(row.lastSeenAt)}</TableCell>
-                                                    <TableCell>
-                                                        {row.isBlocked ? (
-                                                            <Badge variant="destructive">Blocked</Badge>
-                                                        ) : (
-                                                            <Badge variant="outline">Allowed</Badge>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex items-center gap-2 justify-end">
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => setSelectedIpForDetails(row.ipAddress)}
-                                                                data-testid={`button-investigate-${row.ipAddress}`}
-                                                            >
-                                                                <Eye className="h-4 w-4 me-1" /> Inspect
-                                                            </Button>
+                                                    </div>
+                                                    <Badge variant="outline">{row.recommendedAction}</Badge>
+                                                </div>
+                                                {row.riskReasons[0] && (
+                                                    <p className="mt-3 text-xs text-muted-foreground">{row.riskReasons[0]}</p>
+                                                )}
+                                                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                                    <div>Accounts: <span className="font-semibold text-foreground">{row.distinctUsers}</span></div>
+                                                    <div>Ops: <span className="font-semibold text-foreground">{row.operationsCount}</span></div>
+                                                    <div>Types: <span className="font-semibold text-foreground">{row.operationTypesCount}</span></div>
+                                                    <div>Token Fails: <span className="font-semibold text-foreground">{row.tokenFailures}</span></div>
+                                                    <div className="col-span-2">Last Seen: <span className="font-semibold text-foreground">{formatDateTime(row.lastSeenAt)}</span></div>
+                                                </div>
+                                                <div className="mt-4 flex flex-wrap gap-2">
+                                                    <Button
+                                                        className={cn(BUTTON_3D_CLASS, "h-9 gap-2 text-xs")}
+                                                        onClick={() => setSelectedIpForDetails(row.ipAddress)}
+                                                        data-testid={`button-investigate-${row.ipAddress}`}
+                                                    >
+                                                        <Eye className="h-4 w-4" /> Inspect
+                                                    </Button>
+                                                    {row.isBlocked ? (
+                                                        <Button
+                                                            className={cn(BUTTON_3D_CLASS, "h-9 gap-2 text-xs")}
+                                                            onClick={() => unblockIpMutation.mutate(row.ipAddress)}
+                                                            disabled={unblockIpMutation.isPending}
+                                                            data-testid={`button-usage-unblock-${row.ipAddress}`}
+                                                        >
+                                                            <ShieldCheck className="h-4 w-4" /> Unblock
+                                                        </Button>
+                                                    ) : (
+                                                        <Button
+                                                            className={cn(BUTTON_3D_DESTRUCTIVE_CLASS, "h-9 gap-2 text-xs")}
+                                                            onClick={() => onQuickBlock(row)}
+                                                            disabled={blockIpMutation.isPending}
+                                                            data-testid={`button-usage-block-${row.ipAddress}`}
+                                                        >
+                                                            <ShieldAlert className="h-4 w-4" /> Block
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
 
-                                                            {row.isBlocked ? (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => unblockIpMutation.mutate(row.ipAddress)}
-                                                                    disabled={unblockIpMutation.isPending}
-                                                                    data-testid={`button-usage-unblock-${row.ipAddress}`}
-                                                                >
-                                                                    <ShieldCheck className="h-4 w-4 me-1" /> Unblock
-                                                                </Button>
-                                                            ) : (
-                                                                <Button
-                                                                    variant="destructive"
-                                                                    size="sm"
-                                                                    onClick={() => onQuickBlock(row)}
-                                                                    disabled={blockIpMutation.isPending}
-                                                                    data-testid={`button-usage-block-${row.ipAddress}`}
-                                                                >
-                                                                    <ShieldAlert className="h-4 w-4 me-1" /> Block
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
+                                    <div className="hidden overflow-x-auto rounded-[24px] border border-slate-200/80 bg-white/80 dark:border-slate-800 dark:bg-slate-950/60 lg:block">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>IP</TableHead>
+                                                    <TableHead>Accounts</TableHead>
+                                                    <TableHead>Ops</TableHead>
+                                                    <TableHead>Types</TableHead>
+                                                    <TableHead>Token Fails</TableHead>
+                                                    <TableHead>Risk</TableHead>
+                                                    <TableHead>Last Seen</TableHead>
+                                                    <TableHead>Status</TableHead>
+                                                    <TableHead className="text-right">Actions</TableHead>
                                                 </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {allUsageRows.map((row) => (
+                                                    <TableRow key={row.ipAddress}>
+                                                        <TableCell className="font-mono text-xs">{row.ipAddress}</TableCell>
+                                                        <TableCell>{row.distinctUsers}</TableCell>
+                                                        <TableCell>{row.operationsCount}</TableCell>
+                                                        <TableCell>{row.operationTypesCount}</TableCell>
+                                                        <TableCell>{row.tokenFailures}</TableCell>
+                                                        <TableCell>
+                                                            <div className="flex flex-col gap-1">
+                                                                <Badge variant={riskBadgeVariant(row.riskLevel)}>
+                                                                    {row.riskLevel.toUpperCase()} • {row.riskScore}
+                                                                </Badge>
+                                                                {row.riskReasons[0] && (
+                                                                    <span className="text-xs text-muted-foreground max-w-[320px] truncate" title={row.riskReasons.join("; ")}>
+                                                                        {row.riskReasons[0]}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell>{formatDateTime(row.lastSeenAt)}</TableCell>
+                                                        <TableCell>
+                                                            {row.isBlocked ? (
+                                                                <Badge variant="destructive">Blocked</Badge>
+                                                            ) : (
+                                                                <Badge variant="outline">Allowed</Badge>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            <div className="flex items-center gap-2 justify-end">
+                                                                <Button
+                                                                    className={cn(BUTTON_3D_CLASS, "h-9 gap-2 text-xs")}
+                                                                    onClick={() => setSelectedIpForDetails(row.ipAddress)}
+                                                                    data-testid={`button-investigate-${row.ipAddress}`}
+                                                                >
+                                                                    <Eye className="h-4 w-4" /> Inspect
+                                                                </Button>
+
+                                                                {row.isBlocked ? (
+                                                                    <Button
+                                                                        className={cn(BUTTON_3D_CLASS, "h-9 gap-2 text-xs")}
+                                                                        onClick={() => unblockIpMutation.mutate(row.ipAddress)}
+                                                                        disabled={unblockIpMutation.isPending}
+                                                                        data-testid={`button-usage-unblock-${row.ipAddress}`}
+                                                                    >
+                                                                        <ShieldCheck className="h-4 w-4" /> Unblock
+                                                                    </Button>
+                                                                ) : (
+                                                                    <Button
+                                                                        className={cn(BUTTON_3D_DESTRUCTIVE_CLASS, "h-9 gap-2 text-xs")}
+                                                                        onClick={() => onQuickBlock(row)}
+                                                                        disabled={blockIpMutation.isPending}
+                                                                        data-testid={`button-usage-block-${row.ipAddress}`}
+                                                                    >
+                                                                        <ShieldAlert className="h-4 w-4" /> Block
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
                                 </div>
                             )}
                         </CardContent>
@@ -605,7 +692,7 @@ export default function AdminPaymentSecurityPage() {
                 </TabsContent>
 
                 <TabsContent value="blocked">
-                    <Card>
+                    <Card className={DATA_CARD_CLASS}>
                         <CardHeader>
                             <CardTitle>Global Payment IP Blocks</CardTitle>
                             <CardDescription>
@@ -616,57 +703,91 @@ export default function AdminPaymentSecurityPage() {
                             {blockedLoading ? (
                                 <p className="text-sm text-muted-foreground">Loading...</p>
                             ) : allBlockedIps.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">No blocked IP records for current filter.</p>
+                                <div className="rounded-[24px] border border-dashed border-slate-300/90 bg-slate-50/70 py-12 text-center text-sm text-muted-foreground dark:border-slate-700 dark:bg-slate-900/50">
+                                    No blocked IP records for current filter.
+                                </div>
                             ) : (
-                                <div className="rounded-md border overflow-x-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>IP</TableHead>
-                                                <TableHead>Reason</TableHead>
-                                                <TableHead>Type</TableHead>
-                                                <TableHead>Blocked At</TableHead>
-                                                <TableHead className="text-right">Action</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {allBlockedIps.map((row) => (
-                                                <TableRow key={row.id}>
-                                                    <TableCell className="font-mono text-xs">{row.ipAddress}</TableCell>
-                                                    <TableCell className="max-w-[420px] truncate" title={row.blockReason}>{row.blockReason}</TableCell>
-                                                    <TableCell>
-                                                        {row.autoBlocked ? (
-                                                            <Badge variant="destructive">Auto</Badge>
-                                                        ) : (
-                                                            <Badge variant="secondary">Manual</Badge>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell>{formatDateTime(row.blockedAt)}</TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex items-center gap-2 justify-end">
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => setSelectedIpForDetails(row.ipAddress)}
-                                                                data-testid={`button-blocked-inspect-${row.ipAddress}`}
-                                                            >
-                                                                <Eye className="h-4 w-4 me-1" /> Inspect
-                                                            </Button>
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => unblockIpMutation.mutate(row.ipAddress)}
-                                                                disabled={unblockIpMutation.isPending}
-                                                                data-testid={`button-unblock-${row.ipAddress}`}
-                                                            >
-                                                                <ShieldCheck className="h-4 w-4 me-1" /> Unblock
-                                                            </Button>
-                                                        </div>
-                                                    </TableCell>
+                                <div className="space-y-3">
+                                    <div className="space-y-3 lg:hidden">
+                                        {allBlockedIps.map((row) => (
+                                            <div key={row.id} className={cn(STAT_CARD_CLASS, row.autoBlocked ? "border-rose-200 bg-rose-50/80 dark:border-rose-900/50 dark:bg-rose-950/35" : "border-slate-200/80 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900/60")}>
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                        <p className="font-mono text-xs text-slate-600 dark:text-slate-300">{row.ipAddress}</p>
+                                                        <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">{row.blockReason}</p>
+                                                    </div>
+                                                    <Badge variant={row.autoBlocked ? "destructive" : "secondary"}>{row.autoBlocked ? "Auto" : "Manual"}</Badge>
+                                                </div>
+                                                <div className="mt-3 text-xs text-muted-foreground">Blocked At: {formatDateTime(row.blockedAt)}</div>
+                                                <div className="mt-4 flex flex-wrap gap-2">
+                                                    <Button
+                                                        className={cn(BUTTON_3D_CLASS, "h-9 gap-2 text-xs")}
+                                                        onClick={() => setSelectedIpForDetails(row.ipAddress)}
+                                                        data-testid={`button-blocked-inspect-${row.ipAddress}`}
+                                                    >
+                                                        <Eye className="h-4 w-4" /> Inspect
+                                                    </Button>
+                                                    <Button
+                                                        className={cn(BUTTON_3D_CLASS, "h-9 gap-2 text-xs")}
+                                                        onClick={() => unblockIpMutation.mutate(row.ipAddress)}
+                                                        disabled={unblockIpMutation.isPending}
+                                                        data-testid={`button-unblock-${row.ipAddress}`}
+                                                    >
+                                                        <ShieldCheck className="h-4 w-4" /> Unblock
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="hidden overflow-x-auto rounded-[24px] border border-slate-200/80 bg-white/80 dark:border-slate-800 dark:bg-slate-950/60 lg:block">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>IP</TableHead>
+                                                    <TableHead>Reason</TableHead>
+                                                    <TableHead>Type</TableHead>
+                                                    <TableHead>Blocked At</TableHead>
+                                                    <TableHead className="text-right">Action</TableHead>
                                                 </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {allBlockedIps.map((row) => (
+                                                    <TableRow key={row.id}>
+                                                        <TableCell className="font-mono text-xs">{row.ipAddress}</TableCell>
+                                                        <TableCell className="max-w-[420px] truncate" title={row.blockReason}>{row.blockReason}</TableCell>
+                                                        <TableCell>
+                                                            {row.autoBlocked ? (
+                                                                <Badge variant="destructive">Auto</Badge>
+                                                            ) : (
+                                                                <Badge variant="secondary">Manual</Badge>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>{formatDateTime(row.blockedAt)}</TableCell>
+                                                        <TableCell className="text-right">
+                                                            <div className="flex items-center gap-2 justify-end">
+                                                                <Button
+                                                                    className={cn(BUTTON_3D_CLASS, "h-9 gap-2 text-xs")}
+                                                                    onClick={() => setSelectedIpForDetails(row.ipAddress)}
+                                                                    data-testid={`button-blocked-inspect-${row.ipAddress}`}
+                                                                >
+                                                                    <Eye className="h-4 w-4" /> Inspect
+                                                                </Button>
+                                                                <Button
+                                                                    className={cn(BUTTON_3D_CLASS, "h-9 gap-2 text-xs")}
+                                                                    onClick={() => unblockIpMutation.mutate(row.ipAddress)}
+                                                                    disabled={unblockIpMutation.isPending}
+                                                                    data-testid={`button-unblock-${row.ipAddress}`}
+                                                                >
+                                                                    <ShieldCheck className="h-4 w-4" /> Unblock
+                                                                </Button>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
                                 </div>
                             )}
                         </CardContent>
@@ -675,7 +796,7 @@ export default function AdminPaymentSecurityPage() {
             </Tabs>
 
             <Dialog open={Boolean(selectedIpForDetails)} onOpenChange={(open) => !open && setSelectedIpForDetails(null)}>
-                <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className={`${DIALOG_SURFACE_CLASS} max-h-[90vh] overflow-y-auto`}>
                     <DialogHeader>
                         <DialogTitle className="font-mono">IP Investigation: {selectedIpForDetails}</DialogTitle>
                         <DialogDescription>
@@ -690,25 +811,25 @@ export default function AdminPaymentSecurityPage() {
                     ) : (
                         <div className="space-y-5">
                             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                                <Card>
+                                <Card className={STAT_CARD_CLASS}>
                                     <CardContent className="pt-6">
                                         <p className="text-xs text-muted-foreground flex items-center gap-2"><Users className="h-3.5 w-3.5" /> Distinct Accounts</p>
                                         <p className="text-2xl font-bold">{selectedIpDetails.metrics.distinctUsers}</p>
                                     </CardContent>
                                 </Card>
-                                <Card>
+                                <Card className={STAT_CARD_CLASS}>
                                     <CardContent className="pt-6">
                                         <p className="text-xs text-muted-foreground flex items-center gap-2"><Activity className="h-3.5 w-3.5" /> Operations</p>
                                         <p className="text-2xl font-bold">{selectedIpDetails.metrics.operationsCount}</p>
                                     </CardContent>
                                 </Card>
-                                <Card>
+                                <Card className={STAT_CARD_CLASS}>
                                     <CardContent className="pt-6">
                                         <p className="text-xs text-muted-foreground flex items-center gap-2"><Clock3 className="h-3.5 w-3.5" /> Token Failures</p>
                                         <p className="text-2xl font-bold">{selectedIpDetails.metrics.tokenFailures}</p>
                                     </CardContent>
                                 </Card>
-                                <Card>
+                                <Card className={STAT_CARD_CLASS}>
                                     <CardContent className="pt-6">
                                         <p className="text-xs text-muted-foreground flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5" /> Risk</p>
                                         <p className="text-2xl font-bold">{selectedIpDetails.metrics.riskScore}</p>
@@ -719,7 +840,7 @@ export default function AdminPaymentSecurityPage() {
                                 </Card>
                             </div>
 
-                            <div className="rounded-lg border p-3 bg-muted/30">
+                            <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <Badge variant={selectedIpDetails.block ? "destructive" : "outline"}>
                                         {selectedIpDetails.block ? "Blocked" : "Allowed"}
@@ -741,7 +862,7 @@ export default function AdminPaymentSecurityPage() {
                             </div>
 
                             {selectedIpDetails.metrics.riskReasons.length > 0 && (
-                                <Card>
+                                <Card className={DATA_CARD_CLASS}>
                                     <CardHeader>
                                         <CardTitle className="text-sm">Risk Evidence</CardTitle>
                                     </CardHeader>
@@ -753,7 +874,7 @@ export default function AdminPaymentSecurityPage() {
                                 </Card>
                             )}
 
-                            <Card>
+                            <Card className={DATA_CARD_CLASS}>
                                 <CardHeader>
                                     <CardTitle className="text-sm">Operation Mix</CardTitle>
                                 </CardHeader>
@@ -766,7 +887,7 @@ export default function AdminPaymentSecurityPage() {
                                 </CardContent>
                             </Card>
 
-                            <Card>
+                            <Card className={DATA_CARD_CLASS}>
                                 <CardHeader>
                                     <CardTitle className="text-sm">Accounts Using This IP</CardTitle>
                                 </CardHeader>
@@ -774,7 +895,7 @@ export default function AdminPaymentSecurityPage() {
                                     {selectedIpDetails.usersByActivity.length === 0 ? (
                                         <p className="text-sm text-muted-foreground">No accounts in this time window.</p>
                                     ) : (
-                                        <div className="rounded-md border overflow-x-auto">
+                                        <div className="rounded-[24px] border border-slate-200/80 bg-white/80 overflow-x-auto dark:border-slate-800 dark:bg-slate-950/60">
                                             <Table>
                                                 <TableHeader>
                                                     <TableRow>
@@ -803,7 +924,7 @@ export default function AdminPaymentSecurityPage() {
                             </Card>
 
                             <div className="grid gap-4 lg:grid-cols-2">
-                                <Card>
+                                <Card className={DATA_CARD_CLASS}>
                                     <CardHeader>
                                         <CardTitle className="text-sm">Recent Payment Activity</CardTitle>
                                     </CardHeader>
@@ -811,7 +932,7 @@ export default function AdminPaymentSecurityPage() {
                                         {selectedIpDetails.recentActivities.length === 0 ? (
                                             <p className="text-sm text-muted-foreground">No recent payment activity for this IP.</p>
                                         ) : (
-                                            <div className="rounded-md border overflow-x-auto">
+                                            <div className="rounded-[24px] border border-slate-200/80 bg-white/80 overflow-x-auto dark:border-slate-800 dark:bg-slate-950/60">
                                                 <Table>
                                                     <TableHeader>
                                                         <TableRow>
@@ -837,7 +958,7 @@ export default function AdminPaymentSecurityPage() {
                                     </CardContent>
                                 </Card>
 
-                                <Card>
+                                <Card className={DATA_CARD_CLASS}>
                                     <CardHeader>
                                         <CardTitle className="text-sm">Operation Token Outcomes</CardTitle>
                                     </CardHeader>
@@ -853,7 +974,7 @@ export default function AdminPaymentSecurityPage() {
                                         {selectedIpDetails.recentTokenEvents.length === 0 ? (
                                             <p className="text-sm text-muted-foreground">No recent token events for this IP.</p>
                                         ) : (
-                                            <div className="rounded-md border overflow-x-auto">
+                                            <div className="rounded-[24px] border border-slate-200/80 bg-white/80 overflow-x-auto dark:border-slate-800 dark:bg-slate-950/60">
                                                 <Table>
                                                     <TableHeader>
                                                         <TableRow>

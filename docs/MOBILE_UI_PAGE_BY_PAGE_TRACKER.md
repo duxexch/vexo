@@ -4,10 +4,12 @@ Date: 2026-04-13
 Scope baseline: docs/MOBILE_UI_FULL_INVENTORY_2026-04-13.md
 
 ## In Progress
+
 1. /login (mapped to unauth flow): done in this pass
 2. global ui foundation (buttons and inputs): done in this pass
 
 ## Player Routes
+
 1. / : done in this pass
 2. /games : done in this pass
 3. /games/history : done in this pass
@@ -47,11 +49,13 @@ Scope baseline: docs/MOBILE_UI_FULL_INVENTORY_2026-04-13.md
 37. /arcade : done in this pass
 
 ## Public and Auth Routes
+
 1. /auth/callback : done in this pass
 2. unauth /login : done
 3. unauth /challenges : done in this pass
 
 ## Admin Routes
+
 1. /admin : done in this pass
 2. /admin/dashboard : done in this pass
 3. /admin/users : done in this pass
@@ -63,32 +67,34 @@ Scope baseline: docs/MOBILE_UI_FULL_INVENTORY_2026-04-13.md
 9. /admin/tournaments : done
 10. /admin/free-play : done
 11. /admin/gifts : done
-12. /admin/p2p : pending
-13. /admin/currency : pending
-14. /admin/support : pending
-15. /admin/app-settings : pending
-16. /admin/languages : pending
-17. /admin/badges : pending
-18. /admin/notifications : pending
-19. /admin/games : pending
-20. /admin/external-games : pending
-21. /admin/game-sections : pending
-22. /admin/id-verification : pending
-23. /admin/seo : pending
-24. /admin/payment-methods : pending
-25. /admin/integrations : pending
-26. /admin/social-platforms : pending
-27. /admin/advertisements : pending
-28. /admin/support-settings : pending
-29. /admin/challenge-settings : pending
-30. /admin/challenges : pending
-31. /admin/chat-management : pending
-32. /admin/sam9 : pending
-33. /admin/audit-logs : pending
-34. /admin/payment-security : pending
-35. /admin/announcements : pending
+12. /admin/p2p : done
+13. /admin/currency : done
+14. /admin/support : done
+15. /admin/app-settings : done
+16. /admin/languages : done
+17. /admin/badges : done
+18. /admin/notifications : done
+19. /admin/games : done
+20. /admin/external-games : done
+21. /admin/game-sections : done
+22. /admin/id-verification : done
+23. /admin/seo : done
+24. /admin/payment-methods : done
+25. /admin/integrations : done
+26. /admin/social-platforms : done
+27. /admin/advertisements : done
+28. /admin/support-settings : done
+29. /admin/challenge-settings : done
+30. /admin/challenges : done
+31. /admin/chat-management : done
+32. /admin/sam9 : done
+33. /admin/audit-logs : done
+34. /admin/payment-security : done
+35. /admin/announcements : done
+36. /admin/marketers : done
 
 ## Notes
+
 1. Every touched page must remove legacy UI paths and stale styles in touched scope.
 2. Every touched page must be phone-first and safe-area aware.
 3. Every touched page must preserve i18n keys with no new hardcoded user text.

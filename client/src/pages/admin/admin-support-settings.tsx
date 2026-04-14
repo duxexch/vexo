@@ -26,29 +26,14 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from "@/components/ui/form";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { 
-  Plus, 
-  Pencil, 
-  RefreshCw, 
-  Users, 
-  Settings2, 
+  CheckCircle2,
+  Plus,
+  Pencil,
+  RefreshCw,
+  Users,
+  Settings2,
   Loader2,
   Percent,
   DollarSign,
@@ -58,10 +43,18 @@ import {
   TrendingUp,
   Flame,
 } from "lucide-react";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 const adminToken = () => localStorage.getItem("adminToken") || "";
+
+const SURFACE_CARD_CLASS = "rounded-[28px] border border-slate-200/70 bg-white/95 shadow-[0_18px_50px_-24px_rgba(15,23,42,0.35)] backdrop-blur dark:border-slate-800/70 dark:bg-slate-950/90";
+const STAT_CARD_CLASS = `${SURFACE_CARD_CLASS} overflow-hidden`;
+const DATA_CARD_CLASS = `${SURFACE_CARD_CLASS} overflow-hidden`;
+const BUTTON_3D_CLASS = "rounded-2xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 shadow-[0_8px_0_0_rgba(226,232,240,0.95)] transition-transform duration-150 hover:-translate-y-0.5 active:translate-y-1 active:shadow-[0_3px_0_0_rgba(226,232,240,0.95)] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:shadow-[0_8px_0_0_rgba(15,23,42,0.95)]";
+const BUTTON_3D_PRIMARY_CLASS = "rounded-2xl border border-sky-500 bg-sky-500 px-4 py-2 font-semibold text-white shadow-[0_8px_0_0_rgba(3,105,161,0.45)] transition-transform duration-150 hover:-translate-y-0.5 hover:bg-sky-400 active:translate-y-1 active:shadow-[0_3px_0_0_rgba(3,105,161,0.45)]";
+const INPUT_SURFACE_CLASS = "h-12 rounded-2xl border-slate-200 bg-white/90 shadow-none focus-visible:ring-2 focus-visible:ring-sky-200 dark:border-slate-700 dark:bg-slate-900/80 dark:focus-visible:ring-sky-900";
+const DIALOG_SURFACE_CLASS = "max-h-[92vh] overflow-y-auto rounded-[32px] border border-slate-200/80 bg-white/98 p-0 shadow-[0_24px_80px_-28px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-950/98";
 
 const supportSettingsSchema = z.object({
   gameType: z.string().min(1, "نوع اللعبة مطلوب"),
@@ -204,7 +197,7 @@ function SupportSettingsForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-h-[70vh] overflow-y-auto px-1">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-h-[72vh] overflow-y-auto px-1 pb-1">
         <FormField
           control={form.control}
           name="gameType"
@@ -212,11 +205,12 @@ function SupportSettingsForm({
             <FormItem>
               <FormLabel>نوع اللعبة / Game Type</FormLabel>
               <FormControl>
-                <Input 
-                  placeholder="مثال: chess, backgammon, domino" 
-                  {...field} 
+                <Input
+                  placeholder="مثال: chess, backgammon, domino"
+                  {...field}
                   disabled={isEditing}
-                  data-testid="input-game-type" 
+                  className={INPUT_SURFACE_CLASS}
+                  data-testid="input-game-type"
                 />
               </FormControl>
               <FormMessage />
@@ -224,7 +218,7 @@ function SupportSettingsForm({
           )}
         />
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
           <FormField
             control={form.control}
             name="isEnabled"
@@ -243,18 +237,18 @@ function SupportSettingsForm({
           />
         </div>
 
-        <Tabs defaultValue={oddsMode} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger 
-              value="automatic" 
-              onClick={() => form.setValue("oddsMode", "automatic")}
+        <Tabs value={oddsMode} onValueChange={(value) => form.setValue("oddsMode", value as "automatic" | "manual")} className="w-full space-y-4">
+          <TabsList className="grid w-full grid-cols-2 rounded-2xl bg-slate-100 p-1 dark:bg-slate-900">
+            <TabsTrigger
+              value="automatic"
+              className="rounded-2xl"
               data-testid="tab-automatic"
             >
               الوضع التلقائي
             </TabsTrigger>
-            <TabsTrigger 
-              value="manual" 
-              onClick={() => form.setValue("oddsMode", "manual")}
+            <TabsTrigger
+              value="manual"
+              className="rounded-2xl"
               data-testid="tab-manual"
             >
               الوضع اليدوي
@@ -262,7 +256,7 @@ function SupportSettingsForm({
           </TabsList>
 
           <TabsContent value="automatic" className="space-y-4 pt-4">
-            <Card>
+            <Card className={DATA_CARD_CLASS}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Scale className="h-4 w-4" />
@@ -358,7 +352,7 @@ function SupportSettingsForm({
           </TabsContent>
 
           <TabsContent value="manual" className="space-y-4 pt-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
                 name="defaultOddsPlayer1"
@@ -366,11 +360,12 @@ function SupportSettingsForm({
                   <FormItem>
                     <FormLabel>احتمالات اللاعب 1 / Player 1 Odds</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.01" 
-                        placeholder="1.80" 
-                        {...field} 
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="1.80"
+                        {...field}
+                        className={INPUT_SURFACE_CLASS}
                         data-testid="input-odds-player1"
                       />
                     </FormControl>
@@ -386,11 +381,12 @@ function SupportSettingsForm({
                   <FormItem>
                     <FormLabel>احتمالات اللاعب 2 / Player 2 Odds</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.01" 
-                        placeholder="2.00" 
-                        {...field} 
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="2.00"
+                        {...field}
+                        className={INPUT_SURFACE_CLASS}
                         data-testid="input-odds-player2"
                       />
                     </FormControl>
@@ -402,7 +398,7 @@ function SupportSettingsForm({
           </TabsContent>
         </Tabs>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
           <FormField
             control={form.control}
             name="minSupportAmount"
@@ -413,11 +409,12 @@ function SupportSettingsForm({
                   الحد الأدنى / Min Amount
                 </FormLabel>
                 <FormControl>
-                  <Input 
-                    type="number" 
-                    step="0.01" 
-                    placeholder="10.00" 
-                    {...field} 
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="10.00"
+                    {...field}
+                    className={INPUT_SURFACE_CLASS}
                     data-testid="input-min-amount"
                   />
                 </FormControl>
@@ -436,11 +433,12 @@ function SupportSettingsForm({
                   الحد الأقصى / Max Amount
                 </FormLabel>
                 <FormControl>
-                  <Input 
-                    type="number" 
-                    step="0.01" 
-                    placeholder="1000.00" 
-                    {...field} 
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="1000.00"
+                    {...field}
+                    className={INPUT_SURFACE_CLASS}
                     data-testid="input-max-amount"
                   />
                 </FormControl>
@@ -460,11 +458,12 @@ function SupportSettingsForm({
                 نسبة رسوم المنصة / House Fee (%)
               </FormLabel>
               <FormControl>
-                <Input 
-                  type="number" 
-                  step="0.01" 
-                  placeholder="5.00" 
-                  {...field} 
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="5.00"
+                  {...field}
+                  className={INPUT_SURFACE_CLASS}
                   data-testid="input-house-fee"
                 />
               </FormControl>
@@ -473,7 +472,7 @@ function SupportSettingsForm({
           )}
         />
 
-        <Card>
+        <Card className={DATA_CARD_CLASS}>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <Zap className="h-4 w-4 text-yellow-500" />
@@ -485,7 +484,7 @@ function SupportSettingsForm({
               control={form.control}
               name="allowInstantMatch"
               render={({ field }) => (
-                <FormItem className="flex items-center justify-between">
+                <FormItem className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
                   <FormLabel>السماح بالمطابقة الفورية</FormLabel>
                   <FormControl>
                     <Switch
@@ -506,11 +505,12 @@ function SupportSettingsForm({
                   <FormItem>
                     <FormLabel>احتمالات المطابقة الفورية / Instant Match Odds</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.01" 
-                        placeholder="1.90" 
-                        {...field} 
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="1.90"
+                        {...field}
+                        className={INPUT_SURFACE_CLASS}
                         data-testid="input-instant-odds"
                       />
                     </FormControl>
@@ -523,10 +523,10 @@ function SupportSettingsForm({
         </Card>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>
+          <Button type="button" className={BUTTON_3D_CLASS} onClick={onClose}>
             إلغاء / Cancel
           </Button>
-          <Button type="submit" disabled={isSubmitting} data-testid="button-submit-settings">
+          <Button type="submit" className={BUTTON_3D_PRIMARY_CLASS} disabled={isSubmitting} data-testid="button-submit-settings">
             {isSubmitting && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
             {isEditing ? "تحديث / Update" : "إنشاء / Create"}
           </Button>
@@ -540,72 +540,81 @@ function SettingsCard({ settings }: { settings: SupportSettings }) {
   const [isEditOpen, setIsEditOpen] = useState(false);
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-3">
-        <div className="flex items-center gap-3">
-          <CardTitle className="text-lg">{settings.gameType}</CardTitle>
-          <Badge variant={settings.isEnabled ? "default" : "secondary"}>
-            {settings.isEnabled ? "مفعّل" : "معطّل"}
-          </Badge>
-          <Badge variant="outline">
-            {settings.oddsMode === "automatic" ? "تلقائي" : "يدوي"}
-          </Badge>
+    <Card className={DATA_CARD_CLASS}>
+      <CardHeader className="flex flex-col gap-4 pb-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="rounded-2xl bg-primary/10 p-3 text-primary">
+            <Users className="h-5 w-5" />
+          </div>
+          <div>
+            <CardTitle className="text-lg">{settings.gameType}</CardTitle>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Badge variant={settings.isEnabled ? "default" : "secondary"}>
+                {settings.isEnabled ? "مفعّل" : "معطّل"}
+              </Badge>
+              <Badge variant="outline">
+                {settings.oddsMode === "automatic" ? "تلقائي" : "يدوي"}
+              </Badge>
+            </div>
+          </div>
         </div>
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogTrigger asChild>
-            <Button variant="ghost" size="icon" data-testid={`button-edit-${settings.gameType}`}>
+            <Button className={`${BUTTON_3D_CLASS} h-10 w-10 p-0`} data-testid={`button-edit-${settings.gameType}`}>
               <Pencil className="h-4 w-4" />
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>تعديل إعدادات الدعم - {settings.gameType}</DialogTitle>
-            </DialogHeader>
-            <SupportSettingsForm
-              settings={settings}
-              onSuccess={() => setIsEditOpen(false)}
-              onClose={() => setIsEditOpen(false)}
-            />
+          <DialogContent className={`${DIALOG_SURFACE_CLASS} sm:max-w-3xl`}>
+            <div className="space-y-4 p-5 sm:p-6">
+              <DialogHeader>
+                <DialogTitle>تعديل إعدادات الدعم - {settings.gameType}</DialogTitle>
+              </DialogHeader>
+              <SupportSettingsForm
+                settings={settings}
+                onSuccess={() => setIsEditOpen(false)}
+                onClose={() => setIsEditOpen(false)}
+              />
+            </div>
           </DialogContent>
         </Dialog>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
+        <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
             <span className="text-muted-foreground">الحد الأدنى</span>
-            <p className="font-medium">${settings.minSupportAmount}</p>
+            <p className="mt-2 font-medium">${settings.minSupportAmount}</p>
           </div>
-          <div>
+          <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
             <span className="text-muted-foreground">الحد الأقصى</span>
-            <p className="font-medium">${settings.maxSupportAmount}</p>
+            <p className="mt-2 font-medium">${settings.maxSupportAmount}</p>
           </div>
-          <div>
+          <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
             <span className="text-muted-foreground">رسوم المنصة</span>
-            <p className="font-medium">{settings.houseFeePercent}%</p>
+            <p className="mt-2 font-medium">{settings.houseFeePercent}%</p>
           </div>
-          <div>
+          <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
             <span className="text-muted-foreground">المطابقة الفورية</span>
-            <p className="font-medium">{settings.allowInstantMatch ? "نعم" : "لا"}</p>
+            <p className="mt-2 font-medium">{settings.allowInstantMatch ? "نعم" : "لا"}</p>
           </div>
         </div>
 
         {settings.oddsMode === "manual" && (
-          <div className="grid grid-cols-2 gap-4 text-sm border-t pt-4">
-            <div>
+          <div className="grid gap-4 border-t pt-4 text-sm md:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
               <span className="text-muted-foreground">احتمالات اللاعب 1</span>
-              <p className="font-medium">{settings.defaultOddsPlayer1}</p>
+              <p className="mt-2 font-medium">{settings.defaultOddsPlayer1}</p>
             </div>
-            <div>
+            <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/60">
               <span className="text-muted-foreground">احتمالات اللاعب 2</span>
-              <p className="font-medium">{settings.defaultOddsPlayer2}</p>
+              <p className="mt-2 font-medium">{settings.defaultOddsPlayer2}</p>
             </div>
           </div>
         )}
 
         {settings.oddsMode === "automatic" && (
-          <div className="border-t pt-4">
+          <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
             <p className="text-sm text-muted-foreground mb-2">أوزان الخوارزمية:</p>
-            <div className="flex gap-4 text-sm">
+            <div className="flex flex-wrap gap-3 text-sm">
               <Badge variant="outline" className="gap-1">
                 <Trophy className="h-3 w-3 text-yellow-500" />
                 فوز: {(settings.winRateWeight * 100).toFixed(0)}%
@@ -627,7 +636,6 @@ function SettingsCard({ settings }: { settings: SupportSettings }) {
 }
 
 export default function AdminSupportSettingsPage() {
-  const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const { data: settingsList, isLoading, isError, error } = useQuery<SupportSettings[]>({
@@ -643,12 +651,17 @@ export default function AdminSupportSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid gap-4 md:grid-cols-2">
-          <Skeleton className="h-48" />
-          <Skeleton className="h-48" />
-          <Skeleton className="h-48" />
+      <div className="space-y-5 p-3 sm:p-4 md:p-6">
+        <div className={`${SURFACE_CARD_CLASS} p-6`}>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {[1, 2, 3, 4, 5, 6].map((item) => (
+              <div key={item} className="rounded-[24px] border border-slate-200/70 p-5 dark:border-slate-800">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="mt-4 h-4 w-full" />
+                <Skeleton className="mt-2 h-4 w-2/3" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -656,14 +669,13 @@ export default function AdminSupportSettingsPage() {
 
   if (isError) {
     return (
-      <div className="p-6">
-        <Card className="border-destructive">
+      <div className="p-3 sm:p-4 md:p-6">
+        <Card className={`${DATA_CARD_CLASS} border-destructive`}>
           <CardContent className="pt-6">
             <p className="text-destructive">خطأ: {(error as Error).message}</p>
-            <Button 
-              variant="outline" 
+            <Button
+              className={`${BUTTON_3D_CLASS} mt-4`}
               onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/admin/support-settings"] })}
-              className="mt-4"
             >
               إعادة المحاولة
             </Button>
@@ -673,61 +685,120 @@ export default function AdminSupportSettingsPage() {
     );
   }
 
+  const sortedSettingsList = [...(settingsList || [])].sort((left, right) => left.gameType.localeCompare(right.gameType));
+  const enabledCount = sortedSettingsList.filter((settings) => settings.isEnabled).length;
+  const automaticCount = sortedSettingsList.filter((settings) => settings.oddsMode === "automatic").length;
+  const instantMatchCount = sortedSettingsList.filter((settings) => settings.allowInstantMatch).length;
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6 text-primary" />
-            إعدادات الدعم - ادعم واربح
-          </h1>
-          <p className="text-muted-foreground">
-            إدارة إعدادات دعم المتفرجين لكل نوع لعبة
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/admin/support-settings"] })}
-            data-testid="button-refresh"
-          >
-            <RefreshCw className="h-4 w-4 me-2" />
-            تحديث
-          </Button>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-create-settings">
-                <Plus className="h-4 w-4 me-2" />
-                إضافة إعدادات جديدة
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>إضافة إعدادات دعم جديدة</DialogTitle>
-              </DialogHeader>
-              <SupportSettingsForm
-                onSuccess={() => setIsCreateOpen(false)}
-                onClose={() => setIsCreateOpen(false)}
-              />
-            </DialogContent>
-          </Dialog>
+    <div className="space-y-5 p-3 sm:p-4 md:p-6">
+      <div className={`${SURFACE_CARD_CLASS} px-5 py-5 sm:px-6 sm:py-6`}>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-gradient-to-b from-sky-400 to-sky-700 text-white shadow-[0_10px_0_0_rgba(3,105,161,0.45)]">
+              <Users className="h-7 w-7" />
+            </div>
+            <div>
+              <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
+                إعدادات الدعم - ادعم واربح
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+                إدارة إعدادات دعم المتفرجين لكل نوع لعبة
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className={BUTTON_3D_CLASS}
+              onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/admin/support-settings"] })}
+              data-testid="button-refresh"
+            >
+              <RefreshCw className="h-4 w-4 me-2" />
+              تحديث
+            </Button>
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button className={BUTTON_3D_PRIMARY_CLASS} data-testid="button-create-settings">
+                  <Plus className="h-4 w-4 me-2" />
+                  إضافة إعدادات جديدة
+                </Button>
+              </DialogTrigger>
+              <DialogContent className={`${DIALOG_SURFACE_CLASS} sm:max-w-3xl`}>
+                <div className="space-y-4 p-5 sm:p-6">
+                  <DialogHeader>
+                    <DialogTitle>إضافة إعدادات دعم جديدة</DialogTitle>
+                  </DialogHeader>
+                  <SupportSettingsForm
+                    onSuccess={() => setIsCreateOpen(false)}
+                    onClose={() => setIsCreateOpen(false)}
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-sky-100 p-3 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+              <Settings2 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">إجمالي الأنماط</p>
+              <p className="mt-1 text-2xl font-bold">{sortedSettingsList.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">إعدادات مفعّلة</p>
+              <p className="mt-1 text-2xl font-bold">{enabledCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-amber-100 p-3 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+              <Scale className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">أوضاع تلقائية</p>
+              <p className="mt-1 text-2xl font-bold">{automaticCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={STAT_CARD_CLASS}>
+          <CardContent className="flex items-center gap-4 p-4">
+            <div className="rounded-2xl bg-violet-100 p-3 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">
+              <Zap className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">مطابقة فورية</p>
+              <p className="mt-1 text-2xl font-bold">{instantMatchCount}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {settingsList && settingsList.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {settingsList.map((settings) => (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {sortedSettingsList.map((settings) => (
             <SettingsCard key={settings.id} settings={settings} />
           ))}
         </div>
       ) : (
-        <Card>
+        <Card className={DATA_CARD_CLASS}>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Settings2 className="h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-lg font-medium">لا توجد إعدادات</p>
             <p className="text-muted-foreground mb-4">ابدأ بإضافة إعدادات دعم لنوع لعبة</p>
-            <Button onClick={() => setIsCreateOpen(true)}>
+            <Button className={BUTTON_3D_PRIMARY_CLASS} onClick={() => setIsCreateOpen(true)}>
               <Plus className="h-4 w-4 me-2" />
               إضافة إعدادات جديدة
             </Button>

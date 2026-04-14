@@ -3787,6 +3787,35 @@ export const affiliateReferralSnapshots = pgTable("affiliate_referral_snapshots"
   index("idx_affiliate_referral_snapshots_referred").on(table.referredId),
 ]);
 
+export const marketerSchedulerRunStatusEnum = pgEnum("marketer_scheduler_run_status", ["running", "success", "failed", "skipped"]);
+export const marketerSchedulerRunTriggerEnum = pgEnum("marketer_scheduler_run_trigger", ["auto", "manual"]);
+
+export const marketerCommissionSchedulerRuns = pgTable("marketer_commission_scheduler_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  trigger: marketerSchedulerRunTriggerEnum("trigger").notNull().default("auto"),
+  status: marketerSchedulerRunStatusEnum("status").notNull().default("running"),
+  runKey: text("run_key"),
+  idempotencyKey: text("idempotency_key"),
+  nodeId: text("node_id"),
+  attemptCount: integer("attempt_count").notNull().default(1),
+  retryCount: integer("retry_count").notNull().default(0),
+  generatedEvents: integer("generated_events").notNull().default(0),
+  generatedAmount: decimal("generated_amount", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  releasedEvents: integer("released_events").notNull().default(0),
+  releasedAmount: decimal("released_amount", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  errorMessage: text("error_message"),
+  metadata: text("metadata"),
+  startedAt: timestamp("started_at").notNull().defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_marketer_scheduler_runs_status").on(table.status),
+  index("idx_marketer_scheduler_runs_trigger").on(table.trigger),
+  index("idx_marketer_scheduler_runs_started_at").on(table.startedAt),
+  index("idx_marketer_scheduler_runs_run_key").on(table.runKey),
+  uniqueIndex("idx_marketer_scheduler_runs_idempotency_key").on(table.idempotencyKey),
+]);
+
 // ==================== SUPPORT CHAT ====================
 
 export const supportTicketStatusEnum = pgEnum("support_ticket_status", ["open", "active", "waiting", "closed"]);

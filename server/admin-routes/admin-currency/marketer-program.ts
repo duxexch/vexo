@@ -1,10 +1,11 @@
 import type { Express, Response } from "express";
 import crypto from "crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { db } from "../../db";
 import {
     affiliates,
     badgeCatalog,
+    marketerCommissionSchedulerRuns,
     referralRewardsLog,
     userBadges,
     users,
@@ -19,6 +20,7 @@ import {
     releaseEligibleMarketerCommissions,
     syncMarketerRevshareCommissions,
 } from "../../lib/affiliate-commissions";
+import { runMarketerCommissionSchedulerNow } from "../../lib/marketer-commission-scheduler";
 
 function toNumber(value: unknown, fallback = 0): number {
     const parsed = Number.parseFloat(String(value ?? ""));
@@ -38,6 +40,56 @@ function toInt(value: unknown, fallback = 0): number {
 
 function toDecimalString(value: unknown): string {
     return toNumber(value).toFixed(2);
+}
+
+function asRunStatus(value: unknown): "running" | "success" | "failed" | "skipped" | null {
+    const normalized = String(value || "").toLowerCase();
+    if (["running", "success", "failed", "skipped"].includes(normalized)) {
+        return normalized as "running" | "success" | "failed" | "skipped";
+    }
+    return null;
+}
+
+function asRunTrigger(value: unknown): "auto" | "manual" | null {
+    const normalized = String(value || "").toLowerCase();
+    if (["auto", "manual"].includes(normalized)) {
+        return normalized as "auto" | "manual";
+    }
+    return null;
+}
+
+function asStartOfDay(value: unknown): Date | null {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    const date = new Date(`${raw}T00:00:00.000Z`);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function asEndOfDay(value: unknown): Date | null {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    const date = new Date(`${raw}T23:59:59.999Z`);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function resolveSchedulerIdempotencyKey(input: {
+    adminId: string;
+    releaseOnly: boolean;
+    referrerUserId?: string;
+    provided?: string;
+}): string {
+    const provided = typeof input.provided === "string" ? input.provided.trim() : "";
+    if (provided.length > 0) {
+        return provided.slice(0, 120);
+    }
+
+    const bucket = Math.floor(Date.now() / 15_000);
+    const scope = `${input.releaseOnly ? "release" : "full"}:${input.referrerUserId || "all"}`;
+    return crypto
+        .createHash("sha256")
+        .update(`${input.adminId}:${scope}:${bucket}`)
+        .digest("hex")
+        .slice(0, 48);
 }
 
 async function ensureAffiliateRecordForUser(userId: string) {
@@ -383,6 +435,79 @@ export function registerMarketerProgramRoutes(app: Express) {
                 revshare,
                 release,
             });
+        } catch (error: unknown) {
+            return res.status(500).json({ error: getErrorMessage(error) });
+        }
+    });
+
+    app.post("/api/admin/free-play/marketers/scheduler/run", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+        try {
+            const releaseOnly = req.body?.releaseOnly === true;
+            const userId = typeof req.body?.userId === "string" ? req.body.userId.trim() : undefined;
+            const providedIdempotencyKey = typeof req.body?.idempotencyKey === "string"
+                ? req.body.idempotencyKey
+                : typeof req.headers["x-idempotency-key"] === "string"
+                    ? req.headers["x-idempotency-key"]
+                    : "";
+            const idempotencyKey = resolveSchedulerIdempotencyKey({
+                adminId: req.admin!.id,
+                releaseOnly,
+                referrerUserId: userId,
+                provided: providedIdempotencyKey,
+            });
+
+            const runResult = await runMarketerCommissionSchedulerNow({
+                releaseOnly,
+                referrerUserId: userId,
+                idempotencyKey,
+            });
+
+            await logAdminAction(req.admin!.id, "settings_change", "marketer_scheduler", userId || "all", {
+                newValue: JSON.stringify({
+                    action: "run_scheduler",
+                    releaseOnly,
+                    idempotencyKey,
+                    deduplicated: runResult.deduplicated === true,
+                    runId: runResult.runId,
+                    status: runResult.status,
+                }),
+            }, req);
+
+            return res.json({ success: true, idempotencyKey, ...runResult });
+        } catch (error: unknown) {
+            return res.status(500).json({ error: getErrorMessage(error) });
+        }
+    });
+
+    app.get("/api/admin/free-play/marketers/scheduler/runs", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+        try {
+            const limit = Math.min(Math.max(toInt(req.query.limit, 50), 1), 200);
+            const statusFilter = asRunStatus(req.query.status);
+            const triggerFilter = asRunTrigger(req.query.trigger);
+            const dateFrom = asStartOfDay(req.query.dateFrom);
+            const dateTo = asEndOfDay(req.query.dateTo);
+
+            const conditions = [];
+            if (statusFilter) {
+                conditions.push(eq(marketerCommissionSchedulerRuns.status, statusFilter));
+            }
+            if (triggerFilter) {
+                conditions.push(eq(marketerCommissionSchedulerRuns.trigger, triggerFilter));
+            }
+            if (dateFrom) {
+                conditions.push(gte(marketerCommissionSchedulerRuns.startedAt, dateFrom));
+            }
+            if (dateTo) {
+                conditions.push(lte(marketerCommissionSchedulerRuns.startedAt, dateTo));
+            }
+
+            const runs = await db.select()
+                .from(marketerCommissionSchedulerRuns)
+                .where(conditions.length > 0 ? and(...conditions) : undefined)
+                .orderBy(desc(marketerCommissionSchedulerRuns.startedAt))
+                .limit(limit);
+
+            return res.json({ runs });
         } catch (error: unknown) {
             return res.status(500).json({ error: getErrorMessage(error) });
         }
