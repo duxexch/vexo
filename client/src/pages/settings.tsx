@@ -210,10 +210,10 @@ function ProfileSection() {
     setEditingContact(type);
     resetSecurityChallenge();
     if (type === "email") {
-      form.setValue("email", user?.email || "", { shouldDirty: false });
+      form.setValue("email", "", { shouldDirty: false });
       return;
     }
-    form.setValue("phone", user?.phone || "", { shouldDirty: false });
+    form.setValue("phone", "", { shouldDirty: false });
   };
 
   const cancelContactEdit = (type: "email" | "phone") => {
@@ -339,8 +339,27 @@ function ProfileSection() {
   };
 
   const handleProfileSubmit = (data: ProfileFormValues) => {
+    const normalizedEmail = (data.email || "").trim();
+    const normalizedPhone = (data.phone || "").trim();
+
+    if (editingContact === "email" && !normalizedEmail) {
+      toast({ title: t("common.error"), description: t("validation.fillAllFields"), variant: "destructive" });
+      queueFocus(emailInputRef.current);
+      return;
+    }
+
+    if (editingContact === "phone" && !normalizedPhone) {
+      toast({ title: t("common.error"), description: t("validation.fillAllFields"), variant: "destructive" });
+      queueFocus(phoneInputRef.current);
+      return;
+    }
+
     resetSecurityChallenge();
-    updateProfileMutation.mutate(data);
+    updateProfileMutation.mutate({
+      ...data,
+      email: normalizedEmail,
+      phone: normalizedPhone,
+    });
   };
 
   const handleProfileInvalid = (errors: Partial<Record<keyof ProfileFormValues, unknown>>) => {
@@ -875,6 +894,20 @@ function VerificationSection() {
     queueFocus(otpInputRef.current);
   }, [showOtpInput]);
 
+  const maskEmailValue = (value: string): string => {
+    const normalized = value.trim();
+    const [localPart = "", domainPart = ""] = normalized.split("@");
+    if (!localPart || !domainPart) return "***";
+    const visiblePrefix = localPart.slice(0, Math.min(2, localPart.length));
+    return `${visiblePrefix}***@${domainPart}`;
+  };
+
+  const maskPhoneValue = (value: string): string => {
+    const normalized = value.trim();
+    if (normalized.length <= 4) return "****";
+    return `${normalized.slice(0, 2)}****${normalized.slice(-2)}`;
+  };
+
   const getContactTypeLabel = (type: "email" | "phone") => {
     return type === "email" ? t("settings.contactTypeEmail") : t("settings.contactTypePhone");
   };
@@ -1128,7 +1161,7 @@ function VerificationSection() {
                       <Mail className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold">{user.email}</p>
+                      <p className="text-sm font-semibold">{maskEmailValue(user.email)}</p>
                       <p className="text-xs text-muted-foreground">{t('settings.emailNotVerified')}</p>
                     </div>
                   </div>
@@ -1153,7 +1186,7 @@ function VerificationSection() {
                       <Smartphone className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold">{user.phone}</p>
+                      <p className="text-sm font-semibold">{maskPhoneValue(user.phone)}</p>
                       <p className="text-xs text-muted-foreground">{t('settings.phoneNotVerified')}</p>
                     </div>
                   </div>
@@ -1648,6 +1681,14 @@ function SecuritySection() {
   const withdrawalLoginPasswordInputRef = useRef<HTMLInputElement | null>(null);
   const withdrawalSetButtonRef = useRef<HTMLButtonElement | null>(null);
   const { focusAndScroll, queueFocus } = useGuidedFocus();
+
+  const maskEmailValue = (value: string): string => {
+    const normalized = value.trim();
+    const [localPart = "", domainPart = ""] = normalized.split("@");
+    if (!localPart || !domainPart) return "***";
+    const visiblePrefix = localPart.slice(0, Math.min(2, localPart.length));
+    return `${visiblePrefix}***@${domainPart}`;
+  };
 
   const normalizedEmail = (user?.email || "").trim().toLowerCase();
   const hasLinkedGmail = normalizedEmail.endsWith("@gmail.com") || normalizedEmail.endsWith("@googlemail.com");
@@ -2213,7 +2254,7 @@ function SecuritySection() {
                     <div className="space-y-2">
                       <Label>{t("settings.gmailBackupAddress")}</Label>
                       <Input
-                        value={user?.email || ""}
+                        value={user?.email ? maskEmailValue(user.email) : ""}
                         readOnly
                         placeholder={t("settings.gmailBackupMissing")}
                         data-testid="input-gmail-backup-address"
