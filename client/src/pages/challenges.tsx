@@ -21,11 +21,12 @@ import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import type { CountryPaymentMethod } from "@shared/schema";
 import { BackButton } from "@/components/BackButton";
 import { EmptyState } from "@/components/EmptyState";
+import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { ProjectCurrencyAmount, ProjectCurrencySymbol } from "@/components/ProjectCurrencySymbol";
 import { GameCardSkeletonGrid } from "@/components/skeletons";
 import { QueryErrorState } from "@/components/QueryErrorState";
 import { playSound } from "@/hooks/use-sound-effects";
-import { GAME_ICON_STYLES } from "@/lib/game-config";
+import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type GameConfigItem, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import {
   Swords,
   Users,
@@ -132,15 +133,6 @@ interface ChallengeGame {
   status: string;
 }
 
-interface MultiplayerGameIconMeta {
-  id: string;
-  key: string;
-  nameEn: string;
-  iconName?: string;
-  iconUrl?: string;
-  updatedAt?: string;
-}
-
 interface ProjectCurrencySettings {
   currencyName: string;
   currencySymbol: string;
@@ -205,21 +197,8 @@ function RatingBadge({ rating }: { rating?: PlayerRating }) {
   );
 }
 
-function isImagePath(value?: string | null): value is string {
-  if (!value) return false;
-  const normalized = value.trim();
-  if (!normalized) return false;
-  return normalized.startsWith("/") || /^https?:\/\//i.test(normalized);
-}
-
 function normalizeGameToken(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function withVersionSuffix(url: string, versionSeed?: string): string {
-  if (!versionSeed) return url;
-  const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}v=${encodeURIComponent(versionSeed)}`;
 }
 
 export default function ChallengesPage() {
@@ -389,7 +368,7 @@ export default function ChallengesPage() {
     },
   });
 
-  const { data: multiplayerGamesIconMeta = [] } = useQuery<MultiplayerGameIconMeta[]>({
+  const { data: multiplayerGames = [] } = useQuery<MultiplayerGameFromAPI[]>({
     queryKey: ['/api/multiplayer-games'],
     queryFn: async () => {
       const res = await fetch('/api/multiplayer-games');
@@ -398,32 +377,34 @@ export default function ChallengesPage() {
     },
   });
 
-  const challengeIconImageMap = useMemo(() => {
-    const map = new Map<string, string>();
+  const multiplayerGameConfig = useMemo(() => buildGameConfig(multiplayerGames), [multiplayerGames]);
 
-    for (const game of multiplayerGamesIconMeta) {
-      const rawIconUrl = typeof game.iconUrl === 'string' ? game.iconUrl.trim() : '';
-      const rawIconName = typeof game.iconName === 'string' ? game.iconName.trim() : '';
+  const challengeGameConfigByToken = useMemo(() => {
+    const map = new Map<string, GameConfigItem>();
 
-      const imagePath = isImagePath(rawIconUrl)
-        ? rawIconUrl
-        : isImagePath(rawIconName)
-          ? rawIconName
-          : '';
+    const registerConfig = (token: string | undefined, config: GameConfigItem) => {
+      if (!token) return;
+      const normalized = normalizeGameToken(token);
+      if (!normalized) return;
+      map.set(normalized, config);
+    };
 
-      if (!imagePath) continue;
+    for (const [gameKey, config] of Object.entries(multiplayerGameConfig)) {
+      registerConfig(gameKey, config);
+      registerConfig(config.name, config);
+      registerConfig(config.nameAr, config);
+    }
 
-      const versionSeed = game.updatedAt
-        ? String(new Date(game.updatedAt).getTime())
-        : game.id;
-      const versionedPath = withVersionSuffix(imagePath, versionSeed);
-
-      map.set(normalizeGameToken(game.key), versionedPath);
-      map.set(normalizeGameToken(game.nameEn), versionedPath);
+    for (const [gameKey, config] of Object.entries(FALLBACK_GAME_CONFIG)) {
+      const normalized = normalizeGameToken(gameKey);
+      if (map.has(normalized)) continue;
+      registerConfig(gameKey, config);
+      registerConfig(config.name, config);
+      registerConfig(config.nameAr, config);
     }
 
     return map;
-  }, [multiplayerGamesIconMeta]);
+  }, [multiplayerGameConfig]);
 
   const refreshChallengeQueries = () => {
     queryClient.invalidateQueries({ queryKey: ['/api/challenges'] });
@@ -434,9 +415,18 @@ export default function ChallengesPage() {
 
   const followedIds = new Set(followedChallengers?.map(f => f.userId) || []);
 
-  const getGameIconByName = (name: string) => {
-    const lowerName = name.toLowerCase();
-    return GAME_ICON_STYLES[lowerName]?.icon || Target;
+  const getChallengeGameConfig = (token: string): GameConfigItem | undefined => {
+    return challengeGameConfigByToken.get(normalizeGameToken(token));
+  };
+
+  const getResolvedChallengeGameConfig = (token: string): GameConfigItem => {
+    return getChallengeGameConfig(token) ?? {
+      name: token,
+      nameAr: token,
+      color: "bg-primary/15 text-primary border-primary/20",
+      gradient: "from-primary/15 to-primary/5",
+      icon: Target,
+    };
   };
 
   const followChallengerMutation = useMutation({
@@ -846,10 +836,9 @@ export default function ChallengesPage() {
   };
 
 
-  const getGameIcon = (gameType: string) => {
+  const getGameVisual = (gameType: string) => {
     const game = challengeGames.find(g => g.name.toLowerCase() === gameType.toLowerCase() || g.id === gameType);
-    if (game) return getGameIconByName(game.name);
-    return GAME_ICON_STYLES[gameType.toLowerCase()]?.icon || Target;
+    return getResolvedChallengeGameConfig(game?.name ?? gameType);
   };
 
   const formatUsd = (amount: number | string | undefined) => Number(amount || 0).toFixed(2);
@@ -1037,10 +1026,10 @@ export default function ChallengesPage() {
             {gameFilter.map(gId => {
               const game = challengeGames.find(g => g.id === gId);
               if (!game) return null;
-              const Icon = getGameIconByName(game.name);
+              const gameConfig = getResolvedChallengeGameConfig(game.name);
               return (
                 <Badge key={gId} variant="secondary" className="gap-1.5 pe-1.5 py-1">
-                  <Icon className="h-3 w-3" />
+                  <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className="h-[18px] w-[18px]" />
                   {game.name}
                   <button
                     onClick={() => setGameFilter(prev => prev.filter(id => id !== gId))}
@@ -1091,7 +1080,7 @@ export default function ChallengesPage() {
                 {loadingGames ? (
                   <div className="col-span-2 text-center text-muted-foreground text-sm py-4">{t('common.loading')}</div>
                 ) : challengeGames.map(game => {
-                  const Icon = getGameIconByName(game.name);
+                  const gameConfig = getResolvedChallengeGameConfig(game.name);
                   const isSelected = pendingGameFilter.includes(game.id);
                   return (
                     <Button
@@ -1102,7 +1091,11 @@ export default function ChallengesPage() {
                       className={`justify-start gap-2 h-10 ${isSelected ? '' : ''}`}
                       data-testid={`button-filter-${game.name.toLowerCase()}`}
                     >
-                      {isSelected ? <Check className="h-4 w-4 shrink-0" /> : <Icon className="h-4 w-4 shrink-0" />}
+                      {isSelected ? (
+                        <Check className="h-4 w-4 shrink-0" />
+                      ) : (
+                        <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className="h-5 w-5 shrink-0" />
+                      )}
                       <span className="truncate">{game.name}</span>
                     </Button>
                   );
@@ -1157,14 +1150,16 @@ export default function ChallengesPage() {
               ) : filterChallenges(publicChallenges).length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {filterChallenges(publicChallenges).map(challenge => {
-                    const GameIcon = getGameIcon(challenge.gameType);
+                    const gameConfig = getGameVisual(challenge.gameType);
                     return (
                       <Card key={challenge.id} className="overflow-hidden" data-testid={`card-live-challenge-${challenge.id}`}>
                         <CardHeader className="pb-2 bg-primary/5">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              <GameIcon className="h-5 w-5 text-primary" />
-                              <span className="font-semibold capitalize">{challenge.gameType}</span>
+                              <span className={`inline-flex items-center justify-center rounded-2xl border p-2.5 ${getGameIconSurfaceClass(gameConfig)}`}>
+                                <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={`h-6 w-6 ${gameConfig.iconUrl ? '' : getGameIconToneClass(gameConfig.color)}`} />
+                              </span>
+                              <span className="font-semibold capitalize">{language === 'ar' ? gameConfig.nameAr : gameConfig.name}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               <Badge variant="destructive" className="animate-pulse">
@@ -1271,18 +1266,18 @@ export default function ChallengesPage() {
                 <QueryErrorState error={errorAvailable} onRetry={() => refetchAvailable()} compact />
               ) : filterChallenges(availableChallenges).length > 0 ? (
                 filterChallenges(availableChallenges).map(challenge => {
-                  const GameIcon = getGameIcon(challenge.gameType);
+                  const gameConfig = getGameVisual(challenge.gameType);
                   return (
                     <Card key={challenge.id} data-testid={`card-challenge-${challenge.id}`}>
                       <CardContent className="p-4">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
-                            <div className="p-2 rounded-full bg-primary/20">
-                              <GameIcon className="h-5 w-5 text-primary" />
+                            <div className={`rounded-2xl border p-3 ${getGameIconSurfaceClass(gameConfig)}`}>
+                              <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={`h-7 w-7 ${gameConfig.iconUrl ? '' : getGameIconToneClass(gameConfig.color)}`} />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className="font-semibold capitalize">{challenge.gameType}</p>
+                                <p className="font-semibold capitalize">{language === 'ar' ? gameConfig.nameAr : gameConfig.name}</p>
                                 {challenge.visibility === 'public' ? (
                                   <Globe className="h-4 w-4 text-green-500" />
                                 ) : (
@@ -1351,7 +1346,7 @@ export default function ChallengesPage() {
                 <QueryErrorState error={errorMy} onRetry={() => refetchMy()} compact />
               ) : filterChallenges(myChallenges).length > 0 ? (
                 filterChallenges(myChallenges).map(challenge => {
-                  const GameIcon = getGameIcon(challenge.gameType);
+                  const gameConfig = getGameVisual(challenge.gameType);
                   const isParticipant = isChallengeParticipant(challenge);
                   const isCreator = challenge.player1Id === user?.id;
                   const isWaiting = challenge.status === 'waiting';
@@ -1377,11 +1372,11 @@ export default function ChallengesPage() {
                       <CardContent className="p-4">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
-                            <div className="p-2 rounded-full bg-primary/20">
-                              <GameIcon className="h-5 w-5 text-primary" />
+                            <div className={`rounded-2xl border p-3 ${getGameIconSurfaceClass(gameConfig)}`}>
+                              <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={`h-7 w-7 ${gameConfig.iconUrl ? '' : getGameIconToneClass(gameConfig.color)}`} />
                             </div>
                             <div>
-                              <p className="font-semibold capitalize">{challenge.gameType}</p>
+                              <p className="font-semibold capitalize">{language === 'ar' ? gameConfig.nameAr : gameConfig.name}</p>
                               <p className="text-sm text-muted-foreground truncate max-w-[150px]">
                                 {challenge.status === 'waiting'
                                   ? (challenge.requiredPlayers && challenge.requiredPlayers > 2
@@ -1465,9 +1460,8 @@ export default function ChallengesPage() {
                   ) : challengeGames.length === 0 ? (
                     <div className="col-span-2 text-center text-muted-foreground">{t('challenges.noGamesAvailable')}</div>
                   ) : challengeGames.map(game => {
-                    const Icon = getGameIconByName(game.name);
+                    const gameConfig = getResolvedChallengeGameConfig(game.name);
                     const gameKey = game.name.toLowerCase();
-                    const iconImageUrl = challengeIconImageMap.get(normalizeGameToken(game.name));
                     return (
                       <Button
                         key={game.id}
@@ -1479,13 +1473,7 @@ export default function ChallengesPage() {
                         }}
                         data-testid={`button-game-${gameKey}`}
                       >
-                        {iconImageUrl ? (
-                          <span className="mb-1 inline-flex h-6 w-6 items-center justify-center overflow-hidden rounded-sm">
-                            <img src={iconImageUrl} alt="" className="h-full w-full object-contain" loading="lazy" decoding="async" />
-                          </span>
-                        ) : (
-                          <Icon className="h-6 w-6 mb-1" />
-                        )}
+                        <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className="mb-1.5 h-8 w-8" />
                         <span>{game.name}</span>
                       </Button>
                     );

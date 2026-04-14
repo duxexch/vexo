@@ -11,19 +11,18 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n";
 import AchievementBadges from "@/components/AchievementBadges";
+import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { BackButton } from "@/components/BackButton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { type MultiplayerGameFromAPI, buildGameConfig, getGameIconSurfaceClass, getGameIconToneClass } from "@/lib/game-config";
 import * as LucideIcons from "lucide-react";
 import {
   Trophy,
   Target,
   Flame,
   TrendingUp,
-  Crown,
-  Gem,
-  Shuffle,
   Clock,
   DollarSign,
   Gamepad2,
@@ -95,49 +94,6 @@ interface MatchHistoryItem {
   endedAt?: string;
   isWinner: boolean;
   result: 'win' | 'loss' | 'draw';
-}
-
-interface MultiplayerGameFromAPI {
-  id: string;
-  key: string;
-  nameEn: string;
-  nameAr: string;
-  isActive: boolean;
-}
-
-const GAME_ICONS: Record<string, { icon: typeof Crown; color: string }> = {
-  chess: { icon: Crown, color: 'text-amber-500' },
-  domino: { icon: Target, color: 'text-blue-500' },
-  backgammon: { icon: Shuffle, color: 'text-emerald-500' },
-  tarneeb: { icon: Gem, color: 'text-purple-500' },
-  baloot: { icon: Gem, color: 'text-rose-500' },
-};
-
-const DEFAULT_GAME_STYLE = { icon: Gamepad2, color: 'text-gray-500' };
-
-const FALLBACK_GAME_CONFIG: Record<string, { name: string; nameAr: string; icon: typeof Crown; color: string }> = {
-  chess: { name: 'Chess', nameAr: 'شطرنج', icon: Crown, color: 'text-amber-500' },
-  domino: { name: 'Domino', nameAr: 'دومينو', icon: Target, color: 'text-blue-500' },
-  backgammon: { name: 'Backgammon', nameAr: 'طاولة', icon: Shuffle, color: 'text-emerald-500' },
-  tarneeb: { name: 'Tarneeb', nameAr: 'طرنيب', icon: Gem, color: 'text-purple-500' },
-  baloot: { name: 'Baloot', nameAr: 'بلوت', icon: Gem, color: 'text-rose-500' },
-};
-
-function buildGameConfig(apiGames: MultiplayerGameFromAPI[]): Record<string, { name: string; nameAr: string; icon: typeof Crown; color: string }> {
-  if (!apiGames || apiGames.length === 0) {
-    return FALLBACK_GAME_CONFIG;
-  }
-  const config: Record<string, { name: string; nameAr: string; icon: typeof Crown; color: string }> = {};
-  for (const game of apiGames) {
-    const iconStyle = GAME_ICONS[game.key] || DEFAULT_GAME_STYLE;
-    config[game.key] = {
-      name: game.nameEn,
-      nameAr: game.nameAr,
-      icon: iconStyle.icon,
-      color: iconStyle.color,
-    };
-  }
-  return config;
 }
 
 function isImagePath(value?: string | null): value is string {
@@ -503,13 +459,18 @@ export default function PlayerProfilePage() {
             <CardContent className="space-y-4">
               {stats.gameStats.map((game) => {
                 const config = GAME_CONFIG[game.game] || GAME_CONFIG.chess;
-                const Icon = config.icon;
 
                 return (
                   <div key={game.game} className="space-y-2">
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-2">
-                        <Icon className={`w-5 h-5 ${config.color}`} />
+                        <span className={`inline-flex items-center justify-center rounded-xl border p-2 ${getGameIconSurfaceClass(config)}`}>
+                          <GameConfigIcon
+                            config={config}
+                            fallbackIcon={Gamepad2}
+                            className={`h-7 w-7 ${config.iconUrl ? "" : getGameIconToneClass(config.color)}`}
+                          />
+                        </span>
                         <span className="font-medium">
                           {language === 'ar' ? config.nameAr : config.name}
                         </span>
@@ -559,7 +520,6 @@ export default function PlayerProfilePage() {
                   <div className="space-y-3">
                     {matches.map((match) => {
                       const config = GAME_CONFIG[match.gameType] || GAME_CONFIG.chess;
-                      const Icon = config.icon;
 
                       return (
                         <div
@@ -567,10 +527,14 @@ export default function PlayerProfilePage() {
                           className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 hover-elevate"
                           data-testid={`row-match-${match.id}`}
                         >
-                          <div className={`p-2 rounded-lg ${match.result === 'win' ? 'bg-green-500/20' :
+                          <div className={`rounded-xl border p-2.5 ${match.result === 'win' ? 'bg-green-500/20 border-green-500/20' :
                             match.result === 'loss' ? 'bg-red-500/20' : 'bg-gray-500/20'
-                            }`}>
-                            <Icon className={`w-5 h-5 ${config.color}`} />
+                            } ${match.result === 'loss' ? 'border-red-500/20' : match.result === 'draw' ? 'border-gray-500/20' : ''}`}>
+                            <GameConfigIcon
+                              config={config}
+                              fallbackIcon={Gamepad2}
+                              className={`h-7 w-7 ${config.iconUrl ? "" : getGameIconToneClass(config.color)}`}
+                            />
                           </div>
 
                           <div className="flex-1">

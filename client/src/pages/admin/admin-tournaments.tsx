@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { GameConfigIcon } from "@/components/GameConfigIcon";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import {
   Trophy,
   Plus,
@@ -73,13 +75,17 @@ async function adminFetch(url: string, options?: RequestInit) {
 }
 
 const GAME_TYPES = [
-  { value: "chess", label: "Chess", icon: "♟️" },
-  { value: "backgammon", label: "Backgammon", icon: "🎲" },
-  { value: "dominoes", label: "Dominoes", icon: "🁡" },
-  { value: "baloot", label: "Baloot", icon: "🃏" },
-  { value: "tarneeb", label: "Tarneeb", icon: "🂡" },
-  { value: "snake", label: "Snake Arena", icon: "🐍" },
+  { value: "chess", label: "Chess", labelAr: "شطرنج" },
+  { value: "backgammon", label: "Backgammon", labelAr: "طاولة" },
+  { value: "dominoes", label: "Dominoes", labelAr: "دومينو" },
+  { value: "baloot", label: "Baloot", labelAr: "بلوت" },
+  { value: "tarneeb", label: "Tarneeb", labelAr: "طرنيب" },
+  { value: "snake", label: "Snake Arena", labelAr: "أرينا الثعبان" },
 ];
+
+const TOURNAMENT_GAME_TYPE_ALIASES: Record<string, string> = {
+  dominoes: "domino",
+};
 
 const STATUS_COLORS: Record<string, string> = {
   upcoming: "bg-blue-500/10 text-blue-500 border-blue-500/30",
@@ -187,6 +193,21 @@ export default function AdminTournamentsPage() {
   const [form, setForm] = useState<TournamentForm>({ ...defaultForm });
   const [filter, setFilter] = useState<string>("all");
   const [deleteTarget, setDeleteTarget] = useState<TournamentItem | null>(null);
+
+  const { data: multiplayerGames = [] } = useQuery<MultiplayerGameFromAPI[]>({
+    queryKey: ["/api/multiplayer-games"],
+    staleTime: 60000,
+  });
+
+  const tournamentGameConfig = useMemo(
+    () => ({ ...FALLBACK_GAME_CONFIG, ...buildGameConfig(multiplayerGames) }),
+    [multiplayerGames],
+  );
+
+  const resolveTournamentGameConfig = (gameType?: string | null) => {
+    const normalizedType = TOURNAMENT_GAME_TYPE_ALIASES[String(gameType || "")] || String(gameType || "");
+    return tournamentGameConfig[normalizedType] || tournamentGameConfig.chess;
+  };
 
   // Fetch tournaments using ADMIN endpoint
   const { data: tournaments = [], isLoading } = useQuery({
@@ -400,6 +421,7 @@ export default function AdminTournamentsPage() {
         <div className="space-y-3">
           {tournamentList.map((tournament) => {
             const gameInfo = GAME_TYPES.find((g) => g.value === tournament.gameType);
+            const gameConfig = resolveTournamentGameConfig(tournament.gameType);
             return (
               <Card
                 key={tournament.id}
@@ -407,7 +429,13 @@ export default function AdminTournamentsPage() {
                 onClick={() => setSelectedTournament(tournament)}
               >
                 <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                  <div className="text-2xl">{gameInfo?.icon || "🎮"}</div>
+                  <div className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border bg-muted/40 ${getGameIconSurfaceClass(gameConfig)}`}>
+                    <GameConfigIcon
+                      config={gameConfig}
+                      fallbackIcon={gameConfig.icon}
+                      className={`h-8 w-8 ${gameConfig.iconUrl ? "" : getGameIconToneClass(gameConfig.color)}`}
+                    />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold truncate">{tournament.name}</h3>
@@ -504,13 +532,45 @@ export default function AdminTournamentsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {GAME_TYPES.map((g) => (
-                      <SelectItem key={g.value} value={g.value}>
-                        {g.icon} {g.label}
-                      </SelectItem>
-                    ))}
+                    {GAME_TYPES.map((g) => {
+                      const gameConfig = resolveTournamentGameConfig(g.value);
+
+                      return (
+                        <SelectItem key={g.value} value={g.value}>
+                          <span className="flex items-center gap-2">
+                            <span className={`inline-flex items-center justify-center rounded-lg border p-1.5 ${getGameIconSurfaceClass(gameConfig)}`}>
+                              <GameConfigIcon
+                                config={gameConfig}
+                                fallbackIcon={gameConfig.icon}
+                                className={`h-4 w-4 ${gameConfig.iconUrl ? "" : getGameIconToneClass(gameConfig.color)}`}
+                              />
+                            </span>
+                            <span>{g.label}</span>
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
+                <div className="flex items-center gap-2 rounded-xl border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                  {(() => {
+                    const selectedGameConfig = resolveTournamentGameConfig(form.gameType);
+                    const selectedGameMeta = GAME_TYPES.find((g) => g.value === form.gameType);
+
+                    return (
+                      <>
+                        <span className={`inline-flex items-center justify-center rounded-lg border p-1.5 ${getGameIconSurfaceClass(selectedGameConfig)}`}>
+                          <GameConfigIcon
+                            config={selectedGameConfig}
+                            fallbackIcon={selectedGameConfig.icon}
+                            className={`h-4 w-4 ${selectedGameConfig.iconUrl ? "" : getGameIconToneClass(selectedGameConfig.color)}`}
+                          />
+                        </span>
+                        <span>{selectedGameMeta?.label || selectedGameConfig.name}</span>
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label>Format</Label>
@@ -648,7 +708,19 @@ export default function AdminTournamentsPage() {
         <DialogContent className="max-w-[calc(100vw-0.75rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-primary" />
+              {selectedTournament && (() => {
+                const selectedGameConfig = resolveTournamentGameConfig(selectedTournament.gameType);
+
+                return (
+                  <span className={`inline-flex items-center justify-center rounded-xl border p-2 ${getGameIconSurfaceClass(selectedGameConfig)}`}>
+                    <GameConfigIcon
+                      config={selectedGameConfig}
+                      fallbackIcon={selectedGameConfig.icon}
+                      className={`h-5 w-5 ${selectedGameConfig.iconUrl ? "" : getGameIconToneClass(selectedGameConfig.color)}`}
+                    />
+                  </span>
+                );
+              })()}
               {selectedTournament?.name}
               {selectedTournament?.nameAr && (
                 <span className="text-muted-foreground text-sm font-normal">
@@ -660,14 +732,48 @@ export default function AdminTournamentsPage() {
 
           {tournamentDetail && (
             <div className="space-y-4">
+              {(() => {
+                const detailGameConfig = resolveTournamentGameConfig(tournamentDetail.gameType);
+                const detailGameMeta = GAME_TYPES.find((g) => g.value === tournamentDetail.gameType);
+
+                return (
+                  <div className="flex items-center gap-3 rounded-2xl border bg-muted/30 p-3">
+                    <span className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl border ${getGameIconSurfaceClass(detailGameConfig)}`}>
+                      <GameConfigIcon
+                        config={detailGameConfig}
+                        fallbackIcon={detailGameConfig.icon}
+                        className={`h-8 w-8 ${detailGameConfig.iconUrl ? "" : getGameIconToneClass(detailGameConfig.color)}`}
+                      />
+                    </span>
+                    <div>
+                      <p className="font-semibold">{detailGameMeta?.label || detailGameConfig.name}</p>
+                      <p className="text-sm text-muted-foreground">{detailGameMeta?.labelAr || detailGameConfig.nameAr}</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Status & Info */}
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant="outline" className={STATUS_COLORS[tournamentDetail.status] || ""}>
                   {STATUS_LABELS[tournamentDetail.status] || tournamentDetail.status}
                 </Badge>
-                <Badge variant="outline">
-                  {GAME_TYPES.find((g) => g.value === tournamentDetail.gameType)?.icon}{" "}
-                  {tournamentDetail.gameType}
+                <Badge variant="outline" className="gap-2">
+                  {(() => {
+                    const detailGameConfig = resolveTournamentGameConfig(tournamentDetail.gameType);
+                    const detailGameMeta = GAME_TYPES.find((g) => g.value === tournamentDetail.gameType);
+
+                    return (
+                      <>
+                        <GameConfigIcon
+                          config={detailGameConfig}
+                          fallbackIcon={detailGameConfig.icon}
+                          className={`h-4 w-4 ${detailGameConfig.iconUrl ? "" : getGameIconToneClass(detailGameConfig.color)}`}
+                        />
+                        {detailGameMeta?.label || detailGameConfig.name}
+                      </>
+                    );
+                  })()}
                 </Badge>
                 <Badge variant="outline">{tournamentDetail.format?.replace("_", " ")}</Badge>
               </div>

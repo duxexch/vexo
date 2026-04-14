@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import { Shuffle, UserPlus, X, Loader2, Clock, Gamepad2, Check, XCircle, Users, UserCheck, Wifi } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -76,7 +78,7 @@ function normalizeGameRouteSegment(gameName: string | null | undefined): string 
 }
 
 export default function MultiplayerPage() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { user, token } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -94,6 +96,16 @@ export default function MultiplayerPage() {
   const { data: games = [] } = useQuery<GameItem[]>({
     queryKey: ["/api/games/available"],
   });
+
+  const { data: multiplayerGames = [] } = useQuery<MultiplayerGameFromAPI[]>({
+    queryKey: ["/api/multiplayer-games"],
+    staleTime: 60000,
+  });
+
+  const multiplayerGameConfig = useMemo(
+    () => ({ ...FALLBACK_GAME_CONFIG, ...buildGameConfig(multiplayerGames) }),
+    [multiplayerGames],
+  );
 
   // Fetch user's friends list
   const { data: friends = [] } = useQuery<FriendItem[]>({
@@ -344,6 +356,21 @@ export default function MultiplayerPage() {
     setLocation(route);
   };
 
+  const resolveConfiguredGame = (gameName?: string | null, gameId?: string | null) => {
+    const resolvedName = gameName
+      || (gameId ? games.find((game) => game.id === gameId)?.name : undefined);
+    const routeSegment = normalizeGameRouteSegment(resolvedName);
+
+    if (!routeSegment) {
+      return undefined;
+    }
+
+    return multiplayerGameConfig[routeSegment] || multiplayerGameConfig.chess;
+  };
+
+  const selectedGameConfig = resolveConfiguredGame(undefined, selectedGameId);
+  const foundMatchConfig = resolveConfiguredGame(foundMatch?.game?.name, foundMatch?.gameId);
+
   return (
     <div className="container mx-auto max-w-4xl min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-3 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-4 sm:space-y-6">
       <div className="flex items-start sm:items-center justify-between gap-3 mb-2 sm:mb-4">
@@ -388,13 +415,38 @@ export default function MultiplayerPage() {
               <SelectValue placeholder={t("multiplayer.chooseGame")} />
             </SelectTrigger>
             <SelectContent>
-              {games.map((game: GameItem) => (
-                <SelectItem key={game.id} value={game.id}>
-                  {game.name}
-                </SelectItem>
-              ))}
+              {games.map((game: GameItem) => {
+                const gameConfig = resolveConfiguredGame(game.name, game.id);
+
+                return (
+                  <SelectItem key={game.id} value={game.id}>
+                    <span className="flex items-center gap-2">
+                      <span className={`inline-flex items-center justify-center rounded-lg border p-1.5 ${getGameIconSurfaceClass(gameConfig)}`}>
+                        <GameConfigIcon
+                          config={gameConfig}
+                          fallbackIcon={Gamepad2}
+                          className={`h-4 w-4 ${gameConfig?.iconUrl ? "" : getGameIconToneClass(gameConfig?.color)}`}
+                        />
+                      </span>
+                      <span>{language === 'ar' ? gameConfig?.nameAr || game.name : gameConfig?.name || game.name}</span>
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
+          {selectedGameConfig && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <span className={`inline-flex items-center justify-center rounded-xl border p-2 ${getGameIconSurfaceClass(selectedGameConfig)}`}>
+                <GameConfigIcon
+                  config={selectedGameConfig}
+                  fallbackIcon={Gamepad2}
+                  className={`h-5 w-5 ${selectedGameConfig.iconUrl ? "" : getGameIconToneClass(selectedGameConfig.color)}`}
+                />
+              </span>
+              <span>{language === 'ar' ? selectedGameConfig.nameAr : selectedGameConfig.name}</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -558,46 +610,56 @@ export default function MultiplayerPage() {
             <CardDescription>{t("multiplayer.pendingInvitesDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {matchmakingStatus.pendingInvites.map((invite: { id: string; createdAt: string;[key: string]: unknown }) => (
-              <div
-                key={invite.id}
-                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-muted rounded-md"
-                data-testid={`invite-${invite.id}`}
-              >
-                <div className="flex items-center gap-3">
-                  <Gamepad2 className="w-5 h-5 text-primary" />
-                  <div>
-                    <p className="font-medium">{t("multiplayer.gameInvite")}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(invite.createdAt).toLocaleTimeString()}
-                    </p>
+            {matchmakingStatus.pendingInvites.map((invite: { id: string; createdAt: string; gameId?: string;[key: string]: unknown }) => {
+              const inviteConfig = resolveConfiguredGame(undefined, invite.gameId);
+
+              return (
+                <div
+                  key={invite.id}
+                  className="flex flex-col gap-3 rounded-md bg-muted p-3 sm:flex-row sm:items-center sm:justify-between"
+                  data-testid={`invite-${invite.id}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`inline-flex items-center justify-center rounded-xl border p-2 ${getGameIconSurfaceClass(inviteConfig)}`}>
+                      <GameConfigIcon
+                        config={inviteConfig}
+                        fallbackIcon={Gamepad2}
+                        className={`h-5 w-5 ${inviteConfig?.iconUrl ? "" : getGameIconToneClass(inviteConfig?.color)}`}
+                      />
+                    </span>
+                    <div>
+                      <p className="font-medium">{t("multiplayer.gameInvite")}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {inviteConfig ? `${language === 'ar' ? inviteConfig.nameAr : inviteConfig.name} • ` : ''}{new Date(invite.createdAt).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex w-full items-center gap-2 sm:w-auto">
+                    <Button
+                      size="sm"
+                      className="min-h-[40px] flex-1 sm:flex-none"
+                      onClick={() => acceptMatchMutation.mutate(invite.id)}
+                      disabled={acceptMatchMutation.isPending}
+                      data-testid={`button-accept-${invite.id}`}
+                    >
+                      <Check className="w-4 h-4 me-1" />
+                      {t("common.accept")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="min-h-[40px] flex-1 sm:flex-none"
+                      onClick={() => declineMatchMutation.mutate(invite.id)}
+                      disabled={declineMatchMutation.isPending}
+                      data-testid={`button-decline-${invite.id}`}
+                    >
+                      <XCircle className="w-4 h-4 me-1" />
+                      {t("common.decline")}
+                    </Button>
                   </div>
                 </div>
-                <div className="flex w-full sm:w-auto items-center gap-2">
-                  <Button
-                    size="sm"
-                    className="flex-1 sm:flex-none min-h-[40px]"
-                    onClick={() => acceptMatchMutation.mutate(invite.id)}
-                    disabled={acceptMatchMutation.isPending}
-                    data-testid={`button-accept-${invite.id}`}
-                  >
-                    <Check className="w-4 h-4 me-1" />
-                    {t("common.accept")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1 sm:flex-none min-h-[40px]"
-                    onClick={() => declineMatchMutation.mutate(invite.id)}
-                    disabled={declineMatchMutation.isPending}
-                    data-testid={`button-decline-${invite.id}`}
-                  >
-                    <XCircle className="w-4 h-4 me-1" />
-                    {t("common.decline")}
-                  </Button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}
@@ -636,7 +698,13 @@ export default function MultiplayerPage() {
         <DialogContent className="max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Gamepad2 className="w-5 h-5 text-primary" />
+              <span className={`inline-flex items-center justify-center rounded-xl border p-2 ${getGameIconSurfaceClass(foundMatchConfig)}`}>
+                <GameConfigIcon
+                  config={foundMatchConfig}
+                  fallbackIcon={Gamepad2}
+                  className={`h-5 w-5 ${foundMatchConfig?.iconUrl ? "" : getGameIconToneClass(foundMatchConfig?.color)}`}
+                />
+              </span>
               {t("multiplayer.matchFound")}
             </DialogTitle>
             <DialogDescription>{t("multiplayer.matchFoundDesc")}</DialogDescription>
@@ -668,8 +736,13 @@ export default function MultiplayerPage() {
               </div>
               {foundMatch.game && (
                 <div className="text-center">
-                  <Badge variant="outline" className="text-lg px-4 py-1">
-                    {foundMatch.game.name}
+                  <Badge variant="outline" className="gap-2 px-4 py-1 text-lg">
+                    <GameConfigIcon
+                      config={foundMatchConfig}
+                      fallbackIcon={Gamepad2}
+                      className={`h-5 w-5 ${foundMatchConfig?.iconUrl ? "" : getGameIconToneClass(foundMatchConfig?.color)}`}
+                    />
+                    {foundMatchConfig ? (language === 'ar' ? foundMatchConfig.nameAr : foundMatchConfig.name) : foundMatch.game.name}
                   </Badge>
                 </div>
               )}

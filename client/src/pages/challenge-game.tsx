@@ -55,10 +55,11 @@ import { SpectatorPanel } from "@/components/games/SpectatorPanel";
 import { DominoSpectatorInsights } from "@/components/games/DominoSpectatorInsights";
 import { ShareMatchButton } from "@/components/games/ShareMatchButton";
 import { GiftAnimation } from "@/components/games/GiftAnimation";
+import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { ProjectCurrencyAmount } from "@/components/ProjectCurrencySymbol";
+import { cn } from "@/lib/utils";
+import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import {
-  Crown,
-  Target,
   Clock,
   Trophy,
   MessageCircle,
@@ -73,9 +74,6 @@ import {
   Loader2,
   Volume2,
   VolumeX,
-  Dice5,
-  Spade,
-  Heart,
   UserPlus,
 } from "lucide-react";
 
@@ -340,6 +338,11 @@ export default function ChallengeGamePage() {
   } = useQuery<Challenge, Error>({
     queryKey: [`/api/challenges/${challengeId}`],
     enabled: !!challengeId,
+  });
+
+  const { data: multiplayerGames = [] } = useQuery<MultiplayerGameFromAPI[]>({
+    queryKey: ["/api/multiplayer-games"],
+    staleTime: 60000,
   });
 
   const { data: currencyPolicy } = useQuery<{
@@ -2351,27 +2354,11 @@ export default function ChallengeGamePage() {
     return undefined;
   })();
 
-  const GAME_INFO: Record<
-    string,
-    {
-      icon: React.ComponentType<{ className?: string }>;
-      nameAr: string;
-      nameEn: string;
-    }
-  > = {
-    chess: { icon: Crown, nameAr: "الشطرنج", nameEn: "Chess" },
-    domino: { icon: Target, nameAr: "الدومينو", nameEn: "Domino" },
-    backgammon: { icon: Dice5, nameAr: "الطاولة", nameEn: "Backgammon" },
-    tarneeb: { icon: Spade, nameAr: "الطرنيب", nameEn: "Tarneeb" },
-    baloot: { icon: Heart, nameAr: "البلوت", nameEn: "Baloot" },
-    languageduel: {
-      icon: MessageCircle,
-      nameAr: t("languageduel.title"),
-      nameEn: t("languageduel.title"),
-    },
-  };
-  const gameInfo = GAME_INFO[challenge.gameType] || GAME_INFO.chess;
-  const GameIcon = gameInfo.icon;
+  const multiplayerGameConfig = useMemo(
+    () => ({ ...FALLBACK_GAME_CONFIG, ...buildGameConfig(multiplayerGames) }),
+    [multiplayerGames],
+  );
+  const gameInfo = multiplayerGameConfig[challenge.gameType] || multiplayerGameConfig.chess;
   const challengeCurrencyType =
     challenge.currencyType === "project" ? "project" : "usd";
   const isProjectChallengeCurrency = challengeCurrencyType === "project";
@@ -2528,9 +2515,11 @@ export default function ChallengeGamePage() {
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
               <BackButton fallbackPath="/challenges" className="shrink-0" />
               <div className="flex items-center gap-1.5 min-w-0">
-                <GameIcon className="h-5 w-5 text-primary" />
+                <span className={cn("inline-flex h-11 w-11 items-center justify-center rounded-2xl border bg-background/80 shadow-sm", getGameIconSurfaceClass(gameInfo))}>
+                  <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={`h-7 w-7 ${gameInfo.iconUrl ? '' : getGameIconToneClass(gameInfo.color)}`} />
+                </span>
                 <span className="font-semibold truncate">
-                  {language === "ar" ? gameInfo.nameAr : gameInfo.nameEn}
+                  {language === "ar" ? gameInfo.nameAr : gameInfo.name}
                 </span>
               </div>
               <Badge

@@ -5,8 +5,14 @@ import {
   Gem,
   Gamepad2,
   Dice5,
+  Dices,
+  CircleDot,
+  TrendingUp,
+  Star,
+  Trophy,
   Spade,
   Heart,
+  type LucideIcon,
 } from "lucide-react";
 
 /** Shape returned by GET /api/multiplayer-games */
@@ -28,7 +34,7 @@ export interface MultiplayerGameFromAPI {
 export interface GameConfigItem {
   name: string;
   nameAr: string;
-  icon: typeof Crown;
+  icon: LucideIcon;
   color: string;
   gradient: string;
   minStake?: number;
@@ -68,8 +74,70 @@ function resolveGameIconUrl(game: MultiplayerGameFromAPI): string | undefined {
   return withVersionSuffix(imagePath, versionSeed);
 }
 
+const ADMIN_GAME_ICON_COMPONENTS: Record<string, LucideIcon> = {
+  Crown,
+  Shuffle,
+  Target,
+  Gem,
+  Gamepad2,
+  TrendingUp,
+  Dices,
+  CircleDot,
+  Star,
+  Trophy,
+};
+
+function resolveConfiguredGameIcon(iconName: string | undefined, fallback: LucideIcon): LucideIcon {
+  if (!iconName) {
+    return fallback;
+  }
+
+  const normalized = iconName.trim();
+  if (!normalized || isImagePath(normalized)) {
+    return fallback;
+  }
+
+  return ADMIN_GAME_ICON_COMPONENTS[normalized] || fallback;
+}
+
+export function getGameIconToneClass(colorClasses?: string): string {
+  if (!colorClasses) {
+    return "text-primary";
+  }
+
+  const textColorClass = colorClasses
+    .split(/\s+/)
+    .find((token) => token.startsWith("text-"));
+
+  return textColorClass || "text-primary";
+}
+
+export function getGameIconSurfaceClass(config?: Pick<GameConfigItem, "color" | "iconUrl"> | null): string {
+  if (!config) {
+    return "bg-muted/60 text-foreground border-border";
+  }
+
+  if (config.iconUrl) {
+    return "bg-muted/60 text-foreground border-border";
+  }
+
+  const colorClasses = config.color?.trim();
+  if (!colorClasses) {
+    return "bg-muted/60 text-foreground border-border";
+  }
+
+  const hasBackground = /(^|\s)bg-/.test(colorClasses);
+  const hasBorder = /(^|\s)border-/.test(colorClasses);
+
+  if (hasBackground && hasBorder) {
+    return colorClasses;
+  }
+
+  return `bg-muted/60 border-border ${colorClasses}`.trim();
+}
+
 /** Icon + style mapping per game key */
-export const GAME_ICON_STYLES: Record<string, { icon: typeof Crown; color: string; gradient: string }> = {
+export const GAME_ICON_STYLES: Record<string, { icon: LucideIcon; color: string; gradient: string }> = {
   chess: { icon: Crown, color: "bg-amber-500/20 text-amber-500 border-amber-500/30", gradient: "from-amber-500/20 to-amber-600/10" },
   domino: { icon: Target, color: "bg-blue-500/20 text-blue-500 border-blue-500/30", gradient: "from-blue-500/20 to-blue-600/10" },
   backgammon: { icon: Shuffle, color: "bg-emerald-500/20 text-emerald-500 border-emerald-500/30", gradient: "from-emerald-500/20 to-emerald-600/10" },
@@ -86,7 +154,7 @@ export const DEFAULT_GAME_STYLE = {
 };
 
 /** Simple icon-only map (used by game-history fallback) */
-export const GAME_ICONS_SIMPLE: Record<string, typeof Crown> = {
+export const GAME_ICONS_SIMPLE: Record<string, LucideIcon> = {
   chess: Crown,
   domino: Target,
   backgammon: Dice5,
@@ -118,7 +186,7 @@ export function buildGameConfig(apiGames: MultiplayerGameFromAPI[] | undefined):
     config[game.key] = {
       name: game.nameEn,
       nameAr: game.nameAr,
-      icon: style.icon,
+      icon: resolveConfiguredGameIcon(game.iconName, style.icon),
       color: style.color,
       gradient: style.gradient,
       minStake: parseFloat(game.minStake),

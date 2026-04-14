@@ -17,6 +17,7 @@ import { BackButton } from "@/components/BackButton";
 import { EmptyState } from "@/components/EmptyState";
 import { GameCardSkeletonGrid } from "@/components/skeletons";
 import { QueryErrorState } from "@/components/QueryErrorState";
+import { GameConfigIcon } from "@/components/GameConfigIcon";
 import {
   Gamepad2,
   Users,
@@ -39,7 +40,7 @@ import {
   X,
   Gift
 } from "lucide-react";
-import { type GameConfigItem, type MultiplayerGameFromAPI, buildGameConfig, DEFAULT_GAME_STYLE } from "@/lib/game-config";
+import { type GameConfigItem, type MultiplayerGameFromAPI, buildGameConfig, DEFAULT_GAME_STYLE, getGameIconSurfaceClass, getGameIconToneClass } from "@/lib/game-config";
 
 interface Challenge {
   id: string;
@@ -137,8 +138,6 @@ const ChallengeRow = memo(function ChallengeRow({
 }: ChallengeRowProps) {
   const fallbackConfig = { name: challenge.gameType, nameAr: challenge.gameType, icon: Gamepad2, color: DEFAULT_GAME_STYLE.color, gradient: DEFAULT_GAME_STYLE.gradient };
   const config = gameConfig[challenge.gameType] || fallbackConfig;
-  const Icon = config.icon;
-  const iconImageUrl = config.iconUrl;
 
   return (
     <div
@@ -149,12 +148,12 @@ const ChallengeRow = memo(function ChallengeRow({
         <Badge className="absolute -top-2 -end-2 bg-primary text-xs px-1.5 z-10">{t('lobby.new')}</Badge>
       )}
 
-      <div className={`p-2 rounded-lg border shrink-0 ${iconImageUrl ? "bg-muted/60 border-border" : config.color}`}>
-        {iconImageUrl ? (
-          <img src={iconImageUrl} alt="" className="w-5 h-5 object-contain" loading="lazy" decoding="async" />
-        ) : (
-          <Icon className="w-5 h-5" />
-        )}
+      <div className={`p-2.5 rounded-xl border shrink-0 ${config.iconUrl ? "bg-muted/60 border-border" : config.color}`}>
+        <GameConfigIcon
+          config={config}
+          fallbackIcon={Gamepad2}
+          className={`w-6 h-6 ${config.iconUrl ? "" : getGameIconToneClass(config.color)}`}
+        />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -268,9 +267,6 @@ const GameCard = memo(function GameCard({
   onQuickMatch,
   t
 }: GameCardProps) {
-  const Icon = config.icon;
-  const iconImageUrl = config.iconUrl;
-
   return (
     <Card
       className={`hover-elevate cursor-pointer transition-all overflow-hidden ${isSelected ? 'ring-2 ring-primary' : ''}`}
@@ -281,12 +277,12 @@ const GameCard = memo(function GameCard({
       <CardContent className="p-3 sm:p-4 relative">
         <div className="flex flex-col gap-3">
           <div className="flex items-start justify-between gap-2">
-            <div className={`p-2.5 sm:p-3 rounded-lg border shrink-0 ${iconImageUrl ? "bg-muted/60 border-border" : config.color}`}>
-              {iconImageUrl ? (
-                <img src={iconImageUrl} alt="" className="w-5 h-5 sm:w-6 sm:h-6 object-contain" loading="lazy" decoding="async" />
-              ) : (
-                <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
-              )}
+            <div className={`p-3 sm:p-[14px] rounded-xl border shrink-0 ${config.iconUrl ? "bg-muted/60 border-border" : config.color}`}>
+              <GameConfigIcon
+                config={config}
+                fallbackIcon={Gamepad2}
+                className={`w-6 h-6 sm:w-7 sm:h-7 ${config.iconUrl ? "" : getGameIconToneClass(config.color)}`}
+              />
             </div>
             <div className="flex items-center gap-1 flex-wrap justify-end">
               {isTrending && (
@@ -595,7 +591,6 @@ export default function GameLobbyPage() {
               {t('lobby.allGames')}
             </Button>
             {Object.entries(GAME_CONFIG).map(([gameType, config]) => {
-              const Icon = config.icon;
               const isSelected = selectedGame === gameType;
               const matchCount = gameStats[gameType]?.waiting || 0;
 
@@ -608,7 +603,11 @@ export default function GameLobbyPage() {
                   className={`gap-2 min-h-[40px] ${isSelected ? '' : config.color}`}
                   data-testid={`button-filter-${gameType}`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <GameConfigIcon
+                    config={config}
+                    fallbackIcon={Gamepad2}
+                    className={`w-5 h-5 ${config.iconUrl ? "" : getGameIconToneClass(config.color)}`}
+                  />
                   <span className="hidden sm:inline">{language === 'ar' ? config.nameAr : config.name}</span>
                   {matchCount > 0 && (
                     <Badge variant="secondary" className="ms-1 h-5 px-1.5 text-xs">
@@ -830,11 +829,14 @@ export default function GameLobbyPage() {
               <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
                 {(() => {
                   const config = GAME_CONFIG[quickMatchGame];
-                  const Icon = config?.icon || Gamepad2;
                   return (
                     <>
-                      <div className={`p-3 rounded-lg ${config?.color || ''} border`}>
-                        <Icon className="w-6 h-6" />
+                      <div className={`rounded-2xl border p-3.5 ${getGameIconSurfaceClass(config)}`}>
+                        <GameConfigIcon
+                          config={config}
+                          fallbackIcon={Gamepad2}
+                          className={`h-8 w-8 ${config?.iconUrl ? "" : getGameIconToneClass(config?.color)}`}
+                        />
                       </div>
                       <div>
                         <h3 className="font-semibold">

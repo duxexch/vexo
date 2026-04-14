@@ -1,12 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
+import { buildGameConfig, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import { cn } from "@/lib/utils";
 import {
   Crown,
@@ -14,6 +16,7 @@ import {
   Shuffle,
   Gem,
   Gamepad2,
+  type LucideIcon,
   Play,
   Eye,
   Users,
@@ -42,7 +45,8 @@ interface GameConfig {
   nameAr: string;
   descriptionEn: string;
   descriptionAr: string;
-  icon: typeof Crown;
+  icon: LucideIcon;
+  iconUrl?: string;
   gradient: string;
   accentColor: string;
   players: string;
@@ -209,6 +213,31 @@ export default function GamesCatalogPage() {
     staleTime: 30000,
   });
 
+  const { data: apiGames = [] } = useQuery<MultiplayerGameFromAPI[]>({
+    queryKey: ["/api/multiplayer-games"],
+    staleTime: 60000,
+  });
+
+  const multiplayerGameConfig = useMemo(() => buildGameConfig(apiGames), [apiGames]);
+
+  const catalogGames = useMemo(
+    () => GAME_CATALOG.map((game) => {
+      const dynamicConfig = multiplayerGameConfig[game.key];
+      if (!dynamicConfig) {
+        return game;
+      }
+
+      return {
+        ...game,
+        nameEn: dynamicConfig.name,
+        nameAr: dynamicConfig.nameAr,
+        icon: dynamicConfig.icon,
+        iconUrl: dynamicConfig.iconUrl,
+      };
+    }),
+    [multiplayerGameConfig],
+  );
+
   useEffect(() => {
     const totalPlayers = liveMatches.length * 2;
     const totalSpectators = liveMatches.reduce((sum, m) => sum + (m.spectatorCount || 0), 0);
@@ -321,9 +350,8 @@ export default function GamesCatalogPage() {
 
       <div className="max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-8 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {GAME_CATALOG.map((game) => {
+          {catalogGames.map((game) => {
             const liveCount = getGameLiveCount(game.key);
-            const Icon = game.icon;
             const isSelected = selectedGame === game.key;
 
             return (
@@ -351,11 +379,11 @@ export default function GamesCatalogPage() {
                   <div className="flex items-start gap-4 mb-4">
                     <div
                       className={cn(
-                        "p-4 rounded-2xl bg-background/80 backdrop-blur-sm border shadow-lg transition-transform group-hover:scale-110",
-                        game.accentColor
+                        "rounded-[20px] border bg-background/80 p-5 shadow-lg backdrop-blur-sm transition-transform group-hover:scale-110",
+                        game.iconUrl ? "border-border" : game.accentColor
                       )}
                     >
-                      <Icon className="w-8 h-8" />
+                      <GameConfigIcon config={game} fallbackIcon={game.icon} className="h-10 w-10 sm:h-11 sm:w-11" />
                     </div>
                     <div className="flex-1">
                       <h2 className="text-xl font-bold mb-1">
@@ -531,8 +559,7 @@ export default function GamesCatalogPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {liveMatches.slice(0, 6).map((match) => {
-                const gameConfig = GAME_CATALOG.find((g) => g.key === match.gameType);
-                const Icon = gameConfig?.icon || Gamepad2;
+                const gameConfig = catalogGames.find((g) => g.key === match.gameType);
 
                 return (
                   <Card
@@ -544,8 +571,8 @@ export default function GamesCatalogPage() {
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <div className={cn("p-1.5 rounded-lg bg-muted", gameConfig?.accentColor)}>
-                            <Icon className="w-4 h-4" />
+                          <div className={cn("rounded-xl border bg-muted/70 p-2", gameConfig?.iconUrl ? "border-border" : gameConfig?.accentColor)}>
+                            <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig?.icon || Gamepad2} className="h-6 w-6" />
                           </div>
                           <span className="text-sm font-medium">
                             {language === "ar" ? gameConfig?.nameAr : gameConfig?.nameEn}

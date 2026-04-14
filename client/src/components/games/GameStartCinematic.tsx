@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import { cinematicSounds } from '@/lib/cinematic-sounds';
 import { Swords, Crown, Users, Eye } from 'lucide-react';
+import { GameConfigIcon } from '@/components/GameConfigIcon';
+import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from '@/lib/game-config';
 
 // ── Types ──
 
@@ -33,15 +36,6 @@ interface GameStartCinematicProps {
   /** Called when cinematic finishes */
   onComplete: () => void;
 }
-
-// ── Game icons/emoji ──
-const GAME_INFO: Record<string, { icon: string; label: { en: string; ar: string } }> = {
-  chess:      { icon: '♟️', label: { en: 'Chess', ar: 'شطرنج' } },
-  backgammon: { icon: '🎲', label: { en: 'Backgammon', ar: 'طاولة' } },
-  domino:     { icon: '🁣', label: { en: 'Domino', ar: 'دومينو' } },
-  tarneeb:    { icon: '🃏', label: { en: 'Tarneeb', ar: 'طرنيب' } },
-  baloot:     { icon: '🂡', label: { en: 'Baloot', ar: 'بلوت' } },
-};
 
 // ── Phases ──
 type Phase = 'enter' | 'vs' | 'countdown' | 'go' | 'done';
@@ -89,7 +83,7 @@ function getWinRate(p: PlayerInfo): string {
 function PlayerAvatar({ player, size = 'lg', side }: { player: PlayerInfo; size?: 'sm' | 'lg'; side?: 'left' | 'right' }) {
   const sizeClass = size === 'lg' ? 'w-20 h-20 text-3xl' : 'w-14 h-14 text-xl';
   const initial = (player.username || 'P').charAt(0).toUpperCase();
-  
+
   return (
     <div className={cn(
       "relative rounded-full flex items-center justify-center font-bold shadow-2xl border-2 border-white/20",
@@ -117,16 +111,16 @@ function PlayerAvatar({ player, size = 'lg', side }: { player: PlayerInfo; size?
 }
 
 // ── Player Card ──
-function PlayerCard({ 
-  player, side, phase, isTeamGame 
-}: { 
-  player: PlayerInfo; side: 'left' | 'right'; phase: Phase; isTeamGame?: boolean 
+function PlayerCard({
+  player, side, phase, isTeamGame
+}: {
+  player: PlayerInfo; side: 'left' | 'right'; phase: Phase; isTeamGame?: boolean
 }) {
   const { language } = useI18n();
   const isAr = language === 'ar';
   const enterFrom = side === 'left' ? '-translate-x-[120%]' : 'translate-x-[120%]';
   const isVisible = phase !== 'enter' || false;
-  
+
   return (
     <div
       className={cn(
@@ -180,8 +174,18 @@ export function GameStartCinematic({
   const completedRef = useRef(false);
   const particles = useMemo(() => generateParticles(40), []);
 
+  const { data: multiplayerGames = [] } = useQuery<MultiplayerGameFromAPI[]>({
+    queryKey: ['/api/multiplayer-games'],
+    staleTime: 60000,
+  });
+
+  const multiplayerGameConfig = useMemo(
+    () => ({ ...FALLBACK_GAME_CONFIG, ...buildGameConfig(multiplayerGames) }),
+    [multiplayerGames],
+  );
+
   const isTeamGame = gameType === 'tarneeb' || gameType === 'baloot';
-  const gameInfo = GAME_INFO[gameType] || GAME_INFO.chess;
+  const gameInfo = multiplayerGameConfig[gameType] || multiplayerGameConfig.chess;
 
   const finish = useCallback(() => {
     if (completedRef.current) return;
@@ -253,9 +257,9 @@ export function GameStartCinematic({
     >
       {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950" />
-      
+
       {/* Radial glow */}
-      <div 
+      <div
         className="absolute inset-0 opacity-40"
         style={{
           background: 'radial-gradient(ellipse at center, rgba(59,130,246,0.3) 0%, rgba(168,85,247,0.15) 40%, transparent 70%)',
@@ -263,7 +267,7 @@ export function GameStartCinematic({
       />
 
       {/* Animated grid lines */}
-      <div 
+      <div
         className="absolute inset-0 opacity-[0.04]"
         style={{
           backgroundImage: `
@@ -294,16 +298,24 @@ export function GameStartCinematic({
 
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center gap-6 px-4 w-full max-w-2xl">
-        
+
         {/* Game badge */}
         <div className={cn(
           "flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm",
           "transition-all duration-500",
           phase === 'enter' ? 'opacity-0 -translate-y-4' : 'opacity-100 translate-y-0'
         )}>
-          <span className="text-lg">{gameInfo.icon}</span>
+          <span className={cn("inline-flex items-center justify-center rounded-xl border p-2", getGameIconSurfaceClass(gameInfo))}>
+            <GameConfigIcon
+              config={gameInfo}
+              fallbackIcon={gameInfo.icon}
+              className={cn('h-6 w-6', !gameInfo.iconUrl && getGameIconToneClass(gameInfo.color))}
+              decorative={false}
+              alt={isAr ? gameInfo.nameAr : gameInfo.name}
+            />
+          </span>
           <span className="text-sm font-medium text-white/80">
-            {isAr ? gameInfo.label.ar : gameInfo.label.en}
+            {isAr ? gameInfo.nameAr : gameInfo.name}
           </span>
         </div>
 
@@ -333,7 +345,7 @@ export function GameStartCinematic({
               </div>
               {/* Expanding ring */}
               {phase === 'vs' && (
-                <div 
+                <div
                   className="absolute inset-0 rounded-full border-2 border-amber-400/40"
                   style={{ animation: 'cinematicRingExpand 0.8s ease-out forwards' }}
                 />
@@ -383,7 +395,7 @@ export function GameStartCinematic({
                 <Swords className="w-6 h-6 text-white drop-shadow-lg" />
               </div>
               {phase === 'vs' && (
-                <div 
+                <div
                   className="absolute inset-0 rounded-full border-2 border-amber-400/40"
                   style={{ animation: 'cinematicRingExpand 0.8s ease-out forwards' }}
                 />
@@ -397,7 +409,7 @@ export function GameStartCinematic({
               "transition-all duration-700",
               phase === 'enter' ? 'translate-y-10 opacity-0' : 'translate-y-0 opacity-100'
             )}
-            style={{ transitionDelay: '150ms' }}
+              style={{ transitionDelay: '150ms' }}
             >
               <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
                 {isAr ? 'الفريق ٢' : 'Team 2'}

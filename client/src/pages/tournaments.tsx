@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,21 +12,14 @@ import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { BackButton } from "@/components/BackButton";
+import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import {
-  Trophy, Users, Clock, Crown, Swords, Shield,
-  DollarSign, Calendar, ChevronRight, Gamepad2,
-  Target, Gem, ArrowRight, Timer, Filter
+  Trophy, Users, Clock, Swords,
+  DollarSign, Calendar, ChevronRight,
+  ArrowRight, Timer, Filter
 } from "lucide-react";
-
-const GAME_ICONS: Record<string, { icon: typeof Crown; color: string; name: string; nameAr: string }> = {
-  chess: { icon: Crown, name: 'Chess', nameAr: 'شطرنج', color: 'text-amber-500' },
-  backgammon: { icon: Shield, name: 'Backgammon', nameAr: 'طاولة', color: 'text-emerald-500' },
-  domino: { icon: Target, name: 'Domino', nameAr: 'دومينو', color: 'text-blue-500' },
-  tarneeb: { icon: Gem, name: 'Tarneeb', nameAr: 'طرنيب', color: 'text-purple-500' },
-  baloot: { icon: Gem, name: 'Baloot', nameAr: 'بلوت', color: 'text-rose-500' },
-  snake: { icon: Gamepad2, name: 'Snake Arena', nameAr: 'أرينا الثعبان', color: 'text-indigo-500' },
-};
 
 const STATUS_COLORS: Record<string, string> = {
   upcoming: 'bg-blue-500',
@@ -72,6 +65,18 @@ function useCountdown(targetDate: string | null) {
   }, [targetDate]);
 
   return timeLeft;
+}
+
+function useTournamentGameConfig() {
+  const { data: multiplayerGames = [] } = useQuery<MultiplayerGameFromAPI[]>({
+    queryKey: ['/api/multiplayer-games'],
+    staleTime: 60000,
+  });
+
+  return useMemo(
+    () => ({ ...FALLBACK_GAME_CONFIG, ...buildGameConfig(multiplayerGames) }),
+    [multiplayerGames],
+  );
 }
 
 interface TournamentListItem {
@@ -176,6 +181,7 @@ function TournamentListView() {
   const [, navigate] = useLocation();
   const [listTab, setListTab] = useState<'all' | 'mine'>('all');
   const en = language === 'en';
+  const tournamentGameConfig = useTournamentGameConfig();
 
   const { data: tournaments = [], isLoading } = useQuery<TournamentListItem[]>({
     queryKey: ['/api/tournaments'],
@@ -256,8 +262,7 @@ function TournamentListView() {
       ) : (
         <div className="space-y-4">
           {displayList.map(t => {
-            const gameInfo = GAME_ICONS[t.gameType] || GAME_ICONS.chess;
-            const GameIcon = gameInfo.icon;
+            const gameInfo = tournamentGameConfig[t.gameType] || tournamentGameConfig.chess;
             const isUpcoming = t.status === 'upcoming' || t.status === 'registration';
             return (
               <Card
@@ -267,8 +272,8 @@ function TournamentListView() {
               >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3 sm:gap-4">
-                    <div className={`p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-muted to-muted/50`}>
-                      <GameIcon className={`w-8 h-8 ${gameInfo.color}`} />
+                    <div className={`rounded-2xl border bg-gradient-to-br from-muted to-muted/50 p-3 sm:p-3.5 ${getGameIconSurfaceClass(gameInfo)}`}>
+                      <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={`h-10 w-10 ${gameInfo.iconUrl ? '' : getGameIconToneClass(gameInfo.color)}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -281,7 +286,9 @@ function TournamentListView() {
                       </div>
                       <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
-                          <Gamepad2 className="w-4 h-4" />
+                          <span className={`inline-flex items-center justify-center rounded-lg border p-1 ${getGameIconSurfaceClass(gameInfo)}`}>
+                            <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={`h-4 w-4 ${gameInfo.iconUrl ? '' : getGameIconToneClass(gameInfo.color)}`} />
+                          </span>
                           {en ? gameInfo.name : gameInfo.nameAr}
                         </span>
                         <span className="flex items-center gap-1">
@@ -326,6 +333,7 @@ function TournamentDetailView({ id }: { id: string }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const en = language === 'en';
+  const tournamentGameConfig = useTournamentGameConfig();
 
   const { data: tournament, isLoading } = useQuery<TournamentDetail>({
     queryKey: ['/api/tournaments', id],
@@ -384,8 +392,7 @@ function TournamentDetailView({ id }: { id: string }) {
     );
   }
 
-  const gameInfo = GAME_ICONS[tournament.gameType] || GAME_ICONS.chess;
-  const GameIcon = gameInfo.icon;
+  const gameInfo = tournamentGameConfig[tournament.gameType] || tournamentGameConfig.chess;
   const canRegister = (tournament.status === 'registration' || tournament.status === 'upcoming') && !tournament.isRegistered;
   const canWithdraw = (tournament.status === 'registration' || tournament.status === 'upcoming') && tournament.isRegistered;
 
@@ -418,23 +425,28 @@ function TournamentDetailView({ id }: { id: string }) {
     <div className="container max-w-5xl mx-auto min-h-[100svh] p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-5 sm:space-y-6" dir={dir}>
       <div className="flex items-start sm:items-center gap-3 sm:gap-4">
         <BackButton />
-        <div className="flex-1">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <h1 className="text-xl sm:text-2xl font-bold">{en ? tournament.name : tournament.nameAr}</h1>
-            <Badge className={`${STATUS_COLORS[tournament.status]} text-white`}>
-              {statusLabel(tournament.status)}
-            </Badge>
+        <div className="flex flex-1 items-start gap-3">
+          <div className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border bg-muted/40 shadow-sm ${getGameIconSurfaceClass(gameInfo)}`}>
+            <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={`h-8 w-8 ${gameInfo.iconUrl ? '' : getGameIconToneClass(gameInfo.color)}`} />
           </div>
-          {(tournament.description || tournament.descriptionAr) && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {en ? tournament.description : tournament.descriptionAr}
-            </p>
-          )}
-          {(tournament.status === 'upcoming' || tournament.status === 'registration') && tournament.startsAt && (
-            <div className="mt-2">
-              <TournamentCountdown startsAt={tournament.startsAt} />
+          <div className="flex-1">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <h1 className="text-xl sm:text-2xl font-bold">{en ? tournament.name : tournament.nameAr}</h1>
+              <Badge className={`${STATUS_COLORS[tournament.status]} text-white`}>
+                {statusLabel(tournament.status)}
+              </Badge>
             </div>
-          )}
+            {(tournament.description || tournament.descriptionAr) && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {en ? tournament.description : tournament.descriptionAr}
+              </p>
+            )}
+            {(tournament.status === 'upcoming' || tournament.status === 'registration') && tournament.startsAt && (
+              <div className="mt-2">
+                <TournamentCountdown startsAt={tournament.startsAt} />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -442,7 +454,9 @@ function TournamentDetailView({ id }: { id: string }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-3 text-center">
-            <GameIcon className={`w-6 h-6 mx-auto ${gameInfo.color} mb-1`} />
+            <div className={`mx-auto mb-1 inline-flex h-11 w-11 items-center justify-center rounded-2xl border bg-muted/40 ${getGameIconSurfaceClass(gameInfo)}`}>
+              <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={`h-8 w-8 ${gameInfo.iconUrl ? '' : getGameIconToneClass(gameInfo.color)}`} />
+            </div>
             <div className="text-sm font-bold">{en ? gameInfo.name : gameInfo.nameAr}</div>
             <div className="text-xs text-muted-foreground">{en ? 'Game' : 'اللعبة'}</div>
           </CardContent>
