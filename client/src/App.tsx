@@ -28,6 +28,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Gamepad2,
+  Dices,
+  Clock3,
+  Medal,
   DollarSign,
   AlertTriangle,
   Settings,
@@ -87,6 +90,37 @@ const SupportPage = lazy(() => import("@/pages/support"));
 const ChatPage = lazy(() => import("@/pages/chat"));
 const ChallengeGamePage = lazy(() => import("@/pages/challenge-game"));
 type MenuItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; key: string; hasBadge?: boolean };
+
+const GAME_NAV_ICON_ACCENTS: Record<string, { active: string; inactive: string }> = {
+  multiplayer: {
+    active: "bg-gradient-to-br from-blue-500 via-cyan-500 to-indigo-500 border-cyan-200/50",
+    inactive: "bg-gradient-to-br from-blue-500/85 via-cyan-500/85 to-indigo-500/85 border-cyan-200/35",
+  },
+  "game-management": {
+    active: "bg-gradient-to-br from-fuchsia-500 via-violet-500 to-indigo-500 border-violet-200/50",
+    inactive: "bg-gradient-to-br from-fuchsia-500/85 via-violet-500/85 to-indigo-500/85 border-violet-200/35",
+  },
+  challenges: {
+    active: "bg-gradient-to-br from-rose-500 via-red-500 to-orange-500 border-rose-200/50",
+    inactive: "bg-gradient-to-br from-rose-500/85 via-red-500/85 to-orange-500/85 border-rose-200/35",
+  },
+  tournaments: {
+    active: "bg-gradient-to-br from-amber-500 via-yellow-500 to-orange-500 border-amber-200/50",
+    inactive: "bg-gradient-to-br from-amber-500/85 via-yellow-500/85 to-orange-500/85 border-amber-200/35",
+  },
+  "game-history": {
+    active: "bg-gradient-to-br from-sky-500 via-blue-500 to-cyan-500 border-sky-200/50",
+    inactive: "bg-gradient-to-br from-sky-500/85 via-blue-500/85 to-cyan-500/85 border-sky-200/35",
+  },
+  lobby: {
+    active: "bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 border-emerald-200/50",
+    inactive: "bg-gradient-to-br from-emerald-500/85 via-teal-500/85 to-cyan-500/85 border-emerald-200/35",
+  },
+  leaderboard: {
+    active: "bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 border-orange-200/50",
+    inactive: "bg-gradient-to-br from-orange-500/85 via-amber-500/85 to-yellow-500/85 border-orange-200/35",
+  },
+};
 
 const ChallengeWatchPage = lazy(() => import("@/pages/challenge-watch"));
 const ChessGamePage = lazy(() => import("@/pages/games/ChessGame"));
@@ -200,9 +234,9 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
     { title: t('nav.multiplayer'), url: "/multiplayer", icon: Gamepad2, key: "multiplayer" },
     { title: t('nav.challenges'), url: "/challenges", icon: Swords, key: "challenges" },
     { title: t('nav.tournaments'), url: "/tournaments", icon: Trophy, key: "tournaments" },
-    { title: t('nav.gameHistory'), url: "/games/history", icon: Trophy, key: "game-history" },
+    { title: t('nav.gameHistory'), url: "/games/history", icon: Clock3, key: "game-history" },
     { title: t('nav.lobby'), url: "/lobby", icon: Users, key: "lobby" },
-    { title: t('nav.leaderboard'), url: "/leaderboard", icon: Trophy, key: "leaderboard" },
+    { title: t('nav.leaderboard'), url: "/leaderboard", icon: Medal, key: "leaderboard" },
     { title: t('nav.profile'), url: "/profile", icon: User, key: "profile" },
     { title: t('nav.friends'), url: "/friends", icon: Users, key: "friends" },
     { title: t('nav.chat'), url: "/chat", icon: MessageCircle, key: "chat" },
@@ -222,13 +256,13 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
     { title: t('nav.dashboard'), url: "/", icon: LayoutDashboard, key: "dashboard" },
     { title: t('nav.wallet'), url: "/wallet", icon: Wallet, key: "wallet" },
     { title: t('nav.multiplayer'), url: "/multiplayer", icon: Gamepad2, key: "multiplayer" },
-    { title: t('nav.gameManagement'), url: "/games", icon: Gamepad2, key: "game-management" },
+    { title: t('nav.gameManagement'), url: "/games", icon: Dices, key: "game-management" },
     { title: t('nav.announcements'), url: "/admin/announcements", icon: Megaphone, key: "announcements" },
     { title: t('nav.challenges'), url: "/challenges", icon: Swords, key: "challenges" },
     { title: t('nav.tournaments'), url: "/tournaments", icon: Trophy, key: "tournaments" },
-    { title: t('nav.gameHistory'), url: "/games/history", icon: Trophy, key: "game-history" },
+    { title: t('nav.gameHistory'), url: "/games/history", icon: Clock3, key: "game-history" },
     { title: t('nav.lobby'), url: "/lobby", icon: Users, key: "lobby" },
-    { title: t('nav.leaderboard'), url: "/leaderboard", icon: Trophy, key: "leaderboard" },
+    { title: t('nav.leaderboard'), url: "/leaderboard", icon: Medal, key: "leaderboard" },
     { title: t('nav.profile'), url: "/profile", icon: User, key: "profile" },
     { title: t('nav.friends'), url: "/friends", icon: Users, key: "friends" },
     { title: t('nav.chat'), url: "/chat", icon: MessageCircle, key: "chat" },
@@ -266,6 +300,7 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
               {menuItems.map((item) => {
                 const badgeCount = item.key === 'notifications' ? unreadCount : (sectionCounts[item.key] || 0);
                 const isActive = location === item.url;
+                const accent = GAME_NAV_ICON_ACCENTS[item.key];
                 return (
                   <SidebarMenuItem key={item.key}>
                     <SidebarMenuButton
@@ -276,7 +311,15 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
                       data-testid={`link-${item.key}`}
                     >
                       <div className="relative">
-                        <item.icon />
+                        {accent ? (
+                          <span
+                            className={`inline-flex h-6 w-6 items-center justify-center rounded-md border shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_4px_12px_rgba(0,0,0,0.28)] ${isActive ? accent.active : accent.inactive}`}
+                          >
+                            <item.icon className="h-4 w-4 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" />
+                          </span>
+                        ) : (
+                          <item.icon />
+                        )}
                         {badgeCount > 0 && !isActive && (
                           <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none px-1">
                             {badgeCount > 99 ? "99+" : badgeCount}

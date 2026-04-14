@@ -464,11 +464,11 @@ export default function PlayerProfilePage() {
                   <div key={game.game} className="space-y-2">
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center justify-center rounded-xl border p-2 ${getGameIconSurfaceClass(config)}`}>
+                        <span className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border p-1 ${getGameIconSurfaceClass(config)}`}>
                           <GameConfigIcon
                             config={config}
                             fallbackIcon={Gamepad2}
-                            className={`h-7 w-7 ${config.iconUrl ? "" : getGameIconToneClass(config.color)}`}
+                            className={config.iconUrl ? "h-full w-full" : `h-7 w-7 ${getGameIconToneClass(config.color)}`}
                           />
                         </span>
                         <span className="font-medium">
@@ -527,13 +527,13 @@ export default function PlayerProfilePage() {
                           className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 hover-elevate"
                           data-testid={`row-match-${match.id}`}
                         >
-                          <div className={`rounded-xl border p-2.5 ${match.result === 'win' ? 'bg-green-500/20 border-green-500/20' :
+                          <div className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border p-1 ${match.result === 'win' ? 'bg-green-500/20 border-green-500/20' :
                             match.result === 'loss' ? 'bg-red-500/20' : 'bg-gray-500/20'
                             } ${match.result === 'loss' ? 'border-red-500/20' : match.result === 'draw' ? 'border-gray-500/20' : ''}`}>
                             <GameConfigIcon
                               config={config}
                               fallbackIcon={Gamepad2}
-                              className={`h-7 w-7 ${config.iconUrl ? "" : getGameIconToneClass(config.color)}`}
+                              className={config.iconUrl ? "h-full w-full" : `h-7 w-7 ${getGameIconToneClass(config.color)}`}
                             />
                           </div>
 

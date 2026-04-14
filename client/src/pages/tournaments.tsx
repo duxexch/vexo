@@ -272,8 +272,8 @@ function TournamentListView() {
               >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3 sm:gap-4">
-                    <div className={`rounded-2xl border bg-gradient-to-br from-muted to-muted/50 p-3 sm:p-3.5 ${getGameIconSurfaceClass(gameInfo)}`}>
-                      <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={`h-10 w-10 ${gameInfo.iconUrl ? '' : getGameIconToneClass(gameInfo.color)}`} />
+                    <div className={`inline-flex h-14 w-14 items-center justify-center rounded-2xl border bg-gradient-to-br from-muted to-muted/50 p-1.5 sm:h-[58px] sm:w-[58px] ${getGameIconSurfaceClass(gameInfo)}`}>
+                      <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={gameInfo.iconUrl ? "h-full w-full" : `h-10 w-10 ${getGameIconToneClass(gameInfo.color)}`} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -286,8 +286,8 @@ function TournamentListView() {
                       </div>
                       <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
-                          <span className={`inline-flex items-center justify-center rounded-lg border p-1 ${getGameIconSurfaceClass(gameInfo)}`}>
-                            <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={`h-4 w-4 ${gameInfo.iconUrl ? '' : getGameIconToneClass(gameInfo.color)}`} />
+                          <span className={`inline-flex h-6 w-6 items-center justify-center rounded-lg border p-0.5 ${getGameIconSurfaceClass(gameInfo)}`}>
+                            <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={gameInfo.iconUrl ? "h-full w-full" : `h-4 w-4 ${getGameIconToneClass(gameInfo.color)}`} />
                           </span>
                           {en ? gameInfo.name : gameInfo.nameAr}
                         </span>
@@ -426,8 +426,8 @@ function TournamentDetailView({ id }: { id: string }) {
       <div className="flex items-start sm:items-center gap-3 sm:gap-4">
         <BackButton />
         <div className="flex flex-1 items-start gap-3">
-          <div className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border bg-muted/40 shadow-sm ${getGameIconSurfaceClass(gameInfo)}`}>
-            <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={`h-8 w-8 ${gameInfo.iconUrl ? '' : getGameIconToneClass(gameInfo.color)}`} />
+          <div className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border bg-muted/40 p-1 shadow-sm ${getGameIconSurfaceClass(gameInfo)}`}>
+            <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={gameInfo.iconUrl ? "h-full w-full" : `h-8 w-8 ${getGameIconToneClass(gameInfo.color)}`} />
           </div>
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -454,8 +454,8 @@ function TournamentDetailView({ id }: { id: string }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-3 text-center">
-            <div className={`mx-auto mb-1 inline-flex h-11 w-11 items-center justify-center rounded-2xl border bg-muted/40 ${getGameIconSurfaceClass(gameInfo)}`}>
-              <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={`h-8 w-8 ${gameInfo.iconUrl ? '' : getGameIconToneClass(gameInfo.color)}`} />
+            <div className={`mx-auto mb-1 inline-flex h-11 w-11 items-center justify-center rounded-2xl border bg-muted/40 p-1 ${getGameIconSurfaceClass(gameInfo)}`}>
+              <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={gameInfo.iconUrl ? "h-full w-full" : `h-8 w-8 ${getGameIconToneClass(gameInfo.color)}`} />
             </div>
             <div className="text-sm font-bold">{en ? gameInfo.name : gameInfo.nameAr}</div>
             <div className="text-xs text-muted-foreground">{en ? 'Game' : 'اللعبة'}</div>

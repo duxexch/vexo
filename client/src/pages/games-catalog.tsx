@@ -379,11 +379,15 @@ export default function GamesCatalogPage() {
                   <div className="flex items-start gap-4 mb-4">
                     <div
                       className={cn(
-                        "rounded-[20px] border bg-background/80 p-5 shadow-lg backdrop-blur-sm transition-transform group-hover:scale-110",
+                        "inline-flex h-20 w-20 items-center justify-center rounded-[20px] border bg-background/80 p-2.5 shadow-lg backdrop-blur-sm transition-transform group-hover:scale-110",
                         game.iconUrl ? "border-border" : game.accentColor
                       )}
                     >
-                      <GameConfigIcon config={game} fallbackIcon={game.icon} className="h-10 w-10 sm:h-11 sm:w-11" />
+                      <GameConfigIcon
+                        config={game}
+                        fallbackIcon={game.icon}
+                        className={game.iconUrl ? "h-full w-full" : "h-10 w-10 sm:h-11 sm:w-11"}
+                      />
                     </div>
                     <div className="flex-1">
                       <h2 className="text-xl font-bold mb-1">
@@ -480,8 +484,8 @@ export default function GamesCatalogPage() {
                   <CardContent className="relative p-6">
                     <div className="flex items-start gap-4 mb-4">
                       {game.iconUrl ? (
-                        <div className="w-16 h-16 rounded-2xl overflow-hidden border shadow-lg transition-transform group-hover:scale-110 bg-background/80 backdrop-blur-sm">
-                          <img src={game.iconUrl} alt="" className="w-full h-full object-cover" />
+                        <div className="w-16 h-16 rounded-2xl overflow-hidden border p-1 shadow-lg transition-transform group-hover:scale-110 bg-background/80 backdrop-blur-sm">
+                          <img src={game.iconUrl} alt="" className="w-full h-full object-contain" />
                         </div>
                       ) : (
                         <div className="p-4 rounded-2xl bg-background/80 backdrop-blur-sm border shadow-lg transition-transform group-hover:scale-110">
@@ -571,8 +575,12 @@ export default function GamesCatalogPage() {
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <div className={cn("rounded-xl border bg-muted/70 p-2", gameConfig?.iconUrl ? "border-border" : gameConfig?.accentColor)}>
-                            <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig?.icon || Gamepad2} className="h-6 w-6" />
+                          <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-muted/70 p-1", gameConfig?.iconUrl ? "border-border" : gameConfig?.accentColor)}>
+                            <GameConfigIcon
+                              config={gameConfig}
+                              fallbackIcon={gameConfig?.icon || Gamepad2}
+                              className={gameConfig?.iconUrl ? "h-full w-full" : "h-6 w-6"}
+                            />
                           </div>
                           <span className="text-sm font-medium">
                             {language === "ar" ? gameConfig?.nameAr : gameConfig?.nameEn}

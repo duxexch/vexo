@@ -41,6 +41,21 @@ function buildFallbackRobots(req: Request): string {
     : (forwardedProto || (req.secure ? "https" : "http"));
   const host = req.get("host");
   const baseUrl = appUrl || (host ? `${protocol}://${host}` : "https://vixo.click");
+  const hostForDirective = (() => {
+    if (appUrl) {
+      try {
+        return new URL(appUrl).host;
+      } catch {
+        return appUrl.replace(/^https?:\/\//i, "");
+      }
+    }
+
+    if (host) {
+      return host;
+    }
+
+    return "vixo.click";
+  })();
 
   return [
     "# VEX Platform - Robots.txt (fallback)",
@@ -54,7 +69,7 @@ function buildFallbackRobots(req: Request): string {
     `Sitemap: ${baseUrl}/sitemap-core.xml`,
     `Sitemap: ${baseUrl}/sitemap.xml`,
     "",
-    `Host: ${baseUrl}`,
+    `Host: ${hostForDirective}`,
   ].join("\n");
 }
 

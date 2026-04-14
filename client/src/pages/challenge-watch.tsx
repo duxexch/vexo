@@ -1773,8 +1773,8 @@ export default function ChallengeWatchPage() {
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
               <BackButton />
               <div className="flex min-w-0 items-center gap-1.5">
-                <span className={cn("inline-flex h-11 w-11 items-center justify-center rounded-2xl border bg-background/80 shadow-sm", getGameIconSurfaceClass(gameInfo))}>
-                  <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={`h-7 w-7 ${gameInfo.iconUrl ? '' : getGameIconToneClass(gameInfo.color)}`} />
+                <span className={cn("inline-flex h-11 w-11 items-center justify-center rounded-2xl border bg-background/80 p-1 shadow-sm", getGameIconSurfaceClass(gameInfo))}>
+                  <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={gameInfo.iconUrl ? "h-full w-full" : `h-7 w-7 ${getGameIconToneClass(gameInfo.color)}`} />
                 </span>
                 <span className="font-semibold truncate">
                   {language === "ar" ? gameInfo.nameAr : gameInfo.name}

@@ -1029,7 +1029,7 @@ export default function ChallengesPage() {
               const gameConfig = getResolvedChallengeGameConfig(game.name);
               return (
                 <Badge key={gId} variant="secondary" className="gap-1.5 pe-1.5 py-1">
-                  <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className="h-[18px] w-[18px]" />
+                  <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={gameConfig.iconUrl ? "h-5 w-5" : "h-[18px] w-[18px]"} />
                   {game.name}
                   <button
                     onClick={() => setGameFilter(prev => prev.filter(id => id !== gId))}
@@ -1094,7 +1094,7 @@ export default function ChallengesPage() {
                       {isSelected ? (
                         <Check className="h-4 w-4 shrink-0" />
                       ) : (
-                        <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className="h-5 w-5 shrink-0" />
+                        <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={gameConfig.iconUrl ? "h-[22px] w-[22px] shrink-0" : "h-5 w-5 shrink-0"} />
                       )}
                       <span className="truncate">{game.name}</span>
                     </Button>
@@ -1156,8 +1156,8 @@ export default function ChallengesPage() {
                         <CardHeader className="pb-2 bg-primary/5">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              <span className={`inline-flex items-center justify-center rounded-2xl border p-2.5 ${getGameIconSurfaceClass(gameConfig)}`}>
-                                <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={`h-6 w-6 ${gameConfig.iconUrl ? '' : getGameIconToneClass(gameConfig.color)}`} />
+                              <span className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl border p-1.5 ${getGameIconSurfaceClass(gameConfig)}`}>
+                                <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={gameConfig.iconUrl ? "h-full w-full" : `h-6 w-6 ${getGameIconToneClass(gameConfig.color)}`} />
                               </span>
                               <span className="font-semibold capitalize">{language === 'ar' ? gameConfig.nameAr : gameConfig.name}</span>
                             </div>
@@ -1272,8 +1272,8 @@ export default function ChallengesPage() {
                       <CardContent className="p-4">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
-                            <div className={`rounded-2xl border p-3 ${getGameIconSurfaceClass(gameConfig)}`}>
-                              <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={`h-7 w-7 ${gameConfig.iconUrl ? '' : getGameIconToneClass(gameConfig.color)}`} />
+                            <div className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl border p-1.5 ${getGameIconSurfaceClass(gameConfig)}`}>
+                              <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={gameConfig.iconUrl ? "h-full w-full" : `h-7 w-7 ${getGameIconToneClass(gameConfig.color)}`} />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
@@ -1372,8 +1372,8 @@ export default function ChallengesPage() {
                       <CardContent className="p-4">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                           <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
-                            <div className={`rounded-2xl border p-3 ${getGameIconSurfaceClass(gameConfig)}`}>
-                              <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={`h-7 w-7 ${gameConfig.iconUrl ? '' : getGameIconToneClass(gameConfig.color)}`} />
+                            <div className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl border p-1.5 ${getGameIconSurfaceClass(gameConfig)}`}>
+                              <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={gameConfig.iconUrl ? "h-full w-full" : `h-7 w-7 ${getGameIconToneClass(gameConfig.color)}`} />
                             </div>
                             <div>
                               <p className="font-semibold capitalize">{language === 'ar' ? gameConfig.nameAr : gameConfig.name}</p>
@@ -1473,7 +1473,7 @@ export default function ChallengesPage() {
                         }}
                         data-testid={`button-game-${gameKey}`}
                       >
-                        <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className="mb-1.5 h-8 w-8" />
+                        <GameConfigIcon config={gameConfig} fallbackIcon={gameConfig.icon} className={gameConfig.iconUrl ? "mb-1.5 h-9 w-9" : "mb-1.5 h-8 w-8"} />
                         <span>{game.name}</span>
                       </Button>
                     );

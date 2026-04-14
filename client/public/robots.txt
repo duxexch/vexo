@@ -161,4 +161,4 @@ Sitemap: https://vixo.click/sitemap-core.xml
 Sitemap: https://vixo.click/sitemap.xml
 
 # Host
-Host: https://vixo.click
+Host: vixo.click

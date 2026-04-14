@@ -429,11 +429,11 @@ export default function AdminTournamentsPage() {
                 onClick={() => setSelectedTournament(tournament)}
               >
                 <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                  <div className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border bg-muted/40 ${getGameIconSurfaceClass(gameConfig)}`}>
+                  <div className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border bg-muted/40 p-1 ${getGameIconSurfaceClass(gameConfig)}`}>
                     <GameConfigIcon
                       config={gameConfig}
                       fallbackIcon={gameConfig.icon}
-                      className={`h-8 w-8 ${gameConfig.iconUrl ? "" : getGameIconToneClass(gameConfig.color)}`}
+                      className={gameConfig.iconUrl ? "h-full w-full" : `h-8 w-8 ${getGameIconToneClass(gameConfig.color)}`}
                     />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -538,11 +538,11 @@ export default function AdminTournamentsPage() {
                       return (
                         <SelectItem key={g.value} value={g.value}>
                           <span className="flex items-center gap-2">
-                            <span className={`inline-flex items-center justify-center rounded-lg border p-1.5 ${getGameIconSurfaceClass(gameConfig)}`}>
+                            <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border p-0.5 ${getGameIconSurfaceClass(gameConfig)}`}>
                               <GameConfigIcon
                                 config={gameConfig}
                                 fallbackIcon={gameConfig.icon}
-                                className={`h-4 w-4 ${gameConfig.iconUrl ? "" : getGameIconToneClass(gameConfig.color)}`}
+                                className={gameConfig.iconUrl ? "h-full w-full" : `h-4 w-4 ${getGameIconToneClass(gameConfig.color)}`}
                               />
                             </span>
                             <span>{g.label}</span>
@@ -559,11 +559,11 @@ export default function AdminTournamentsPage() {
 
                     return (
                       <>
-                        <span className={`inline-flex items-center justify-center rounded-lg border p-1.5 ${getGameIconSurfaceClass(selectedGameConfig)}`}>
+                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border p-0.5 ${getGameIconSurfaceClass(selectedGameConfig)}`}>
                           <GameConfigIcon
                             config={selectedGameConfig}
                             fallbackIcon={selectedGameConfig.icon}
-                            className={`h-4 w-4 ${selectedGameConfig.iconUrl ? "" : getGameIconToneClass(selectedGameConfig.color)}`}
+                            className={selectedGameConfig.iconUrl ? "h-full w-full" : `h-4 w-4 ${getGameIconToneClass(selectedGameConfig.color)}`}
                           />
                         </span>
                         <span>{selectedGameMeta?.label || selectedGameConfig.name}</span>
@@ -712,11 +712,11 @@ export default function AdminTournamentsPage() {
                 const selectedGameConfig = resolveTournamentGameConfig(selectedTournament.gameType);
 
                 return (
-                  <span className={`inline-flex items-center justify-center rounded-xl border p-2 ${getGameIconSurfaceClass(selectedGameConfig)}`}>
+                  <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border p-1 ${getGameIconSurfaceClass(selectedGameConfig)}`}>
                     <GameConfigIcon
                       config={selectedGameConfig}
                       fallbackIcon={selectedGameConfig.icon}
-                      className={`h-5 w-5 ${selectedGameConfig.iconUrl ? "" : getGameIconToneClass(selectedGameConfig.color)}`}
+                      className={selectedGameConfig.iconUrl ? "h-full w-full" : `h-5 w-5 ${getGameIconToneClass(selectedGameConfig.color)}`}
                     />
                   </span>
                 );
@@ -738,11 +738,11 @@ export default function AdminTournamentsPage() {
 
                 return (
                   <div className="flex items-center gap-3 rounded-2xl border bg-muted/30 p-3">
-                    <span className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl border ${getGameIconSurfaceClass(detailGameConfig)}`}>
+                    <span className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl border p-1 ${getGameIconSurfaceClass(detailGameConfig)}`}>
                       <GameConfigIcon
                         config={detailGameConfig}
                         fallbackIcon={detailGameConfig.icon}
-                        className={`h-8 w-8 ${detailGameConfig.iconUrl ? "" : getGameIconToneClass(detailGameConfig.color)}`}
+                        className={detailGameConfig.iconUrl ? "h-full w-full" : `h-8 w-8 ${getGameIconToneClass(detailGameConfig.color)}`}
                       />
                     </span>
                     <div>
@@ -768,7 +768,7 @@ export default function AdminTournamentsPage() {
                         <GameConfigIcon
                           config={detailGameConfig}
                           fallbackIcon={detailGameConfig.icon}
-                          className={`h-4 w-4 ${detailGameConfig.iconUrl ? "" : getGameIconToneClass(detailGameConfig.color)}`}
+                          className={detailGameConfig.iconUrl ? "h-4 w-4" : `h-4 w-4 ${getGameIconToneClass(detailGameConfig.color)}`}
                         />
                         {detailGameMeta?.label || detailGameConfig.name}
                       </>

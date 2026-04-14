@@ -525,7 +525,9 @@ export default function AdminExternalGames() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-3">
                             {game.iconUrl ? (
-                              <img src={game.iconUrl} alt="" className="h-14 w-14 rounded-2xl object-cover" />
+                              <div className="h-14 w-14 rounded-2xl border bg-background/80 p-1">
+                                <img src={game.iconUrl} alt="" className="h-full w-full object-contain" />
+                              </div>
                             ) : (
                               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
                                 <Gamepad2 className="h-6 w-6 text-primary" />
@@ -614,7 +616,9 @@ export default function AdminExternalGames() {
                           <TableCell>
                             <div className="flex items-center gap-3">
                               {game.iconUrl ? (
-                                <img src={game.iconUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                                <div className="h-10 w-10 rounded-lg border bg-background/80 p-1">
+                                  <img src={game.iconUrl} alt="" className="h-full w-full object-contain" />
+                                </div>
                               ) : (
                                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                                   <Gamepad2 className="h-5 w-5 text-primary" />
@@ -937,7 +941,9 @@ export default function AdminExternalGames() {
                 </div>
                 {form.iconUrl && (
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                    <img src={form.iconUrl} alt="Preview" className="w-16 h-16 rounded-lg object-cover" />
+                    <div className="h-16 w-16 rounded-lg border bg-background/80 p-1">
+                      <img src={form.iconUrl} alt="Preview" className="h-full w-full object-contain" />
+                    </div>
                     <span className="text-sm text-muted-foreground">Icon preview</span>
                   </div>
                 )}

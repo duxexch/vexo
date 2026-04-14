@@ -148,11 +148,11 @@ const ChallengeRow = memo(function ChallengeRow({
         <Badge className="absolute -top-2 -end-2 bg-primary text-xs px-1.5 z-10">{t('lobby.new')}</Badge>
       )}
 
-      <div className={`p-2.5 rounded-xl border shrink-0 ${config.iconUrl ? "bg-muted/60 border-border" : config.color}`}>
+      <div className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border p-1.5 shrink-0 ${config.iconUrl ? "bg-muted/60 border-border" : config.color}`}>
         <GameConfigIcon
           config={config}
           fallbackIcon={Gamepad2}
-          className={`w-6 h-6 ${config.iconUrl ? "" : getGameIconToneClass(config.color)}`}
+          className={config.iconUrl ? "h-full w-full" : `w-6 h-6 ${getGameIconToneClass(config.color)}`}
         />
       </div>
 
@@ -277,11 +277,11 @@ const GameCard = memo(function GameCard({
       <CardContent className="p-3 sm:p-4 relative">
         <div className="flex flex-col gap-3">
           <div className="flex items-start justify-between gap-2">
-            <div className={`p-3 sm:p-[14px] rounded-xl border shrink-0 ${config.iconUrl ? "bg-muted/60 border-border" : config.color}`}>
+            <div className={`inline-flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl border p-1.5 shrink-0 ${config.iconUrl ? "bg-muted/60 border-border" : config.color}`}>
               <GameConfigIcon
                 config={config}
                 fallbackIcon={Gamepad2}
-                className={`w-6 h-6 sm:w-7 sm:h-7 ${config.iconUrl ? "" : getGameIconToneClass(config.color)}`}
+                className={config.iconUrl ? "h-full w-full" : `w-6 h-6 sm:w-7 sm:h-7 ${getGameIconToneClass(config.color)}`}
               />
             </div>
             <div className="flex items-center gap-1 flex-wrap justify-end">
@@ -606,7 +606,7 @@ export default function GameLobbyPage() {
                   <GameConfigIcon
                     config={config}
                     fallbackIcon={Gamepad2}
-                    className={`w-5 h-5 ${config.iconUrl ? "" : getGameIconToneClass(config.color)}`}
+                    className={config.iconUrl ? "w-5 h-5" : `w-5 h-5 ${getGameIconToneClass(config.color)}`}
                   />
                   <span className="hidden sm:inline">{language === 'ar' ? config.nameAr : config.name}</span>
                   {matchCount > 0 && (
@@ -831,11 +831,11 @@ export default function GameLobbyPage() {
                   const config = GAME_CONFIG[quickMatchGame];
                   return (
                     <>
-                      <div className={`rounded-2xl border p-3.5 ${getGameIconSurfaceClass(config)}`}>
+                      <div className={`inline-flex h-14 w-14 items-center justify-center rounded-2xl border p-2 ${getGameIconSurfaceClass(config)}`}>
                         <GameConfigIcon
                           config={config}
                           fallbackIcon={Gamepad2}
-                          className={`h-8 w-8 ${config?.iconUrl ? "" : getGameIconToneClass(config?.color)}`}
+                          className={config?.iconUrl ? "h-full w-full" : `h-8 w-8 ${getGameIconToneClass(config?.color)}`}
                         />
                       </div>
                       <div>

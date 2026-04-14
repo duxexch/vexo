@@ -421,11 +421,11 @@ export default function MultiplayerPage() {
                 return (
                   <SelectItem key={game.id} value={game.id}>
                     <span className="flex items-center gap-2">
-                      <span className={`inline-flex items-center justify-center rounded-lg border p-1.5 ${getGameIconSurfaceClass(gameConfig)}`}>
+                      <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border p-1 ${getGameIconSurfaceClass(gameConfig)}`}>
                         <GameConfigIcon
                           config={gameConfig}
                           fallbackIcon={Gamepad2}
-                          className={`h-4 w-4 ${gameConfig?.iconUrl ? "" : getGameIconToneClass(gameConfig?.color)}`}
+                          className={gameConfig?.iconUrl ? "h-full w-full" : `h-4 w-4 ${getGameIconToneClass(gameConfig?.color)}`}
                         />
                       </span>
                       <span>{language === 'ar' ? gameConfig?.nameAr || game.name : gameConfig?.name || game.name}</span>
@@ -437,11 +437,11 @@ export default function MultiplayerPage() {
           </Select>
           {selectedGameConfig && (
             <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-              <span className={`inline-flex items-center justify-center rounded-xl border p-2 ${getGameIconSurfaceClass(selectedGameConfig)}`}>
+              <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border p-1 ${getGameIconSurfaceClass(selectedGameConfig)}`}>
                 <GameConfigIcon
                   config={selectedGameConfig}
                   fallbackIcon={Gamepad2}
-                  className={`h-5 w-5 ${selectedGameConfig.iconUrl ? "" : getGameIconToneClass(selectedGameConfig.color)}`}
+                  className={selectedGameConfig.iconUrl ? "h-full w-full" : `h-5 w-5 ${getGameIconToneClass(selectedGameConfig.color)}`}
                 />
               </span>
               <span>{language === 'ar' ? selectedGameConfig.nameAr : selectedGameConfig.name}</span>
@@ -620,11 +620,11 @@ export default function MultiplayerPage() {
                   data-testid={`invite-${invite.id}`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className={`inline-flex items-center justify-center rounded-xl border p-2 ${getGameIconSurfaceClass(inviteConfig)}`}>
+                    <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border p-1 ${getGameIconSurfaceClass(inviteConfig)}`}>
                       <GameConfigIcon
                         config={inviteConfig}
                         fallbackIcon={Gamepad2}
-                        className={`h-5 w-5 ${inviteConfig?.iconUrl ? "" : getGameIconToneClass(inviteConfig?.color)}`}
+                        className={inviteConfig?.iconUrl ? "h-full w-full" : `h-5 w-5 ${getGameIconToneClass(inviteConfig?.color)}`}
                       />
                     </span>
                     <div>
@@ -698,11 +698,11 @@ export default function MultiplayerPage() {
         <DialogContent className="max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span className={`inline-flex items-center justify-center rounded-xl border p-2 ${getGameIconSurfaceClass(foundMatchConfig)}`}>
+              <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border p-1 ${getGameIconSurfaceClass(foundMatchConfig)}`}>
                 <GameConfigIcon
                   config={foundMatchConfig}
                   fallbackIcon={Gamepad2}
-                  className={`h-5 w-5 ${foundMatchConfig?.iconUrl ? "" : getGameIconToneClass(foundMatchConfig?.color)}`}
+                  className={foundMatchConfig?.iconUrl ? "h-full w-full" : `h-5 w-5 ${getGameIconToneClass(foundMatchConfig?.color)}`}
                 />
               </span>
               {t("multiplayer.matchFound")}
@@ -740,7 +740,7 @@ export default function MultiplayerPage() {
                     <GameConfigIcon
                       config={foundMatchConfig}
                       fallbackIcon={Gamepad2}
-                      className={`h-5 w-5 ${foundMatchConfig?.iconUrl ? "" : getGameIconToneClass(foundMatchConfig?.color)}`}
+                      className={foundMatchConfig?.iconUrl ? "h-5 w-5" : `h-5 w-5 ${getGameIconToneClass(foundMatchConfig?.color)}`}
                     />
                     {foundMatchConfig ? (language === 'ar' ? foundMatchConfig.nameAr : foundMatchConfig.name) : foundMatch.game.name}
                   </Badge>
