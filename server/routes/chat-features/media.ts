@@ -6,7 +6,7 @@ import { uploadFile } from "../../lib/minio-client";
 import crypto from "crypto";
 import type { AuthRequest } from "../middleware";
 import { storage } from "../../storage";
-import { getErrorMessage, getConfigNumber, getConfigValue, checkRateLimit, normalizeMimeType, validateMagicBytes, type AuthMiddleware } from "./helpers";
+import { getErrorMessage, getConfigDecimal, getConfigNumber, getConfigValue, checkRateLimit, normalizeMimeType, validateMagicBytes, type AuthMiddleware } from "./helpers";
 
 const IMAGE_UPLOAD_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const VIDEO_UPLOAD_MIME_TYPES = ["video/mp4", "video/webm"];
@@ -19,7 +19,6 @@ const CHAT_UPLOAD_MIME_TYPES = [
 
 /** Media permission routes — status, purchase, upload */
 export function registerMediaRoutes(app: Express, authMiddleware: AuthMiddleware): void {
-
   // Check media permission status for current user
   app.get("/api/chat/media/status", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -29,10 +28,19 @@ export function registerMediaRoutes(app: Express, authMiddleware: AuthMiddleware
         .from(chatMediaPermissions)
         .where(eq(chatMediaPermissions.userId, userId));
 
-      const price = await getConfigNumber("chat_media_price", 100);
-      const maxImageSize = await getConfigNumber("chat_media_max_image_size", 5242880);
-      const maxVideoSize = await getConfigNumber("chat_media_max_video_size", 26214400);
-      const systemEnabled = await getConfigValue("chat_media_enabled", "true");
+      const [
+        price,
+        voiceMessagePrice,
+        maxImageSize,
+        maxVideoSize,
+        systemEnabled,
+      ] = await Promise.all([
+        getConfigNumber("chat_media_price", 100),
+        getConfigDecimal("chat_voice_message_price", 0),
+        getConfigNumber("chat_media_max_image_size", 5242880),
+        getConfigNumber("chat_media_max_video_size", 26214400),
+        getConfigValue("chat_media_enabled", "true"),
+      ]);
 
       const currencySettings = await storage.getProjectCurrencySettings();
       const wallet = await storage.getOrCreateProjectCurrencyWallet(userId);
@@ -45,10 +53,12 @@ export function registerMediaRoutes(app: Express, authMiddleware: AuthMiddleware
         mediaEnabled: isEnabled || false,
         systemEnabled: systemEnabled === "true",
         price,
+        voiceMessagePrice,
         maxImageSize,
         maxVideoSize,
         userBalance: walletBalance,
         canAfford: walletBalance >= price,
+        canAffordVoiceMessage: voiceMessagePrice <= 0 || walletBalance >= voiceMessagePrice,
         currencySymbol: currencySettings?.currencySymbol || "VEX",
         currencyName: currencySettings?.currencyName || "VEX Coin",
         allowedTypes: [...IMAGE_UPLOAD_MIME_TYPES, ...VIDEO_UPLOAD_MIME_TYPES],

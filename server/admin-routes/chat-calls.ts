@@ -6,6 +6,8 @@ import { type AdminRequest, adminAuthMiddleware, getErrorMessage, logAdminAction
 
 const VOICE_CALL_PRICE_KEY = "chat_voice_call_price_per_minute";
 const VIDEO_CALL_PRICE_KEY = "chat_video_call_price_per_minute";
+const VOICE_MESSAGE_PRICE_KEY = "chat_voice_message_price";
+const MESSAGE_DELETE_PRICE_KEY = "chat_delete_message_price";
 
 function normalizePrice(value: unknown): number | null {
   if (value === undefined || value === null || value === "") {
@@ -25,9 +27,11 @@ async function getConfigPrice(key: string, fallback: number): Promise<number> {
 
 export function registerAdminChatCallRoutes(app: Express) {
   const getStatsPayload = async () => {
-    const [voicePricePerMinute, videoPricePerMinute] = await Promise.all([
+    const [voicePricePerMinute, videoPricePerMinute, voiceMessagePrice, messageDeletePrice] = await Promise.all([
       getConfigPrice(VOICE_CALL_PRICE_KEY, 15),
       getConfigPrice(VIDEO_CALL_PRICE_KEY, 25),
+      getConfigPrice(VOICE_MESSAGE_PRICE_KEY, 0),
+      getConfigPrice(MESSAGE_DELETE_PRICE_KEY, 0),
     ]);
 
     const aggregates = await db.execute(sql`
@@ -64,6 +68,16 @@ export function registerAdminChatCallRoutes(app: Express) {
       LIMIT 30
     `);
 
+    const actionAggregates = await db.execute(sql`
+      SELECT
+        reference_type,
+        COUNT(*)::int AS total_count,
+        COALESCE(SUM(ABS(CAST(amount AS DECIMAL))), 0) AS total_revenue
+      FROM project_currency_ledger
+      WHERE reference_type IN ('chat_voice_message_charge', 'chat_message_delete_charge')
+      GROUP BY reference_type
+    `);
+
     const rowByType = new Map<string, { total_minutes: number; total_revenue: string }>();
     for (const row of aggregates.rows as Array<{ call_type: string; total_minutes: number; total_revenue: string }>) {
       rowByType.set(row.call_type, row);
@@ -71,10 +85,19 @@ export function registerAdminChatCallRoutes(app: Express) {
 
     const voiceRow = rowByType.get("voice");
     const videoRow = rowByType.get("video");
+    const actionRowByType = new Map<string, { total_count: number; total_revenue: string }>();
+    for (const row of actionAggregates.rows as Array<{ reference_type: string; total_count: number; total_revenue: string }>) {
+      actionRowByType.set(row.reference_type, row);
+    }
+
+    const voiceMessageRow = actionRowByType.get("chat_voice_message_charge");
+    const messageDeleteRow = actionRowByType.get("chat_message_delete_charge");
 
     return {
       voicePricePerMinute,
       videoPricePerMinute,
+      voiceMessagePrice,
+      messageDeletePrice,
       activeCalls: Number((activeCallsResult.rows[0] as Record<string, unknown>)?.count || 0),
       totals: {
         voiceMinutes: Number(voiceRow?.total_minutes || 0),
@@ -82,6 +105,10 @@ export function registerAdminChatCallRoutes(app: Express) {
         voiceRevenue: Number(voiceRow?.total_revenue || 0),
         videoRevenue: Number(videoRow?.total_revenue || 0),
         totalRevenue: Number(voiceRow?.total_revenue || 0) + Number(videoRow?.total_revenue || 0),
+        voiceMessagesCharged: Number(voiceMessageRow?.total_count || 0),
+        deleteActionsCharged: Number(messageDeleteRow?.total_count || 0),
+        voiceMessagesRevenue: Number(voiceMessageRow?.total_revenue || 0),
+        deleteActionsRevenue: Number(messageDeleteRow?.total_revenue || 0),
       },
       sessions: latestSessions.rows,
     };
@@ -107,15 +134,24 @@ export function registerAdminChatCallRoutes(app: Express) {
     try {
       const voicePrice = normalizePrice(req.body?.voicePricePerMinute);
       const videoPrice = normalizePrice(req.body?.videoPricePerMinute);
+      const voiceMessagePrice = normalizePrice(req.body?.voiceMessagePrice);
+      const messageDeletePrice = normalizePrice(req.body?.messageDeletePrice);
 
       const hasVoiceInput = req.body?.voicePricePerMinute !== undefined;
       const hasVideoInput = req.body?.videoPricePerMinute !== undefined;
+      const hasVoiceMessageInput = req.body?.voiceMessagePrice !== undefined;
+      const hasMessageDeleteInput = req.body?.messageDeletePrice !== undefined;
 
-      if (!hasVoiceInput && !hasVideoInput) {
+      if (!hasVoiceInput && !hasVideoInput && !hasVoiceMessageInput && !hasMessageDeleteInput) {
         return res.status(400).json({ error: "Provide at least one price field" });
       }
 
-      if ((hasVoiceInput && voicePrice === null) || (hasVideoInput && videoPrice === null)) {
+      if (
+        (hasVoiceInput && voicePrice === null)
+        || (hasVideoInput && videoPrice === null)
+        || (hasVoiceMessageInput && voiceMessagePrice === null)
+        || (hasMessageDeleteInput && messageDeletePrice === null)
+      ) {
         return res.status(400).json({ error: "Invalid price value" });
       }
 
@@ -125,6 +161,12 @@ export function registerAdminChatCallRoutes(app: Express) {
       }
       if (hasVideoInput && videoPrice !== null) {
         updates.push({ key: VIDEO_CALL_PRICE_KEY, value: videoPrice });
+      }
+      if (hasVoiceMessageInput && voiceMessagePrice !== null) {
+        updates.push({ key: VOICE_MESSAGE_PRICE_KEY, value: voiceMessagePrice });
+      }
+      if (hasMessageDeleteInput && messageDeletePrice !== null) {
+        updates.push({ key: MESSAGE_DELETE_PRICE_KEY, value: messageDeletePrice });
       }
 
       for (const update of updates) {
@@ -151,20 +193,26 @@ export function registerAdminChatCallRoutes(app: Express) {
           metadata: JSON.stringify({
             voicePricePerMinute: hasVoiceInput ? voicePrice : undefined,
             videoPricePerMinute: hasVideoInput ? videoPrice : undefined,
+            voiceMessagePrice: hasVoiceMessageInput ? voiceMessagePrice : undefined,
+            messageDeletePrice: hasMessageDeleteInput ? messageDeletePrice : undefined,
           }),
         },
         req,
       );
 
-      const [currentVoice, currentVideo] = await Promise.all([
+      const [currentVoice, currentVideo, currentVoiceMessage, currentMessageDelete] = await Promise.all([
         getConfigPrice(VOICE_CALL_PRICE_KEY, 15),
         getConfigPrice(VIDEO_CALL_PRICE_KEY, 25),
+        getConfigPrice(VOICE_MESSAGE_PRICE_KEY, 0),
+        getConfigPrice(MESSAGE_DELETE_PRICE_KEY, 0),
       ]);
 
       res.json({
         success: true,
         voicePricePerMinute: currentVoice,
         videoPricePerMinute: currentVideo,
+        voiceMessagePrice: currentVoiceMessage,
+        messageDeletePrice: currentMessageDelete,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

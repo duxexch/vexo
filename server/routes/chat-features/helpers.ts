@@ -25,7 +25,8 @@ export async function getConfigValue(key: string, defaultValue: string): Promise
 /** Get a numeric system config value with fallback */
 export async function getConfigNumber(key: string, defaultValue: number): Promise<number> {
   const val = await getConfigValue(key, String(defaultValue));
-  return parseInt(val) || defaultValue;
+  const parsed = Number.parseFloat(val);
+  return Number.isFinite(parsed) ? parsed : defaultValue;
 }
 
 /** Get a decimal system config value with fallback */

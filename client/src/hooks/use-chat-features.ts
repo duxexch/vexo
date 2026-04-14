@@ -57,9 +57,13 @@ interface ChatCallSession {
 interface ChatCallPricingStatus {
   voicePricePerMinute: number;
   videoPricePerMinute: number;
+  voiceMessagePrice: number;
+  messageDeletePrice: number;
   userBalance: number;
   canStartVoiceCall: boolean;
   canStartVideoCall: boolean;
+  canSendVoiceMessage: boolean;
+  canDeleteMessage: boolean;
   currencySymbol: string;
   currencyName: string;
   activeSession: ChatCallSession | null;
@@ -676,11 +680,15 @@ export function useChatCallPricing() {
     queuedOperationCount,
     voicePricePerMinute: status?.voicePricePerMinute ?? 0,
     videoPricePerMinute: status?.videoPricePerMinute ?? 0,
+    voiceMessagePrice: status?.voiceMessagePrice ?? 0,
+    messageDeletePrice: status?.messageDeletePrice ?? 0,
     userBalance: status?.userBalance ?? 0,
     currencySymbol: status?.currencySymbol ?? 'VEX',
     activeSession: status?.activeSession ?? null,
     canStartVoiceCall: status?.canStartVoiceCall ?? false,
     canStartVideoCall: status?.canStartVideoCall ?? false,
+    canSendVoiceMessage: status?.canSendVoiceMessage ?? false,
+    canDeleteMessage: status?.canDeleteMessage ?? false,
     startCallSession,
     endCallSession,
     refreshStatus,

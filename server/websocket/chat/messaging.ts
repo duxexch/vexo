@@ -1,7 +1,7 @@
 import { WebSocket } from "ws";
 import { db } from "../../db";
-import { chatMessages, chatSettings, users } from "@shared/schema";
-import { eq, and, or } from "drizzle-orm";
+import { chatAutoDeletePermissions, chatMessages, chatSettings, projectCurrencyLedger, projectCurrencyWallets, systemConfig, users } from "@shared/schema";
+import { eq, and, or, sql } from "drizzle-orm";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import type { AuthenticatedSocket } from "../shared";
 import { clients } from "../shared";
@@ -40,6 +40,16 @@ function buildChatNotificationPreview(messageType: string, content: string): { e
   }
 
   return { en: "Sent a message", ar: "أرسل رسالة" };
+}
+
+function toMoney(value: number): number {
+  return Number(value.toFixed(2));
+}
+
+async function getConfigDecimal(key: string, fallback: number): Promise<number> {
+  const [config] = await db.select().from(systemConfig).where(eq(systemConfig.key, key)).limit(1);
+  const parsed = Number.parseFloat(config?.value || "");
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 /**
@@ -232,9 +242,106 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
 
   // PRIVACY: No word filtering on private messages - user privacy first
 
-  // Save message + get sender info in a single parallel call (was 2 sequential queries)
-  const [insertResult, senderResult] = await Promise.all([
-    db.insert(chatMessages).values({
+  const now = new Date();
+  const wantsDisappearing = Boolean(isDisappearing || disappearAfterRead);
+  const isVoiceMessage = String(messageType || "").toLowerCase() === "voice";
+  let resolvedDeleteAfterMinutes = 60;
+  const voiceMessagePrice = isVoiceMessage ? toMoney(await getConfigDecimal("chat_voice_message_price", 0)) : 0;
+
+  if (wantsDisappearing) {
+    const [autoDeletePermission] = await db.select({
+      autoDeleteEnabled: chatAutoDeletePermissions.autoDeleteEnabled,
+      deleteAfterMinutes: chatAutoDeletePermissions.deleteAfterMinutes,
+      revokedAt: chatAutoDeletePermissions.revokedAt,
+      expiresAt: chatAutoDeletePermissions.expiresAt,
+    }).from(chatAutoDeletePermissions)
+      .where(eq(chatAutoDeletePermissions.userId, senderUserId))
+      .limit(1);
+
+    const hasAutoDeletePermission = Boolean(
+      autoDeletePermission
+      && autoDeletePermission.autoDeleteEnabled
+      && !autoDeletePermission.revokedAt
+      && (!autoDeletePermission.expiresAt || autoDeletePermission.expiresAt > now)
+    );
+
+    if (!hasAutoDeletePermission) {
+      if (dedupeKey) {
+        await getRedisClient().del(dedupeKey).catch(() => { });
+      }
+      ws.send(JSON.stringify({
+        type: "chat_error",
+        error: "Auto-delete permission required",
+        code: "auto_delete_permission_required",
+        clientMessageId,
+      }));
+      return;
+    }
+
+    resolvedDeleteAfterMinutes = Math.max(1, Number(autoDeletePermission?.deleteAfterMinutes || 60));
+  }
+
+  const insertedMessage = await db.transaction(async (tx) => {
+    if (voiceMessagePrice > 0) {
+      await tx.execute(sql`
+        INSERT INTO project_currency_wallets (user_id)
+        VALUES (${senderUserId})
+        ON CONFLICT (user_id) DO NOTHING
+      `);
+
+      const [wallet] = await tx.select()
+        .from(projectCurrencyWallets)
+        .where(eq(projectCurrencyWallets.userId, senderUserId))
+        .for('update');
+
+      if (!wallet) {
+        throw new Error("Project currency wallet not found");
+      }
+
+      let earnedBalance = parseFloat(wallet.earnedBalance || "0");
+      let purchasedBalance = parseFloat(wallet.purchasedBalance || "0");
+      const totalBalance = earnedBalance + purchasedBalance;
+      if (totalBalance < voiceMessagePrice) {
+        throw new Error("Insufficient project currency balance for voice message");
+      }
+
+      let remaining = voiceMessagePrice;
+      if (earnedBalance >= remaining) {
+        earnedBalance = toMoney(earnedBalance - remaining);
+        remaining = 0;
+      } else {
+        remaining = toMoney(remaining - earnedBalance);
+        earnedBalance = 0;
+        purchasedBalance = toMoney(Math.max(0, purchasedBalance - remaining));
+      }
+
+      const balanceBefore = parseFloat(wallet.totalBalance || "0");
+      const balanceAfter = toMoney(earnedBalance + purchasedBalance);
+
+      await tx.update(projectCurrencyWallets)
+        .set({
+          earnedBalance: earnedBalance.toFixed(2),
+          purchasedBalance: purchasedBalance.toFixed(2),
+          totalBalance: balanceAfter.toFixed(2),
+          totalSpent: toMoney(parseFloat(wallet.totalSpent || "0") + voiceMessagePrice).toFixed(2),
+          updatedAt: now,
+        })
+        .where(eq(projectCurrencyWallets.id, wallet.id));
+
+      await tx.insert(projectCurrencyLedger).values({
+        userId: senderUserId,
+        walletId: wallet.id,
+        type: "admin_adjustment",
+        amount: (-voiceMessagePrice).toFixed(2),
+        balanceBefore: toMoney(balanceBefore).toFixed(2),
+        balanceAfter: balanceAfter.toFixed(2),
+        referenceId: `chat_voice_message:${senderUserId}:${clientMessageId || Date.now()}`,
+        referenceType: "chat_voice_message_charge",
+        description: "Voice message send charge",
+      });
+    }
+
+    const [message] = await tx.insert(chatMessages).values({
       senderId: senderUserId,
       receiverId,
       content: sanitizedContent,
@@ -242,19 +349,37 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
       attachmentUrl: safeAttachmentUrl,
       isDisappearing: Boolean(isDisappearing),
       disappearAfterRead: Boolean(disappearAfterRead),
+      autoDeleteAt: Boolean(isDisappearing) ? new Date(now.getTime() + (resolvedDeleteAfterMinutes * 60 * 1000)) : null,
       replyToId: replyToId ? String(replyToId).slice(0, 100) : undefined,
-    }).returning(),
-    db.select({
-      id: users.id,
-      username: users.username,
-      firstName: users.firstName,
-      lastName: users.lastName,
-      avatarUrl: users.profilePicture,
-    }).from(users).where(eq(users.id, senderUserId)),
-  ]);
+    }).returning();
 
-  const message = insertResult[0];
-  const sender = senderResult[0];
+    return message;
+  }).catch(async (error: unknown) => {
+    if (dedupeKey) {
+      await getRedisClient().del(dedupeKey).catch(() => { });
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    ws.send(JSON.stringify({
+      type: "chat_error",
+      error: message,
+      code: message.includes("Insufficient") ? "insufficient_voice_message_balance" : "chat_message_send_failed",
+      clientMessageId,
+    }));
+    return null;
+  });
+
+  if (!insertedMessage) {
+    return;
+  }
+
+  const message = insertedMessage;
+  const [sender] = await db.select({
+    id: users.id,
+    username: users.username,
+    firstName: users.firstName,
+    lastName: users.lastName,
+    avatarUrl: users.profilePicture,
+  }).from(users).where(eq(users.id, senderUserId));
 
   if (dedupeKey) {
     await getRedisClient()

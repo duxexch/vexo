@@ -8,6 +8,8 @@ import type { AuthRequest } from "../middleware";
 import { storage } from "../../storage";
 import { getErrorMessage, getConfigNumber, getConfigValue, checkRateLimit, type AuthMiddleware } from "./helpers";
 
+const AUTO_DELETE_INTERVALS = [1, 5, 15, 30, 60, 360, 1440, 10080] as const;
+
 /** Auto-delete permission routes — status, purchase, settings + cleanup cron */
 export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddleware): void {
 
@@ -39,7 +41,7 @@ export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddl
         canAfford: walletBalance >= price,
         currencySymbol: currencySettings?.currencySymbol || "VEX",
         currencyName: currencySettings?.currencyName || "VEX Coin",
-        availableIntervals: [1, 5, 15, 30, 60, 1440],
+        availableIntervals: [...AUTO_DELETE_INTERVALS],
         grantedBy: permission?.grantedBy,
         expiresAt: permission?.expiresAt,
       });
@@ -180,7 +182,7 @@ export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddl
       const userId = req.user!.id;
       const { deleteAfterMinutes, enabled } = req.body;
 
-      const validIntervals = [1, 5, 15, 30, 60, 1440];
+      const validIntervals = [...AUTO_DELETE_INTERVALS];
       if (deleteAfterMinutes && !validIntervals.includes(deleteAfterMinutes)) {
         return res.status(400).json({ error: "Invalid interval", validIntervals });
       }

@@ -242,6 +242,9 @@ export function useChat(): UseChatReturn {
             content: entry.payload.content,
             messageType: entry.payload.messageType,
             attachmentUrl: entry.payload.attachmentUrl,
+            isDisappearing: entry.payload.isDisappearing,
+            disappearAfterRead: entry.payload.disappearAfterRead,
+            replyToId: entry.payload.replyToId,
           }),
         });
 
@@ -394,6 +397,14 @@ export function useChat(): UseChatReturn {
           const { message, code } = extractWsErrorInfo(data);
           if (message) {
             console.error("Chat websocket error:", code || "unknown_code", message);
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("vex:chat-error", {
+                detail: {
+                  message,
+                  code,
+                },
+              }));
+            }
           }
           return;
         }

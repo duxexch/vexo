@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Send, Check, CheckCheck, Loader2, AlertCircle, Search, Timer, ArrowLeft, Shield, Lock, Paperclip, Reply, Trash2, Pencil, Smile, X, CornerDownRight, Mic, MicOff, ChevronDown, Languages, Palette, Phone, Video, PhoneOff } from "lucide-react";
+import { MessageCircle, Send, Check, CheckCheck, Loader2, AlertCircle, Search, Timer, ArrowLeft, Shield, Lock, Paperclip, Reply, Trash2, Pencil, Smile, X, CornerDownRight, Mic, MicOff, ChevronDown, Languages, Palette, Phone, Video, PhoneCall, PhoneOff, MoreHorizontal } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -167,9 +167,10 @@ export default function ChatPage() {
   const {
     voicePricePerMinute,
     videoPricePerMinute,
+    voiceMessagePrice,
+    messageDeletePrice,
+    canSendVoiceMessage,
     currencySymbol: callCurrencySymbol,
-    canStartVoiceCall,
-    canStartVideoCall,
     activeSession: activeCallSession,
     endingSession: endingCallSession,
     startCallSession,
@@ -212,6 +213,7 @@ export default function ChatPage() {
   const prevMessageCountRef = useRef(0);
   const messageInputRef = useRef<HTMLInputElement>(null);
   const hasAutoSelectedConversationRef = useRef(false);
+  const typingActiveRef = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -429,6 +431,24 @@ export default function ChatPage() {
       return;
     }
 
+    const handleChatError = (event: Event) => {
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      if (detail?.message) {
+        setComposerError(detail.message);
+      }
+    };
+
+    window.addEventListener('vex:chat-error', handleChatError as EventListener);
+    return () => {
+      window.removeEventListener('vex:chat-error', handleChatError as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
     const handleQueuedStartProcessed = (event: Event) => {
       if (document.visibilityState !== 'visible') {
         return;
@@ -549,6 +569,7 @@ export default function ChatPage() {
     setMessageInput("");
     setReplyTo(null);
     setTyping(activeConversation, false);
+    typingActiveRef.current = false;
   };
 
   const handleMediaUpload = async (file: File) => {
@@ -641,13 +662,24 @@ export default function ChatPage() {
 
   const handleInputChange = (value: string) => {
     setMessageInput(value);
-    if (activeConversation) {
-      setTyping(activeConversation, true);
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = setTimeout(() => {
-        setTyping(activeConversation, false);
-      }, 2000);
+    if (!activeConversation) {
+      return;
     }
+
+    const hasMeaningfulInput = value.trim().length > 0;
+    if (hasMeaningfulInput && !typingActiveRef.current) {
+      setTyping(activeConversation, true);
+      typingActiveRef.current = true;
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      setTyping(activeConversation, false);
+      typingActiveRef.current = false;
+    }, hasMeaningfulInput ? 1200 : 0);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -676,6 +708,12 @@ export default function ChatPage() {
   };
 
   const handleDelete = (msg: ChatMessage, forEveryone: boolean) => {
+    if (messageDeletePrice > 0) {
+      const shouldDelete = window.confirm(`${forEveryone ? t('chat.deleteForAll') : t('chat.deleteForMe')} • ${messageDeletePrice} ${callCurrencySymbol}`);
+      if (!shouldDelete) {
+        return;
+      }
+    }
     deleteMessage(msg.id, forEveryone);
   };
 
@@ -686,6 +724,11 @@ export default function ChatPage() {
   // Voice recording
   const startRecording = async () => {
     if (!activeConversation) {
+      return;
+    }
+
+    if (!canSendVoiceMessage) {
+      setComposerError(`${t('chat.voiceMsg')} • ${voiceMessagePrice} ${callCurrencySymbol}`);
       return;
     }
 
@@ -853,7 +896,7 @@ export default function ChatPage() {
   const dateGroups = getMessageDateGroups();
 
   return (
-    <div className="flex h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)]">
+    <div className="flex h-full min-h-0 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
       {/* =================== Conversation List =================== */}
       <div className={cn(
         "border-e flex flex-col bg-muted/40 w-full md:w-80",
@@ -979,11 +1022,13 @@ export default function ChatPage() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold flex items-center gap-2">
-                  {activeUserProfile?.firstName || activeUserProfile?.username || `@${activeConversation}`}
+                <h3 className="font-semibold flex min-w-0 items-center gap-2">
+                  <span className="truncate">
+                    {activeUserProfile?.firstName || activeUserProfile?.username || `@${activeConversation}`}
+                  </span>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 gap-1 text-emerald-500 border-emerald-500/30">
+                      <Badge variant="outline" className="h-5 shrink-0 gap-1 border-emerald-500/30 px-1.5 py-0 text-[10px] text-emerald-500">
                         <Shield className="h-3 w-3" />
                         E2EE
                       </Badge>
@@ -993,7 +1038,7 @@ export default function ChatPage() {
                     </TooltipContent>
                   </Tooltip>
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="truncate text-xs text-muted-foreground">
                   {typingUsers.has(activeConversation) ? (
                     <span className="text-primary animate-pulse">{t('chat.typing')}</span>
                   ) : isActiveUserOnline ? (
@@ -1005,10 +1050,10 @@ export default function ChatPage() {
                   )}
                 </p>
               </div>
-              <div className="flex items-center gap-1 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex max-w-[58vw] flex-wrap items-center justify-end gap-1 pb-0.5 sm:max-w-none sm:flex-nowrap sm:gap-1.5">
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px] min-w-[44px]"
+                    <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px] min-w-[44px] shrink-0"
                       onClick={() => { setShowChatSearch(!showChatSearch); setChatSearchQuery(""); }}>
                       <Search className="h-4 w-4" />
                     </Button>
@@ -1016,39 +1061,46 @@ export default function ChatPage() {
                   <TooltipContent><p>{t('chat.searchInChat')}</p></TooltipContent>
                 </Tooltip>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-9 w-9 min-h-[44px] min-w-[44px]"
-                      disabled={!activeConversation || !!activeCallSession || !canStartVoiceCall}
+                      className="h-9 w-9 min-h-[44px] min-w-[44px] shrink-0"
+                    >
+                      <PhoneCall className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuItem
+                      disabled={!activeConversation || !!activeCallSession}
                       onClick={() => void handleStartCallSession('voice')}
+                      className="gap-2"
                     >
                       <Phone className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{`${t('challenge.voiceStart')} • ${voicePricePerMinute} ${callCurrencySymbol}`}</p>
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 min-h-[44px] min-w-[44px]"
-                      disabled={!activeConversation || !!activeCallSession || !canStartVideoCall}
+                      <div className="flex min-w-0 flex-col">
+                        <span className="truncate">{t('challenge.voiceStart')}</span>
+                        <span className="text-[11px] text-muted-foreground">{`${voicePricePerMinute} ${callCurrencySymbol}`}</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={!activeConversation || !!activeCallSession}
                       onClick={() => void handleStartCallSession('video')}
+                      className="gap-2"
                     >
                       <Video className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{`${t('chat.video')} • ${videoPricePerMinute} ${callCurrencySymbol}`}</p>
-                  </TooltipContent>
-                </Tooltip>
+                      <div className="flex min-w-0 flex-col">
+                        <span className="truncate">{t('chat.video')}</span>
+                        <span className="text-[11px] text-muted-foreground">{`${videoPricePerMinute} ${callCurrencySymbol}`}</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setShowPinSetup(true)} className="gap-2">
+                      <Lock className={cn("h-4 w-4", hasPinEnabled ? "text-emerald-500" : "text-muted-foreground")} />
+                      <span>{hasPinEnabled ? t('chat.pinSettings') : t('chat.setPin')}</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {canJoinRecoveredCall && activeCallSession && (
                   <Tooltip>
@@ -1056,7 +1108,7 @@ export default function ChatPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-9 w-9 min-h-[44px] min-w-[44px]"
+                        className="h-9 w-9 min-h-[44px] min-w-[44px] shrink-0"
                         onClick={() => void handleJoinRecoveredCall()}
                       >
                         <Phone className="h-4 w-4" />
@@ -1074,7 +1126,7 @@ export default function ChatPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-9 w-9 min-h-[44px] min-w-[44px] text-destructive"
+                        className="h-9 w-9 min-h-[44px] min-w-[44px] shrink-0 text-destructive"
                         disabled={endingCallSession}
                         onClick={() => void handleEndCallSession()}
                       >
@@ -1087,24 +1139,13 @@ export default function ChatPage() {
                   </Tooltip>
                 )}
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px] min-w-[44px]" onClick={() => setShowPinSetup(true)}>
-                      <Lock className={cn("h-4 w-4", hasPinEnabled ? "text-emerald-500" : "text-muted-foreground")} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{hasPinEnabled ? t('chat.pinSettings') : t('chat.setPin')}</p>
-                  </TooltipContent>
-                </Tooltip>
-
                 {/* Auto-translate toggle */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       variant={autoTranslate ? "default" : "ghost"}
                       size="icon"
-                      className={cn("h-9 w-9 min-h-[44px] min-w-[44px]", autoTranslate && "text-primary-foreground")}
+                      className={cn("h-9 w-9 min-h-[44px] min-w-[44px] shrink-0", autoTranslate && "text-primary-foreground")}
                       onClick={() => setAutoTranslate(!autoTranslate)}
                     >
                       <Languages className="h-4 w-4" />
@@ -1118,9 +1159,10 @@ export default function ChatPage() {
                 {/* Language selector */}
                 <DropdownMenu open={showLanguageSelector} onOpenChange={setShowLanguageSelector}>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 px-2 text-xs gap-1 text-foreground shrink-0">
-                      <span className="max-w-[60px] truncate">{currentLanguageInfo?.nativeName || targetLanguage}</span>
-                      <ChevronDown className="h-3 w-3" />
+                    <Button variant="outline" size="sm" className="h-9 min-h-[44px] min-w-[44px] shrink-0 gap-1 px-2 text-xs text-foreground">
+                      <span className="hidden max-w-[90px] truncate sm:inline">{currentLanguageInfo?.nativeName || targetLanguage}</span>
+                      <span className="text-[10px] font-semibold uppercase sm:hidden">{targetLanguage}</span>
+                      <ChevronDown className="hidden h-3 w-3 sm:inline" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent className="max-h-[320px] overflow-y-auto w-[240px]" align="end">
@@ -1159,8 +1201,27 @@ export default function ChatPage() {
                 {/* Bubble style presets */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px] min-w-[44px] shrink-0">
+                    <Button variant="ghost" size="icon" className="hidden h-9 w-9 min-h-[44px] min-w-[44px] shrink-0 min-[381px]:inline-flex">
                       <Palette className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onClick={() => setBubbleStyle("vivid")} className={cn(bubbleStyle === "vivid" && "font-semibold")}>
+                      Vivid bubbles
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setBubbleStyle("classic")} className={cn(bubbleStyle === "classic" && "font-semibold")}>
+                      Classic bubbles
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setBubbleStyle("compact")} className={cn(bubbleStyle === "compact" && "font-semibold")}>
+                      Compact bubbles
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px] min-w-[44px] shrink-0 min-[381px]:hidden">
+                      <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-44">
@@ -1281,7 +1342,7 @@ export default function ChatPage() {
                           !showAvatar ? "mt-0.5" : "mt-3"
                         )}>
                           {/* Message bubble */}
-                          <div className={cn("max-w-[75%] sm:max-w-[65%] relative")}>
+                          <div className={cn("max-w-[85%] sm:max-w-[70%] relative")}>
                             {/* Reply preview */}
                             {repliedMsg && !isDeleted && (
                               <div className={cn(
@@ -1338,7 +1399,7 @@ export default function ChatPage() {
                                   {/* Text content */}
                                   {msg.content && (
                                     <div>
-                                      <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                                      <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-relaxed">
                                         {getDisplayText(String(msg.id), msg.content)}
                                       </p>
                                       {isTranslatingMsg(String(msg.id)) && (
@@ -1414,12 +1475,16 @@ export default function ChatPage() {
                               </div>
                             )}
 
-                            {/* Message actions (hover) */}
+                            {/* Message actions: always available on touch, hover-enhanced on larger screens */}
                             {!isDeleted && (
                               <div className={cn(
-                                "absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-background border rounded-lg shadow-sm p-0.5",
-                                isMine ? "-start-2 -translate-x-full" : "-end-2 translate-x-full"
-                              )}>
+                                "mt-1 flex items-center gap-0.5 rounded-lg border bg-background p-0.5 shadow-sm transition-opacity sm:absolute sm:top-0 sm:mt-0 sm:opacity-0 sm:group-hover:opacity-100",
+                                isMine
+                                  ? "justify-end sm:-start-2 sm:-translate-x-full"
+                                  : "justify-start sm:-end-2 sm:translate-x-full"
+                              )}
+                                onClick={(event) => event.stopPropagation()}
+                              >
                                 {/* Quick reactions */}
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
@@ -1551,6 +1616,21 @@ export default function ChatPage() {
                 </div>
               )}
 
+              {(voiceMessagePrice > 0 || messageDeletePrice > 0) && (
+                <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                  {voiceMessagePrice > 0 && (
+                    <Badge variant="outline" className="border-primary/30 bg-primary/5 text-[11px]">
+                      {`${t('chat.voiceMsg')} • ${voiceMessagePrice} ${callCurrencySymbol}`}
+                    </Badge>
+                  )}
+                  {messageDeletePrice > 0 && (
+                    <Badge variant="outline" className="border-amber-500/30 bg-amber-500/5 text-[11px] text-amber-600 dark:text-amber-400">
+                      {`${t('chat.deleteForAll')} • ${messageDeletePrice} ${callCurrencySymbol}`}
+                    </Badge>
+                  )}
+                </div>
+              )}
+
               {composerError && (
                 <div className="mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-2 text-xs text-destructive">
                   {composerError}
@@ -1612,9 +1692,15 @@ export default function ChatPage() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
-                          variant={disappearingMode ? "default" : "ghost"} size="icon"
-                          onClick={() => setDisappearingMode(!disappearingMode)}
-                          className={cn("shrink-0 h-10 w-10", disappearingMode && "text-primary-foreground")}
+                          variant={hasAutoDelete && disappearingMode ? "default" : "ghost"} size="icon"
+                          onClick={() => {
+                            if (!hasAutoDelete) {
+                              setShowAutoDeletePurchase(true);
+                              return;
+                            }
+                            setDisappearingMode(!disappearingMode);
+                          }}
+                          className={cn("shrink-0 h-10 w-10", hasAutoDelete && disappearingMode && "text-primary-foreground")}
                           data-testid="button-toggle-disappearing"
                         >
                           <Timer className="h-4 w-4" />
@@ -1670,7 +1756,7 @@ export default function ChatPage() {
                           <Button
                             variant="ghost" size="icon"
                             onClick={startRecording}
-                            disabled={isVoiceUploading}
+                            disabled={isVoiceUploading || !canSendVoiceMessage}
                             className="min-h-[44px] min-w-[44px] rounded-full hover:bg-destructive/10 hover:text-destructive"
                           >
                             <Mic className="h-5 w-5" />

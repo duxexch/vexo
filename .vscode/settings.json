@@ -36,5 +36,6 @@
         "Continue.continue": 2,
         "Anthropic.claude-code": 3,
         "Sixth.sixth-ai": 4
-    }
+    },
+    "chat.agent.maxRequests": 5000
 }

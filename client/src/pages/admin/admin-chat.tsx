@@ -1963,9 +1963,9 @@ export default function AdminChatPage() {
                 <CardTitle className="text-lg flex items-center gap-2">
                   <PhoneCall className="h-4 w-4" />
                   <Video className="h-4 w-4" />
-                  تسعير المكالمات
+                  تسعير المكالمات وإجراءات الدردشة
                 </CardTitle>
-                <CardDescription>تسعير الدقيقة للمكالمات الخاصة الصوتية والمرئية</CardDescription>
+                <CardDescription>إدارة أسعار المكالمات الخاصة وسعر الرسائل الصوتية وحذف الرسائل</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <AdminCallPricingSection toast={toast} />
@@ -2239,6 +2239,8 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
 function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
   const [voicePrice, setVoicePrice] = useState("");
   const [videoPrice, setVideoPrice] = useState("");
+  const [voiceMessagePrice, setVoiceMessagePrice] = useState("");
+  const [messageDeletePrice, setMessageDeletePrice] = useState("");
   const [saving, setSaving] = useState(false);
 
   const { data: stats, refetch, isFetching } = useQuery({
@@ -2267,6 +2269,24 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
       payload.videoPricePerMinute = Number(parsed.toFixed(2));
     }
 
+    if (voiceMessagePrice.trim()) {
+      const parsed = Number(voiceMessagePrice);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        toast({ title: "خطأ", description: "سعر الرسالة الصوتية غير صالح", variant: "destructive" });
+        return;
+      }
+      payload.voiceMessagePrice = Number(parsed.toFixed(2));
+    }
+
+    if (messageDeletePrice.trim()) {
+      const parsed = Number(messageDeletePrice);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        toast({ title: "خطأ", description: "سعر حذف الرسالة غير صالح", variant: "destructive" });
+        return;
+      }
+      payload.messageDeletePrice = Number(parsed.toFixed(2));
+    }
+
     if (!Object.keys(payload).length) {
       toast({ title: "تنبيه", description: "أدخل قيمة واحدة على الأقل" });
       return;
@@ -2280,7 +2300,9 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
       });
       setVoicePrice("");
       setVideoPrice("");
-      toast({ title: "تم تحديث تسعير المكالمات" });
+      setVoiceMessagePrice("");
+      setMessageDeletePrice("");
+      toast({ title: "تم تحديث التسعير" });
       refetch();
     } catch (err: unknown) {
       toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
@@ -2291,7 +2313,7 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 text-sm">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
         <div className="rounded-2xl bg-muted p-2 text-center">
           <div className="text-lg font-bold">{stats?.voicePricePerMinute ?? 0}</div>
           <div className="text-muted-foreground text-xs">سعر دقيقة الصوت</div>
@@ -2299,6 +2321,14 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
         <div className="rounded-2xl bg-muted p-2 text-center">
           <div className="text-lg font-bold">{stats?.videoPricePerMinute ?? 0}</div>
           <div className="text-muted-foreground text-xs">سعر دقيقة الفيديو</div>
+        </div>
+        <div className="rounded-2xl bg-muted p-2 text-center">
+          <div className="text-lg font-bold">{stats?.voiceMessagePrice ?? 0}</div>
+          <div className="text-muted-foreground text-xs">سعر الرسالة الصوتية</div>
+        </div>
+        <div className="rounded-2xl bg-muted p-2 text-center">
+          <div className="text-lg font-bold">{stats?.messageDeletePrice ?? 0}</div>
+          <div className="text-muted-foreground text-xs">سعر حذف الرسالة</div>
         </div>
       </div>
 
@@ -2310,6 +2340,17 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
         <div className="rounded-xl border border-slate-200/70 p-2 text-center dark:border-slate-800">
           <div className="font-semibold">{stats?.totals?.videoMinutes ?? 0}</div>
           <div className="text-muted-foreground">دقائق فيديو مفوترة</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-xl border border-slate-200/70 p-2 text-center dark:border-slate-800">
+          <div className="font-semibold">{stats?.totals?.voiceMessagesCharged ?? 0}</div>
+          <div className="text-muted-foreground">رسائل صوتية مفوترة</div>
+        </div>
+        <div className="rounded-xl border border-slate-200/70 p-2 text-center dark:border-slate-800">
+          <div className="font-semibold">{stats?.totals?.deleteActionsCharged ?? 0}</div>
+          <div className="text-muted-foreground">حذف رسائل مفوتر</div>
         </div>
       </div>
 
@@ -2330,6 +2371,24 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
           placeholder="سعر دقيقة الفيديو"
           value={videoPrice}
           onChange={(e) => setVideoPrice(e.target.value)}
+          className={INPUT_SURFACE_CLASS}
+        />
+        <Input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="سعر الرسالة الصوتية"
+          value={voiceMessagePrice}
+          onChange={(e) => setVoiceMessagePrice(e.target.value)}
+          className={INPUT_SURFACE_CLASS}
+        />
+        <Input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="سعر حذف الرسالة"
+          value={messageDeletePrice}
+          onChange={(e) => setMessageDeletePrice(e.target.value)}
           className={INPUT_SURFACE_CLASS}
         />
       </div>

@@ -16,6 +16,11 @@ const CHAT_CALL_CONFIG_KEYS: Record<ChatCallType, string> = {
   video: "chat_video_call_price_per_minute",
 };
 
+const CHAT_ACTION_PRICE_CONFIG_KEYS = {
+  voiceMessage: "chat_voice_message_price",
+  messageDelete: "chat_delete_message_price",
+} as const;
+
 function normalizeCallType(raw: unknown): ChatCallType | null {
   const value = String(raw || "").trim().toLowerCase();
   if (value === "voice" || value === "video") {
@@ -55,9 +60,11 @@ export function registerCallRoutes(app: Express, authMiddleware: AuthMiddleware)
   app.get("/api/chat/calls/pricing", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.id;
-      const [voiceRate, videoRate] = await Promise.all([
+      const [voiceRate, videoRate, voiceMessagePrice, messageDeletePrice] = await Promise.all([
         getConfigDecimal(CHAT_CALL_CONFIG_KEYS.voice, 15),
         getConfigDecimal(CHAT_CALL_CONFIG_KEYS.video, 25),
+        getConfigDecimal(CHAT_ACTION_PRICE_CONFIG_KEYS.voiceMessage, 0),
+        getConfigDecimal(CHAT_ACTION_PRICE_CONFIG_KEYS.messageDelete, 0),
       ]);
 
       const [currencySettings, wallet] = await Promise.all([
@@ -93,9 +100,13 @@ export function registerCallRoutes(app: Express, authMiddleware: AuthMiddleware)
       res.json({
         voicePricePerMinute: voiceRate,
         videoPricePerMinute: videoRate,
+        voiceMessagePrice,
+        messageDeletePrice,
         userBalance: walletBalance,
         canStartVoiceCall: voiceRate <= 0 || walletBalance >= voiceRate,
         canStartVideoCall: videoRate <= 0 || walletBalance >= videoRate,
+        canSendVoiceMessage: voiceMessagePrice <= 0 || walletBalance >= voiceMessagePrice,
+        canDeleteMessage: messageDeletePrice <= 0 || walletBalance >= messageDeletePrice,
         currencySymbol: currencySettings?.currencySymbol || "VEX",
         currencyName: currencySettings?.currencyName || "VEX Coin",
         activeSession: activeSession

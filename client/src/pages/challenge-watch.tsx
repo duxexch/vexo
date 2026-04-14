@@ -218,7 +218,7 @@ interface ProjectCurrencySettings {
 export default function ChallengeWatchPage() {
   const [, params] = useRoute("/challenge/:id/watch");
   const [, setLocation] = useLocation();
-  const { t, language } = useI18n();
+  const { t, language, dir } = useI18n();
   const { user } = useAuth();
   const { toast } = useToast();
   const challengeId = params?.id;
@@ -1369,9 +1369,10 @@ export default function ChallengeWatchPage() {
     );
   }
 
-  const isRTL = language === "ar";
+  const isRTL = dir === "rtl";
   const mobileSupportDockClass = isRTL ? "end-2" : "start-2";
   const mobileChatDockClass = isRTL ? "start-2" : "end-2";
+  const liveChatLabel = `${t("common.live")} ${t("game.chat")}`;
   const multiplayerGameConfig = useMemo(
     () => ({ ...FALLBACK_GAME_CONFIG, ...buildGameConfig(multiplayerGames) }),
     [multiplayerGames],
@@ -1428,13 +1429,7 @@ export default function ChallengeWatchPage() {
         userId: msg.userId,
         username:
           msg.username ||
-          (isPlayerMessage
-            ? language === "ar"
-              ? "لاعب"
-              : "Player"
-            : language === "ar"
-              ? "مشاهد"
-              : "Viewer"),
+          (isPlayerMessage ? t("domino.player") : t("common.view")),
         message: String(msg.message || ""),
         timestamp: msg.timestamp,
       };
@@ -1466,6 +1461,8 @@ export default function ChallengeWatchPage() {
         : isChessGame
           ? "w-full max-w-2xl"
           : "w-full max-w-lg";
+  const playerOneLabel = `${t("domino.player")} 1`;
+  const playerTwoLabel = `${t("domino.player")} 2`;
   const chessWhiteLabel = `⚪ ${t("chess.white")}`;
   const chessBlackLabel = `⚫ ${t("chess.black")}`;
   const backgammonWhiteLabel = `⚪ ${t("backgammon.white")}`;
@@ -1476,11 +1473,11 @@ export default function ChallengeWatchPage() {
     }
 
     if (gameSession.currentTurn === challenge.player1Id) {
-      return `${challenge.player1?.username || (language === "ar" ? "اللاعب 1" : "Player 1")} · ${chessWhiteLabel}`;
+      return `${challenge.player1?.username || playerOneLabel} · ${chessWhiteLabel}`;
     }
 
     if (gameSession.currentTurn === challenge.player2Id) {
-      return `${challenge.player2?.username || (language === "ar" ? "اللاعب 2" : "Player 2")} · ${chessBlackLabel}`;
+      return `${challenge.player2?.username || playerTwoLabel} · ${chessBlackLabel}`;
     }
 
     return null;
@@ -1491,11 +1488,11 @@ export default function ChallengeWatchPage() {
     }
 
     if (gameSession.currentTurn === challenge.player1Id) {
-      return `${challenge.player1?.username || (language === "ar" ? "اللاعب 1" : "Player 1")} · ${backgammonWhiteLabel}`;
+      return `${challenge.player1?.username || playerOneLabel} · ${backgammonWhiteLabel}`;
     }
 
     if (gameSession.currentTurn === challenge.player2Id) {
-      return `${challenge.player2?.username || (language === "ar" ? "اللاعب 2" : "Player 2")} · ${backgammonBlackLabel}`;
+      return `${challenge.player2?.username || playerTwoLabel} · ${backgammonBlackLabel}`;
     }
 
     return null;
@@ -1584,23 +1581,23 @@ export default function ChallengeWatchPage() {
   }
 
   const resolveWinnerName = (winnerId?: string) => {
-    if (!winnerId) return language === "ar" ? "غير معروف" : "Unknown";
+    if (!winnerId) return t("common.none");
     const playerMap = new Map<string, string>([
       [
         challenge.player1?.id || challenge.player1Id,
-        challenge.player1?.username || "Player 1",
+        challenge.player1?.username || playerOneLabel,
       ],
       [
         challenge.player2?.id || challenge.player2Id || "",
-        challenge.player2?.username || "Player 2",
+        challenge.player2?.username || playerTwoLabel,
       ],
       [
         challenge.player3?.id || challenge.player3Id || "",
-        challenge.player3?.username || "Player 3",
+        challenge.player3?.username || `${t("domino.player")} 3`,
       ],
       [
         challenge.player4?.id || challenge.player4Id || "",
-        challenge.player4?.username || "Player 4",
+        challenge.player4?.username || `${t("domino.player")} 4`,
       ],
     ]);
     return playerMap.get(winnerId) || winnerId;
@@ -1788,7 +1785,7 @@ export default function ChallengeWatchPage() {
                 className="inline-flex shrink-0 gap-1 text-[11px] sm:text-xs"
               >
                 <Eye className="h-3 w-3" />
-                {language === "ar" ? "مشاهد" : "Spectator"}
+                {t("common.view")}
               </Badge>
               <Badge
                 variant="secondary"
@@ -1982,9 +1979,9 @@ export default function ChallengeWatchPage() {
                             }
                             data-testid="watch-player1-avatar-voice-toggle"
                             title={
-                              language === "ar"
-                                ? "الاستماع لصوت اللاعب 1"
-                                : "Toggle player 1 voice"
+                              player1MutedForViewer
+                                ? t("chat.unmuteUser")
+                                : t("chat.muteUser")
                             }
                           >
                             {player1MutedForViewer ? (
@@ -1997,7 +1994,7 @@ export default function ChallengeWatchPage() {
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="font-medium">
-                              {challenge.player1?.username || "Player 1"}
+                                {challenge.player1?.username || playerOneLabel}
                             </p>
                             {player1ResultMeta && (
                               <Badge
@@ -2014,9 +2011,7 @@ export default function ChallengeWatchPage() {
                                 ? chessWhiteLabel
                                 : isBackgammonGame
                                   ? backgammonWhiteLabel
-                                  : language === "ar"
-                                    ? "المقعد 1"
-                                    : "Seat 1"}
+                                  : playerOneLabel}
                             </p>
                             {oddsData?.player1 && (
                               <Badge
@@ -2265,9 +2260,7 @@ export default function ChallengeWatchPage() {
                     challenge.gameType === "languageduel") &&
                     !playerView && (
                       <div className="w-full max-w-lg rounded-lg border bg-card p-6 text-center text-muted-foreground">
-                        {language === "ar"
-                          ? "جاري مزامنة حالة المباراة..."
-                          : "Synchronizing live game state..."}
+                        {t("challenge.reconnecting")}
                       </div>
                     )}
                 </div>
@@ -2423,9 +2416,9 @@ export default function ChallengeWatchPage() {
                             }
                             data-testid="watch-player2-avatar-voice-toggle"
                             title={
-                              language === "ar"
-                                ? "الاستماع لصوت اللاعب 2"
-                                : "Toggle player 2 voice"
+                              player2MutedForViewer
+                                ? t("chat.unmuteUser")
+                                : t("chat.muteUser")
                             }
                           >
                             {player2MutedForViewer ? (
@@ -2438,7 +2431,7 @@ export default function ChallengeWatchPage() {
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="font-medium">
-                              {challenge.player2?.username || "Waiting..."}
+                              {challenge.player2?.username || t("common.pending")}
                             </p>
                             {player2ResultMeta && (
                               <Badge
@@ -2455,9 +2448,7 @@ export default function ChallengeWatchPage() {
                                 ? chessBlackLabel
                                 : isBackgammonGame
                                   ? backgammonBlackLabel
-                                  : language === "ar"
-                                    ? "المقعد 2"
-                                    : "Seat 2"}
+                                  : playerTwoLabel}
                             </p>
                             {oddsData?.player2 && challenge.player2 && (
                               <Badge
@@ -2909,19 +2900,17 @@ export default function ChallengeWatchPage() {
 
       {user && (
         <div
-          className={`pointer-events-none !fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] ${mobileSupportDockClass} z-50 lg:hidden`}
+          className={`pointer-events-none !fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] ${mobileSupportDockClass} z-50 lg:hidden`}
         >
           <div className="pointer-events-auto flex min-h-[2.75rem] min-w-[2.75rem] items-end gap-2">
             <Button
               onClick={openGiftPanel}
               className="vex-arcade-fab relative h-11 w-11 rounded-full p-0 shadow-2xl"
               data-testid="fab-gift"
-              title={language === "ar" ? "إرسال هدية" : "Send Gift"}
+              title={t("challenges.sendGift")}
             >
               <Gift className="h-5 w-5" />
-              <span className="sr-only">
-                {language === "ar" ? "هدية" : "Gift"}
-              </span>
+              <span className="sr-only">{t("challenges.sendGift")}</span>
             </Button>
 
             <Button
@@ -2930,19 +2919,17 @@ export default function ChallengeWatchPage() {
               disabled={supportActionsDisabled}
               className="vex-arcade-fab-outline h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md disabled:opacity-45"
               data-testid="button-mobile-jump-support"
-              title={language === "ar" ? "ادعم" : "Support"}
+              title={t("challenges.stake")}
             >
               <TrendingUp className="h-5 w-5" />
-              <span className="sr-only">
-                {language === "ar" ? "ادعم" : "Support"}
-              </span>
+              <span className="sr-only">{t("challenges.stake")}</span>
             </Button>
           </div>
         </div>
       )}
 
       <div
-        className={`pointer-events-none !fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] ${mobileChatDockClass} z-50 lg:hidden`}
+        className={`pointer-events-none !fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] ${mobileChatDockClass} z-50 lg:hidden`}
       >
         <div className="pointer-events-auto flex min-h-[2.75rem] min-w-[2.75rem] items-end justify-end">
           <Button
@@ -2950,12 +2937,10 @@ export default function ChallengeWatchPage() {
             onClick={() => setShowMobileChat(true)}
             className="vex-arcade-fab-outline relative h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md"
             data-testid="button-mobile-open-chat"
-            title={language === "ar" ? "الدردشة المباشرة" : "Live Chat"}
+            title={liveChatLabel}
           >
             <MessageCircle className="h-5 w-5" />
-            <span className="sr-only">
-              {language === "ar" ? "الدردشة" : "Chat"}
-            </span>
+            <span className="sr-only">{t("game.chat")}</span>
             {liveChatMessages.length > 0 && (
               <span className="absolute -end-1 -top-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
                 {liveChatMessages.length > 99 ? "99+" : liveChatMessages.length}
@@ -2970,9 +2955,7 @@ export default function ChallengeWatchPage() {
           <DialogHeader className="border-b px-4 py-3">
             <DialogTitle className="flex items-center gap-2 text-base">
               <MessageCircle className="h-4 w-4 text-primary" />
-              {language === "ar"
-                ? "الدردشة المباشرة للمباراة"
-                : "Live Match Chat"}
+              {liveChatLabel}
               <Badge variant="secondary" className="ms-auto">
                 {liveChatMessages.length}
               </Badge>
@@ -2982,9 +2965,7 @@ export default function ChallengeWatchPage() {
           <div className="max-h-[65vh] overflow-y-auto px-4 py-3">
             {liveChatMessages.length === 0 ? (
               <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
-                {language === "ar"
-                  ? "لا توجد رسائل بعد — ستظهر رسائل الدردشة هنا لكل المشاهدين."
-                  : "No messages yet — live chat will appear here for all spectators."}
+                {t("chat.noMessages")}
               </div>
             ) : (
               <div className="space-y-2">
@@ -3023,11 +3004,7 @@ export default function ChallengeWatchPage() {
                       sendLiveChatMessage(mobileChatInput);
                     }
                   }}
-                  placeholder={
-                    language === "ar"
-                      ? "اكتب رسالة للمشاهدين..."
-                      : "Write a message to the viewers..."
-                  }
+                  placeholder={t("chat.typeMessage")}
                   maxLength={300}
                 />
                 <Button
@@ -3035,14 +3012,12 @@ export default function ChallengeWatchPage() {
                   onClick={() => sendLiveChatMessage(mobileChatInput)}
                   disabled={!mobileChatInput.trim()}
                 >
-                  {language === "ar" ? "إرسال" : "Send"}
+                  {t("chat.sendMessage")}
                 </Button>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                {language === "ar"
-                  ? "سجّل الدخول للمشاركة في الدردشة المباشرة."
-                  : "Sign in to participate in the live chat."}
+                {`${t("auth.signIn")} · ${liveChatLabel}`}
               </p>
             )}
           </div>

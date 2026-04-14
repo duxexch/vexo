@@ -15,6 +15,7 @@ import { Send, MessageCircle, Zap, MoreVertical, Ban, VolumeX, X } from "lucide-
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 const CHAT_BUBBLE_PREF_KEY = "vex_game_chat_bubble_enabled";
 
@@ -123,29 +124,34 @@ export function GameChat({
   const [chatBubbleEnabled, setChatBubbleEnabled] = useState<boolean>(() => readChatBubblePreference());
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { t, dir } = useI18n();
   const { toast } = useToast();
   const { user, refreshUser } = useAuth();
   const lastProcessedRef = useRef<number>(0);
+  const chatTitle = t("chat.title");
+  const quickLabel = t("auth.quick");
+  const quickActionsLabel = t("play.quickActions");
+  const chatHistoryLabel = `${t("nav.gameHistory")} · ${chatTitle}`;
 
   const blockMutation = useMutation({
     mutationFn: (userId: string) => apiRequest('POST', `/api/users/${userId}/block`),
     onSuccess: () => {
-      toast({ title: language === 'ar' ? 'تم حظر المستخدم' : 'User blocked' });
+      toast({ title: t("chat.blockSuccess") });
       refreshUser();
     },
     onError: (err: Error) => {
-      toast({ title: language === 'ar' ? 'خطأ' : 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: t("common.error"), description: err.message, variant: 'destructive' });
     }
   });
 
   const muteMutation = useMutation({
     mutationFn: (userId: string) => apiRequest('POST', `/api/users/${userId}/mute`),
     onSuccess: () => {
-      toast({ title: language === 'ar' ? 'تم كتم المستخدم' : 'User muted' });
+      toast({ title: t("chat.muteSuccess") });
       refreshUser();
     },
     onError: (err: Error) => {
-      toast({ title: language === 'ar' ? 'خطأ' : 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: t("common.error"), description: err.message, variant: 'destructive' });
     }
   });
 
@@ -238,12 +244,12 @@ export function GameChat({
 
       {/* Quick messages floating strip */}
       {showQuickPanel && (
-        <div className="absolute bottom-16 left-0 right-0 z-40 bg-background/95 backdrop-blur-md border-t animate-in slide-in-from-bottom-4 duration-200">
+        <div dir={dir} className="absolute bottom-16 left-0 right-0 z-40 bg-background/95 backdrop-blur-md border-t animate-in slide-in-from-bottom-4 duration-200">
           <div className="flex items-center justify-between px-3 py-1.5 border-b">
             <span className="text-xs font-medium text-muted-foreground">
-              {language === "ar" ? "رسائل سريعة" : "Quick Messages"}
+              {quickActionsLabel}
             </span>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowQuickPanel(false)}>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowQuickPanel(false)} aria-label={t("common.close")}>
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -267,16 +273,16 @@ export function GameChat({
 
       {/* Chat history overlay */}
       {showHistory && (
-        <div className="absolute bottom-16 left-0 right-0 z-40 bg-background/95 backdrop-blur-md border-t animate-in slide-in-from-bottom-4 duration-200 max-h-[60vh]">
+        <div dir={dir} className="absolute bottom-16 left-0 right-0 z-40 bg-background/95 backdrop-blur-md border-t animate-in slide-in-from-bottom-4 duration-200 max-h-[60vh]">
           <div className="flex items-center justify-between px-3 py-2 border-b">
             <div className="flex items-center gap-1.5">
               <MessageCircle className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium">
-                {language === "ar" ? "سجل الدردشة" : "Chat History"}
+                {chatHistoryLabel}
               </span>
               <span className="text-xs text-muted-foreground">({messages.length})</span>
             </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowHistory(false)}>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowHistory(false)} aria-label={t("common.close")}>
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -284,7 +290,7 @@ export function GameChat({
             <div className="p-3 space-y-2.5">
               {messages.length === 0 ? (
                 <p className="text-center text-sm text-muted-foreground py-6">
-                  {language === "ar" ? "لا توجد رسائل بعد" : "No messages yet"}
+                  {t("chat.noMessages")}
                 </p>
               ) : (
                 messages.map((msg) => {
@@ -337,7 +343,7 @@ export function GameChat({
                                       data-testid={`menu-block-${msg.senderId}`}
                                     >
                                       <Ban className="h-3.5 w-3.5 me-1.5" />
-                                      {language === "ar" ? "حظر" : "Block"}
+                                      {t("chat.blockUser")}
                                     </DropdownMenuItem>
                                   )}
                                   {!isAlreadyMuted && (
@@ -347,7 +353,7 @@ export function GameChat({
                                       data-testid={`menu-mute-${msg.senderId}`}
                                     >
                                       <VolumeX className="h-3.5 w-3.5 me-1.5" />
-                                      {language === "ar" ? "كتم" : "Mute"}
+                                      {t("chat.muteUser")}
                                     </DropdownMenuItem>
                                   )}
                                 </DropdownMenuContent>
@@ -377,7 +383,7 @@ export function GameChat({
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
                 onKeyDown={handleKeyPress}
-                placeholder={language === "ar" ? "اكتب رسالة..." : "Type a message..."}
+                placeholder={t("chat.typeMessage")}
                 className="flex-1 h-9 text-sm"
                 disabled={disabled}
                 autoFocus
@@ -398,18 +404,18 @@ export function GameChat({
       )}
 
       {/* Bottom control bar — chat/quick message buttons */}
-      <div className="absolute bottom-0 left-0 right-0 z-30 flex items-center justify-center gap-2 p-2 bg-background/80 backdrop-blur-sm">
+      <div dir={dir} className="absolute bottom-0 left-0 right-0 z-30 flex items-center justify-center gap-2 p-2 bg-background/80 backdrop-blur-sm">
         <Button
           variant={chatBubbleEnabled ? "default" : "outline"}
           size="sm"
           className="h-9 w-9 rounded-full p-0 shadow-md"
           onClick={toggleChatBubble}
           disabled={disabled}
-          title={language === "ar" ? "فقاعة الدردشة" : "Chat Bubble"}
+          title={chatTitle}
           data-testid="button-toggle-chat-bubble"
         >
           <MessageCircle className="h-4 w-4" />
-          <span className="sr-only">{language === "ar" ? "فقاعة الدردشة" : "Chat Bubble"}</span>
+          <span className="sr-only">{chatTitle}</span>
         </Button>
         <Button
           variant={showQuickPanel ? "default" : "outline"}
@@ -423,7 +429,7 @@ export function GameChat({
         >
           <Zap className="h-4 w-4" />
           <span className="text-xs hidden sm:inline">
-            {language === "ar" ? "سريع" : "Quick"}
+            {quickLabel}
           </span>
         </Button>
         <Button
@@ -438,7 +444,7 @@ export function GameChat({
         >
           <MessageCircle className="h-4 w-4" />
           <span className="text-xs hidden sm:inline">
-            {language === "ar" ? "دردشة" : "Chat"}
+            {chatTitle}
           </span>
           {messages.length > 0 && !showHistory && (
             <span className="absolute -top-1 -end-1 h-4 w-4 rounded-full bg-destructive text-[9px] text-destructive-foreground flex items-center justify-center font-bold">

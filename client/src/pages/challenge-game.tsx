@@ -245,7 +245,7 @@ const QUICK_MESSAGES = [
 export default function ChallengeGamePage() {
   const [, params] = useRoute("/challenge/:id/play");
   const [, setLocation] = useLocation();
-  const { t, language } = useI18n();
+  const { t, language, dir } = useI18n();
   const { user, token: authToken } = useAuth();
   const { toast } = useToast();
   const challengeId = params?.id;
@@ -2373,6 +2373,8 @@ export default function ChallengeGamePage() {
   const isTarneebGame = challenge.gameType === "tarneeb";
   const isTeamGame =
     isTarneebGame || challenge.gameType === "baloot";
+  const mobilePlayerChatDockClass = dir === "rtl" ? "start-2" : "end-2";
+  const liveChatLabel = `${t("common.live")} ${t("game.chat")}`;
   const showTwoPlayerAvatarLanes = !isDominoGame && !isTeamGame;
   const isWideBoardGame =
     isDominoGame || isBackgammonGame || isTeamGame;
@@ -2385,6 +2387,8 @@ export default function ChallengeGamePage() {
         : isChessGame
           ? "w-full max-w-2xl"
           : "w-full max-w-lg";
+  const playerOneLabel = `${t("domino.player")} 1`;
+  const playerTwoLabel = `${t("domino.player")} 2`;
   const chessWhiteLabel = `⚪ ${t("chess.white")}`;
   const chessBlackLabel = `⚫ ${t("chess.black")}`;
   const backgammonWhiteLabel = `⚪ ${t("backgammon.white")}`;
@@ -2401,11 +2405,11 @@ export default function ChallengeGamePage() {
     }
 
     if (gameSession.currentTurn === challenge.player1Id) {
-      return `${challenge.player1?.username || (language === "ar" ? "اللاعب 1" : "Player 1")} · ${chessWhiteLabel}`;
+      return `${challenge.player1?.username || playerOneLabel} · ${chessWhiteLabel}`;
     }
 
     if (gameSession.currentTurn === challenge.player2Id) {
-      return `${challenge.player2?.username || (language === "ar" ? "اللاعب 2" : "Player 2")} · ${chessBlackLabel}`;
+      return `${challenge.player2?.username || playerTwoLabel} · ${chessBlackLabel}`;
     }
 
     return null;
@@ -2422,11 +2426,11 @@ export default function ChallengeGamePage() {
     }
 
     if (gameSession.currentTurn === challenge.player1Id) {
-      return `${challenge.player1?.username || (language === "ar" ? "اللاعب 1" : "Player 1")} · ${backgammonWhiteLabel}`;
+      return `${challenge.player1?.username || playerOneLabel} · ${backgammonWhiteLabel}`;
     }
 
     if (gameSession.currentTurn === challenge.player2Id) {
-      return `${challenge.player2?.username || (language === "ar" ? "اللاعب 2" : "Player 2")} · ${backgammonBlackLabel}`;
+      return `${challenge.player2?.username || playerTwoLabel} · ${backgammonBlackLabel}`;
     }
 
     return null;
@@ -2498,7 +2502,7 @@ export default function ChallengeGamePage() {
   };
 
   return (
-    <div className="vex-arcade-stage vex-arcade-stage--tabletop min-h-[100svh] bg-background">
+    <div className="vex-arcade-stage vex-arcade-stage--tabletop min-h-[100svh] bg-background" dir={dir}>
       {/* Reconnection overlay */}
       {wsConnState === "reconnecting" && (
         <div className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-center gap-4 backdrop-blur-sm">
@@ -2526,13 +2530,7 @@ export default function ChallengeGamePage() {
                 variant={isSpectator ? "outline" : "default"}
                 className="inline-flex shrink-0 text-[11px] sm:text-xs"
               >
-                {isSpectator
-                  ? language === "ar"
-                    ? "مشاهد"
-                    : "Spectator"
-                  : language === "ar"
-                    ? "لاعب"
-                    : "Player"}
+                {isSpectator ? t("common.view") : t("domino.player")}
               </Badge>
               <Badge
                 variant="secondary"
@@ -2594,9 +2592,7 @@ export default function ChallengeGamePage() {
                     >
                       {autoPlayNotice.mode === "autoplay"
                         ? "Auto Play"
-                        : language === "ar"
-                          ? "مهلة عودة"
-                          : "Reconnect"}
+                        : t("challenge.reconnecting")}
                     </Badge>
                   </div>
                   <p className="mt-1 text-xs leading-5 text-amber-900/80 dark:text-amber-100/85">
@@ -2611,9 +2607,7 @@ export default function ChallengeGamePage() {
                   onClick={() => setAutoPlayNotice(null)}
                 >
                   <X className="h-4 w-4" />
-                  <span className="sr-only">
-                    {language === "ar" ? "إغلاق" : "Dismiss"}
-                  </span>
+                  <span className="sr-only">{t("common.close")}</span>
                 </Button>
               </div>
             </div>
@@ -2643,7 +2637,7 @@ export default function ChallengeGamePage() {
                     <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2">
                       <div className="min-w-0 me-2">
                         <p className="truncate text-xs text-muted-foreground">
-                          {challenge.player1?.username || "Player 1"}
+                          {challenge.player1?.username || playerOneLabel}
                         </p>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 shrink-0">
@@ -2658,7 +2652,7 @@ export default function ChallengeGamePage() {
                     <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2">
                       <div className="min-w-0 me-2">
                         <p className="truncate text-xs text-muted-foreground">
-                          {challenge.player2?.username || "Player 2"}
+                          {challenge.player2?.username || playerTwoLabel}
                         </p>
                       </div>
                       <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 shrink-0">
@@ -2813,9 +2807,9 @@ export default function ChallengeGamePage() {
                           }}
                           data-testid="play-opponent-avatar-voice-toggle"
                           title={
-                            language === "ar"
-                              ? "الاستماع لصوت الخصم"
-                              : "Toggle opponent voice"
+                            opponentMutedForViewer
+                              ? t("chat.unmuteUser")
+                              : t("chat.muteUser")
                           }
                         >
                           {opponentMutedForViewer ? (
@@ -2828,7 +2822,7 @@ export default function ChallengeGamePage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium">
-                            {opponent?.username || "Waiting..."}
+                            {opponent?.username || t("common.pending")}
                           </p>
                           {opponentResultMeta && (
                             <Badge
@@ -3131,9 +3125,9 @@ export default function ChallengeGamePage() {
                           onClick={() => setIsVoiceMicMuted((prev) => !prev)}
                           data-testid="play-self-avatar-mic-toggle"
                           title={
-                            language === "ar"
-                              ? "تشغيل/كتم المايك"
-                              : "Toggle microphone"
+                            isVoiceMicMuted
+                              ? t("chat.unmuteUser")
+                              : t("chat.muteUser")
                           }
                         >
                           {isVoiceMicMuted ? (
@@ -3147,7 +3141,7 @@ export default function ChallengeGamePage() {
                         <div className="flex items-center gap-2">
                           <p className="font-medium">
                             {isSpectator
-                              ? `${user?.username} ${language === "ar" ? "(مشاهدة)" : "(Watching)"}`
+                              ? `${user?.username} (${t("common.view")})`
                               : `${user?.username} ${t("challenge.you")}`}
                           </p>
                           {selfResultMeta && (
@@ -3161,9 +3155,7 @@ export default function ChallengeGamePage() {
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {isSpectator
-                            ? language === "ar"
-                              ? "وضع المشاهدة"
-                              : "Spectator mode"
+                            ? t("common.view")
                             : isTeamGame
                               ? t("challenge.team", { num: String(myTeam + 1) })
                               : isChessGame
@@ -3339,19 +3331,17 @@ export default function ChallengeGamePage() {
       </div>
 
       {!isSpectator && (isChessGame || isBackgammonGame) && (
-        <div className="pointer-events-none !fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] end-2 z-50 flex sm:hidden">
+        <div className={`pointer-events-none !fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] ${mobilePlayerChatDockClass} z-50 flex sm:hidden`}>
           <div className="pointer-events-auto">
             <Button
               variant="outline"
               onClick={() => setShowMobileChat(true)}
               className="vex-arcade-fab-outline relative h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md"
               data-testid="button-mobile-open-chat-player"
-              title={language === "ar" ? "الدردشة المباشرة" : "Live Chat"}
+              title={liveChatLabel}
             >
               <MessageCircle className="h-5 w-5" />
-              <span className="sr-only">
-                {language === "ar" ? "الدردشة" : "Chat"}
-              </span>
+              <span className="sr-only">{t("game.chat")}</span>
               {messages.length > 0 && (
                 <span className="absolute -end-1 -top-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
                   {messages.length > 99 ? "99+" : messages.length}
@@ -3367,7 +3357,7 @@ export default function ChallengeGamePage() {
           <DialogHeader className="border-b px-4 py-3">
             <DialogTitle className="flex items-center gap-2 text-base">
               <MessageCircle className="h-4 w-4 text-primary" />
-              {language === "ar" ? "دردشة المباراة" : "Match Chat"}
+              {liveChatLabel}
               <Badge variant="secondary" className="ms-auto">
                 {messages.length}
               </Badge>
@@ -3396,15 +3386,15 @@ export default function ChallengeGamePage() {
 
       <ConfirmDialog
         open={showResignDialog}
-        title={language === "ar" ? "تأكيد الاستسلام" : "Confirm Resignation"}
+        title={t("challenge.resign")}
         description={
           language === "ar"
             ? "هل أنت متأكد من الاستسلام؟ ستخسر المباراة والتحدي."
             : "Are you sure you want to resign? You will lose the match and your entry."
         }
         variant="destructive"
-        confirmLabel={language === "ar" ? "استسلام" : "Resign"}
-        cancelLabel={language === "ar" ? "إلغاء" : "Cancel"}
+        confirmLabel={t("challenge.resign")}
+        cancelLabel={t("common.cancel")}
         onConfirm={handleResign}
         onCancel={() => setShowResignDialog(false)}
       />
@@ -3418,7 +3408,7 @@ export default function ChallengeGamePage() {
                   <div className="flex flex-col items-center gap-2">
                     <Trophy className="h-12 w-12 text-yellow-500" />
                     <span className="text-2xl">
-                      {language === "ar" ? "انتهت المباراة" : "Match Finished"}
+                      {t("backgammon.gameOver")}
                     </span>
                   </div>
                 ) : challenge.gameType === "domino" &&
@@ -3426,9 +3416,7 @@ export default function ChallengeGamePage() {
                   <div className="flex flex-col items-center gap-2">
                     <ArrowRightLeft className="h-12 w-12 text-yellow-500" />
                     <span className="text-2xl">
-                      {language === "ar"
-                        ? "انتهت المباراة بالتعادل"
-                        : "Match Draw"}
+                      {t("profile.draw")}
                     </span>
                   </div>
                 ) : gameSession.winnerId === user?.id ? (
@@ -3444,7 +3432,7 @@ export default function ChallengeGamePage() {
                   <div className="flex flex-col items-center gap-2">
                     <X className="h-12 w-12 text-destructive" />
                     <span className="text-2xl">
-                      {language === "ar" ? "للأسف خسرت" : "You Lost"}
+                      {t("backgammon.youLost")}
                     </span>
                   </div>
                 )}
@@ -3453,17 +3441,17 @@ export default function ChallengeGamePage() {
             <div className="text-center text-muted-foreground">
               <p>
                 {gameSession.winReason === "checkmate" &&
-                  (language === "ar" ? "كش مات!" : "Checkmate!")}
+                  t("chess.checkmate")}
                 {gameSession.winReason === "timeout" &&
                   (language === "ar" ? "انتهى الوقت" : "Time out")}
                 {gameSession.winReason === "resignation" &&
-                  (language === "ar" ? "استسلام" : "Resignation")}
+                  t("challenge.resign")}
                 {gameSession.winReason === "domino_blocked" &&
                   (language === "ar" ? "اللعبة محظورة" : "Game blocked")}
                 {gameSession.winReason === "blocked" &&
                   (language === "ar" ? "اللعبة محظورة" : "Game blocked")}
                 {gameSession.winReason === "stalemate" &&
-                  (language === "ar" ? "طريق مسدود" : "Stalemate")}
+                  t("chess.stalemate")}
                 {gameSession.winReason === "gammon" &&
                   (language === "ar" ? "غامون!" : "Gammon!")}
                 {gameSession.winReason === "backgammon" &&
@@ -3477,7 +3465,7 @@ export default function ChallengeGamePage() {
                 {gameSession.winReason === "draw_agreement" &&
                   (language === "ar" ? "تعادل بالاتفاق" : "Draw by agreement")}
                 {gameSession.winReason === "draw" &&
-                  (language === "ar" ? "تعادل" : "Draw")}
+                  t("profile.draw")}
               </p>
               {canPlayActions && gameSession.winnerId === user?.id && (
                 <div className="mt-2 inline-flex items-center gap-1 text-lg font-bold text-green-500">
@@ -3518,14 +3506,14 @@ export default function ChallengeGamePage() {
                 variant="outline"
                 onClick={() => setLocation("/challenges")}
               >
-                {language === "ar" ? "العودة للتحديات" : "Back to Challenges"}
+                {t("challenge.backToChallenges")}
               </Button>
               <Button
                 onClick={() => {
                   setLocation("/challenges");
                 }}
               >
-                {language === "ar" ? "مباراة جديدة" : "New Match"}
+                {t("common.playAgain")}
               </Button>
             </DialogFooter>
           </DialogContent>
