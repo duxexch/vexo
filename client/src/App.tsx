@@ -191,6 +191,46 @@ const DEFAULT_SIDEBAR_ICON_ACCENT = {
   inactive: "bg-gradient-to-br from-cyan-500/85 via-blue-500/85 to-indigo-500/85 border-blue-200/35",
 };
 
+type BottomNavAccent = {
+  active: string;
+  inactive: string;
+  glow: string;
+};
+
+const BOTTOM_NAV_ACCENTS: Record<string, BottomNavAccent> = {
+  p2p: {
+    active: "bg-gradient-to-br from-orange-500 via-rose-500 to-pink-600 border-orange-200/65",
+    inactive: "bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 border-slate-500/45",
+    glow: "bg-orange-500/45",
+  },
+  main: {
+    active: "bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-600 border-cyan-200/65",
+    inactive: "bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 border-slate-500/45",
+    glow: "bg-cyan-500/45",
+  },
+  play: {
+    active: "bg-gradient-to-br from-violet-500 via-fuchsia-500 to-indigo-600 border-violet-200/65",
+    inactive: "bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 border-slate-500/45",
+    glow: "bg-violet-500/45",
+  },
+  challenges: {
+    active: "bg-gradient-to-br from-rose-500 via-red-500 to-orange-500 border-rose-200/65",
+    inactive: "bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 border-slate-500/45",
+    glow: "bg-rose-500/45",
+  },
+  chat: {
+    active: "bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-600 border-sky-200/65",
+    inactive: "bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 border-slate-500/45",
+    glow: "bg-sky-500/45",
+  },
+};
+
+const DEFAULT_BOTTOM_NAV_ACCENT: BottomNavAccent = {
+  active: "bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-600 border-cyan-200/65",
+  inactive: "bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 border-slate-500/45",
+  glow: "bg-cyan-500/45",
+};
+
 const ChallengeWatchPage = lazy(() => import("@/pages/challenge-watch"));
 const ChessGamePage = lazy(() => import("@/pages/games/ChessGame"));
 const BackgammonGamePage = lazy(() => import("@/pages/games/BackgammonGame"));
@@ -416,6 +456,7 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
   const { t, language } = useI18n();
   const [location, setLocation] = useLocation();
   const { sectionCounts } = useNotificationStatus();
+  const [pressedItemKey, setPressedItemKey] = useState<string | null>(null);
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
@@ -491,9 +532,26 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
     touchEndY.current = null;
   };
 
+  const applyIconTilt = (event: React.MouseEvent<HTMLDivElement>) => {
+    const host = event.currentTarget;
+    const rect = host.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const rotateY = ((x / rect.width) - 0.5) * 10;
+    const rotateX = (0.5 - (y / rect.height)) * 10;
+    host.style.setProperty("--tilt-x", `${rotateX.toFixed(2)}deg`);
+    host.style.setProperty("--tilt-y", `${rotateY.toFixed(2)}deg`);
+  };
+
+  const resetIconTilt = (event: React.MouseEvent<HTMLDivElement>) => {
+    const host = event.currentTarget;
+    host.style.setProperty("--tilt-x", "0deg");
+    host.style.setProperty("--tilt-y", "0deg");
+  };
+
   return (
     <nav
-      className="fixed bottom-0 start-0 end-0 flex items-center justify-around gap-1 px-2 pt-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t bg-background md:hidden z-50"
+      className="fixed bottom-0 start-0 end-0 flex items-center justify-around gap-1 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-slate-950/95 backdrop-blur-md shadow-[0_-14px_30px_rgba(0,0,0,0.45)] md:hidden z-50"
       aria-label="Main navigation"
       onTouchStart={handleNavTouchStart}
       onTouchMove={handleNavTouchMove}
@@ -502,36 +560,85 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
       {navItems.map((item) => {
         const isActive = location === item.url;
         const badgeCount = isActive ? 0 : (sectionCounts[item.key] || 0);
+        const accent = BOTTOM_NAV_ACCENTS[item.key] || DEFAULT_BOTTOM_NAV_ACCENT;
+        const isPressed = pressedItemKey === item.key;
         return (
           <Link key={item.key} href={item.url}
-            className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md min-w-[3rem] transition-colors no-underline ${isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+            className={`group relative flex flex-col items-center gap-1 px-1.5 py-1 rounded-xl min-w-[3.2rem] transition-all duration-300 no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
               }`}
             aria-current={isActive ? "page" : undefined}
             data-testid={`nav-${item.key}`}
+            onPointerDown={() => setPressedItemKey(item.key)}
+            onPointerUp={() => setPressedItemKey(null)}
+            onPointerCancel={() => setPressedItemKey(null)}
+            onPointerLeave={() => setPressedItemKey(null)}
           >
-            <div className="relative">
-              <item.icon className="w-5 h-5" />
+            <div
+              className="relative [perspective:900px]"
+              onMouseMove={applyIconTilt}
+              onMouseLeave={resetIconTilt}
+            >
+              <span
+                className={`pointer-events-none absolute -inset-1 rounded-[14px] blur-md transition-all duration-300 ${accent.glow} ${isActive ? 'opacity-70' : 'opacity-0 group-hover:opacity-45'}`}
+              />
+              <span
+                className={`relative flex h-9 w-9 items-center justify-center rounded-[12px] border [transform-style:preserve-3d] shadow-[0_8px_18px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.32)] transition-all duration-300 ease-out ${isActive ? accent.active : accent.inactive} ${isPressed ? 'scale-[0.94]' : 'group-hover:scale-[1.05]'}`}
+                style={{ transform: 'translateZ(6px) rotateX(var(--tilt-x,0deg)) rotateY(var(--tilt-y,0deg))' }}
+              >
+                <span className="pointer-events-none absolute inset-0 rounded-[12px] bg-gradient-to-b from-white/35 via-transparent to-black/30" />
+                <item.icon className={`relative h-[17px] w-[17px] transition-transform duration-300 ${isActive ? 'scale-[1.06] text-white' : 'text-slate-100/90 group-hover:text-white'}`} />
+              </span>
               {badgeCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold leading-none px-0.5">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold leading-none px-0.5 shadow-[0_4px_10px_rgba(239,68,68,0.45)]">
                   {badgeCount > 99 ? "99+" : badgeCount}
                 </span>
               )}
             </div>
-            <span className="text-[10px] font-medium leading-none">{item.title}</span>
-            {isActive && <div className="w-4 h-0.5 bg-primary rounded-full mt-0.5" />}
+            <span className={`text-[10px] font-medium leading-none tracking-[0.01em] transition-colors duration-300 ${isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground/90'}`}>
+              {item.title}
+            </span>
+            {isActive && <div className="w-5 h-[2px] rounded-full bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400 shadow-[0_0_12px_rgba(56,189,248,0.45)]" />}
           </Link>
         );
       })}
-      <button
-        className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md min-w-[3rem] transition-colors ${isChatOpen ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        onClick={onChatToggle}
-        data-testid="nav-chat"
-      >
-        <MessageCircle className="w-5 h-5" />
-        <span className="text-[10px] font-medium leading-none">{t('nav.chat') || 'Chat'}</span>
-        {isChatOpen && <div className="w-4 h-0.5 bg-primary rounded-full mt-0.5" />}
-      </button>
+      {(() => {
+        const chatAccent = BOTTOM_NAV_ACCENTS.chat || DEFAULT_BOTTOM_NAV_ACCENT;
+        const isChatPressed = pressedItemKey === "chat";
+        return (
+          <button
+            type="button"
+            className={`group relative flex flex-col items-center gap-1 px-1.5 py-1 rounded-xl min-w-[3.2rem] transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${isChatOpen ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            onClick={onChatToggle}
+            data-testid="nav-chat"
+            onPointerDown={() => setPressedItemKey("chat")}
+            onPointerUp={() => setPressedItemKey(null)}
+            onPointerCancel={() => setPressedItemKey(null)}
+            onPointerLeave={() => setPressedItemKey(null)}
+          >
+            <div
+              className="relative [perspective:900px]"
+              onMouseMove={applyIconTilt}
+              onMouseLeave={resetIconTilt}
+            >
+              <span
+                className={`pointer-events-none absolute -inset-1 rounded-[14px] blur-md transition-all duration-300 ${chatAccent.glow} ${isChatOpen ? 'opacity-70' : 'opacity-0 group-hover:opacity-45'}`}
+              />
+              <span
+                className={`relative flex h-9 w-9 items-center justify-center rounded-[12px] border [transform-style:preserve-3d] shadow-[0_8px_18px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.32)] transition-all duration-300 ease-out ${isChatOpen ? chatAccent.active : chatAccent.inactive} ${isChatPressed ? 'scale-[0.94]' : 'group-hover:scale-[1.05]'}`}
+                style={{ transform: 'translateZ(6px) rotateX(var(--tilt-x,0deg)) rotateY(var(--tilt-y,0deg))' }}
+              >
+                <span className="pointer-events-none absolute inset-0 rounded-[12px] bg-gradient-to-b from-white/35 via-transparent to-black/30" />
+                <MessageCircle className={`relative h-[17px] w-[17px] transition-transform duration-300 ${isChatOpen ? 'scale-[1.06] text-white' : 'text-slate-100/90 group-hover:text-white'}`} />
+              </span>
+            </div>
+            <span className={`text-[10px] font-medium leading-none tracking-[0.01em] transition-colors duration-300 ${isChatOpen ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground/90'}`}>
+              {t('nav.chat') || 'Chat'}
+            </span>
+            {isChatOpen && <div className="w-5 h-[2px] rounded-full bg-gradient-to-r from-sky-400 via-blue-400 to-indigo-400 shadow-[0_0_12px_rgba(56,189,248,0.45)]" />}
+          </button>
+        );
+      })()}
     </nav>
   );
 }
