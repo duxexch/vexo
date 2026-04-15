@@ -198,37 +198,36 @@ const AI_QUERY_COLUMN_LABELS: Record<string, string> = {
 
 type ToastFn = ReturnType<typeof useToast>["toast"];
 
-function normalizeAdminApiPath(url: string): string {
-  const rawUrl = String(url || "").trim();
-  if (!rawUrl) {
+const ADMIN_API_BASE_PATH = "/api/admin";
+
+function normalizeAdminApiPath(path: string): string {
+  const rawPath = String(path || "").trim();
+  if (!rawPath) {
     throw new Error("Invalid admin endpoint");
   }
 
-  // Prevent protocol-relative or absolute URL usage in admin fetch calls.
-  if (rawUrl.startsWith("//") || /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(rawUrl)) {
+  if (rawPath.startsWith("//") || /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(rawPath)) {
     throw new Error("Absolute URLs are not allowed");
   }
 
-  const baseOrigin = typeof window !== "undefined"
-    ? window.location.origin
-    : "http://localhost";
-  const parsed = new URL(rawUrl, baseOrigin);
+  const normalized = rawPath.startsWith(ADMIN_API_BASE_PATH)
+    ? rawPath.slice(ADMIN_API_BASE_PATH.length)
+    : rawPath;
 
-  if (parsed.origin !== baseOrigin) {
-    throw new Error("Cross-origin admin requests are not allowed");
+  const safeRelativePath = normalized.startsWith("/") ? normalized : `/${normalized}`;
+
+  if (safeRelativePath.includes("\\") || safeRelativePath.includes("..")) {
+    throw new Error("Invalid admin endpoint path");
   }
 
-  if (!(parsed.pathname === "/api/admin" || parsed.pathname.startsWith("/api/admin/"))) {
-    throw new Error("Only /api/admin endpoints are allowed");
-  }
-
-  return `${parsed.pathname}${parsed.search}`;
+  return safeRelativePath;
 }
 
-async function adminFetch(url: string, options: RequestInit = {}) {
-  const safePath = normalizeAdminApiPath(url);
+async function adminFetch(path: string, options: RequestInit = {}) {
+  const safeRelativePath = normalizeAdminApiPath(path);
+  const endpoint = `${ADMIN_API_BASE_PATH}${safeRelativePath}`;
 
-  const res = await fetch(safePath, {
+  const res = await fetch(endpoint, {
     ...options,
     headers: {
       "Content-Type": "application/json",
