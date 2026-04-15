@@ -2354,10 +2354,10 @@ export default function ChallengeGamePage() {
     return undefined;
   })();
 
-  const multiplayerGameConfig = useMemo(
-    () => ({ ...FALLBACK_GAME_CONFIG, ...buildGameConfig(multiplayerGames) }),
-    [multiplayerGames],
-  );
+  const multiplayerGameConfig = {
+    ...FALLBACK_GAME_CONFIG,
+    ...buildGameConfig(multiplayerGames),
+  };
   const gameInfo = multiplayerGameConfig[challenge.gameType] || multiplayerGameConfig.chess;
   const challengeCurrencyType =
     challenge.currencyType === "project" ? "project" : "usd";

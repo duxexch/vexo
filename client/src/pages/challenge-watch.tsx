@@ -1373,10 +1373,10 @@ export default function ChallengeWatchPage() {
   const mobileSupportDockClass = isRTL ? "end-2" : "start-2";
   const mobileChatDockClass = isRTL ? "start-2" : "end-2";
   const liveChatLabel = `${t("common.live")} ${t("game.chat")}`;
-  const multiplayerGameConfig = useMemo(
-    () => ({ ...FALLBACK_GAME_CONFIG, ...buildGameConfig(multiplayerGames) }),
-    [multiplayerGames],
-  );
+  const multiplayerGameConfig = {
+    ...FALLBACK_GAME_CONFIG,
+    ...buildGameConfig(multiplayerGames),
+  };
   const gameInfo = multiplayerGameConfig[challenge.gameType] || multiplayerGameConfig.chess;
   const isLanguageDuelGame = challenge.gameType === "languageduel";
   const isTarneebGame = challenge.gameType === "tarneeb";
@@ -1994,7 +1994,7 @@ export default function ChallengeWatchPage() {
                         <div>
                           <div className="flex items-center gap-2">
                             <p className="font-medium">
-                                {challenge.player1?.username || playerOneLabel}
+                              {challenge.player1?.username || playerOneLabel}
                             </p>
                             {player1ResultMeta && (
                               <Badge
