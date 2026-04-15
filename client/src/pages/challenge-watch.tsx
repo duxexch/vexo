@@ -1612,6 +1612,65 @@ export default function ChallengeWatchPage() {
       : undefined;
   const supportActionsDisabled =
     !challenge.player2 || gameSession?.status !== "playing" || isTeamGame;
+  const challengeVoiceTargets = useMemo(
+    () =>
+      [
+        {
+          id: challenge.player1Id,
+          username: challenge.player1?.username,
+          seat: 1,
+        },
+        {
+          id: challenge.player2Id,
+          username: challenge.player2?.username,
+          seat: 2,
+        },
+        {
+          id: challenge.player3Id,
+          username: challenge.player3?.username,
+          seat: 3,
+        },
+        {
+          id: challenge.player4Id,
+          username: challenge.player4?.username,
+          seat: 4,
+        },
+      ].flatMap((target) => {
+        if (
+          typeof target.id !== "string" ||
+          target.id.length === 0 ||
+          target.id === user?.id
+        ) {
+          return [];
+        }
+
+        return [
+          {
+            id: target.id,
+            username: target.username,
+            seat: target.seat,
+          },
+        ];
+      }),
+    [
+      challenge.player1Id,
+      challenge.player1?.username,
+      challenge.player2Id,
+      challenge.player2?.username,
+      challenge.player3Id,
+      challenge.player3?.username,
+      challenge.player4Id,
+      challenge.player4?.username,
+      user?.id,
+    ],
+  );
+
+  const togglePeerListening = useCallback((peerUserId: string) => {
+    setVoicePeerMutedMap((previous) => ({
+      ...previous,
+      [peerUserId]: !previous[peerUserId],
+    }));
+  }, []);
 
   const fullscreenWatchActions = useMemo<GameFullscreenActionItem[]>(() => {
     const chatBadge =
@@ -1652,6 +1711,26 @@ export default function ChallengeWatchPage() {
       );
     }
 
+    for (const target of challengeVoiceTargets) {
+      const mutedForViewer = Boolean(voicePeerMutedMap[target.id]);
+      const isConnected = connectedVoicePeers.includes(target.id);
+      const speakerLabel =
+        target.username || `${t("domino.player")} ${target.seat}`;
+
+      actions.push({
+        id: `voice-peer-${target.id}`,
+        icon: mutedForViewer ? VolumeX : Volume2,
+        label: mutedForViewer
+          ? `${t("challenge.voiceUnmuteSpeaker")} ${speakerLabel}`
+          : `${t("challenge.voiceMuteSpeaker")} ${speakerLabel}`,
+        onClick: () => {
+          togglePeerListening(target.id);
+        },
+        disabled: !isConnected,
+        tone: mutedForViewer ? "destructive" : "outline",
+      });
+    }
+
     return actions;
   }, [
     liveChatLabel,
@@ -1660,6 +1739,10 @@ export default function ChallengeWatchPage() {
     openSupportFromFullscreen,
     openGiftPanel,
     supportActionsDisabled,
+    challengeVoiceTargets,
+    voicePeerMutedMap,
+    connectedVoicePeers,
+    togglePeerListening,
     t,
     user,
   ]);
@@ -1823,13 +1906,6 @@ export default function ChallengeWatchPage() {
   const dominoPlayer2Score = challenge?.player2Id
     ? (dominoScoreLookup.get(challenge.player2Id) ?? 0)
     : 0;
-  const togglePeerListening = (peerUserId: string) => {
-    setVoicePeerMutedMap((previous) => ({
-      ...previous,
-      [peerUserId]: !previous[peerUserId],
-    }));
-  };
-
   const dominoAutoPlayBadgeText =
     autoPlayNotice && autoPlayLiveSeconds !== null
       ? autoPlayNotice.mode === "grace"
@@ -1935,22 +2011,22 @@ export default function ChallengeWatchPage() {
                   {gameSession?.spectatorCount || 0}
                 </span>
               </div>
-
-              <VoiceChat
-                challengeId={challengeId!}
-                isEnabled={true}
-                onToggle={() => { }}
-                isMicMuted={true}
-                onMicMuteToggle={() => {
-                  // Spectator mode is listen-only.
-                }}
-                role="spectator"
-                showInlineControls={false}
-                peerAudioMutedOverride={voicePeerMutedMap}
-                onConnectedPeersChange={setConnectedVoicePeers}
-              />
             </div>
           </header>
+
+          <VoiceChat
+            challengeId={challengeId!}
+            isEnabled={true}
+            onToggle={() => { }}
+            isMicMuted={true}
+            onMicMuteToggle={() => {
+              // Spectator mode is listen-only.
+            }}
+            role="spectator"
+            showInlineControls={false}
+            peerAudioMutedOverride={voicePeerMutedMap}
+            onConnectedPeersChange={setConnectedVoicePeers}
+          />
 
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             <ScrollArea className="flex-1">

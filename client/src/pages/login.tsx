@@ -1296,7 +1296,7 @@ export default function LoginPage() {
   return (
     <main
       id="main-content"
-      className="relative flex min-h-[100svh] supports-[min-height:100dvh]:min-h-[100dvh] items-start justify-center overflow-y-auto bg-background p-4 pt-20 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center sm:pt-4"
+      className="relative flex min-h-[100svh] supports-[min-height:100dvh]:min-h-[100dvh] items-start justify-center overflow-y-auto bg-background p-4 pt-20 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] sm:items-center sm:pt-4 sm:pb-[max(1rem,env(safe-area-inset-bottom))]"
       dir={dir}
     >
       <div
@@ -1363,7 +1363,7 @@ export default function LoginPage() {
               )}
             </TabsList>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 pb-[calc(env(safe-area-inset-bottom)+2.5rem)] sm:pb-6">
               {enabledTabs.includes("one-click") && (
                 <TabsContent value="one-click" className="m-0 space-y-4">
                   <div className="text-center space-y-4">

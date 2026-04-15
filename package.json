@@ -56,6 +56,7 @@
     "security:smoke:domino-contract": "tsx scripts/smoke-domino-contract.ts",
     "quality:mobile:domino": "node scripts/smoke-domino-mobile-check.mjs",
     "quality:mobile:fullscreen": "node scripts/smoke-game-fullscreen-mobile-ux.mjs",
+    "quality:mobile:fullscreen:android-back": "node scripts/smoke-game-fullscreen-android-back.mjs",
     "security:smoke:settlement-idempotency": "tsx scripts/smoke-settlement-idempotency.ts",
     "security:smoke:google-auth-runtime": "node scripts/smoke-google-auth-runtime.mjs",
     "security:csp": "node scripts/validate-csp-prod.mjs",

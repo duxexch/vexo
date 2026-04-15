@@ -31,6 +31,7 @@ type VoicePeerRole = "player" | "spectator";
 type VoiceWsMessage = {
   type: string;
   error?: string;
+  timestamp?: number;
   peers?: Array<{ userId: string; role?: VoicePeerRole }>;
   peerUserId?: string;
   fromUserId?: string;
@@ -38,6 +39,9 @@ type VoiceWsMessage = {
   answer?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit;
 };
+
+const HEARTBEAT_INTERVAL_MS = 10_000;
+const HEARTBEAT_TIMEOUT_MS = 25_000;
 
 export function VoiceChat({
   challengeId,
@@ -76,8 +80,11 @@ export function VoiceChat({
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const joinAckTimerRef = useRef<number | null>(null);
+  const heartbeatIntervalRef = useRef<number | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const lastPongAtRef = useRef(0);
   const isAuthenticatedRef = useRef(false);
+  const suppressReconnectOnCloseRef = useRef(false);
   const intentionalStopRef = useRef(false);
   const startingRef = useRef(false);
 
@@ -93,6 +100,30 @@ export function VoiceChat({
       window.clearTimeout(joinAckTimerRef.current);
       joinAckTimerRef.current = null;
     }
+  }, []);
+
+  const clearHeartbeatInterval = useCallback(() => {
+    if (heartbeatIntervalRef.current !== null) {
+      window.clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+  }, []);
+
+  const isFatalVoiceError = useCallback((errorType: string, errorMessage?: string): boolean => {
+    if (errorType === "auth_error") {
+      return true;
+    }
+
+    const normalized = String(errorMessage || "").toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+
+    return (
+      normalized.includes("not authorized for this match")
+      || normalized.includes("insufficient project currency balance for challenge voice")
+      || normalized.includes("invalid room identifier")
+    );
   }, []);
 
   const syncPeerAudioElement = useCallback((peerUserId: string) => {
@@ -184,6 +215,32 @@ export function VoiceChat({
       console.error("[VoiceChat] Failed to send WS message", error);
     }
   }, []);
+
+  const startHeartbeat = useCallback(() => {
+    clearHeartbeatInterval();
+    lastPongAtRef.current = Date.now();
+
+    heartbeatIntervalRef.current = window.setInterval(() => {
+      const socket = wsRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN || !isAuthenticatedRef.current) {
+        return;
+      }
+
+      if (Date.now() - lastPongAtRef.current > HEARTBEAT_TIMEOUT_MS) {
+        if (!intentionalStopRef.current) {
+          setConnectionState("error");
+        }
+        socket.close();
+        return;
+      }
+
+      safelySend({
+        type: "voice_ping",
+        matchId: challengeId,
+        timestamp: Date.now(),
+      });
+    }, HEARTBEAT_INTERVAL_MS);
+  }, [challengeId, clearHeartbeatInterval, safelySend]);
 
   const processQueuedIceCandidates = useCallback(async (peerUserId: string) => {
     const pc = peerConnectionsRef.current.get(peerUserId);
@@ -427,6 +484,8 @@ export function VoiceChat({
   const stopVoiceChat = useCallback(() => {
     clearReconnectTimer();
     clearJoinAckTimer();
+    clearHeartbeatInterval();
+    suppressReconnectOnCloseRef.current = true;
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       safelySend({ type: "voice_leave", matchId: challengeId });
@@ -452,8 +511,9 @@ export function VoiceChat({
 
     isAuthenticatedRef.current = false;
     startingRef.current = false;
+    suppressReconnectOnCloseRef.current = false;
     setConnectionState("disconnected");
-  }, [challengeId, clearJoinAckTimer, clearReconnectTimer, closeAllPeerConnections, safelySend]);
+  }, [challengeId, clearHeartbeatInterval, clearJoinAckTimer, clearReconnectTimer, closeAllPeerConnections, safelySend]);
 
   const startVoiceChat = useCallback(async () => {
     if (startingRef.current) {
@@ -470,7 +530,9 @@ export function VoiceChat({
 
     startingRef.current = true;
     intentionalStopRef.current = false;
+    suppressReconnectOnCloseRef.current = false;
     clearReconnectTimer();
+    clearHeartbeatInterval();
     setConnectionState("connecting");
 
     const localStream = await ensureLocalStream();
@@ -502,6 +564,7 @@ export function VoiceChat({
         switch (data.type) {
           case "auth_success":
             isAuthenticatedRef.current = true;
+            startHeartbeat();
             safelySend({ type: "voice_join", matchId: challengeId });
             clearJoinAckTimer();
             joinAckTimerRef.current = window.setTimeout(() => {
@@ -516,13 +579,13 @@ export function VoiceChat({
                 if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
                   ws.close();
                 }
-                scheduleReconnect();
               }
             }, 4000);
             break;
 
           case "auth_error":
           case "voice_error":
+            suppressReconnectOnCloseRef.current = isFatalVoiceError(data.type, data.error);
             toast({
               variant: "destructive",
               title: t("challenge.voiceErrorRetry"),
@@ -534,9 +597,10 @@ export function VoiceChat({
             if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
               ws.close();
             }
-            if (!intentionalStopRef.current) {
-              scheduleReconnect();
-            }
+            break;
+
+          case "voice_pong":
+            lastPongAtRef.current = Date.now();
             break;
 
           case "voice_joined":
@@ -665,14 +729,24 @@ export function VoiceChat({
 
     ws.onclose = () => {
       clearJoinAckTimer();
+      clearHeartbeatInterval();
       if (wsRef.current === ws) {
         wsRef.current = null;
       }
 
-      if (!intentionalStopRef.current && isEnabled) {
-        closeAllPeerConnections();
+      const suppressReconnect = suppressReconnectOnCloseRef.current;
+      suppressReconnectOnCloseRef.current = false;
+
+      closeAllPeerConnections();
+
+      if (!intentionalStopRef.current && isEnabled && !suppressReconnect) {
         setConnectionState("connecting");
         scheduleReconnect();
+        return;
+      }
+
+      if (!intentionalStopRef.current && suppressReconnect) {
+        setConnectionState("error");
       }
     };
 
@@ -680,17 +754,20 @@ export function VoiceChat({
   }, [
     challengeId,
     clearJoinAckTimer,
+    clearHeartbeatInterval,
     clearReconnectTimer,
     closeAllPeerConnections,
     closePeerConnection,
     createPeerConnection,
     ensureLocalStream,
     initiateOfferToPeer,
+    isFatalVoiceError,
     isEnabled,
     isSpectatorRole,
     processQueuedIceCandidates,
     safelySend,
     scheduleReconnect,
+    startHeartbeat,
     t,
     toast,
     token,

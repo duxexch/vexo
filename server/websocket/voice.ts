@@ -1,6 +1,6 @@
 import { WebSocket } from "ws";
 import { db } from "../db";
-import { challenges, chatCallSessions, gameMatches, liveGameSessions } from "@shared/schema";
+import { challenges, chatCallSessions, gameMatches, liveGameSessions, projectCurrencyWallets, systemConfig } from "@shared/schema";
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { redisRateLimit } from "../lib/redis";
@@ -10,6 +10,7 @@ import { voiceRooms } from "./shared";
 const MAX_SDP_LENGTH = 25_000;
 const MAX_ICE_CANDIDATE_LENGTH = 2_048;
 const VOICE_TELEMETRY_FLUSH_INTERVAL_MS = 60_000;
+const CHALLENGE_VOICE_PRICE_CONFIG_KEY = "chat_voice_call_price_per_minute";
 
 interface VoiceTelemetryCounters {
   joinRequests: number;
@@ -206,6 +207,40 @@ function isNonEmptyId(value: string | null | undefined): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
+async function getConfigDecimal(key: string, fallback: number): Promise<number> {
+  const [config] = await db.select().from(systemConfig).where(eq(systemConfig.key, key)).limit(1);
+  const parsed = Number.parseFloat(config?.value || "");
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+async function resolveChallengeVoicePricingGate(userId: string): Promise<{
+  requiredRate: number;
+  walletBalance: number;
+  allowed: boolean;
+}> {
+  const requiredRate = Number((await getConfigDecimal(CHALLENGE_VOICE_PRICE_CONFIG_KEY, 15)).toFixed(2));
+  if (requiredRate <= 0) {
+    return {
+      requiredRate,
+      walletBalance: Number.POSITIVE_INFINITY,
+      allowed: true,
+    };
+  }
+
+  const [wallet] = await db
+    .select({ totalBalance: projectCurrencyWallets.totalBalance })
+    .from(projectCurrencyWallets)
+    .where(eq(projectCurrencyWallets.userId, userId))
+    .limit(1);
+
+  const walletBalance = Number(parseFloat(wallet?.totalBalance || "0").toFixed(2));
+  return {
+    requiredRate,
+    walletBalance,
+    allowed: walletBalance >= requiredRate,
+  };
+}
+
 function toUniqueParticipantIds(values: Array<string | null | undefined>): string[] {
   return Array.from(new Set(values.filter(isNonEmptyId)));
 }
@@ -397,6 +432,18 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
     return true;
   };
 
+  if (data.type === "voice_ping" && ws.userId) {
+    if (!(await enforceVoiceRateLimit("ping", 90, 60_000))) {
+      return;
+    }
+
+    ws.send(JSON.stringify({
+      type: "voice_pong",
+      timestamp: Date.now(),
+    }));
+    return;
+  }
+
   // Voice join — verify user is participant in match, set up room
   if (data.type === "voice_join" && ws.userId) {
     incrementVoiceTelemetryCounter("joinRequests");
@@ -415,6 +462,20 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
     if (!access) {
       sendVoiceError("Not authorized for this match", { matchId, participantCount: 0 });
       return;
+    }
+
+    if (access.roomKind === "challenge") {
+      const pricingGate = await resolveChallengeVoicePricingGate(ws.userId);
+      if (!pricingGate.allowed) {
+        sendVoiceError("Insufficient project currency balance for challenge voice", {
+          matchId,
+          requiredRate: pricingGate.requiredRate,
+          walletBalance: pricingGate.walletBalance,
+          roomKind: access.roomKind,
+          role: access.userRole,
+        });
+        return;
+      }
     }
 
     const participantIds = access.participantIds;

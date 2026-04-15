@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const BODY_FULLSCREEN_FLAG = "data-vex-game-fullscreen";
+const FULLSCREEN_HISTORY_GUARD_KEY = "__vex_game_fullscreen_guard__";
+
+function asHistoryStateObject(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return {};
+    }
+
+    return value as Record<string, unknown>;
+}
 
 function isContainerInFullscreen(container: HTMLDivElement | null): boolean {
     if (typeof document === "undefined") return false;
@@ -16,6 +25,8 @@ export function useGameFullscreen() {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
     const [isFallbackFullscreen, setIsFallbackFullscreen] = useState(false);
+    const hasHistoryGuardRef = useRef(false);
+    const skipNextPopstateRef = useRef(false);
 
     const syncNativeFullscreenState = useCallback(() => {
         setIsNativeFullscreen(isContainerInFullscreen(containerRef.current));
@@ -91,6 +102,64 @@ export function useGameFullscreen() {
     }, []);
 
     const isFullscreen = isNativeFullscreen || isFallbackFullscreen;
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        const handlePopstate = () => {
+            if (skipNextPopstateRef.current) {
+                skipNextPopstateRef.current = false;
+                return;
+            }
+
+            if (!isFullscreen) return;
+
+            void exitFullscreen();
+        };
+
+        window.addEventListener("popstate", handlePopstate);
+        return () => {
+            window.removeEventListener("popstate", handlePopstate);
+        };
+    }, [exitFullscreen, isFullscreen]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        const currentState = asHistoryStateObject(window.history.state);
+
+        if (isFullscreen) {
+            if (!currentState[FULLSCREEN_HISTORY_GUARD_KEY]) {
+                try {
+                    window.history.pushState(
+                        {
+                            ...currentState,
+                            [FULLSCREEN_HISTORY_GUARD_KEY]: true,
+                        },
+                        "",
+                        window.location.href,
+                    );
+                } catch {
+                    // Ignore browser history restrictions and keep fullscreen usable.
+                }
+            }
+
+            hasHistoryGuardRef.current = true;
+            return;
+        }
+
+        if (!hasHistoryGuardRef.current) {
+            return;
+        }
+
+        const stateAfterExit = asHistoryStateObject(window.history.state);
+        if (stateAfterExit[FULLSCREEN_HISTORY_GUARD_KEY]) {
+            skipNextPopstateRef.current = true;
+            window.history.back();
+        }
+
+        hasHistoryGuardRef.current = false;
+    }, [isFullscreen]);
 
     const toggleFullscreen = useCallback(async () => {
         if (isFullscreen) {

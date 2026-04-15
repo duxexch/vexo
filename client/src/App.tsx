@@ -452,7 +452,7 @@ function BalanceBar() {
   return <BalanceDisplay balance={user?.balance || "0"} variant="header" showDeposit />;
 }
 
-function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => void; isChatOpen: boolean }) {
+function BottomNavigation({ onChatToggle, isChatOpen, isVisible }: { onChatToggle: () => void; isChatOpen: boolean; isVisible: boolean }) {
   const { t, language } = useI18n();
   const [location, setLocation] = useLocation();
   const { sectionCounts } = useNotificationStatus();
@@ -551,7 +551,7 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
 
   return (
     <nav
-      className="fixed bottom-0 start-0 end-0 flex items-center justify-around gap-1 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-slate-950/95 backdrop-blur-md shadow-[0_-14px_30px_rgba(0,0,0,0.45)] md:hidden z-50"
+      className={`fixed bottom-0 start-0 end-0 flex items-center justify-around gap-1 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-slate-950/95 backdrop-blur-md shadow-[0_-14px_30px_rgba(0,0,0,0.45)] md:hidden z-50 transition-transform duration-300 ease-out ${isVisible ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}
       aria-label="Main navigation"
       onTouchStart={handleNavTouchStart}
       onTouchMove={handleNavTouchMove}
@@ -645,8 +645,12 @@ function BottomNavigation({ onChatToggle, isChatOpen }: { onChatToggle: () => vo
 
 function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const { t, language, dir } = useI18n();
+  const [location] = useLocation();
   const sidebarSide = dir === 'rtl' ? 'right' : 'left';
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isBottomNavVisible, setIsBottomNavVisible] = useState(true);
+  const mainContentRef = useRef<HTMLElement | null>(null);
+  const lastMainScrollTopRef = useRef(0);
 
   const style = {
     "--sidebar-width": "16rem",
@@ -655,6 +659,42 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
 
   const toggleChat = () => {
     setIsChatOpen(!isChatOpen);
+  };
+
+  useEffect(() => {
+    setIsBottomNavVisible(true);
+    if (mainContentRef.current) {
+      lastMainScrollTopRef.current = mainContentRef.current.scrollTop;
+    }
+  }, [location]);
+
+  useEffect(() => {
+    if (isChatOpen) {
+      setIsBottomNavVisible(true);
+    }
+  }, [isChatOpen]);
+
+  const handleMainContentScroll = (event: React.UIEvent<HTMLElement>) => {
+    const currentScrollTop = event.currentTarget.scrollTop;
+    const scrollDelta = currentScrollTop - lastMainScrollTopRef.current;
+
+    if (Math.abs(scrollDelta) < 8) {
+      return;
+    }
+
+    if (currentScrollTop <= 12 || isChatOpen) {
+      setIsBottomNavVisible(true);
+      lastMainScrollTopRef.current = currentScrollTop;
+      return;
+    }
+
+    if (scrollDelta > 0 && currentScrollTop > 80) {
+      setIsBottomNavVisible(false);
+    } else if (scrollDelta < 0) {
+      setIsBottomNavVisible(true);
+    }
+
+    lastMainScrollTopRef.current = currentScrollTop;
   };
 
   return (
@@ -681,16 +721,21 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                   <LanguageSwitcher />
                 </div>
               </header>
-              <main id="main-content" className="flex-1 overflow-auto pb-16 md:pb-0 animate-page-enter">
+              <main
+                id="main-content"
+                ref={mainContentRef}
+                onScroll={handleMainContentScroll}
+                className={`flex-1 overflow-auto animate-page-enter ${isBottomNavVisible ? "pb-[calc(env(safe-area-inset-bottom)+7.25rem)]" : "pb-[max(1rem,env(safe-area-inset-bottom))]"} md:pb-0`}
+              >
                 {children}
               </main>
-              <BottomNavigation onChatToggle={toggleChat} isChatOpen={isChatOpen} />
+              <BottomNavigation onChatToggle={toggleChat} isChatOpen={isChatOpen} isVisible={isBottomNavVisible} />
             </div>
             {isChatOpen && (
               <div className="fixed inset-0 z-[100] md:hidden" onClick={toggleChat}>
                 <div className="absolute inset-0 bg-black/50" />
                 <div
-                  className="absolute bottom-16 start-0 end-0 h-[70vh] bg-background rounded-t-xl overflow-hidden"
+                  className="absolute bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] start-0 end-0 h-[70vh] bg-background rounded-t-xl overflow-hidden"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Suspense fallback={<PageLoader />}>

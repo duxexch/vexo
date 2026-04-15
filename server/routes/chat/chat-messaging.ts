@@ -3,7 +3,7 @@ import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
-import { chatAutoDeletePermissions, chatMessages, chatSettings, projectCurrencyLedger, projectCurrencyWallets, systemConfig } from "@shared/schema";
+import { chatAutoDeletePermissions, chatMediaPermissions, chatMessages, chatSettings, projectCurrencyLedger, projectCurrencyWallets, systemConfig } from "@shared/schema";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import { sanitizePlainText } from "../../lib/input-security";
 import { isUserBlocked } from "../../lib/user-blocking";
@@ -55,8 +55,12 @@ export function registerChatMessagingRoutes(app: Express): void {
         disappearAfterRead = false,
         replyToId,
       } = req.body;
-      const isMediaMessage = messageType && messageType !== "text";
-      const isVoiceMessage = String(messageType || "").toLowerCase() === "voice";
+      const normalizedMessageType = String(messageType || "text").trim().toLowerCase();
+      const isVoiceMessage = normalizedMessageType === "voice" || normalizedMessageType === "audio";
+      const isImageMessage = normalizedMessageType === "image";
+      const isVideoMessage = normalizedMessageType === "video";
+      const isMediaMessage = isVoiceMessage || isImageMessage || isVideoMessage;
+      const storedMessageType = isVoiceMessage ? "voice" : normalizedMessageType;
 
       // SECURITY: Validate receiverId
       if (!receiverId || receiverId.length > 100) {
@@ -82,6 +86,10 @@ export function registerChatMessagingRoutes(app: Express): void {
 
       if (canonicalSetting && canonicalSetting.value === "false") {
         return res.status(403).json({ error: "Chat is currently disabled" });
+      }
+
+      if (!isMediaMessage && storedMessageType !== "text") {
+        return res.status(400).json({ error: "Invalid message type" });
       }
 
       if (!isMediaMessage && (!content || typeof content !== 'string')) {
@@ -142,6 +150,27 @@ export function registerChatMessagingRoutes(app: Express): void {
       const safeAttachmentUrl = attachmentUrl ? String(attachmentUrl).slice(0, 2048) : undefined;
       if (isMediaMessage && !safeAttachmentUrl) {
         return res.status(400).json({ error: "Attachment is required for media messages" });
+      }
+
+      if ((isImageMessage || isVideoMessage) && safeAttachmentUrl) {
+        const [mediaPermission] = await db.select({
+          mediaEnabled: chatMediaPermissions.mediaEnabled,
+          revokedAt: chatMediaPermissions.revokedAt,
+          expiresAt: chatMediaPermissions.expiresAt,
+        }).from(chatMediaPermissions)
+          .where(eq(chatMediaPermissions.userId, senderId))
+          .limit(1);
+
+        const mediaAllowed = Boolean(
+          mediaPermission
+          && mediaPermission.mediaEnabled
+          && !mediaPermission.revokedAt
+          && (!mediaPermission.expiresAt || mediaPermission.expiresAt > now)
+        );
+
+        if (!mediaAllowed) {
+          return res.status(403).json({ error: "Media permission required. Purchase to unlock." });
+        }
       }
 
       const [message] = await db.transaction(async (tx) => {
@@ -208,7 +237,7 @@ export function registerChatMessagingRoutes(app: Express): void {
           senderId,
           receiverId,
           content: sanitizedContent,
-          messageType: String(messageType).slice(0, 20),
+          messageType: storedMessageType.slice(0, 20),
           attachmentUrl: safeAttachmentUrl,
           isDisappearing: Boolean(isDisappearing),
           disappearAfterRead: Boolean(disappearAfterRead),

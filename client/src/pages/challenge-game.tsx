@@ -2555,12 +2555,65 @@ export default function ChallengeGamePage() {
       ? gameSession.totalGiftsValue
       : `${giftAggregate.totalAmount.toFixed(2)} VXC`;
 
-  const togglePeerListening = (peerUserId: string) => {
+  const challengeVoiceTargets = useMemo(
+    () =>
+      [
+        {
+          id: challenge.player1Id,
+          username: challenge.player1?.username,
+          seat: 1,
+        },
+        {
+          id: challenge.player2Id,
+          username: challenge.player2?.username,
+          seat: 2,
+        },
+        {
+          id: challenge.player3Id,
+          username: challenge.player3?.username,
+          seat: 3,
+        },
+        {
+          id: challenge.player4Id,
+          username: challenge.player4?.username,
+          seat: 4,
+        },
+      ].flatMap((target) => {
+        if (
+          typeof target.id !== "string" ||
+          target.id.length === 0 ||
+          target.id === user?.id
+        ) {
+          return [];
+        }
+
+        return [
+          {
+            id: target.id,
+            username: target.username,
+            seat: target.seat,
+          },
+        ];
+      }),
+    [
+      challenge.player1Id,
+      challenge.player1?.username,
+      challenge.player2Id,
+      challenge.player2?.username,
+      challenge.player3Id,
+      challenge.player3?.username,
+      challenge.player4Id,
+      challenge.player4?.username,
+      user?.id,
+    ],
+  );
+
+  const togglePeerListening = useCallback((peerUserId: string) => {
     setVoicePeerMutedMap((previous) => ({
       ...previous,
       [peerUserId]: !previous[peerUserId],
     }));
-  };
+  }, []);
 
   const fullscreenPlayActions = useMemo<GameFullscreenActionItem[]>(() => {
     const chatBadge =
@@ -2580,6 +2633,38 @@ export default function ChallengeGamePage() {
         badge: chatBadge,
       },
     ];
+
+    if (shouldRenderPlayerVoiceChat) {
+      actions.push({
+        id: "voice-self-mic",
+        icon: isVoiceMicMuted ? MicOff : Mic,
+        label: isVoiceMicMuted
+          ? t("challenge.voiceUnmuteMic")
+          : t("challenge.voiceMuteMic"),
+        onClick: () => setIsVoiceMicMuted((previous) => !previous),
+        tone: isVoiceMicMuted ? "destructive" : "outline",
+      });
+
+      for (const target of challengeVoiceTargets) {
+        const mutedForViewer = Boolean(voicePeerMutedMap[target.id]);
+        const isConnected = connectedVoicePeers.includes(target.id);
+        const speakerLabel =
+          target.username || `${t("domino.player")} ${target.seat}`;
+
+        actions.push({
+          id: `voice-peer-${target.id}`,
+          icon: mutedForViewer ? VolumeX : Volume2,
+          label: mutedForViewer
+            ? `${t("challenge.voiceUnmuteSpeaker")} ${speakerLabel}`
+            : `${t("challenge.voiceMuteSpeaker")} ${speakerLabel}`,
+          onClick: () => {
+            togglePeerListening(target.id);
+          },
+          disabled: !isConnected,
+          tone: mutedForViewer ? "destructive" : "outline",
+        });
+      }
+    }
 
     const isDrawEnabledGame =
       challenge.gameType === "chess" || challenge.gameType === "backgammon";
@@ -2626,6 +2711,12 @@ export default function ChallengeGamePage() {
     messages.length,
     liveChatLabel,
     openLiveChat,
+    shouldRenderPlayerVoiceChat,
+    isVoiceMicMuted,
+    challengeVoiceTargets,
+    voicePeerMutedMap,
+    connectedVoicePeers,
+    togglePeerListening,
     challenge.gameType,
     canPlayActions,
     gameSession?.status,
@@ -2722,22 +2813,22 @@ export default function ChallengeGamePage() {
                   {gameSession?.spectatorCount || 0}
                 </span>
               </div>
-
-              {shouldRenderPlayerVoiceChat && (
-                <VoiceChat
-                  challengeId={challengeId!}
-                  isEnabled={true}
-                  onToggle={() => { }}
-                  isMicMuted={isVoiceMicMuted}
-                  onMicMuteToggle={() => setIsVoiceMicMuted((prev) => !prev)}
-                  role="player"
-                  showInlineControls={false}
-                  peerAudioMutedOverride={voicePeerMutedMap}
-                  onConnectedPeersChange={setConnectedVoicePeers}
-                />
-              )}
             </div>
           </header>
+
+          {shouldRenderPlayerVoiceChat && (
+            <VoiceChat
+              challengeId={challengeId!}
+              isEnabled={true}
+              onToggle={() => { }}
+              isMicMuted={isVoiceMicMuted}
+              onMicMuteToggle={() => setIsVoiceMicMuted((prev) => !prev)}
+              role="player"
+              showInlineControls={false}
+              peerAudioMutedOverride={voicePeerMutedMap}
+              onConnectedPeersChange={setConnectedVoicePeers}
+            />
+          )}
 
           {autoPlayNotice && (
             <div className="px-2 pt-2 sm:px-3">

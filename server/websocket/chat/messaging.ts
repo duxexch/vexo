@@ -1,6 +1,6 @@
 import { WebSocket } from "ws";
 import { db } from "../../db";
-import { chatAutoDeletePermissions, chatMessages, chatSettings, projectCurrencyLedger, projectCurrencyWallets, systemConfig, users } from "@shared/schema";
+import { chatAutoDeletePermissions, chatMediaPermissions, chatMessages, chatSettings, projectCurrencyLedger, projectCurrencyWallets, systemConfig, users } from "@shared/schema";
 import { eq, and, or, sql } from "drizzle-orm";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import type { AuthenticatedSocket } from "../shared";
@@ -60,6 +60,12 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
   if (!ws.userId) return;
 
   const { receiverId, content, messageType = "text", attachmentUrl, isDisappearing = false, disappearAfterRead = false, replyToId } = data;
+  const normalizedMessageType = String(messageType || "text").trim().toLowerCase();
+  const isVoiceMessage = normalizedMessageType === "voice" || normalizedMessageType === "audio";
+  const isImageMessage = normalizedMessageType === "image";
+  const isVideoMessage = normalizedMessageType === "video";
+  const isMediaMessage = isVoiceMessage || isImageMessage || isVideoMessage;
+  const storedMessageType = isVoiceMessage ? "voice" : normalizedMessageType;
   const clientMessageId = normalizeClientMessageId(data?.clientMessageId);
   const senderUserId = ws.userId;
   const dedupeKey = clientMessageId ? `chat:msg:dedupe:${senderUserId}:${clientMessageId}` : null;
@@ -172,8 +178,20 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
     return;
   }
 
-  // SECURITY: Validate content - allow empty content for media/voice messages
-  const isMediaMessage = messageType && messageType !== "text";
+  if (!isMediaMessage && storedMessageType !== "text") {
+    if (dedupeKey) {
+      await getRedisClient().del(dedupeKey).catch(() => { });
+    }
+    ws.send(JSON.stringify({
+      type: "chat_error",
+      error: "Invalid message type",
+      code: "invalid_message_type",
+      clientMessageId,
+    }));
+    return;
+  }
+
+  // SECURITY: Validate content - allow empty content only for supported media messages
   if (!isMediaMessage) {
     if (!content || typeof content !== 'string') {
       if (dedupeKey) {
@@ -210,6 +228,38 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
     return;
   }
 
+  const now = new Date();
+
+  if ((isImageMessage || isVideoMessage) && safeAttachmentUrl) {
+    const [mediaPermission] = await db.select({
+      mediaEnabled: chatMediaPermissions.mediaEnabled,
+      revokedAt: chatMediaPermissions.revokedAt,
+      expiresAt: chatMediaPermissions.expiresAt,
+    }).from(chatMediaPermissions)
+      .where(eq(chatMediaPermissions.userId, senderUserId))
+      .limit(1);
+
+    const mediaAllowed = Boolean(
+      mediaPermission
+      && mediaPermission.mediaEnabled
+      && !mediaPermission.revokedAt
+      && (!mediaPermission.expiresAt || mediaPermission.expiresAt > now)
+    );
+
+    if (!mediaAllowed) {
+      if (dedupeKey) {
+        await getRedisClient().del(dedupeKey).catch(() => { });
+      }
+      ws.send(JSON.stringify({
+        type: "chat_error",
+        error: "Media permission required. Purchase to unlock.",
+        code: "media_permission_required",
+        clientMessageId,
+      }));
+      return;
+    }
+  }
+
   // Use cached block/mute lists instead of 2 DB queries per message
   const [senderLists, recipientLists] = await Promise.all([
     getCachedUserBlockLists(senderUserId, async (id) => {
@@ -242,9 +292,7 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
 
   // PRIVACY: No word filtering on private messages - user privacy first
 
-  const now = new Date();
   const wantsDisappearing = Boolean(isDisappearing || disappearAfterRead);
-  const isVoiceMessage = String(messageType || "").toLowerCase() === "voice";
   let resolvedDeleteAfterMinutes = 60;
   const voiceMessagePrice = isVoiceMessage ? toMoney(await getConfigDecimal("chat_voice_message_price", 0)) : 0;
 
@@ -345,7 +393,7 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
       senderId: senderUserId,
       receiverId,
       content: sanitizedContent,
-      messageType: String(messageType).slice(0, 20),
+      messageType: storedMessageType.slice(0, 20),
       attachmentUrl: safeAttachmentUrl,
       isDisappearing: Boolean(isDisappearing),
       disappearAfterRead: Boolean(disappearAfterRead),
@@ -420,7 +468,7 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
   }));
 
   const senderDisplayName = sender?.firstName || sender?.username || "User";
-  const preview = buildChatNotificationPreview(String(messageType), sanitizedContent);
+  const preview = buildChatNotificationPreview(storedMessageType, sanitizedContent);
   const chatLinkUserId = encodeURIComponent(senderUserId);
 
   // Durable notification record + web push fallback for offline recipients.
@@ -436,7 +484,7 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
     metadata: JSON.stringify({
       event: "chat_message",
       senderId: senderUserId,
-      messageType: String(messageType || "text"),
+      messageType: storedMessageType,
       messageId: message.id,
     }),
   }).catch(() => {
