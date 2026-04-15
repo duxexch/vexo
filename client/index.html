@@ -58,7 +58,6 @@
   <meta name="twitter:image" content="https://vixo.click/icons/vex-gaming-logo-512x512.png" />
   <meta name="twitter:image:alt" content="VEX Gaming Platform" />
   <link rel="icon" type="image/png" sizes="96x96" href="/icons/vex-gaming-logo-96x96.png" />
-  <link rel="icon" type="image/png" sizes="192x192" href="/icons/vex-gaming-logo-192x192.png" />
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="manifest" href="/manifest.json" />
   <!-- Service Worker link for PWA analyzers / static discovery -->
@@ -70,8 +69,21 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
   <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
-  <link rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Cairo:wght@400;600;700&display=swap" />
+  <link id="vex-fonts" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Cairo:wght@400;600;700&display=swap"
+    media="print" />
+  <script>
+    window.addEventListener("load", () => {
+      const fonts = document.getElementById("vex-fonts");
+      if (fonts && fonts.tagName === "LINK") {
+        fonts.media = "all";
+      }
+    }, { once: true });
+  </script>
+  <noscript>
+    <link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Cairo:wght@400;600;700&display=swap" />
+  </noscript>
   <!-- Structured Data: WebApplication -->
   <script type="application/ld+json">
     {
@@ -283,8 +295,8 @@
     <div id="app-skeleton"
       style="min-height:100vh;background:#0f1419;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;">
       <div style="text-align:center;">
-        <img src="/icons/vex-gaming-logo-192x192.png" alt="VEX - منصة الألعاب والتداول" width="80" height="80"
-          fetchpriority="high" style="border-radius:16px;margin:0 auto 16px;display:block;" />
+        <img src="/icons/vex-gaming-logo-96x96.png" alt="VEX - منصة الألعاب والتداول" width="80" height="80"
+          decoding="async" style="width:80px;height:80px;border-radius:16px;margin:0 auto 16px;display:block;" />
         <div style="color:#4ade80;font-size:28px;font-weight:700;letter-spacing:2px;">VEX</div>
         <div style="color:#848e9c;font-size:13px;margin-top:8px;">جاري التحميل...</div>
         <div

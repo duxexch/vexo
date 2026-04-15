@@ -452,6 +452,14 @@ export function serveStatic(app: Express) {
     lastModified: false,
   }));
 
+  // App icons change infrequently, so cache longer than generic static files.
+  app.use("/icons", express.static(path.join(distPath, "icons"), {
+    maxAge: "30d",
+    immutable: true,
+    etag: true,
+    index: false,
+  }));
+
   // Other static files — cache briefly, revalidate
   app.use(express.static(distPath, {
     maxAge: "1h",
