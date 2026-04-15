@@ -106,11 +106,21 @@ export function SpectatorPanel({
     ? panelPlayers.find((player) => player.id === currentTurn)?.username
     : undefined;
 
-  const { data: followedChallengers } = useQuery<{ id: string; followedId: string }[]>({
+  const { data: followedChallengersRaw } = useQuery<{ id: string; followedId: string }[]>({
     queryKey: ["/api/challenger-follows"],
   });
 
-  const followedIds = new Set(followedChallengers?.map((f) => f.followedId) || []);
+  const followedChallengers = Array.isArray(followedChallengersRaw)
+    ? followedChallengersRaw
+    : Array.isArray((followedChallengersRaw as unknown as { follows?: unknown } | undefined)?.follows)
+      ? ((followedChallengersRaw as unknown as { follows?: Array<{ id: string; followedId: string }> }).follows || [])
+      : [];
+
+  const followedIds = new Set(
+    followedChallengers
+      .map((followItem) => followItem.followedId)
+      .filter((followedId): followedId is string => typeof followedId === "string" && followedId.length > 0),
+  );
 
   const addPointsMutation = useMutation({
     mutationFn: (data: { challengeId: string; targetPlayerId: string; pointsAmount: number }) =>

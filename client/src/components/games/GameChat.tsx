@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,21 +10,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { Send, MessageCircle, Zap, MoreVertical, Ban, VolumeX, X } from "lucide-react";
+import { Send, MessageCircle, Zap, MoreVertical, Ban, VolumeX } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-
-const CHAT_BUBBLE_PREF_KEY = "vex_game_chat_bubble_enabled";
-
-function readChatBubblePreference(): boolean {
-  if (typeof window === "undefined") return true;
-  const value = window.localStorage.getItem(CHAT_BUBBLE_PREF_KEY);
-  if (value === "0") return false;
-  if (value === "1") return true;
-  return true;
-}
 
 interface Message {
   id: string;
@@ -52,61 +41,7 @@ interface GameChatProps {
   language: string;
   disabled?: boolean;
   currentUserId?: string;
-}
-
-// Floating bubble that auto-hides after 3 seconds
-function FloatingBubble({ msg, isOwn, onExpire }: { msg: Message; isOwn: boolean; onExpire: () => void }) {
-  const [visible, setVisible] = useState(true);
-  const [fading, setFading] = useState(false);
-
-  useEffect(() => {
-    const fadeTimer = setTimeout(() => setFading(true), 2500);
-    const removeTimer = setTimeout(() => {
-      setVisible(false);
-      onExpire();
-    }, 3000);
-    return () => {
-      clearTimeout(fadeTimer);
-      clearTimeout(removeTimer);
-    };
-  }, [onExpire]);
-
-  if (!visible) return null;
-
-  return (
-    <div
-      className={cn(
-        "flex items-end gap-1.5 transition-all duration-500",
-        isOwn ? "justify-end" : "justify-start",
-        fading ? "opacity-0 translate-y-[-8px]" : "opacity-100 animate-in slide-in-from-bottom-2"
-      )}
-    >
-      {!isOwn && (
-        <Avatar className="h-6 w-6 ring-2 ring-background shadow-md">
-          <AvatarImage src={msg.senderAvatar} />
-          <AvatarFallback className="text-[10px] bg-primary/20">
-            {msg.senderName?.[0]?.toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-      )}
-      <div
-        className={cn(
-          "max-w-[170px] sm:max-w-[220px] px-3 py-1.5 rounded-2xl shadow-lg text-sm break-words",
-          isOwn
-            ? "bg-primary text-primary-foreground rounded-br-sm"
-            : "bg-card border border-border text-card-foreground rounded-bl-sm",
-          msg.isQuickMessage && "font-semibold text-xs bg-amber-500/90 text-white border-amber-400"
-        )}
-      >
-        {!isOwn && (
-          <span className="block text-[10px] font-medium opacity-70 mb-0.5 truncate">
-            {msg.senderName}
-          </span>
-        )}
-        {msg.message}
-      </div>
-    </div>
-  );
+  autoFocusInput?: boolean;
 }
 
 export function GameChat({
@@ -116,22 +51,18 @@ export function GameChat({
   language,
   disabled = false,
   currentUserId,
+  autoFocusInput = false,
 }: GameChatProps) {
   const [messageInput, setMessageInput] = useState("");
-  const [showHistory, setShowHistory] = useState(false);
   const [showQuickPanel, setShowQuickPanel] = useState(false);
-  const [activeBubbles, setActiveBubbles] = useState<Message[]>([]);
-  const [chatBubbleEnabled, setChatBubbleEnabled] = useState<boolean>(() => readChatBubblePreference());
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { t, dir } = useI18n();
   const { toast } = useToast();
   const { user, refreshUser } = useAuth();
-  const lastProcessedRef = useRef<number>(0);
   const chatTitle = t("chat.title");
   const quickLabel = t("auth.quick");
   const quickActionsLabel = t("play.quickActions");
-  const chatHistoryLabel = `${t("nav.gameHistory")} · ${chatTitle}`;
 
   const blockMutation = useMutation({
     mutationFn: (userId: string) => apiRequest('POST', `/api/users/${userId}/block`),
@@ -155,62 +86,40 @@ export function GameChat({
     }
   });
 
-  // Watch for new messages → add them as floating bubbles
   useEffect(() => {
-    if (!chatBubbleEnabled) return;
-    if (messages.length > lastProcessedRef.current) {
-      const newMsgs = messages.slice(lastProcessedRef.current);
-      setActiveBubbles(prev => [...prev, ...newMsgs].slice(-3)); // keep stack compact so it stays out of board area
-      lastProcessedRef.current = messages.length;
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop =
+        messagesContainerRef.current.scrollHeight;
     }
-  }, [messages, chatBubbleEnabled]);
+  }, [messages, showQuickPanel]);
 
   useEffect(() => {
-    if (!chatBubbleEnabled) {
-      setActiveBubbles([]);
-      return;
+    if (autoFocusInput) {
+      inputRef.current?.focus();
     }
-    if (messages.length > 0) {
-      const last = messages[messages.length - 1];
-      setActiveBubbles([last]);
-      lastProcessedRef.current = messages.length;
-    }
-  }, [chatBubbleEnabled, messages]);
-
-  const toggleChatBubble = useCallback(() => {
-    setChatBubbleEnabled((prev) => {
-      const next = !prev;
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(CHAT_BUBBLE_PREF_KEY, next ? "1" : "0");
-      }
-      return next;
-    });
-  }, []);
-
-  // Auto-scroll history
-  useEffect(() => {
-    if (showHistory && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, showHistory]);
-
-  const handleBubbleExpire = useCallback((msgId: string) => {
-    setActiveBubbles(prev => prev.filter(m => m.id !== msgId));
-  }, []);
+  }, [autoFocusInput]);
 
   const handleSend = useCallback(() => {
     if (!messageInput.trim() || disabled) return;
     onSendMessage(messageInput.trim());
     setMessageInput("");
-    setShowHistory(false); // Close after sending (Ludo King behavior)
-    setShowQuickPanel(false);
-  }, [messageInput, disabled, onSendMessage]);
+    if (autoFocusInput) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+  }, [messageInput, disabled, onSendMessage, autoFocusInput]);
 
   const handleQuickMessage = useCallback((qm: QuickMessage) => {
     if (disabled) return;
     onSendMessage(language === "ar" ? qm.ar : qm.en, true, qm.key);
-    setShowQuickPanel(false); // Close after sending
-  }, [disabled, onSendMessage, language]);
+    setShowQuickPanel(false);
+    if (autoFocusInput) {
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+  }, [disabled, onSendMessage, language, autoFocusInput]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -227,39 +136,135 @@ export function GameChat({
   const userId = currentUserId || user?.id;
 
   return (
-    <>
-      {/* Floating bubbles overlay — positioned at bottom of game area */}
-      {chatBubbleEnabled && (
-        <div className="absolute bottom-12 left-2 right-2 z-30 pointer-events-none flex flex-col gap-1.5 max-h-[84px] overflow-hidden">
-          {activeBubbles.map((msg) => (
-            <FloatingBubble
-              key={msg.id}
-              msg={msg}
-              isOwn={msg.senderId === userId}
-              onExpire={() => handleBubbleExpire(msg.id)}
-            />
-          ))}
+    <div
+      dir={dir}
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border bg-background/95 shadow-sm backdrop-blur-sm"
+    >
+      <div className="flex items-center justify-between border-b px-3 py-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <MessageCircle className="h-4 w-4 text-primary" />
+          <span className="truncate text-sm font-medium">{chatTitle}</span>
         </div>
-      )}
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+          {messages.length}
+        </span>
+      </div>
 
-      {/* Quick messages floating strip */}
-      {showQuickPanel && (
-        <div dir={dir} className="absolute bottom-16 left-0 right-0 z-40 bg-background/95 backdrop-blur-md border-t animate-in slide-in-from-bottom-4 duration-200">
-          <div className="flex items-center justify-between px-3 py-1.5 border-b">
-            <span className="text-xs font-medium text-muted-foreground">
-              {quickActionsLabel}
-            </span>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowQuickPanel(false)} aria-label={t("common.close")}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto px-3 py-2"
+        data-testid="game-chat-messages-container"
+      >
+        {messages.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            {t("chat.noMessages")}
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            {messages.map((msg) => {
+              const isOwnMessage = msg.senderId === userId;
+              const isAlreadyBlocked =
+                typeof msg.senderId === "string" &&
+                user?.blockedUsers?.includes(msg.senderId);
+              const isAlreadyMuted =
+                typeof msg.senderId === "string" &&
+                user?.mutedUsers?.includes(msg.senderId);
+              const displayName = msg.senderName?.trim() || t("common.view");
+
+              return (
+                <div
+                  key={msg.id}
+                  className={cn(
+                    "flex gap-1.5",
+                    isOwnMessage ? "justify-end" : "justify-start"
+                  )}
+                >
+                  {!isOwnMessage && (
+                    <Avatar className="h-7 w-7 shrink-0">
+                      <AvatarImage src={msg.senderAvatar} />
+                      <AvatarFallback className="text-[10px]">
+                        {displayName[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div className={cn("max-w-[80%]", isOwnMessage ? "items-end" : "items-start")}>
+                    <div
+                      className={cn(
+                        "rounded-2xl px-3 py-1.5 text-sm",
+                        isOwnMessage
+                          ? "rounded-br-sm bg-primary text-primary-foreground"
+                          : "rounded-bl-sm bg-muted",
+                        msg.isQuickMessage && "bg-amber-500/90 text-xs font-medium text-white"
+                      )}
+                    >
+                      {!isOwnMessage && (
+                        <div className="mb-0.5 flex items-center gap-1">
+                          <span className="truncate text-[10px] font-medium opacity-70">
+                            {displayName}
+                          </span>
+                          {typeof msg.senderId === "string" && msg.senderId.length > 0 && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="p-0 opacity-60 hover:opacity-100" type="button">
+                                  <MoreVertical className="h-3 w-3" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start" className="min-w-[140px]">
+                                {!isAlreadyBlocked && (
+                                  <DropdownMenuItem
+                                    onClick={() => blockMutation.mutate(msg.senderId!)}
+                                    disabled={blockMutation.isPending}
+                                    data-testid={`menu-block-${msg.senderId}`}
+                                  >
+                                    <Ban className="me-1.5 h-3.5 w-3.5" />
+                                    {t("chat.blockUser")}
+                                  </DropdownMenuItem>
+                                )}
+                                {!isAlreadyMuted && (
+                                  <DropdownMenuItem
+                                    onClick={() => muteMutation.mutate(msg.senderId!)}
+                                    disabled={muteMutation.isPending}
+                                    data-testid={`menu-mute-${msg.senderId}`}
+                                  >
+                                    <VolumeX className="me-1.5 h-3.5 w-3.5" />
+                                    {t("chat.muteUser")}
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
+                      )}
+                      {msg.message}
+                    </div>
+                    <span
+                      className={cn(
+                        "mt-0.5 block text-[10px] text-muted-foreground",
+                        isOwnMessage ? "text-end" : "text-start"
+                      )}
+                    >
+                      {formatTime(msg.createdAt)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div className="grid grid-cols-2 gap-1.5 p-2 max-h-[140px] overflow-y-auto">
+        )}
+      </div>
+
+      {showQuickPanel && (
+        <div className="border-t bg-background/90 px-2 pb-1.5 pt-2">
+          <div className="mb-1.5 px-1 text-[11px] font-medium text-muted-foreground">
+            {quickActionsLabel}
+          </div>
+          <div className="grid max-h-[132px] grid-cols-2 gap-1.5 overflow-y-auto sm:grid-cols-3">
             {quickMessages.map((qm) => (
               <Button
                 key={qm.key}
                 variant="outline"
                 size="sm"
-                className="h-auto py-1.5 px-2 text-xs hover:bg-primary hover:text-primary-foreground transition-colors"
+                className="h-auto py-1.5 px-2 text-xs transition-colors hover:bg-primary hover:text-primary-foreground"
                 onClick={() => handleQuickMessage(qm)}
                 disabled={disabled}
                 data-testid={`quick-message-${qm.key}`}
@@ -271,188 +276,46 @@ export function GameChat({
         </div>
       )}
 
-      {/* Chat history overlay */}
-      {showHistory && (
-        <div dir={dir} className="absolute bottom-16 left-0 right-0 z-40 bg-background/95 backdrop-blur-md border-t animate-in slide-in-from-bottom-4 duration-200 max-h-[60vh]">
-          <div className="flex items-center justify-between px-3 py-2 border-b">
-            <div className="flex items-center gap-1.5">
-              <MessageCircle className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">
-                {chatHistoryLabel}
-              </span>
-              <span className="text-xs text-muted-foreground">({messages.length})</span>
-            </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowHistory(false)} aria-label={t("common.close")}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          <ScrollArea className="max-h-[40vh] overflow-y-auto" ref={scrollRef}>
-            <div className="p-3 space-y-2.5">
-              {messages.length === 0 ? (
-                <p className="text-center text-sm text-muted-foreground py-6">
-                  {t("chat.noMessages")}
-                </p>
-              ) : (
-                messages.map((msg) => {
-                  const isOwnMessage = msg.senderId === userId;
-                  const isAlreadyBlocked = user?.blockedUsers?.includes(msg.senderId);
-                  const isAlreadyMuted = user?.mutedUsers?.includes(msg.senderId);
-
-                  return (
-                    <div
-                      key={msg.id}
-                      className={cn(
-                        "flex gap-1.5",
-                        isOwnMessage ? "justify-end" : "justify-start"
-                      )}
-                    >
-                      {!isOwnMessage && (
-                        <Avatar className="h-7 w-7 shrink-0">
-                          <AvatarImage src={msg.senderAvatar} />
-                          <AvatarFallback className="text-[10px]">
-                            {msg.senderName?.[0]?.toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                      )}
-                      <div className={cn("max-w-[75%]", isOwnMessage ? "items-end" : "items-start")}>
-                        <div
-                          className={cn(
-                            "px-3 py-1.5 rounded-2xl text-sm",
-                            isOwnMessage
-                              ? "bg-primary text-primary-foreground rounded-br-sm"
-                              : "bg-muted rounded-bl-sm",
-                            msg.isQuickMessage && "bg-amber-500/90 text-white font-medium text-xs"
-                          )}
-                        >
-                          {!isOwnMessage && (
-                            <div className="flex items-center gap-1 mb-0.5">
-                              <span className="text-[10px] font-medium opacity-70 truncate">
-                                {msg.senderName}
-                              </span>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button className="opacity-60 hover:opacity-100 p-0">
-                                    <MoreVertical className="h-3 w-3" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="min-w-[140px]">
-                                  {!isAlreadyBlocked && (
-                                    <DropdownMenuItem
-                                      onClick={() => blockMutation.mutate(msg.senderId)}
-                                      disabled={blockMutation.isPending}
-                                      data-testid={`menu-block-${msg.senderId}`}
-                                    >
-                                      <Ban className="h-3.5 w-3.5 me-1.5" />
-                                      {t("chat.blockUser")}
-                                    </DropdownMenuItem>
-                                  )}
-                                  {!isAlreadyMuted && (
-                                    <DropdownMenuItem
-                                      onClick={() => muteMutation.mutate(msg.senderId)}
-                                      disabled={muteMutation.isPending}
-                                      data-testid={`menu-mute-${msg.senderId}`}
-                                    >
-                                      <VolumeX className="h-3.5 w-3.5 me-1.5" />
-                                      {t("chat.muteUser")}
-                                    </DropdownMenuItem>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          )}
-                          {msg.message}
-                        </div>
-                        <span className={cn(
-                          "text-[10px] text-muted-foreground mt-0.5 block",
-                          isOwnMessage ? "text-end" : "text-start"
-                        )}>
-                          {formatTime(msg.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </ScrollArea>
-          {/* Input inside history panel */}
-          <div className="p-2 border-t">
-            <div className="flex gap-1.5">
-              <Input
-                ref={inputRef}
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-                onKeyDown={handleKeyPress}
-                placeholder={t("chat.typeMessage")}
-                className="flex-1 h-9 text-sm"
-                disabled={disabled}
-                autoFocus
-                data-testid="input-game-chat"
-              />
-              <Button
-                size="icon"
-                className="h-9 w-9"
-                onClick={handleSend}
-                disabled={!messageInput.trim() || disabled}
-                data-testid="button-send-game-chat"
-              >
-                <Send className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
+      <div className="border-t bg-background/80 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center gap-1.5">
+          <Input
+            ref={inputRef}
+            value={messageInput}
+            onChange={(e) => setMessageInput(e.target.value)}
+            onKeyDown={handleKeyPress}
+            placeholder={t("chat.typeMessage")}
+            className="h-10 flex-1 text-sm"
+            disabled={disabled}
+            autoFocus={autoFocusInput}
+            data-testid="input-game-chat"
+          />
+          <Button
+            variant={showQuickPanel ? "default" : "outline"}
+            size="icon"
+            className="h-10 w-10"
+            onClick={() => setShowQuickPanel((previous) => !previous)}
+            disabled={disabled}
+            title={quickLabel}
+            data-testid="button-toggle-game-quick-replies"
+          >
+            <Zap className="h-4 w-4" />
+            <span className="sr-only">{quickLabel}</span>
+          </Button>
+          <Button
+            size="icon"
+            className="h-10 w-10"
+            onClick={handleSend}
+            disabled={!messageInput.trim() || disabled}
+            data-testid="button-send-game-chat"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
         </div>
-      )}
-
-      {/* Bottom control bar — chat/quick message buttons */}
-      <div dir={dir} className="absolute bottom-0 left-0 right-0 z-30 flex items-center justify-center gap-2 p-2 bg-background/80 backdrop-blur-sm">
-        <Button
-          variant={chatBubbleEnabled ? "default" : "outline"}
-          size="sm"
-          className="h-9 w-9 rounded-full p-0 shadow-md"
-          onClick={toggleChatBubble}
-          disabled={disabled}
-          title={chatTitle}
-          data-testid="button-toggle-chat-bubble"
-        >
-          <MessageCircle className="h-4 w-4" />
-          <span className="sr-only">{chatTitle}</span>
-        </Button>
-        <Button
-          variant={showQuickPanel ? "default" : "outline"}
-          size="sm"
-          className="h-9 gap-1.5 rounded-full px-4 shadow-md"
-          onClick={() => {
-            setShowQuickPanel(!showQuickPanel);
-            setShowHistory(false);
-          }}
-          disabled={disabled}
-        >
-          <Zap className="h-4 w-4" />
-          <span className="text-xs hidden sm:inline">
-            {quickLabel}
-          </span>
-        </Button>
-        <Button
-          variant={showHistory ? "default" : "outline"}
-          size="sm"
-          className="h-9 gap-1.5 rounded-full px-4 shadow-md relative"
-          onClick={() => {
-            setShowHistory(!showHistory);
-            setShowQuickPanel(false);
-          }}
-          disabled={disabled}
-        >
-          <MessageCircle className="h-4 w-4" />
-          <span className="text-xs hidden sm:inline">
-            {chatTitle}
-          </span>
-          {messages.length > 0 && !showHistory && (
-            <span className="absolute -top-1 -end-1 h-4 w-4 rounded-full bg-destructive text-[9px] text-destructive-foreground flex items-center justify-center font-bold">
-              {messages.length > 99 ? "99+" : messages.length}
-            </span>
-          )}
-        </Button>
       </div>
-    </>
+
+      <div className="sr-only" aria-live="polite">
+        {messages.length}
+      </div>
+    </div>
   );
 }

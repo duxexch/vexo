@@ -219,9 +219,15 @@ interface DominoGameResultMeta {
 interface ChatMsg {
   id?: string;
   userId?: string;
+  senderId?: string;
   username: string;
+  senderName?: string;
+  senderAvatar?: string;
   message: string;
   timestamp: string | number;
+  createdAt?: string;
+  isQuickMessage?: boolean;
+  quickMessageKey?: string;
 }
 
 interface AvatarChatBubbleState {
@@ -1414,35 +1420,73 @@ export default function ChallengeGamePage() {
           break;
         case "chat_message":
           if (data.message) {
-            const incomingMessage = data.message as unknown as ChatMsg;
-            setMessages((prev) => [
-              ...prev,
-              incomingMessage,
-            ]);
-            const senderRecord = incomingMessage as {
-              userId?: unknown;
-              senderId?: unknown;
-              message?: unknown;
-            };
+            const incomingMessage = data.message as Record<string, unknown>;
             const senderId =
-              typeof senderRecord.userId === "string"
-                ? senderRecord.userId
-                : typeof senderRecord.senderId === "string"
-                  ? senderRecord.senderId
-                  : "";
+              typeof incomingMessage.userId === "string"
+                ? incomingMessage.userId
+                : typeof incomingMessage.senderId === "string"
+                  ? incomingMessage.senderId
+                  : typeof incomingMessage.sender_id === "string"
+                    ? incomingMessage.sender_id
+                    : "";
             const senderNameRaw =
-              (incomingMessage as { username?: unknown; senderName?: unknown })
-                .username ??
-              (incomingMessage as { senderName?: unknown }).senderName;
+              incomingMessage.username ??
+              incomingMessage.senderName ??
+              incomingMessage.sender_name;
             const senderName =
               typeof senderNameRaw === "string" &&
                 senderNameRaw.trim().length > 0
                 ? senderNameRaw
                 : t("common.view");
             const chatText =
-              typeof senderRecord.message === "string"
-                ? senderRecord.message
+              typeof incomingMessage.message === "string"
+                ? incomingMessage.message
                 : "";
+            const createdAtRaw =
+              typeof incomingMessage.createdAt === "string"
+                ? incomingMessage.createdAt
+                : typeof incomingMessage.created_at === "string"
+                  ? incomingMessage.created_at
+                  : undefined;
+            const timestamp =
+              typeof incomingMessage.timestamp === "string" ||
+                typeof incomingMessage.timestamp === "number"
+                ? incomingMessage.timestamp
+                : createdAtRaw || new Date().toISOString();
+
+            if (!chatText.trim()) {
+              break;
+            }
+
+            const normalizedMessage: ChatMsg = {
+              id:
+                typeof incomingMessage.id === "string"
+                  ? incomingMessage.id
+                  : undefined,
+              userId: senderId || undefined,
+              senderId: senderId || undefined,
+              username: senderName,
+              senderName,
+              senderAvatar:
+                typeof incomingMessage.senderAvatar === "string"
+                  ? incomingMessage.senderAvatar
+                  : typeof incomingMessage.sender_avatar === "string"
+                    ? incomingMessage.sender_avatar
+                    : undefined,
+              message: chatText,
+              timestamp,
+              createdAt: createdAtRaw,
+              isQuickMessage: Boolean(incomingMessage.isQuickMessage),
+              quickMessageKey:
+                typeof incomingMessage.quickMessageKey === "string"
+                  ? incomingMessage.quickMessageKey
+                  : undefined,
+            };
+
+            setMessages((prev) => [
+              ...prev,
+              normalizedMessage,
+            ].slice(-220));
 
             if (senderId && chatText) {
               pushAvatarChatBubble(senderId, senderName, chatText);
@@ -2522,7 +2566,9 @@ export default function ChallengeGamePage() {
     }
   }
 
-  const supportAggregate = supports.reduce(
+  const normalizedSupports = Array.isArray(supports) ? supports : [];
+
+  const supportAggregate = normalizedSupports.reduce(
     (aggregate, support) => {
       const amount = Number.parseFloat(String(support.amount || 0));
       return {
@@ -2555,67 +2601,90 @@ export default function ChallengeGamePage() {
       ? gameSession.totalGiftsValue
       : `${giftAggregate.totalAmount.toFixed(2)} VXC`;
 
-  const challengeVoiceTargets = useMemo(
-    () =>
-      [
-        {
-          id: challenge.player1Id,
-          username: challenge.player1?.username,
-          seat: 1,
-        },
-        {
-          id: challenge.player2Id,
-          username: challenge.player2?.username,
-          seat: 2,
-        },
-        {
-          id: challenge.player3Id,
-          username: challenge.player3?.username,
-          seat: 3,
-        },
-        {
-          id: challenge.player4Id,
-          username: challenge.player4?.username,
-          seat: 4,
-        },
-      ].flatMap((target) => {
-        if (
-          typeof target.id !== "string" ||
-          target.id.length === 0 ||
-          target.id === user?.id
-        ) {
-          return [];
-        }
+  const challengeVoiceTargets = [
+    {
+      id: challenge.player1Id,
+      username: challenge.player1?.username,
+      seat: 1,
+    },
+    {
+      id: challenge.player2Id,
+      username: challenge.player2?.username,
+      seat: 2,
+    },
+    {
+      id: challenge.player3Id,
+      username: challenge.player3?.username,
+      seat: 3,
+    },
+    {
+      id: challenge.player4Id,
+      username: challenge.player4?.username,
+      seat: 4,
+    },
+  ].flatMap((target) => {
+    if (
+      typeof target.id !== "string" ||
+      target.id.length === 0 ||
+      target.id === user?.id
+    ) {
+      return [];
+    }
 
-        return [
-          {
-            id: target.id,
-            username: target.username,
-            seat: target.seat,
-          },
-        ];
-      }),
-    [
-      challenge.player1Id,
-      challenge.player1?.username,
-      challenge.player2Id,
-      challenge.player2?.username,
-      challenge.player3Id,
-      challenge.player3?.username,
-      challenge.player4Id,
-      challenge.player4?.username,
-      user?.id,
-    ],
-  );
+    return [
+      {
+        id: target.id,
+        username: target.username,
+        seat: target.seat,
+      },
+    ];
+  });
 
-  const togglePeerListening = useCallback((peerUserId: string) => {
+  const gameChatMessages = messages
+    .filter((msg) => String(msg.message || "").trim().length > 0)
+    .slice(-160)
+    .map((msg, index) => {
+      const senderId =
+        typeof msg.userId === "string" && msg.userId.length > 0
+          ? msg.userId
+          : typeof msg.senderId === "string" && msg.senderId.length > 0
+            ? msg.senderId
+            : "";
+      const senderName =
+        typeof msg.senderName === "string" && msg.senderName.trim().length > 0
+          ? msg.senderName
+          : typeof msg.username === "string" && msg.username.trim().length > 0
+            ? msg.username
+            : t("common.view");
+      const createdAtCandidate =
+        typeof msg.createdAt === "string" && msg.createdAt.trim().length > 0
+          ? msg.createdAt
+          : msg.timestamp;
+      const createdAtDate = new Date(createdAtCandidate);
+      const createdAt = Number.isNaN(createdAtDate.getTime())
+        ? new Date().toISOString()
+        : createdAtDate.toISOString();
+
+      return {
+        id: msg.id || `${senderId || "chat"}-${index}-${createdAt}`,
+        senderId,
+        senderName,
+        senderAvatar: msg.senderAvatar,
+        message: String(msg.message || ""),
+        isQuickMessage: Boolean(msg.isQuickMessage),
+        quickMessageKey: msg.quickMessageKey,
+        createdAt,
+      };
+    });
+
+  const togglePeerListening = (peerUserId: string) => {
     setVoicePeerMutedMap((previous) => ({
       ...previous,
       [peerUserId]: !previous[peerUserId],
     }));
-  }, []);
+  };
 
-  const fullscreenPlayActions = useMemo<GameFullscreenActionItem[]>(() => {
+  const fullscreenPlayActions: GameFullscreenActionItem[] = (() => {
     const chatBadge =
       messages.length > 99
         ? "99+"
@@ -2707,25 +2776,7 @@ export default function ChallengeGamePage() {
     }
 
     return actions;
-  }, [
-    messages.length,
-    liveChatLabel,
-    openLiveChat,
-    shouldRenderPlayerVoiceChat,
-    isVoiceMicMuted,
-    challengeVoiceTargets,
-    voicePeerMutedMap,
-    connectedVoicePeers,
-    togglePeerListening,
-    challenge.gameType,
-    canPlayActions,
-    gameSession?.status,
-    drawOffered,
-    user?.id,
-    t,
-    sendRespondDraw,
-    sendOfferDraw,
-  ]);
+  })();
 
   return (
     <div
@@ -3563,15 +3614,7 @@ export default function ChallengeGamePage() {
                   className={`w-full mt-2 h-36 sm:h-40 relative ${isWideBoardGame ? "max-w-5xl" : isChessGame ? "max-w-2xl" : "max-w-lg"} ${isChessGame || isBackgammonGame ? "hidden sm:block" : ""}`}
                 >
                   <GameChat
-                    messages={
-                      messages as unknown as {
-                        id: string;
-                        senderId: string;
-                        senderName: string;
-                        message: string;
-                        createdAt: string;
-                      }[]
-                    }
+                    messages={gameChatMessages}
                     onSendMessage={sendChatMessage}
                     quickMessages={QUICK_MESSAGES}
                     language={language}
@@ -3674,19 +3717,12 @@ export default function ChallengeGamePage() {
 
           <div className="relative h-[min(65vh,32rem)] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             <GameChat
-              messages={
-                messages as unknown as {
-                  id: string;
-                  senderId: string;
-                  senderName: string;
-                  message: string;
-                  createdAt: string;
-                }[]
-              }
+              messages={gameChatMessages}
               onSendMessage={sendChatMessage}
               quickMessages={QUICK_MESSAGES}
               language={language}
               currentUserId={user?.id}
+              autoFocusInput
             />
           </div>
         </DialogContent>

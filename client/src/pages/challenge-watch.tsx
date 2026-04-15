@@ -184,9 +184,15 @@ interface WatchGiftInfo {
 interface WatchChatMessage {
   id?: string;
   userId?: string;
+  senderId?: string;
   username: string;
+  senderName?: string;
+  senderAvatar?: string;
   message: string;
   timestamp: string | number;
+  createdAt?: string;
+  isQuickMessage?: boolean;
+  quickMessageKey?: string;
 }
 
 interface WatchAvatarChatBubbleState {
@@ -848,24 +854,72 @@ export default function ChallengeWatchPage() {
           break;
         case "chat_message":
           if (data.message) {
-            const incomingMessage = data.message as WatchChatMessage;
-            setMessages((prev) =>
-              [...prev, incomingMessage].slice(-160),
-            );
-
+            const incomingMessage = data.message as unknown as Record<string, unknown>;
             const senderId =
               typeof incomingMessage.userId === "string"
                 ? incomingMessage.userId
-                : "";
+                : typeof incomingMessage.senderId === "string"
+                  ? incomingMessage.senderId
+                  : typeof incomingMessage.sender_id === "string"
+                    ? incomingMessage.sender_id
+                    : "";
+            const senderNameRaw =
+              incomingMessage.username ??
+              incomingMessage.senderName ??
+              incomingMessage.sender_name;
             const senderName =
-              typeof incomingMessage.username === "string" &&
-                incomingMessage.username.trim().length > 0
-                ? incomingMessage.username
+              typeof senderNameRaw === "string" &&
+                senderNameRaw.trim().length > 0
+                ? senderNameRaw
                 : t("common.view");
             const chatText =
               typeof incomingMessage.message === "string"
                 ? incomingMessage.message
                 : "";
+            const createdAtRaw =
+              typeof incomingMessage.createdAt === "string"
+                ? incomingMessage.createdAt
+                : typeof incomingMessage.created_at === "string"
+                  ? incomingMessage.created_at
+                  : undefined;
+            const timestamp =
+              typeof incomingMessage.timestamp === "string" ||
+                typeof incomingMessage.timestamp === "number"
+                ? incomingMessage.timestamp
+                : createdAtRaw || new Date().toISOString();
+
+            if (!chatText.trim()) {
+              break;
+            }
+
+            const normalizedMessage: WatchChatMessage = {
+              id:
+                typeof incomingMessage.id === "string"
+                  ? incomingMessage.id
+                  : undefined,
+              userId: senderId || undefined,
+              senderId: senderId || undefined,
+              username: senderName,
+              senderName,
+              senderAvatar:
+                typeof incomingMessage.senderAvatar === "string"
+                  ? incomingMessage.senderAvatar
+                  : typeof incomingMessage.sender_avatar === "string"
+                    ? incomingMessage.sender_avatar
+                    : undefined,
+              message: chatText,
+              timestamp,
+              createdAt: createdAtRaw,
+              isQuickMessage: Boolean(incomingMessage.isQuickMessage),
+              quickMessageKey:
+                typeof incomingMessage.quickMessageKey === "string"
+                  ? incomingMessage.quickMessageKey
+                  : undefined,
+            };
+
+            setMessages((prev) =>
+              [...prev, normalizedMessage].slice(-160),
+            );
 
             if (senderId && chatText) {
               pushAvatarChatBubble(senderId, senderName, chatText);
@@ -1259,18 +1313,23 @@ export default function ChallengeWatchPage() {
       });
       return;
     }
+    const minSupportAmount = Number(oddsData?.minSupportAmount);
+    const maxSupportAmount = Number(oddsData?.maxSupportAmount);
+    const hasValidSupportRange =
+      Number.isFinite(minSupportAmount) && Number.isFinite(maxSupportAmount);
+
     if (
-      oddsData &&
-      (amount < oddsData.minSupportAmount || amount > oddsData.maxSupportAmount)
+      hasValidSupportRange &&
+      (amount < minSupportAmount || amount > maxSupportAmount)
     ) {
       const minAmountText =
         challenge?.currencyType === "project"
-          ? `${oddsData.minSupportAmount.toFixed(2)} VXC`
-          : `$${oddsData.minSupportAmount.toFixed(2)}`;
+          ? `${minSupportAmount.toFixed(2)} VXC`
+          : `$${minSupportAmount.toFixed(2)}`;
       const maxAmountText =
         challenge?.currencyType === "project"
-          ? `${oddsData.maxSupportAmount.toFixed(2)} VXC`
-          : `$${oddsData.maxSupportAmount.toFixed(2)}`;
+          ? `${maxSupportAmount.toFixed(2)} VXC`
+          : `$${maxSupportAmount.toFixed(2)}`;
       toast({
         title: language === "ar" ? "خطأ" : "Error",
         description:
@@ -1439,12 +1498,13 @@ export default function ChallengeWatchPage() {
       : `$${safeAmount.toFixed(2)}`;
   };
 
+  const normalizedSupports = Array.isArray(supports) ? supports : [];
   const supportAggregate =
-    !supports || supports.length === 0
+    normalizedSupports.length === 0
       ? { count: 0, totalAmount: 0 }
       : {
-        count: supports.length,
-        totalAmount: supports.reduce((sum, support) => {
+        count: normalizedSupports.length,
+        totalAmount: normalizedSupports.reduce((sum, support) => {
           const numericAmount = Number(support.amount);
           return sum + (Number.isFinite(numericAmount) ? numericAmount : 0);
         }, 0),
@@ -1463,18 +1523,28 @@ export default function ChallengeWatchPage() {
     .filter((msg) => String(msg.message || "").trim().length > 0)
     .slice(-80)
     .map((msg, index) => {
+      const resolvedUserId =
+        typeof msg.userId === "string" && msg.userId.length > 0
+          ? msg.userId
+          : typeof msg.senderId === "string" && msg.senderId.length > 0
+            ? msg.senderId
+            : undefined;
       const isPlayerMessage = Boolean(
-        msg.userId && participantIds.has(msg.userId),
+        resolvedUserId && participantIds.has(resolvedUserId),
       );
       return {
         id:
-          msg.id || `${msg.userId || "chat"}-${index}-${String(msg.timestamp)}`,
-        userId: msg.userId,
+          msg.id || `${resolvedUserId || "chat"}-${index}-${String(msg.timestamp)}`,
+        userId: resolvedUserId,
         username:
           msg.username ||
+          msg.senderName ||
           (isPlayerMessage ? t("domino.player") : t("common.view")),
         message: String(msg.message || ""),
-        timestamp: msg.timestamp,
+        timestamp:
+          msg.timestamp ||
+          msg.createdAt ||
+          new Date().toISOString(),
       };
     });
 
@@ -1612,67 +1682,53 @@ export default function ChallengeWatchPage() {
       : undefined;
   const supportActionsDisabled =
     !challenge.player2 || gameSession?.status !== "playing" || isTeamGame;
-  const challengeVoiceTargets = useMemo(
-    () =>
-      [
-        {
-          id: challenge.player1Id,
-          username: challenge.player1?.username,
-          seat: 1,
-        },
-        {
-          id: challenge.player2Id,
-          username: challenge.player2?.username,
-          seat: 2,
-        },
-        {
-          id: challenge.player3Id,
-          username: challenge.player3?.username,
-          seat: 3,
-        },
-        {
-          id: challenge.player4Id,
-          username: challenge.player4?.username,
-          seat: 4,
-        },
-      ].flatMap((target) => {
-        if (
-          typeof target.id !== "string" ||
-          target.id.length === 0 ||
-          target.id === user?.id
-        ) {
-          return [];
-        }
+  const challengeVoiceTargets = [
+    {
+      id: challenge.player1Id,
+      username: challenge.player1?.username,
+      seat: 1,
+    },
+    {
+      id: challenge.player2Id,
+      username: challenge.player2?.username,
+      seat: 2,
+    },
+    {
+      id: challenge.player3Id,
+      username: challenge.player3?.username,
+      seat: 3,
+    },
+    {
+      id: challenge.player4Id,
+      username: challenge.player4?.username,
+      seat: 4,
+    },
+  ].flatMap((target) => {
+    if (
+      typeof target.id !== "string" ||
+      target.id.length === 0 ||
+      target.id === user?.id
+    ) {
+      return [];
+    }
 
-        return [
-          {
-            id: target.id,
-            username: target.username,
-            seat: target.seat,
-          },
-        ];
-      }),
-    [
-      challenge.player1Id,
-      challenge.player1?.username,
-      challenge.player2Id,
-      challenge.player2?.username,
-      challenge.player3Id,
-      challenge.player3?.username,
-      challenge.player4Id,
-      challenge.player4?.username,
-      user?.id,
-    ],
-  );
+    return [
+      {
+        id: target.id,
+        username: target.username,
+        seat: target.seat,
+      },
+    ];
+  });
 
-  const togglePeerListening = useCallback((peerUserId: string) => {
+  const togglePeerListening = (peerUserId: string) => {
     setVoicePeerMutedMap((previous) => ({
       ...previous,
       [peerUserId]: !previous[peerUserId],
     }));
-  }, []);
+  };
 
-  const fullscreenWatchActions = useMemo<GameFullscreenActionItem[]>(() => {
+  const fullscreenWatchActions: GameFullscreenActionItem[] = (() => {
     const chatBadge =
       liveChatMessages.length > 99
         ? "99+"
@@ -1732,20 +1788,7 @@ export default function ChallengeWatchPage() {
     }
 
     return actions;
-  }, [
-    liveChatLabel,
-    liveChatMessages.length,
-    openLiveChat,
-    openSupportFromFullscreen,
-    openGiftPanel,
-    supportActionsDisabled,
-    challengeVoiceTargets,
-    voicePeerMutedMap,
-    connectedVoicePeers,
-    togglePeerListening,
-    t,
-    user,
-  ]);
+  })();
 
   const balootPlayerNames: Record<string, string> = {};
   for (const [id, username] of [
@@ -2231,7 +2274,9 @@ export default function ChallengeWatchPage() {
                                 variant="outline"
                                 className="text-xs bg-green-500/10 text-green-500 border-green-500/30"
                               >
-                                x{oddsData.player1.odds.toFixed(2)}
+                                x{Number.isFinite(Number(oddsData.player1.odds))
+                                  ? Number(oddsData.player1.odds).toFixed(2)
+                                  : "1.50"}
                               </Badge>
                             )}
                           </div>
@@ -2734,7 +2779,9 @@ export default function ChallengeWatchPage() {
                                 variant="outline"
                                 className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30"
                               >
-                                x{oddsData.player2.odds.toFixed(2)}
+                                x{Number.isFinite(Number(oddsData.player2.odds))
+                                  ? Number(oddsData.player2.odds).toFixed(2)
+                                  : "1.50"}
                               </Badge>
                             )}
                           </div>
@@ -3162,8 +3209,8 @@ export default function ChallengeWatchPage() {
                   supportTotalText={formatChallengeAmountText(
                     supportAggregate.totalAmount,
                   )}
-                  giftCount={giftAggregate.count}
-                  giftTotalText={`${giftAggregate.totalValue.toFixed(2)} VXC`}
+                  giftCount={Number(giftAggregate?.count ?? 0)}
+                  giftTotalText={`${Number(giftAggregate?.totalValue ?? 0).toFixed(2)} VXC`}
                   onSendGift={handleSendGift}
                   onSendChat={sendLiveChatMessage}
                   canSendChat={Boolean(user)}
@@ -3246,6 +3293,7 @@ export default function ChallengeWatchPage() {
                   className="min-h-[44px]"
                   value={mobileChatInput}
                   onChange={(e) => setMobileChatInput(e.target.value)}
+                  autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();

@@ -143,7 +143,7 @@ export function FullScreenGiftPanel({
     (option): option is RecipientOption => option !== null,
   );
 
-  const { data: giftCatalog = [] } = useQuery<Array<{
+  const { data: giftCatalogRaw } = useQuery<Array<{
     id: string;
     name: string;
     nameAr?: string;
@@ -154,6 +154,22 @@ export function FullScreenGiftPanel({
   }>>({
     queryKey: ["/api/gifts"],
   });
+
+  const giftCatalog = Array.isArray(giftCatalogRaw)
+    ? giftCatalogRaw
+    : Array.isArray((giftCatalogRaw as unknown as { gifts?: unknown } | undefined)?.gifts)
+      ? ((giftCatalogRaw as unknown as {
+        gifts?: Array<{
+          id: string;
+          name: string;
+          nameAr?: string;
+          iconUrl?: string;
+          price: string;
+          animationType?: string;
+          isActive?: boolean;
+        }>
+      }).gifts || [])
+      : [];
 
   const allGifts: GiftDef[] = giftCatalog
     .filter((gift) => gift.isActive !== false)
