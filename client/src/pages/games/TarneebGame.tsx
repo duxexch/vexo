@@ -2,16 +2,18 @@ import { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { TarneebBoard } from '@/components/games/TarneebBoard';
 import type { TarneebState } from '@/components/games/TarneebBoard';
+import { GameFullscreenActionDock, type GameFullscreenActionItem } from '@/components/games/GameFullscreenActionDock';
 import { GiftAnimation } from '@/components/games/GiftAnimation';
 import { GameStartCinematic } from '@/components/games/GameStartCinematic';
 import { GameChat } from '@/components/games/GameChat';
+import { useGameFullscreen } from '@/hooks/use-game-fullscreen';
 import { useGameWebSocket, type CardGameState } from '@/hooks/useGameWebSocket';
 import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Wifi, WifiOff, Users, ArrowLeft, Share2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Users, ArrowLeft, Share2, AlertCircle, RefreshCw, Maximize2, Flag } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cardSounds } from '@/lib/game-sounds';
 
@@ -42,6 +44,13 @@ export default function TarneebGame() {
 
   const tarneebState = gameState as CardGameState | null;
   const [showCinematic, setShowCinematic] = useState(true);
+
+  const {
+    containerRef: fullscreenContainerRef,
+    isFullscreen: isGameFullscreen,
+    toggleFullscreen,
+    exitFullscreen,
+  } = useGameFullscreen();
 
   const isValidTarneebState = useMemo(() => {
     if (!tarneebState) return false;
@@ -275,6 +284,39 @@ export default function TarneebGame() {
     }
   };
 
+  const fullscreenActions = useMemo<GameFullscreenActionItem[]>(() => {
+    const actions: GameFullscreenActionItem[] = [
+      {
+        id: 'back-challenges',
+        icon: ArrowLeft,
+        label: t('common.back'),
+        onClick: () => setLocation('/challenges'),
+        tone: 'outline',
+      },
+      {
+        id: 'share-match',
+        icon: Share2,
+        label: t('common.share'),
+        onClick: () => {
+          void handleShare();
+        },
+        tone: 'primary',
+      },
+    ];
+
+    if (canPlayActions && !gameResult) {
+      actions.push({
+        id: 'resign',
+        icon: Flag,
+        label: t('challenge.resign'),
+        onClick: handleResign,
+        tone: 'destructive',
+      });
+    }
+
+    return actions;
+  }, [t, setLocation, handleShare, canPlayActions, gameResult, handleResign]);
+
   if (!sessionId) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -329,7 +371,10 @@ export default function TarneebGame() {
   const winnerTeam = (gameResult as { winner: string | null; reason: string; winningTeam?: number } | null)?.winningTeam ?? boardState.winningTeam;
 
   return (
-    <div className="vex-arcade-stage container mx-auto max-w-6xl min-h-[100svh] px-3 sm:px-4 pt-4 sm:pt-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div
+      ref={fullscreenContainerRef}
+      className={`vex-arcade-stage container mx-auto max-w-6xl min-h-[100svh] px-3 sm:px-4 pt-4 sm:pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] ${isGameFullscreen ? 'vex-game-fullscreen-shell !mx-0 !w-screen !max-w-none !px-2 sm:!px-3 !pt-[max(0.5rem,env(safe-area-inset-top))]' : ''}`}
+    >
       {/* ── Cinematic Game Start ── */}
       {showCinematic && !gameResult && tarneebState?.playerOrder && (
         <GameStartCinematic
@@ -349,7 +394,7 @@ export default function TarneebGame() {
       )}
 
       <div className="flex flex-col gap-4">
-        <div className="vex-arcade-header flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
+        <div className={`vex-arcade-header flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3 ${isGameFullscreen ? 'hidden' : ''}`}>
           <div className="flex min-w-0 flex-wrap items-center gap-3">
             <Button
               variant="ghost"
@@ -385,6 +430,18 @@ export default function TarneebGame() {
                 <WifiOff className="w-3 h-3" />
               )}
             </Badge>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                void toggleFullscreen();
+              }}
+              aria-label={t('common.view')}
+              className="vex-arcade-btn vex-arcade-btn--icon min-h-[44px] min-w-[44px]"
+              data-testid="button-toggle-fullscreen"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </Button>
             <Button variant="outline" size="icon" onClick={handleShare} aria-label="Share game" data-testid="button-share" className="vex-arcade-btn vex-arcade-btn--icon min-h-[44px] min-w-[44px]">
               <Share2 className="w-4 h-4" />
             </Button>
@@ -457,6 +514,16 @@ export default function TarneebGame() {
           currentUserId={String(user?.id || '')}
         />
       </div>
+
+      <GameFullscreenActionDock
+        active={isGameFullscreen}
+        actions={fullscreenActions}
+        onExit={() => {
+          void exitFullscreen();
+        }}
+        exitLabel={t('common.close')}
+        dir={isAr ? 'rtl' : 'ltr'}
+      />
 
       <GiftAnimation
         gift={lastGift ? { id: Date.now().toString(), ...lastGift } : null}

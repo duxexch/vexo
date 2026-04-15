@@ -48,10 +48,15 @@ import { ProjectCurrencyAmount } from "@/components/ProjectCurrencySymbol";
 import { VoiceChat } from "@/components/games/VoiceChat";
 import { SpectatorPanel } from "@/components/games/SpectatorPanel";
 import { ShareMatchButton } from "@/components/games/ShareMatchButton";
+import {
+  GameFullscreenActionDock,
+  type GameFullscreenActionItem,
+} from "@/components/games/GameFullscreenActionDock";
 import { FloatingGiftsOverlay } from "@/components/games/TikTokGiftBar";
 import { FullScreenGiftPanel } from "@/components/games/FullScreenGiftPanel";
 import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
+import { useGameFullscreen } from "@/hooks/use-game-fullscreen";
 import {
   Clock,
   Trophy,
@@ -67,6 +72,7 @@ import {
   Info,
   ArrowRightLeft,
   MessageCircle,
+  Maximize2,
   Volume2,
   VolumeX,
   UserPlus,
@@ -278,6 +284,13 @@ export default function ChallengeWatchPage() {
   const supportSectionRef = useRef<HTMLDivElement | null>(null);
   const liveChatPanelRef = useRef<HTMLDivElement | null>(null);
   const WS_ERROR_TOAST_DEDUPE_MS = 2000;
+
+  const {
+    containerRef: fullscreenContainerRef,
+    isFullscreen: isGameFullscreen,
+    toggleFullscreen,
+    exitFullscreen,
+  } = useGameFullscreen();
 
   const showWsErrorToast = useCallback(
     (message: string, code?: string) => {
@@ -1213,6 +1226,7 @@ export default function ChallengeWatchPage() {
 
   const openLiveChat = useCallback(() => {
     if (
+      !isGameFullscreen &&
       typeof window !== "undefined" &&
       window.matchMedia("(min-width: 1024px)").matches
     ) {
@@ -1224,7 +1238,14 @@ export default function ChallengeWatchPage() {
     }
 
     setShowMobileChat(true);
-  }, []);
+  }, [isGameFullscreen]);
+
+  const openSupportFromFullscreen = useCallback(async () => {
+    await exitFullscreen();
+    setTimeout(() => {
+      jumpToSupportSection();
+    }, 80);
+  }, [exitFullscreen, jumpToSupportSection]);
 
   const handleAddSupport = () => {
     if (!selectedPlayer || !supportAmount) return;
@@ -1465,8 +1486,9 @@ export default function ChallengeWatchPage() {
   const isChessGame = challenge.gameType === "chess";
   const isBackgammonGame = challenge.gameType === "backgammon";
   const showTwoPlayerAvatarLanes = !isDominoGame && !isTeamGame;
-  const playerInfoWidthClass =
-    challenge.gameType === "baloot"
+  const playerInfoWidthClass = isGameFullscreen
+    ? "w-full max-w-[calc(100vw-0.75rem)] mb-3"
+    : challenge.gameType === "baloot"
       ? "w-full max-w-6xl mb-4"
       : isBackgammonGame
         ? "w-full max-w-5xl mb-2"
@@ -1475,8 +1497,9 @@ export default function ChallengeWatchPage() {
           : isChessGame
             ? "w-full max-w-2xl mb-2"
             : "w-full max-w-lg mb-4";
-  const boardWidthClass =
-    challenge.gameType === "baloot"
+  const boardWidthClass = isGameFullscreen
+    ? "w-full max-w-[calc(100vw-0.75rem)]"
+    : challenge.gameType === "baloot"
       ? "w-full max-w-6xl"
       : isWideBoardGame
         ? "w-full max-w-5xl"
@@ -1589,6 +1612,57 @@ export default function ChallengeWatchPage() {
       : undefined;
   const supportActionsDisabled =
     !challenge.player2 || gameSession?.status !== "playing" || isTeamGame;
+
+  const fullscreenWatchActions = useMemo<GameFullscreenActionItem[]>(() => {
+    const chatBadge =
+      liveChatMessages.length > 99
+        ? "99+"
+        : liveChatMessages.length > 0
+          ? String(liveChatMessages.length)
+          : null;
+
+    const actions: GameFullscreenActionItem[] = [
+      {
+        id: "chat",
+        icon: MessageCircle,
+        label: liveChatLabel,
+        onClick: openLiveChat,
+        tone: "primary",
+        badge: chatBadge,
+      },
+    ];
+
+    if (user) {
+      actions.unshift(
+        {
+          id: "support",
+          icon: TrendingUp,
+          label: t("challenges.stake"),
+          onClick: openSupportFromFullscreen,
+          disabled: supportActionsDisabled,
+          tone: "outline",
+        },
+        {
+          id: "gift",
+          icon: Gift,
+          label: t("challenges.sendGift"),
+          onClick: openGiftPanel,
+          tone: "outline",
+        },
+      );
+    }
+
+    return actions;
+  }, [
+    liveChatLabel,
+    liveChatMessages.length,
+    openLiveChat,
+    openSupportFromFullscreen,
+    openGiftPanel,
+    supportActionsDisabled,
+    t,
+    user,
+  ]);
 
   const balootPlayerNames: Record<string, string> = {};
   for (const [id, username] of [
@@ -1786,12 +1860,21 @@ export default function ChallengeWatchPage() {
 
   return (
     <div
-      className="vex-arcade-stage vex-arcade-stage--tabletop min-h-[100svh] bg-background"
+      ref={fullscreenContainerRef}
+      className={cn(
+        "vex-arcade-stage vex-arcade-stage--tabletop min-h-[100svh] bg-background",
+        isGameFullscreen && "vex-game-fullscreen-shell",
+      )}
       dir={isRTL ? "rtl" : "ltr"}
     >
       <div className="flex min-h-[100svh] flex-col lg:flex-row">
         <div className="flex-1 flex flex-col overflow-hidden">
-          <header className="vex-arcade-header flex flex-wrap items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card">
+          <header
+            className={cn(
+              "vex-arcade-header flex flex-wrap items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card",
+              isGameFullscreen && "hidden",
+            )}
+          >
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
               <BackButton />
               <div className="flex min-w-0 items-center gap-1.5">
@@ -1826,6 +1909,21 @@ export default function ChallengeWatchPage() {
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 rounded-full border-primary/35 bg-background/90"
+                onClick={() => {
+                  void toggleFullscreen();
+                }}
+                data-testid="button-toggle-game-fullscreen-watch"
+                title={t("common.view")}
+              >
+                <Maximize2 className="h-4 w-4" />
+                <span className="sr-only">{t("common.view")}</span>
+              </Button>
+
               <ShareMatchButton
                 challengeId={challengeId!}
                 gameType={challenge.gameType}
@@ -2967,36 +3065,48 @@ export default function ChallengeWatchPage() {
               </div>
             </ScrollArea>
 
-            <div
-              ref={liveChatPanelRef}
-              className="w-full border-s border-border/60 bg-gradient-to-b from-card via-card to-muted/10 lg:w-80"
-            >
-              <SpectatorPanel
-                challengeId={challengeId!}
-                player1={challenge.player1}
-                player2={challenge.player2}
-                player3={challenge.player3}
-                player4={challenge.player4}
-                spectatorCount={gameSession?.spectatorCount || 0}
-                totalMoves={gameSession?.totalMoves}
-                currentTurn={gameSession?.currentTurn || undefined}
-                gameStatus={gameSession?.status}
-                panelMode="spectator"
-                chatMessages={liveChatMessages}
-                supportCount={supportAggregate.count}
-                supportTotalText={formatChallengeAmountText(
-                  supportAggregate.totalAmount,
-                )}
-                giftCount={giftAggregate.count}
-                giftTotalText={`${giftAggregate.totalValue.toFixed(2)} VXC`}
-                onSendGift={handleSendGift}
-                onSendChat={sendLiveChatMessage}
-                canSendChat={Boolean(user)}
-              />
-            </div>
+            {!isGameFullscreen && (
+              <div
+                ref={liveChatPanelRef}
+                className="w-full border-s border-border/60 bg-gradient-to-b from-card via-card to-muted/10 lg:w-80"
+              >
+                <SpectatorPanel
+                  challengeId={challengeId!}
+                  player1={challenge.player1}
+                  player2={challenge.player2}
+                  player3={challenge.player3}
+                  player4={challenge.player4}
+                  spectatorCount={gameSession?.spectatorCount || 0}
+                  totalMoves={gameSession?.totalMoves}
+                  currentTurn={gameSession?.currentTurn || undefined}
+                  gameStatus={gameSession?.status}
+                  panelMode="spectator"
+                  chatMessages={liveChatMessages}
+                  supportCount={supportAggregate.count}
+                  supportTotalText={formatChallengeAmountText(
+                    supportAggregate.totalAmount,
+                  )}
+                  giftCount={giftAggregate.count}
+                  giftTotalText={`${giftAggregate.totalValue.toFixed(2)} VXC`}
+                  onSendGift={handleSendGift}
+                  onSendChat={sendLiveChatMessage}
+                  canSendChat={Boolean(user)}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      <GameFullscreenActionDock
+        active={isGameFullscreen}
+        actions={fullscreenWatchActions}
+        onExit={() => {
+          void exitFullscreen();
+        }}
+        exitLabel={t("common.close")}
+        dir={dir}
+      />
 
       <FloatingGiftsOverlay
         gifts={receivedGifts.map((g) => ({
@@ -3007,7 +3117,13 @@ export default function ChallengeWatchPage() {
       />
 
       <Dialog open={showMobileChat} onOpenChange={setShowMobileChat}>
-        <DialogContent className="max-w-[calc(100vw-0.75rem)] overflow-hidden rounded-2xl p-0 sm:max-w-md lg:hidden">
+        <DialogContent
+          className={cn(
+            "max-w-[calc(100vw-0.75rem)] overflow-hidden rounded-2xl p-0 sm:max-w-md",
+            !isGameFullscreen && "lg:hidden",
+            isGameFullscreen && "lg:max-w-2xl",
+          )}
+        >
           <DialogHeader className="border-b px-4 py-3">
             <DialogTitle className="flex items-center gap-2 text-base">
               <MessageCircle className="h-4 w-4 text-primary" />

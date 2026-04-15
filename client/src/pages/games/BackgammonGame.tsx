@@ -1,15 +1,17 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { BackgammonBoard } from '@/components/games/backgammon/BackgammonBoard';
+import { GameFullscreenActionDock, type GameFullscreenActionItem } from '@/components/games/GameFullscreenActionDock';
 import { GiftAnimation } from '@/components/games/GiftAnimation';
 import { GameStartCinematic } from '@/components/games/GameStartCinematic';
+import { useGameFullscreen } from '@/hooks/use-game-fullscreen';
 import { useGameWebSocket, type BackgammonGameState } from '@/hooks/useGameWebSocket';
 import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Wifi, WifiOff, Users, ArrowLeft, Share2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Users, ArrowLeft, Share2, AlertCircle, RefreshCw, Maximize2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { backgammonSounds } from '@/lib/game-sounds';
 
@@ -42,6 +44,13 @@ export default function BackgammonGame() {
 
   const bgState = gameState as BackgammonGameState | null;
   const [showCinematic, setShowCinematic] = useState(true);
+
+  const {
+    containerRef: fullscreenContainerRef,
+    isFullscreen: isGameFullscreen,
+    toggleFullscreen,
+    exitFullscreen,
+  } = useGameFullscreen();
 
   const isValidBackgammonState = useMemo(() => {
     if (!bgState) return false;
@@ -249,6 +258,25 @@ export default function BackgammonGame() {
     }
   };
 
+  const fullscreenActions = useMemo<GameFullscreenActionItem[]>(() => ([
+    {
+      id: 'back-challenges',
+      icon: ArrowLeft,
+      label: t('common.back'),
+      onClick: () => setLocation('/challenges'),
+      tone: 'outline',
+    },
+    {
+      id: 'share-match',
+      icon: Share2,
+      label: t('common.share'),
+      onClick: () => {
+        void handleShare();
+      },
+      tone: 'primary',
+    },
+  ]), [t, setLocation, handleShare]);
+
   if (!sessionId) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -299,7 +327,10 @@ export default function BackgammonGame() {
   }
 
   return (
-    <div className="vex-arcade-stage container max-w-6xl mx-auto min-h-[100svh] px-3 sm:px-4 pt-4 sm:pt-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div
+      ref={fullscreenContainerRef}
+      className={`vex-arcade-stage container max-w-6xl mx-auto min-h-[100svh] px-3 sm:px-4 pt-4 sm:pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] ${isGameFullscreen ? 'vex-game-fullscreen-shell !mx-0 !w-screen !max-w-none !px-2 sm:!px-3 !pt-[max(0.5rem,env(safe-area-inset-top))]' : ''}`}
+    >
       {/* ── Cinematic Game Start ── */}
       {showCinematic && !gameResult && (
         <GameStartCinematic
@@ -312,7 +343,7 @@ export default function BackgammonGame() {
         />
       )}
 
-      <div className="vex-arcade-header mb-4 sm:mb-6 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
+      <div className={`vex-arcade-header mb-4 sm:mb-6 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3 ${isGameFullscreen ? 'hidden' : ''}`}>
         <div className="flex min-w-0 flex-wrap items-center gap-3 sm:gap-4">
           <Button
             variant="ghost"
@@ -343,14 +374,26 @@ export default function BackgammonGame() {
             <Users className="w-3 h-3 me-1" />
             {spectatorCount} {t('common.spectators')}
           </Badge>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              void toggleFullscreen();
+            }}
+            aria-label={t('common.view')}
+            className="vex-arcade-btn vex-arcade-btn--icon min-h-[44px] min-w-[44px]"
+            data-testid="button-toggle-fullscreen"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </Button>
           <Button variant="outline" size="icon" onClick={handleShare} aria-label="Share game" data-testid="button-share" className="vex-arcade-btn vex-arcade-btn--icon min-h-[44px] min-w-[44px]">
             <Share2 className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+      <div className={isGameFullscreen ? 'flex flex-col gap-4' : 'grid grid-cols-1 lg:grid-cols-3 gap-6'}>
+        <div className={isGameFullscreen ? '' : 'lg:col-span-2'}>
           <Card className="vex-arcade-panel">
             <CardContent className="p-4">
               <BackgammonBoard
@@ -378,115 +421,127 @@ export default function BackgammonGame() {
           </Card>
         </div>
 
-        <div className="space-y-4">
-          <Card className="vex-arcade-panel">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">{t('backgammon.gameInfo')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">
-                  {isSpectator
-                    ? (language === 'ar' ? 'المشاهد' : 'Viewer')
-                    : t('backgammon.you')}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{user?.username}</span>
-                  {isSpectator ? (
-                    <Badge variant="outline">{language === 'ar' ? 'مشاهد' : 'Spectator'}</Badge>
-                  ) : (
-                    <Badge variant={mappedPlayerColor === 'white' ? 'default' : 'secondary'}>
-                      {mappedPlayerColor === 'white' ? t('backgammon.white') : t('backgammon.black')}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-
-              {opponent && (
+        {!isGameFullscreen && (
+          <div className="space-y-4">
+            <Card className="vex-arcade-panel">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">{t('backgammon.gameInfo')}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">{t('backgammon.opponent')}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {isSpectator
+                      ? (language === 'ar' ? 'المشاهد' : 'Viewer')
+                      : t('backgammon.you')}
+                  </span>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{opponent.username}</span>
-                    <Badge variant={mappedPlayerColor === 'white' ? 'secondary' : 'default'}>
-                      {mappedPlayerColor === 'white' ? t('backgammon.black') : t('backgammon.white')}
-                    </Badge>
+                    <span className="font-medium">{user?.username}</span>
+                    {isSpectator ? (
+                      <Badge variant="outline">{language === 'ar' ? 'مشاهد' : 'Spectator'}</Badge>
+                    ) : (
+                      <Badge variant={mappedPlayerColor === 'white' ? 'default' : 'secondary'}>
+                        {mappedPlayerColor === 'white' ? t('backgammon.white') : t('backgammon.black')}
+                      </Badge>
+                    )}
                   </div>
                 </div>
-              )}
 
-              <div className="border-t pt-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-muted-foreground">{t('backgammon.borneOff')}</span>
-                </div>
-                <div className="flex justify-between mt-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full bg-amber-100 border border-amber-300" />
-                    <span>{bgState.borneOff?.white || 0}/15</span>
+                {opponent && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">{t('backgammon.opponent')}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{opponent.username}</span>
+                      <Badge variant={mappedPlayerColor === 'white' ? 'secondary' : 'default'}>
+                        {mappedPlayerColor === 'white' ? t('backgammon.black') : t('backgammon.white')}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full bg-stone-800 border border-stone-600" />
-                    <span>{bgState.borneOff?.black || 0}/15</span>
-                  </div>
-                </div>
-              </div>
+                )}
 
-              {(bgState.bar?.white > 0 || bgState.bar?.black > 0) && (
                 <div className="border-t pt-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">{t('backgammon.onBar')}</span>
+                    <span className="text-sm text-muted-foreground">{t('backgammon.borneOff')}</span>
                   </div>
                   <div className="flex justify-between mt-2">
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 rounded-full bg-amber-100 border border-amber-300" />
-                      <span>{bgState.bar?.white || 0}</span>
+                      <span>{bgState.borneOff?.white || 0}/15</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 rounded-full bg-stone-800 border border-stone-600" />
-                      <span>{bgState.bar?.black || 0}</span>
+                      <span>{bgState.borneOff?.black || 0}/15</span>
                     </div>
                   </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
 
-          {gameResult && (
-            <Card className="vex-arcade-panel border-2 border-primary/30 bg-card/80 backdrop-blur">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg">{t('backgammon.gameOver')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-lg font-medium">
-                  {gameResult.winner === null
-                    ? t('profile.draw')
-                    : isSpectator
-                      ? (language === 'ar' ? 'انتهت المباراة' : 'Match finished')
-                      : gameResult.winner === user?.id
-                        ? t('backgammon.youWon')
-                        : t('backgammon.youLost')}
-                </p>
-                {gameResult.reason && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {gameResult.reason === 'backgammon' && t('backgammon.byBackgammon')}
-                    {gameResult.reason === 'gammon' && t('backgammon.byGammon')}
-                    {gameResult.reason === 'normal' && t('backgammon.byNormal')}
-                  </p>
+                {(bgState.bar?.white > 0 || bgState.bar?.black > 0) && (
+                  <div className="border-t pt-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">{t('backgammon.onBar')}</span>
+                    </div>
+                    <div className="flex justify-between mt-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-full bg-amber-100 border border-amber-300" />
+                        <span>{bgState.bar?.white || 0}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-full bg-stone-800 border border-stone-600" />
+                        <span>{bgState.bar?.black || 0}</span>
+                      </div>
+                    </div>
+                  </div>
                 )}
-                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')} className="vex-arcade-btn w-full sm:w-auto">
-                    <ArrowLeft className="w-4 h-4 me-1.5" />
-                    {t('common.back')}
-                  </Button>
-                  <Button size="sm" onClick={() => setLocation('/challenges?game=backgammon')} className="vex-arcade-btn w-full sm:w-auto">
-                    <RefreshCw className="w-4 h-4 me-1.5" />
-                    {t('common.playAgain')}
-                  </Button>
-                </div>
               </CardContent>
             </Card>
-          )}
-        </div>
+
+            {gameResult && (
+              <Card className="vex-arcade-panel border-2 border-primary/30 bg-card/80 backdrop-blur">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">{t('backgammon.gameOver')}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-lg font-medium">
+                    {gameResult.winner === null
+                      ? t('profile.draw')
+                      : isSpectator
+                        ? (language === 'ar' ? 'انتهت المباراة' : 'Match finished')
+                        : gameResult.winner === user?.id
+                          ? t('backgammon.youWon')
+                          : t('backgammon.youLost')}
+                  </p>
+                  {gameResult.reason && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {gameResult.reason === 'backgammon' && t('backgammon.byBackgammon')}
+                      {gameResult.reason === 'gammon' && t('backgammon.byGammon')}
+                      {gameResult.reason === 'normal' && t('backgammon.byNormal')}
+                    </p>
+                  )}
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setLocation('/challenges')} className="vex-arcade-btn w-full sm:w-auto">
+                      <ArrowLeft className="w-4 h-4 me-1.5" />
+                      {t('common.back')}
+                    </Button>
+                    <Button size="sm" onClick={() => setLocation('/challenges?game=backgammon')} className="vex-arcade-btn w-full sm:w-auto">
+                      <RefreshCw className="w-4 h-4 me-1.5" />
+                      {t('common.playAgain')}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
       </div>
+
+      <GameFullscreenActionDock
+        active={isGameFullscreen}
+        actions={fullscreenActions}
+        onExit={() => {
+          void exitFullscreen();
+        }}
+        exitLabel={t('common.close')}
+        dir={language === 'ar' ? 'rtl' : 'ltr'}
+      />
 
       <GiftAnimation
         gift={lastGift ? { id: Date.now().toString(), ...lastGift } : null}

@@ -7,14 +7,16 @@ import { ChessControls, DrawOfferDialog } from '@/components/games/chess/ChessCo
 import { ChessChat } from '@/components/games/chess/ChessChat';
 import { ChessCapturedPieces } from '@/components/games/chess/ChessCapturedPieces';
 import { ChessThemeSelector } from '@/components/games/chess/ChessThemeSelector';
+import { GameFullscreenActionDock, type GameFullscreenActionItem } from '@/components/games/GameFullscreenActionDock';
 import { GiftAnimation } from '@/components/games/GiftAnimation';
 import { GameStartCinematic } from '@/components/games/GameStartCinematic';
+import { useGameFullscreen } from '@/hooks/use-game-fullscreen';
 import { useGameWebSocket } from '@/hooks/useGameWebSocket';
 import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Wifi, WifiOff, Users, ArrowLeft, Share2, AlertCircle, Swords, Trophy, Frown, HandshakeIcon } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Users, ArrowLeft, Share2, AlertCircle, Swords, Trophy, Frown, HandshakeIcon, Maximize2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { loadSavedTheme, type BoardTheme } from '@/lib/chess-themes';
 import { chessSounds } from '@/lib/chess-sounds';
@@ -95,7 +97,7 @@ export default function ChessGame() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { t, language } = useI18n();
+  const { t, language, dir } = useI18n();
 
   // Cinematic intro
   const [showCinematic, setShowCinematic] = useState(true);
@@ -103,6 +105,13 @@ export default function ChessGame() {
   // Board theme
   const [boardTheme, setBoardTheme] = useState<BoardTheme>(() => loadSavedTheme());
   const [showThemes, setShowThemes] = useState(false);
+
+  const {
+    containerRef: fullscreenContainerRef,
+    isFullscreen: isGameFullscreen,
+    toggleFullscreen,
+    exitFullscreen,
+  } = useGameFullscreen();
 
   // Sound effect tracking
   const prevMoveCountRef = useRef(0);
@@ -229,6 +238,39 @@ export default function ChessGame() {
     }
   };
 
+  const fullscreenActions = useMemo<GameFullscreenActionItem[]>(() => {
+    const actions: GameFullscreenActionItem[] = [
+      {
+        id: 'back-games',
+        icon: ArrowLeft,
+        label: t('common.back'),
+        onClick: () => setLocation('/games'),
+        tone: 'outline',
+      },
+      {
+        id: 'share-match',
+        icon: Share2,
+        label: t('chess.share'),
+        onClick: () => {
+          void handleShare();
+        },
+        tone: 'primary',
+      },
+    ];
+
+    if (canPlayActions && isGameActive) {
+      actions.push({
+        id: 'resign',
+        icon: Frown,
+        label: t('chess.resign'),
+        onClick: resign,
+        tone: 'destructive',
+      });
+    }
+
+    return actions;
+  }, [t, setLocation, canPlayActions, isGameActive, resign, handleShare]);
+
   // ── Error / Loading states ──
   if (!sessionId) {
     return (
@@ -289,7 +331,10 @@ export default function ChessGame() {
     : (chessState?.capturedPieces?.black || []);
 
   return (
-    <div className="vex-arcade-stage container mx-auto min-h-[100svh] max-w-7xl px-3 sm:px-4 pt-3 sm:pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div
+      ref={fullscreenContainerRef}
+      className={`vex-arcade-stage container mx-auto min-h-[100svh] max-w-7xl px-3 sm:px-4 pt-3 sm:pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] ${isGameFullscreen ? 'vex-game-fullscreen-shell !mx-0 !w-screen !max-w-none !px-2 sm:!px-3 !pt-[max(0.5rem,env(safe-area-inset-top))]' : ''}`}
+    >
       {/* ── Cinematic Game Start ── */}
       {showCinematic && !gameResult && (
         <GameStartCinematic
@@ -303,7 +348,7 @@ export default function ChessGame() {
       )}
 
       {/* ── Header ── */}
-      <div className="vex-arcade-header mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3">
+      <div className={`vex-arcade-header mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-3 py-2 sm:px-4 sm:py-3 ${isGameFullscreen ? 'hidden' : ''}`}>
         <div className="flex min-w-0 items-center gap-3">
           <Button
             variant="ghost"
@@ -349,6 +394,18 @@ export default function ChessGame() {
               {spectatorCount}
             </Badge>
           )}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              void toggleFullscreen();
+            }}
+            aria-label={t('common.view')}
+            className="vex-arcade-btn vex-arcade-btn--icon min-h-[44px] min-w-[44px]"
+            data-testid="button-toggle-fullscreen"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </Button>
           <Button variant="outline" size="sm" onClick={handleShare} data-testid="button-share" className="vex-arcade-btn hidden sm:flex">
             <Share2 className="w-4 h-4 me-1.5" />
             {t('chess.share')}
@@ -397,7 +454,7 @@ export default function ChessGame() {
       )}
 
       {/* ── Main Layout ── */}
-      <div className="grid lg:grid-cols-[1fr_280px] gap-4 lg:gap-6">
+      <div className={isGameFullscreen ? 'flex flex-col gap-4 items-center' : 'grid lg:grid-cols-[1fr_280px] gap-4 lg:gap-6'}>
         {/* Left: Board area */}
         <div className="flex flex-col items-center">
           {/* Opponent info bar */}
@@ -483,39 +540,51 @@ export default function ChessGame() {
         </div>
 
         {/* Right: Sidebar */}
-        <div className="space-y-4 lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
-          {/* Timer cards for desktop */}
-          {gameState && playerColor && (
-            <ChessTimer
-              whiteTime={tickingWhiteTime}
-              blackTime={tickingBlackTime}
-              currentTurn={chessState!.currentTurn}
-              isGameActive={!!isGameActive}
-              playerColor={playerColor}
-            />
-          )}
+        {!isGameFullscreen && (
+          <div className="space-y-4 lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
+            {/* Timer cards for desktop */}
+            {gameState && playerColor && (
+              <ChessTimer
+                whiteTime={tickingWhiteTime}
+                blackTime={tickingBlackTime}
+                currentTurn={chessState!.currentTurn}
+                isGameActive={!!isGameActive}
+                playerColor={playerColor}
+              />
+            )}
 
-          {/* Move list */}
-          {gameState && (
-            <ChessMoveList
-              moves={(chessState?.moveHistory || []).map((m) => ({
-                moveNumber: m.moveNumber,
-                notation: m.notation,
-                player: m.player
-              }))}
-            />
-          )}
+            {/* Move list */}
+            {gameState && (
+              <ChessMoveList
+                moves={(chessState?.moveHistory || []).map((m) => ({
+                  moveNumber: m.moveNumber,
+                  notation: m.notation,
+                  player: m.player
+                }))}
+              />
+            )}
 
-          {/* Chat */}
-          {user && (
-            <ChessChat
-              messages={chatMessages}
-              onSendMessage={sendChat}
-              currentUserId={user.id}
-            />
-          )}
-        </div>
+            {/* Chat */}
+            {user && (
+              <ChessChat
+                messages={chatMessages}
+                onSendMessage={sendChat}
+                currentUserId={user.id}
+              />
+            )}
+          </div>
+        )}
       </div>
+
+      <GameFullscreenActionDock
+        active={isGameFullscreen}
+        actions={fullscreenActions}
+        onExit={() => {
+          void exitFullscreen();
+        }}
+        exitLabel={t('common.close')}
+        dir={dir}
+      />
 
       {/* ── Modals ── */}
       <DrawOfferDialog

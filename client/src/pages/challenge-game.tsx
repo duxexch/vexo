@@ -54,11 +54,16 @@ import { VoiceChat } from "@/components/games/VoiceChat";
 import { SpectatorPanel } from "@/components/games/SpectatorPanel";
 import { DominoSpectatorInsights } from "@/components/games/DominoSpectatorInsights";
 import { ShareMatchButton } from "@/components/games/ShareMatchButton";
+import {
+  GameFullscreenActionDock,
+  type GameFullscreenActionItem,
+} from "@/components/games/GameFullscreenActionDock";
 import { GiftAnimation } from "@/components/games/GiftAnimation";
 import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { ProjectCurrencyAmount } from "@/components/ProjectCurrencySymbol";
 import { cn } from "@/lib/utils";
 import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
+import { useGameFullscreen } from "@/hooks/use-game-fullscreen";
 import {
   Clock,
   Trophy,
@@ -72,6 +77,7 @@ import {
   X,
   Check,
   Loader2,
+  Maximize2,
   Volume2,
   VolumeX,
   UserPlus,
@@ -329,6 +335,13 @@ export default function ChallengeGamePage() {
   );
   const liveChatPanelRef = useRef<HTMLDivElement | null>(null);
   const liveChatInlineRef = useRef<HTMLDivElement | null>(null);
+
+  const {
+    containerRef: fullscreenContainerRef,
+    isFullscreen: isGameFullscreen,
+    toggleFullscreen,
+    exitFullscreen,
+  } = useGameFullscreen();
   const dominoLastActionSigRef = useRef<string>("");
   const dominoCanPlayRef = useRef(false);
   const dominoStatusRef = useRef<GameSession["status"] | null>(null);
@@ -1998,6 +2011,11 @@ export default function ChallengeGamePage() {
   );
 
   const openLiveChat = useCallback(() => {
+    if (isGameFullscreen) {
+      setShowMobileChat(true);
+      return;
+    }
+
     if (
       typeof window !== "undefined" &&
       window.matchMedia("(max-width: 639px)").matches
@@ -2023,7 +2041,7 @@ export default function ChallengeGamePage() {
     }
 
     setShowMobileChat(true);
-  }, []);
+  }, [isGameFullscreen]);
 
   const clearGiftAnimation = useCallback(() => {
     setActiveGiftAnimation(null);
@@ -2421,13 +2439,15 @@ export default function ChallengeGamePage() {
     isDominoGame || isBackgammonGame || isTeamGame;
   const isTopAlignedBoardGame = isWideBoardGame || isChessGame;
   const boardShellWidthClass =
-    challenge.gameType === "baloot"
-      ? "w-full max-w-6xl"
-      : isWideBoardGame
-        ? "w-full max-w-5xl"
-        : isChessGame
-          ? "w-full max-w-2xl"
-          : "w-full max-w-lg";
+    isGameFullscreen
+      ? "w-full max-w-[calc(100vw-0.75rem)]"
+      : challenge.gameType === "baloot"
+        ? "w-full max-w-6xl"
+        : isWideBoardGame
+          ? "w-full max-w-5xl"
+          : isChessGame
+            ? "w-full max-w-2xl"
+            : "w-full max-w-lg";
   const playerOneLabel = `${t("domino.player")} 1`;
   const playerTwoLabel = `${t("domino.player")} 2`;
   const chessWhiteLabel = `⚪ ${t("chess.white")}`;
@@ -2542,8 +2562,89 @@ export default function ChallengeGamePage() {
     }));
   };
 
+  const fullscreenPlayActions = useMemo<GameFullscreenActionItem[]>(() => {
+    const chatBadge =
+      messages.length > 99
+        ? "99+"
+        : messages.length > 0
+          ? String(messages.length)
+          : null;
+
+    const actions: GameFullscreenActionItem[] = [
+      {
+        id: "chat",
+        icon: MessageCircle,
+        label: liveChatLabel,
+        onClick: openLiveChat,
+        tone: "primary",
+        badge: chatBadge,
+      },
+    ];
+
+    const isDrawEnabledGame =
+      challenge.gameType === "chess" || challenge.gameType === "backgammon";
+
+    if (canPlayActions && gameSession?.status === "playing") {
+      if (drawOffered && drawOffered !== user?.id && isDrawEnabledGame) {
+        actions.push(
+          {
+            id: "draw-accept",
+            icon: Check,
+            label: t("challenge.accept"),
+            onClick: () => sendRespondDraw(true),
+            tone: "primary",
+          },
+          {
+            id: "draw-decline",
+            icon: X,
+            label: t("challenge.decline"),
+            onClick: () => sendRespondDraw(false),
+            tone: "outline",
+          },
+        );
+      } else if (!drawOffered && isDrawEnabledGame) {
+        actions.push({
+          id: "offer-draw",
+          icon: ArrowRightLeft,
+          label: t("challenge.offerDraw"),
+          onClick: sendOfferDraw,
+          tone: "outline",
+        });
+      }
+
+      actions.push({
+        id: "resign",
+        icon: Flag,
+        label: t("challenge.resign"),
+        onClick: () => setShowResignDialog(true),
+        tone: "destructive",
+      });
+    }
+
+    return actions;
+  }, [
+    messages.length,
+    liveChatLabel,
+    openLiveChat,
+    challenge.gameType,
+    canPlayActions,
+    gameSession?.status,
+    drawOffered,
+    user?.id,
+    t,
+    sendRespondDraw,
+    sendOfferDraw,
+  ]);
+
   return (
-    <div className="vex-arcade-stage vex-arcade-stage--tabletop min-h-[100svh] bg-background" dir={dir}>
+    <div
+      ref={fullscreenContainerRef}
+      className={cn(
+        "vex-arcade-stage vex-arcade-stage--tabletop min-h-[100svh] bg-background",
+        isGameFullscreen && "vex-game-fullscreen-shell",
+      )}
+      dir={dir}
+    >
       {/* Reconnection overlay */}
       {wsConnState === "reconnecting" && (
         <div className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-center gap-4 backdrop-blur-sm">
@@ -2556,7 +2657,12 @@ export default function ChallengeGamePage() {
       )}
       <div className="flex min-h-[100svh] flex-col lg:flex-row">
         <div className="flex-1 flex flex-col">
-          <header className="vex-arcade-header flex flex-wrap items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card">
+          <header
+            className={cn(
+              "vex-arcade-header flex flex-wrap items-center justify-between gap-2 p-2 sm:p-3 border-b bg-card",
+              isGameFullscreen && "hidden",
+            )}
+          >
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap">
               <BackButton fallbackPath="/challenges" className="shrink-0" />
               <div className="flex items-center gap-1.5 min-w-0">
@@ -2590,6 +2696,21 @@ export default function ChallengeGamePage() {
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 rounded-full border-primary/35 bg-background/90"
+                onClick={() => {
+                  void toggleFullscreen();
+                }}
+                data-testid="button-toggle-game-fullscreen-play"
+                title={t("common.view")}
+              >
+                <Maximize2 className="h-4 w-4" />
+                <span className="sr-only">{t("common.view")}</span>
+              </Button>
+
               <ShareMatchButton
                 challengeId={challengeId!}
                 gameType={challenge.gameType}
@@ -3282,7 +3403,7 @@ export default function ChallengeGamePage() {
                 </div>
               )}
 
-              {canPlayActions && gameSession?.status === "playing" && (
+              {canPlayActions && gameSession?.status === "playing" && !isGameFullscreen && (
                 <div
                   className={`${isChessGame || isBackgammonGame ? "mt-2" : "mt-4"} flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:justify-start`}
                 >
@@ -3345,7 +3466,7 @@ export default function ChallengeGamePage() {
               )}
 
               {/* Floating game chat for players (Ludo King style) */}
-              {!isSpectator && !isBackgammonGame && !isTeamGame && !isLanguageDuelGame && (
+              {!isSpectator && !isBackgammonGame && !isTeamGame && !isLanguageDuelGame && !isGameFullscreen && (
                 <div
                   ref={liveChatInlineRef}
                   className={`w-full mt-2 h-36 sm:h-40 relative ${isWideBoardGame ? "max-w-5xl" : isChessGame ? "max-w-2xl" : "max-w-lg"} ${isChessGame || isBackgammonGame ? "hidden sm:block" : ""}`}
@@ -3370,7 +3491,7 @@ export default function ChallengeGamePage() {
             </div>
 
             {/* Sidebar with gifts/comments for spectators and supported player game types */}
-            {(isSpectator || isDominoGame || isBackgammonGame || isTeamGame || isLanguageDuelGame) && (
+            {!isGameFullscreen && (isSpectator || isDominoGame || isBackgammonGame || isTeamGame || isLanguageDuelGame) && (
               <div
                 ref={liveChatPanelRef}
                 className="w-full lg:w-[22rem] border-t lg:border-t-0 lg:border-s flex flex-col bg-card max-h-[46vh] lg:max-h-none"
@@ -3432,8 +3553,24 @@ export default function ChallengeGamePage() {
         </div>
       </div>
 
+      <GameFullscreenActionDock
+        active={isGameFullscreen}
+        actions={fullscreenPlayActions}
+        onExit={() => {
+          void exitFullscreen();
+        }}
+        exitLabel={t("common.close")}
+        dir={dir}
+      />
+
       <Dialog open={showMobileChat} onOpenChange={setShowMobileChat}>
-        <DialogContent className="max-w-[calc(100vw-0.75rem)] overflow-hidden rounded-2xl p-0 sm:max-w-md lg:hidden">
+        <DialogContent
+          className={cn(
+            "max-w-[calc(100vw-0.75rem)] overflow-hidden rounded-2xl p-0 sm:max-w-md",
+            !isGameFullscreen && "lg:hidden",
+            isGameFullscreen && "lg:max-w-2xl",
+          )}
+        >
           <DialogHeader className="border-b px-4 py-3">
             <DialogTitle className="flex items-center gap-2 text-base">
               <MessageCircle className="h-4 w-4 text-primary" />

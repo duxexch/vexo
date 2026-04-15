@@ -982,6 +982,47 @@ input:focus-visible {
       animation: none;
     }
   }
+
+  .vex-game-fullscreen-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    width: 100vw;
+    height: 100svh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 5.25rem);
+    scroll-padding-bottom: calc(env(safe-area-inset-bottom) + 5.75rem);
+  }
+
+  .vex-game-fullscreen-shell .vex-board-lane {
+    margin-inline: auto;
+  }
+
+  .vex-game-fullscreen-dock {
+    max-width: min(96vw, 34rem);
+    box-shadow:
+      0 16px 34px rgba(1, 23, 54, 0.38),
+      inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  }
+
+  @media (max-width: 420px) {
+    .vex-game-fullscreen-shell {
+      padding-bottom: calc(env(safe-area-inset-bottom) + 5.6rem);
+      scroll-padding-bottom: calc(env(safe-area-inset-bottom) + 6rem);
+    }
+
+    .vex-game-fullscreen-dock {
+      border-radius: 1rem;
+    }
+  }
+}
+
+body[data-vex-game-fullscreen="on"] {
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 
 /* RTL Support */
