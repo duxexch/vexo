@@ -185,6 +185,7 @@ interface WatchChatMessage {
 
 interface WatchAvatarChatBubbleState {
   id: string;
+  senderName: string;
   text: string;
 }
 
@@ -275,6 +276,7 @@ export default function ChallengeWatchPage() {
     null,
   );
   const supportSectionRef = useRef<HTMLDivElement | null>(null);
+  const liveChatPanelRef = useRef<HTMLDivElement | null>(null);
   const WS_ERROR_TOAST_DEDUPE_MS = 2000;
 
   const showWsErrorToast = useCallback(
@@ -301,7 +303,7 @@ export default function ChallengeWatchPage() {
   );
 
   const pushAvatarChatBubble = useCallback(
-    (senderId: string, rawMessage: string) => {
+    (senderId: string, senderName: string, rawMessage: string) => {
       const normalizedMessage = rawMessage.trim();
       if (!senderId || !normalizedMessage) {
         return;
@@ -312,6 +314,7 @@ export default function ChallengeWatchPage() {
         ...prev,
         [senderId]: {
           id: bubbleId,
+          senderName: senderName.trim() || t("common.view"),
           text:
             normalizedMessage.length > 72
               ? `${normalizedMessage.slice(0, 69)}...`
@@ -332,7 +335,7 @@ export default function ChallengeWatchPage() {
         });
       }, 4000);
     },
-    [],
+    [t],
   );
 
   const {
@@ -841,13 +844,18 @@ export default function ChallengeWatchPage() {
               typeof incomingMessage.userId === "string"
                 ? incomingMessage.userId
                 : "";
+            const senderName =
+              typeof incomingMessage.username === "string" &&
+                incomingMessage.username.trim().length > 0
+                ? incomingMessage.username
+                : t("common.view");
             const chatText =
               typeof incomingMessage.message === "string"
                 ? incomingMessage.message
                 : "";
 
             if (senderId && chatText) {
-              pushAvatarChatBubble(senderId, chatText);
+              pushAvatarChatBubble(senderId, senderName, chatText);
             }
           }
           break;
@@ -963,6 +971,7 @@ export default function ChallengeWatchPage() {
       openFundingAssistance,
       language,
       toast,
+      t,
       pushAvatarChatBubble,
     ],
   );
@@ -1202,6 +1211,21 @@ export default function ChallengeWatchPage() {
     });
   }, []);
 
+  const openLiveChat = useCallback(() => {
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 1024px)").matches
+    ) {
+      liveChatPanelRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      return;
+    }
+
+    setShowMobileChat(true);
+  }, []);
+
   const handleAddSupport = () => {
     if (!selectedPlayer || !supportAmount) return;
     const amount = parseFloat(supportAmount);
@@ -1370,8 +1394,6 @@ export default function ChallengeWatchPage() {
   }
 
   const isRTL = dir === "rtl";
-  const mobileSupportDockClass = isRTL ? "end-2" : "start-2";
-  const mobileChatDockClass = isRTL ? "start-2" : "end-2";
   const liveChatLabel = `${t("common.live")} ${t("game.chat")}`;
   const multiplayerGameConfig = {
     ...FALLBACK_GAME_CONFIG,
@@ -1559,11 +1581,11 @@ export default function ChallengeWatchPage() {
   );
   const player1AvatarBubble =
     challenge.player1Id && avatarChatBubbles[challenge.player1Id]
-      ? avatarChatBubbles[challenge.player1Id].text
+      ? avatarChatBubbles[challenge.player1Id]
       : undefined;
   const player2AvatarBubble =
     challenge.player2Id && avatarChatBubbles[challenge.player2Id]
-      ? avatarChatBubbles[challenge.player2Id].text
+      ? avatarChatBubbles[challenge.player2Id]
       : undefined;
   const supportActionsDisabled =
     !challenge.player2 || gameSession?.status !== "playing" || isTeamGame;
@@ -1846,9 +1868,14 @@ export default function ChallengeWatchPage() {
                       <div className="flex items-center gap-3">
                         <div className="relative">
                           {player1AvatarBubble && (
-                            <div className="pointer-events-none absolute bottom-full start-1/2 z-20 mb-1 -translate-x-1/2">
-                              <div className="max-w-[10rem] rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-center text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
-                                {player1AvatarBubble}
+                            <div className="pointer-events-none absolute top-1/2 z-20 max-w-[11rem] -translate-y-1/2 ltr:left-full ltr:ml-2 rtl:right-full rtl:mr-2">
+                              <div className="rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
+                                <p className="truncate font-semibold text-primary">
+                                  {player1AvatarBubble.senderName}
+                                </p>
+                                <p className="mt-0.5 break-words">
+                                  {player1AvatarBubble.text}
+                                </p>
                               </div>
                             </div>
                           )}
@@ -1966,6 +1993,18 @@ export default function ChallengeWatchPage() {
                           <Button
                             type="button"
                             size="icon"
+                            variant="outline"
+                            className="absolute -bottom-1 h-6 w-6 p-0 ltr:-left-1 rtl:-right-1"
+                            onClick={openLiveChat}
+                            data-testid="watch-player1-avatar-chat-toggle"
+                            title={liveChatLabel}
+                          >
+                            <MessageCircle className="h-3 w-3" />
+                            <span className="sr-only">{liveChatLabel}</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
                             variant={
                               player1MutedForViewer ? "destructive" : "outline"
                             }
@@ -2069,21 +2108,70 @@ export default function ChallengeWatchPage() {
                   </div>
                 )}
 
-                {(user || topTurnDescriptor) && (
-                  <div className={cn(boardWidthClass, "mb-3")}>
-                    <div className="relative flex min-h-[2.25rem] items-center justify-center">
+                <div className={cn(boardWidthClass, "mb-3")}>
+                  <div className="grid min-h-[2.5rem] grid-cols-[auto,minmax(0,1fr),auto] items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      {user && (
+                        <>
+                          <Button
+                            onClick={openGiftPanel}
+                            className="h-8 w-8 rounded-full p-0"
+                            data-testid="button-inline-send-gift"
+                            title={t("challenges.sendGift")}
+                          >
+                            <Gift className="h-4 w-4" />
+                            <span className="sr-only">{t("challenges.sendGift")}</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={jumpToSupportSection}
+                            disabled={supportActionsDisabled}
+                            className="h-8 w-8 rounded-full border-primary/35 bg-background/90 p-0 disabled:opacity-45"
+                            data-testid="button-inline-jump-support"
+                            title={t("challenges.stake")}
+                          >
+                            <TrendingUp className="h-4 w-4" />
+                            <span className="sr-only">{t("challenges.stake")}</span>
+                          </Button>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="flex min-w-0 justify-center">
                       {topTurnDescriptor && (
                         <Badge
                           variant="outline"
-                          className="rounded-full border-primary/35 bg-primary/10 px-3 py-1 text-[11px] sm:text-xs"
+                          className="max-w-full truncate rounded-full border-primary/35 bg-primary/10 px-3 py-1 text-[11px] sm:text-xs"
                         >
-                          <Clock className="me-1 h-3.5 w-3.5" />
-                          {topTurnDescriptor}
+                          <Clock className="me-1 h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{topTurnDescriptor}</span>
                         </Badge>
                       )}
                     </div>
+
+                    <div className="flex items-center justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={openLiveChat}
+                        className="relative h-8 w-8 rounded-full border-primary/35 bg-background/90 p-0"
+                        data-testid="button-inline-open-chat"
+                        title={liveChatLabel}
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        <span className="sr-only">{liveChatLabel}</span>
+                        {liveChatMessages.length > 0 && (
+                          <span className="absolute -end-1 -top-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
+                            {liveChatMessages.length > 99
+                              ? "99+"
+                              : liveChatMessages.length}
+                          </span>
+                        )}
+                      </Button>
+                    </div>
                   </div>
-                )}
+                </div>
 
                 {autoPlayNotice && (
                   <div className={cn(boardWidthClass, "mb-3")}>
@@ -2283,9 +2371,14 @@ export default function ChallengeWatchPage() {
                       <div className="flex items-center gap-3">
                         <div className="relative">
                           {player2AvatarBubble && (
-                            <div className="pointer-events-none absolute bottom-full start-1/2 z-20 mb-1 -translate-x-1/2">
-                              <div className="max-w-[10rem] rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-center text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
-                                {player2AvatarBubble}
+                            <div className="pointer-events-none absolute top-1/2 z-20 max-w-[11rem] -translate-y-1/2 ltr:left-full ltr:ml-2 rtl:right-full rtl:mr-2">
+                              <div className="rounded-xl border border-primary/30 bg-background/95 px-2 py-1 text-[10px] leading-4 text-foreground shadow-lg backdrop-blur-sm">
+                                <p className="truncate font-semibold text-primary">
+                                  {player2AvatarBubble.senderName}
+                                </p>
+                                <p className="mt-0.5 break-words">
+                                  {player2AvatarBubble.text}
+                                </p>
                               </div>
                             </div>
                           )}
@@ -2400,6 +2493,18 @@ export default function ChallengeWatchPage() {
                               </PopoverContent>
                             )}
                           </Popover>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="outline"
+                            className="absolute -bottom-1 h-6 w-6 p-0 ltr:-left-1 rtl:-right-1"
+                            onClick={openLiveChat}
+                            data-testid="watch-player2-avatar-chat-toggle"
+                            title={liveChatLabel}
+                          >
+                            <MessageCircle className="h-3 w-3" />
+                            <span className="sr-only">{liveChatLabel}</span>
+                          </Button>
                           <Button
                             type="button"
                             size="icon"
@@ -2862,7 +2967,10 @@ export default function ChallengeWatchPage() {
               </div>
             </ScrollArea>
 
-            <div className="w-full border-s border-border/60 bg-gradient-to-b from-card via-card to-muted/10 lg:w-80">
+            <div
+              ref={liveChatPanelRef}
+              className="w-full border-s border-border/60 bg-gradient-to-b from-card via-card to-muted/10 lg:w-80"
+            >
               <SpectatorPanel
                 challengeId={challengeId!}
                 player1={challenge.player1}
@@ -2897,58 +3005,6 @@ export default function ChallengeWatchPage() {
           senderName: g.senderName,
         }))}
       />
-
-      {user && (
-        <div
-          className={`pointer-events-none !fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] ${mobileSupportDockClass} z-50 lg:hidden`}
-        >
-          <div className="pointer-events-auto flex min-h-[2.75rem] min-w-[2.75rem] items-end gap-2">
-            <Button
-              onClick={openGiftPanel}
-              className="vex-arcade-fab relative h-11 w-11 rounded-full p-0 shadow-2xl"
-              data-testid="fab-gift"
-              title={t("challenges.sendGift")}
-            >
-              <Gift className="h-5 w-5" />
-              <span className="sr-only">{t("challenges.sendGift")}</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={jumpToSupportSection}
-              disabled={supportActionsDisabled}
-              className="vex-arcade-fab-outline h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md disabled:opacity-45"
-              data-testid="button-mobile-jump-support"
-              title={t("challenges.stake")}
-            >
-              <TrendingUp className="h-5 w-5" />
-              <span className="sr-only">{t("challenges.stake")}</span>
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <div
-        className={`pointer-events-none !fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] ${mobileChatDockClass} z-50 lg:hidden`}
-      >
-        <div className="pointer-events-auto flex min-h-[2.75rem] min-w-[2.75rem] items-end justify-end">
-          <Button
-            variant="outline"
-            onClick={() => setShowMobileChat(true)}
-            className="vex-arcade-fab-outline relative h-11 w-11 rounded-full border-primary/35 bg-background/90 p-0 shadow-2xl backdrop-blur-md"
-            data-testid="button-mobile-open-chat"
-            title={liveChatLabel}
-          >
-            <MessageCircle className="h-5 w-5" />
-            <span className="sr-only">{t("game.chat")}</span>
-            {liveChatMessages.length > 0 && (
-              <span className="absolute -end-1 -top-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
-                {liveChatMessages.length > 99 ? "99+" : liveChatMessages.length}
-              </span>
-            )}
-          </Button>
-        </div>
-      </div>
 
       <Dialog open={showMobileChat} onOpenChange={setShowMobileChat}>
         <DialogContent className="max-w-[calc(100vw-0.75rem)] overflow-hidden rounded-2xl p-0 sm:max-w-md lg:hidden">
