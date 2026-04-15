@@ -255,6 +255,7 @@ export default function ChallengeWatchPage() {
   const [showGiftPanel, setShowGiftPanel] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [mobileChatInput, setMobileChatInput] = useState("");
+  const [showMobileQuickReplies, setShowMobileQuickReplies] = useState(false);
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [autoPlayNotice, setAutoPlayNotice] = useState<{
@@ -284,6 +285,7 @@ export default function ChallengeWatchPage() {
     signature: "",
     at: 0,
   });
+  const seenChatMessageKeysRef = useRef<Set<string>>(new Set());
   const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(
     null,
   );
@@ -917,9 +919,34 @@ export default function ChallengeWatchPage() {
                   : undefined,
             };
 
-            setMessages((prev) =>
-              [...prev, normalizedMessage].slice(-160),
-            );
+            const normalizedMessageKey = normalizedMessage.id
+              ? `id:${normalizedMessage.id}`
+              : `sig:${normalizedMessage.senderId || normalizedMessage.userId || ""}:${normalizedMessage.message}:${String(normalizedMessage.createdAt || normalizedMessage.timestamp || "")}`;
+
+            if (seenChatMessageKeysRef.current.has(normalizedMessageKey)) {
+              break;
+            }
+
+            seenChatMessageKeysRef.current.add(normalizedMessageKey);
+            if (seenChatMessageKeysRef.current.size > 1200) {
+              seenChatMessageKeysRef.current.clear();
+              seenChatMessageKeysRef.current.add(normalizedMessageKey);
+            }
+
+            setMessages((prev) => {
+              const alreadyExists = prev.some((msg) => {
+                const existingKey = msg.id
+                  ? `id:${msg.id}`
+                  : `sig:${msg.senderId || msg.userId || ""}:${msg.message}:${String(msg.createdAt || msg.timestamp || "")}`;
+                return existingKey === normalizedMessageKey;
+              });
+
+              if (alreadyExists) {
+                return prev;
+              }
+
+              return [...prev, normalizedMessage].slice(-160);
+            });
 
             if (senderId && chatText) {
               pushAvatarChatBubble(senderId, senderName, chatText);
@@ -1050,6 +1077,7 @@ export default function ChallengeWatchPage() {
 
     setMessages([]);
     setAvatarChatBubbles({});
+    seenChatMessageKeysRef.current.clear();
   }, [gameSession?.status]);
 
   const formatTime = (seconds: number) => {
@@ -1176,17 +1204,22 @@ export default function ChallengeWatchPage() {
     gameSession?.updatedAt,
   ]);
 
+  const toSafeOdds = (value: unknown, fallback = 1.5): number => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
   const getPlayerOdds = (playerId: string): number => {
     if (!oddsData || !challenge) return 1.5;
-    const instantOdds = parseFloat(oddsData.instantMatchOdds) || 1.8;
+    const instantOdds = toSafeOdds(oddsData.instantMatchOdds, 1.8);
     if (playerId === challenge.player1Id) {
       return supportMode === "instant"
         ? instantOdds
-        : oddsData.player1?.odds || 1.5;
+        : toSafeOdds(oddsData.player1?.odds, 1.5);
     }
     return supportMode === "instant"
       ? instantOdds
-      : oddsData.player2?.odds || 1.5;
+      : toSafeOdds(oddsData.player2?.odds, 1.5);
   };
 
   const calculatePotentialWinnings = () => {
@@ -1475,6 +1508,12 @@ export default function ChallengeWatchPage() {
 
   const isRTL = dir === "rtl";
   const liveChatLabel = `${t("common.live")} ${t("game.chat")}`;
+  const mobileQuickMessages = [
+    t("chat.quickMessages.goodMove"),
+    t("chat.quickMessages.wellPlayed"),
+    t("chat.quickMessages.niceStrategy"),
+    t("chat.quickMessages.exciting"),
+  ].filter((message) => typeof message === "string" && message.trim().length > 0);
   const multiplayerGameConfig = {
     ...FALLBACK_GAME_CONFIG,
     ...buildGameConfig(multiplayerGames),
@@ -1547,6 +1586,25 @@ export default function ChallengeWatchPage() {
           new Date().toISOString(),
       };
     });
+
+  const groupedLiveChatMessages = liveChatMessages.map((msg, index, list) => {
+    const previous = index > 0 ? list[index - 1] : undefined;
+    const next = index < list.length - 1 ? list[index + 1] : undefined;
+
+    const currentSenderKey = `${String(msg.userId || "")}::${String(msg.username || "")}`;
+    const previousSenderKey = previous
+      ? `${String(previous.userId || "")}::${String(previous.username || "")}`
+      : "";
+    const nextSenderKey = next
+      ? `${String(next.userId || "")}::${String(next.username || "")}`
+      : "";
+
+    return {
+      ...msg,
+      startsSequence: index === 0 || previousSenderKey !== currentSenderKey,
+      endsSequence: index === list.length - 1 || nextSenderKey !== currentSenderKey,
+    };
+  });
 
   const isWideBoardGame =
     isDominoGame ||
@@ -2873,8 +2931,7 @@ export default function ChallengeWatchPage() {
                                     ? parseFloat(
                                       oddsData?.instantMatchOdds || "1.50",
                                     ).toFixed(2)
-                                    : oddsData?.player1?.odds?.toFixed(2) ||
-                                    "1.50"}
+                                    : toSafeOdds(oddsData?.player1?.odds, 1.5).toFixed(2)}
                                 </Badge>
                                 <Button
                                   size="sm"
@@ -2923,8 +2980,7 @@ export default function ChallengeWatchPage() {
                                     ? parseFloat(
                                       oddsData?.instantMatchOdds || "1.50",
                                     ).toFixed(2)
-                                    : oddsData?.player2?.odds?.toFixed(2) ||
-                                    "1.50"}
+                                    : toSafeOdds(oddsData?.player2?.odds, 1.5).toFixed(2)}
                                 </Badge>
                                 <Button
                                   size="sm"
@@ -3258,28 +3314,33 @@ export default function ChallengeWatchPage() {
           </DialogHeader>
 
           <div className="max-h-[65vh] overflow-y-auto px-4 py-3">
-            {liveChatMessages.length === 0 ? (
+            {groupedLiveChatMessages.length === 0 ? (
               <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
                 {t("chat.noMessages")}
               </div>
             ) : (
-              <div className="space-y-2">
-                {liveChatMessages.map((msg) => (
+              <div className="space-y-1">
+                {groupedLiveChatMessages.map((msg) => (
                   <div
                     key={msg.id}
-                    className="rounded-xl border bg-card/70 px-3 py-2 shadow-sm"
+                    className={cn(
+                      "rounded-xl border bg-card/70 px-3 py-2 shadow-sm",
+                      msg.startsSequence ? "mt-2 first:mt-0" : "mt-1",
+                    )}
                   >
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="truncate text-xs font-semibold">
-                        {msg.username}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
+                    {msg.startsSequence && (
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <span className="truncate text-xs font-semibold">
+                          {msg.username}
+                        </span>
+                      </div>
+                    )}
+                    <p className="text-sm leading-6 break-words">{msg.message}</p>
+                    {msg.endsSequence && (
+                      <span className="mt-1 block text-[10px] text-muted-foreground">
                         {formatChatTimestamp(msg.timestamp)}
                       </span>
-                    </div>
-                    <p className="text-sm leading-6 break-words">
-                      {msg.message}
-                    </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -3288,28 +3349,60 @@ export default function ChallengeWatchPage() {
 
           <div className="border-t px-4 py-3">
             {user ? (
-              <div className="flex items-center gap-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-                <Input
-                  className="min-h-[44px]"
-                  value={mobileChatInput}
-                  onChange={(e) => setMobileChatInput(e.target.value)}
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      sendLiveChatMessage(mobileChatInput);
-                    }
-                  }}
-                  placeholder={t("chat.typeMessage")}
-                  maxLength={300}
-                />
-                <Button
-                  className="vex-arcade-btn min-h-[44px]"
-                  onClick={() => sendLiveChatMessage(mobileChatInput)}
-                  disabled={!mobileChatInput.trim()}
-                >
-                  {t("chat.sendMessage")}
-                </Button>
+              <div className="space-y-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant={showMobileQuickReplies ? "secondary" : "outline"}
+                    size="icon"
+                    className="min-h-[44px] min-w-[44px]"
+                    onClick={() => setShowMobileQuickReplies((previous) => !previous)}
+                    disabled={mobileQuickMessages.length === 0}
+                    aria-label={t("chat.quickReplies")}
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                  </Button>
+                  <Input
+                    className="min-h-[44px]"
+                    value={mobileChatInput}
+                    onChange={(e) => setMobileChatInput(e.target.value)}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        sendLiveChatMessage(mobileChatInput);
+                      }
+                    }}
+                    placeholder={t("chat.typeMessage")}
+                    maxLength={300}
+                  />
+                  <Button
+                    className="vex-arcade-btn min-h-[44px]"
+                    onClick={() => sendLiveChatMessage(mobileChatInput)}
+                    disabled={!mobileChatInput.trim()}
+                  >
+                    {t("chat.sendMessage")}
+                  </Button>
+                </div>
+                {showMobileQuickReplies && mobileQuickMessages.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {mobileQuickMessages.map((message) => (
+                      <Button
+                        key={message}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 rounded-full px-3 text-xs"
+                        onClick={() => {
+                          setShowMobileQuickReplies(false);
+                          sendLiveChatMessage(message);
+                        }}
+                      >
+                        {message}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">

@@ -89,12 +89,13 @@ export function SpectatorPanel({
   onSendChat,
   canSendChat = false,
 }: SpectatorPanelProps) {
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const { toast } = useToast();
 
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [pointsAmount, setPointsAmount] = useState("");
   const [chatDraft, setChatDraft] = useState("");
+  const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showGiftPanel, setShowGiftPanel] = useState(false);
   const [showPointsDialog, setShowPointsDialog] = useState(false);
   const isViewerPanel = panelMode === "spectator";
@@ -195,6 +196,24 @@ export function SpectatorPanel({
     setChatDraft("");
   };
 
+  const quickMessages = [
+    t("chat.quickMessages.goodMove"),
+    t("chat.quickMessages.wellPlayed"),
+    t("chat.quickMessages.niceStrategy"),
+    t("chat.quickMessages.exciting"),
+  ].filter((message) => typeof message === "string" && message.trim().length > 0);
+
+  const handleQuickReplySend = (message: string) => {
+    const safeMessage = message.trim();
+    if (!safeMessage || !onSendChat || !canSendChat) {
+      return;
+    }
+
+    onSendChat(safeMessage);
+    setChatDraft("");
+    setShowQuickReplies(false);
+  };
+
   const formatChatTime = (timestamp: string | number) => {
     const date = new Date(timestamp);
     if (Number.isNaN(date.getTime())) {
@@ -205,6 +224,29 @@ export function SpectatorPanel({
       minute: "2-digit",
     });
   };
+
+  const normalizedChatMessages = (chatMessages ?? []).slice(-40).map((msg, index) => ({
+    ...msg,
+    _key: msg.id || `${msg.userId || "msg"}-${index}-${String(msg.timestamp)}`,
+  }));
+
+  const groupedChatMessages = normalizedChatMessages.map((msg, index, list) => {
+    const previous = index > 0 ? list[index - 1] : undefined;
+    const next = index < list.length - 1 ? list[index + 1] : undefined;
+    const currentSenderKey = `${String(msg.userId || "")}::${String(msg.username || "")}`;
+    const previousSenderKey = previous
+      ? `${String(previous.userId || "")}::${String(previous.username || "")}`
+      : "";
+    const nextSenderKey = next
+      ? `${String(next.userId || "")}::${String(next.username || "")}`
+      : "";
+
+    return {
+      ...msg,
+      startsSequence: index === 0 || previousSenderKey !== currentSenderKey,
+      endsSequence: index === list.length - 1 || nextSenderKey !== currentSenderKey,
+    };
+  });
 
   const renderPlayerCard = (player: Player | undefined, label: string) => {
     if (!player) return null;
@@ -379,18 +421,30 @@ export function SpectatorPanel({
             {language === "ar" ? "الدردشة المباشرة" : "Live Match Chat"}
           </h4>
           <div className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-border/60 bg-background/60 p-2.5 shadow-sm">
-            {!chatMessages || chatMessages.length === 0 ? (
+            {groupedChatMessages.length === 0 ? (
               <p className="py-3 text-center text-xs text-muted-foreground">
                 {language === "ar" ? "لا توجد رسائل حتى الآن" : "No messages yet"}
               </p>
             ) : (
-              chatMessages.slice(-40).map((msg, index) => (
-                <div key={msg.id || `${msg.userId || "msg"}-${index}-${String(msg.timestamp)}`} className="rounded-md border bg-background/80 px-2 py-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-xs font-medium">{msg.username}</span>
-                    <span className="shrink-0 text-[10px] text-muted-foreground">{formatChatTime(msg.timestamp)}</span>
-                  </div>
-                  <p className="mt-1 text-xs break-words">{msg.message}</p>
+              groupedChatMessages.map((msg) => (
+                <div
+                  key={msg._key}
+                  className={cn(
+                    "rounded-md border bg-background/80 px-2.5 py-1.5",
+                    msg.startsSequence ? "mt-2 first:mt-0" : "mt-1",
+                  )}
+                >
+                  {msg.startsSequence && (
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="truncate text-xs font-semibold">{msg.username}</span>
+                    </div>
+                  )}
+                  <p className="text-xs leading-5 break-words">{msg.message}</p>
+                  {msg.endsSequence && (
+                    <span className="mt-1 block text-[10px] text-muted-foreground">
+                      {formatChatTime(msg.timestamp)}
+                    </span>
+                  )}
                 </div>
               ))
             )}
@@ -399,6 +453,17 @@ export function SpectatorPanel({
           {onSendChat && (
             <div className="mt-2 space-y-2">
               <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={showQuickReplies ? "secondary" : "outline"}
+                  size="icon"
+                  className="shrink-0"
+                  onClick={() => setShowQuickReplies((previous) => !previous)}
+                  disabled={!canSendChat || quickMessages.length === 0}
+                  aria-label={t("chat.quickReplies")}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                </Button>
                 <Input
                   value={chatDraft}
                   onChange={(e) => setChatDraft(e.target.value)}
@@ -416,6 +481,23 @@ export function SpectatorPanel({
                   {language === "ar" ? "إرسال" : "Send"}
                 </Button>
               </div>
+              {showQuickReplies && quickMessages.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {quickMessages.map((message) => (
+                    <Button
+                      key={message}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 rounded-full px-3 text-xs"
+                      onClick={() => handleQuickReplySend(message)}
+                      disabled={!canSendChat}
+                    >
+                      {message}
+                    </Button>
+                  ))}
+                </div>
+              )}
               {!canSendChat && (
                 <p className="text-xs text-muted-foreground">
                   {language === "ar" ? "سجّل الدخول للمشاركة في الدردشة المباشرة." : "Sign in to participate in live chat."}

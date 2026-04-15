@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -63,6 +63,7 @@ export function GameChat({
   const chatTitle = t("chat.title");
   const quickLabel = t("auth.quick");
   const quickActionsLabel = t("play.quickActions");
+  const symbolChips = ["🙂", "👏", "🔥", "🎯"];
 
   const blockMutation = useMutation({
     mutationFn: (userId: string) => apiRequest('POST', `/api/users/${userId}/block`),
@@ -121,6 +122,16 @@ export function GameChat({
     }
   }, [disabled, onSendMessage, language, autoFocusInput]);
 
+  const handleAppendSymbol = useCallback((symbol: string) => {
+    if (disabled) return;
+    setMessageInput((previous) =>
+      previous.trim().length === 0 ? symbol : `${previous} ${symbol}`,
+    );
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  }, [disabled]);
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -134,13 +145,31 @@ export function GameChat({
   };
 
   const userId = currentUserId || user?.id;
+  const groupedMessages = useMemo(() => {
+    const getSenderKey = (msg: Message) =>
+      `${String(msg.senderId || "")}::${String(msg.senderName || "")}`;
+
+    return messages.map((msg, index, list) => {
+      const previous = index > 0 ? list[index - 1] : undefined;
+      const next = index < list.length - 1 ? list[index + 1] : undefined;
+
+      const startsSequence = !previous || getSenderKey(previous) !== getSenderKey(msg);
+      const endsSequence = !next || getSenderKey(next) !== getSenderKey(msg);
+
+      return {
+        ...msg,
+        startsSequence,
+        endsSequence,
+      };
+    });
+  }, [messages]);
 
   return (
     <div
       dir={dir}
-      className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border bg-background/95 shadow-sm backdrop-blur-sm"
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-b from-background/95 via-background to-muted/10 shadow-[0_16px_42px_-24px_rgba(15,23,42,0.45)] backdrop-blur-sm"
     >
-      <div className="flex items-center justify-between border-b px-3 py-2">
+      <div className="flex items-center justify-between border-b border-border/70 bg-gradient-to-r from-primary/10 via-transparent to-amber-500/10 px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-1.5">
           <MessageCircle className="h-4 w-4 text-primary" />
           <span className="truncate text-sm font-medium">{chatTitle}</span>
@@ -152,16 +181,16 @@ export function GameChat({
 
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto px-3 py-2"
+        className="flex-1 overflow-y-auto px-3 py-3"
         data-testid="game-chat-messages-container"
       >
-        {messages.length === 0 ? (
+        {groupedMessages.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
             {t("chat.noMessages")}
           </p>
         ) : (
-          <div className="space-y-2.5">
-            {messages.map((msg) => {
+          <div className="space-y-0.5">
+            {groupedMessages.map((msg) => {
               const isOwnMessage = msg.senderId === userId;
               const isAlreadyBlocked =
                 typeof msg.senderId === "string" &&
@@ -175,76 +204,101 @@ export function GameChat({
                 <div
                   key={msg.id}
                   className={cn(
-                    "flex gap-1.5",
+                    "flex gap-2",
+                    msg.startsSequence ? "mt-3 first:mt-0" : "mt-1",
                     isOwnMessage ? "justify-end" : "justify-start"
                   )}
                 >
-                  {!isOwnMessage && (
-                    <Avatar className="h-7 w-7 shrink-0">
-                      <AvatarImage src={msg.senderAvatar} />
-                      <AvatarFallback className="text-[10px]">
-                        {displayName[0]?.toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                  )}
-                  <div className={cn("max-w-[80%]", isOwnMessage ? "items-end" : "items-start")}>
+                  {!isOwnMessage ? (
+                    msg.startsSequence ? (
+                      <Avatar className="mt-0.5 h-7 w-7 shrink-0 ring-1 ring-border/50">
+                        <AvatarImage src={msg.senderAvatar} />
+                        <AvatarFallback className="text-[10px]">
+                          {displayName[0]?.toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <div className="h-7 w-7 shrink-0" />
+                    )
+                  ) : null}
+
+                  <div className={cn("max-w-[82%]", isOwnMessage ? "items-end" : "items-start")}>
+                    {msg.startsSequence && (
+                      <div
+                        className={cn(
+                          "mb-1 flex items-center gap-1.5 px-1",
+                          isOwnMessage ? "justify-end" : "justify-start",
+                        )}
+                      >
+                        <span className="truncate text-[11px] font-semibold text-muted-foreground">
+                          {displayName}
+                        </span>
+                        {!isOwnMessage && typeof msg.senderId === "string" && msg.senderId.length > 0 && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-0 opacity-60 hover:opacity-100" type="button">
+                                <MoreVertical className="h-3 w-3" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="min-w-[140px]">
+                              {!isAlreadyBlocked && (
+                                <DropdownMenuItem
+                                  onClick={() => blockMutation.mutate(msg.senderId!)}
+                                  disabled={blockMutation.isPending}
+                                  data-testid={`menu-block-${msg.senderId}`}
+                                >
+                                  <Ban className="me-1.5 h-3.5 w-3.5" />
+                                  {t("chat.blockUser")}
+                                </DropdownMenuItem>
+                              )}
+                              {!isAlreadyMuted && (
+                                <DropdownMenuItem
+                                  onClick={() => muteMutation.mutate(msg.senderId!)}
+                                  disabled={muteMutation.isPending}
+                                  data-testid={`menu-mute-${msg.senderId}`}
+                                >
+                                  <VolumeX className="me-1.5 h-3.5 w-3.5" />
+                                  {t("chat.muteUser")}
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    )}
+
                     <div
                       className={cn(
-                        "rounded-2xl px-3 py-1.5 text-sm",
+                        "inline-flex max-w-full items-start gap-1.5 rounded-2xl px-3 py-1.5 text-sm shadow-sm",
                         isOwnMessage
                           ? "rounded-br-sm bg-primary text-primary-foreground"
-                          : "rounded-bl-sm bg-muted",
-                        msg.isQuickMessage && "bg-amber-500/90 text-xs font-medium text-white"
+                          : "rounded-bl-sm border border-border/60 bg-card",
+                        !msg.startsSequence &&
+                        (isOwnMessage ? "rounded-tr-md" : "rounded-tl-md"),
+                        !msg.endsSequence &&
+                        (isOwnMessage ? "rounded-br-md" : "rounded-bl-md"),
+                        msg.isQuickMessage &&
+                        (isOwnMessage
+                          ? "bg-amber-500 text-amber-950"
+                          : "border-amber-300/70 bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100"),
                       )}
                     >
-                      {!isOwnMessage && (
-                        <div className="mb-0.5 flex items-center gap-1">
-                          <span className="truncate text-[10px] font-medium opacity-70">
-                            {displayName}
-                          </span>
-                          {typeof msg.senderId === "string" && msg.senderId.length > 0 && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="p-0 opacity-60 hover:opacity-100" type="button">
-                                  <MoreVertical className="h-3 w-3" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="min-w-[140px]">
-                                {!isAlreadyBlocked && (
-                                  <DropdownMenuItem
-                                    onClick={() => blockMutation.mutate(msg.senderId!)}
-                                    disabled={blockMutation.isPending}
-                                    data-testid={`menu-block-${msg.senderId}`}
-                                  >
-                                    <Ban className="me-1.5 h-3.5 w-3.5" />
-                                    {t("chat.blockUser")}
-                                  </DropdownMenuItem>
-                                )}
-                                {!isAlreadyMuted && (
-                                  <DropdownMenuItem
-                                    onClick={() => muteMutation.mutate(msg.senderId!)}
-                                    disabled={muteMutation.isPending}
-                                    data-testid={`menu-mute-${msg.senderId}`}
-                                  >
-                                    <VolumeX className="me-1.5 h-3.5 w-3.5" />
-                                    {t("chat.muteUser")}
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </div>
+                      {msg.isQuickMessage && (
+                        <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       )}
-                      {msg.message}
+                      <span className="break-words leading-6">{msg.message}</span>
                     </div>
-                    <span
-                      className={cn(
-                        "mt-0.5 block text-[10px] text-muted-foreground",
-                        isOwnMessage ? "text-end" : "text-start"
-                      )}
-                    >
-                      {formatTime(msg.createdAt)}
-                    </span>
+
+                    {msg.endsSequence && (
+                      <span
+                        className={cn(
+                          "mt-0.5 block px-1 text-[10px] text-muted-foreground",
+                          isOwnMessage ? "text-end" : "text-start",
+                        )}
+                      >
+                        {formatTime(msg.createdAt)}
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -277,6 +331,21 @@ export function GameChat({
       )}
 
       <div className="border-t bg-background/80 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="mb-2 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          {symbolChips.map((symbol) => (
+            <button
+              key={symbol}
+              type="button"
+              className="inline-flex h-8 min-w-8 items-center justify-center rounded-full border border-border/70 bg-background/80 px-2 text-sm shadow-sm transition-colors hover:bg-muted"
+              onClick={() => handleAppendSymbol(symbol)}
+              disabled={disabled}
+              aria-label={symbol}
+            >
+              {symbol}
+            </button>
+          ))}
+        </div>
+
         <div className="flex items-center gap-1.5">
           <Input
             ref={inputRef}

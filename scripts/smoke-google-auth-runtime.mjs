@@ -65,6 +65,28 @@ function assert(condition, message) {
     }
 }
 
+function sanitizeErrorMessage(input) {
+    const raw = String(input || "Unknown error");
+
+    const redactedBearer = raw.replace(
+        /Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi,
+        "Bearer [REDACTED]",
+    );
+
+    const redactedQueryTokens = redactedBearer.replace(
+        /([?&](?:token|access_token|refresh_token|id_token|code|state|client_secret)=)[^&\s]+/gi,
+        "$1[REDACTED]",
+    );
+
+    const redactedKeyValue = redactedQueryTokens.replace(
+        /((?:token|secret|password|authorization|cookie)[^:=\n]*[:=]\s*)([^,\s]+)/gi,
+        "$1[REDACTED]",
+    );
+
+    const singleLine = redactedKeyValue.replace(/\s+/g, " ").trim();
+    return singleLine.length > 240 ? `${singleLine.slice(0, 240)}...` : singleLine;
+}
+
 async function run() {
     const options = parseArgs(args);
     const baseUrl = normalizeBaseUrl(options.baseUrl);
@@ -124,6 +146,7 @@ async function run() {
 
 run().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[smoke] failed: ${message}`);
+    const safeMessage = sanitizeErrorMessage(message);
+    console.error(`[smoke] failed: ${safeMessage}`);
     process.exit(1);
 });

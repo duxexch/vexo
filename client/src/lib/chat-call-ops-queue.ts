@@ -57,11 +57,30 @@ function isValidOperation(raw: unknown): raw is ChatCallQueuedOperation {
   return typeof candidate.sessionId === 'string';
 }
 
+let operationIdFallbackCounter = 0;
+
+function createCryptoRandomSuffix(byteLength = 16): string | null {
+  if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+    return null;
+  }
+
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
 function createOperationId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  return `call-op-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  const randomSuffix = createCryptoRandomSuffix(12);
+  if (randomSuffix) {
+    return `call-op-${Date.now()}-${randomSuffix}`;
+  }
+
+  operationIdFallbackCounter += 1;
+  return `call-op-${Date.now()}-${operationIdFallbackCounter}`;
 }
 
 function emitQueueUpdated(queue: ChatCallQueuedOperation[]): void {

@@ -336,6 +336,7 @@ export default function ChallengeGamePage() {
   const chessMovePendingRef = useRef(false);
   const chessMoveAckTimerRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutSignalSentRef = useRef(false);
+  const seenChatMessageKeysRef = useRef<Set<string>>(new Set());
   const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(
     null,
   );
@@ -1483,10 +1484,34 @@ export default function ChallengeGamePage() {
                   : undefined,
             };
 
-            setMessages((prev) => [
-              ...prev,
-              normalizedMessage,
-            ].slice(-220));
+            const normalizedMessageKey = normalizedMessage.id
+              ? `id:${normalizedMessage.id}`
+              : `sig:${normalizedMessage.senderId || normalizedMessage.userId || ""}:${normalizedMessage.message}:${String(normalizedMessage.createdAt || normalizedMessage.timestamp || "")}`;
+
+            if (seenChatMessageKeysRef.current.has(normalizedMessageKey)) {
+              break;
+            }
+
+            seenChatMessageKeysRef.current.add(normalizedMessageKey);
+            if (seenChatMessageKeysRef.current.size > 1200) {
+              seenChatMessageKeysRef.current.clear();
+              seenChatMessageKeysRef.current.add(normalizedMessageKey);
+            }
+
+            setMessages((prev) => {
+              const alreadyExists = prev.some((msg) => {
+                const existingKey = msg.id
+                  ? `id:${msg.id}`
+                  : `sig:${msg.senderId || msg.userId || ""}:${msg.message}:${String(msg.createdAt || msg.timestamp || "")}`;
+                return existingKey === normalizedMessageKey;
+              });
+
+              if (alreadyExists) {
+                return prev;
+              }
+
+              return [...prev, normalizedMessage].slice(-220);
+            });
 
             if (senderId && chatText) {
               pushAvatarChatBubble(senderId, senderName, chatText);
@@ -1707,6 +1732,7 @@ export default function ChallengeGamePage() {
 
     setMessages([]);
     setAvatarChatBubbles({});
+    seenChatMessageKeysRef.current.clear();
   }, [gameSession?.status]);
 
   const sendMove = useCallback(
@@ -2640,42 +2666,50 @@ export default function ChallengeGamePage() {
     ];
   });
 
-  const gameChatMessages = messages
-    .filter((msg) => String(msg.message || "").trim().length > 0)
-    .slice(-160)
-    .map((msg, index) => {
-      const senderId =
-        typeof msg.userId === "string" && msg.userId.length > 0
-          ? msg.userId
-          : typeof msg.senderId === "string" && msg.senderId.length > 0
-            ? msg.senderId
-            : "";
-      const senderName =
-        typeof msg.senderName === "string" && msg.senderName.trim().length > 0
-          ? msg.senderName
-          : typeof msg.username === "string" && msg.username.trim().length > 0
-            ? msg.username
-            : t("common.view");
-      const createdAtCandidate =
-        typeof msg.createdAt === "string" && msg.createdAt.trim().length > 0
-          ? msg.createdAt
-          : msg.timestamp;
-      const createdAtDate = new Date(createdAtCandidate);
-      const createdAt = Number.isNaN(createdAtDate.getTime())
-        ? new Date().toISOString()
-        : createdAtDate.toISOString();
+  const gameChatMessages = (() => {
+    const seenIds = new Set<string>();
 
-      return {
-        id: msg.id || `${senderId || "chat"}-${index}-${createdAt}`,
-        senderId,
-        senderName,
-        senderAvatar: msg.senderAvatar,
-        message: String(msg.message || ""),
-        isQuickMessage: Boolean(msg.isQuickMessage),
-        quickMessageKey: msg.quickMessageKey,
-        createdAt,
-      };
-    });
+    return messages
+      .filter((msg) => String(msg.message || "").trim().length > 0)
+      .slice(-160)
+      .map((msg, index) => {
+        const senderId =
+          typeof msg.userId === "string" && msg.userId.length > 0
+            ? msg.userId
+            : typeof msg.senderId === "string" && msg.senderId.length > 0
+              ? msg.senderId
+              : "";
+        const senderName =
+          typeof msg.senderName === "string" && msg.senderName.trim().length > 0
+            ? msg.senderName
+            : typeof msg.username === "string" && msg.username.trim().length > 0
+              ? msg.username
+              : t("common.view");
+        const createdAtCandidate =
+          typeof msg.createdAt === "string" && msg.createdAt.trim().length > 0
+            ? msg.createdAt
+            : msg.timestamp;
+        const createdAtDate = new Date(createdAtCandidate);
+        const createdAt = Number.isNaN(createdAtDate.getTime())
+          ? new Date().toISOString()
+          : createdAtDate.toISOString();
+
+        const baseId = msg.id || `${senderId || "chat"}-${index}-${createdAt}`;
+        const uniqueId = seenIds.has(baseId) ? `${baseId}-${index}` : baseId;
+        seenIds.add(uniqueId);
+
+        return {
+          id: uniqueId,
+          senderId,
+          senderName,
+          senderAvatar: msg.senderAvatar,
+          message: String(msg.message || ""),
+          isQuickMessage: Boolean(msg.isQuickMessage),
+          quickMessageKey: msg.quickMessageKey,
+          createdAt,
+        };
+      });
+  })();
 
   const togglePeerListening = (peerUserId: string) => {
     setVoicePeerMutedMap((previous) => ({
