@@ -91,7 +91,15 @@ const ChatPage = lazy(() => import("@/pages/chat"));
 const ChallengeGamePage = lazy(() => import("@/pages/challenge-game"));
 type MenuItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; key: string; hasBadge?: boolean };
 
-const GAME_NAV_ICON_ACCENTS: Record<string, { active: string; inactive: string }> = {
+const SIDEBAR_ICON_ACCENTS: Record<string, { active: string; inactive: string }> = {
+  dashboard: {
+    active: "bg-gradient-to-br from-indigo-500 via-blue-500 to-cyan-500 border-blue-200/50",
+    inactive: "bg-gradient-to-br from-indigo-500/85 via-blue-500/85 to-cyan-500/85 border-blue-200/35",
+  },
+  wallet: {
+    active: "bg-gradient-to-br from-emerald-500 via-green-500 to-teal-500 border-emerald-200/50",
+    inactive: "bg-gradient-to-br from-emerald-500/85 via-green-500/85 to-teal-500/85 border-emerald-200/35",
+  },
   multiplayer: {
     active: "bg-gradient-to-br from-blue-500 via-cyan-500 to-indigo-500 border-cyan-200/50",
     inactive: "bg-gradient-to-br from-blue-500/85 via-cyan-500/85 to-indigo-500/85 border-cyan-200/35",
@@ -103,6 +111,10 @@ const GAME_NAV_ICON_ACCENTS: Record<string, { active: string; inactive: string }
   challenges: {
     active: "bg-gradient-to-br from-rose-500 via-red-500 to-orange-500 border-rose-200/50",
     inactive: "bg-gradient-to-br from-rose-500/85 via-red-500/85 to-orange-500/85 border-rose-200/35",
+  },
+  announcements: {
+    active: "bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 border-amber-200/50",
+    inactive: "bg-gradient-to-br from-amber-500/85 via-orange-500/85 to-rose-500/85 border-amber-200/35",
   },
   tournaments: {
     active: "bg-gradient-to-br from-amber-500 via-yellow-500 to-orange-500 border-amber-200/50",
@@ -120,6 +132,63 @@ const GAME_NAV_ICON_ACCENTS: Record<string, { active: string; inactive: string }
     active: "bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 border-orange-200/50",
     inactive: "bg-gradient-to-br from-orange-500/85 via-amber-500/85 to-yellow-500/85 border-orange-200/35",
   },
+  profile: {
+    active: "bg-gradient-to-br from-violet-500 via-fuchsia-500 to-pink-500 border-violet-200/50",
+    inactive: "bg-gradient-to-br from-violet-500/85 via-fuchsia-500/85 to-pink-500/85 border-violet-200/35",
+  },
+  friends: {
+    active: "bg-gradient-to-br from-teal-500 via-cyan-500 to-blue-500 border-cyan-200/50",
+    inactive: "bg-gradient-to-br from-teal-500/85 via-cyan-500/85 to-blue-500/85 border-cyan-200/35",
+  },
+  chat: {
+    active: "bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-500 border-sky-200/50",
+    inactive: "bg-gradient-to-br from-sky-500/85 via-blue-500/85 to-indigo-500/85 border-sky-200/35",
+  },
+  p2p: {
+    active: "bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 border-orange-200/50",
+    inactive: "bg-gradient-to-br from-orange-500/85 via-red-500/85 to-pink-500/85 border-orange-200/35",
+  },
+  free: {
+    active: "bg-gradient-to-br from-lime-500 via-emerald-500 to-green-500 border-lime-200/50",
+    inactive: "bg-gradient-to-br from-lime-500/85 via-emerald-500/85 to-green-500/85 border-lime-200/35",
+  },
+  "daily-rewards": {
+    active: "bg-gradient-to-br from-yellow-500 via-amber-500 to-orange-500 border-yellow-200/50",
+    inactive: "bg-gradient-to-br from-yellow-500/85 via-amber-500/85 to-orange-500/85 border-yellow-200/35",
+  },
+  referral: {
+    active: "bg-gradient-to-br from-cyan-500 via-sky-500 to-blue-500 border-cyan-200/50",
+    inactive: "bg-gradient-to-br from-cyan-500/85 via-sky-500/85 to-blue-500/85 border-cyan-200/35",
+  },
+  transactions: {
+    active: "bg-gradient-to-br from-amber-500 via-orange-500 to-yellow-500 border-amber-200/50",
+    inactive: "bg-gradient-to-br from-amber-500/85 via-orange-500/85 to-yellow-500/85 border-amber-200/35",
+  },
+  complaints: {
+    active: "bg-gradient-to-br from-red-500 via-rose-500 to-orange-500 border-red-200/50",
+    inactive: "bg-gradient-to-br from-red-500/85 via-rose-500/85 to-orange-500/85 border-red-200/35",
+  },
+  support: {
+    active: "bg-gradient-to-br from-purple-500 via-indigo-500 to-blue-500 border-purple-200/50",
+    inactive: "bg-gradient-to-br from-purple-500/85 via-indigo-500/85 to-blue-500/85 border-purple-200/35",
+  },
+  notifications: {
+    active: "bg-gradient-to-br from-pink-500 via-rose-500 to-red-500 border-pink-200/50",
+    inactive: "bg-gradient-to-br from-pink-500/85 via-rose-500/85 to-red-500/85 border-pink-200/35",
+  },
+  settings: {
+    active: "bg-gradient-to-br from-slate-500 via-zinc-500 to-neutral-500 border-slate-200/50",
+    inactive: "bg-gradient-to-br from-slate-500/85 via-zinc-500/85 to-neutral-500/85 border-slate-200/35",
+  },
+  "install-app": {
+    active: "bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 border-blue-200/50",
+    inactive: "bg-gradient-to-br from-blue-500/85 via-indigo-500/85 to-violet-500/85 border-blue-200/35",
+  },
+};
+
+const DEFAULT_SIDEBAR_ICON_ACCENT = {
+  active: "bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-500 border-blue-200/50",
+  inactive: "bg-gradient-to-br from-cyan-500/85 via-blue-500/85 to-indigo-500/85 border-blue-200/35",
 };
 
 const ChallengeWatchPage = lazy(() => import("@/pages/challenge-watch"));
@@ -300,7 +369,7 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
               {menuItems.map((item) => {
                 const badgeCount = item.key === 'notifications' ? unreadCount : (sectionCounts[item.key] || 0);
                 const isActive = location === item.url;
-                const accent = GAME_NAV_ICON_ACCENTS[item.key];
+                const accent = SIDEBAR_ICON_ACCENTS[item.key] || DEFAULT_SIDEBAR_ICON_ACCENT;
                 return (
                   <SidebarMenuItem key={item.key}>
                     <SidebarMenuButton
@@ -311,15 +380,11 @@ function AppSidebar({ side }: { side: "left" | "right" }) {
                       data-testid={`link-${item.key}`}
                     >
                       <div className="relative">
-                        {accent ? (
-                          <span
-                            className={`inline-flex h-6 w-6 items-center justify-center rounded-md border shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_4px_12px_rgba(0,0,0,0.28)] ${isActive ? accent.active : accent.inactive}`}
-                          >
-                            <item.icon className="h-4 w-4 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" />
-                          </span>
-                        ) : (
-                          <item.icon />
-                        )}
+                        <span
+                          className={`inline-flex h-6 w-6 items-center justify-center rounded-md border shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_4px_12px_rgba(0,0,0,0.28)] ${isActive ? accent.active : accent.inactive}`}
+                        >
+                          <item.icon className="h-4 w-4 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]" />
+                        </span>
                         {badgeCount > 0 && !isActive && (
                           <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none px-1">
                             {badgeCount > 99 ? "99+" : badgeCount}
