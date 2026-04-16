@@ -1791,14 +1791,16 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                       disabled={!activeConversation}
                     />
 
-                    <AutoDeleteToggle
-                      hasAccess={hasAutoDelete}
-                      isActive={hasAutoDelete}
-                      deleteAfterMinutes={deleteAfterMinutes}
-                      onToggle={() => { }}
-                      onPurchaseClick={() => setShowAutoDeletePurchase(true)}
-                      onSettingsClick={() => setShowAutoDeleteSettings(true)}
-                    />
+                    {hasAutoDelete && (
+                      <AutoDeleteToggle
+                        hasAccess={true}
+                        isActive={hasAutoDelete}
+                        deleteAfterMinutes={deleteAfterMinutes}
+                        onToggle={() => { }}
+                        onPurchaseClick={() => { }}
+                        onSettingsClick={() => setShowAutoDeleteSettings(true)}
+                      />
+                    )}
                   </div>
 
                   <div className="flex min-w-0 flex-1 items-end gap-1.5 sm:gap-2">

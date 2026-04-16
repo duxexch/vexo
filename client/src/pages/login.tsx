@@ -1349,7 +1349,7 @@ export default function LoginPage() {
   return (
     <main
       id="main-content"
-      className="relative flex min-h-[100svh] supports-[min-height:100dvh]:min-h-[100dvh] items-start justify-center overflow-y-auto bg-background p-4 pt-20 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] sm:items-center sm:pt-4 sm:pb-[max(1rem,env(safe-area-inset-bottom))]"
+      className="relative flex min-h-[100svh] supports-[min-height:100dvh]:min-h-[100dvh] items-start justify-center overflow-y-auto bg-background p-4 pt-20 pb-[calc(env(safe-area-inset-bottom)+8rem)] sm:items-center sm:pt-4 sm:pb-[max(1rem,env(safe-area-inset-bottom))]"
       dir={dir}
     >
       <div
@@ -1371,7 +1371,7 @@ export default function LoginPage() {
           <p className="text-muted-foreground text-sm mt-1">{t('auth.gamingTrading')}</p>
         </div>
 
-        <CardContent className="p-0 max-h-[calc(100svh-8.5rem)] supports-[max-height:100dvh]:max-h-[calc(100dvh-8.5rem)] overflow-y-auto overscroll-contain">
+        <CardContent className="p-0 max-h-[calc(100svh-9.75rem)] supports-[max-height:100dvh]:max-h-[calc(100dvh-9.75rem)] sm:max-h-[calc(100dvh-8.5rem)] overflow-y-auto overscroll-contain">
           <Tabs value={currentTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="sticky top-0 z-10 w-full rounded-none border-b border-border h-auto p-0 bg-background/95 backdrop-blur flex items-stretch overflow-x-auto">
               {enabledTabs.includes("one-click") && (
@@ -1416,7 +1416,7 @@ export default function LoginPage() {
               )}
             </TabsList>
 
-            <div className="p-6 space-y-4 pb-[calc(env(safe-area-inset-bottom)+2.5rem)] sm:pb-6">
+            <div className="p-6 space-y-4 pb-[calc(env(safe-area-inset-bottom)+6rem)] sm:pb-6">
               {enabledTabs.includes("one-click") && (
                 <TabsContent value="one-click" className="m-0 space-y-4">
                   <div className="text-center space-y-4">
@@ -1713,6 +1713,10 @@ export default function LoginPage() {
               )}
             </div>
           </Tabs>
+          <div
+            aria-hidden="true"
+            className="h-[calc(env(safe-area-inset-bottom)+4rem)] sm:hidden"
+          />
         </CardContent>
       </Card>
 

@@ -67,11 +67,11 @@ export function AutoDeleteToggle({
           onClick={onSettingsClick}
           className={cn("shrink-0", isActive && "text-primary-foreground")}
         >
-          <Timer className="h-4 w-4" />
+          <Clock className="h-4 w-4" />
         </Button>
       </TooltipTrigger>
       <TooltipContent>
-        <p>{isActive ? `الحذف التلقائي: ${label}` : "تفعيل الحذف التلقائي"}</p>
+        <p>{isActive ? `إعدادات الحذف التلقائي: ${label}` : "تفعيل الحذف التلقائي"}</p>
       </TooltipContent>
     </Tooltip>
   );
@@ -292,8 +292,8 @@ export function AutoDeleteCountdown({ autoDeleteAt, className }: AutoDeleteCount
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge 
-          variant="outline" 
+        <Badge
+          variant="outline"
           className={cn("text-[10px] px-1 py-0 h-4 gap-0.5 text-amber-500 border-amber-500/30", className)}
         >
           <Timer className="h-2.5 w-2.5" />
