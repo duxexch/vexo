@@ -756,7 +756,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
             </a>
             <AppSidebar side={sidebarSide} />
             <div className="flex flex-col flex-1 overflow-hidden">
-              <header className="flex items-center justify-between gap-4 p-3 border-b bg-background sticky top-0 z-50">
+              <header className="sticky top-0 z-50 flex items-center justify-between gap-4 border-b bg-background px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
                 <SidebarTrigger className="h-10 w-10" aria-label={t('nav.navigation') || 'Navigation'} data-testid="button-sidebar-toggle" />
                 <div className="flex items-center gap-3 flex-wrap overflow-visible">
                   <Link href="/wallet">
@@ -926,7 +926,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
   const { dir, t } = useI18n();
   return (
     <div className="min-h-screen bg-background" dir={dir}>
-      <header className="flex items-center justify-between gap-4 p-3 border-b bg-background sticky top-0 z-50">
+      <header className="sticky top-0 z-50 flex items-center justify-between gap-4 border-b bg-background px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <Link href="/" aria-label="VEX Home">
           <div className="flex items-center gap-2 cursor-pointer">
             <VexLogo size={28} />

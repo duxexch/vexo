@@ -826,6 +826,19 @@ function MarketplaceTab() {
     return offer.type === "sell" ? t('p2p.buy') : t('p2p.sell');
   };
 
+  const resetOfferFilters = () => {
+    setTypeFilter("all");
+    setCountryFilter("all");
+    setCurrencyFilter("all");
+    setPaymentFilter("all");
+    setAmountFilter("");
+    setTraderSearch("");
+    setPriceSort("none");
+    setMinimumRatingFilter("all");
+    setMaxPaymentWindowFilter("all");
+    setShowTopRatedOnly(false);
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -850,152 +863,152 @@ function MarketplaceTab() {
           </Badge>
         </div>
 
-        <div className="space-y-3 p-3 sm:p-4">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-type-filter">
-                <SelectValue placeholder={t('p2p.type')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('p2p.all')}</SelectItem>
-                <SelectItem value="buy">{t('p2p.buy')}</SelectItem>
-                <SelectItem value="sell">{t('p2p.sell')}</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="space-y-2.5 p-3 sm:p-4">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">
+            <div className="min-w-[10rem] sm:min-w-0">
+              <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-currency-filter">
+                  <SelectValue placeholder={t('p2p.currency')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                  {currencyOptions.map((currencyCode) => (
+                    <SelectItem key={currencyCode} value={currencyCode}>{currencyCode}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select value={countryFilter} onValueChange={setCountryFilter}>
-              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-country-filter">
-                <SelectValue placeholder={t('p2p.country')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('p2p.all')}</SelectItem>
-                {countryOptions.map((countryOption) => (
-                  <SelectItem key={countryOption.value} value={countryOption.value}>{countryOption.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="min-w-[10rem] sm:min-w-0">
+              <Select value={minimumRatingFilter} onValueChange={setMinimumRatingFilter}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-rating-filter">
+                  <SelectValue placeholder={t('p2p.profile.rating')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                  <SelectItem value="4">4.0+</SelectItem>
+                  <SelectItem value="4.5">4.5+</SelectItem>
+                  <SelectItem value="4.8">4.8+</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
-              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-currency-filter">
-                <SelectValue placeholder={t('p2p.currency')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('p2p.all')}</SelectItem>
-                {currencyOptions.map((currencyCode) => (
-                  <SelectItem key={currencyCode} value={currencyCode}>{currencyCode}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="min-w-[11rem] sm:min-w-0">
+              <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-payment-filter">
+                  <SelectValue placeholder={t('p2p.paymentMethod')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                  {paymentOptions.map((method) => (
+                    <SelectItem key={method} value={method}>{method}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-            <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-payment-filter">
-                <SelectValue placeholder={t('p2p.paymentMethod')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('p2p.all')}</SelectItem>
-                {paymentOptions.map((method) => (
-                  <SelectItem key={method} value={method}>{method}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0">
+            <div className="min-w-[9.5rem] sm:min-w-[8.75rem]">
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-type-filter">
+                  <SelectValue placeholder={t('p2p.type')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                  <SelectItem value="buy">{t('p2p.buy')}</SelectItem>
+                  <SelectItem value="sell">{t('p2p.sell')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="min-w-[10rem] sm:min-w-[9.5rem]">
+              <Select value={countryFilter} onValueChange={setCountryFilter}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-country-filter">
+                  <SelectValue placeholder={t('p2p.country')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                  {countryOptions.map((countryOption) => (
+                    <SelectItem key={countryOption.value} value={countryOption.value}>{countryOption.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <Input
               value={amountFilter}
               onChange={(event) => setAmountFilter(event.target.value)}
               type="number"
               placeholder={t('common.amount')}
-              className="border-slate-700 bg-slate-900 text-slate-100"
+              className="min-w-[8.75rem] border-slate-700 bg-slate-900 text-slate-100"
               data-testid="input-amount-filter"
             />
-          </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <Input
               value={traderSearch}
               onChange={(event) => setTraderSearch(event.target.value)}
               placeholder={`${t('common.search')} ${t('p2p.trader')}`}
-              className="border-slate-700 bg-slate-900 text-slate-100"
+              className="min-w-[12rem] border-slate-700 bg-slate-900 text-slate-100"
               data-testid="input-trader-search-filter"
             />
 
-            <Select value={priceSort} onValueChange={(value) => setPriceSort(value as "none" | "asc" | "desc")}>
-              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-price-sort">
-                <SelectValue placeholder={t('p2p.price')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">{t('p2p.price')}</SelectItem>
-                <SelectItem value="asc">{`${t('p2p.price')} ↑`}</SelectItem>
-                <SelectItem value="desc">{`${t('p2p.price')} ↓`}</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={minimumRatingFilter} onValueChange={setMinimumRatingFilter}>
-              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-rating-filter">
-                <SelectValue placeholder={t('p2p.profile.rating')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('p2p.all')}</SelectItem>
-                <SelectItem value="4">4.0+</SelectItem>
-                <SelectItem value="4.5">4.5+</SelectItem>
-                <SelectItem value="4.8">4.8+</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={maxPaymentWindowFilter} onValueChange={setMaxPaymentWindowFilter}>
-              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-payment-window-filter">
-                <SelectValue placeholder={t('transactions.processingTime')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('p2p.all')}</SelectItem>
-                {paymentTimeWindowOptions.map((minutes) => (
-                  <SelectItem key={minutes} value={String(minutes)}>{minutes}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-700 bg-slate-900 px-3 py-2">
-              <div className="flex items-center gap-2 text-slate-300">
-                <Shield className="h-4 w-4 text-[#f0c73f]" />
-                <Star className="h-4 w-4 text-[#f0c73f]" />
-                <Switch
-                  checked={showTopRatedOnly}
-                  onCheckedChange={setShowTopRatedOnly}
-                  data-testid="switch-top-rated-filter"
-                />
-              </div>
-
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
-                  onClick={() => refetch()}
-                  data-testid="button-refresh-offers"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
-                  onClick={() => {
-                    setTypeFilter("all");
-                    setCountryFilter("all");
-                    setCurrencyFilter("all");
-                    setPaymentFilter("all");
-                    setAmountFilter("");
-                    setTraderSearch("");
-                    setPriceSort("none");
-                    setMinimumRatingFilter("all");
-                    setMaxPaymentWindowFilter("all");
-                    setShowTopRatedOnly(false);
-                  }}
-                  data-testid="button-clear-offer-filters"
-                >
-                  {t('friends.clearFilters')}
-                </Button>
-              </div>
+            <div className="min-w-[9.75rem]">
+              <Select value={priceSort} onValueChange={(value) => setPriceSort(value as "none" | "asc" | "desc")}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-price-sort">
+                  <SelectValue placeholder={t('p2p.price')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t('p2p.price')}</SelectItem>
+                  <SelectItem value="asc">{`${t('p2p.price')} ↑`}</SelectItem>
+                  <SelectItem value="desc">{`${t('p2p.price')} ↓`}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            <div className="min-w-[10.5rem]">
+              <Select value={maxPaymentWindowFilter} onValueChange={setMaxPaymentWindowFilter}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-payment-window-filter">
+                  <SelectValue placeholder={t('transactions.processingTime')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                  {paymentTimeWindowOptions.map((minutes) => (
+                    <SelectItem key={minutes} value={String(minutes)}>{minutes}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex min-w-[8.5rem] items-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-2.5 py-2 text-slate-300">
+              <Shield className="h-4 w-4 text-[#f0c73f]" />
+              <Star className="h-4 w-4 text-[#f0c73f]" />
+              <Switch
+                checked={showTopRatedOnly}
+                onCheckedChange={setShowTopRatedOnly}
+                data-testid="switch-top-rated-filter"
+              />
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 min-w-[2.75rem] border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+              onClick={() => refetch()}
+              data-testid="button-refresh-offers"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 min-w-[8.5rem] border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+              onClick={resetOfferFilters}
+              data-testid="button-clear-offer-filters"
+            >
+              {t('friends.clearFilters')}
+            </Button>
           </div>
         </div>
       </div>
@@ -4586,13 +4599,13 @@ export default function P2PPage() {
           <p className="text-sm sm:text-base text-muted-foreground">{t('p2p.description')}</p>
         </div>
         <div className="flex w-full sm:w-auto gap-2">
-          <Link href="/p2p/profile/me">
+          <Link href="/p2p/profile/me" className="flex-1 sm:flex-none">
             <Button variant="outline" size="sm" className="w-full sm:w-auto min-h-[44px] sm:min-h-0" data-testid="button-p2p-profile">
               <User className="h-4 w-4 sm:me-2" />
               <span className="hidden sm:inline">{t('p2p.profile.myProfile')}</span>
             </Button>
           </Link>
-          <Link href="/p2p/settings">
+          <Link href="/p2p/settings" className="flex-1 sm:flex-none">
             <Button variant="outline" size="sm" className="w-full sm:w-auto min-h-[44px] sm:min-h-0" data-testid="button-p2p-settings">
               <Settings className="h-4 w-4 sm:me-2" />
               <span className="hidden sm:inline">{t('p2p.settings.title')}</span>
