@@ -48,17 +48,13 @@ export async function cancelP2PTradeProjectCurrencyAtomic(tradeId: string, cance
       return { success: false, error: 'Disputed trades must be resolved through dispute flow' };
     }
 
-    if (trade.buyerId === cancelledByUserId && trade.status !== 'pending') {
-      return { success: false, error: 'Buyer can only cancel pending trades' };
-    }
-
-    if (trade.sellerId === cancelledByUserId && trade.status !== 'pending' && trade.status !== 'paid') {
-      return { success: false, error: 'Seller can only cancel pending or paid trades' };
+    if (trade.status !== 'pending' && trade.status !== 'paid') {
+      return { success: false, error: 'Only pending or paid trades can be cancelled' };
     }
 
     const escrowAmount = parseFloat(trade.escrowAmount);
     const tradeAmount = parseFloat(trade.amount);
-    
+
     // Get tracked escrow split for accurate refunds
     const escrowEarnedAmount = parseFloat(trade.escrowEarnedAmount || '0');
     const escrowPurchasedAmount = parseFloat(trade.escrowPurchasedAmount || '0');
@@ -74,16 +70,16 @@ export async function cancelP2PTradeProjectCurrencyAtomic(tradeId: string, cance
       if (sellerWallet) {
         const currentEarned = parseFloat(sellerWallet.earnedBalance);
         const currentPurchased = parseFloat(sellerWallet.purchasedBalance);
-        
+
         // Refund to correct balance types using tracked split
         const newEarnedBalance = (currentEarned + escrowEarnedAmount).toFixed(8);
         const newPurchasedBalance = (currentPurchased + escrowPurchasedAmount).toFixed(8);
 
         await tx.update(projectCurrencyWallets)
-          .set({ 
+          .set({
             earnedBalance: newEarnedBalance,
             purchasedBalance: newPurchasedBalance,
-            updatedAt: new Date() 
+            updatedAt: new Date()
           })
           .where(eq(projectCurrencyWallets.userId, trade.sellerId));
 
@@ -101,7 +97,7 @@ export async function cancelP2PTradeProjectCurrencyAtomic(tradeId: string, cance
             metadata: JSON.stringify({ balanceType: 'earned' })
           });
         }
-        
+
         if (escrowPurchasedAmount > 0) {
           await tx.insert(projectCurrencyLedger).values({
             walletId: sellerWallet.id,

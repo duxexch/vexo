@@ -72,6 +72,11 @@ interface P2PTrade {
 interface P2PTradeDetails extends P2PTrade {
   buyer?: { id: string; username: string; nickname?: string | null } | null;
   seller?: { id: string; username: string; nickname?: string | null } | null;
+  offerCurrency?: string | null;
+  offerFiatCurrency?: string | null;
+  offerTerms?: string | null;
+  offerAutoReply?: string | null;
+  offerPaymentTimeLimit?: number | null;
 }
 
 interface P2PTradeMessage {
@@ -94,6 +99,69 @@ interface TradeMessageDraft {
     fileData: string;
     fileType: string;
   };
+}
+
+const CANCEL_HANDSHAKE_PREFIX = "[[P2P_CANCEL_HANDSHAKE_V1]]";
+
+type P2PCancelHandshakeKind = "request" | "approval";
+
+interface P2PCancelHandshakePayload {
+  version: 1;
+  kind: P2PCancelHandshakeKind;
+  requestId: string;
+  tradeId: string;
+  requesterId: string;
+  approverId?: string;
+  reason: string | null;
+  attestNoFundsMoved: boolean;
+  attestConsequencesAccepted: boolean;
+  createdAt: string;
+}
+
+function parseP2PCancelHandshakePayload(rawMessage?: string | null): P2PCancelHandshakePayload | null {
+  if (!rawMessage || !rawMessage.startsWith(CANCEL_HANDSHAKE_PREFIX)) {
+    return null;
+  }
+
+  const encodedPayload = rawMessage.slice(CANCEL_HANDSHAKE_PREFIX.length);
+  if (!encodedPayload) {
+    return null;
+  }
+
+  try {
+    const decodedBinary = atob(encodedPayload);
+    const decodedBytes = Uint8Array.from(decodedBinary, (char) => char.charCodeAt(0));
+    const decoded = new TextDecoder().decode(decodedBytes);
+    const parsed = JSON.parse(decoded) as Partial<P2PCancelHandshakePayload>;
+
+    if (
+      parsed.version !== 1
+      || (parsed.kind !== "request" && parsed.kind !== "approval")
+      || typeof parsed.requestId !== "string"
+      || typeof parsed.tradeId !== "string"
+      || typeof parsed.requesterId !== "string"
+      || typeof parsed.attestNoFundsMoved !== "boolean"
+      || typeof parsed.attestConsequencesAccepted !== "boolean"
+      || typeof parsed.createdAt !== "string"
+    ) {
+      return null;
+    }
+
+    return {
+      version: 1,
+      kind: parsed.kind,
+      requestId: parsed.requestId,
+      tradeId: parsed.tradeId,
+      requesterId: parsed.requesterId,
+      approverId: typeof parsed.approverId === "string" ? parsed.approverId : undefined,
+      reason: typeof parsed.reason === "string" ? parsed.reason : null,
+      attestNoFundsMoved: parsed.attestNoFundsMoved,
+      attestConsequencesAccepted: parsed.attestConsequencesAccepted,
+      createdAt: parsed.createdAt,
+    };
+  } catch {
+    return null;
+  }
 }
 
 interface OfferPaymentMethodOption {
@@ -556,6 +624,9 @@ function MarketplaceTab() {
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
   const [priceSort, setPriceSort] = useState<"none" | "asc" | "desc">("none");
   const [amountFilter, setAmountFilter] = useState("");
+  const [traderSearch, setTraderSearch] = useState("");
+  const [minimumRatingFilter, setMinimumRatingFilter] = useState<string>("all");
+  const [maxPaymentWindowFilter, setMaxPaymentWindowFilter] = useState<string>("all");
   const [showTopRatedOnly, setShowTopRatedOnly] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<P2POffer | null>(null);
   const numberLocale = resolveLanguageLocale(language);
@@ -624,6 +695,14 @@ function MarketplaceTab() {
     )).sort((a, b) => a.localeCompare(b));
   }, [offersByTypeCountryAndCurrency]);
 
+  const paymentTimeWindowOptions = useMemo(() => {
+    return Array.from(new Set(
+      offersByTypeCountryAndCurrency
+        .map((offer) => Number(offer.paymentTimeLimit || 0))
+        .filter((value) => Number.isFinite(value) && value > 0),
+    )).sort((a, b) => a - b);
+  }, [offersByTypeCountryAndCurrency]);
+
   useEffect(() => {
     if (countryFilter === "all") {
       return;
@@ -654,14 +733,40 @@ function MarketplaceTab() {
     }
   }, [paymentFilter, paymentOptions]);
 
+  useEffect(() => {
+    if (maxPaymentWindowFilter === "all") {
+      return;
+    }
+
+    const parsed = Number(maxPaymentWindowFilter);
+    if (!Number.isFinite(parsed) || !paymentTimeWindowOptions.includes(parsed)) {
+      setMaxPaymentWindowFilter("all");
+    }
+  }, [maxPaymentWindowFilter, paymentTimeWindowOptions]);
+
   const filteredOffers = useMemo(() => {
     const numericAmountFilter = parseFloat(amountFilter);
     const shouldFilterByAmount = Number.isFinite(numericAmountFilter) && numericAmountFilter > 0;
+    const normalizedTraderSearch = traderSearch.trim().toLowerCase();
+    const minimumRating = minimumRatingFilter === "all" ? null : Number(minimumRatingFilter);
+    const maximumPaymentWindow = maxPaymentWindowFilter === "all" ? null : Number(maxPaymentWindowFilter);
 
     let next = offersByTypeCountryAndCurrency.filter((offer) => {
       if (offer.userId === user?.id) return false;
       if (paymentFilter !== "all" && !offer.paymentMethods.includes(paymentFilter)) return false;
       if (showTopRatedOnly && offer.rating < 4.8) return false;
+      if (normalizedTraderSearch && !String(offer.username || "").toLowerCase().includes(normalizedTraderSearch)) return false;
+
+      if (Number.isFinite(minimumRating) && minimumRating !== null && offer.rating < minimumRating) {
+        return false;
+      }
+
+      if (Number.isFinite(maximumPaymentWindow) && maximumPaymentWindow !== null) {
+        const offerPaymentWindow = Number(offer.paymentTimeLimit || 0);
+        if (!Number.isFinite(offerPaymentWindow) || offerPaymentWindow <= 0 || offerPaymentWindow > maximumPaymentWindow) {
+          return false;
+        }
+      }
 
       if (shouldFilterByAmount) {
         const offerMin = parseFloat(offer.minLimit);
@@ -684,7 +789,7 @@ function MarketplaceTab() {
     }
 
     return next;
-  }, [offersByTypeCountryAndCurrency, paymentFilter, amountFilter, showTopRatedOnly, priceSort, user?.id]);
+  }, [offersByTypeCountryAndCurrency, paymentFilter, amountFilter, traderSearch, minimumRatingFilter, maxPaymentWindowFilter, showTopRatedOnly, priceSort, user?.id]);
 
   const createTradeMutation = useMutation({
     mutationFn: async (payload: { offerId: string; amount: string; paymentMethod: string }) => {
@@ -746,107 +851,151 @@ function MarketplaceTab() {
         </div>
 
         <div className="space-y-3 p-3 sm:p-4">
-          <div className="flex flex-nowrap items-stretch gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="min-w-[130px] shrink-0">
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-type-filter">
-                  <SelectValue placeholder={t('p2p.type')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
-                  <SelectItem value="buy">{t('p2p.buy')}</SelectItem>
-                  <SelectItem value="sell">{t('p2p.sell')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-type-filter">
+                <SelectValue placeholder={t('p2p.type')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                <SelectItem value="buy">{t('p2p.buy')}</SelectItem>
+                <SelectItem value="sell">{t('p2p.sell')}</SelectItem>
+              </SelectContent>
+            </Select>
 
-            <div className="min-w-[150px] shrink-0">
-              <Select value={countryFilter} onValueChange={setCountryFilter}>
-                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-country-filter">
-                  <SelectValue placeholder={t('p2p.country')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
-                  {countryOptions.map((countryOption) => (
-                    <SelectItem key={countryOption.value} value={countryOption.value}>{countryOption.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={countryFilter} onValueChange={setCountryFilter}>
+              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-country-filter">
+                <SelectValue placeholder={t('p2p.country')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                {countryOptions.map((countryOption) => (
+                  <SelectItem key={countryOption.value} value={countryOption.value}>{countryOption.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-            <div className="min-w-[130px] shrink-0">
-              <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
-                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-currency-filter">
-                  <SelectValue placeholder={t('p2p.currency')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
-                  {currencyOptions.map((currencyCode) => (
-                    <SelectItem key={currencyCode} value={currencyCode}>{currencyCode}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={currencyFilter} onValueChange={setCurrencyFilter}>
+              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-currency-filter">
+                <SelectValue placeholder={t('p2p.currency')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                {currencyOptions.map((currencyCode) => (
+                  <SelectItem key={currencyCode} value={currencyCode}>{currencyCode}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-            <div className="min-w-[170px] shrink-0">
-              <Select value={paymentFilter} onValueChange={setPaymentFilter}>
-                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-payment-filter">
-                  <SelectValue placeholder={t('p2p.paymentMethod')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
-                  {paymentOptions.map((method) => (
-                    <SelectItem key={method} value={method}>{method}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+            <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-payment-filter">
+                <SelectValue placeholder={t('p2p.paymentMethod')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                {paymentOptions.map((method) => (
+                  <SelectItem key={method} value={method}>{method}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <div className="flex flex-nowrap items-stretch gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <Input
               value={amountFilter}
               onChange={(event) => setAmountFilter(event.target.value)}
               type="number"
               placeholder={t('common.amount')}
-              className="min-w-[130px] shrink-0 border-slate-700 bg-slate-900 text-slate-100"
+              className="border-slate-700 bg-slate-900 text-slate-100"
               data-testid="input-amount-filter"
             />
+          </div>
 
-            <div className="min-w-[130px] shrink-0">
-              <Select value={priceSort} onValueChange={(value) => setPriceSort(value as "none" | "asc" | "desc")}>
-                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-price-sort">
-                  <SelectValue placeholder={t('p2p.price')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">{t('p2p.price')}</SelectItem>
-                  <SelectItem value="asc">{`${t('p2p.price')} ↑`}</SelectItem>
-                  <SelectItem value="desc">{`${t('p2p.price')} ↓`}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <Input
+              value={traderSearch}
+              onChange={(event) => setTraderSearch(event.target.value)}
+              placeholder={`${t('common.search')} ${t('p2p.trader')}`}
+              className="border-slate-700 bg-slate-900 text-slate-100"
+              data-testid="input-trader-search-filter"
+            />
 
-            <div className="flex min-w-[110px] shrink-0 items-center justify-between rounded-md border border-slate-700 bg-slate-900 px-3 py-2">
+            <Select value={priceSort} onValueChange={(value) => setPriceSort(value as "none" | "asc" | "desc")}>
+              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-price-sort">
+                <SelectValue placeholder={t('p2p.price')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{t('p2p.price')}</SelectItem>
+                <SelectItem value="asc">{`${t('p2p.price')} ↑`}</SelectItem>
+                <SelectItem value="desc">{`${t('p2p.price')} ↓`}</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={minimumRatingFilter} onValueChange={setMinimumRatingFilter}>
+              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-rating-filter">
+                <SelectValue placeholder={t('p2p.profile.rating')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                <SelectItem value="4">4.0+</SelectItem>
+                <SelectItem value="4.5">4.5+</SelectItem>
+                <SelectItem value="4.8">4.8+</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={maxPaymentWindowFilter} onValueChange={setMaxPaymentWindowFilter}>
+              <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-payment-window-filter">
+                <SelectValue placeholder={t('transactions.processingTime')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                {paymentTimeWindowOptions.map((minutes) => (
+                  <SelectItem key={minutes} value={String(minutes)}>{minutes}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-700 bg-slate-900 px-3 py-2">
               <div className="flex items-center gap-2 text-slate-300">
                 <Shield className="h-4 w-4 text-[#f0c73f]" />
                 <Star className="h-4 w-4 text-[#f0c73f]" />
+                <Switch
+                  checked={showTopRatedOnly}
+                  onCheckedChange={setShowTopRatedOnly}
+                  data-testid="switch-top-rated-filter"
+                />
               </div>
-              <Switch
-                checked={showTopRatedOnly}
-                onCheckedChange={setShowTopRatedOnly}
-                data-testid="switch-top-rated-filter"
-              />
-            </div>
 
-            <Button
-              variant="outline"
-              className="min-w-[110px] shrink-0 border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
-              onClick={() => refetch()}
-              data-testid="button-refresh-offers"
-            >
-              <Filter className="me-2 h-4 w-4" />
-              {t('common.filter')}
-            </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+                  onClick={() => refetch()}
+                  data-testid="button-refresh-offers"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+                  onClick={() => {
+                    setTypeFilter("all");
+                    setCountryFilter("all");
+                    setCurrencyFilter("all");
+                    setPaymentFilter("all");
+                    setAmountFilter("");
+                    setTraderSearch("");
+                    setPriceSort("none");
+                    setMinimumRatingFilter("all");
+                    setMaxPaymentWindowFilter("all");
+                    setShowTopRatedOnly(false);
+                  }}
+                  data-testid="button-clear-offer-filters"
+                >
+                  {t('friends.clearFilters')}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -2142,17 +2291,30 @@ function MyTradesTab() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [activeTradeId, setActiveTradeId] = useState<string | null>(null);
+  const [tradeStatusFilter, setTradeStatusFilter] = useState<string>("all");
+  const [tradeSearch, setTradeSearch] = useState("");
   const [outgoingMessage, setOutgoingMessage] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [cancelReason, setCancelReason] = useState("");
+  const [cancelConfirmNoFundsMoved, setCancelConfirmNoFundsMoved] = useState(false);
+  const [cancelConfirmConsequences, setCancelConfirmConsequences] = useState(false);
+  const [arbitrationDetails, setArbitrationDetails] = useState("");
+  const [buyerInstructionAcknowledged, setBuyerInstructionAcknowledged] = useState(false);
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const [selectedImageDraft, setSelectedImageDraft] = useState<TradeMessageDraft["image"]>();
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const tradeImageInputRef = useRef<HTMLInputElement | null>(null);
+  const tradeCameraInputRef = useRef<HTMLInputElement | null>(null);
   const numberLocale = resolveLanguageLocale(language);
 
   const { data: trades, isLoading } = useQuery<P2PTrade[]>({
     queryKey: ["/api/p2p/my-trades"],
     refetchInterval: 8000,
+  });
+
+  const { data: p2pWalletBalances = [] } = useQuery<P2PWalletBalanceEntry[]>({
+    queryKey: ["/api/p2p/wallet-balances"],
+    refetchInterval: activeTradeId ? 6000 : false,
   });
 
   const { data: activeTrade, isLoading: activeTradeLoading } = useQuery<P2PTradeDetails>({
@@ -2185,30 +2347,97 @@ function MyTradesTab() {
     },
   });
 
+  const uploadDraftImage = async (imageDraft: TradeMessageDraft["image"]) => {
+    if (!imageDraft) {
+      return { attachmentUrl: undefined as string | undefined, attachmentType: undefined as string | undefined };
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const uploadRes = await apiRequest("POST", "/api/upload", {
+        fileName: imageDraft.fileName,
+        fileData: imageDraft.fileData,
+        fileType: imageDraft.fileType,
+      });
+      const uploadData = await uploadRes.json();
+      return {
+        attachmentUrl: uploadData?.url || uploadData?.fileUrl,
+        attachmentType: imageDraft.fileType,
+      };
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const cancelHandshakeEvents = useMemo(() => {
+    return tradeMessages.flatMap((message) => {
+      const payload = parseP2PCancelHandshakePayload(message.message);
+      if (!payload) {
+        return [] as Array<{ payload: P2PCancelHandshakePayload; message: P2PTradeMessage }>;
+      }
+
+      return [{ payload, message }];
+    });
+  }, [tradeMessages]);
+
+  const activeCancellationRequest = useMemo(() => {
+    return [...cancelHandshakeEvents].reverse().find((event) => event.payload.kind === "request") || null;
+  }, [cancelHandshakeEvents]);
+
+  const activeCancellationApproval = useMemo(() => {
+    if (!activeCancellationRequest) {
+      return null;
+    }
+
+    return [...cancelHandshakeEvents].reverse().find((event) => {
+      return event.payload.kind === "approval"
+        && event.payload.requestId === activeCancellationRequest.payload.requestId;
+    }) || null;
+  }, [activeCancellationRequest, cancelHandshakeEvents]);
+
+  const canApproveActiveCancellationRequest = Boolean(activeCancellationRequest)
+    && !activeCancellationApproval
+    && activeCancellationRequest?.payload.requesterId !== user?.id;
+  const canFinalizeApprovedCancellation = Boolean(activeCancellationRequest)
+    && Boolean(activeCancellationApproval);
+  const canCurrentUserRequestCancellation = Boolean(activeTrade)
+    && !activeCancellationRequest
+    && (activeTrade?.status === "pending" || activeTrade?.status === "paid");
+  const canEscalateToArbitration = Boolean(activeTrade)
+    && (activeTrade?.status === "paid" || activeTrade?.status === "confirmed");
+  const showBuyerGuidedPendingFlow = Boolean(activeTrade?.isBuyer && activeTrade?.status === "pending");
+  const activeTradeOfferCurrency = normalizeCurrencyCodeValue(activeTrade?.offerCurrency || "");
+  const activeTradeFiatCurrency = normalizeCurrencyCodeValue(activeTrade?.offerFiatCurrency || "");
+  const prioritizedWalletBalances = useMemo(() => {
+    if (p2pWalletBalances.length === 0) {
+      return [] as P2PWalletBalanceEntry[];
+    }
+
+    const sorted = [...p2pWalletBalances].sort((a, b) => {
+      const aCurrency = normalizeCurrencyCodeValue(a.currency);
+      const bCurrency = normalizeCurrencyCodeValue(b.currency);
+      const aPriority = aCurrency === activeTradeOfferCurrency ? 0 : 1;
+      const bPriority = bCurrency === activeTradeOfferCurrency ? 0 : 1;
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+      return aCurrency.localeCompare(bCurrency);
+    });
+
+    return sorted;
+  }, [activeTradeOfferCurrency, p2pWalletBalances]);
+
+  const visibleTradeMessages = useMemo(() => {
+    return tradeMessages.filter((message) => !parseP2PCancelHandshakePayload(message.message));
+  }, [tradeMessages]);
+
   const sendMessageMutation = useMutation({
     mutationFn: async (draft: TradeMessageDraft) => {
       if (!activeTradeId) {
         throw new Error(t('common.error'));
       }
 
-      let attachmentUrl: string | undefined;
-      let attachmentType: string | undefined;
-
-      if (draft.image) {
-        setIsUploadingImage(true);
-        try {
-          const uploadRes = await apiRequest("POST", "/api/upload", {
-            fileName: draft.image.fileName,
-            fileData: draft.image.fileData,
-            fileType: draft.image.fileType,
-          });
-          const uploadData = await uploadRes.json();
-          attachmentUrl = uploadData?.url || uploadData?.fileUrl;
-          attachmentType = draft.image.fileType;
-        } finally {
-          setIsUploadingImage(false);
-        }
-      }
+      const { attachmentUrl, attachmentType } = await uploadDraftImage(draft.image);
 
       const res = await apiRequest("POST", `/api/p2p/trades/${activeTradeId}/messages`, {
         message: draft.message,
@@ -2239,10 +2468,30 @@ function MyTradesTab() {
       }
 
       if (action === "pay") {
+        const normalizedPaymentReference = paymentReference.trim();
+        if (!normalizedPaymentReference) {
+          throw new Error(t('transactions.paymentReference'));
+        }
+
+        if (!selectedImageDraft) {
+          throw new Error(t('p2p.dispute.uploadEvidence'));
+        }
+
+        const { attachmentUrl, attachmentType } = await uploadDraftImage(selectedImageDraft);
+        await apiRequest("POST", `/api/p2p/trades/${activeTradeId}/messages`, {
+          message: `${t('transactions.paymentReference')}: ${normalizedPaymentReference}`,
+          attachmentUrl,
+          attachmentType,
+        });
+
+        await apiRequest("POST", `/api/p2p/trades/${activeTradeId}/messages`, {
+          message: t('p2p.tradeProcessing'),
+        });
+
         const response = await apiRequestWithPaymentToken(
           "POST",
           `/api/p2p/trades/${activeTradeId}/pay`,
-          { paymentReference: paymentReference.trim() || undefined },
+          { paymentReference: normalizedPaymentReference },
           "p2p_trade_pay",
         );
         return response.json();
@@ -2265,6 +2514,8 @@ function MyTradesTab() {
 
       const response = await apiRequest("POST", `/api/p2p/trades/${activeTradeId}/cancel`, {
         reason: cancelReason.trim() || undefined,
+        confirmNoFundsMoved: cancelConfirmNoFundsMoved,
+        acceptCancellationConsequences: cancelConfirmConsequences,
       });
       return response.json();
     },
@@ -2274,11 +2525,132 @@ function MyTradesTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId, "logs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/wallet-balances"] });
       setCancelReason("");
+      setPaymentReference("");
+      setSelectedImageDraft(undefined);
+      setBuyerInstructionAcknowledged(false);
       toast({
         title: t('common.success'),
         description: t('p2p.tradeProcessing'),
       });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t('common.error'),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const requestCancellationApprovalMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeTradeId) {
+        throw new Error(t('common.error'));
+      }
+
+      const response = await apiRequest("POST", `/api/p2p/trades/${activeTradeId}/cancel/request`, {
+        reason: cancelReason.trim() || undefined,
+        confirmNoFundsMoved: cancelConfirmNoFundsMoved,
+        acceptCancellationConsequences: cancelConfirmConsequences,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId, "messages"] });
+      toast({
+        title: t('common.success'),
+        description: t('p2p.tradeProcessing'),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t('common.error'),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const approveCancellationRequestMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeTradeId || !activeCancellationRequest) {
+        throw new Error(t('common.error'));
+      }
+
+      const response = await apiRequest("POST", `/api/p2p/trades/${activeTradeId}/cancel/approve`, {
+        requestId: activeCancellationRequest.payload.requestId,
+        confirmNoFundsMoved: cancelConfirmNoFundsMoved,
+        acceptCancellationConsequences: cancelConfirmConsequences,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId, "messages"] });
+      toast({
+        title: t('common.success'),
+        description: t('p2p.tradeProcessing'),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t('common.error'),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const quickDisputeMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeTradeId) {
+        throw new Error(t('common.error'));
+      }
+
+      const response = await apiRequest("POST", "/api/p2p/disputes", {
+        tradeId: activeTradeId,
+        reason: "payment_pending",
+        description: arbitrationDetails.trim() || t('p2p.dispute.additionalDetailsPlaceholder'),
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/my-trades"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId, "logs"] });
+      setArbitrationDetails("");
+      toast({
+        title: t('p2p.dispute.submitted'),
+        description: t('p2p.dispute.submittedDesc'),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t('common.error'),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const acknowledgeBuyerInstructionsMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeTradeId || !activeTrade) {
+        throw new Error(t('common.error'));
+      }
+
+      const message = `${t('transactions.paymentInstructions')}: ${activeTrade.paymentMethod || "-"} | ${formatAssetAmount(activeTrade.amount, activeTrade.offerCurrency || activeTrade.offerFiatCurrency || "USD", numberLocale)}`;
+      const response = await apiRequest("POST", `/api/p2p/trades/${activeTradeId}/messages`, {
+        message,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      setBuyerInstructionAcknowledged(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/trades", activeTradeId, "messages"] });
     },
     onError: (error: Error) => {
       toast({
@@ -2294,6 +2666,10 @@ function MyTradesTab() {
     setOutgoingMessage("");
     setPaymentReference("");
     setCancelReason("");
+    setCancelConfirmNoFundsMoved(false);
+    setCancelConfirmConsequences(false);
+    setArbitrationDetails("");
+    setBuyerInstructionAcknowledged(false);
     setSelectedImageDraft(undefined);
     setIsUploadingImage(false);
   };
@@ -2303,6 +2679,10 @@ function MyTradesTab() {
     setOutgoingMessage("");
     setPaymentReference("");
     setCancelReason("");
+    setCancelConfirmNoFundsMoved(false);
+    setCancelConfirmConsequences(false);
+    setArbitrationDetails("");
+    setBuyerInstructionAcknowledged(false);
     setSelectedImageDraft(undefined);
     setIsUploadingImage(false);
   };
@@ -2333,6 +2713,79 @@ function MyTradesTab() {
 
     return counters;
   }, [sortedTrades]);
+
+  const filteredTrades = useMemo(() => {
+    const normalizedSearch = tradeSearch.trim().toLowerCase();
+
+    return sortedTrades.filter((trade) => {
+      if (tradeStatusFilter !== "all" && trade.status !== tradeStatusFilter) {
+        return false;
+      }
+
+      if (normalizedSearch && !String(trade.counterpartyUsername || "").toLowerCase().includes(normalizedSearch)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [sortedTrades, tradeSearch, tradeStatusFilter]);
+
+  useEffect(() => {
+    if (!activeTradeId || activeTrade?.status !== "pending") {
+      setBuyerInstructionAcknowledged(false);
+    }
+  }, [activeTrade?.status, activeTradeId]);
+
+  useEffect(() => {
+    if (!activeTradeId) {
+      return;
+    }
+
+    const timerId = window.setInterval(() => {
+      setClockNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [activeTradeId]);
+
+  const remainingTradeWindow = useMemo(() => {
+    if (!activeTrade?.expiresAt) {
+      return null;
+    }
+
+    const targetTime = new Date(activeTrade.expiresAt).getTime();
+    if (!Number.isFinite(targetTime)) {
+      return null;
+    }
+
+    const remainingMs = targetTime - clockNow;
+    if (remainingMs <= 0) {
+      return "00:00";
+    }
+
+    const remainingSeconds = Math.floor(remainingMs / 1000);
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }, [activeTrade?.expiresAt, clockNow]);
+
+  useEffect(() => {
+    if (!activeTradeId || !showBuyerGuidedPendingFlow || !user?.id) {
+      return;
+    }
+
+    const hasAcknowledgementMessage = tradeMessages.some((message) => {
+      if (message.senderId !== user.id || message.isSystemMessage) {
+        return false;
+      }
+
+      return String(message.message || "").includes(t('transactions.paymentInstructions'));
+    });
+
+    if (hasAcknowledgementMessage) {
+      setBuyerInstructionAcknowledged(true);
+    }
+  }, [activeTradeId, showBuyerGuidedPendingFlow, t, tradeMessages, user?.id]);
 
   const submitTradeMessage = () => {
     const safeMessage = outgoingMessage.trim();
@@ -2467,7 +2920,44 @@ function MyTradesTab() {
         </div>
       </div>
 
-      {sortedTrades.length === 0 ? (
+      <div className="grid grid-cols-1 gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:grid-cols-3">
+        <Select value={tradeStatusFilter} onValueChange={setTradeStatusFilter}>
+          <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-trade-status-filter">
+            <SelectValue placeholder={t('common.status')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('p2p.all')}</SelectItem>
+            <SelectItem value="pending">{t('p2p.tradePending')}</SelectItem>
+            <SelectItem value="paid">{t('p2p.tradeProcessing')}</SelectItem>
+            <SelectItem value="confirmed">{t('common.confirm')}</SelectItem>
+            <SelectItem value="completed">{t('p2p.tradeCompleted')}</SelectItem>
+            <SelectItem value="cancelled">{t('p2p.tradeCancelled')}</SelectItem>
+            <SelectItem value="disputed">{t('p2p.tradeDisputed')}</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Input
+          value={tradeSearch}
+          onChange={(event) => setTradeSearch(event.target.value)}
+          placeholder={`${t('common.search')} ${t('p2p.counterparty')}`}
+          className="border-slate-700 bg-slate-900 text-slate-100"
+          data-testid="input-trade-search-filter"
+        />
+
+        <Button
+          variant="outline"
+          className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+          onClick={() => {
+            setTradeStatusFilter("all");
+            setTradeSearch("");
+          }}
+          data-testid="button-clear-trade-filters"
+        >
+          {t('friends.clearFilters')}
+        </Button>
+      </div>
+
+      {filteredTrades.length === 0 ? (
         <Card>
           <CardContent>
             <EmptyState icon={ArrowUpRight} title={t('p2p.noTrades')} description={t('p2p.noTradesDesc')} />
@@ -2476,7 +2966,7 @@ function MyTradesTab() {
       ) : (
         <>
           <div className="space-y-3 lg:hidden">
-            {sortedTrades.map((trade) => (
+            {filteredTrades.map((trade) => (
               <Card
                 key={trade.id}
                 className="border-slate-800 bg-slate-950/80 text-slate-100"
@@ -2536,7 +3026,7 @@ function MyTradesTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedTrades.map((trade) => (
+                {filteredTrades.map((trade) => (
                   <TableRow key={trade.id} className="border-slate-800 hover:bg-slate-900/60" data-testid={`row-trade-${trade.id}`}>
                     <TableCell className="font-mono text-sm text-slate-300" data-testid={`text-trade-id-${trade.id}`}>
                       {trade.id.slice(0, 8)}...
@@ -2620,11 +3110,11 @@ function MyTradesTab() {
                         <Skeleton className="h-8" />
                         <Skeleton className="h-8" />
                       </div>
-                    ) : tradeMessages.length === 0 ? (
+                    ) : visibleTradeMessages.length === 0 ? (
                       <p className="text-sm text-muted-foreground">{t('p2p.noTradesDesc')}</p>
                     ) : (
                       <div className="space-y-2">
-                        {tradeMessages.map((message) => {
+                        {visibleTradeMessages.map((message) => {
                           const isOwnMessage = message.senderId === user?.id;
                           const isSystemMessage = message.isSystemMessage;
                           return (
@@ -2701,25 +3191,78 @@ function MyTradesTab() {
                         })}
                       </div>
 
-                      <div className="space-y-2">
-                        {activeTrade.isBuyer && activeTrade.status === "pending" && (
-                          <>
+                      <div className="space-y-3">
+                        {showBuyerGuidedPendingFlow && (
+                          <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3">
+                            <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                              <div className="rounded border border-slate-800 bg-slate-900/70 p-2">
+                                <p className="text-slate-400">{t('p2p.paymentMethod')}</p>
+                                <p className="mt-1 text-slate-100">{activeTrade.paymentMethod || "-"}</p>
+                              </div>
+                              <div className="rounded border border-slate-800 bg-slate-900/70 p-2">
+                                <p className="text-slate-400">{t('common.amount')}</p>
+                                <p className="mt-1 text-slate-100">
+                                  {formatAssetAmount(activeTrade.amount, activeTradeOfferCurrency || activeTradeFiatCurrency || "USDT", numberLocale)}
+                                </p>
+                              </div>
+                            </div>
+
+                            {(activeTrade.offerTerms || activeTrade.offerAutoReply) && (
+                              <div className="space-y-1 rounded border border-slate-800 bg-slate-900/60 p-2 text-xs text-slate-300">
+                                <p className="text-slate-400">{t('transactions.paymentInstructions')}</p>
+                                {activeTrade.offerTerms && <p className="whitespace-pre-wrap break-words">{activeTrade.offerTerms}</p>}
+                                {activeTrade.offerAutoReply && <p className="whitespace-pre-wrap break-words">{activeTrade.offerAutoReply}</p>}
+                              </div>
+                            )}
+
+                            {!buyerInstructionAcknowledged ? (
+                              <Button
+                                className="w-full bg-[#f0c73f] text-slate-900 hover:bg-[#f5ce56]"
+                                onClick={() => acknowledgeBuyerInstructionsMutation.mutate()}
+                                disabled={acknowledgeBuyerInstructionsMutation.isPending}
+                                data-testid="button-acknowledge-buyer-instructions"
+                              >
+                                {t('common.confirm')}
+                              </Button>
+                            ) : (
+                              <p className="text-xs text-emerald-300">{t('common.confirm')}</p>
+                            )}
+                          </div>
+                        )}
+
+                        {showBuyerGuidedPendingFlow && buyerInstructionAcknowledged && (
+                          <div className="space-y-2 rounded-lg border border-slate-700 bg-slate-950 p-3">
                             <Input
                               value={paymentReference}
                               onChange={(e) => setPaymentReference(e.target.value)}
                               placeholder={t('transactions.paymentReference')}
-                              className="border-slate-700 bg-slate-950 text-slate-100"
+                              className="border-slate-700 bg-slate-900 text-slate-100"
                               data-testid="input-payment-reference"
                             />
+                            <p className="text-xs text-slate-400">{t('transactions.referenceNote')}</p>
                             <Button
                               className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
                               onClick={() => tradeActionMutation.mutate("pay")}
-                              disabled={tradeActionMutation.isPending}
+                              disabled={
+                                tradeActionMutation.isPending
+                                || isUploadingImage
+                                || paymentReference.trim().length === 0
+                                || !selectedImageDraft
+                              }
                               data-testid="button-trade-action-pay"
                             >
                               {t('p2p.tradeProcessing')}
                             </Button>
-                          </>
+                          </div>
+                        )}
+
+                        {activeTrade.isBuyer && activeTrade.status === "paid" && (
+                          <div className="rounded-lg border border-emerald-700/40 bg-emerald-900/10 p-3 text-xs text-emerald-300">
+                            <p>{t('p2p.tradeProcessing')}</p>
+                            {remainingTradeWindow && (
+                              <p className="mt-1 text-emerald-200">{remainingTradeWindow}</p>
+                            )}
+                          </div>
                         )}
 
                         {activeTrade.isSeller && activeTrade.status === "paid" && (
@@ -2744,27 +3287,117 @@ function MyTradesTab() {
                           </Button>
                         )}
 
-                        {((activeTrade.isBuyer && activeTrade.status === "pending")
-                          || (activeTrade.isSeller && (activeTrade.status === "pending" || activeTrade.status === "paid"))) && (
-                            <>
-                              <Input
-                                value={cancelReason}
-                                onChange={(e) => setCancelReason(e.target.value)}
-                                placeholder={t('p2p.dispute.reason')}
-                                className="border-slate-700 bg-slate-950 text-slate-100"
-                                data-testid="input-trade-cancel-reason"
+                        {canEscalateToArbitration && (
+                          <div className="space-y-2 rounded-lg border border-amber-700/40 bg-amber-900/10 p-3">
+                            <Textarea
+                              value={arbitrationDetails}
+                              onChange={(event) => setArbitrationDetails(event.target.value)}
+                              placeholder={t('p2p.dispute.additionalDetailsPlaceholder')}
+                              className="border-amber-800/50 bg-slate-950 text-slate-100"
+                              rows={3}
+                              data-testid="textarea-quick-dispute-details"
+                            />
+                            <Button
+                              variant="outline"
+                              className="w-full border-amber-700/60 bg-amber-900/20 text-amber-200 hover:bg-amber-900/30"
+                              onClick={() => quickDisputeMutation.mutate()}
+                              disabled={quickDisputeMutation.isPending}
+                              data-testid="button-quick-dispute"
+                            >
+                              <Scale className="me-1 h-4 w-4" />
+                              {t('p2p.dispute.submitDispute')}
+                            </Button>
+                          </div>
+                        )}
+
+                        {(activeTrade.status === "pending" || activeTrade.status === "paid") && (
+                          <div className="space-y-2 rounded-lg border border-red-700/30 bg-red-900/10 p-3">
+                            <Input
+                              value={cancelReason}
+                              onChange={(e) => setCancelReason(e.target.value)}
+                              placeholder={t('p2p.dispute.reason')}
+                              className="border-slate-700 bg-slate-950 text-slate-100"
+                              data-testid="input-trade-cancel-reason"
+                            />
+
+                            <label className="flex items-center gap-2 text-xs text-slate-300">
+                              <Checkbox
+                                checked={cancelConfirmNoFundsMoved}
+                                onCheckedChange={(checked) => setCancelConfirmNoFundsMoved(Boolean(checked))}
                               />
-                              <Button
-                                variant="destructive"
-                                className="w-full"
-                                onClick={() => tradeActionMutation.mutate("cancel")}
-                                disabled={tradeActionMutation.isPending}
-                                data-testid="button-trade-action-cancel"
-                              >
-                                {t('common.cancel')}
-                              </Button>
-                            </>
-                          )}
+                              <span>{t('p2p.dispute.reason.no_payment')}</span>
+                            </label>
+
+                            <label className="flex items-center gap-2 text-xs text-slate-300">
+                              <Checkbox
+                                checked={cancelConfirmConsequences}
+                                onCheckedChange={(checked) => setCancelConfirmConsequences(Boolean(checked))}
+                              />
+                              <span>{t('p2p.dispute.mutualAgreement')}</span>
+                            </label>
+
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                              {canCurrentUserRequestCancellation && (
+                                <Button
+                                  variant="outline"
+                                  className="border-red-700/50 bg-red-900/20 text-red-100 hover:bg-red-900/30"
+                                  onClick={() => requestCancellationApprovalMutation.mutate()}
+                                  disabled={
+                                    requestCancellationApprovalMutation.isPending
+                                    || !cancelConfirmNoFundsMoved
+                                    || !cancelConfirmConsequences
+                                  }
+                                  data-testid="button-request-cancellation-approval"
+                                >
+                                  {t('common.send')}
+                                </Button>
+                              )}
+
+                              {canApproveActiveCancellationRequest && (
+                                <Button
+                                  variant="outline"
+                                  className="border-[#f0c73f]/50 bg-[#f0c73f]/10 text-[#f6d97a] hover:bg-[#f0c73f]/20"
+                                  onClick={() => approveCancellationRequestMutation.mutate()}
+                                  disabled={
+                                    approveCancellationRequestMutation.isPending
+                                    || !cancelConfirmNoFundsMoved
+                                    || !cancelConfirmConsequences
+                                  }
+                                  data-testid="button-approve-cancellation-request"
+                                >
+                                  {t('common.confirm')}
+                                </Button>
+                              )}
+
+                              {canFinalizeApprovedCancellation && (
+                                <Button
+                                  variant="destructive"
+                                  className="sm:col-span-2"
+                                  onClick={() => tradeActionMutation.mutate("cancel")}
+                                  disabled={
+                                    tradeActionMutation.isPending
+                                    || !cancelConfirmNoFundsMoved
+                                    || !cancelConfirmConsequences
+                                  }
+                                  data-testid="button-trade-action-cancel"
+                                >
+                                  {t('common.cancel')}
+                                </Button>
+                              )}
+                            </div>
+
+                            {activeCancellationRequest && (
+                              <div className="rounded-md border border-slate-800 bg-slate-950/70 p-2 text-xs text-slate-300">
+                                <p>
+                                  {activeCancellationApproval
+                                    ? t('common.approved')
+                                    : t('common.pending')}
+                                </p>
+                                <p className="mt-1 text-slate-400">{activeCancellationRequest.payload.reason || t('p2p.dispute.reason')}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2799,6 +3432,14 @@ function MyTradesTab() {
                         className="hidden"
                         onChange={handleTradeImageSelect}
                       />
+                      <input
+                        ref={tradeCameraInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={handleTradeImageSelect}
+                      />
                       <Button
                         type="button"
                         variant="outline"
@@ -2808,6 +3449,15 @@ function MyTradesTab() {
                       >
                         <Paperclip className="me-1 h-4 w-4" />
                         {t('common.upload')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="border-slate-700 bg-slate-950 text-slate-100 hover:bg-slate-800"
+                        onClick={() => tradeCameraInputRef.current?.click()}
+                        data-testid="button-trade-room-camera"
+                      >
+                        <Camera className="h-4 w-4" />
                       </Button>
                       <Input
                         value={outgoingMessage}
@@ -2863,6 +3513,52 @@ function MyTradesTab() {
                         </span>
                         <span className="font-medium">{formatLocalizedDateTime(activeTrade.expiresAt, numberLocale)}</span>
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-slate-800 bg-slate-900/70 text-slate-100">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{t('wallet.currentBalance')}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {prioritizedWalletBalances.length === 0 ? (
+                      <p className="text-xs text-slate-400">{t('p2p.noTradesDesc')}</p>
+                    ) : (
+                      <ScrollArea className="h-40 pe-2">
+                        <div className="space-y-2">
+                          {prioritizedWalletBalances.map((entry) => {
+                            const currency = normalizeCurrencyCodeValue(entry.currency);
+                            const isActiveTradeCurrency = currency === activeTradeOfferCurrency;
+                            return (
+                              <div
+                                key={entry.currency}
+                                className={cn(
+                                  "rounded-md border border-slate-800 bg-slate-950/70 p-2",
+                                  isActiveTradeCurrency && "border-[#f0c73f]/50 bg-[#f0c73f]/10",
+                                )}
+                              >
+                                <div className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="font-semibold text-slate-100">{currency || "-"}</span>
+                                  <span className="text-slate-100">
+                                    {formatAssetAmount(entry.available, entry.currency, numberLocale)}
+                                  </span>
+                                </div>
+                                <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                                  <span>{t('wallet.pending')}</span>
+                                  <span>
+                                    {formatAssetAmount(
+                                      Number(entry.frozen || 0) + Number(entry.reservedOutgoing || 0),
+                                      entry.currency,
+                                      numberLocale,
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </ScrollArea>
                     )}
                   </CardContent>
                 </Card>

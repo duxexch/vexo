@@ -128,12 +128,8 @@ export async function cancelP2PTradeAtomic(tradeId: string, cancelledByUserId: s
       return { success: false, error: 'Disputed trades must be resolved through dispute flow' };
     }
 
-    if (trade.buyerId === cancelledByUserId && trade.status !== 'pending') {
-      return { success: false, error: 'Buyer can only cancel pending trades' };
-    }
-
-    if (trade.sellerId === cancelledByUserId && trade.status !== 'pending' && trade.status !== 'paid') {
-      return { success: false, error: 'Seller can only cancel pending or paid trades' };
+    if (trade.status !== 'pending' && trade.status !== 'paid') {
+      return { success: false, error: 'Only pending or paid trades can be cancelled' };
     }
 
     const escrowAmount = parseFloat(trade.escrowAmount);

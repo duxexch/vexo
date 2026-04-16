@@ -470,9 +470,10 @@ export function registerTradeRoutes(app: Express) {
         return res.status(403).json({ error: "Not authorized to view this trade" });
       }
 
-      const [buyer, seller, usernamesByUserId] = await Promise.all([
+      const [buyer, seller, offer, usernamesByUserId] = await Promise.all([
         storage.getUser(trade.buyerId),
         storage.getUser(trade.sellerId),
+        storage.getP2POffer(trade.offerId),
         getP2PUsernameMap([trade.buyerId, trade.sellerId]),
       ]);
 
@@ -486,6 +487,11 @@ export function registerTradeRoutes(app: Express) {
         isBuyer,
         isSeller: trade.sellerId === req.user!.id,
         counterpartyUsername: isBuyer ? sellerP2PUsername : buyerP2PUsername,
+        offerCurrency: offer?.cryptoCurrency || null,
+        offerFiatCurrency: offer?.fiatCurrency || null,
+        offerTerms: offer?.terms || null,
+        offerAutoReply: offer?.autoReply || null,
+        offerPaymentTimeLimit: offer?.paymentTimeLimit || null,
         buyer: buyer ? { id: buyer.id, username: buyerP2PUsername, nickname: buyer.nickname } : null,
         seller: seller ? { id: seller.id, username: sellerP2PUsername, nickname: seller.nickname } : null,
       });
