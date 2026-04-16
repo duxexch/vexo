@@ -784,7 +784,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Suspense fallback={<PageLoader />}>
-                    <ChatPage />
+                    <ChatPage embedded />
                   </Suspense>
                 </div>
               </div>

@@ -129,6 +129,8 @@ interface OfferEligibility {
   canCreateOffer: boolean;
   reasons: string[];
   paymentMethods: OfferPaymentMethodOption[];
+  minTradeAmount?: string;
+  maxTradeAmount?: string;
   allowedCurrencies: string[];
   allowedBuyCurrencies?: string[];
   allowedSellCurrencies?: string[];
@@ -468,6 +470,10 @@ function TradeOfferDialog({
                 type="number"
                 value={tradeAmount}
                 onChange={(e) => setTradeAmount(e.target.value)}
+                min={offer?.minLimit || undefined}
+                max={offer?.maxLimit || undefined}
+                step="0.01"
+                placeholder={offer?.minLimit || "0"}
                 data-testid="input-trade-amount"
               />
             </div>
@@ -1154,6 +1160,9 @@ function MyOffersTab() {
     return offerEligibility?.allowedCurrencies || ["USD", "USDT", "EUR", "GBP", "SAR", "AED", "EGP"];
   }, [offerEligibility?.allowedCurrencies]);
 
+  const adminMinTradeAmount = String(offerEligibility?.minTradeAmount || "10");
+  const adminMaxTradeAmount = String(offerEligibility?.maxTradeAmount || "100000");
+
   useEffect(() => {
     if (availableOfferCurrencies.length === 0) {
       return;
@@ -1175,6 +1184,23 @@ function MyOffersTab() {
       form.setValue("fiatCurrency", availableQuoteCurrencies[0]);
     }
   }, [availableQuoteCurrencies, form]);
+
+  useEffect(() => {
+    if (!isCreateDialogOpen) {
+      return;
+    }
+
+    const currentMinLimit = form.getValues("minLimit");
+    const currentMaxLimit = form.getValues("maxLimit");
+
+    if (!currentMinLimit) {
+      form.setValue("minLimit", adminMinTradeAmount);
+    }
+
+    if (!currentMaxLimit) {
+      form.setValue("maxLimit", adminMaxTradeAmount);
+    }
+  }, [adminMaxTradeAmount, adminMinTradeAmount, form, isCreateDialogOpen]);
 
   const createOfferMutation = useMutation({
     mutationFn: async (data: CreateOfferForm) => {
@@ -1622,7 +1648,14 @@ function MyOffersTab() {
                             <FormItem>
                               <FormLabel>{t('p2p.minLimit')}</FormLabel>
                               <FormControl>
-                                <Input {...field} type="number" placeholder="10" data-testid="input-offer-min" />
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  min={adminMinTradeAmount}
+                                  max={adminMaxTradeAmount}
+                                  placeholder={adminMinTradeAmount}
+                                  data-testid="input-offer-min"
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -1635,13 +1668,24 @@ function MyOffersTab() {
                             <FormItem>
                               <FormLabel>{t('p2p.maxLimit')}</FormLabel>
                               <FormControl>
-                                <Input {...field} type="number" placeholder="1000" data-testid="input-offer-max" />
+                                <Input
+                                  {...field}
+                                  type="number"
+                                  min={adminMinTradeAmount}
+                                  max={adminMaxTradeAmount}
+                                  placeholder={adminMaxTradeAmount}
+                                  data-testid="input-offer-max"
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                       </div>
+
+                      <p className="text-xs text-muted-foreground">
+                        {t('p2p.limit')}: {formatFiatRange(adminMinTradeAmount, adminMaxTradeAmount, numberLocale)}
+                      </p>
 
                       <FormField
                         control={form.control}

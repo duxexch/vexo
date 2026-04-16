@@ -67,6 +67,14 @@ function mapOfferForClient(offer: Record<string, unknown>, username: string, cou
   };
 }
 
+function resolveConfiguredTradeBound(rawValue: unknown, fallbackValue: number): number {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallbackValue;
+  }
+  return parsed;
+}
+
 async function getFrozenIncomingSellBalance(userId: string, currencyCode: string): Promise<number> {
   const normalizedCurrency = normalizeCurrencyCode(currencyCode);
   if (!normalizedCurrency) {
@@ -154,6 +162,8 @@ export function registerOfferRoutes(app: Express) {
           )),
         db.select({
           isEnabled: p2pSettings.isEnabled,
+          minTradeAmount: p2pSettings.minTradeAmount,
+          maxTradeAmount: p2pSettings.maxTradeAmount,
           requireIdentityVerification: p2pSettings.requireIdentityVerification,
           requirePhoneVerification: p2pSettings.requirePhoneVerification,
           requireEmailVerification: p2pSettings.requireEmailVerification,
@@ -212,6 +222,12 @@ export function registerOfferRoutes(app: Express) {
         reasons.push("No P2P currencies are currently enabled by admin settings.");
       }
 
+      const configuredMinTradeAmount = resolveConfiguredTradeBound(globalSettings?.minTradeAmount, 10);
+      const configuredMaxTradeAmount = Math.max(
+        configuredMinTradeAmount,
+        resolveConfiguredTradeBound(globalSettings?.maxTradeAmount, 100000),
+      );
+
       const requiredVerificationLevel = verificationRequirements.requireIdentityVerification
         ? "kyc_basic"
         : verificationRequirements.requirePhoneVerification
@@ -236,6 +252,8 @@ export function registerOfferRoutes(app: Express) {
         reasons,
         monthlyTradeLimit: monthlyLimit,
         monthlyTradeUsed: monthlyUsed,
+        minTradeAmount: configuredMinTradeAmount.toFixed(2),
+        maxTradeAmount: configuredMaxTradeAmount.toFixed(2),
         paymentMethods: mapOwnedPaymentMethodsForClient(paymentMethods),
         allowedCurrencies: currencyControls.allowedP2PCurrencies,
         allowedBuyCurrencies: currencyControls.p2pBuyCurrencies,
@@ -471,8 +489,8 @@ export function registerOfferRoutes(app: Express) {
       }
 
       if (globalSettings) {
-        const minTradeAmount = parseFloat(globalSettings.minTradeAmount);
-        const maxTradeAmount = parseFloat(globalSettings.maxTradeAmount);
+        const minTradeAmount = resolveConfiguredTradeBound(globalSettings.minTradeAmount, 10);
+        const maxTradeAmount = Math.max(minTradeAmount, resolveConfiguredTradeBound(globalSettings.maxTradeAmount, 100000));
         if (parsedMinLimit < minTradeAmount || parsedMaxLimit > maxTradeAmount) {
           return res.status(400).json({ error: `Trade limits must be between ${minTradeAmount} and ${maxTradeAmount}` });
         }

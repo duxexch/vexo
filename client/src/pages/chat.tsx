@@ -136,7 +136,11 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return result.split(",")[1] || result;
 }
 
-export default function ChatPage() {
+interface ChatPageProps {
+  embedded?: boolean;
+}
+
+export default function ChatPage({ embedded = false }: ChatPageProps) {
   const { t } = useI18n();
   const { user, token } = useAuth();
   const {
@@ -958,7 +962,12 @@ export default function ChatPage() {
   const dateGroups = getMessageDateGroups();
 
   return (
-    <div className="flex h-full min-h-0 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0">
+    <div
+      className={cn(
+        "flex h-full min-h-0 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] md:pb-0",
+        embedded ? "pb-0" : "pb-[calc(4.5rem+env(safe-area-inset-bottom))]"
+      )}
+    >
       {/* =================== Conversation List =================== */}
       <div className={cn(
         "border-e flex flex-col bg-muted/40 w-full md:w-80",

@@ -225,14 +225,6 @@ export function registerTradeRoutes(app: Express) {
           if (!settings.isEnabled) {
             return res.status(403).json({ error: "P2P trading is currently disabled" });
           }
-
-          const minTradeAmount = parseFloat(settings.minTradeAmount);
-          const maxTradeAmount = parseFloat(settings.maxTradeAmount);
-          const requestedAmount = parseFloat(amount);
-
-          if (requestedAmount < minTradeAmount || requestedAmount > maxTradeAmount) {
-            return res.status(400).json({ error: `Trade amount must be between ${minTradeAmount} and ${maxTradeAmount}` });
-          }
         }
 
         const requesterVerificationCheck = evaluateP2PVerificationRequirements(requestingUser, verificationRequirements);

@@ -35,6 +35,24 @@ const updateP2pSettingsSchema = z.object({
   depositEnabledCurrencies: z.array(currencyCodeSchema).max(100).optional(),
 });
 
+function parsePositiveDecimal(input: string | null | undefined): number | null {
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  const normalized = String(input).trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
 function normalizeCurrencyArray(currencies: string[]): string[] {
   const uniqueCurrencies = new Set<string>();
 
@@ -88,6 +106,27 @@ export function registerP2pSettingsRoutes(app: Express) {
       if (!existing) {
         [existing] = await db.insert(p2pSettings).values({}).returning();
       }
+
+      const resolvedMinTradeAmountRaw = data.minTradeAmount ?? String(existing.minTradeAmount);
+      const resolvedMaxTradeAmountRaw = data.maxTradeAmount ?? String(existing.maxTradeAmount);
+
+      const resolvedMinTradeAmount = parsePositiveDecimal(resolvedMinTradeAmountRaw);
+      const resolvedMaxTradeAmount = parsePositiveDecimal(resolvedMaxTradeAmountRaw);
+
+      if (resolvedMinTradeAmount === null) {
+        return res.status(400).json({ error: "minTradeAmount must be a positive number" });
+      }
+
+      if (resolvedMaxTradeAmount === null) {
+        return res.status(400).json({ error: "maxTradeAmount must be a positive number" });
+      }
+
+      if (resolvedMaxTradeAmount < resolvedMinTradeAmount) {
+        return res.status(400).json({ error: "maxTradeAmount must be greater than or equal to minTradeAmount" });
+      }
+
+      normalizedData.minTradeAmount = resolvedMinTradeAmount.toFixed(2);
+      normalizedData.maxTradeAmount = resolvedMaxTradeAmount.toFixed(2);
 
       const previousValue = JSON.stringify(existing);
 
