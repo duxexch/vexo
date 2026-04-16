@@ -155,7 +155,7 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative"
+          className="relative overflow-visible"
           aria-label="Notifications"
           data-testid="button-notification-bell"
         >
@@ -167,14 +167,14 @@ export function NotificationBell() {
           {hasUnread && (
             <Badge
               variant="destructive"
-              className={`absolute top-0.5 end-0.5 h-5 min-w-5 p-0 flex items-center justify-center text-xs no-default-hover-elevate no-default-active-elevate ${hasNewPulse ? 'animate-pulse' : ''}`}
+              className={`absolute -top-1 -end-1 z-10 h-5 min-w-5 px-1 py-0 flex items-center justify-center text-xs leading-none no-default-hover-elevate no-default-active-elevate ${hasNewPulse ? 'animate-pulse' : ''}`}
               data-testid="badge-unread-count"
             >
               {unreadCount > 99 ? "99+" : unreadCount}
             </Badge>
           )}
           {hasNewPulse && hasUnread && (
-            <span className="absolute top-0.5 end-0.5 h-5 w-5 rounded-full bg-destructive/40 animate-ping" />
+            <span className="absolute -top-1 -end-1 h-5 w-5 rounded-full bg-destructive/40 animate-ping pointer-events-none" />
           )}
         </Button>
       </PopoverTrigger>

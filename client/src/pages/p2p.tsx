@@ -2405,6 +2405,9 @@ function MyTradesTab() {
     && (activeTrade?.status === "pending" || activeTrade?.status === "paid");
   const canEscalateToArbitration = Boolean(activeTrade)
     && (activeTrade?.status === "paid" || activeTrade?.status === "confirmed");
+  const canShowTradeWorkflowPanel = Boolean(activeTrade)
+    && activeTrade?.status !== "cancelled";
+  const canComposeTradeMessages = Boolean(activeTrade);
   const showBuyerGuidedPendingFlow = Boolean(activeTrade?.isBuyer && activeTrade?.status === "pending");
   const activeTradeOfferCurrency = normalizeCurrencyCodeValue(activeTrade?.offerCurrency || "");
   const activeTradeFiatCurrency = normalizeCurrencyCodeValue(activeTrade?.offerFiatCurrency || "");
@@ -3117,6 +3120,9 @@ function MyTradesTab() {
                         {visibleTradeMessages.map((message) => {
                           const isOwnMessage = message.senderId === user?.id;
                           const isSystemMessage = message.isSystemMessage;
+                          const safeTradeAttachmentUrl = message.attachmentUrl
+                            ? normalizeSafeEvidenceUrl(message.attachmentUrl)
+                            : null;
                           return (
                             <div
                               key={message.id}
@@ -3138,10 +3144,10 @@ function MyTradesTab() {
                                     {message.sender?.username || message.sender?.nickname || t('p2p.trader')}
                                   </p>
                                 )}
-                                {message.attachmentUrl && (
-                                  <a href={message.attachmentUrl} target="_blank" rel="noopener noreferrer" className="mb-1 block">
+                                {safeTradeAttachmentUrl && (
+                                  <a href={safeTradeAttachmentUrl} target="_blank" rel="noopener noreferrer" className="mb-1 block">
                                     <img
-                                      src={message.attachmentUrl}
+                                      src={safeTradeAttachmentUrl}
                                       alt={t('support.image')}
                                       className="max-h-52 w-full max-w-[260px] rounded-md object-cover"
                                       loading="lazy"
@@ -3163,7 +3169,7 @@ function MyTradesTab() {
                   </ScrollArea>
                 </div>
 
-                {activeTrade.status !== "cancelled" && (
+                {canShowTradeWorkflowPanel && (
                   <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -3403,8 +3409,12 @@ function MyTradesTab() {
                   </div>
                 )}
 
-                {activeTrade.status !== "cancelled" && (
+                {canComposeTradeMessages && (
                   <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2">
+                    {activeTrade.status === "cancelled" && (
+                      <p className="px-1 text-xs text-slate-400">{t('p2p.tradeCancelled')}</p>
+                    )}
+
                     {selectedImageDraft && (
                       <div className="relative flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 p-2">
                         <img src={selectedImageDraft.fileData} alt={t('support.image')} className="h-14 w-14 rounded object-cover" />

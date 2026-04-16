@@ -658,7 +658,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const lastMainScrollTopRef = useRef(0);
   const bottomNavScrollIntentRef = useRef(0);
 
-  const BOTTOM_NAV_MIN_SCROLLABLE_DISTANCE = 140;
+  const BOTTOM_NAV_MIN_REAL_SCROLLABLE_DISTANCE = 24;
   const BOTTOM_NAV_SCROLL_JITTER_PX = 6;
   const BOTTOM_NAV_HIDE_INTENT_THRESHOLD = 28;
   const BOTTOM_NAV_SHOW_INTENT_THRESHOLD = -20;
@@ -688,14 +688,23 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     }
   }, [isChatOpen]);
 
+  const getEffectiveScrollableDistance = (container: HTMLElement): number => {
+    const maxScrollableDistance = Math.max(0, container.scrollHeight - container.clientHeight);
+    const computedStyle = window.getComputedStyle(container);
+    const bottomPadding = Number.parseFloat(computedStyle.paddingBottom || "0") || 0;
+
+    // Ignore artificial scrolling introduced only by bottom safe-area/nav padding.
+    return Math.max(0, maxScrollableDistance - bottomPadding);
+  };
+
   const handleMainContentScroll = (event: React.UIEvent<HTMLElement>) => {
     const container = event.currentTarget;
     const currentScrollTop = container.scrollTop;
-    const maxScrollableDistance = Math.max(0, container.scrollHeight - container.clientHeight);
+    const effectiveScrollableDistance = getEffectiveScrollableDistance(container);
     const scrollDelta = currentScrollTop - lastMainScrollTopRef.current;
 
     // Keep bottom nav stable on short pages where tiny elastic scrolls cause flicker.
-    if (maxScrollableDistance <= BOTTOM_NAV_MIN_SCROLLABLE_DISTANCE) {
+    if (effectiveScrollableDistance <= BOTTOM_NAV_MIN_REAL_SCROLLABLE_DISTANCE) {
       if (!isBottomNavVisible) {
         setIsBottomNavVisible(true);
       }
@@ -749,7 +758,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
             <div className="flex flex-col flex-1 overflow-hidden">
               <header className="flex items-center justify-between gap-4 p-3 border-b bg-background sticky top-0 z-50">
                 <SidebarTrigger className="h-10 w-10" aria-label={t('nav.navigation') || 'Navigation'} data-testid="button-sidebar-toggle" />
-                <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap overflow-visible">
                   <Link href="/wallet">
                     <Button variant="outline" size="sm" className="gap-2" aria-label={t('nav.wallet') || 'Wallet'} data-testid="button-header-wallet">
                       <Wallet className="h-4 w-4" />
@@ -770,7 +779,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                 id="main-content"
                 ref={mainContentRef}
                 onScroll={handleMainContentScroll}
-                className={`flex-1 overflow-auto animate-page-enter ${isBottomNavVisible ? "pb-[calc(env(safe-area-inset-bottom)+7.25rem)]" : "pb-[max(1rem,env(safe-area-inset-bottom))]"} md:pb-0`}
+                className="flex-1 overflow-auto animate-page-enter pb-[calc(env(safe-area-inset-bottom)+7.25rem)] md:pb-0"
               >
                 {children}
               </main>

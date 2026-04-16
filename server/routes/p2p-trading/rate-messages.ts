@@ -9,6 +9,19 @@ import { db } from "../../db";
 import { p2pTraderProfiles } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
+function isAllowedTradeAttachmentUrl(rawAttachmentUrl: string): boolean {
+  const normalizedUrl = rawAttachmentUrl.trim();
+  if (!normalizedUrl) {
+    return false;
+  }
+
+  if (normalizedUrl.includes("..")) {
+    return false;
+  }
+
+  return normalizedUrl.startsWith("/uploads/") || normalizedUrl.startsWith("/storage/");
+}
+
 /** POST rate, GET/POST messages — Rating and messaging */
 export function registerRateMessageRoutes(app: Express) {
 
@@ -156,10 +169,6 @@ export function registerRateMessageRoutes(app: Express) {
         return res.status(403).json({ error: "Not authorized to message in this trade" });
       }
 
-      if (trade.status === "cancelled") {
-        return res.status(400).json({ error: "Cannot message in cancelled trades" });
-      }
-
       const { message, isPrewritten, attachmentUrl, attachmentType } = req.body;
 
       const normalizedMessage = typeof message === "string" ? message.trim() : "";
@@ -185,7 +194,7 @@ export function registerRateMessageRoutes(app: Express) {
           return res.status(400).json({ error: "Only image attachments are allowed" });
         }
 
-        if (!/^https?:\/\//.test(normalizedAttachmentUrl) && !normalizedAttachmentUrl.startsWith("/")) {
+        if (!isAllowedTradeAttachmentUrl(normalizedAttachmentUrl)) {
           return res.status(400).json({ error: "Invalid attachment URL" });
         }
 
