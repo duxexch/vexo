@@ -65,20 +65,10 @@ function assert(condition, message) {
     }
 }
 
-function getSafeOriginLabel(input) {
-    try {
-        const parsed = new URL(String(input || ""));
-        return parsed.origin;
-    } catch {
-        return "[invalid-base-url]";
-    }
-}
-
 async function run() {
     const options = parseArgs(args);
     const baseUrl = normalizeBaseUrl(options.baseUrl);
-
-    console.log(`[smoke] base URL origin: ${getSafeOriginLabel(baseUrl)}`);
+    console.log("[smoke] starting google auth runtime checks");
 
     const authSettings = await fetchJson(baseUrl, "/api/auth/settings");
     assert(authSettings.ok, `Auth settings request failed with ${authSettings.status}`);
@@ -131,8 +121,7 @@ async function run() {
     console.log("[smoke] google auth runtime checks passed");
 }
 
-run().catch((error) => {
-    const reason = error instanceof Error && error.name ? error.name : "Error";
-    console.error(`[smoke] failed (${reason})`);
+run().catch(() => {
+    console.error("[smoke] failed");
     process.exit(1);
 });

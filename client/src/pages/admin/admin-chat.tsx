@@ -199,6 +199,7 @@ const AI_QUERY_COLUMN_LABELS: Record<string, string> = {
 type ToastFn = ReturnType<typeof useToast>["toast"];
 
 const ADMIN_API_BASE_PATH = "/api/admin";
+const ADMIN_API_ORIGIN = typeof window !== "undefined" ? window.location.origin : "http://localhost";
 
 function normalizeAdminApiPath(path: string): string {
   const rawPath = String(path || "").trim();
@@ -223,9 +224,23 @@ function normalizeAdminApiPath(path: string): string {
   return safeRelativePath;
 }
 
-async function adminFetch(path: string, options: RequestInit = {}) {
+function buildSafeAdminEndpoint(path: string): string {
   const safeRelativePath = normalizeAdminApiPath(path);
-  const endpoint = `${ADMIN_API_BASE_PATH}${safeRelativePath}`;
+  const endpointUrl = new URL(`${ADMIN_API_BASE_PATH}${safeRelativePath}`, ADMIN_API_ORIGIN);
+
+  if (endpointUrl.origin !== ADMIN_API_ORIGIN) {
+    throw new Error("Cross-origin admin endpoints are not allowed");
+  }
+
+  if (!endpointUrl.pathname.startsWith(`${ADMIN_API_BASE_PATH}/`) && endpointUrl.pathname !== ADMIN_API_BASE_PATH) {
+    throw new Error("Invalid admin endpoint path");
+  }
+
+  return `${endpointUrl.pathname}${endpointUrl.search}`;
+}
+
+async function adminFetch(path: string, options: RequestInit = {}) {
+  const endpoint = buildSafeAdminEndpoint(path);
 
   const res = await fetch(endpoint, {
     ...options,
