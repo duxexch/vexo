@@ -17,7 +17,7 @@ import { VexLogo } from "@/components/vex-logo";
 import { SiGoogle, SiFacebook, SiTelegram, SiWhatsapp, SiX, SiApple, SiDiscord, SiLinkedin, SiGithub, SiTiktok, SiInstagram } from "react-icons/si";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Checkbox } from "@/components/ui/checkbox";
-import { SupportChatIcon } from "@/components/support-chat-widget";
+import { SupportContactQuickLaunch } from "@/components/support-contact-quick-launch";
 import { LanguageSwitcher } from "@/lib/i18n";
 import { fetchWithCsrf } from "@/lib/csrf";
 import { Browser } from "@capacitor/browser";
@@ -1357,7 +1357,7 @@ export default function LoginPage() {
         style={{ top: "calc(env(safe-area-inset-top, 0px) + 0.75rem)" }}
       >
         <div className="flex items-center gap-2">
-          <SupportChatIcon />
+          <SupportContactQuickLaunch />
           <LanguageSwitcher />
         </div>
         <ThemeToggle />
@@ -1365,7 +1365,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md border-primary/20 overflow-hidden shadow-sm sm:shadow-md">
         <div className="p-6 text-center border-b border-border">
           <div className="flex justify-center mb-4">
-            <VexLogo size={64} />
+            <VexLogo size={64} loading="eager" fetchPriority="high" />
           </div>
           <h1 className="text-2xl font-bold text-foreground">VEX</h1>
           <p className="text-muted-foreground text-sm mt-1">{t('auth.gamingTrading')}</p>
@@ -1651,11 +1651,21 @@ export default function LoginPage() {
                   >
                     <>
                       {t('auth.termsAgreementPrefix')} {" "}
-                      <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                      <a
+                        href="/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-foreground underline decoration-foreground/60 underline-offset-4 hover:text-primary"
+                      >
                         {t('auth.termsConditions')}
                       </a>
                       {" "}{t('common.and')} {" "}
-                      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+                      <a
+                        href="/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-foreground underline decoration-foreground/60 underline-offset-4 hover:text-primary"
+                      >
                         {t('auth.privacyPolicy')}
                       </a>
                     </>

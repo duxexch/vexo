@@ -63,7 +63,6 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { prefetchPage } from "@/components/PrefetchLink";
 import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { SupportChatWidget, SupportChatHeaderTrigger } from "@/components/support-chat-widget";
 import { PrivateCallLayerProvider } from "@/components/chat/private-call-layer";
 
 import NotFound from "@/pages/not-found";
@@ -89,6 +88,12 @@ const MultiplayerPage = lazy(() => import("@/pages/multiplayer"));
 const SupportPage = lazy(() => import("@/pages/support"));
 const ChatPage = lazy(() => import("@/pages/chat"));
 const ChallengeGamePage = lazy(() => import("@/pages/challenge-game"));
+const SupportChatHeaderTrigger = lazy(() =>
+  import("@/components/support-chat-widget").then((m) => ({ default: m.SupportChatHeaderTrigger })),
+);
+const SupportChatWidget = lazy(() =>
+  import("@/components/support-chat-widget").then((m) => ({ default: m.SupportChatWidget })),
+);
 type MenuItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }>; key: string; hasBadge?: boolean };
 
 const SIDEBAR_ICON_ACCENTS: Record<string, { active: string; inactive: string }> = {
@@ -752,7 +757,9 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                     </Button>
                   </Link>
                   {isHomeRoute && (
-                    <SupportChatHeaderTrigger isLoggedIn={true} />
+                    <Suspense fallback={null}>
+                      <SupportChatHeaderTrigger isLoggedIn={true} />
+                    </Suspense>
                   )}
                   <ThemeToggle />
                   <NotificationBell />
@@ -783,7 +790,9 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
               </div>
             )}
           </div>
-          <SupportChatWidget isLoggedIn={true} showFloatingTrigger={false} />
+          <Suspense fallback={null}>
+            <SupportChatWidget isLoggedIn={true} showFloatingTrigger={false} />
+          </Suspense>
         </SidebarProvider>
       </PrivateCallLayerProvider>
     </NotificationProvider>

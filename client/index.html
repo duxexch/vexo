@@ -73,12 +73,22 @@
     href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Cairo:wght@400;600;700&display=swap"
     media="print" />
   <script>
-    window.addEventListener("load", () => {
+    (() => {
       const fonts = document.getElementById("vex-fonts");
       if (fonts && fonts.tagName === "LINK") {
-        fonts.media = "all";
+        const applyFonts = () => {
+          if (fonts.getAttribute("media") !== "all") {
+            fonts.setAttribute("media", "all");
+          }
+        };
+
+        if ("requestAnimationFrame" in window) {
+          requestAnimationFrame(() => requestAnimationFrame(applyFonts));
+        } else {
+          setTimeout(applyFonts, 0);
+        }
       }
-    }, { once: true });
+    })();
   </script>
   <noscript>
     <link rel="stylesheet"

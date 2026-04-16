@@ -398,8 +398,23 @@ async function maybePromptNativeUpdate(release: ReleaseInfo): Promise<void> {
   }
 }
 
-if (!isRedirectingToCanonicalHost) {
-  void startReleaseMonitoring();
+function scheduleReleaseMonitoring(): void {
+  const start = () => {
+    void startReleaseMonitoring();
+  };
+
+  const requestIdle = (
+    window as typeof window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+    }
+  ).requestIdleCallback;
+
+  if (typeof requestIdle === "function") {
+    requestIdle(start, { timeout: 3000 });
+    return;
+  }
+
+  window.setTimeout(start, 1500);
 }
 
 if (!isRedirectingToCanonicalHost && Capacitor.isNativePlatform()) {
@@ -438,4 +453,5 @@ if (!isRedirectingToCanonicalHost && Capacitor.isNativePlatform()) {
 
 if (!isRedirectingToCanonicalHost) {
   createRoot(document.getElementById("root")!).render(<App />);
+  scheduleReleaseMonitoring();
 }

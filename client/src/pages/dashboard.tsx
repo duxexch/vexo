@@ -11,7 +11,7 @@ import {
   Flame, Target, Swords, Crown, Star, ChevronRight
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
@@ -30,6 +30,7 @@ interface DashboardStats {
 function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: string }) {
   const { t, language } = useI18n();
   const headers = useAuthHeaders();
+  const [isInsightsReady, setIsInsightsReady] = useState(false);
   const [isBalanceHidden, setIsBalanceHidden] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -51,6 +52,34 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
     }
   };
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const onReady = () => setIsInsightsReady(true);
+    const idleCapableWindow = window as Window & {
+      requestIdleCallback?: (cb: IdleRequestCallback, options?: IdleRequestOptions) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    let timeoutHandle: number | null = null;
+    let idleHandle: number | null = null;
+
+    if (typeof idleCapableWindow.requestIdleCallback === "function") {
+      idleHandle = idleCapableWindow.requestIdleCallback(() => onReady(), { timeout: 1400 });
+    } else {
+      timeoutHandle = window.setTimeout(onReady, 900);
+    }
+
+    return () => {
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+      }
+      if (idleHandle !== null && typeof idleCapableWindow.cancelIdleCallback === "function") {
+        idleCapableWindow.cancelIdleCallback(idleHandle);
+      }
+    };
+  }, []);
+
   // Fetch platform stats (online players, active games)
   const { data: platformStats } = useQuery<{ onlinePlayers: number; activeGames: number } | null>({
     queryKey: ["/api/platform/stats"],
@@ -59,6 +88,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
       if (!res.ok) return null;
       return res.json();
     },
+    enabled: isInsightsReady,
     refetchInterval: 30000, // refresh every 30s
   });
 
@@ -70,7 +100,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
       if (!res.ok) return null;
       return res.json();
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && isInsightsReady,
   });
 
   // Fetch active challenges
@@ -81,7 +111,7 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && isInsightsReady,
   });
 
   const balance = parseFloat(String(user?.balance || "0"));
@@ -213,73 +243,81 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
       </Card>
 
       {/* Game Performance Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-2 rounded-full bg-blue-500/10">
-                <Swords className="h-4 w-4 text-blue-500" />
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {t('dashboard.gamesPlayed')}
-              </span>
-            </div>
-            <p className="text-2xl font-bold">{gamesPlayed}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Star className="h-4 w-4 text-primary" />
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {t('dashboard.wins')}
-              </span>
-            </div>
-            <p className="text-2xl font-bold">{gamesWon}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-2 rounded-full bg-emerald-500/10">
-                <Target className="h-4 w-4 text-emerald-500" />
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {t('dashboard.winRate')}
-              </span>
-            </div>
-            <div className="space-y-1">
-              <p className="text-2xl font-bold">{winRate}%</p>
-              <Progress value={winRate} className="h-1.5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-2 rounded-full bg-orange-500/10">
-                <Flame className="h-4 w-4 text-orange-500" />
-              </div>
-              <span className="text-sm text-muted-foreground">
-                {t('dashboard.winStreak')}
-              </span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <p className="text-2xl font-bold">{currentStreak}</p>
-              {bestStreak > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  {t('dashboard.best')}: {bestStreak}
+      {isInsightsReady ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <Card>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 rounded-full bg-blue-500/10">
+                  <Swords className="h-4 w-4 text-blue-500" />
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {t('dashboard.gamesPlayed')}
                 </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              </div>
+              <p className="text-2xl font-bold">{gamesPlayed}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 rounded-full bg-primary/10">
+                  <Star className="h-4 w-4 text-primary" />
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {t('dashboard.wins')}
+                </span>
+              </div>
+              <p className="text-2xl font-bold">{gamesWon}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 rounded-full bg-emerald-500/10">
+                  <Target className="h-4 w-4 text-emerald-500" />
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {t('dashboard.winRate')}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <p className="text-2xl font-bold">{winRate}%</p>
+                <Progress value={winRate} className="h-1.5" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 rounded-full bg-orange-500/10">
+                  <Flame className="h-4 w-4 text-orange-500" />
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {t('dashboard.winStreak')}
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-bold">{currentStreak}</p>
+                {bestStreak > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {t('dashboard.best')}: {bestStreak}
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" aria-hidden="true">
+          {[0, 1, 2, 3].map((slot) => (
+            <Skeleton key={slot} className="h-28" />
+          ))}
+        </div>
+      )}
 
       {/* Active Challenges Banner */}
       {activeChallengesCount > 0 && (
