@@ -201,6 +201,8 @@ function normalizeGameToken(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+const DEFAULT_SAM9_SUPPORTED_GAMES = ['domino', 'backgammon', 'tarneeb', 'baloot'];
+
 export default function ChallengesPage() {
   const { t, language } = useI18n();
   const { user } = useAuth();
@@ -239,13 +241,11 @@ export default function ChallengesPage() {
   const createChallengeButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const multiPlayerGames = ['domino', 'tarneeb', 'baloot'];
-  const sam9SupportedGames = ['domino', 'backgammon', 'tarneeb', 'baloot'];
   const [activeChallenge, setActiveChallenge] = useState<Challenge | null>(null);
   const [gameFilter, setGameFilter] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [pendingGameFilter, setPendingGameFilter] = useState<string[]>([]);
-  const canUseSam9Opponent = Boolean(selectedGame && sam9SupportedGames.includes(selectedGame));
 
   const { data: sam9SoloConfig } = useQuery<Sam9SoloConfig>({
     queryKey: ['/api/challenges/sam9-solo-config'],
@@ -260,6 +260,16 @@ export default function ChallengesPage() {
   const sam9SoloMode = sam9SoloConfig?.mode || 'competitive';
   const sam9FixedFeeAmountRaw = Number(sam9SoloConfig?.fixedFee || 0);
   const sam9FixedFeeAmount = Number.isFinite(sam9FixedFeeAmountRaw) ? Math.max(0, sam9FixedFeeAmountRaw) : 0;
+  const sam9SupportedGames = useMemo(() => {
+    const configuredGames = Array.isArray(sam9SoloConfig?.supportedGames)
+      ? sam9SoloConfig.supportedGames
+        .map((game) => String(game || '').toLowerCase().trim())
+        .filter((game) => game.length > 0)
+      : [];
+
+    return configuredGames.length > 0 ? configuredGames : DEFAULT_SAM9_SUPPORTED_GAMES;
+  }, [sam9SoloConfig?.supportedGames]);
+  const canUseSam9Opponent = Boolean(selectedGame && sam9SupportedGames.includes(selectedGame));
   const isSam9FriendlyFixedFee = opponentType === 'sam9' && sam9SoloMode === 'friendly_fixed_fee';
 
   useEffect(() => {
@@ -816,6 +826,18 @@ export default function ChallengesPage() {
   const projectBalance = Number(projectWallet?.totalBalance || 0);
   const needProjectCurrency = (currencyPolicy?.projectOnly ?? true) || currencyType === 'project';
   const projectShortage = Math.max(0, effectiveBetAmount - projectBalance);
+  const sam9FixedFeeText = needProjectCurrency
+    ? `${sam9FixedFeeAmount.toFixed(2)} VXC`
+    : `$${sam9FixedFeeAmount.toFixed(2)}`;
+  const sam9StakeHint = opponentType === 'sam9'
+    ? (isSam9FriendlyFixedFee
+      ? (language === 'ar'
+        ? `تحدي SAM9 برسوم ثابتة. سيتم خصم ${sam9FixedFeeText} من رصيدك تلقائيًا.`
+        : `SAM9 fixed-fee challenge. ${sam9FixedFeeText} will be deducted from your balance automatically.`)
+      : (language === 'ar'
+        ? 'تحدي مع SAM9، برجاء إدخال مبلغ التحدي.'
+        : 'SAM9 challenge: please enter the challenge amount.'))
+    : null;
   const minConvertAmount = Number(projectCurrencySettings?.minConversionAmount || 1);
   const maxConvertAmount = Number(projectCurrencySettings?.maxConversionAmount || 10000);
   const quickConvertAmountValue = Number(quickConvertAmount || 0);
@@ -1483,30 +1505,62 @@ export default function ChallengesPage() {
 
               <div>
                 <Label>{t('challenges.stakeAmount')}</Label>
-                <div className="relative mt-2">
-                  <Coins className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    ref={stakeInputRef}
-                    type="number"
-                    value={betAmount}
-                    onChange={(e) => setBetAmount(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Enter') return;
-                      e.preventDefault();
-                      if (opponentType === 'friend') {
-                        queueFocus(friendInputRef.current);
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Coins className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      ref={stakeInputRef}
+                      type="number"
+                      value={betAmount}
+                      onChange={(e) => setBetAmount(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        if (opponentType === 'friend') {
+                          queueFocus(friendInputRef.current);
+                          return;
+                        }
+                        queueFocus(createChallengeButtonRef.current);
+                      }}
+                      placeholder="10.00"
+                      inputMode="decimal"
+                      enterKeyHint={opponentType === 'friend' ? 'next' : 'done'}
+                      className="ps-10"
+                      disabled={isSam9FriendlyFixedFee}
+                      data-testid="input-stake-amount"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant={opponentType === 'sam9' ? 'default' : 'outline'}
+                    className="shrink-0 min-h-10 px-3"
+                    onClick={() => {
+                      if (!canUseSam9Opponent) {
                         return;
                       }
-                      queueFocus(createChallengeButtonRef.current);
+                      setOpponentType((current) => (current === 'sam9' ? 'random' : 'sam9'));
                     }}
-                    placeholder="10.00"
-                    inputMode="decimal"
-                    enterKeyHint={opponentType === 'friend' ? 'next' : 'done'}
-                    className="ps-10"
-                    disabled={isSam9FriendlyFixedFee}
-                    data-testid="input-stake-amount"
-                  />
+                    disabled={!canUseSam9Opponent}
+                    data-testid="button-sam9-quick-toggle"
+                  >
+                    <Star className="h-4 w-4 me-1" />
+                    SAM9
+                  </Button>
                 </div>
+
+                {!canUseSam9Opponent && selectedGame && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {language === 'ar'
+                      ? 'SAM9 متاح فقط في دومينو، طاولة، طرنيب، وبلوت.'
+                      : 'SAM9 is available only for Domino, Backgammon, Tarneeb, and Baloot.'}
+                  </p>
+                )}
+
+                {sam9StakeHint && (
+                  <p className={`mt-2 text-xs ${isSam9FriendlyFixedFee ? 'text-amber-700 dark:text-amber-400' : 'text-primary'}`}>
+                    {sam9StakeHint}
+                  </p>
+                )}
               </div>
 
               <div>

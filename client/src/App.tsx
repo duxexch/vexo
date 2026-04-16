@@ -63,7 +63,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { prefetchPage } from "@/components/PrefetchLink";
 import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { SupportChatWidget } from "@/components/support-chat-widget";
+import { SupportChatWidget, SupportChatHeaderTrigger } from "@/components/support-chat-widget";
 import { PrivateCallLayerProvider } from "@/components/chat/private-call-layer";
 
 import NotFound from "@/pages/not-found";
@@ -651,11 +651,18 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const [isBottomNavVisible, setIsBottomNavVisible] = useState(true);
   const mainContentRef = useRef<HTMLElement | null>(null);
   const lastMainScrollTopRef = useRef(0);
+  const bottomNavScrollIntentRef = useRef(0);
+
+  const BOTTOM_NAV_MIN_SCROLLABLE_DISTANCE = 140;
+  const BOTTOM_NAV_SCROLL_JITTER_PX = 6;
+  const BOTTOM_NAV_HIDE_INTENT_THRESHOLD = 28;
+  const BOTTOM_NAV_SHOW_INTENT_THRESHOLD = -20;
 
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "4rem",
   };
+  const isHomeRoute = location === "/" || location.startsWith("/?");
 
   const toggleChat = () => {
     setIsChatOpen(!isChatOpen);
@@ -663,6 +670,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setIsBottomNavVisible(true);
+    bottomNavScrollIntentRef.current = 0;
     if (mainContentRef.current) {
       lastMainScrollTopRef.current = mainContentRef.current.scrollTop;
     }
@@ -671,27 +679,54 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isChatOpen) {
       setIsBottomNavVisible(true);
+      bottomNavScrollIntentRef.current = 0;
     }
   }, [isChatOpen]);
 
   const handleMainContentScroll = (event: React.UIEvent<HTMLElement>) => {
-    const currentScrollTop = event.currentTarget.scrollTop;
+    const container = event.currentTarget;
+    const currentScrollTop = container.scrollTop;
+    const maxScrollableDistance = Math.max(0, container.scrollHeight - container.clientHeight);
     const scrollDelta = currentScrollTop - lastMainScrollTopRef.current;
 
-    if (Math.abs(scrollDelta) < 8) {
+    // Keep bottom nav stable on short pages where tiny elastic scrolls cause flicker.
+    if (maxScrollableDistance <= BOTTOM_NAV_MIN_SCROLLABLE_DISTANCE) {
+      if (!isBottomNavVisible) {
+        setIsBottomNavVisible(true);
+      }
+      bottomNavScrollIntentRef.current = 0;
+      lastMainScrollTopRef.current = currentScrollTop;
+      return;
+    }
+
+    if (Math.abs(scrollDelta) < BOTTOM_NAV_SCROLL_JITTER_PX) {
+      lastMainScrollTopRef.current = currentScrollTop;
       return;
     }
 
     if (currentScrollTop <= 12 || isChatOpen) {
       setIsBottomNavVisible(true);
+      bottomNavScrollIntentRef.current = 0;
       lastMainScrollTopRef.current = currentScrollTop;
       return;
     }
 
-    if (scrollDelta > 0 && currentScrollTop > 80) {
-      setIsBottomNavVisible(false);
-    } else if (scrollDelta < 0) {
-      setIsBottomNavVisible(true);
+    const nextIntent = scrollDelta > 0
+      ? Math.max(0, bottomNavScrollIntentRef.current + scrollDelta)
+      : Math.min(0, bottomNavScrollIntentRef.current + scrollDelta);
+
+    bottomNavScrollIntentRef.current = nextIntent;
+
+    if (nextIntent >= BOTTOM_NAV_HIDE_INTENT_THRESHOLD && currentScrollTop > 80) {
+      if (isBottomNavVisible) {
+        setIsBottomNavVisible(false);
+      }
+      bottomNavScrollIntentRef.current = 0;
+    } else if (nextIntent <= BOTTOM_NAV_SHOW_INTENT_THRESHOLD) {
+      if (!isBottomNavVisible) {
+        setIsBottomNavVisible(true);
+      }
+      bottomNavScrollIntentRef.current = 0;
     }
 
     lastMainScrollTopRef.current = currentScrollTop;
@@ -716,6 +751,9 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                       <span className="hidden sm:inline">{t('nav.wallet')}</span>
                     </Button>
                   </Link>
+                  {isHomeRoute && (
+                    <SupportChatHeaderTrigger isLoggedIn={true} />
+                  )}
                   <ThemeToggle />
                   <NotificationBell />
                   <LanguageSwitcher />
@@ -745,7 +783,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
               </div>
             )}
           </div>
-          <SupportChatWidget isLoggedIn={true} />
+          <SupportChatWidget isLoggedIn={true} showFloatingTrigger={false} />
         </SidebarProvider>
       </PrivateCallLayerProvider>
     </NotificationProvider>

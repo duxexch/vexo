@@ -6,7 +6,10 @@ import { useI18n } from "@/lib/i18n";
 import { useSoundEffects } from "@/hooks/use-sound-effects";
 import { useChatPin } from "@/hooks/use-chat-pin";
 import { useChatMedia, useChatAutoDelete, useChatCallPricing } from "@/hooks/use-chat-features";
-import { CHAT_CALL_QUEUED_START_PROCESSED_EVENT } from "@/lib/chat-call-ops-queue";
+import {
+  CHAT_CALL_QUEUED_OPERATION_FAILED_EVENT,
+  CHAT_CALL_QUEUED_START_PROCESSED_EVENT,
+} from "@/lib/chat-call-ops-queue";
 import { usePrivateCallLayer } from "@/components/chat/private-call-layer";
 import { useMessageTranslation } from "@/hooks/use-message-translation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -479,14 +482,55 @@ export default function ChatPage() {
         callType: detail.session.callType,
         ratePerMinute: Number(detail.session.ratePerMinute || 0),
         isCaller: detail.session.callerId === user?.id,
-      }).then(() => refreshCallStatus());
+      })
+        .then(() => refreshCallStatus())
+        .catch(async (error) => {
+          await endCallSession(detail.session!.id).catch(() => ({ success: false }));
+          await refreshCallStatus();
+
+          if (error instanceof Error && error.message === 'media_stream_unavailable') {
+            setComposerError(t('challenge.voiceMicPermissionNeeded'));
+            return;
+          }
+
+          setComposerError(t('common.failed'));
+        });
     };
 
     window.addEventListener(CHAT_CALL_QUEUED_START_PROCESSED_EVENT, handleQueuedStartProcessed as EventListener);
     return () => {
       window.removeEventListener(CHAT_CALL_QUEUED_START_PROCESSED_EVENT, handleQueuedStartProcessed as EventListener);
     };
-  }, [activeConversation, activeSessionId, refreshCallStatus, startOutgoingCall, user?.id]);
+  }, [activeConversation, activeSessionId, endCallSession, refreshCallStatus, startOutgoingCall, t, user?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleQueuedCallOperationFailed = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        kind?: 'start' | 'end';
+        receiverId?: string;
+        error?: string;
+      }>).detail;
+
+      if (!detail || detail.kind !== 'start') {
+        return;
+      }
+
+      if (activeConversation && detail.receiverId && detail.receiverId !== activeConversation) {
+        return;
+      }
+
+      setComposerError(detail.error || t('common.failed'));
+    };
+
+    window.addEventListener(CHAT_CALL_QUEUED_OPERATION_FAILED_EVENT, handleQueuedCallOperationFailed as EventListener);
+    return () => {
+      window.removeEventListener(CHAT_CALL_QUEUED_OPERATION_FAILED_EVENT, handleQueuedCallOperationFailed as EventListener);
+    };
+  }, [activeConversation, t]);
 
   // Mark incoming messages as read when visible
   useEffect(() => {
@@ -601,17 +645,35 @@ export default function ChatPage() {
       return;
     }
 
+    if (result.queued) {
+      setComposerError(t('chat.reconnecting'));
+      return;
+    }
+
     if (result.session?.id) {
-      await startOutgoingCall({
-        sessionId: result.session.id,
-        peerUserId: activeConversation,
-        callType,
-        ratePerMinute: Number(result.session.ratePerMinute || (callType === 'voice' ? voicePricePerMinute : videoPricePerMinute) || 0),
-      });
+      try {
+        await startOutgoingCall({
+          sessionId: result.session.id,
+          peerUserId: activeConversation,
+          callType,
+          ratePerMinute: Number(result.session.ratePerMinute || (callType === 'voice' ? voicePricePerMinute : videoPricePerMinute) || 0),
+        });
+      } catch (error) {
+        await endCallSession(result.session.id).catch(() => ({ success: false }));
+        await refreshCallStatus();
+
+        if (error instanceof Error && error.message === 'media_stream_unavailable') {
+          setComposerError(t('challenge.voiceMicPermissionNeeded'));
+          return;
+        }
+
+        setComposerError(t('common.failed'));
+        return;
+      }
     }
 
     await refreshCallStatus();
-  }, [activeConversation, refreshCallStatus, startCallSession, startOutgoingCall, t, videoPricePerMinute, voicePricePerMinute]);
+  }, [activeConversation, endCallSession, refreshCallStatus, startCallSession, startOutgoingCall, t, videoPricePerMinute, voicePricePerMinute]);
 
   const handleEndCallSession = useCallback(async () => {
     if (!activeCallSession?.id) {

@@ -541,7 +541,36 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    const isTrustedOAuthOrigin = (origin: string) => origin === window.location.origin;
+    const normalizeOAuthHost = (hostname: string): string => hostname.replace(/^www\./i, "");
+
+    const parseOrigin = (value: string): URL | null => {
+      try {
+        return new URL(value);
+      } catch {
+        return null;
+      }
+    };
+
+    const currentOriginUrl = parseOrigin(window.location.origin);
+
+    const isTrustedOAuthOrigin = (origin: string) => {
+      if (!currentOriginUrl) {
+        return origin === window.location.origin;
+      }
+
+      const incomingOriginUrl = parseOrigin(origin);
+      if (!incomingOriginUrl) {
+        return false;
+      }
+
+      const currentPort = currentOriginUrl.port || (currentOriginUrl.protocol === "https:" ? "443" : "80");
+      const incomingPort = incomingOriginUrl.port || (incomingOriginUrl.protocol === "https:" ? "443" : "80");
+
+      return (
+        normalizeOAuthHost(incomingOriginUrl.hostname) === normalizeOAuthHost(currentOriginUrl.hostname)
+        && incomingPort === currentPort
+      );
+    };
 
     const isTrustedOAuthSource = (source: MessageEventSource | null) => {
       return Boolean(socialPopupRef.current && source === socialPopupRef.current);
@@ -555,8 +584,17 @@ export default function LoginPage() {
       return Boolean(socialPopupRef.current && !socialPopupRef.current.closed);
     };
 
-    const handleOAuthSignal = async (payload: { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean }) => {
-      if ((payload.type === "vex_oauth_success" || payload.type === "vex_oauth_error") && !hasActiveSocialAttempt()) {
+    const handleOAuthSignal = async (payload: { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean; token?: string }) => {
+      const isRecentOAuthEvent =
+        typeof payload.ts === "number"
+          ? Math.abs(Date.now() - payload.ts) <= 2 * 60_000
+          : false;
+
+      if (
+        (payload.type === "vex_oauth_success" || payload.type === "vex_oauth_error")
+        && !hasActiveSocialAttempt()
+        && !isRecentOAuthEvent
+      ) {
         return;
       }
 
@@ -570,6 +608,11 @@ export default function LoginPage() {
 
       if (payload.type === "vex_oauth_success") {
         const redirectTarget = resolveOAuthEventRedirect(payload);
+        if (typeof payload.token === "string" && payload.token.trim().length > 0) {
+          const normalizedToken = payload.token.trim();
+          localStorage.setItem("pwm_token", normalizedToken);
+          sessionStorage.setItem("pwm_token_backup", normalizedToken);
+        }
         if (socialPopupRef.current && !socialPopupRef.current.closed) {
           try {
             socialPopupRef.current.close();
@@ -624,11 +667,21 @@ export default function LoginPage() {
         return;
       }
 
+      const payload = event.data as { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean; token?: string };
+
       if (!isTrustedOAuthSource(event.source)) {
-        return;
+        const isOAuthSignal = payload.type === "vex_oauth_success" || payload.type === "vex_oauth_error";
+        const isRecentOAuthSignal =
+          isOAuthSignal
+          && typeof payload.ts === "number"
+          && Math.abs(Date.now() - payload.ts) <= 2 * 60_000;
+
+        if (!isRecentOAuthSignal) {
+          return;
+        }
       }
 
-      await handleOAuthSignal(event.data as { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean });
+      await handleOAuthSignal(payload);
     };
 
     const onStorage = async (event: StorageEvent) => {
@@ -637,7 +690,7 @@ export default function LoginPage() {
       }
 
       try {
-        const payload = JSON.parse(event.newValue) as { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean };
+        const payload = JSON.parse(event.newValue) as { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean; token?: string };
         await handleOAuthSignal(payload);
       } catch {
         // Ignore malformed storage payloads.

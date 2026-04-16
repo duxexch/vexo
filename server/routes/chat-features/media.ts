@@ -218,6 +218,17 @@ export function registerMediaRoutes(app: Express, authMiddleware: AuthMiddleware
         return res.status(400).json({ error: "File type not allowed" });
       }
 
+      if (isVoiceUpload) {
+        const voiceMessagePrice = await getConfigDecimal("chat_voice_message_price", 0);
+        if (voiceMessagePrice > 0) {
+          const wallet = await storage.getOrCreateProjectCurrencyWallet(userId);
+          const walletBalance = parseFloat(wallet.totalBalance || "0");
+          if (walletBalance < voiceMessagePrice) {
+            return res.status(403).json({ error: "Insufficient project currency balance for voice message" });
+          }
+        }
+      }
+
       if (!isVoiceUpload) {
         const [permission] = await db.select()
           .from(chatMediaPermissions)

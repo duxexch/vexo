@@ -35,6 +35,9 @@ interface SupportTicket {
   createdAt: string;
 }
 
+const SUPPORT_CHAT_OPEN_EVENT = "open-support-chat";
+const SUPPORT_CHAT_NEW_MESSAGE_EVENT = "support-chat-new-message";
+
 function getToken() {
   return localStorage.getItem("pwm_token") || "";
 }
@@ -52,7 +55,7 @@ async function supportFetch(url: string, options: RequestInit = {}) {
   return res.json();
 }
 
-export function SupportChatWidget({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
+export function SupportChatWidget({ isLoggedIn = false, showFloatingTrigger = true }: { isLoggedIn?: boolean; showFloatingTrigger?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [mediaPreview, setMediaPreview] = useState<{ url: string; type: string; name: string; file: File } | null>(null);
@@ -73,11 +76,11 @@ export function SupportChatWidget({ isLoggedIn = false }: { isLoggedIn?: boolean
       // If already open, messages will refresh via query invalidation
       // If closed, the unread badge will update via query invalidation
     };
-    window.addEventListener('open-support-chat', handleOpen);
-    window.addEventListener('support-chat-new-message', handleNewMessage);
+    window.addEventListener(SUPPORT_CHAT_OPEN_EVENT, handleOpen);
+    window.addEventListener(SUPPORT_CHAT_NEW_MESSAGE_EVENT, handleNewMessage);
     return () => {
-      window.removeEventListener('open-support-chat', handleOpen);
-      window.removeEventListener('support-chat-new-message', handleNewMessage);
+      window.removeEventListener(SUPPORT_CHAT_OPEN_EVENT, handleOpen);
+      window.removeEventListener(SUPPORT_CHAT_NEW_MESSAGE_EVENT, handleNewMessage);
     };
   }, []);
 
@@ -260,7 +263,7 @@ export function SupportChatWidget({ isLoggedIn = false }: { isLoggedIn?: boolean
   return (
     <>
       {/* Floating Button */}
-      {!isOpen && (
+      {!isOpen && showFloatingTrigger && (
         <button
           onClick={() => setIsOpen(true)}
           className={`fixed bottom-20 start-4 z-50 flex items-center justify-center w-12 h-12 rounded-full text-white shadow-lg hover:scale-110 hover:shadow-xl transition-all duration-300 group ${unreadCount > 0 ? 'bg-green-500 opacity-100 shadow-green-500/40 animate-pulse' : 'bg-green-600/40 opacity-50 hover:bg-green-500 hover:opacity-100 hover:shadow-green-500/30'}`
@@ -551,6 +554,49 @@ export function SupportChatWidget({ isLoggedIn = false }: { isLoggedIn?: boolean
         </div>
       )}
     </>
+  );
+}
+
+export function SupportChatHeaderTrigger({ isLoggedIn = false, className }: { isLoggedIn?: boolean; className?: string }) {
+  const { t } = useI18n();
+
+  const { data: unreadData } = useQuery<{ unread: number }>({
+    queryKey: ["support-unread"],
+    queryFn: () => supportFetch("/api/support-chat/unread"),
+    enabled: isLoggedIn,
+    refetchInterval: 60000,
+  });
+
+  if (!isLoggedIn) {
+    return null;
+  }
+
+  const unreadCount = unreadData?.unread || 0;
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      onClick={() => window.dispatchEvent(new Event(SUPPORT_CHAT_OPEN_EVENT))}
+      aria-label={t('support.title')}
+      title={t('support.title')}
+      className={cn(
+        "relative h-9 w-9",
+        unreadCount > 0
+          ? "animate-pulse border-green-500/60 text-green-600 shadow-[0_0_0_2px_rgba(34,197,94,0.18)]"
+          : "",
+        className,
+      )}
+      data-testid="button-header-support-chat"
+    >
+      <Headphones className="h-4 w-4" />
+      {unreadCount > 0 && (
+        <span className="absolute -top-1 -end-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white shadow-md">
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </span>
+      )}
+    </Button>
   );
 }
 

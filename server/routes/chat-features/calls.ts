@@ -20,6 +20,7 @@ const CHAT_ACTION_PRICE_CONFIG_KEYS = {
   voiceMessage: "chat_voice_message_price",
   messageDelete: "chat_delete_message_price",
 } as const;
+const CALL_RING_TIMEOUT_SECONDS = 45;
 
 function normalizeCallType(raw: unknown): ChatCallType | null {
   const value = String(raw || "").trim().toLowerCase();
@@ -56,10 +57,51 @@ function notifyUsers(userIds: string[], payload: Record<string, unknown>): void 
   });
 }
 
+async function cancelStaleUnconnectedCallSessions(participantUserIds: string[]): Promise<void> {
+  const normalizedUserIds = Array.from(
+    new Set(
+      participantUserIds
+        .map((value) => String(value || "").trim())
+        .filter((value) => value.length > 0),
+    ),
+  );
+
+  if (normalizedUserIds.length === 0) {
+    return;
+  }
+
+  const participantClauses = normalizedUserIds.flatMap((participantId) => [
+    eq(chatCallSessions.callerId, participantId),
+    eq(chatCallSessions.receiverId, participantId),
+  ]);
+
+  if (participantClauses.length === 0) {
+    return;
+  }
+
+  await db
+    .update(chatCallSessions)
+    .set({
+      status: "cancelled",
+      endedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(chatCallSessions.status, "active"),
+        sql`${chatCallSessions.connectedAt} IS NULL`,
+        sql`${chatCallSessions.startedAt} < NOW() - INTERVAL '${sql.raw(String(CALL_RING_TIMEOUT_SECONDS))} seconds'`,
+        or(...participantClauses),
+      ),
+    );
+}
+
 export function registerCallRoutes(app: Express, authMiddleware: AuthMiddleware): void {
   app.get("/api/chat/calls/pricing", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.id;
+      await cancelStaleUnconnectedCallSessions([userId]);
+
       const [voiceRate, videoRate, voiceMessagePrice, messageDeletePrice] = await Promise.all([
         getConfigDecimal(CHAT_CALL_CONFIG_KEYS.voice, 15),
         getConfigDecimal(CHAT_CALL_CONFIG_KEYS.video, 25),
@@ -157,6 +199,8 @@ export function registerCallRoutes(app: Express, authMiddleware: AuthMiddleware)
       if (callerBlockedUsers.includes(receiverId) || receiverBlockedUsers.includes(callerId)) {
         return res.status(403).json({ error: "Cannot start call while one side is blocked" });
       }
+
+      await cancelStaleUnconnectedCallSessions([callerId, receiverId]);
 
       const [existingActiveSession] = await db
         .select({ id: chatCallSessions.id })

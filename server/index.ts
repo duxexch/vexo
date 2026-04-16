@@ -18,7 +18,7 @@ import { getRedisClient, redisHealthCheck, closeRedis, trackUserOnline, getOnlin
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-import { initMinIO, uploadFile as minioUpload, getFileStream, minioHealthCheck } from "./lib/minio-client";
+import { initMinIO, uploadFile as minioUpload, getFileStream, getMinioClient, getBucketName, minioHealthCheck } from "./lib/minio-client";
 import { startSecurityCleanupJob } from "./lib/security-cleanup";
 import { db } from "./db";
 import { challenges, users, projectCurrencyWallets } from "@shared/schema";
@@ -532,32 +532,57 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
     }
 
     // Serve files from MinIO via /storage/* proxy route
-    app.get("/storage/:filename", publicFileRateLimiter, async (req: Request, res: Response) => {
+    app.get("/storage/*", publicFileRateLimiter, async (req: Request, res: Response) => {
       try {
-        const { filename } = req.params;
-        if (!filename || filename.includes("..") || filename.includes("/")) {
+        const wildcardParam = (req.params as Record<string, string | undefined>)["0"];
+        const rawObjectName = typeof wildcardParam === "string" ? wildcardParam.trim() : "";
+        const normalizedObjectName = rawObjectName.replace(/\\/g, "/").replace(/^\/+/, "");
+        const objectNameParts = normalizedObjectName.split("/");
+        if (
+          !normalizedObjectName
+          || objectNameParts.some((part) => !part || part === "." || part === "..")
+        ) {
           return res.status(400).json({ error: "Invalid filename" });
         }
+        const objectName = objectNameParts.join("/");
 
         if (useMinIO) {
-          const stream = await getFileStream(filename);
+          const [stream, objectStat] = await Promise.all([
+            getFileStream(objectName),
+            getMinioClient().statObject(getBucketName(), objectName).catch(() => null),
+          ]);
+
           // Set cache headers
           res.setHeader("Cache-Control", "public, max-age=2592000, immutable");
-          // Guess content type from extension
-          const ext = path.extname(filename).toLowerCase();
-          const mimeMap: Record<string, string> = {
-            ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
-            ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
-            ".mp4": "video/mp4", ".webm": "video/webm", ".pdf": "application/pdf",
-            ".avif": "image/avif", ".heic": "image/heic", ".bmp": "image/bmp",
-          };
-          if (mimeMap[ext]) {
-            res.setHeader("Content-Type", mimeMap[ext]);
+
+          const statMimeType = objectStat?.metaData?.["content-type"] || objectStat?.metaData?.["Content-Type"];
+          if (typeof statMimeType === "string" && statMimeType.trim().length > 0) {
+            res.setHeader("Content-Type", statMimeType);
+          } else {
+            // Fallback MIME resolution if object metadata is missing.
+            const ext = path.extname(objectName).toLowerCase();
+            const mimeMap: Record<string, string> = {
+              ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+              ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
+              ".mp4": "video/mp4", ".webm": "video/webm", ".pdf": "application/pdf",
+              ".avif": "image/avif", ".heic": "image/heic", ".bmp": "image/bmp",
+              ".ogg": "audio/ogg", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+              ".aac": "audio/aac", ".m4a": "audio/mp4",
+            };
+            if (mimeMap[ext]) {
+              res.setHeader("Content-Type", mimeMap[ext]);
+            }
           }
+
           stream.pipe(res);
         } else {
           // Fallback: try to serve from local uploads dir
-          const localPath = path.join(uploadsDir, filename);
+          const localPath = path.resolve(uploadsDir, ...objectNameParts);
+          const relativePath = path.relative(uploadsDir, localPath);
+          if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+            return res.status(400).json({ error: "Invalid filename" });
+          }
+
           if (fs.existsSync(localPath)) {
             return res.sendFile(localPath);
           }

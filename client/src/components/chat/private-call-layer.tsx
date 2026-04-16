@@ -669,12 +669,12 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
 
   const startOutgoingCall = useCallback(async (input: StartOutgoingCallInput) => {
     if (!token) {
-      return;
+      throw new Error("auth_required");
     }
 
     const ready = await ensureLocalStream(input.callType);
     if (!ready) {
-      return;
+      throw new Error("media_stream_unavailable");
     }
 
     const nextCall: ActiveCall = {
