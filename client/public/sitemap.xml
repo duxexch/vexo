@@ -190,7 +190,7 @@
   <!-- ══════════ مركز الأدلة / Guides Hub ══════════ -->
   <url>
     <loc>https://vixo.click/guides/index.html</loc>
-    <lastmod>2026-04-06</lastmod>
+    <lastmod>2026-04-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.78</priority>
     <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/index.html" />
@@ -295,6 +295,46 @@
     <priority>0.73</priority>
     <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/vex-earn-daily-rewards-tournaments-guide.html" />
     <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-earn-daily-rewards-tournaments-guide.html" />
+  </url>
+
+  <!-- ══════════ خريطة الكلمات المفتاحية العربية / Arabic Keywords Hub ══════════ -->
+  <url>
+    <loc>https://vixo.click/guides/vex-seo-keywords-ar.html</loc>
+    <lastmod>2026-04-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.72</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/vex-seo-keywords-ar.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-seo-keywords-ar.html" />
+  </url>
+
+  <!-- ══════════ خريطة الكلمات المفتاحية الإنجليزية / English Keywords Hub ══════════ -->
+  <url>
+    <loc>https://vixo.click/guides/vex-seo-keywords-en.html</loc>
+    <lastmod>2026-04-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.72</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/vex-seo-keywords-en.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-seo-keywords-en.html" />
+  </url>
+
+  <!-- ══════════ نوايا البحث FAQ / Search Intent FAQ ══════════ -->
+  <url>
+    <loc>https://vixo.click/guides/vex-search-intents-faq.html</loc>
+    <lastmod>2026-04-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.71</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/vex-search-intents-faq.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-search-intents-faq.html" />
+  </url>
+
+  <!-- ══════════ خريطة HTML / HTML Sitemap ══════════ -->
+  <url>
+    <loc>https://vixo.click/guides/vex-html-sitemap.html</loc>
+    <lastmod>2026-04-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.70</priority>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/guides/vex-html-sitemap.html" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/guides/vex-html-sitemap.html" />
   </url>
 
 </urlset>

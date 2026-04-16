@@ -15,6 +15,10 @@ Sitemap: https://vixo.click/sitemap.xml
 - https://vixo.click/guides/vex-p2p-trading-security.html
 - https://vixo.click/guides/vex-games-challenges-guide.html
 - https://vixo.click/guides/vex-account-wallet-verification.html
+- https://vixo.click/guides/vex-seo-keywords-ar.html
+- https://vixo.click/guides/vex-seo-keywords-en.html
+- https://vixo.click/guides/vex-search-intents-faq.html
+- https://vixo.click/guides/vex-html-sitemap.html
 
 ## Content focus keywords
 - VEX platform
@@ -25,6 +29,9 @@ Sitemap: https://vixo.click/sitemap.xml
 - digital wallet and payments
 - account verification and trust
 - gaming challenges and fair play
+- arabic seo keywords for games and p2p
+- english long-tail search intents
+- install app and mobile usage discovery
 
 ## Crawl guidance
 - Prefer canonical URLs under https://vixo.click/
