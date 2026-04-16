@@ -40,8 +40,26 @@ services:
     container_name: vex-redis
     hostname: vex-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy
-      allkeys-lru --requirepass ${REDIS_PASSWORD:-changeme_redis_password}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        if [ -f /data/appendonly.aof.manifest ]; then
+          echo "[redis-bootstrap] validating AOF manifest"
+          if ! redis-check-aof --fix /data/appendonly.aof.manifest; then
+            echo "[redis-bootstrap] fallback: backing up and removing bad incremental AOF"
+            if [ -f /data/appendonly.aof.1.incr.aof ]; then
+              cp /data/appendonly.aof.1.incr.aof "/data/appendonly.aof.1.incr.aof.bak.$(date +%s)" || true
+              rm -f /data/appendonly.aof.1.incr.aof
+            fi
+            redis-check-aof --fix /data/appendonly.aof.manifest || true
+          fi
+        fi
+        exec redis-server \
+          --appendonly yes \
+          --maxmemory 256mb \
+          --maxmemory-policy allkeys-lru \
+          --requirepass "${REDIS_PASSWORD:-changeme_redis_password}"
     volumes:
       - redis_data:/data
     networks:
