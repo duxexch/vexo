@@ -43,13 +43,14 @@ function startChallengeExpiryJob() {
   setInterval(async () => {
     try {
       const defaultExpiryMinutes = 30;
+      const expiryCutoff = new Date(Date.now() - defaultExpiryMinutes * 60 * 1000);
 
       // Step 1: Find expired waiting challenges (batch, limit 50 per run)
       const expiredChallenges = await db.select()
         .from(challenges)
         .where(and(
           eq(challenges.status, 'waiting'),
-          sql`${challenges.createdAt} < NOW() - INTERVAL '${sql.raw(String(defaultExpiryMinutes))} minutes'`
+          lt(challenges.createdAt, expiryCutoff)
         ))
         .limit(50);
 

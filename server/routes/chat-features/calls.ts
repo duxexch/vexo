@@ -1,5 +1,5 @@
 import type { Express, Response } from "express";
-import { and, desc, eq, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { WebSocket } from "ws";
 import { chatCallSessions, projectCurrencyLedger, projectCurrencyWallets, users } from "@shared/schema";
 import { db } from "../../db";
@@ -79,6 +79,8 @@ async function cancelStaleUnconnectedCallSessions(participantUserIds: string[]):
     return;
   }
 
+  const staleBefore = new Date(Date.now() - CALL_RING_TIMEOUT_SECONDS * 1000);
+
   await db
     .update(chatCallSessions)
     .set({
@@ -89,8 +91,8 @@ async function cancelStaleUnconnectedCallSessions(participantUserIds: string[]):
     .where(
       and(
         eq(chatCallSessions.status, "active"),
-        sql`${chatCallSessions.connectedAt} IS NULL`,
-        sql`${chatCallSessions.startedAt} < NOW() - INTERVAL '${sql.raw(String(CALL_RING_TIMEOUT_SECONDS))} seconds'`,
+        isNull(chatCallSessions.connectedAt),
+        lt(chatCallSessions.startedAt, staleBefore),
         or(...participantClauses),
       ),
     );

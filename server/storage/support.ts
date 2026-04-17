@@ -13,6 +13,54 @@ import {
 import { db } from "../db";
 import { eq, desc, and, asc, inArray } from "drizzle-orm";
 
+const PAYMENT_METHOD_DUPLICATE_ERROR = "PAYMENT_METHOD_DUPLICATE";
+
+function normalizePaymentMethodKeyPart(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function buildCountryPaymentMethodKey(input: {
+  countryCode: string | null | undefined;
+  name: string | null | undefined;
+  type: string | null | undefined;
+  currencyId?: string | null | undefined;
+}): string {
+  return [
+    normalizePaymentMethodKeyPart(input.countryCode),
+    normalizePaymentMethodKeyPart(input.name),
+    normalizePaymentMethodKeyPart(input.type),
+    normalizePaymentMethodKeyPart(input.currencyId),
+  ].join("|");
+}
+
+function getCountryPaymentMethodRank(method: CountryPaymentMethod): number {
+  return (method.isActive ? 4 : 0)
+    + (method.isAvailable ? 2 : 0)
+    + (method.isWithdrawalEnabled ? 1 : 0);
+}
+
+function shouldPreferCountryPaymentMethod(candidate: CountryPaymentMethod, current: CountryPaymentMethod): boolean {
+  const rankDiff = getCountryPaymentMethodRank(candidate) - getCountryPaymentMethodRank(current);
+  if (rankDiff !== 0) {
+    return rankDiff > 0;
+  }
+
+  if (candidate.sortOrder !== current.sortOrder) {
+    return candidate.sortOrder < current.sortOrder;
+  }
+
+  const nameDiff = candidate.name.localeCompare(current.name);
+  if (nameDiff !== 0) {
+    return nameDiff < 0;
+  }
+
+  return candidate.id.localeCompare(current.id) < 0;
+}
+
+function createDuplicatePaymentMethodError(): Error {
+  return new Error(PAYMENT_METHOD_DUPLICATE_ERROR);
+}
+
 // ==================== COMPLAINTS ====================
 
 export async function getComplaint(id: string): Promise<Complaint | undefined> {
@@ -58,16 +106,135 @@ export async function getComplaintMessages(complaintId: string): Promise<Complai
 // ==================== COUNTRY PAYMENT METHODS ====================
 
 export async function listCountryPaymentMethods(): Promise<CountryPaymentMethod[]> {
-  return db.select().from(countryPaymentMethods).orderBy(asc(countryPaymentMethods.sortOrder), asc(countryPaymentMethods.name));
+  const methods = await db
+    .select()
+    .from(countryPaymentMethods)
+    .orderBy(
+      asc(countryPaymentMethods.sortOrder),
+      asc(countryPaymentMethods.name),
+      asc(countryPaymentMethods.id),
+    );
+
+  const uniqueMethods = new Map<string, CountryPaymentMethod>();
+
+  for (const method of methods) {
+    const methodKey = buildCountryPaymentMethodKey(method);
+    const current = uniqueMethods.get(methodKey);
+
+    if (!current || shouldPreferCountryPaymentMethod(method, current)) {
+      uniqueMethods.set(methodKey, method);
+    }
+  }
+
+  return Array.from(uniqueMethods.values()).sort((left, right) => {
+    if (left.sortOrder !== right.sortOrder) {
+      return left.sortOrder - right.sortOrder;
+    }
+
+    const nameDiff = left.name.localeCompare(right.name);
+    if (nameDiff !== 0) {
+      return nameDiff;
+    }
+
+    const countryDiff = String(left.countryCode).localeCompare(String(right.countryCode));
+    if (countryDiff !== 0) {
+      return countryDiff;
+    }
+
+    return left.id.localeCompare(right.id);
+  });
 }
 
 export async function createCountryPaymentMethod(method: InsertCountryPaymentMethod): Promise<CountryPaymentMethod> {
-  const [created] = await db.insert(countryPaymentMethods).values(method).returning();
+  const normalizedCountryCode = method.countryCode.trim().toUpperCase();
+  const normalizedName = method.name.trim();
+  const normalizedCurrencyId = method.currencyId?.trim() || null;
+  const candidateKey = buildCountryPaymentMethodKey({
+    countryCode: normalizedCountryCode,
+    name: normalizedName,
+    type: method.type,
+    currencyId: normalizedCurrencyId,
+  });
+
+  const existingForCountryAndType = await db
+    .select()
+    .from(countryPaymentMethods)
+    .where(
+      and(
+        eq(countryPaymentMethods.countryCode, normalizedCountryCode),
+        eq(countryPaymentMethods.type, method.type),
+      ),
+    );
+
+  const hasDuplicate = existingForCountryAndType.some((existingMethod) =>
+    buildCountryPaymentMethodKey(existingMethod) === candidateKey,
+  );
+
+  if (hasDuplicate) {
+    throw createDuplicatePaymentMethodError();
+  }
+
+  const [created] = await db.insert(countryPaymentMethods).values({
+    ...method,
+    countryCode: normalizedCountryCode,
+    name: normalizedName,
+    currencyId: normalizedCurrencyId,
+  }).returning();
   return created;
 }
 
 export async function updateCountryPaymentMethod(id: string, data: Partial<InsertCountryPaymentMethod>): Promise<CountryPaymentMethod | undefined> {
-  const [updated] = await db.update(countryPaymentMethods).set(data).where(eq(countryPaymentMethods.id, id)).returning();
+  const [existingMethod] = await db
+    .select()
+    .from(countryPaymentMethods)
+    .where(eq(countryPaymentMethods.id, id));
+
+  if (!existingMethod) {
+    return undefined;
+  }
+
+  const normalizedCountryCode = (data.countryCode ?? existingMethod.countryCode).trim().toUpperCase();
+  const normalizedName = (data.name ?? existingMethod.name).trim();
+  const normalizedType = data.type ?? existingMethod.type;
+  const normalizedCurrencyId = data.currencyId !== undefined
+    ? (data.currencyId?.trim() || null)
+    : (existingMethod.currencyId || null);
+
+  const currentKey = buildCountryPaymentMethodKey(existingMethod);
+  const nextKey = buildCountryPaymentMethodKey({
+    countryCode: normalizedCountryCode,
+    name: normalizedName,
+    type: normalizedType,
+    currencyId: normalizedCurrencyId,
+  });
+
+  if (nextKey !== currentKey) {
+    const existingForCountryAndType = await db
+      .select()
+      .from(countryPaymentMethods)
+      .where(
+        and(
+          eq(countryPaymentMethods.countryCode, normalizedCountryCode),
+          eq(countryPaymentMethods.type, normalizedType),
+        ),
+      );
+
+    const hasDuplicate = existingForCountryAndType.some((method) =>
+      method.id !== id && buildCountryPaymentMethodKey(method) === nextKey,
+    );
+
+    if (hasDuplicate) {
+      throw createDuplicatePaymentMethodError();
+    }
+  }
+
+  const [updated] = await db.update(countryPaymentMethods).set({
+    ...data,
+    countryCode: normalizedCountryCode,
+    name: normalizedName,
+    type: normalizedType,
+    currencyId: normalizedCurrencyId,
+  }).where(eq(countryPaymentMethods.id, id)).returning();
   return updated;
 }
 

@@ -123,6 +123,24 @@ const PAYMENT_METHODS = [
 
 const GAMES: Record<string, unknown>[] = [];
 
+function normalizePaymentSeedKeyPart(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function buildPaymentSeedKey(input: {
+  countryCode: string | null | undefined;
+  name: string | null | undefined;
+  type: string | null | undefined;
+  currencyId?: string | null | undefined;
+}): string {
+  return [
+    normalizePaymentSeedKeyPart(input.countryCode),
+    normalizePaymentSeedKeyPart(input.name),
+    normalizePaymentSeedKeyPart(input.type),
+    normalizePaymentSeedKeyPart(input.currencyId),
+  ].join("|");
+}
+
 async function seedCurrencies() {
   console.log("Seeding currencies...");
   for (const currency of CURRENCIES) {
@@ -143,7 +161,36 @@ async function seedCurrencies() {
 
 async function seedPaymentMethods() {
   console.log("Seeding payment methods...");
+
+  const existingMethods = await db
+    .select({
+      countryCode: countryPaymentMethods.countryCode,
+      name: countryPaymentMethods.name,
+      type: countryPaymentMethods.type,
+      currencyId: countryPaymentMethods.currencyId,
+    })
+    .from(countryPaymentMethods);
+
+  const existingKeys = new Set(
+    existingMethods.map((method) => buildPaymentSeedKey(method)),
+  );
+
+  let insertedCount = 0;
+  let skippedCount = 0;
+
   for (const method of PAYMENT_METHODS) {
+    const methodKey = buildPaymentSeedKey({
+      countryCode: method.countryCode,
+      name: method.name,
+      type: method.type,
+      currencyId: null,
+    });
+
+    if (existingKeys.has(methodKey)) {
+      skippedCount += 1;
+      continue;
+    }
+
     try {
       await db.insert(countryPaymentMethods).values({
         name: method.name,
@@ -154,12 +201,16 @@ async function seedPaymentMethods() {
         processingTime: method.processingTime,
         sortOrder: method.sortOrder,
         isActive: true,
-      }).onConflictDoNothing();
+      });
+
+      existingKeys.add(methodKey);
+      insertedCount += 1;
     } catch (err) {
       console.log(`Payment method ${method.name} may already exist`);
+      skippedCount += 1;
     }
   }
-  console.log(`Seeded ${PAYMENT_METHODS.length} payment methods`);
+  console.log(`Payment methods seed complete: inserted ${insertedCount}, skipped ${skippedCount}`);
 }
 
 async function seedGames() {
@@ -168,18 +219,18 @@ async function seedGames() {
 
 async function main() {
   console.log("Starting seed...");
-  
+
   try {
     await seedCurrencies();
     await seedPaymentMethods();
     await seedGames();
-    
+
     console.log("Seed completed successfully!");
   } catch (error) {
     console.error("Seed failed:", error);
     process.exit(1);
   }
-  
+
   process.exit(0);
 }
 

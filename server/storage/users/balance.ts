@@ -2,12 +2,36 @@ import { users, transactions, type User } from "@shared/schema";
 import { db } from "../../db";
 import { eq, sql } from "drizzle-orm";
 
+const MAX_DECIMAL_15_2 = 9999999999999.99;
+
+function parsePositiveAmount(value: string): number | null {
+  const parsed = Number.parseFloat(String(value));
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  const normalized = Number(parsed.toFixed(2));
+  if (normalized <= 0 || normalized > MAX_DECIMAL_15_2) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function parseFiniteAmount(value: string): number | null {
+  const parsed = Number.parseFloat(String(value));
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return parsed;
+}
+
 // ==================== BALANCE OPERATIONS ====================
 
 export async function updateUserBalance(id: string, amount: string, operation: 'add' | 'subtract'): Promise<User | undefined> {
   // ATOMIC balance update using SQL to prevent race conditions
-  const changeAmount = parseFloat(amount);
-  if (isNaN(changeAmount) || changeAmount < 0) {
+  const changeAmount = parsePositiveAmount(amount);
+  if (changeAmount === null) {
     throw new Error('Invalid amount');
   }
 
@@ -22,7 +46,7 @@ export async function updateUserBalance(id: string, amount: string, operation: '
 
   // Add operation — safe (can't go negative by adding)
   const [updated] = await db.update(users)
-    .set({ 
+    .set({
       balance: sql`CAST(CAST(${users.balance} AS DECIMAL) + ${changeAmount} AS TEXT)`,
       updatedAt: new Date()
     })
@@ -34,8 +58,8 @@ export async function updateUserBalance(id: string, amount: string, operation: '
 
 // Atomic balance update with minimum balance check (prevents negative balance)
 export async function updateUserBalanceWithCheck(id: string, amount: string, operation: 'add' | 'subtract'): Promise<{ success: boolean; user?: User; error?: string }> {
-  const changeAmount = parseFloat(amount);
-  if (isNaN(changeAmount) || changeAmount < 0) {
+  const changeAmount = parsePositiveAmount(amount);
+  if (changeAmount === null) {
     return { success: false, error: 'Invalid amount' };
   }
 
@@ -51,8 +75,11 @@ export async function updateUserBalanceWithCheck(id: string, amount: string, ope
       return { success: false, error: 'User not found' };
     }
 
-    const currentBalance = parseFloat(user.balance);
-    
+    const currentBalance = parseFiniteAmount(user.balance);
+    if (currentBalance === null) {
+      return { success: false, error: 'Invalid stored balance state' };
+    }
+
     if (operation === 'subtract' && currentBalance < changeAmount) {
       return { success: false, error: 'Insufficient balance' };
     }
@@ -72,10 +99,10 @@ export async function updateUserBalanceWithCheck(id: string, amount: string, ope
 
 // Transactional transfer between two users (for game payouts, gifts, P2P)
 export async function transferBalance(
-  fromUserId: string, 
-  toUserId: string, 
+  fromUserId: string,
+  toUserId: string,
   amount: string,
-  options?: { 
+  options?: {
     createTransactionRecords?: boolean;
     transactionType?: 'game_payout' | 'gift' | 'p2p_transfer';
     description?: string;
@@ -86,16 +113,16 @@ export async function transferBalance(
   if (fromUserId === toUserId) {
     return { success: false, error: 'Cannot transfer to self' };
   }
-  
-  const transferAmount = parseFloat(amount);
-  if (isNaN(transferAmount) || transferAmount <= 0) {
+
+  const transferAmount = parsePositiveAmount(amount);
+  if (transferAmount === null) {
     return { success: false, error: 'Invalid amount' };
   }
 
   return await db.transaction(async (tx) => {
     // Lock both rows in consistent order to prevent deadlocks
     const [fromId, toId] = [fromUserId, toUserId].sort();
-    
+
     const [user1] = await tx.select().from(users).where(eq(users.id, fromId)).for('update');
     const [user2] = await tx.select().from(users).where(eq(users.id, toId)).for('update');
 
@@ -106,9 +133,13 @@ export async function transferBalance(
       return { success: false, error: 'User not found' };
     }
 
-    const fromBalance = parseFloat(fromUser.balance);
-    const toBalance = parseFloat(toUser.balance);
-    
+    const fromBalance = parseFiniteAmount(fromUser.balance);
+    const toBalance = parseFiniteAmount(toUser.balance);
+
+    if (fromBalance === null || toBalance === null) {
+      return { success: false, error: 'Invalid stored balance state' };
+    }
+
     if (fromBalance < transferAmount) {
       return { success: false, error: 'Insufficient balance' };
     }
@@ -132,7 +163,7 @@ export async function transferBalance(
       await tx.insert(transactions).values({
         userId: fromUserId,
         type: 'withdrawal',
-        amount: amount,
+        amount: transferAmount.toFixed(2),
         balanceBefore: fromBalance.toFixed(2),
         balanceAfter: fromNewBalance,
         status: 'completed',
@@ -143,7 +174,7 @@ export async function transferBalance(
       await tx.insert(transactions).values({
         userId: toUserId,
         type: 'deposit',
-        amount: amount,
+        amount: transferAmount.toFixed(2),
         balanceBefore: toBalance.toFixed(2),
         balanceAfter: toNewBalance,
         status: 'completed',

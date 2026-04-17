@@ -11,6 +11,10 @@ const bulkActionSchema = z.object({
   action: z.enum(["activate", "deactivate", "enable_withdrawal", "disable_withdrawal", "delete"]),
 });
 
+function isDuplicatePaymentMethodError(error: unknown): boolean {
+  return getErrorMessage(error) === "PAYMENT_METHOD_DUPLICATE";
+}
+
 export function registerPaymentMethodRoutes(app: Express): void {
 
   app.get("/api/payment-methods", authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -127,6 +131,11 @@ export function registerPaymentMethodRoutes(app: Express): void {
       const method = await storage.createCountryPaymentMethod(parsed.data);
       res.json(method);
     } catch (error: unknown) {
+      if (isDuplicatePaymentMethodError(error)) {
+        return res.status(409).json({
+          error: "Payment method already exists for this country and type",
+        });
+      }
       res.status(500).json({ error: getErrorMessage(error) });
     }
   });
@@ -144,6 +153,11 @@ export function registerPaymentMethodRoutes(app: Express): void {
       }
       res.json(method);
     } catch (error: unknown) {
+      if (isDuplicatePaymentMethodError(error)) {
+        return res.status(409).json({
+          error: "Payment method already exists for this country and type",
+        });
+      }
       res.status(500).json({ error: getErrorMessage(error) });
     }
   });
