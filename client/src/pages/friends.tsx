@@ -60,7 +60,7 @@ function UserCard({
 
   return (
     <div
-      className="group relative flex items-start sm:items-center gap-2.5 sm:gap-3 p-3 rounded-xl 
+      className="group relative flex flex-wrap items-start sm:items-center gap-2.5 sm:gap-3 p-3 rounded-xl 
                  bg-card/50 border border-border/40 hover:border-primary/30
                  hover:bg-card/80 transition-all duration-200"
       data-testid={`card-user-${user.id}`}
@@ -80,7 +80,7 @@ function UserCard({
       {/* User info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="font-semibold text-sm truncate" data-testid={`text-username-${user.id}`}>
+          <span className="line-clamp-2 text-sm font-semibold leading-tight break-words [overflow-wrap:anywhere]" data-testid={`text-username-${user.id}`}>
             {user.username}
           </span>
           <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-mono border-primary/20 text-primary/70" data-testid={`badge-level-${user.id}`}>
@@ -93,19 +93,19 @@ function UserCard({
             </Badge>
           )}
         </div>
-        <p className="text-xs text-muted-foreground/70 truncate mt-0.5" data-testid={`text-accountid-${user.id}`}>
+        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/70 break-words [overflow-wrap:anywhere]" data-testid={`text-accountid-${user.id}`}>
           @{user.accountId}
         </p>
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-1.5 flex-wrap justify-end flex-shrink-0">
+      <div className="flex basis-full items-center gap-1.5 flex-wrap justify-start ps-[3.5rem] sm:basis-auto sm:justify-end sm:ps-0">
         {actionType === "friend" && (
           <>
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-full hover:bg-primary/10 hover:text-primary"
+              className="h-11 w-11 rounded-full hover:bg-primary/10 hover:text-primary sm:h-9 sm:w-9"
               onClick={() => onAction(user.id, "chat")}
               disabled={isLoading}
               data-testid={`button-chat-${user.id}`}
@@ -116,7 +116,7 @@ function UserCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-full hover:bg-orange-500/10 hover:text-orange-500"
+              className="h-11 w-11 rounded-full hover:bg-orange-500/10 hover:text-orange-500 sm:h-9 sm:w-9"
               onClick={() => onAction(user.id, "challenge")}
               disabled={isLoading}
               data-testid={`button-challenge-${user.id}`}
@@ -131,7 +131,7 @@ function UserCard({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 rounded-full text-xs hover:bg-red-500/10 hover:text-red-500"
+            className="h-10 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500 sm:h-8"
             onClick={() => onAction(user.id, "unfollow")}
             disabled={isLoading}
             data-testid={`button-unfollow-${user.id}`}
@@ -152,7 +152,7 @@ function UserCard({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 rounded-full text-xs hover:bg-red-500/10 hover:text-red-500"
+              className="h-10 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500 sm:h-8"
               onClick={() => onAction(user.id, "unfollow")}
               disabled={isLoading}
               data-testid={`button-follower-unfollow-${user.id}`}
@@ -169,7 +169,7 @@ function UserCard({
           ) : (
             <Button
               size="sm"
-              className="h-8 rounded-full text-xs bg-primary hover:bg-primary/90"
+              className="h-10 rounded-full px-3 text-xs bg-primary hover:bg-primary/90 sm:h-8"
               onClick={() => onAction(user.id, "friend-request")}
               disabled={isLoading}
               data-testid={`button-followback-${user.id}`}
@@ -190,7 +190,7 @@ function UserCard({
           <>
             <Button
               size="sm"
-              className="h-8 rounded-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="h-10 rounded-full px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white sm:h-8"
               onClick={() => onAction(user.id, "accept-friend-request")}
               disabled={isLoading}
               data-testid={`button-accept-request-${user.id}`}
@@ -207,7 +207,7 @@ function UserCard({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 rounded-full text-xs hover:bg-red-500/10 hover:text-red-500"
+              className="h-10 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500 sm:h-8"
               onClick={() => onAction(user.id, "reject-friend-request")}
               disabled={isLoading}
               data-testid={`button-reject-request-${user.id}`}
@@ -228,7 +228,7 @@ function UserCard({
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 rounded-full text-xs hover:bg-emerald-500/10 hover:text-emerald-500"
+            className="h-10 rounded-full px-3 text-xs hover:bg-emerald-500/10 hover:text-emerald-500 sm:h-8"
             onClick={() => onAction(user.id, "unblock")}
             disabled={isLoading}
             data-testid={`button-unblock-${user.id}`}
@@ -250,7 +250,7 @@ function UserCard({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 rounded-full text-xs text-emerald-600 hover:text-emerald-600"
+                className="h-10 rounded-full px-3 text-xs text-emerald-600 hover:text-emerald-600 sm:h-8"
                 disabled
                 data-testid={`button-friend-state-${user.id}`}
               >
@@ -262,7 +262,7 @@ function UserCard({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 rounded-full text-xs text-amber-600 hover:text-amber-600"
+                  className="h-10 rounded-full px-3 text-xs text-amber-600 hover:text-amber-600 sm:h-8"
                   disabled
                   data-testid={`button-request-pending-${user.id}`}
                 >
@@ -272,7 +272,7 @@ function UserCard({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 rounded-full text-xs hover:bg-red-500/10 hover:text-red-500"
+                  className="h-10 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500 sm:h-8"
                   onClick={() => onAction(user.id, "cancel-friend-request")}
                   disabled={isLoading}
                   data-testid={`button-cancel-request-${user.id}`}
@@ -291,7 +291,7 @@ function UserCard({
               <>
                 <Button
                   size="sm"
-                  className="h-8 rounded-full text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                  className="h-10 rounded-full px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white sm:h-8"
                   onClick={() => onAction(user.id, "accept-friend-request")}
                   disabled={isLoading}
                   data-testid={`button-search-accept-request-${user.id}`}
@@ -308,7 +308,7 @@ function UserCard({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 rounded-full text-xs hover:bg-red-500/10 hover:text-red-500"
+                  className="h-10 rounded-full px-3 text-xs hover:bg-red-500/10 hover:text-red-500 sm:h-8"
                   onClick={() => onAction(user.id, "reject-friend-request")}
                   disabled={isLoading}
                   data-testid={`button-search-reject-request-${user.id}`}
@@ -326,7 +326,7 @@ function UserCard({
             ) : (
               <Button
                 size="sm"
-                className="h-8 rounded-full text-xs bg-primary hover:bg-primary/90"
+                className="h-10 rounded-full px-3 text-xs bg-primary hover:bg-primary/90 sm:h-8"
                 onClick={() => onAction(user.id, "friend-request")}
                 disabled={isLoading}
                 data-testid={`button-add-friend-${user.id}`}
@@ -348,7 +348,7 @@ function UserCard({
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9 rounded-full hover:bg-red-500/10 hover:text-red-500"
+            className="h-11 w-11 rounded-full hover:bg-red-500/10 hover:text-red-500 sm:h-9 sm:w-9"
             onClick={() => onAction(user.id, user.isBlocked ? "unblock" : "block")}
             disabled={isLoading}
             data-testid={`button-block-toggle-${user.id}`}

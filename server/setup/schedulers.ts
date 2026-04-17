@@ -272,6 +272,58 @@ function selectTarneebTimeoutAutoMove(validMoves: MoveData[]): MoveData | null {
   return pickRandomMove(validMoves);
 }
 
+type WatchdogFailureState = {
+  consecutiveFailures: number;
+  backoffUntilMs: number;
+  lastErrorLogAtMs: number;
+};
+
+const WATCHDOG_ERROR_LOG_THROTTLE_MS = 30_000;
+const WATCHDOG_BACKOFF_BASE_MS = 3_000;
+const WATCHDOG_BACKOFF_MAX_MS = 60_000;
+
+function createWatchdogFailureState(): WatchdogFailureState {
+  return {
+    consecutiveFailures: 0,
+    backoffUntilMs: 0,
+    lastErrorLogAtMs: 0,
+  };
+}
+
+function shouldRunWatchdog(state: WatchdogFailureState): boolean {
+  return Date.now() >= state.backoffUntilMs;
+}
+
+function markWatchdogFailure(name: string, state: WatchdogFailureState, error: Error): void {
+  const now = Date.now();
+  state.consecutiveFailures += 1;
+
+  const backoffMs = Math.min(
+    WATCHDOG_BACKOFF_MAX_MS,
+    WATCHDOG_BACKOFF_BASE_MS * 2 ** (state.consecutiveFailures - 1),
+  );
+  state.backoffUntilMs = now + backoffMs;
+
+  const shouldLog = state.consecutiveFailures === 1 || (now - state.lastErrorLogAtMs) >= WATCHDOG_ERROR_LOG_THROTTLE_MS;
+  if (shouldLog) {
+    logger.error(
+      `[${name}] Error (failure #${state.consecutiveFailures}, next retry in ${backoffMs}ms)`,
+      error,
+    );
+    state.lastErrorLogAtMs = now;
+  }
+}
+
+function markWatchdogRecovery(name: string, state: WatchdogFailureState): void {
+  if (state.consecutiveFailures > 0) {
+    logger.info(`[${name}] Recovered after ${state.consecutiveFailures} consecutive failures`);
+  }
+
+  state.consecutiveFailures = 0;
+  state.backoffUntilMs = 0;
+  state.lastErrorLogAtMs = 0;
+}
+
 export function startSchedulers(): void {
   // ==================== MARKETER COMMISSION SCHEDULER ====================
   startMarketerCommissionScheduler();
@@ -346,11 +398,17 @@ export function startSchedulers(): void {
 
   // ==================== P2P TRADE EXPIRY SCHEDULER ====================
   const P2P_EXPIRY_INTERVAL = 60 * 1000; // 1 minute
+  const p2pExpirySchedulerState = createWatchdogFailureState();
 
   async function processExpiredTrades() {
+    if (!shouldRunWatchdog(p2pExpirySchedulerState)) {
+      return;
+    }
+
     try {
       const [settings] = await db.select().from(p2pSettings).limit(1);
       if (!settings?.autoExpireEnabled) {
+        markWatchdogRecovery("P2P Scheduler", p2pExpirySchedulerState);
         return;
       }
 
@@ -431,8 +489,13 @@ export function startSchedulers(): void {
       if (expiredTrades.length > 0) {
         logger.info(`[P2P Scheduler] Processed ${expiredTrades.length} expired trades`);
       }
+      markWatchdogRecovery("P2P Scheduler", p2pExpirySchedulerState);
     } catch (error) {
-      logger.error('[P2P Scheduler] Error processing expired trades', error instanceof Error ? error : new Error(String(error)));
+      markWatchdogFailure(
+        "P2P Scheduler",
+        p2pExpirySchedulerState,
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   }
 
@@ -569,8 +632,13 @@ export function startSchedulers(): void {
   // ==================== CHESS TIMEOUT WATCHDOG ====================
   // Server-authoritative timeout settlement for active challenge chess games.
   const CHESS_TIMEOUT_WATCHDOG_INTERVAL = 3000;
+  const chessTimeoutWatchdogState = createWatchdogFailureState();
 
   async function processChallengeChessTimeouts() {
+    if (!shouldRunWatchdog(chessTimeoutWatchdogState)) {
+      return;
+    }
+
     try {
       const activeRows = await db.select({
         challengeId: challengeGameSessions.challengeId,
@@ -708,8 +776,13 @@ export function startSchedulers(): void {
           );
         }
       }
+      markWatchdogRecovery("Chess Timeout Watchdog", chessTimeoutWatchdogState);
     } catch (error) {
-      logger.error("[Chess Timeout Watchdog] Error", error instanceof Error ? error : new Error(String(error)));
+      markWatchdogFailure(
+        "Chess Timeout Watchdog",
+        chessTimeoutWatchdogState,
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   }
 
@@ -721,10 +794,15 @@ export function startSchedulers(): void {
   // Server-authoritative 30s per-turn timeout for challenge domino sessions.
   const DOMINO_TURN_TIMEOUT_MS = 30_000;
   const DOMINO_TIMEOUT_WATCHDOG_INTERVAL = 1000;
+  const dominoTimeoutWatchdogState = createWatchdogFailureState();
 
   async function processChallengeDominoTimeouts() {
     const dominoEngine = getGameEngine("domino");
     if (!dominoEngine) {
+      return;
+    }
+
+    if (!shouldRunWatchdog(dominoTimeoutWatchdogState)) {
       return;
     }
 
@@ -1027,8 +1105,13 @@ export function startSchedulers(): void {
           );
         }
       }
+      markWatchdogRecovery("Domino Timeout Watchdog", dominoTimeoutWatchdogState);
     } catch (error) {
-      logger.error("[Domino Timeout Watchdog] Error", error instanceof Error ? error : new Error(String(error)));
+      markWatchdogFailure(
+        "Domino Timeout Watchdog",
+        dominoTimeoutWatchdogState,
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   }
 
@@ -1040,10 +1123,15 @@ export function startSchedulers(): void {
   // Server-authoritative 30s timeout for challenge language duel sessions.
   const LANGUAGE_DUEL_TURN_TIMEOUT_MS = 30_000;
   const LANGUAGE_DUEL_TIMEOUT_WATCHDOG_INTERVAL = 1000;
+  const languageDuelTimeoutWatchdogState = createWatchdogFailureState();
 
   async function processChallengeLanguageDuelTimeouts() {
     const languageDuelEngine = getGameEngine("languageduel");
     if (!languageDuelEngine) {
+      return;
+    }
+
+    if (!shouldRunWatchdog(languageDuelTimeoutWatchdogState)) {
       return;
     }
 
@@ -1311,8 +1399,13 @@ export function startSchedulers(): void {
           );
         }
       }
+      markWatchdogRecovery("Language Duel Timeout Watchdog", languageDuelTimeoutWatchdogState);
     } catch (error) {
-      logger.error("[Language Duel Timeout Watchdog] Error", error instanceof Error ? error : new Error(String(error)));
+      markWatchdogFailure(
+        "Language Duel Timeout Watchdog",
+        languageDuelTimeoutWatchdogState,
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   }
 
@@ -1324,10 +1417,15 @@ export function startSchedulers(): void {
   // Server-authoritative 30s per-turn timeout for challenge baloot sessions.
   const BALOOT_TURN_TIMEOUT_MS = 30_000;
   const BALOOT_TIMEOUT_WATCHDOG_INTERVAL = 1000;
+  const balootTimeoutWatchdogState = createWatchdogFailureState();
 
   async function processChallengeBalootTimeouts() {
     const balootEngine = getGameEngine("baloot");
     if (!balootEngine) {
+      return;
+    }
+
+    if (!shouldRunWatchdog(balootTimeoutWatchdogState)) {
       return;
     }
 
@@ -1639,8 +1737,13 @@ export function startSchedulers(): void {
           );
         }
       }
+      markWatchdogRecovery("Baloot Timeout Watchdog", balootTimeoutWatchdogState);
     } catch (error) {
-      logger.error("[Baloot Timeout Watchdog] Error", error instanceof Error ? error : new Error(String(error)));
+      markWatchdogFailure(
+        "Baloot Timeout Watchdog",
+        balootTimeoutWatchdogState,
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   }
 
@@ -1652,10 +1755,15 @@ export function startSchedulers(): void {
   // Server-authoritative 30s per-turn timeout for challenge tarneeb sessions.
   const TARNEEB_TURN_TIMEOUT_MS = 30_000;
   const TARNEEB_TIMEOUT_WATCHDOG_INTERVAL = 1000;
+  const tarneebTimeoutWatchdogState = createWatchdogFailureState();
 
   async function processChallengeTarneebTimeouts() {
     const tarneebEngine = getGameEngine("tarneeb");
     if (!tarneebEngine) {
+      return;
+    }
+
+    if (!shouldRunWatchdog(tarneebTimeoutWatchdogState)) {
       return;
     }
 
@@ -1969,8 +2077,13 @@ export function startSchedulers(): void {
           );
         }
       }
+      markWatchdogRecovery("Tarneeb Timeout Watchdog", tarneebTimeoutWatchdogState);
     } catch (error) {
-      logger.error("[Tarneeb Timeout Watchdog] Error", error instanceof Error ? error : new Error(String(error)));
+      markWatchdogFailure(
+        "Tarneeb Timeout Watchdog",
+        tarneebTimeoutWatchdogState,
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   }
 

@@ -4,6 +4,8 @@ import { db } from "../../db";
 import { eq, sql, gte, count } from "drizzle-orm";
 import { getBannedWordsList, addCustomBannedWord, removeBannedWord } from "../../lib/word-filter";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
+import { invalidateChatEnabledCache } from "../../lib/redis";
+import { removeLegacyChatEnabledAliasRow } from "../../lib/chat-settings";
 
 const CHAT_SETTING_ALIAS: Record<string, string> = {
   isEnabled: "chat_enabled",
@@ -53,8 +55,37 @@ export function registerChatManagementRoutes(app: Express) {
 
   app.get("/api/admin/chat-settings", adminAuthMiddleware, async (_req: AdminRequest, res: Response) => {
     try {
-      const settings = await db.select().from(chatSettings).orderBy(chatSettings.key);
-      res.json(settings);
+      const settings = await db
+        .select({
+          id: chatSettings.id,
+          key: chatSettings.key,
+          value: chatSettings.value,
+          updatedBy: chatSettings.updatedBy,
+          updatedAt: chatSettings.updatedAt,
+        })
+        .from(chatSettings)
+        .orderBy(chatSettings.key);
+
+      const normalizedSettings = settings.map((setting) => ({
+        id: setting.id,
+        key: String(setting.key),
+        value: setting.value,
+        updatedBy: setting.updatedBy,
+        updatedAt: setting.updatedAt,
+      }));
+
+      const canonicalSetting = normalizedSettings.find((setting) => setting.key === "chat_enabled");
+      const legacySetting = normalizedSettings.find((setting) => setting.key === "isEnabled");
+      const responseSettings = normalizedSettings.filter((setting) => setting.key !== "isEnabled");
+
+      if (!canonicalSetting && legacySetting) {
+        responseSettings.push({
+          ...legacySetting,
+          key: "chat_enabled",
+        });
+      }
+
+      res.json(responseSettings);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -88,6 +119,11 @@ export function registerChatManagementRoutes(app: Express) {
           newValue: normalizedValue
         }, req);
 
+        if (key === "chat_enabled") {
+          await removeLegacyChatEnabledAliasRow();
+          invalidateChatEnabledCache();
+        }
+
         return res.json(created);
       }
 
@@ -100,6 +136,11 @@ export function registerChatManagementRoutes(app: Express) {
         previousValue: existing.value || "",
         newValue: normalizedValue
       }, req);
+
+      if (key === "chat_enabled") {
+        await removeLegacyChatEnabledAliasRow();
+        invalidateChatEnabledCache();
+      }
 
       res.json(updated);
     } catch (error: unknown) {

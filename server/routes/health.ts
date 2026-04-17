@@ -92,6 +92,13 @@ async function buildMonitoringKpi(req: Request): Promise<{
     voiceJoinAcceptanceRate: number;
     voiceRejectedEvents: number;
     voiceForwardedEvents: number;
+    voiceIceCandidatesObserved: number;
+    voiceIceRelayRatio: number;
+    voiceIceHost: number;
+    voiceIceSrflx: number;
+    voiceIceRelay: number;
+    voiceIcePrflx: number;
+    voiceIceUnknown: number;
     processRssMb: number;
   };
 }> {
@@ -139,6 +146,13 @@ async function buildMonitoringKpi(req: Request): Promise<{
       voiceJoinAcceptanceRate: voiceTelemetry.rates.joinAcceptanceRate,
       voiceRejectedEvents: voiceTelemetry.totals.rejected,
       voiceForwardedEvents: voiceTelemetry.totals.forwarded,
+      voiceIceCandidatesObserved: voiceTelemetry.iceCandidates.totalObserved,
+      voiceIceRelayRatio: voiceTelemetry.iceCandidates.distribution.relay,
+      voiceIceHost: voiceTelemetry.iceCandidates.byType.host,
+      voiceIceSrflx: voiceTelemetry.iceCandidates.byType.srflx,
+      voiceIceRelay: voiceTelemetry.iceCandidates.byType.relay,
+      voiceIcePrflx: voiceTelemetry.iceCandidates.byType.prflx,
+      voiceIceUnknown: voiceTelemetry.iceCandidates.byType.unknown,
       processRssMb: Math.round(memoryUsage.rss / 1024 / 1024),
     },
   };

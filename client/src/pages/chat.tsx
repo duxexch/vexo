@@ -1015,7 +1015,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                     )}
                     data-testid={`chat-conversation-${conv.otherUserId}`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-start gap-3">
                       <div className="relative">
                         <Avatar className="h-10 w-10">
                           <AvatarImage src={conv.otherUser.avatarUrl || undefined} />
@@ -1025,17 +1025,17 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                           <span className="absolute bottom-0 end-0 w-3 h-3 bg-emerald-500 border-2 border-background rounded-full" />
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium truncate">
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="line-clamp-2 text-start font-medium leading-tight break-words [overflow-wrap:anywhere]">
                             {conv.otherUser.firstName || conv.otherUser.username}
                           </span>
                           <span className="text-xs text-muted-foreground shrink-0">
                             {conv.lastMessage?.createdAt ? formatMessageTime(conv.lastMessage.createdAt, t) : ""}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm text-muted-foreground truncate">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="line-clamp-2 text-sm text-muted-foreground leading-snug break-words [overflow-wrap:anywhere]">
                             {conv.lastMessage?.messageType === "image" ? t("chat.photo") :
                               conv.lastMessage?.messageType === "video" ? t("chat.video") :
                                 conv.lastMessage?.messageType === "voice" ? t("chat.voiceMsg") :
@@ -1094,7 +1094,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold flex min-w-0 items-center gap-2">
-                  <span className="truncate">
+                  <span className="line-clamp-2 break-words [overflow-wrap:anywhere]">
                     {activeUserProfile?.firstName || activeUserProfile?.username || `@${activeConversation}`}
                   </span>
                   <Tooltip>
@@ -1109,7 +1109,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                     </TooltipContent>
                   </Tooltip>
                 </h3>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="line-clamp-2 text-xs leading-snug text-muted-foreground break-words [overflow-wrap:anywhere]">
                   {typingUsers.has(activeConversation) ? (
                     <span className="text-primary animate-pulse">{t('chat.typing')}</span>
                   ) : isActiveUserOnline ? (
@@ -1121,7 +1121,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                   )}
                 </p>
               </div>
-              <div className="flex max-w-[58vw] flex-wrap items-center justify-end gap-1 pb-0.5 sm:max-w-none sm:flex-nowrap sm:gap-1.5">
+              <div className="flex max-w-[58vw] min-w-0 flex-wrap content-start items-center justify-end gap-1 pb-0.5 sm:max-w-none sm:flex-nowrap sm:gap-1.5">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px] min-w-[44px] shrink-0"
@@ -1320,7 +1320,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                     </Badge>
                     <span className="font-mono text-primary">{formattedActiveCallElapsed}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="flex flex-wrap items-center justify-end gap-2 text-muted-foreground">
                     <span className="whitespace-nowrap">{`${activeCallSession.ratePerMinute} ${callCurrencySymbol}`}</span>
                     <span className="font-medium text-foreground">{`~ ${activeCallEstimatedCost} ${callCurrencySymbol}`}</span>
                     <span className="text-[10px]">({activeCallEstimatedMinutes})</span>
@@ -1361,7 +1361,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                   className="h-8 text-sm"
                   autoFocus
                 />
-                <span className="text-xs text-muted-foreground shrink-0">
+                <span className="max-w-[40vw] truncate text-xs text-muted-foreground shrink-0 sm:max-w-none sm:whitespace-nowrap">
                   {searchResults.length > 0 ? t('chat.results', { count: searchResults.length }) : ""}
                 </span>
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0"
@@ -1413,7 +1413,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                           !showAvatar ? "mt-0.5" : "mt-3"
                         )}>
                           {/* Message bubble */}
-                          <div className={cn("max-w-[85%] sm:max-w-[70%] relative")}>
+                          <div className={cn("relative max-w-[88%] sm:max-w-[70%]")}>
                             {/* Reply preview */}
                             {repliedMsg && !isDeleted && (
                               <div className={cn(
@@ -1424,11 +1424,11 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                               )}>
                                 <div className="flex items-center gap-1">
                                   <CornerDownRight className="h-3 w-3" />
-                                  <span className="font-medium truncate">
+                                  <span className="line-clamp-1 font-medium break-words [overflow-wrap:anywhere]">
                                     {repliedMsg.senderId === user?.id ? t('chat.you') : (activeUserProfile?.firstName || activeUserProfile?.username || `@${activeConversation}`)}
                                   </span>
                                 </div>
-                                <p className="truncate opacity-80">{repliedMsg.content || t('chat.media')}</p>
+                                <p className="line-clamp-2 break-words [overflow-wrap:anywhere] opacity-80">{repliedMsg.content || t('chat.media')}</p>
                               </div>
                             )}
 
@@ -1459,11 +1459,11 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                                   {msg.attachmentUrl && !msg.mediaUrl && (
                                     <div className="mb-1">
                                       {msg.messageType === "image" ? (
-                                        <img src={msg.attachmentUrl} alt="" className="max-w-[260px] rounded-lg" loading="lazy" />
+                                        <img src={msg.attachmentUrl} alt="" className="w-full max-w-full rounded-lg sm:max-w-[260px]" loading="lazy" />
                                       ) : msg.messageType === "video" ? (
-                                        <video src={msg.attachmentUrl} controls className="max-w-[260px] rounded-lg" />
+                                        <video src={msg.attachmentUrl} controls className="w-full max-w-full rounded-lg sm:max-w-[260px]" />
                                       ) : msg.messageType === "voice" ? (
-                                        <audio src={msg.attachmentUrl} controls className="max-w-[240px]" />
+                                        <audio src={msg.attachmentUrl} controls className="w-full max-w-full sm:max-w-[240px]" />
                                       ) : null}
                                     </div>
                                   )}
@@ -1549,7 +1549,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                             {/* Message actions: always available on touch, hover-enhanced on larger screens */}
                             {!isDeleted && (
                               <div className={cn(
-                                "mt-1 flex items-center gap-0.5 rounded-lg border bg-background p-0.5 shadow-sm transition-opacity sm:absolute sm:top-0 sm:mt-0 sm:opacity-0 sm:group-hover:opacity-100",
+                                "mt-1 flex max-w-full flex-wrap items-center gap-0.5 rounded-lg border bg-background p-0.5 shadow-sm transition-opacity sm:absolute sm:top-0 sm:mt-0 sm:flex-nowrap sm:opacity-0 sm:group-hover:opacity-100",
                                 isMine
                                   ? "justify-end sm:-start-2 sm:-translate-x-full"
                                   : "justify-start sm:-end-2 sm:translate-x-full"
@@ -1667,7 +1667,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                       <><Reply className="h-3 w-3" /> {replyTo!.senderId === user?.id ? t('chat.replyToSelf') : t('chat.replyTo', { name: activeUser?.firstName || activeUser?.username || '' })}</>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground truncate">
+                  <p className="line-clamp-2 text-xs text-muted-foreground break-words [overflow-wrap:anywhere]">
                     {editingMsg?.content || replyTo?.content || t('chat.media')}
                   </p>
                 </div>
@@ -1717,7 +1717,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                     >
                       <div className="min-w-0 flex items-center gap-2 text-xs text-destructive">
                         <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{failed.preview || t("common.failed")}</span>
+                        <span className="line-clamp-2 break-words [overflow-wrap:anywhere]">{failed.preview || t("common.failed")}</span>
                       </div>
                       <Button
                         type="button"

@@ -10,6 +10,59 @@ import { getErrorMessage, getConfigNumber, getConfigValue, checkRateLimit, type 
 
 const AUTO_DELETE_INTERVALS = [1, 5, 15, 30, 60, 360, 1440, 10080] as const;
 
+type AutoDeleteCleanupFailureState = {
+  consecutiveFailures: number;
+  backoffUntilMs: number;
+  lastErrorLogAtMs: number;
+};
+
+const AUTO_DELETE_ERROR_LOG_THROTTLE_MS = 5 * 60 * 1000;
+const AUTO_DELETE_BACKOFF_BASE_MS = 60 * 1000;
+const AUTO_DELETE_BACKOFF_MAX_MS = 15 * 60 * 1000;
+
+function createAutoDeleteCleanupFailureState(): AutoDeleteCleanupFailureState {
+  return {
+    consecutiveFailures: 0,
+    backoffUntilMs: 0,
+    lastErrorLogAtMs: 0,
+  };
+}
+
+function shouldRunAutoDeleteCleanup(state: AutoDeleteCleanupFailureState): boolean {
+  return Date.now() >= state.backoffUntilMs;
+}
+
+function markAutoDeleteCleanupFailure(state: AutoDeleteCleanupFailureState, error: Error): void {
+  const now = Date.now();
+  state.consecutiveFailures += 1;
+
+  const backoffMs = Math.min(
+    AUTO_DELETE_BACKOFF_MAX_MS,
+    AUTO_DELETE_BACKOFF_BASE_MS * 2 ** (state.consecutiveFailures - 1),
+  );
+
+  state.backoffUntilMs = now + backoffMs;
+
+  const shouldLog = state.consecutiveFailures === 1 || (now - state.lastErrorLogAtMs) >= AUTO_DELETE_ERROR_LOG_THROTTLE_MS;
+  if (shouldLog) {
+    logger.error(
+      `[Auto-Delete] Error cleaning expired messages (failure #${state.consecutiveFailures}, next retry in ${backoffMs}ms)`,
+      error,
+    );
+    state.lastErrorLogAtMs = now;
+  }
+}
+
+function markAutoDeleteCleanupRecovery(state: AutoDeleteCleanupFailureState): void {
+  if (state.consecutiveFailures > 0) {
+    logger.info(`[Auto-Delete] Cleanup recovered after ${state.consecutiveFailures} consecutive failures`);
+  }
+
+  state.consecutiveFailures = 0;
+  state.backoffUntilMs = 0;
+  state.lastErrorLogAtMs = 0;
+}
+
 /** Auto-delete permission routes — status, purchase, settings + cleanup cron */
 export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddleware): void {
 
@@ -210,10 +263,16 @@ export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddl
   });
 
   // Auto-delete cron job — runs every 60 seconds
+  const autoDeleteCleanupState = createAutoDeleteCleanupFailureState();
+
   setInterval(async () => {
+    if (!shouldRunAutoDeleteCleanup(autoDeleteCleanupState)) {
+      return;
+    }
+
     try {
       const now = new Date();
-      
+
       const expiredMessages = await db.select({
         id: chatMessages.id,
         mediaUrl: chatMessages.mediaUrl,
@@ -224,7 +283,10 @@ export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddl
         ))
         .limit(100);
 
-      if (expiredMessages.length === 0) return;
+      if (expiredMessages.length === 0) {
+        markAutoDeleteCleanupRecovery(autoDeleteCleanupState);
+        return;
+      }
 
       for (const msg of expiredMessages) {
         if (msg.mediaUrl) {
@@ -241,9 +303,13 @@ export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddl
       await db.execute(sql`
         DELETE FROM chat_messages WHERE id = ANY(${idsToDelete})
       `);
+      markAutoDeleteCleanupRecovery(autoDeleteCleanupState);
 
     } catch (error) {
-      logger.error('[Auto-Delete] Error cleaning expired messages', error instanceof Error ? error : new Error(String(error)));
+      markAutoDeleteCleanupFailure(
+        autoDeleteCleanupState,
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
   }, 60000);
 }

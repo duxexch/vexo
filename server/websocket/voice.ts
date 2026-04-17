@@ -12,6 +12,24 @@ const MAX_ICE_CANDIDATE_LENGTH = 2_048;
 const VOICE_TELEMETRY_FLUSH_INTERVAL_MS = 60_000;
 const CHALLENGE_VOICE_PRICE_CONFIG_KEY = "chat_voice_call_price_per_minute";
 
+type IceCandidateType = "host" | "srflx" | "relay" | "prflx" | "unknown";
+
+interface VoiceIceCandidateTypeCounters {
+  host: number;
+  srflx: number;
+  relay: number;
+  prflx: number;
+  unknown: number;
+}
+
+interface VoiceIceCandidateTypeDistribution {
+  host: number;
+  srflx: number;
+  relay: number;
+  prflx: number;
+  unknown: number;
+}
+
 interface VoiceTelemetryCounters {
   joinRequests: number;
   joinAccepted: number;
@@ -39,6 +57,11 @@ export interface VoiceTelemetrySnapshot {
   rates: {
     joinAcceptanceRate: number;
   };
+  iceCandidates: {
+    totalObserved: number;
+    byType: VoiceIceCandidateTypeCounters;
+    distribution: VoiceIceCandidateTypeDistribution;
+  };
 }
 
 const voiceTelemetryCounters: VoiceTelemetryCounters = {
@@ -55,10 +78,47 @@ const voiceTelemetryCounters: VoiceTelemetryCounters = {
   rejectedOther: 0,
 };
 
+const voiceIceCandidateTypeCounters: VoiceIceCandidateTypeCounters = {
+  host: 0,
+  srflx: 0,
+  relay: 0,
+  prflx: 0,
+  unknown: 0,
+};
+
 let voiceTelemetryLastFlushAt = Date.now();
+
+function getTotalIceCandidatesObserved(counters: VoiceIceCandidateTypeCounters): number {
+  return counters.host + counters.srflx + counters.relay + counters.prflx + counters.unknown;
+}
+
+function buildIceCandidateTypeDistribution(
+  counters: VoiceIceCandidateTypeCounters,
+  totalObserved: number,
+): VoiceIceCandidateTypeDistribution {
+  if (totalObserved <= 0) {
+    return {
+      host: 0,
+      srflx: 0,
+      relay: 0,
+      prflx: 0,
+      unknown: 0,
+    };
+  }
+
+  return {
+    host: Number((counters.host / totalObserved).toFixed(4)),
+    srflx: Number((counters.srflx / totalObserved).toFixed(4)),
+    relay: Number((counters.relay / totalObserved).toFixed(4)),
+    prflx: Number((counters.prflx / totalObserved).toFixed(4)),
+    unknown: Number((counters.unknown / totalObserved).toFixed(4)),
+  };
+}
 
 function getVoiceTelemetryBaseSnapshot(nowMs: number): VoiceTelemetrySnapshot {
   const counters: VoiceTelemetryCounters = { ...voiceTelemetryCounters };
+  const iceCounters: VoiceIceCandidateTypeCounters = { ...voiceIceCandidateTypeCounters };
+  const totalIceCandidatesObserved = getTotalIceCandidatesObserved(iceCounters);
   const rejected = counters.rejectedRateLimit
     + counters.rejectedInvalidPayload
     + counters.rejectedUnauthorized
@@ -82,11 +142,20 @@ function getVoiceTelemetryBaseSnapshot(nowMs: number): VoiceTelemetrySnapshot {
     rates: {
       joinAcceptanceRate,
     },
+    iceCandidates: {
+      totalObserved: totalIceCandidatesObserved,
+      byType: iceCounters,
+      distribution: buildIceCandidateTypeDistribution(iceCounters, totalIceCandidatesObserved),
+    },
   };
 }
 
 function incrementVoiceTelemetryCounter(counter: keyof VoiceTelemetryCounters, amount: number = 1): void {
   voiceTelemetryCounters[counter] += amount;
+}
+
+function incrementIceCandidateTypeCounter(candidateType: IceCandidateType): void {
+  voiceIceCandidateTypeCounters[candidateType] += 1;
 }
 
 function classifyVoiceError(errorMessage: string): keyof VoiceTelemetryCounters {
@@ -96,6 +165,21 @@ function classifyVoiceError(errorMessage: string): keyof VoiceTelemetryCounters 
   if (normalized.includes("not authorized")) return "rejectedUnauthorized";
   if (normalized.includes("not in voice room")) return "rejectedNotInRoom";
   return "rejectedOther";
+}
+
+function classifyIceCandidateType(candidateValue: string): IceCandidateType {
+  const match = /\btyp\s+([a-z0-9]+)/i.exec(candidateValue);
+  const type = match?.[1]?.toLowerCase() || "unknown";
+
+  switch (type) {
+    case "host":
+    case "srflx":
+    case "relay":
+    case "prflx":
+      return type;
+    default:
+      return "unknown";
+  }
 }
 
 function flushVoiceTelemetryIfDue(): void {
@@ -111,12 +195,21 @@ function flushVoiceTelemetryIfDue(): void {
     || snapshot.counters.leaveProcessed > 0;
 
   if (shouldLog) {
+    const iceByType = snapshot.iceCandidates.byType;
+
     logger.info("[VoiceWS] telemetry summary", {
       windowMs: snapshot.windowDurationMs,
       activeRooms: snapshot.activeRooms,
       ...snapshot.counters,
       ...snapshot.totals,
       ...snapshot.rates,
+      iceCandidatesObserved: snapshot.iceCandidates.totalObserved,
+      iceCandidateHost: iceByType.host,
+      iceCandidateSrflx: iceByType.srflx,
+      iceCandidateRelay: iceByType.relay,
+      iceCandidatePrflx: iceByType.prflx,
+      iceCandidateUnknown: iceByType.unknown,
+      iceCandidateRelayRatio: snapshot.iceCandidates.distribution.relay,
     });
 
     if (snapshot.counters.rejectedRateLimit >= 10 || snapshot.counters.rejectedInvalidPayload >= 10) {
@@ -143,6 +236,9 @@ export function getVoiceTelemetrySnapshot(): VoiceTelemetrySnapshot {
 export function resetVoiceTelemetryCounters(): void {
   Object.keys(voiceTelemetryCounters).forEach((key) => {
     voiceTelemetryCounters[key as keyof VoiceTelemetryCounters] = 0;
+  });
+  Object.keys(voiceIceCandidateTypeCounters).forEach((key) => {
+    voiceIceCandidateTypeCounters[key as keyof VoiceIceCandidateTypeCounters] = 0;
   });
   voiceTelemetryLastFlushAt = Date.now();
 }
@@ -247,7 +343,7 @@ function toUniqueParticipantIds(values: Array<string | null | undefined>): strin
 
 type VoiceAccessResolution = {
   participantIds: string[];
-  userRole: "player" | "spectator";
+  userRole: "player";
   roomKind: "match" | "challenge" | "private_call";
   callSessionId?: string;
 };
@@ -332,7 +428,6 @@ async function resolveVoiceAccess(roomId: string, userId: string): Promise<Voice
       player2Id: challenges.player2Id,
       player3Id: challenges.player3Id,
       player4Id: challenges.player4Id,
-      visibility: challenges.visibility,
     })
     .from(challenges)
     .where(eq(challenges.id, roomId))
@@ -377,15 +472,6 @@ async function resolveVoiceAccess(roomId: string, userId: string): Promise<Voice
     return {
       participantIds,
       userRole: "player",
-      roomKind: "challenge",
-    };
-  }
-
-  const visibility = String(challenge.visibility || "public").toLowerCase();
-  if (visibility !== "private") {
-    return {
-      participantIds,
-      userRole: "spectator",
       roomKind: "challenge",
     };
   }
@@ -489,7 +575,7 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
       .filter(([peerUserId, socket]) => peerUserId !== ws.userId && socket.readyState === WebSocket.OPEN)
       .map(([peerUserId]) => ({
         userId: peerUserId,
-        role: participantIds.includes(peerUserId) ? "player" : "spectator",
+        role: "player",
       }));
 
     voiceRooms.get(matchId)!.set(ws.userId, ws);
@@ -561,7 +647,7 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
 
     // Verify sender is in the voice room before forwarding
     const room = voiceRooms.get(matchId);
-    if (room && room.has(ws.userId)) {
+    if (room && room.get(ws.userId) === ws) {
       const targetSocket = room.get(targetUserId);
       if (!targetSocket || targetSocket.readyState !== WebSocket.OPEN) {
         sendVoiceError("Voice peer is not available", {
@@ -610,7 +696,7 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
 
     // Verify sender is in the voice room before forwarding
     const room = voiceRooms.get(matchId);
-    if (room && room.has(ws.userId)) {
+    if (room && room.get(ws.userId) === ws) {
       const targetSocket = room.get(targetUserId);
       if (!targetSocket || targetSocket.readyState !== WebSocket.OPEN) {
         sendVoiceError("Voice peer is not available", {
@@ -658,7 +744,10 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
 
     // Verify sender is in the voice room before forwarding
     const room = voiceRooms.get(matchId);
-    if (room && room.has(ws.userId)) {
+    if (room && room.get(ws.userId) === ws) {
+      const candidateType = classifyIceCandidateType(candidate.candidate || "");
+      incrementIceCandidateTypeCounter(candidateType);
+
       const targetSocket = room.get(targetUserId);
       if (!targetSocket || targetSocket.readyState !== WebSocket.OPEN) {
         return;
@@ -677,8 +766,11 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
         matchId,
         fromUserId: ws.userId,
         toUserId: targetUserId,
+        candidateType,
         forwardedCount: 1,
       });
+    } else {
+      sendVoiceError("Not in voice room", { matchId, event: "voice_ice_candidate" });
     }
   }
 

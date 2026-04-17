@@ -2,19 +2,16 @@ import type { Express, Response } from "express";
 import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
-import { eq, sql } from "drizzle-orm";
-import { users, chatSettings } from "@shared/schema";
+import { sql } from "drizzle-orm";
+import { users } from "@shared/schema";
+import { getNormalizedChatSettingsMap } from "../../lib/chat-settings";
 
 export function registerChatConversationRoutes(app: Express): void {
 
   // Get chat settings (check if chat is enabled)
   app.get("/api/chat/settings", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-      const settings = await db.select().from(chatSettings);
-      const settingsMap: Record<string, string> = {};
-      settings.forEach(s => {
-        settingsMap[s.key] = s.value || "";
-      });
+      const settingsMap = await getNormalizedChatSettingsMap();
       res.json(settingsMap);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
@@ -25,7 +22,7 @@ export function registerChatConversationRoutes(app: Express): void {
   app.get("/api/chat/conversations", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.id;
-      
+
       // Single query: conversations + user info + unread counts (eliminates N+1)
       const result = await db.execute(sql`
         WITH ranked AS (
@@ -66,7 +63,7 @@ export function registerChatConversationRoutes(app: Express): void {
         ORDER BY c.created_at DESC
         LIMIT 100
       `);
-      
+
       const conversations = (result.rows as Record<string, unknown>[]).map(row => ({
         otherUserId: row.other_user_id,
         lastMessage: {
@@ -88,7 +85,7 @@ export function registerChatConversationRoutes(app: Express): void {
           accountId: row.account_id,
         },
       }));
-      
+
       res.json(conversations);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

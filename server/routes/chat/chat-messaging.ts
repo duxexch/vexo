@@ -3,10 +3,28 @@ import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
-import { chatAutoDeletePermissions, chatMediaPermissions, chatMessages, chatSettings, projectCurrencyLedger, projectCurrencyWallets, systemConfig } from "@shared/schema";
+import { chatAutoDeletePermissions, chatMediaPermissions, chatMessages, projectCurrencyLedger, projectCurrencyWallets, systemConfig } from "@shared/schema";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import { sanitizePlainText } from "../../lib/input-security";
 import { isUserBlocked } from "../../lib/user-blocking";
+import { getRedisClient, isChatEnabled } from "../../lib/redis";
+import { resolveChatEnabledFlagFromDb } from "../../lib/chat-settings";
+
+const CHAT_MESSAGE_DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
+const CHAT_MESSAGE_DEDUPE_PENDING_TTL_MS = 60 * 1000;
+
+function normalizeClientMessageId(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  return normalized.slice(0, 128);
+}
 
 export function registerChatMessagingRoutes(app: Express): void {
   const toMoney = (value: number): number => Number(value.toFixed(2));
@@ -54,6 +72,7 @@ export function registerChatMessagingRoutes(app: Express): void {
         isDisappearing = false,
         disappearAfterRead = false,
         replyToId,
+        clientMessageId: rawClientMessageId,
       } = req.body;
       const normalizedMessageType = String(messageType || "text").trim().toLowerCase();
       const isVoiceMessage = normalizedMessageType === "voice" || normalizedMessageType === "audio";
@@ -61,44 +80,82 @@ export function registerChatMessagingRoutes(app: Express): void {
       const isVideoMessage = normalizedMessageType === "video";
       const isMediaMessage = isVoiceMessage || isImageMessage || isVideoMessage;
       const storedMessageType = isVoiceMessage ? "voice" : normalizedMessageType;
+      const clientMessageId = normalizeClientMessageId(rawClientMessageId);
+      const dedupeKey = clientMessageId ? `chat:msg:dedupe:${senderId}:${clientMessageId}` : null;
+      const releaseDedupeLock = async () => {
+        if (dedupeKey) {
+          await getRedisClient().del(dedupeKey).catch(() => { });
+        }
+      };
+
+      if (dedupeKey) {
+        const lockSetResult = await getRedisClient().set(
+          dedupeKey,
+          "pending",
+          "PX",
+          CHAT_MESSAGE_DEDUPE_PENDING_TTL_MS,
+          "NX",
+        ).catch(() => null);
+
+        if (lockSetResult && lockSetResult !== "OK") {
+          const existingMarker = await getRedisClient().get(dedupeKey).catch(() => null);
+
+          if (existingMarker && existingMarker !== "pending") {
+            const [existingMessage] = await db
+              .select()
+              .from(chatMessages)
+              .where(and(
+                eq(chatMessages.id, existingMarker),
+                eq(chatMessages.senderId, senderId),
+              ))
+              .limit(1);
+
+            if (existingMessage) {
+              return res.status(200).json(existingMessage);
+            }
+          }
+
+          return res.status(409).json({
+            error: "Message is already being processed",
+            code: "message_in_flight",
+            clientMessageId,
+          });
+        }
+      }
 
       // SECURITY: Validate receiverId
       if (!receiverId || receiverId.length > 100) {
+        await releaseDedupeLock();
         return res.status(400).json({ error: "Invalid receiver" });
       }
 
       // SECURITY: Rate limit
       const rateLimitResult = chatRateLimiter.check(senderId);
       if (!rateLimitResult.allowed) {
+        await releaseDedupeLock();
         return res.status(429).json({ error: "Too many messages, please wait" });
       }
 
-      // Check if chat is enabled (support both key names)
-      const chatEnabledSettings = await db.select({
-        key: chatSettings.key,
-        value: chatSettings.value,
-      }).from(chatSettings).where(
-        or(eq(chatSettings.key, "chat_enabled"), eq(chatSettings.key, "isEnabled"))
-      );
-
-      const canonicalSetting = chatEnabledSettings.find((item) => item.key === "chat_enabled")
-        || chatEnabledSettings.find((item) => item.key === "isEnabled");
-
-      if (canonicalSetting && canonicalSetting.value === "false") {
+      const chatEnabled = await isChatEnabled(resolveChatEnabledFlagFromDb);
+      if (!chatEnabled) {
+        await releaseDedupeLock();
         return res.status(403).json({ error: "Chat is currently disabled" });
       }
 
       if (!isMediaMessage && storedMessageType !== "text") {
+        await releaseDedupeLock();
         return res.status(400).json({ error: "Invalid message type" });
       }
 
       if (!isMediaMessage && (!content || typeof content !== 'string')) {
+        await releaseDedupeLock();
         return res.status(400).json({ error: "Message content is required" });
       }
 
       // SECURITY: Normalize incoming user text into safe plain text
       const sanitizedContent = content ? sanitizePlainText(content, { maxLength: 2000 }) : "";
       if (!sanitizedContent && !isMediaMessage) {
+        await releaseDedupeLock();
         return res.status(400).json({ error: "Message content is required" });
       }
 
@@ -109,9 +166,11 @@ export function registerChatMessagingRoutes(app: Express): void {
       ]);
 
       if (senderBlockedRecipient) {
+        await releaseDedupeLock();
         return res.status(403).json({ error: "You have blocked this user" });
       }
       if (recipientBlockedSender) {
+        await releaseDedupeLock();
         return res.status(403).json({ error: "Cannot send message to this user" });
       }
 
@@ -140,6 +199,7 @@ export function registerChatMessagingRoutes(app: Express): void {
         );
 
         if (!hasAutoDeletePermission) {
+          await releaseDedupeLock();
           return res.status(403).json({ error: "Auto-delete permission required" });
         }
 
@@ -149,6 +209,7 @@ export function registerChatMessagingRoutes(app: Express): void {
       // SECURITY: Limit attachmentUrl
       const safeAttachmentUrl = attachmentUrl ? String(attachmentUrl).slice(0, 2048) : undefined;
       if (isMediaMessage && !safeAttachmentUrl) {
+        await releaseDedupeLock();
         return res.status(400).json({ error: "Attachment is required for media messages" });
       }
 
@@ -169,6 +230,7 @@ export function registerChatMessagingRoutes(app: Express): void {
         );
 
         if (!mediaAllowed) {
+          await releaseDedupeLock();
           return res.status(403).json({ error: "Media permission required. Purchase to unlock." });
         }
       }
@@ -227,7 +289,7 @@ export function registerChatMessagingRoutes(app: Express): void {
             amount: (-voiceMessagePrice).toFixed(2),
             balanceBefore: toMoney(balanceBefore).toFixed(2),
             balanceAfter: balanceAfter.toFixed(2),
-            referenceId: `chat_voice_message_rest:${senderId}:${Date.now()}`,
+            referenceId: `chat_voice_message_rest:${senderId}:${clientMessageId || Date.now()}`,
             referenceType: "chat_voice_message_charge",
             description: "Voice message send charge",
           });
@@ -246,8 +308,18 @@ export function registerChatMessagingRoutes(app: Express): void {
         }).returning();
       });
 
+      if (dedupeKey) {
+        await getRedisClient().set(dedupeKey, message.id, "PX", CHAT_MESSAGE_DEDUPE_TTL_MS).catch(() => { });
+      }
+
       res.status(201).json(message);
     } catch (error: unknown) {
+      const clientMessageId = normalizeClientMessageId(req.body?.clientMessageId);
+      const dedupeKey = clientMessageId ? `chat:msg:dedupe:${req.user!.id}:${clientMessageId}` : null;
+      if (dedupeKey) {
+        await getRedisClient().del(dedupeKey).catch(() => { });
+      }
+
       const message = getErrorMessage(error);
       if (message.includes("Insufficient")) {
         return res.status(400).json({ error: message });

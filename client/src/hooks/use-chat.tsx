@@ -183,8 +183,9 @@ export function useChat(): UseChatReturn {
       });
       if (response.ok) {
         const settings = await response.json();
-        const rawEnabled = settings?.chat_enabled ?? settings?.isEnabled;
-        const isEnabled = rawEnabled !== false && String(rawEnabled ?? "true") !== "false";
+        const rawEnabled = settings?.chat_enabled;
+        const normalizedEnabled = String(rawEnabled ?? "true").trim().toLowerCase();
+        const isEnabled = normalizedEnabled !== "false" && normalizedEnabled !== "0";
         setState((prev) => ({
           ...prev,
           isChatEnabled: isEnabled,
@@ -239,6 +240,7 @@ export function useChat(): UseChatReturn {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
+            clientMessageId,
             content: entry.payload.content,
             messageType: entry.payload.messageType,
             attachmentUrl: entry.payload.attachmentUrl,

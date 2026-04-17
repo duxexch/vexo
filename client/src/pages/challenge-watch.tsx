@@ -45,7 +45,6 @@ import BalootBoard from "@/components/games/BalootBoard";
 import type { BalootState } from "@/components/games/BalootBoard";
 import LanguageDuelBoard from "@/components/games/LanguageDuelBoard";
 import { ProjectCurrencyAmount } from "@/components/ProjectCurrencySymbol";
-import { VoiceChat } from "@/components/games/VoiceChat";
 import { SpectatorPanel } from "@/components/games/SpectatorPanel";
 import { ShareMatchButton } from "@/components/games/ShareMatchButton";
 import {
@@ -73,8 +72,6 @@ import {
   ArrowRightLeft,
   MessageCircle,
   Maximize2,
-  Volume2,
-  VolumeX,
   UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -269,10 +266,6 @@ export default function ChallengeWatchPage() {
   const [fundingShortageProject, setFundingShortageProject] = useState(0);
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
   const [quickConvertAmount, setQuickConvertAmount] = useState("5");
-  const [voicePeerMutedMap, setVoicePeerMutedMap] = useState<
-    Record<string, boolean>
-  >({});
-  const [connectedVoicePeers, setConnectedVoicePeers] = useState<string[]>([]);
   const [avatarChatBubbles, setAvatarChatBubbles] = useState<
     Record<string, WatchAvatarChatBubbleState>
   >({});
@@ -1718,18 +1711,6 @@ export default function ChallengeWatchPage() {
     }
     return t("friends.addFriend");
   };
-  const player1VoiceConnected = Boolean(
-    challenge.player1Id && connectedVoicePeers.includes(challenge.player1Id),
-  );
-  const player1MutedForViewer = Boolean(
-    challenge.player1Id && voicePeerMutedMap[challenge.player1Id],
-  );
-  const player2VoiceConnected = Boolean(
-    challenge.player2Id && connectedVoicePeers.includes(challenge.player2Id),
-  );
-  const player2MutedForViewer = Boolean(
-    challenge.player2Id && voicePeerMutedMap[challenge.player2Id],
-  );
   const player1AvatarBubble =
     challenge.player1Id && avatarChatBubbles[challenge.player1Id]
       ? avatarChatBubbles[challenge.player1Id]
@@ -1740,52 +1721,6 @@ export default function ChallengeWatchPage() {
       : undefined;
   const supportActionsDisabled =
     !challenge.player2 || gameSession?.status !== "playing" || isTeamGame;
-  const challengeVoiceTargets = [
-    {
-      id: challenge.player1Id,
-      username: challenge.player1?.username,
-      seat: 1,
-    },
-    {
-      id: challenge.player2Id,
-      username: challenge.player2?.username,
-      seat: 2,
-    },
-    {
-      id: challenge.player3Id,
-      username: challenge.player3?.username,
-      seat: 3,
-    },
-    {
-      id: challenge.player4Id,
-      username: challenge.player4?.username,
-      seat: 4,
-    },
-  ].flatMap((target) => {
-    if (
-      typeof target.id !== "string" ||
-      target.id.length === 0 ||
-      target.id === user?.id
-    ) {
-      return [];
-    }
-
-    return [
-      {
-        id: target.id,
-        username: target.username,
-        seat: target.seat,
-      },
-    ];
-  });
-
-  const togglePeerListening = (peerUserId: string) => {
-    setVoicePeerMutedMap((previous) => ({
-      ...previous,
-      [peerUserId]: !previous[peerUserId],
-    }));
-  };
-
   const fullscreenWatchActions: GameFullscreenActionItem[] = (() => {
     const chatBadge =
       liveChatMessages.length > 99
@@ -1823,26 +1758,6 @@ export default function ChallengeWatchPage() {
           tone: "outline",
         },
       );
-    }
-
-    for (const target of challengeVoiceTargets) {
-      const mutedForViewer = Boolean(voicePeerMutedMap[target.id]);
-      const isConnected = connectedVoicePeers.includes(target.id);
-      const speakerLabel =
-        target.username || `${t("domino.player")} ${target.seat}`;
-
-      actions.push({
-        id: `voice-peer-${target.id}`,
-        icon: mutedForViewer ? VolumeX : Volume2,
-        label: mutedForViewer
-          ? `${t("challenge.voiceUnmuteSpeaker")} ${speakerLabel}`
-          : `${t("challenge.voiceMuteSpeaker")} ${speakerLabel}`,
-        onClick: () => {
-          togglePeerListening(target.id);
-        },
-        disabled: !isConnected,
-        tone: mutedForViewer ? "destructive" : "outline",
-      });
     }
 
     return actions;
@@ -2115,20 +2030,6 @@ export default function ChallengeWatchPage() {
             </div>
           </header>
 
-          <VoiceChat
-            challengeId={challengeId!}
-            isEnabled={true}
-            onToggle={() => { }}
-            isMicMuted={true}
-            onMicMuteToggle={() => {
-              // Spectator mode is listen-only.
-            }}
-            role="spectator"
-            showInlineControls={false}
-            peerAudioMutedOverride={voicePeerMutedMap}
-            onConnectedPeersChange={setConnectedVoicePeers}
-          />
-
           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
             <ScrollArea className="flex-1">
               <div className="p-2.5 sm:p-4 pb-[calc(8rem+env(safe-area-inset-bottom))] lg:pb-6 flex flex-col items-center">
@@ -2276,33 +2177,6 @@ export default function ChallengeWatchPage() {
                           >
                             <MessageCircle className="h-3 w-3" />
                             <span className="sr-only">{liveChatLabel}</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant={
-                              player1MutedForViewer ? "destructive" : "outline"
-                            }
-                            className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
-                            disabled={
-                              !challenge.player1Id || !player1VoiceConnected
-                            }
-                            onClick={() =>
-                              challenge.player1Id &&
-                              togglePeerListening(challenge.player1Id)
-                            }
-                            data-testid="watch-player1-avatar-voice-toggle"
-                            title={
-                              player1MutedForViewer
-                                ? t("chat.unmuteUser")
-                                : t("chat.muteUser")
-                            }
-                          >
-                            {player1MutedForViewer ? (
-                              <VolumeX className="h-3 w-3" />
-                            ) : (
-                              <Volume2 className="h-3 w-3" />
-                            )}
                           </Button>
                         </div>
                         <div>
@@ -2781,33 +2655,6 @@ export default function ChallengeWatchPage() {
                           >
                             <MessageCircle className="h-3 w-3" />
                             <span className="sr-only">{liveChatLabel}</span>
-                          </Button>
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant={
-                              player2MutedForViewer ? "destructive" : "outline"
-                            }
-                            className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
-                            disabled={
-                              !challenge.player2Id || !player2VoiceConnected
-                            }
-                            onClick={() =>
-                              challenge.player2Id &&
-                              togglePeerListening(challenge.player2Id)
-                            }
-                            data-testid="watch-player2-avatar-voice-toggle"
-                            title={
-                              player2MutedForViewer
-                                ? t("chat.unmuteUser")
-                                : t("chat.muteUser")
-                            }
-                          >
-                            {player2MutedForViewer ? (
-                              <VolumeX className="h-3 w-3" />
-                            ) : (
-                              <Volume2 className="h-3 w-3" />
-                            )}
                           </Button>
                         </div>
                         <div>

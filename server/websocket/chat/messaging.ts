@@ -1,13 +1,14 @@
 import { WebSocket } from "ws";
 import { db } from "../../db";
-import { chatAutoDeletePermissions, chatMediaPermissions, chatMessages, chatSettings, projectCurrencyLedger, projectCurrencyWallets, systemConfig, users } from "@shared/schema";
-import { eq, and, or, sql } from "drizzle-orm";
+import { chatAutoDeletePermissions, chatMediaPermissions, chatMessages, projectCurrencyLedger, projectCurrencyWallets, systemConfig, users } from "@shared/schema";
+import { eq, and, sql } from "drizzle-orm";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import type { AuthenticatedSocket } from "../shared";
 import { clients } from "../shared";
 import { getCachedUserBlockLists, getRedisClient, isChatEnabled } from "../../lib/redis";
 import { sanitizePlainText } from "../../lib/input-security";
 import { sendNotification } from "../notifications";
+import { resolveChatEnabledFlagFromDb } from "../../lib/chat-settings";
 
 const CHAT_MESSAGE_DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
 const CHAT_MESSAGE_DEDUPE_PENDING_TTL_MS = 60 * 1000;
@@ -157,19 +158,7 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
   }
 
   // Check if chat is enabled — cached (was 1 DB query per message)
-  const chatEnabled = await isChatEnabled(async () => {
-    const settings = await db.select({
-      key: chatSettings.key,
-      value: chatSettings.value,
-    }).from(chatSettings).where(
-      or(eq(chatSettings.key, "chat_enabled"), eq(chatSettings.key, "isEnabled"))
-    );
-
-    const canonical = settings.find((item) => item.key === "chat_enabled")
-      || settings.find((item) => item.key === "isEnabled");
-
-    return !canonical || canonical.value !== "false";
-  });
+  const chatEnabled = await isChatEnabled(resolveChatEnabledFlagFromDb);
   if (!chatEnabled) {
     if (dedupeKey) {
       await getRedisClient().del(dedupeKey).catch(() => { });
@@ -498,12 +487,47 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
 export async function handleTyping(ws: AuthenticatedSocket, data: any): Promise<void> {
   if (!ws.userId) return;
 
-  const { receiverId, isTyping } = data;
+  const receiverId = typeof data?.receiverId === "string" ? data.receiverId.trim() : "";
+  if (!receiverId || receiverId.length > 100 || receiverId === ws.userId) {
+    return;
+  }
+
+  const typingState = Boolean(data?.isTyping);
+
+  const [senderLists, recipientLists] = await Promise.all([
+    getCachedUserBlockLists(ws.userId, async (id) => {
+      const [user] = await db
+        .select({ blockedUsers: users.blockedUsers, mutedUsers: users.mutedUsers })
+        .from(users)
+        .where(eq(users.id, id));
+      return user || null;
+    }),
+    getCachedUserBlockLists(receiverId, async (id) => {
+      const [user] = await db
+        .select({ blockedUsers: users.blockedUsers, mutedUsers: users.mutedUsers })
+        .from(users)
+        .where(eq(users.id, id));
+      return user || null;
+    }),
+  ]);
+
+  if (senderLists.blockedUsers.includes(receiverId)) {
+    return;
+  }
+
+  if (recipientLists.blockedUsers.includes(ws.userId)) {
+    return;
+  }
+
+  if (recipientLists.mutedUsers.includes(ws.userId)) {
+    return;
+  }
+
   const recipientSockets = clients.get(receiverId);
   if (recipientSockets) {
     const outgoing = JSON.stringify({
       type: "typing_indicator",
-      data: { senderId: ws.userId, isTyping }
+      data: { senderId: ws.userId, isTyping: typingState }
     });
     recipientSockets.forEach(socket => {
       if (socket.readyState === WebSocket.OPEN) {

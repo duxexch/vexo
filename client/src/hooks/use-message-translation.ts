@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useI18n } from '@/lib/i18n';
+import { useAuth } from '@/lib/auth';
 
 interface TranslationState {
   translatedText: string | null;
@@ -166,6 +167,7 @@ interface UseMessageTranslation {
  */
 export function useMessageTranslation(): UseMessageTranslation {
   const { language: uiLanguage } = useI18n();
+  const { token } = useAuth();
   const [states, setStates] = useState<Map<string, TranslationState>>(new Map());
   const [autoTranslate, setAutoTranslateState] = useState<boolean>(() => {
     return localStorage.getItem('vex_auto_translate') === 'true';
@@ -214,9 +216,17 @@ export function useMessageTranslation(): UseMessageTranslation {
     });
 
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
       const response = await fetch('/api/chat/translate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           text,
           sourceLang: 'auto',
@@ -259,7 +269,7 @@ export function useMessageTranslation(): UseMessageTranslation {
     } finally {
       abortControllers.current.delete(messageId);
     }
-  }, [targetLanguage]);
+  }, [targetLanguage, token]);
 
   const getDisplayText = useCallback((messageId: string, originalText: string): string => {
     const state = states.get(messageId);
