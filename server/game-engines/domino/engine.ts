@@ -325,6 +325,15 @@ export class DominoEngine implements GameEngine {
         break;
       }
 
+      // Respect draw-game flow: only auto-pass when drawing is not possible.
+      // If boneyard still has tiles (and draw cap not reached), keep turn on player.
+      const canDraw =
+        state.boneyard.length > 0 &&
+        (state.drawsThisTurn || 0) < getMaxDrawsPerTurn(state.playerOrder.length);
+      if (canDraw) {
+        break;
+      }
+
       state.passCount++;
       state.lastAction = { type: 'pass', playerId: currentPlayer };
       events.push({ type: 'move', data: { action: 'pass', playerId: currentPlayer, auto: true } });

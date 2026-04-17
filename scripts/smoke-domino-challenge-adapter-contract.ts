@@ -588,7 +588,12 @@ async function main(): Promise<void> {
 
 main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    const details = error instanceof SmokeError ? error.details : error;
+    const details =
+        typeof error === "object" &&
+            error !== null &&
+            "details" in error
+            ? (error as { details?: unknown }).details
+            : error;
     const stack = error instanceof Error ? error.stack : undefined;
     console.error("[smoke:domino-challenge-adapter-contract] FAIL", message, details ?? "", stack ?? "");
     process.exit(1);

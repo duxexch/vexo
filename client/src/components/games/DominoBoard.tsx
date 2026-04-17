@@ -324,8 +324,8 @@ function getDirectionSign(direction: DominoDirection): number {
 }
 
 function getTileFootprint(renderRotation: number, compact: boolean) {
-  const long = compact ? 48 : 64;
-  const short = compact ? 24 : 32;
+  const long = compact ? 56 : 80;
+  const short = compact ? 28 : 40;
   const normalizedRotation = ((renderRotation % 360) + 360) % 360;
   const isSideways = normalizedRotation === 90 || normalizedRotation === 270;
   return {
@@ -379,8 +379,8 @@ function buildDominoSnakePlacements(
 ): DominoPathPlacement[] {
   if (entries.length === 0) return [];
 
-  const seamOverlap = compact ? 0.8 : 1.2;
-  const defaultHorizontalRun = compact ? 4 : 5;
+  const seamOverlap = compact ? 1.15 : 1.65;
+  const defaultHorizontalRun = compact ? 3 : 4;
   const horizontalRun = Math.max(3, horizontalRunOverride ?? defaultHorizontalRun);
   const verticalRun = compact ? 1 : 2;
   const directions = side === "left"
@@ -915,8 +915,7 @@ export function DominoBoard({
     : null;
   const isTurnLive = isMyTurn && !isSpectator && status !== 'finished';
   const isCompactMobile = isNarrowViewport;
-  const boardTileCount = state.boardTiles.length;
-  const boardTileSize: DominoTileSize = isCompactMobile ? "xs" : "sm";
+  const boardTileSize: DominoTileSize = isCompactMobile ? "sm" : "md";
 
   const anchorTileIndex = useMemo(() => {
     if (state.boardTiles.length === 0) {
@@ -946,11 +945,11 @@ export function DominoBoard({
     const laneWidth = boardLaneSize.width > 0
       ? boardLaneSize.width
       : (isCompactMobile ? 320 : 760);
-    const tileLongSide = isCompactMobile ? 48 : 64;
-    const seamOverlap = isCompactMobile ? 0.8 : 1.2;
-    const rawRun = Math.floor((laneWidth - 24) / Math.max(1, tileLongSide - seamOverlap));
+    const tileLongSide = isCompactMobile ? 56 : 80;
+    const seamOverlap = isCompactMobile ? 1.15 : 1.65;
+    const rawRun = Math.floor((laneWidth - 26) / Math.max(1, tileLongSide - seamOverlap));
     const minRun = isCompactMobile ? 3 : 4;
-    const maxRun = isCompactMobile ? 6 : 8;
+    const maxRun = isCompactMobile ? 5 : 7;
     return Math.max(minRun, Math.min(maxRun, rawRun));
   }, [boardLaneSize.width, isCompactMobile]);
 
@@ -986,21 +985,49 @@ export function DominoBoard({
   }, [leftPlacements, anchorEntry, rightPlacements, isCompactMobile, anchorRenderRotation]);
 
   const boardHeight = useMemo(() => {
-    const baseHeight = isCompactMobile
-      ? (isSpectator ? 220 : 252)
-      : (isSpectator ? 290 : 340);
-    const wrapBonus = Math.max(0, boardBounds.height - (isCompactMobile ? 120 : 168));
-    return Math.round(baseHeight + Math.min(isCompactMobile ? 44 : 78, wrapBonus * 0.55));
+    const minHeight = isCompactMobile
+      ? (isSpectator ? 244 : 278)
+      : (isSpectator ? 338 : 392);
+    const verticalPadding = isCompactMobile ? 48 : 72;
+    const requiredHeight = Math.ceil(boardBounds.height + verticalPadding);
+    return Math.max(minHeight, requiredHeight);
   }, [boardBounds.height, isCompactMobile, isSpectator]);
+
   const boardZoom = useMemo(() => {
-    const densityZoom = boardTileCount <= 10 ? 1 : boardTileCount <= 16 ? 0.95 : Math.max(0.7, 1 - (boardTileCount - 16) * 0.018);
-    const safePadding = isCompactMobile ? 28 : 44;
-    const availableWidth = Math.max(140, boardLaneSize.width - safePadding * 2);
-    const availableHeight = Math.max(120, boardLaneSize.height - safePadding * 2);
+    const safePadding = isCompactMobile ? 24 : 40;
+    const fallbackWidth = Math.max(boardBounds.width + safePadding * 2, isCompactMobile ? 320 : 760);
+    const fallbackHeight = Math.max(boardBounds.height + safePadding * 2, boardHeight);
+    const laneWidth = boardLaneSize.width > 0 ? boardLaneSize.width : fallbackWidth;
+    const laneHeight = boardLaneSize.height > 0 ? boardLaneSize.height : fallbackHeight;
+    const availableWidth = Math.max(140, laneWidth - safePadding * 2);
+    const availableHeight = Math.max(120, laneHeight - safePadding * 2);
     const fitWidthZoom = availableWidth / Math.max(boardBounds.width, 1);
     const fitHeightZoom = availableHeight / Math.max(boardBounds.height, 1);
-    return Math.max(0.46, Math.min(1, densityZoom, fitWidthZoom, fitHeightZoom));
-  }, [boardTileCount, isCompactMobile, boardBounds.width, boardBounds.height, boardLaneSize.width, boardLaneSize.height]);
+    const fitZoom = Math.min(1, fitWidthZoom, fitHeightZoom);
+    const minReadableZoom = isCompactMobile ? 0.86 : 0.9;
+    return Math.max(minReadableZoom, fitZoom);
+  }, [isCompactMobile, boardBounds.width, boardBounds.height, boardLaneSize.width, boardLaneSize.height, boardHeight]);
+
+  const turnFlowHint = useMemo(() => {
+    if (!isTurnLive) {
+      return null;
+    }
+
+    if (playableTiles.length > 0) {
+      return `${t('domino.play')} - ${t('domino.selectEnd')}`;
+    }
+
+    if (canAutoDraw) {
+      return `${t('domino.draw')} -> ${t('domino.play')}`;
+    }
+
+    if (canPass) {
+      return `${t('domino.pass')} -> ${t('domino.opponentTurn')}`;
+    }
+
+    return null;
+  }, [isTurnLive, playableTiles.length, canAutoDraw, canPass, t]);
+
   const boardOffset = useMemo(() => ({
     offsetX: boardBounds.offsetX,
     offsetY: boardBounds.offsetY,
@@ -1227,6 +1254,12 @@ export function DominoBoard({
               </span>
             )}
 
+            {turnFlowHint && (
+              <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+                {turnFlowHint}
+              </span>
+            )}
+
             {state.scores && Object.entries(state.scores).length > 0 && Object.entries(state.scores).map(([pid, score]) => {
               const label = getPlayerLabel(pid);
               return (
@@ -1424,6 +1457,12 @@ export function DominoBoard({
         {/* F5: Button container — use server canDraw for draw eligibility */}
         {!isSpectator && (
           <div className={cn("flex justify-center flex-wrap animate-domino-fade-in", isCompactMobile ? "gap-2" : "gap-3")}>
+            {canChooseEnd && selectedPlayable && selectedPlayable.ends.length > 1 && (
+              <p className="w-full text-center text-[11px] font-medium text-muted-foreground">
+                {t('domino.selectEnd')}
+              </p>
+            )}
+
             {canAutoDraw && isMyTurn && !isSpectator && (
               <Button
                 variant="secondary"
