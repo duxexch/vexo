@@ -1,6 +1,6 @@
 import type { Express, Response } from "express";
 import { db } from "../../db";
-import { eq, desc, and, or, sql, count } from "drizzle-orm";
+import { eq, desc, and, or, sql } from "drizzle-orm";
 import { tournaments, tournamentParticipants, tournamentMatches, users, type TournamentStatus } from "@shared/schema";
 import { optionalAuthMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage } from "../helpers";
@@ -14,7 +14,7 @@ export function registerTournamentListingRoutes(app: Express): void {
       const { status, gameType } = req.query;
 
       const isRegisteredExpression = req.user?.id
-        ? sql<boolean>`EXISTS(SELECT 1 FROM tournament_participants WHERE tournament_id = ${tournaments.id} AND user_id = ${req.user.id})`
+        ? sql<boolean>`EXISTS(SELECT 1 FROM tournament_participants tp WHERE tp.tournament_id = "tournaments"."id" AND tp.user_id = ${req.user.id})`
         : sql<boolean>`false`;
 
       let query = db.select({
@@ -47,7 +47,7 @@ export function registerTournamentListingRoutes(app: Express): void {
         endsAt: tournaments.endsAt,
         winnerId: tournaments.winnerId,
         createdAt: tournaments.createdAt,
-        participantCount: sql<number>`(SELECT COUNT(*) FROM tournament_participants WHERE tournament_id = ${tournaments.id})`.as('participant_count'),
+        participantCount: sql<number>`(SELECT COUNT(*) FROM tournament_participants tp WHERE tp.tournament_id = "tournaments"."id")`.as('participant_count'),
         isRegistered: isRegisteredExpression.as('is_registered'),
       }).from(tournaments)
         .orderBy(desc(tournaments.createdAt))
@@ -84,6 +84,7 @@ export function registerTournamentListingRoutes(app: Express): void {
         ));
       if (!tournament) return res.status(404).json({ error: "Tournament not found" });
       if (!tournament.isPublished) return res.status(404).json({ error: "Tournament not found" });
+      const tournamentId = tournament.id;
 
       const participants = await db.select({
         id: tournamentParticipants.id,
@@ -100,7 +101,7 @@ export function registerTournamentListingRoutes(app: Express): void {
       })
         .from(tournamentParticipants)
         .leftJoin(users, eq(tournamentParticipants.userId, users.id))
-        .where(eq(tournamentParticipants.tournamentId, id))
+        .where(eq(tournamentParticipants.tournamentId, tournamentId))
         .orderBy(tournamentParticipants.seed);
 
       const matches = await db.select({
@@ -118,7 +119,7 @@ export function registerTournamentListingRoutes(app: Express): void {
         challengeId: tournamentMatches.challengeId,
       })
         .from(tournamentMatches)
-        .where(eq(tournamentMatches.tournamentId, id))
+        .where(eq(tournamentMatches.tournamentId, tournamentId))
         .orderBy(tournamentMatches.round, tournamentMatches.matchNumber);
 
       // Check if user is registered

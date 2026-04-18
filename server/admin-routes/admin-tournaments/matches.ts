@@ -1,6 +1,7 @@
 import type { Express, Response } from "express";
 import {
   tournaments, tournamentParticipants, tournamentMatches,
+  transactions,
   users,
 } from "@shared/schema";
 import { db } from "../../db";
@@ -13,6 +14,49 @@ import {
 } from "../../lib/tournament-utils";
 
 export function registerTournamentMatchRoutes(app: Express) {
+
+  app.post("/api/admin/tournaments/:id/settle-prizes", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const [tournament] = await db.select({
+        id: tournaments.id,
+        status: tournaments.status,
+        prizesSettledAt: tournaments.prizesSettledAt,
+      }).from(tournaments).where(eq(tournaments.id, id));
+
+      if (!tournament) {
+        return res.status(404).json({ error: "Tournament not found" });
+      }
+
+      if (tournament.status !== "completed") {
+        return res.status(400).json({ error: "Tournament must be completed before prize settlement" });
+      }
+
+      const settlementResult = await settleTournamentPrizes(id);
+      if (!settlementResult.settled && settlementResult.reason !== "Prizes already settled") {
+        return res.status(400).json({ error: settlementResult.reason || "Prize settlement failed" });
+      }
+
+      const alreadySettled = settlementResult.reason === "Prizes already settled" || Boolean(tournament.prizesSettledAt);
+
+      await logAdminAction(req.admin!.id, "settings_change", "tournament", id, {
+        newValue: JSON.stringify({
+          action: "settle_prizes",
+          alreadySettled,
+          payoutCount: settlementResult.payoutCount,
+        }),
+        reason: "Tournament prize settlement requested from admin panel",
+      }, req);
+
+      return res.json({
+        success: true,
+        alreadySettled,
+        payoutCount: settlementResult.payoutCount,
+      });
+    } catch (error: unknown) {
+      return res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
 
   app.post("/api/admin/tournaments/matches/:matchId/result", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
@@ -159,44 +203,111 @@ export function registerTournamentMatchRoutes(app: Express) {
   app.delete("/api/admin/tournaments/:id", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
       const { id } = req.params;
-      const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, id));
-      if (!tournament) return res.status(404).json({ error: "Tournament not found" });
+      const deleteResult = await db.transaction(async (tx) => {
+        const [lockedTournament] = await tx.select().from(tournaments).where(eq(tournaments.id, id)).for('update');
+        if (!lockedTournament) {
+          throw new Error("Tournament not found");
+        }
 
-      if (!canDeleteTournament(tournament.status)) {
-        return res.status(400).json({
-          error: `Cannot delete tournament in status ${tournament.status}. Cancel or finish lifecycle first.`,
-        });
-      }
+        if (!canDeleteTournament(lockedTournament.status)) {
+          throw new Error(`Cannot delete tournament in status ${lockedTournament.status}. Cancel or finish lifecycle first.`);
+        }
 
-      const shouldRefundOnDelete = parseFloat(tournament.entryFee) > 0
-        && (tournament.status === 'upcoming' || tournament.status === 'registration');
+        const entryFeeValue = Number.parseFloat(lockedTournament.entryFee || "0");
+        const normalizedEntryFee = Number.isFinite(entryFeeValue)
+          ? Number(entryFeeValue.toFixed(2))
+          : 0;
 
-      await db.transaction(async (tx) => {
+        const shouldRefundOnDelete = normalizedEntryFee > 0
+          && (lockedTournament.status === 'upcoming' || lockedTournament.status === 'registration');
+
+        let refundedCount = 0;
         if (shouldRefundOnDelete) {
-          const participants = await tx.select().from(tournamentParticipants)
+          const participants = await tx.select({ userId: tournamentParticipants.userId })
+            .from(tournamentParticipants)
             .where(eq(tournamentParticipants.tournamentId, id));
 
           for (const participant of participants) {
+            const [user] = await tx.select({ balance: users.balance })
+              .from(users)
+              .where(eq(users.id, participant.userId))
+              .for('update');
+
+            if (!user) {
+              continue;
+            }
+
+            const balanceBeforeValue = Number.parseFloat(user.balance || "0");
+            const balanceAfterValue = Number((balanceBeforeValue + normalizedEntryFee).toFixed(2));
+            const refundReferenceId = `tournament-delete-refund:${id}:${participant.userId}`;
+
             await tx.update(users)
-              .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${tournament.entryFee})::text` })
+              .set({ balance: balanceAfterValue.toFixed(2) })
               .where(eq(users.id, participant.userId));
+
+            await tx.insert(transactions).values({
+              userId: participant.userId,
+              type: "refund",
+              status: "completed",
+              amount: normalizedEntryFee.toFixed(2),
+              balanceBefore: balanceBeforeValue.toFixed(2),
+              balanceAfter: balanceAfterValue.toFixed(2),
+              description: `Tournament deleted refund (${lockedTournament.name || "Tournament"})`,
+              referenceId: refundReferenceId,
+              processedAt: new Date(),
+            });
+
+            refundedCount += 1;
+          }
+
+          const totalRefundAmount = Number((normalizedEntryFee * refundedCount).toFixed(2));
+          if (totalRefundAmount > 0) {
+            await tx.update(tournaments)
+              .set({
+                prizePool: sql`GREATEST(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) - ${totalRefundAmount}, 0)::text`,
+                updatedAt: new Date(),
+              })
+              .where(eq(tournaments.id, id));
           }
         }
 
         await tx.delete(tournamentMatches).where(eq(tournamentMatches.tournamentId, id));
         await tx.delete(tournamentParticipants).where(eq(tournamentParticipants.tournamentId, id));
         await tx.delete(tournaments).where(eq(tournaments.id, id));
+
+        return {
+          tournamentName: lockedTournament.name,
+          tournamentStatus: lockedTournament.status,
+          shouldRefundOnDelete,
+          refundedCount,
+        };
       });
 
       await logAdminAction(req.admin!.id, "settings_change", "tournament", id, {
-        previousValue: JSON.stringify({ name: tournament.name, status: tournament.status }),
-        newValue: JSON.stringify({ refunded: shouldRefundOnDelete }),
+        previousValue: JSON.stringify({ name: deleteResult.tournamentName, status: deleteResult.tournamentStatus }),
+        newValue: JSON.stringify({
+          refunded: deleteResult.shouldRefundOnDelete,
+          refundedCount: deleteResult.refundedCount,
+        }),
         reason: "Tournament deleted",
       }, req);
 
-      res.json({ success: true });
+      res.json({
+        success: true,
+        refunded: deleteResult.shouldRefundOnDelete,
+        refundedCount: deleteResult.refundedCount,
+      });
     } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
+      const message = getErrorMessage(error);
+      if (message === "Tournament not found") {
+        return res.status(404).json({ error: message });
+      }
+
+      if (message.startsWith("Cannot delete tournament in status")) {
+        return res.status(400).json({ error: message });
+      }
+
+      res.status(500).json({ error: message });
     }
   });
 }

@@ -823,7 +823,7 @@ export async function settleTournamentPrizes(tournamentId: string): Promise<Tour
                     balanceBefore: balanceBefore.toFixed(2),
                     balanceAfter,
                     description: `Tournament prize payout (${bucket.placement} place)`,
-                    referenceId: `tournament-prize:${tournamentId}`,
+                    referenceId: `tournament-prize:${tournamentId}:${userId}:${bucket.placement}`,
                     processedAt: new Date(),
                 });
 

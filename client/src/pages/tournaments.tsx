@@ -18,7 +18,7 @@ import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGame
 import {
   Trophy, Users, Clock, Swords,
   DollarSign, Calendar, ChevronRight,
-  ArrowRight, Timer, Filter, Share2, Copy, Image as ImageIcon, Video
+  Timer, Filter, Share2, Copy, Image as ImageIcon, Video, XCircle
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -234,14 +234,8 @@ interface TournamentDetail {
 }
 
 export default function TournamentsPage() {
-  const { t, language, dir } = useI18n();
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [, navigate] = useLocation();
   const [, params] = useRoute('/tournaments/:id');
   const tournamentId = params?.id;
-
-  const en = language === 'en';
 
   // Show detail if ID present
   if (tournamentId) {
@@ -263,7 +257,7 @@ function TournamentCountdown({ startsAt }: { startsAt: string | null }) {
 }
 
 function TournamentListView() {
-  const { t, language, dir } = useI18n();
+  const { language, dir } = useI18n();
   const { user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -298,7 +292,7 @@ function TournamentListView() {
     }
   };
 
-  const { data: tournaments = [], isLoading } = useQuery<TournamentListItem[]>({
+  const { data: tournaments = [], isLoading, isError, error, refetch } = useQuery<TournamentListItem[]>({
     queryKey: ['/api/tournaments'],
   });
 
@@ -356,6 +350,21 @@ function TournamentListView() {
         <div className="space-y-4">
           {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 w-full rounded-xl" />)}
         </div>
+      ) : isError ? (
+        <Card>
+          <CardContent className="p-8 text-center space-y-4">
+            <XCircle className="w-12 h-12 mx-auto text-red-500/70" />
+            <div>
+              <h3 className="text-lg font-semibold mb-1">{en ? 'Unable to Load Tournaments' : 'تعذر تحميل البطولات'}</h3>
+              <p className="text-sm text-muted-foreground">
+                {(error as Error | undefined)?.message || (en ? 'Please try again in a moment.' : 'حاول مرة أخرى بعد قليل.')}
+              </p>
+            </div>
+            <Button type="button" className="min-h-[44px]" onClick={() => void refetch()}>
+              {en ? 'Retry' : 'إعادة المحاولة'}
+            </Button>
+          </CardContent>
+        </Card>
       ) : displayList.length === 0 ? (
         <Card>
           <CardContent className="p-12 text-center">
@@ -490,14 +499,14 @@ function TournamentListView() {
 }
 
 function TournamentDetailView({ id }: { id: string }) {
-  const { t, language, dir } = useI18n();
+  const { language, dir } = useI18n();
   const { user } = useAuth();
   const { toast } = useToast();
   const en = language === 'en';
   const tournamentGameConfig = useTournamentGameConfig();
 
-  const { data: tournament, isLoading } = useQuery<TournamentDetail>({
-    queryKey: ['/api/tournaments', id],
+  const { data: tournament, isLoading, isError, error, refetch } = useQuery<TournamentDetail>({
+    queryKey: [`/api/tournaments/${id}`],
   });
 
   const registerMutation = useMutation({
@@ -505,7 +514,7 @@ function TournamentDetailView({ id }: { id: string }) {
     onSuccess: async () => {
       toast({ title: en ? 'Registered!' : 'تم التسجيل!' });
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['/api/tournaments', id] }),
+        queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${id}`] }),
         queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/user'] }),
       ]);
@@ -520,7 +529,7 @@ function TournamentDetailView({ id }: { id: string }) {
     onSuccess: async () => {
       toast({ title: en ? 'Withdrawn' : 'تم الانسحاب' });
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['/api/tournaments', id] }),
+        queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${id}`] }),
         queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/user'] }),
       ]);
@@ -553,8 +562,23 @@ function TournamentDetailView({ id }: { id: string }) {
         </div>
         <Card>
           <CardContent className="p-12 text-center">
-            <Trophy className="w-16 h-16 mx-auto text-muted-foreground mb-4 opacity-50" />
-            <p>{en ? 'Tournament not found' : 'البطولة غير موجودة'}</p>
+            {isError ? (
+              <>
+                <XCircle className="w-16 h-16 mx-auto text-red-500/70 mb-4" />
+                <p className="font-semibold mb-2">{en ? 'Failed to Load Tournament' : 'فشل تحميل البطولة'}</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {(error as Error | undefined)?.message || (en ? 'Please try again.' : 'يرجى المحاولة مرة أخرى.')}
+                </p>
+                <Button type="button" className="min-h-[44px]" onClick={() => void refetch()}>
+                  {en ? 'Retry' : 'إعادة المحاولة'}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Trophy className="w-16 h-16 mx-auto text-muted-foreground mb-4 opacity-50" />
+                <p>{en ? 'Tournament not found' : 'البطولة غير موجودة'}</p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

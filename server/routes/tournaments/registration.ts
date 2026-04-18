@@ -1,7 +1,7 @@
 import type { Express, Response } from "express";
 import { db } from "../../db";
 import { eq, and, or, sql, count } from "drizzle-orm";
-import { tournaments, tournamentParticipants, users } from "@shared/schema";
+import { tournaments, tournamentParticipants, transactions, users } from "@shared/schema";
 import { authMiddleware, AuthRequest, sensitiveRateLimiter } from "../middleware";
 import { sendNotification } from "../../websocket";
 import { getErrorMessage } from "../helpers";
@@ -59,18 +59,37 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
           throw new Error("Tournament is full");
         }
 
-        const entryFeeValue = Number.parseFloat(lockedTournament.entryFee);
+        const entryFeeValue = Number.parseFloat(lockedTournament.entryFee || "0");
+        const normalizedEntryFee = Number.isFinite(entryFeeValue)
+          ? Number(entryFeeValue.toFixed(2))
+          : 0;
 
         // Deduct entry fee if any (with row lock)
-        if (entryFeeValue > 0) {
-          const [user] = await tx.select().from(users).where(eq(users.id, userId)).for('update');
-          if (!user || Number.parseFloat(user.balance) < entryFeeValue) {
+        if (normalizedEntryFee > 0) {
+          const [user] = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).for('update');
+          const balanceBeforeValue = Number.parseFloat(user?.balance || "0");
+          if (!user || !Number.isFinite(balanceBeforeValue) || balanceBeforeValue < normalizedEntryFee) {
             throw new Error("Insufficient balance");
           }
 
+          const balanceAfterValue = Number((balanceBeforeValue - normalizedEntryFee).toFixed(2));
+          const entryReferenceId = `tournament-entry:${tournamentId}:${userId}`;
+
           await tx.update(users)
-            .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) - ${entryFeeValue})::text` })
+            .set({ balance: balanceAfterValue.toFixed(2) })
             .where(eq(users.id, userId));
+
+          await tx.insert(transactions).values({
+            userId,
+            type: "stake",
+            status: "completed",
+            amount: normalizedEntryFee.toFixed(2),
+            balanceBefore: balanceBeforeValue.toFixed(2),
+            balanceAfter: balanceAfterValue.toFixed(2),
+            description: `Tournament entry fee (${lockedTournament.name || "Tournament"})`,
+            referenceId: entryReferenceId,
+            processedAt: new Date(),
+          });
         }
 
         const [newParticipant] = await tx.insert(tournamentParticipants).values({
@@ -80,9 +99,9 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         }).returning();
 
         // Update prize pool
-        if (entryFeeValue > 0) {
+        if (normalizedEntryFee > 0) {
           await tx.update(tournaments)
-            .set({ prizePool: sql`(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) + ${entryFeeValue})::text` })
+            .set({ prizePool: sql`(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) + ${normalizedEntryFee})::text` })
             .where(eq(tournaments.id, tournamentId));
         }
 
@@ -183,14 +202,39 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         }
 
         // Refund entry fee
-        const entryFeeValue = Number.parseFloat(lockedTournament.entryFee);
-        if (entryFeeValue > 0) {
+        const entryFeeValue = Number.parseFloat(lockedTournament.entryFee || "0");
+        const normalizedEntryFee = Number.isFinite(entryFeeValue)
+          ? Number(entryFeeValue.toFixed(2))
+          : 0;
+
+        if (normalizedEntryFee > 0) {
+          const [user] = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).for('update');
+          if (!user) {
+            throw new Error("User not found");
+          }
+
+          const balanceBeforeValue = Number.parseFloat(user.balance || "0");
+          const balanceAfterValue = Number((balanceBeforeValue + normalizedEntryFee).toFixed(2));
+          const refundReferenceId = `tournament-unregister-refund:${tournamentId}:${userId}`;
+
           await tx.update(users)
-            .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${entryFeeValue})::text` })
+            .set({ balance: balanceAfterValue.toFixed(2) })
             .where(eq(users.id, userId));
 
+          await tx.insert(transactions).values({
+            userId,
+            type: "refund",
+            status: "completed",
+            amount: normalizedEntryFee.toFixed(2),
+            balanceBefore: balanceBeforeValue.toFixed(2),
+            balanceAfter: balanceAfterValue.toFixed(2),
+            description: `Tournament withdrawal refund (${lockedTournament.name || "Tournament"})`,
+            referenceId: refundReferenceId,
+            processedAt: new Date(),
+          });
+
           await tx.update(tournaments)
-            .set({ prizePool: sql`GREATEST(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) - ${entryFeeValue}, 0)::text` })
+            .set({ prizePool: sql`GREATEST(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) - ${normalizedEntryFee}, 0)::text` })
             .where(eq(tournaments.id, tournamentId));
         }
       });

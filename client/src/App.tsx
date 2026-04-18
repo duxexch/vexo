@@ -973,6 +973,18 @@ function Router() {
     );
   }
 
+  // Tournaments pages are public - accessible without login for shared links.
+  const isPublicTournamentRoute = location === "/tournaments" || location.startsWith("/tournaments/");
+  if (isPublicTournamentRoute && !isAuthenticated && !isLoading) {
+    return (
+      <PublicLayout>
+        <Suspense fallback={<PageLoader />}>
+          <ErrorBoundary><TournamentsPage /></ErrorBoundary>
+        </Suspense>
+      </PublicLayout>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">

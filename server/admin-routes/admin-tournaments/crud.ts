@@ -67,6 +67,7 @@ export function registerTournamentCrudRoutes(app: Express) {
         prizePool: tournaments.prizePool,
         prizeDistributionMethod: tournaments.prizeDistributionMethod,
         prizeDistribution: tournaments.prizeDistribution,
+        prizesSettledAt: tournaments.prizesSettledAt,
         currentRound: tournaments.currentRound,
         totalRounds: tournaments.totalRounds,
         registrationStartsAt: tournaments.registrationStartsAt,
@@ -75,7 +76,7 @@ export function registerTournamentCrudRoutes(app: Express) {
         endsAt: tournaments.endsAt,
         winnerId: tournaments.winnerId,
         createdAt: tournaments.createdAt,
-        participantCount: sql<number>`(SELECT COUNT(*) FROM tournament_participants WHERE tournament_id = ${tournaments.id})`.as('participant_count'),
+        participantCount: sql<number>`(SELECT COUNT(*) FROM tournament_participants tp WHERE tp.tournament_id = "tournaments"."id")`.as('participant_count'),
       }).from(tournaments)
         .orderBy(desc(tournaments.createdAt))
         .$dynamic();

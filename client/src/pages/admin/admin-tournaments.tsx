@@ -182,6 +182,7 @@ interface TournamentItem {
   prizePool: string;
   prizeDistributionMethod?: string;
   prizeDistribution?: string | null;
+  prizesSettledAt?: string | null;
   startsAt: string | null;
   endsAt: string | null;
   registrationStartsAt: string | null;
@@ -578,6 +579,31 @@ export default function AdminTournamentsPage() {
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const settlePrizesMutation = useMutation({
+    mutationFn: (id: string) =>
+      adminFetch(`/api/admin/tournaments/${id}/settle-prizes`, {
+        method: "POST",
+      }) as Promise<{ alreadySettled?: boolean; payoutCount?: number }>,
+    onSuccess: (result) => {
+      if (result?.alreadySettled) {
+        toast({ title: "Prizes Already Settled", description: "No additional payout was required." });
+      } else {
+        toast({
+          title: "Prize Settlement Completed",
+          description: `Payout entries created: ${Number(result?.payoutCount || 0)}`,
+        });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tournaments"] });
+      if (selectedTournament?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/tournaments", selectedTournament.id] });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1384,6 +1410,12 @@ export default function AdminTournamentsPage() {
                         ? `On @ ${tournamentDetail.autoStartPlayerCount || tournamentDetail.minPlayers}`
                         : "Off"}
                     </div>
+                    <div>
+                      <span className="text-muted-foreground">Prize Settlement:</span>{" "}
+                      {tournamentDetail.prizesSettledAt
+                        ? `Settled on ${formatDate(tournamentDetail.prizesSettledAt)}`
+                        : "Pending"}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1456,6 +1488,19 @@ export default function AdminTournamentsPage() {
                 >
                   <Trash2 className="h-4 w-4 mr-2" /> Delete
                 </Button>
+
+                {tournamentDetail.status === "completed" && (
+                  <Button
+                    className="min-h-[44px]"
+                    variant="outline"
+                    onClick={() => settlePrizesMutation.mutate(tournamentDetail.id)}
+                    disabled={settlePrizesMutation.isPending}
+                  >
+                    {settlePrizesMutation.isPending
+                      ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Settling...</>
+                      : <><Trophy className="h-4 w-4 mr-2" /> Settle Prizes</>}
+                  </Button>
+                )}
               </div>
 
               {/* Participants */}

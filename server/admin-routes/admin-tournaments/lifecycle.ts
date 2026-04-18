@@ -1,10 +1,11 @@
 import type { Express, Response } from "express";
 import {
   tournaments, tournamentParticipants,
+  transactions,
   users, type TournamentStatus,
 } from "@shared/schema";
 import { db } from "../../db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 import { sendNotification } from "../../websocket";
 import {
@@ -24,58 +25,112 @@ export function registerTournamentLifecycleRoutes(app: Express) {
         return res.status(400).json({ error: "Invalid status" });
       }
 
-      const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, id));
-      if (!tournament) return res.status(404).json({ error: "Tournament not found" });
-
       const nextStatus = newStatus as TournamentStatus;
-      const oldStatus = tournament.status;
+      const statusUpdateResult = await db.transaction(async (tx) => {
+        const [lockedTournament] = await tx.select().from(tournaments).where(eq(tournaments.id, id)).for('update');
+        if (!lockedTournament) {
+          throw new Error("Tournament not found");
+        }
 
-      if (!isAllowedTournamentStatusTransition(oldStatus, nextStatus)) {
-        return res.status(400).json({
-          error: `Invalid tournament status transition from ${oldStatus} to ${nextStatus}`,
-        });
-      }
+        const oldStatus = lockedTournament.status;
+        if (!isAllowedTournamentStatusTransition(oldStatus, nextStatus)) {
+          throw new Error(`Invalid tournament status transition from ${oldStatus} to ${nextStatus}`);
+        }
 
-      const participants = await db.select()
-        .from(tournamentParticipants)
-        .where(eq(tournamentParticipants.tournamentId, id));
+        const participants = await tx.select({ userId: tournamentParticipants.userId })
+          .from(tournamentParticipants)
+          .where(eq(tournamentParticipants.tournamentId, id));
 
-      const shouldRefundOnCancel = nextStatus === 'cancelled'
-        && parseFloat(tournament.entryFee) > 0
-        && (oldStatus === 'upcoming' || oldStatus === 'registration');
+        const entryFeeValue = Number.parseFloat(lockedTournament.entryFee || "0");
+        const normalizedEntryFee = Number.isFinite(entryFeeValue)
+          ? Number(entryFeeValue.toFixed(2))
+          : 0;
 
-      await db.transaction(async (tx) => {
+        const shouldRefundOnCancel = nextStatus === 'cancelled'
+          && normalizedEntryFee > 0
+          && (oldStatus === 'upcoming' || oldStatus === 'registration');
+
+        const refundedUserIds: string[] = [];
+
         if (shouldRefundOnCancel) {
           for (const participant of participants) {
+            const [user] = await tx.select({ balance: users.balance })
+              .from(users)
+              .where(eq(users.id, participant.userId))
+              .for('update');
+
+            if (!user) {
+              continue;
+            }
+
+            const balanceBeforeValue = Number.parseFloat(user.balance || "0");
+            const balanceAfterValue = Number((balanceBeforeValue + normalizedEntryFee).toFixed(2));
+            const refundReferenceId = `tournament-cancel-refund:${id}:${participant.userId}`;
+
             await tx.update(users)
-              .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${tournament.entryFee})::text` })
+              .set({ balance: balanceAfterValue.toFixed(2) })
               .where(eq(users.id, participant.userId));
+
+            await tx.insert(transactions).values({
+              userId: participant.userId,
+              type: "refund",
+              status: "completed",
+              amount: normalizedEntryFee.toFixed(2),
+              balanceBefore: balanceBeforeValue.toFixed(2),
+              balanceAfter: balanceAfterValue.toFixed(2),
+              description: `Tournament cancelled refund (${lockedTournament.name || "Tournament"})`,
+              referenceId: refundReferenceId,
+              processedAt: new Date(),
+            });
+
+            refundedUserIds.push(participant.userId);
+          }
+
+          const totalRefundAmount = Number((normalizedEntryFee * refundedUserIds.length).toFixed(2));
+          if (totalRefundAmount > 0) {
+            await tx.update(tournaments)
+              .set({
+                prizePool: sql`GREATEST(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) - ${totalRefundAmount}, 0)::text`,
+                updatedAt: new Date(),
+              })
+              .where(eq(tournaments.id, id));
           }
         }
 
         await tx.update(tournaments)
           .set({ status: nextStatus, updatedAt: new Date() })
           .where(eq(tournaments.id, id));
+
+        return {
+          oldStatus,
+          shouldRefundOnCancel,
+          participantUserIds: participants.map((participant) => participant.userId),
+          refundedUserIds,
+          tournamentName: lockedTournament.name,
+          tournamentNameAr: lockedTournament.nameAr,
+          entryFee: lockedTournament.entryFee,
+        };
       });
 
       if (nextStatus === 'cancelled') {
-        const tName = tournament.name || 'Tournament';
-        const tNameAr = tournament.nameAr || tName;
+        const tName = statusUpdateResult.tournamentName || 'Tournament';
+        const tNameAr = statusUpdateResult.tournamentNameAr || tName;
+        const refundedUserIdSet = new Set(statusUpdateResult.refundedUserIds);
 
-        for (const participant of participants) {
-          if (shouldRefundOnCancel) {
-            sendNotification(participant.userId, {
+        for (const participantUserId of statusUpdateResult.participantUserIds) {
+          if (statusUpdateResult.shouldRefundOnCancel && refundedUserIdSet.has(participantUserId)) {
+            sendNotification(participantUserId, {
               type: 'transaction',
               priority: 'high',
               title: 'Tournament Cancelled — Refunded',
               titleAr: 'تم إلغاء البطولة — تم الاسترداد',
-              message: `"${tName}" has been cancelled. Your entry fee of $${tournament.entryFee} has been refunded.`,
-              messageAr: `تم إلغاء "${tNameAr}". تم استرداد رسوم الدخول $${tournament.entryFee}.`,
+              message: `"${tName}" has been cancelled. Your entry fee of $${statusUpdateResult.entryFee} has been refunded.`,
+              messageAr: `تم إلغاء "${tNameAr}". تم استرداد رسوم الدخول $${statusUpdateResult.entryFee}.`,
               link: '/tournaments',
-              metadata: JSON.stringify({ tournamentId: id, action: 'tournament_cancelled_refund', refund: tournament.entryFee }),
+              metadata: JSON.stringify({ tournamentId: id, action: 'tournament_cancelled_refund', refund: statusUpdateResult.entryFee }),
             }).catch(() => { });
           } else {
-            sendNotification(participant.userId, {
+            sendNotification(participantUserId, {
               type: 'announcement',
               priority: 'high',
               title: 'Tournament Cancelled',
@@ -90,15 +145,31 @@ export function registerTournamentLifecycleRoutes(app: Express) {
       }
 
       await logAdminAction(req.admin!.id, "settings_change", "tournament", id, {
-        previousValue: oldStatus,
+        previousValue: statusUpdateResult.oldStatus,
         newValue: nextStatus,
-        reason: `Tournament status changed from ${oldStatus} to ${nextStatus}`,
-        metadata: JSON.stringify({ refunded: shouldRefundOnCancel }),
+        reason: `Tournament status changed from ${statusUpdateResult.oldStatus} to ${nextStatus}`,
+        metadata: JSON.stringify({
+          refunded: statusUpdateResult.shouldRefundOnCancel,
+          refundedCount: statusUpdateResult.refundedUserIds.length,
+        }),
       }, req);
 
-      res.json({ success: true, refunded: shouldRefundOnCancel });
+      res.json({
+        success: true,
+        refunded: statusUpdateResult.shouldRefundOnCancel,
+        refundedCount: statusUpdateResult.refundedUserIds.length,
+      });
     } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
+      const message = getErrorMessage(error);
+      if (message === "Tournament not found") {
+        return res.status(404).json({ error: message });
+      }
+
+      if (message.startsWith("Invalid tournament status transition")) {
+        return res.status(400).json({ error: message });
+      }
+
+      res.status(500).json({ error: message });
     }
   });
 
