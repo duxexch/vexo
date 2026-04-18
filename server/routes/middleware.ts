@@ -262,6 +262,34 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
   }
 };
 
+export const optionalAuthMiddleware = async (req: AuthRequest, _res: Response, next: NextFunction) => {
+  const token = getUserTokenFromRequest(req);
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const verified = await verifyUserAccessToken(token, {
+      userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : undefined,
+      requireActiveSession: true,
+      updateSessionActivity: true,
+    });
+
+    req.user = {
+      id: verified.id,
+      role: verified.role,
+      username: verified.username,
+      tokenFingerprint: verified.tokenFingerprint,
+      token,
+    };
+  } catch {
+    // Optional auth should not block public endpoints.
+  }
+
+  next();
+};
+
 export const adminMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
   if (req.user?.role !== "admin") {
     return res.status(403).json({ error: "Admin access required" });

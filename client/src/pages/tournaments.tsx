@@ -18,7 +18,7 @@ import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGame
 import {
   Trophy, Users, Clock, Swords,
   DollarSign, Calendar, ChevronRight,
-  ArrowRight, Timer, Filter
+  ArrowRight, Timer, Filter, Share2, Copy, Image as ImageIcon, Video
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -86,6 +86,28 @@ function isRegistrationWindowOpen(tournament: {
   return true;
 }
 
+function parsePrizeDistribution(rawDistribution: string | null | undefined): number[] {
+  if (!rawDistribution) return [];
+
+  try {
+    const parsed = JSON.parse(rawDistribution);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((entry) => Number.parseFloat(String(entry)))
+        .filter((entry) => Number.isFinite(entry) && entry > 0);
+    }
+  } catch {
+    // Ignore malformed payload and fallback to empty.
+  }
+
+  return [];
+}
+
+function buildTournamentPublicUrl(slugOrId: string): string {
+  if (typeof window === "undefined") return `/tournaments/${slugOrId}`;
+  return `${window.location.origin}/tournaments/${slugOrId}`;
+}
+
 function useCountdown(targetDate: string | null) {
   const [timeLeft, setTimeLeft] = useState('');
 
@@ -128,12 +150,21 @@ interface TournamentListItem {
   id: string;
   name: string;
   nameAr: string;
+  isPublished: boolean;
+  shareSlug: string | null;
+  coverImageUrl: string | null;
+  promoVideoUrl: string | null;
   gameType: string;
   format: string;
   status: string;
   maxPlayers: number;
+  minPlayers: number;
+  autoStartOnFull: boolean;
+  autoStartPlayerCount: number | null;
   entryFee: string;
   prizePool: string;
+  prizeDistributionMethod: string;
+  prizeDistribution: string | null;
   registrationStartsAt: string | null;
   registrationEndsAt: string | null;
   startsAt: string | null;
@@ -174,13 +205,20 @@ interface TournamentDetail {
   nameAr: string;
   description: string | null;
   descriptionAr: string | null;
+  isPublished: boolean;
+  shareSlug: string | null;
+  coverImageUrl: string | null;
+  promoVideoUrl: string | null;
   gameType: string;
   format: string;
   status: string;
   maxPlayers: number;
   minPlayers: number;
+  autoStartOnFull: boolean;
+  autoStartPlayerCount: number | null;
   entryFee: string;
   prizePool: string;
+  prizeDistributionMethod: string;
   prizeDistribution: string | null;
   registrationStartsAt: string | null;
   registrationEndsAt: string | null;
@@ -227,10 +265,38 @@ function TournamentCountdown({ startsAt }: { startsAt: string | null }) {
 function TournamentListView() {
   const { t, language, dir } = useI18n();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [, navigate] = useLocation();
   const [listTab, setListTab] = useState<'all' | 'mine'>('all');
   const en = language === 'en';
   const tournamentGameConfig = useTournamentGameConfig();
+
+  const handleShareTournament = async (tournament: TournamentListItem) => {
+    const tournamentPath = String(tournament.shareSlug || tournament.id);
+    const tournamentUrl = buildTournamentPublicUrl(tournamentPath);
+    const title = en ? tournament.name : tournament.nameAr;
+    const text = en
+      ? `Join ${title} on VEX tournaments`
+      : `انضم إلى ${title} في بطولات VEX`;
+
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ title, text, url: tournamentUrl });
+        return;
+      }
+
+      await navigator.clipboard.writeText(tournamentUrl);
+      toast({
+        title: en ? 'Link copied' : 'تم نسخ الرابط',
+        description: en ? 'Tournament link copied to clipboard' : 'تم نسخ رابط البطولة',
+      });
+    } catch {
+      toast({
+        title: en ? 'Share failed' : 'فشل المشاركة',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const { data: tournaments = [], isLoading } = useQuery<TournamentListItem[]>({
     queryKey: ['/api/tournaments'],
@@ -317,55 +383,101 @@ function TournamentListView() {
               <Card
                 key={t.id}
                 className="hover-elevate cursor-pointer transition-all"
-                onClick={() => navigate(`/tournaments/${t.id}`)}
+                onClick={() => navigate(`/tournaments/${t.shareSlug || t.id}`)}
               >
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3 sm:gap-4">
-                    <div className={`inline-flex h-14 w-14 items-center justify-center rounded-2xl border bg-gradient-to-br from-muted to-muted/50 p-1.5 sm:h-[58px] sm:w-[58px] ${getGameIconSurfaceClass(gameInfo)}`}>
-                      <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={gameInfo.iconUrl ? "h-full w-full" : `h-10 w-10 ${getGameIconToneClass(gameInfo.color)}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-base sm:text-lg truncate">
-                          {en ? t.name : t.nameAr}
-                        </h3>
-                        <Badge className={`${STATUS_COLORS[t.status] || 'bg-gray-500'} text-white`}>
-                          {getStatusLabel(t.status, en)}
-                        </Badge>
+                <CardContent className="p-0 overflow-hidden">
+                  {t.coverImageUrl && (
+                    <img
+                      src={t.coverImageUrl}
+                      alt={en ? t.name : t.nameAr}
+                      className="h-32 w-full object-cover"
+                      loading="lazy"
+                    />
+                  )}
+                  <div className="p-4">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <div className={`inline-flex h-14 w-14 items-center justify-center rounded-2xl border bg-gradient-to-br from-muted to-muted/50 p-1.5 sm:h-[58px] sm:w-[58px] ${getGameIconSurfaceClass(gameInfo)}`}>
+                        <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={gameInfo.iconUrl ? "h-full w-full" : `h-10 w-10 ${getGameIconToneClass(gameInfo.color)}`} />
                       </div>
-                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
-                        <span className="flex items-center gap-1">
-                          <span className={`inline-flex h-6 w-6 items-center justify-center rounded-lg border p-0.5 ${getGameIconSurfaceClass(gameInfo)}`}>
-                            <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={gameInfo.iconUrl ? "h-full w-full" : `h-4 w-4 ${getGameIconToneClass(gameInfo.color)}`} />
-                          </span>
-                          {en ? gameInfo.name : gameInfo.nameAr}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
-                          {t.participantCount}/{t.maxPlayers}
-                        </span>
-                        {parseFloat(t.entryFee) > 0 && (
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-bold text-base sm:text-lg truncate">
+                            {en ? t.name : t.nameAr}
+                          </h3>
+                          <Badge className={`${STATUS_COLORS[t.status] || 'bg-gray-500'} text-white`}>
+                            {getStatusLabel(t.status, en)}
+                          </Badge>
+                          {t.autoStartOnFull && (
+                            <Badge variant="outline" className="border-cyan-500/30 text-cyan-500">
+                              {en ? `Quick Start @ ${t.autoStartPlayerCount || t.minPlayers}` : `بدء سريع عند ${t.autoStartPlayerCount || t.minPlayers}`}
+                            </Badge>
+                          )}
+                          {t.coverImageUrl && (
+                            <Badge variant="outline" className="gap-1">
+                              <ImageIcon className="w-3 h-3" />
+                              {en ? 'Cover' : 'صورة'}
+                            </Badge>
+                          )}
+                          {t.promoVideoUrl && (
+                            <Badge variant="outline" className="gap-1">
+                              <Video className="w-3 h-3" />
+                              {en ? 'Video' : 'فيديو'}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
                           <span className="flex items-center gap-1">
-                            <DollarSign className="w-4 h-4" />
-                            {t.entryFee}
+                            <span className={`inline-flex h-6 w-6 items-center justify-center rounded-lg border p-0.5 ${getGameIconSurfaceClass(gameInfo)}`}>
+                              <GameConfigIcon config={gameInfo} fallbackIcon={gameInfo.icon} className={gameInfo.iconUrl ? "h-full w-full" : `h-4 w-4 ${getGameIconToneClass(gameInfo.color)}`} />
+                            </span>
+                            {en ? gameInfo.name : gameInfo.nameAr}
                           </span>
-                        )}
-                        <span className="flex items-center gap-1 text-amber-500 font-semibold">
-                          <Trophy className="w-4 h-4" />
-                          ${t.prizePool}
-                        </span>
+                          <span className="flex items-center gap-1">
+                            <Users className="w-4 h-4" />
+                            {t.participantCount}/{t.maxPlayers}
+                          </span>
+                          {parseFloat(t.entryFee) > 0 && (
+                            <span className="flex items-center gap-1">
+                              <DollarSign className="w-4 h-4" />
+                              {t.entryFee}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1 text-amber-500 font-semibold">
+                            <Trophy className="w-4 h-4" />
+                            ${t.prizePool}
+                          </span>
+                          {parsePrizeDistribution(t.prizeDistribution).slice(0, 3).map((percentage, index) => (
+                            <Badge key={`${t.id}-distribution-${index}`} variant="outline" className="text-xs">
+                              {en ? `Top ${index + 1}: ${percentage}%` : `المركز ${index + 1}: ${percentage}%`}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          {t.startsAt && (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Calendar className="w-3 h-3" />
+                              {formatDate(t.startsAt)}
+                            </span>
+                          )}
+                          {isUpcoming && t.startsAt && <TournamentCountdown startsAt={t.startsAt} />}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 mt-1 flex-wrap">
-                        {t.startsAt && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Calendar className="w-3 h-3" />
-                            {formatDate(t.startsAt)}
-                          </span>
-                        )}
-                        {isUpcoming && t.startsAt && <TournamentCountdown startsAt={t.startsAt} />}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="outline"
+                          className="min-h-[44px] min-w-[44px]"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleShareTournament(t);
+                          }}
+                        >
+                          <Share2 className="w-4 h-4" />
+                        </Button>
+                        <ChevronRight className="hidden sm:block w-5 h-5 text-muted-foreground" />
                       </div>
                     </div>
-                    <ChevronRight className="hidden sm:block w-5 h-5 text-muted-foreground mt-2" />
                   </div>
                 </CardContent>
               </Card>
@@ -479,6 +591,32 @@ function TournamentDetailView({ id }: { id: string }) {
     return en ? `Round ${round}` : `الجولة ${round}`;
   };
 
+  const handleShareTournament = async () => {
+    const tournamentUrl = buildTournamentPublicUrl(String(tournament.shareSlug || tournament.id));
+    const title = en ? tournament.name : tournament.nameAr;
+    const text = en
+      ? `Join ${title} on VEX tournaments`
+      : `انضم إلى ${title} في بطولات VEX`;
+
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ title, text, url: tournamentUrl });
+        return;
+      }
+
+      await navigator.clipboard.writeText(tournamentUrl);
+      toast({
+        title: en ? 'Link copied' : 'تم نسخ الرابط',
+        description: en ? 'Tournament link copied to clipboard' : 'تم نسخ رابط البطولة',
+      });
+    } catch {
+      toast({
+        title: en ? 'Share failed' : 'فشل المشاركة',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div className="container max-w-5xl mx-auto min-h-[100svh] p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-5 sm:space-y-6" dir={dir}>
       <div className="flex items-start sm:items-center gap-3 sm:gap-4">
@@ -506,7 +644,40 @@ function TournamentDetailView({ id }: { id: string }) {
             )}
           </div>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="min-h-[44px] min-w-[44px]"
+          onClick={() => {
+            void handleShareTournament();
+          }}
+        >
+          <Share2 className="w-4 h-4" />
+        </Button>
       </div>
+
+      {(tournament.coverImageUrl || tournament.promoVideoUrl) && (
+        <Card>
+          <CardContent className="p-3 space-y-3">
+            {tournament.coverImageUrl && (
+              <img
+                src={tournament.coverImageUrl}
+                alt={en ? tournament.name : tournament.nameAr}
+                className="h-48 w-full rounded-xl border object-cover"
+              />
+            )}
+            {tournament.promoVideoUrl && (
+              <video
+                src={tournament.promoVideoUrl}
+                className="h-52 w-full rounded-xl border object-cover"
+                controls
+                preload="metadata"
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -541,6 +712,56 @@ function TournamentDetailView({ id }: { id: string }) {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="rounded-xl border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground mb-1">{en ? 'Quick Start' : 'البدء السريع'}</p>
+              <p className="font-medium">
+                {tournament.autoStartOnFull
+                  ? (en
+                    ? `Starts automatically at ${tournament.autoStartPlayerCount || tournament.minPlayers} players`
+                    : `تبدأ تلقائيا عند ${tournament.autoStartPlayerCount || tournament.minPlayers} لاعب`)
+                  : (en ? 'Manual start by admin' : 'تبدأ يدويا من الإدارة')}
+              </p>
+            </div>
+            <div className="rounded-xl border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground mb-1">{en ? 'Prize Model' : 'نظام الجوائز'}</p>
+              <p className="font-medium capitalize">{String(tournament.prizeDistributionMethod || 'top_3').replace(/_/g, ' ')}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {parsePrizeDistribution(tournament.prizeDistribution).map((percentage, index) => (
+              <Badge key={`detail-prize-${index}`} variant="outline">
+                {en ? `Top ${index + 1}: ${percentage}%` : `المركز ${index + 1}: ${percentage}%`}
+              </Badge>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="break-all">{buildTournamentPublicUrl(String(tournament.shareSlug || tournament.id))}</span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="min-h-[36px]"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(buildTournamentPublicUrl(String(tournament.shareSlug || tournament.id)));
+                  toast({ title: en ? 'Link copied' : 'تم نسخ الرابط' });
+                } catch {
+                  toast({ title: en ? 'Copy failed' : 'فشل النسخ', variant: 'destructive' });
+                }
+              }}
+            >
+              <Copy className="w-3 h-3 me-1" />
+              {en ? 'Copy' : 'نسخ'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Register/Withdraw */}
       {user && (canRegister || canWithdraw) && (

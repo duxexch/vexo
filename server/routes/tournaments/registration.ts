@@ -1,11 +1,14 @@
 import type { Express, Response } from "express";
 import { db } from "../../db";
-import { eq, and, sql, count } from "drizzle-orm";
+import { eq, and, or, sql, count } from "drizzle-orm";
 import { tournaments, tournamentParticipants, users } from "@shared/schema";
 import { authMiddleware, AuthRequest, sensitiveRateLimiter } from "../middleware";
 import { sendNotification } from "../../websocket";
 import { getErrorMessage } from "../helpers";
-import { isTournamentRegistrationOpen } from "../../lib/tournament-utils";
+import {
+  isTournamentRegistrationOpen,
+  tryAutoStartTournament,
+} from "../../lib/tournament-utils";
 
 export function registerTournamentRegistrationRoutes(app: Express): void {
 
@@ -19,12 +22,17 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
       const registrationResult = await db.transaction(async (tx) => {
         const [lockedTournament] = await tx.select()
           .from(tournaments)
-          .where(eq(tournaments.id, id))
+          .where(or(
+            eq(tournaments.id, id),
+            eq(tournaments.shareSlug, id),
+          ))
           .for('update');
 
         if (!lockedTournament) {
           throw new Error("Tournament not found");
         }
+
+        const tournamentId = lockedTournament.id;
 
         if (!isTournamentRegistrationOpen(lockedTournament)) {
           throw new Error("Registration is closed");
@@ -34,7 +42,7 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         const [existing] = await tx.select()
           .from(tournamentParticipants)
           .where(and(
-            eq(tournamentParticipants.tournamentId, id),
+            eq(tournamentParticipants.tournamentId, tournamentId),
             eq(tournamentParticipants.userId, userId),
           ));
 
@@ -45,7 +53,7 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         const [{ count: currentCount }] = await tx
           .select({ count: count() })
           .from(tournamentParticipants)
-          .where(eq(tournamentParticipants.tournamentId, id));
+          .where(eq(tournamentParticipants.tournamentId, tournamentId));
 
         if (Number(currentCount) >= lockedTournament.maxPlayers) {
           throw new Error("Tournament is full");
@@ -66,7 +74,7 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         }
 
         const [newParticipant] = await tx.insert(tournamentParticipants).values({
-          tournamentId: id,
+          tournamentId,
           userId,
           seed: Number(currentCount) + 1,
         }).returning();
@@ -75,20 +83,32 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         if (entryFeeValue > 0) {
           await tx.update(tournaments)
             .set({ prizePool: sql`(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) + ${entryFeeValue})::text` })
-            .where(eq(tournaments.id, id));
+            .where(eq(tournaments.id, tournamentId));
         }
 
         // Normalize status to registration once first participant joins in a valid window.
         if (lockedTournament.status === 'upcoming') {
           await tx.update(tournaments)
             .set({ status: 'registration' })
-            .where(eq(tournaments.id, id));
+            .where(eq(tournaments.id, tournamentId));
         }
 
         return { participant: newParticipant, tournament: lockedTournament };
       });
 
-      res.json(registrationResult.participant);
+      const tournamentId = registrationResult.tournament.id;
+      let autoStarted = false;
+      try {
+        const autoStartResult = await tryAutoStartTournament(tournamentId);
+        autoStarted = autoStartResult.success;
+      } catch {
+        autoStarted = false;
+      }
+
+      res.json({
+        ...registrationResult.participant,
+        autoStarted,
+      });
 
       // Send registration confirmation notification (non-blocking)
       const tournament = registrationResult.tournament;
@@ -96,6 +116,7 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
       const tNameAr = tournament.nameAr || tName;
       const fee = parseFloat(tournament.entryFee) > 0 ? ` (Fee: $${tournament.entryFee})` : '';
       const feeAr = parseFloat(tournament.entryFee) > 0 ? ` (الرسوم: $${tournament.entryFee})` : '';
+      const tournamentPath = tournament.shareSlug || tournament.id;
       sendNotification(userId, {
         type: 'announcement',
         priority: 'normal',
@@ -103,8 +124,8 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         titleAr: 'تم تأكيد التسجيل في البطولة',
         message: `You have successfully registered for "${tName}".${fee}`,
         messageAr: `تم تسجيلك بنجاح في "${tNameAr}".${feeAr}`,
-        link: `/tournaments/${id}`,
-        metadata: JSON.stringify({ tournamentId: id, action: 'tournament_registered' }),
+        link: `/tournaments/${tournamentPath}`,
+        metadata: JSON.stringify({ tournamentId: tournament.id, action: 'tournament_registered' }),
       }).catch(() => { });
     } catch (error: unknown) {
       const msg = getErrorMessage(error);
@@ -134,12 +155,17 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
       await db.transaction(async (tx) => {
         const [lockedTournament] = await tx.select()
           .from(tournaments)
-          .where(eq(tournaments.id, id))
+          .where(or(
+            eq(tournaments.id, id),
+            eq(tournaments.shareSlug, id),
+          ))
           .for('update');
 
         if (!lockedTournament) {
           throw new Error("Tournament not found");
         }
+
+        const tournamentId = lockedTournament.id;
 
         if (!isTournamentRegistrationOpen(lockedTournament)) {
           throw new Error("Cannot withdraw after registration closed");
@@ -147,7 +173,7 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
 
         const result = await tx.delete(tournamentParticipants)
           .where(and(
-            eq(tournamentParticipants.tournamentId, id),
+            eq(tournamentParticipants.tournamentId, tournamentId),
             eq(tournamentParticipants.userId, userId),
           ))
           .returning();
@@ -165,7 +191,7 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
 
           await tx.update(tournaments)
             .set({ prizePool: sql`GREATEST(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) - ${entryFeeValue}, 0)::text` })
-            .where(eq(tournaments.id, id));
+            .where(eq(tournaments.id, tournamentId));
         }
       });
 

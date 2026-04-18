@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { GameConfigIcon } from "@/components/GameConfigIcon";
 import {
   Dialog,
@@ -51,6 +52,11 @@ import {
   Trash2,
   Ban,
   ArrowRight,
+  Upload,
+  Image as ImageIcon,
+  Video,
+  Globe,
+  GlobeLock,
 } from "lucide-react";
 
 function getAdminToken() {
@@ -108,17 +114,74 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+const PRIZE_DISTRIBUTION_OPTIONS = [
+  { value: "winner_take_all", label: "Winner Takes All", preview: "100" },
+  { value: "top_2", label: "Top 2", preview: "70, 30" },
+  { value: "top_3", label: "Top 3", preview: "50, 30, 20" },
+  { value: "top_4", label: "Top 4", preview: "45, 25, 18, 12" },
+  { value: "top_5", label: "Top 5", preview: "40, 25, 15, 12, 8" },
+  { value: "top_8_balanced", label: "Top 8 Balanced", preview: "28, 20, 14, 10, 8, 7, 7, 6" },
+  { value: "custom", label: "Custom Percentages", preview: "e.g. 45, 25, 20, 10" },
+] as const;
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatDateInputValue(date: Date): string {
+  const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
+  return localDate.toISOString().slice(0, 16);
+}
+
+function parseDateTimeLocal(value?: string): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function parseCustomDistribution(rawValue: string): number[] {
+  if (!rawValue.trim()) return [];
+  return rawValue
+    .split(",")
+    .map((entry) => Number.parseFloat(entry.trim()))
+    .filter((entry) => Number.isFinite(entry) && entry >= 0);
+}
+
+function slugifyTournament(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 80);
+}
+
 interface TournamentItem {
   id: string;
   name: string;
   nameAr?: string;
+  isPublished?: boolean;
+  publishedAt?: string | null;
+  shareSlug?: string | null;
+  coverImageUrl?: string | null;
+  promoVideoUrl?: string | null;
   gameType: string;
   format: string;
   status: string;
   maxPlayers: number;
   minPlayers: number;
+  autoStartOnFull?: boolean;
+  autoStartPlayerCount?: number | null;
   entryFee: string;
   prizePool: string;
+  prizeDistributionMethod?: string;
+  prizeDistribution?: string | null;
   startsAt: string | null;
   endsAt: string | null;
   registrationStartsAt: string | null;
@@ -162,12 +225,20 @@ interface TournamentForm {
   nameAr: string;
   description: string;
   descriptionAr: string;
+  isPublished: boolean;
+  shareSlug: string;
+  coverImageUrl: string;
+  promoVideoUrl: string;
   gameType: string;
   format: string;
   maxPlayers: number;
   minPlayers: number;
+  autoStartOnFull: boolean;
+  autoStartPlayerCount: number;
   entryFee: string;
   prizePool: string;
+  prizeDistributionMethod: string;
+  prizeDistributionCustom: string;
   startsAt: string;
   endsAt: string;
   registrationStartsAt: string;
@@ -179,12 +250,20 @@ const defaultForm: TournamentForm = {
   nameAr: "",
   description: "",
   descriptionAr: "",
+  isPublished: true,
+  shareSlug: "",
+  coverImageUrl: "",
+  promoVideoUrl: "",
   gameType: "chess",
   format: "single_elimination",
   maxPlayers: 16,
   minPlayers: 4,
+  autoStartOnFull: false,
+  autoStartPlayerCount: 4,
   entryFee: "5.00",
   prizePool: "0",
+  prizeDistributionMethod: "top_3",
+  prizeDistributionCustom: "",
   startsAt: "",
   endsAt: "",
   registrationStartsAt: "",
@@ -198,6 +277,118 @@ export default function AdminTournamentsPage() {
   const [form, setForm] = useState<TournamentForm>({ ...defaultForm });
   const [filter, setFilter] = useState<string>("all");
   const [deleteTarget, setDeleteTarget] = useState<TournamentItem | null>(null);
+
+  const openCreateDialog = () => {
+    const now = new Date();
+    const startsAt = new Date(now.getTime() + (72 * 60 * 60 * 1000));
+    const registrationStartsAt = new Date(now.getTime() + (10 * 60 * 1000));
+    const registrationEndsAt = new Date(startsAt.getTime() - (2 * 60 * 60 * 1000));
+
+    setForm({
+      ...defaultForm,
+      autoStartPlayerCount: defaultForm.minPlayers,
+      startsAt: formatDateInputValue(startsAt),
+      registrationStartsAt: formatDateInputValue(registrationStartsAt),
+      registrationEndsAt: formatDateInputValue(registrationEndsAt),
+    });
+    setShowCreate(true);
+  };
+
+  const timelineIssues = useMemo(() => {
+    const issues: string[] = [];
+    const startsAt = parseDateTimeLocal(form.startsAt);
+    const endsAt = parseDateTimeLocal(form.endsAt);
+    const registrationOpensAt = parseDateTimeLocal(form.registrationStartsAt);
+    const registrationClosesAt = parseDateTimeLocal(form.registrationEndsAt);
+
+    if (form.minPlayers > form.maxPlayers) {
+      issues.push("Min players cannot exceed max players");
+    }
+
+    if (endsAt && startsAt && endsAt.getTime() < startsAt.getTime()) {
+      issues.push("Tournament end must be after start");
+    }
+
+    if (registrationOpensAt && registrationClosesAt && registrationClosesAt.getTime() < registrationOpensAt.getTime()) {
+      issues.push("Registration close must be after registration open");
+    }
+
+    if (registrationClosesAt && startsAt && registrationClosesAt.getTime() > startsAt.getTime()) {
+      issues.push("Registration must close before the tournament starts");
+    }
+
+    if (registrationOpensAt && startsAt && registrationOpensAt.getTime() > startsAt.getTime()) {
+      issues.push("Registration cannot open after tournament start");
+    }
+
+    return issues;
+  }, [
+    form.endsAt,
+    form.maxPlayers,
+    form.minPlayers,
+    form.registrationEndsAt,
+    form.registrationStartsAt,
+    form.startsAt,
+  ]);
+
+  const customDistributionIssues = useMemo(() => {
+    if (form.prizeDistributionMethod !== "custom") return [];
+
+    const values = parseCustomDistribution(form.prizeDistributionCustom);
+    if (values.length === 0) {
+      return ["Custom prize distribution is required"];
+    }
+
+    const sum = values.reduce((accumulator, value) => accumulator + value, 0);
+    if (Math.abs(sum - 100) > 0.01) {
+      return ["Custom prize distribution must total 100"];
+    }
+
+    return [];
+  }, [form.prizeDistributionCustom, form.prizeDistributionMethod]);
+
+  const canSubmitCreate = Boolean(
+    form.name
+    && form.nameAr
+    && form.gameType
+    && timelineIssues.length === 0
+    && customDistributionIssues.length === 0,
+  );
+
+  const applySmartTimelineFix = () => {
+    if (!form.startsAt) return;
+
+    const startDate = parseDateTimeLocal(form.startsAt);
+    if (!startDate) return;
+
+    const suggestedClose = new Date(startDate.getTime() - (60 * 60 * 1000));
+    const suggestedOpen = new Date(suggestedClose.getTime() - (24 * 60 * 60 * 1000));
+
+    setForm((previous) => ({
+      ...previous,
+      registrationStartsAt: previous.registrationStartsAt || formatDateInputValue(suggestedOpen),
+      registrationEndsAt: formatDateInputValue(suggestedClose),
+    }));
+  };
+
+  const handleStartDateChange = (nextStartsAt: string) => {
+    setForm((previous) => {
+      const next = { ...previous, startsAt: nextStartsAt };
+      const startDate = parseDateTimeLocal(nextStartsAt);
+      const closeDate = parseDateTimeLocal(previous.registrationEndsAt);
+
+      if (startDate && closeDate && closeDate.getTime() > startDate.getTime()) {
+        const adjustedClose = new Date(startDate.getTime() - (15 * 60 * 1000));
+        next.registrationEndsAt = formatDateInputValue(adjustedClose);
+      }
+
+      if (next.autoStartPlayerCount < next.minPlayers) {
+        next.autoStartPlayerCount = next.minPlayers;
+      }
+
+      return next;
+    });
+  };
 
   const { data: multiplayerGames = [] } = useQuery<MultiplayerGameFromAPI[]>({
     queryKey: ["/api/multiplayer-games"],
@@ -254,12 +445,20 @@ export default function AdminTournamentsPage() {
           nameAr: data.nameAr,
           description: data.description || null,
           descriptionAr: data.descriptionAr || null,
+          isPublished: data.isPublished,
+          shareSlug: data.shareSlug || null,
+          coverImageUrl: data.coverImageUrl || null,
+          promoVideoUrl: data.promoVideoUrl || null,
           gameType: normalizeTournamentGameType(data.gameType),
           format: data.format,
           maxPlayers: Number(data.maxPlayers),
           minPlayers: Number(data.minPlayers),
+          autoStartOnFull: Boolean(data.autoStartOnFull),
+          autoStartPlayerCount: data.autoStartOnFull ? Number(data.autoStartPlayerCount) : null,
           entryFee: data.entryFee || "0.00",
           prizePool: data.prizePool || "0.00",
+          prizeDistributionMethod: data.prizeDistributionMethod,
+          prizeDistribution: data.prizeDistributionMethod === "custom" ? data.prizeDistributionCustom : null,
           startsAt: data.startsAt ? new Date(data.startsAt).toISOString() : null,
           endsAt: data.endsAt ? new Date(data.endsAt).toISOString() : null,
           registrationStartsAt: data.registrationStartsAt ? new Date(data.registrationStartsAt).toISOString() : null,
@@ -274,6 +473,77 @@ export default function AdminTournamentsPage() {
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const publishMutation = useMutation({
+    mutationFn: ({ id, isPublished }: { id: string; isPublished: boolean }) =>
+      adminFetch(`/api/admin/tournaments/${id}/publish`, {
+        method: "PUT",
+        body: JSON.stringify({ isPublished }),
+      }),
+    onSuccess: (_, variables) => {
+      toast({
+        title: variables.isPublished ? "Tournament Published" : "Tournament Hidden",
+        description: variables.isPublished
+          ? "Tournament is now visible in public tournaments"
+          : "Tournament has been hidden from public tournaments",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tournaments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/tournaments", variables.id] });
+      if (selectedTournament?.id === variables.id) {
+        setSelectedTournament({
+          ...selectedTournament,
+          isPublished: variables.isPublished,
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const uploadMediaMutation = useMutation({
+    mutationFn: async ({ file, kind }: { file: File; kind: "image" | "video" }) => {
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+
+      if (kind === "image" && !isImage) {
+        throw new Error("Please choose an image file");
+      }
+
+      if (kind === "video" && !isVideo) {
+        throw new Error("Please choose a video file");
+      }
+
+      if (file.size > (10 * 1024 * 1024)) {
+        throw new Error("File must be 10MB or smaller");
+      }
+
+      const fileData = await fileToDataUrl(file);
+      const uploadResult = await adminFetch("/api/upload", {
+        method: "POST",
+        body: JSON.stringify({ fileData, fileName: file.name }),
+      }) as { url?: string };
+
+      if (!uploadResult.url) {
+        throw new Error("Upload failed");
+      }
+
+      return { kind, url: uploadResult.url };
+    },
+    onSuccess: ({ kind, url }) => {
+      setForm((previous) => ({
+        ...previous,
+        ...(kind === "image" ? { coverImageUrl: url } : { promoVideoUrl: url }),
+      }));
+
+      toast({
+        title: kind === "image" ? "Tournament Cover Uploaded" : "Tournament Video Uploaded",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -354,6 +624,19 @@ export default function AdminTournamentsPage() {
     },
   });
 
+  const handleCreateTournament = () => {
+    if (!canSubmitCreate) {
+      toast({
+        title: "Cannot Create Tournament",
+        description: "Fix validation issues in schedule or prize distribution first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    createMutation.mutate(form);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] flex items-center justify-center">
@@ -384,7 +667,7 @@ export default function AdminTournamentsPage() {
             Create, manage, and run tournaments
           </p>
         </div>
-        <Button className="min-h-[44px] w-full sm:w-auto" onClick={() => setShowCreate(true)}>
+        <Button className="min-h-[44px] w-full sm:w-auto" onClick={openCreateDialog}>
           <Plus className="h-4 w-4 mr-2" />
           Create Tournament
         </Button>
@@ -461,6 +744,14 @@ export default function AdminTournamentsPage() {
                       <Badge variant="outline" className={STATUS_COLORS[tournament.status] || ""}>
                         {STATUS_LABELS[tournament.status] || tournament.status}
                       </Badge>
+                      <Badge variant="outline" className={tournament.isPublished ? "text-emerald-500 border-emerald-500/30" : "text-orange-500 border-orange-500/30"}>
+                        {tournament.isPublished ? "Published" : "Hidden"}
+                      </Badge>
+                      {tournament.autoStartOnFull && (
+                        <Badge variant="outline" className="text-cyan-500 border-cyan-500/30">
+                          Quick Start @{tournament.autoStartPlayerCount || tournament.minPlayers}
+                        </Badge>
+                      )}
                       <Badge variant="outline">{gameMeta?.label || gameConfig.name}</Badge>
                     </div>
                     <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground flex-wrap">
@@ -483,6 +774,20 @@ export default function AdminTournamentsPage() {
                         </span>
                       )}
                     </div>
+                    {(tournament.coverImageUrl || tournament.promoVideoUrl) && (
+                      <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                        {tournament.coverImageUrl && (
+                          <span className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5">
+                            <ImageIcon className="h-3 w-3" /> Public cover
+                          </span>
+                        )}
+                        {tournament.promoVideoUrl && (
+                          <span className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5">
+                            <Video className="h-3 w-3" /> Promo video
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <ChevronRight className="hidden sm:block h-5 w-5 text-muted-foreground" />
                 </CardContent>
@@ -499,13 +804,65 @@ export default function AdminTournamentsPage() {
             <DialogTitle>Create Tournament</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {(timelineIssues.length > 0 || customDistributionIssues.length > 0) && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200 space-y-1">
+                {timelineIssues.map((issue) => (
+                  <p key={issue}>- {issue}</p>
+                ))}
+                {customDistributionIssues.map((issue) => (
+                  <p key={issue}>- {issue}</p>
+                ))}
+                {!!form.startsAt && (
+                  <Button type="button" size="sm" variant="outline" className="mt-2" onClick={applySmartTimelineFix}>
+                    Fix Timeline Automatically
+                  </Button>
+                )}
+              </div>
+            )}
+
+            <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold">Public Visibility</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Publish tournaments for users and sharing.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {form.isPublished ? <Globe className="h-4 w-4 text-emerald-500" /> : <GlobeLock className="h-4 w-4 text-orange-500" />}
+                  <Switch
+                    checked={form.isPublished}
+                    onCheckedChange={(checked) => setForm({ ...form, isPublished: checked })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Share Slug (optional)</Label>
+                <Input
+                  value={form.shareSlug}
+                  onChange={(e) => setForm({ ...form, shareSlug: slugifyTournament(e.target.value) })}
+                  placeholder="chess-pro-league"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Public URL: /tournaments/{form.shareSlug || slugifyTournament(form.name) || "tournament"}
+                </p>
+              </div>
+            </div>
+
             {/* Names */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Name (EN) *</Label>
                 <Input
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(e) => {
+                    const nextName = e.target.value;
+                    setForm((previous) => ({
+                      ...previous,
+                      name: nextName,
+                      shareSlug: previous.shareSlug || slugifyTournament(nextName),
+                    }));
+                  }}
                   placeholder="Chess Championship"
                 />
               </div>
@@ -615,7 +972,14 @@ export default function AdminTournamentsPage() {
                 <Input
                   type="number"
                   value={form.minPlayers}
-                  onChange={(e) => setForm({ ...form, minPlayers: parseInt(e.target.value) || 2 })}
+                  onChange={(e) => {
+                    const nextMinPlayers = parseInt(e.target.value, 10) || 2;
+                    setForm((previous) => ({
+                      ...previous,
+                      minPlayers: nextMinPlayers,
+                      autoStartPlayerCount: Math.max(previous.autoStartPlayerCount, nextMinPlayers),
+                    }));
+                  }}
                   min={2}
                 />
               </div>
@@ -624,10 +988,51 @@ export default function AdminTournamentsPage() {
                 <Input
                   type="number"
                   value={form.maxPlayers}
-                  onChange={(e) => setForm({ ...form, maxPlayers: parseInt(e.target.value) || 4 })}
+                  onChange={(e) => {
+                    const nextMaxPlayers = parseInt(e.target.value, 10) || 4;
+                    setForm((previous) => ({
+                      ...previous,
+                      maxPlayers: nextMaxPlayers,
+                      autoStartPlayerCount: Math.min(previous.autoStartPlayerCount, nextMaxPlayers),
+                    }));
+                  }}
                   min={4}
                 />
               </div>
+            </div>
+
+            {/* Quick start */}
+            <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold">Quick Start</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Start tournament automatically when participants reach the threshold.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.autoStartOnFull}
+                  onCheckedChange={(checked) => setForm({ ...form, autoStartOnFull: checked })}
+                />
+              </div>
+              {form.autoStartOnFull && (
+                <div className="space-y-1.5">
+                  <Label>Auto-start player threshold</Label>
+                  <Input
+                    type="number"
+                    value={form.autoStartPlayerCount}
+                    min={form.minPlayers}
+                    max={form.maxPlayers}
+                    onChange={(e) => {
+                      const nextValue = parseInt(e.target.value, 10) || form.minPlayers;
+                      setForm({
+                        ...form,
+                        autoStartPlayerCount: Math.max(form.minPlayers, Math.min(form.maxPlayers, nextValue)),
+                      });
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Entry Fee & Prize Pool */}
@@ -652,6 +1057,99 @@ export default function AdminTournamentsPage() {
                   min={0}
                 />
                 <p className="text-xs text-muted-foreground">Base prize pool (entry fees added automatically)</p>
+              </div>
+            </div>
+
+            {/* Prize distribution */}
+            <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+              <h4 className="text-sm font-semibold flex items-center gap-2">
+                <Trophy className="h-4 w-4" /> Prize Distribution
+              </h4>
+              <div className="space-y-1.5">
+                <Label>Distribution Model</Label>
+                <Select
+                  value={form.prizeDistributionMethod}
+                  onValueChange={(value) => setForm({ ...form, prizeDistributionMethod: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIZE_DISTRIBUTION_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        <div className="flex items-center justify-between gap-3">
+                          <span>{option.label}</span>
+                          <span className="text-xs text-muted-foreground">{option.preview}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.prizeDistributionMethod === "custom" && (
+                <div className="space-y-1.5">
+                  <Label>Custom Percentages</Label>
+                  <Input
+                    value={form.prizeDistributionCustom}
+                    onChange={(e) => setForm({ ...form, prizeDistributionCustom: e.target.value })}
+                    placeholder="45, 25, 20, 10"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Enter comma-separated percentages. Total must equal 100.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Media upload */}
+            <div className="border rounded-lg p-3 space-y-3 bg-muted/30">
+              <h4 className="text-sm font-semibold flex items-center gap-2">
+                <Upload className="h-4 w-4" /> Public Media
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Cover Image</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => {
+                      const selectedFile = event.target.files?.[0];
+                      if (selectedFile) {
+                        uploadMediaMutation.mutate({ file: selectedFile, kind: "image" });
+                      }
+                    }}
+                  />
+                  {form.coverImageUrl && (
+                    <div className="rounded-xl border overflow-hidden">
+                      <img
+                        src={form.coverImageUrl}
+                        alt="Tournament cover"
+                        className="h-28 w-full object-cover"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Promo Video</Label>
+                  <Input
+                    type="file"
+                    accept="video/*"
+                    onChange={(event) => {
+                      const selectedFile = event.target.files?.[0];
+                      if (selectedFile) {
+                        uploadMediaMutation.mutate({ file: selectedFile, kind: "video" });
+                      }
+                    }}
+                  />
+                  {form.promoVideoUrl && (
+                    <video
+                      src={form.promoVideoUrl}
+                      className="h-28 w-full rounded-xl border object-cover"
+                      controls
+                      preload="metadata"
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -691,7 +1189,7 @@ export default function AdminTournamentsPage() {
                   <Input
                     type="datetime-local"
                     value={form.startsAt}
-                    onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
+                    onChange={(e) => handleStartDateChange(e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -710,8 +1208,8 @@ export default function AdminTournamentsPage() {
             <Button className="min-h-[44px] w-full sm:w-auto" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
             <Button
               className="min-h-[44px] w-full sm:w-auto"
-              onClick={() => createMutation.mutate(form)}
-              disabled={createMutation.isPending || !form.name || !form.nameAr || !form.gameType}
+              onClick={handleCreateTournament}
+              disabled={createMutation.isPending || uploadMediaMutation.isPending || !canSubmitCreate}
             >
               {createMutation.isPending ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...</>
@@ -773,10 +1271,36 @@ export default function AdminTournamentsPage() {
                 );
               })()}
 
+              {(tournamentDetail.coverImageUrl || tournamentDetail.promoVideoUrl) && (
+                <div className="space-y-3">
+                  {tournamentDetail.coverImageUrl && (
+                    <img
+                      src={String(tournamentDetail.coverImageUrl)}
+                      alt="Tournament cover"
+                      className="h-40 w-full rounded-2xl border object-cover"
+                    />
+                  )}
+                  {tournamentDetail.promoVideoUrl && (
+                    <video
+                      src={String(tournamentDetail.promoVideoUrl)}
+                      className="h-44 w-full rounded-2xl border object-cover"
+                      controls
+                      preload="metadata"
+                    />
+                  )}
+                </div>
+              )}
+
               {/* Status & Info */}
               <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant="outline" className={STATUS_COLORS[tournamentDetail.status] || ""}>
                   {STATUS_LABELS[tournamentDetail.status] || tournamentDetail.status}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className={tournamentDetail.isPublished ? "text-emerald-500 border-emerald-500/30" : "text-orange-500 border-orange-500/30"}
+                >
+                  {tournamentDetail.isPublished ? "Published" : "Hidden"}
                 </Badge>
                 <Badge variant="outline" className="gap-2">
                   {(() => {
@@ -846,12 +1370,42 @@ export default function AdminTournamentsPage() {
                       <span className="text-muted-foreground">Tournament:</span>{" "}
                       {formatDate(tournamentDetail.startsAt)} — {formatDate(tournamentDetail.endsAt)}
                     </div>
+                    <div className="sm:col-span-2 break-all">
+                      <span className="text-muted-foreground">Share URL:</span>{" "}
+                      /tournaments/{String(tournamentDetail.shareSlug || tournamentDetail.id)}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Prize Model:</span>{" "}
+                      {String(tournamentDetail.prizeDistributionMethod || "top_3").replace(/_/g, " ")}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Quick Start:</span>{" "}
+                      {tournamentDetail.autoStartOnFull
+                        ? `On @ ${tournamentDetail.autoStartPlayerCount || tournamentDetail.minPlayers}`
+                        : "Off"}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
 
               {/* ===== ADMIN ACTIONS ===== */}
               <div className="flex gap-2 flex-wrap">
+                <Button
+                  className="min-h-[44px]"
+                  variant="outline"
+                  onClick={() => publishMutation.mutate({
+                    id: tournamentDetail.id,
+                    isPublished: !Boolean(tournamentDetail.isPublished),
+                  })}
+                  disabled={publishMutation.isPending}
+                >
+                  {Boolean(tournamentDetail.isPublished) ? (
+                    <><GlobeLock className="h-4 w-4 mr-2" /> Hide From Public</>
+                  ) : (
+                    <><Globe className="h-4 w-4 mr-2" /> Publish To Public</>
+                  )}
+                </Button>
+
                 {/* Open Registration */}
                 {tournamentDetail.status === "upcoming" && (
                   <Button

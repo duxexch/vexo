@@ -20,6 +20,26 @@ function isTournamentValidationError(message: string): boolean {
   );
 }
 
+async function ensureUniqueTournamentShareSlug(baseSlug: string): Promise<string> {
+  const normalizedBase = String(baseSlug || "tournament").trim().toLowerCase() || "tournament";
+  let candidate = normalizedBase;
+
+  for (let attempt = 1; attempt <= 40; attempt += 1) {
+    const [existing] = await db.select({ id: tournaments.id })
+      .from(tournaments)
+      .where(eq(tournaments.shareSlug, candidate))
+      .limit(1);
+
+    if (!existing) {
+      return candidate;
+    }
+
+    candidate = `${normalizedBase}-${attempt + 1}`;
+  }
+
+  return `${normalizedBase}-${Date.now().toString(36)}`;
+}
+
 export function registerTournamentCrudRoutes(app: Express) {
 
   app.get("/api/admin/tournaments", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
@@ -31,13 +51,21 @@ export function registerTournamentCrudRoutes(app: Express) {
         nameAr: tournaments.nameAr,
         description: tournaments.description,
         descriptionAr: tournaments.descriptionAr,
+        isPublished: tournaments.isPublished,
+        publishedAt: tournaments.publishedAt,
+        shareSlug: tournaments.shareSlug,
+        coverImageUrl: tournaments.coverImageUrl,
+        promoVideoUrl: tournaments.promoVideoUrl,
         gameType: tournaments.gameType,
         format: tournaments.format,
         status: tournaments.status,
         maxPlayers: tournaments.maxPlayers,
         minPlayers: tournaments.minPlayers,
+        autoStartOnFull: tournaments.autoStartOnFull,
+        autoStartPlayerCount: tournaments.autoStartPlayerCount,
         entryFee: tournaments.entryFee,
         prizePool: tournaments.prizePool,
+        prizeDistributionMethod: tournaments.prizeDistributionMethod,
         prizeDistribution: tournaments.prizeDistribution,
         currentRound: tournaments.currentRound,
         totalRounds: tournaments.totalRounds,
@@ -125,18 +153,29 @@ export function registerTournamentCrudRoutes(app: Express) {
   app.post("/api/admin/tournaments", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
       const normalizedPayload = normalizeTournamentPayload(req.body as Record<string, unknown>);
+      const uniqueShareSlug = await ensureUniqueTournamentShareSlug(normalizedPayload.shareSlug);
+      const publishedAt = normalizedPayload.isPublished ? new Date() : null;
 
       const [tournament] = await db.insert(tournaments).values({
         name: normalizedPayload.name,
         nameAr: normalizedPayload.nameAr,
         description: normalizedPayload.description,
         descriptionAr: normalizedPayload.descriptionAr,
+        isPublished: normalizedPayload.isPublished,
+        publishedAt,
+        shareSlug: uniqueShareSlug,
+        coverImageUrl: normalizedPayload.coverImageUrl,
+        promoVideoUrl: normalizedPayload.promoVideoUrl,
         gameType: normalizedPayload.gameType,
         format: normalizedPayload.format as "single_elimination" | "double_elimination" | "round_robin" | "swiss",
         maxPlayers: normalizedPayload.maxPlayers,
         minPlayers: normalizedPayload.minPlayers,
+        autoStartOnFull: normalizedPayload.autoStartOnFull,
+        autoStartPlayerCount: normalizedPayload.autoStartPlayerCount,
         entryFee: normalizedPayload.entryFee,
         prizePool: normalizedPayload.prizePool,
+        prizeDistributionMethod: normalizedPayload.prizeDistributionMethod,
+        prizeDistribution: normalizedPayload.prizeDistribution,
         totalRounds: normalizedPayload.totalRounds,
         status: 'upcoming',
         startsAt: normalizedPayload.startsAt,
@@ -151,6 +190,11 @@ export function registerTournamentCrudRoutes(app: Express) {
           name: normalizedPayload.name,
           gameType: normalizedPayload.gameType,
           format: normalizedPayload.format,
+          isPublished: normalizedPayload.isPublished,
+          shareSlug: uniqueShareSlug,
+          autoStartOnFull: normalizedPayload.autoStartOnFull,
+          autoStartPlayerCount: normalizedPayload.autoStartPlayerCount,
+          prizeDistributionMethod: normalizedPayload.prizeDistributionMethod,
           maxPlayers: normalizedPayload.maxPlayers,
           entryFee: normalizedPayload.entryFee,
           prizePool: normalizedPayload.prizePool,

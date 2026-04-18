@@ -6,7 +6,11 @@ import {
 import { db } from "../../db";
 import { eq, and, sql } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
-import { autoAdvanceTournamentByes, canDeleteTournament } from "../../lib/tournament-utils";
+import {
+  autoAdvanceTournamentByes,
+  canDeleteTournament,
+  settleTournamentPrizes,
+} from "../../lib/tournament-utils";
 
 export function registerTournamentMatchRoutes(app: Express) {
 
@@ -109,33 +113,19 @@ export function registerTournamentMatchRoutes(app: Express) {
 
       // Check if tournament is complete (including bye-driven completion after propagation)
       if (finalMatch?.status === 'completed' && finalMatch.winnerId) {
-        const runnerUpId = finalMatch.winnerId === finalMatch.player1Id
-          ? finalMatch.player2Id
-          : finalMatch.player1Id;
-
         await db.update(tournaments)
           .set({
             status: 'completed',
             winnerId: finalMatch.winnerId,
+            currentRound: tournament.totalRounds,
             endsAt: new Date(),
             updatedAt: new Date(),
           })
           .where(eq(tournaments.id, match.tournamentId));
 
-        await db.update(tournamentParticipants)
-          .set({ placement: 1 })
-          .where(and(
-            eq(tournamentParticipants.tournamentId, match.tournamentId),
-            eq(tournamentParticipants.userId, finalMatch.winnerId),
-          ));
-
-        if (runnerUpId) {
-          await db.update(tournamentParticipants)
-            .set({ placement: 2 })
-            .where(and(
-              eq(tournamentParticipants.tournamentId, match.tournamentId),
-              eq(tournamentParticipants.userId, runnerUpId),
-            ));
+        const settlementResult = await settleTournamentPrizes(match.tournamentId);
+        if (!settlementResult.settled && settlementResult.reason !== "Prizes already settled") {
+          throw new Error(settlementResult.reason || "Failed to settle tournament prizes");
         }
       } else {
         const [nextRoundMatch] = await db.select({ round: tournamentMatches.round })

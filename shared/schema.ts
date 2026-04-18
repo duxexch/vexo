@@ -3614,14 +3614,23 @@ export const tournaments = pgTable("tournaments", {
   nameAr: text("name_ar").notNull(),
   description: text("description"),
   descriptionAr: text("description_ar"),
+  isPublished: boolean("is_published").notNull().default(true),
+  publishedAt: timestamp("published_at"),
+  shareSlug: text("share_slug"),
+  coverImageUrl: text("cover_image_url"),
+  promoVideoUrl: text("promo_video_url"),
   gameType: text("game_type").notNull(), // chess, backgammon, domino, tarneeb, baloot
   format: tournamentFormatEnum("format").notNull().default("single_elimination"),
   status: tournamentStatusEnum("status").notNull().default("upcoming"),
   maxPlayers: integer("max_players").notNull().default(16),
   minPlayers: integer("min_players").notNull().default(4),
+  autoStartOnFull: boolean("auto_start_on_full").notNull().default(false),
+  autoStartPlayerCount: integer("auto_start_player_count"),
   entryFee: decimal("entry_fee", { precision: 15, scale: 2 }).notNull().default("0.00"),
   prizePool: decimal("prize_pool", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  prizeDistributionMethod: text("prize_distribution_method").notNull().default("top_3"),
   prizeDistribution: text("prize_distribution"), // JSON: [50, 30, 20] percentages
+  prizesSettledAt: timestamp("prizes_settled_at"),
   currentRound: integer("current_round").notNull().default(0),
   totalRounds: integer("total_rounds").notNull().default(0),
   registrationStartsAt: timestamp("registration_starts_at"),
@@ -3634,8 +3643,10 @@ export const tournaments = pgTable("tournaments", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_tournaments_status").on(table.status),
+  index("idx_tournaments_is_published").on(table.isPublished),
   index("idx_tournaments_game_type").on(table.gameType),
   index("idx_tournaments_starts_at").on(table.startsAt),
+  uniqueIndex("idx_tournaments_share_slug_unique").on(table.shareSlug),
 ]);
 
 export const tournamentParticipants = pgTable("tournament_participants", {
