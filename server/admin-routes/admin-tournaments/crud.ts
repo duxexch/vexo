@@ -4,6 +4,21 @@ import type { TournamentStatus } from "@shared/schema";
 import { db } from "../../db";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
+import {
+  normalizeTournamentGameType,
+  normalizeTournamentPayload,
+} from "../../lib/tournament-utils";
+
+function isTournamentValidationError(message: string): boolean {
+  const lowered = message.toLowerCase();
+  return (
+    lowered.includes("required") ||
+    lowered.includes("invalid") ||
+    lowered.includes("unsupported") ||
+    lowered.includes("must") ||
+    lowered.includes("cannot")
+  );
+}
 
 export function registerTournamentCrudRoutes(app: Express) {
 
@@ -42,7 +57,7 @@ export function registerTournamentCrudRoutes(app: Express) {
         conditions.push(eq(tournaments.status, status as TournamentStatus));
       }
       if (gameType && typeof gameType === 'string') {
-        conditions.push(eq(tournaments.gameType, gameType));
+        conditions.push(eq(tournaments.gameType, normalizeTournamentGameType(gameType)));
       }
       if (conditions.length > 0) {
         query = query.where(and(...conditions));
@@ -109,44 +124,48 @@ export function registerTournamentCrudRoutes(app: Express) {
 
   app.post("/api/admin/tournaments", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
-      const { name, nameAr, description, descriptionAr, gameType, format,
-              maxPlayers, minPlayers, entryFee, prizePool,
-              startsAt, endsAt, registrationStartsAt, registrationEndsAt } = req.body;
-
-      if (!name || !nameAr || !gameType) {
-        return res.status(400).json({ error: "Name, Arabic name, and game type are required" });
-      }
-
-      const rounds = Math.ceil(Math.log2(maxPlayers || 16));
+      const normalizedPayload = normalizeTournamentPayload(req.body as Record<string, unknown>);
 
       const [tournament] = await db.insert(tournaments).values({
-        name,
-        nameAr,
-        description: description || null,
-        descriptionAr: descriptionAr || null,
-        gameType,
-        format: format || 'single_elimination',
-        maxPlayers: maxPlayers || 16,
-        minPlayers: minPlayers || 4,
-        entryFee: entryFee || '0.00',
-        prizePool: prizePool || '0.00',
-        totalRounds: rounds,
+        name: normalizedPayload.name,
+        nameAr: normalizedPayload.nameAr,
+        description: normalizedPayload.description,
+        descriptionAr: normalizedPayload.descriptionAr,
+        gameType: normalizedPayload.gameType,
+        format: normalizedPayload.format as "single_elimination" | "double_elimination" | "round_robin" | "swiss",
+        maxPlayers: normalizedPayload.maxPlayers,
+        minPlayers: normalizedPayload.minPlayers,
+        entryFee: normalizedPayload.entryFee,
+        prizePool: normalizedPayload.prizePool,
+        totalRounds: normalizedPayload.totalRounds,
         status: 'upcoming',
-        startsAt: startsAt ? new Date(startsAt) : null,
-        endsAt: endsAt ? new Date(endsAt) : null,
-        registrationStartsAt: registrationStartsAt ? new Date(registrationStartsAt) : null,
-        registrationEndsAt: registrationEndsAt ? new Date(registrationEndsAt) : null,
+        startsAt: normalizedPayload.startsAt,
+        endsAt: normalizedPayload.endsAt,
+        registrationStartsAt: normalizedPayload.registrationStartsAt,
+        registrationEndsAt: normalizedPayload.registrationEndsAt,
         createdBy: req.admin!.id,
       }).returning();
 
       await logAdminAction(req.admin!.id, "settings_change", "tournament", tournament.id, {
-        newValue: JSON.stringify({ name, gameType, format, maxPlayers, entryFee, prizePool }),
+        newValue: JSON.stringify({
+          name: normalizedPayload.name,
+          gameType: normalizedPayload.gameType,
+          format: normalizedPayload.format,
+          maxPlayers: normalizedPayload.maxPlayers,
+          entryFee: normalizedPayload.entryFee,
+          prizePool: normalizedPayload.prizePool,
+        }),
         reason: "Tournament created",
       }, req);
 
       res.json(tournament);
     } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
+      const message = getErrorMessage(error);
+      if (isTournamentValidationError(message)) {
+        return res.status(400).json({ error: message });
+      }
+
+      res.status(500).json({ error: message });
     }
   });
 }

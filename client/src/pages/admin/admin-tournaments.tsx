@@ -87,6 +87,11 @@ const TOURNAMENT_GAME_TYPE_ALIASES: Record<string, string> = {
   dominoes: "domino",
 };
 
+function normalizeTournamentGameType(gameType?: string | null): string {
+  const normalizedType = String(gameType || "").trim().toLowerCase();
+  return TOURNAMENT_GAME_TYPE_ALIASES[normalizedType] || normalizedType;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   upcoming: "bg-blue-500/10 text-blue-500 border-blue-500/30",
   registration: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
@@ -205,8 +210,22 @@ export default function AdminTournamentsPage() {
   );
 
   const resolveTournamentGameConfig = (gameType?: string | null) => {
-    const normalizedType = TOURNAMENT_GAME_TYPE_ALIASES[String(gameType || "")] || String(gameType || "");
+    const normalizedType = normalizeTournamentGameType(gameType);
     return tournamentGameConfig[normalizedType] || tournamentGameConfig.chess;
+  };
+
+  const resolveTournamentGameMeta = (gameType?: string | null) => {
+    const normalizedType = normalizeTournamentGameType(gameType);
+    const direct = GAME_TYPES.find((g) => g.value === normalizedType);
+    if (direct) return direct;
+
+    const aliasKey = Object.keys(TOURNAMENT_GAME_TYPE_ALIASES)
+      .find((key) => TOURNAMENT_GAME_TYPE_ALIASES[key] === normalizedType);
+    if (aliasKey) {
+      return GAME_TYPES.find((g) => g.value === aliasKey) || null;
+    }
+
+    return null;
   };
 
   // Fetch tournaments using ADMIN endpoint
@@ -235,7 +254,7 @@ export default function AdminTournamentsPage() {
           nameAr: data.nameAr,
           description: data.description || null,
           descriptionAr: data.descriptionAr || null,
-          gameType: data.gameType,
+          gameType: normalizeTournamentGameType(data.gameType),
           format: data.format,
           maxPlayers: Number(data.maxPlayers),
           minPlayers: Number(data.minPlayers),
@@ -420,7 +439,7 @@ export default function AdminTournamentsPage() {
       ) : (
         <div className="space-y-3">
           {tournamentList.map((tournament) => {
-            const gameInfo = GAME_TYPES.find((g) => g.value === tournament.gameType);
+            const gameMeta = resolveTournamentGameMeta(tournament.gameType);
             const gameConfig = resolveTournamentGameConfig(tournament.gameType);
             return (
               <Card
@@ -442,6 +461,7 @@ export default function AdminTournamentsPage() {
                       <Badge variant="outline" className={STATUS_COLORS[tournament.status] || ""}>
                         {STATUS_LABELS[tournament.status] || tournament.status}
                       </Badge>
+                      <Badge variant="outline">{gameMeta?.label || gameConfig.name}</Badge>
                     </div>
                     <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1">
@@ -734,7 +754,7 @@ export default function AdminTournamentsPage() {
             <div className="space-y-4">
               {(() => {
                 const detailGameConfig = resolveTournamentGameConfig(tournamentDetail.gameType);
-                const detailGameMeta = GAME_TYPES.find((g) => g.value === tournamentDetail.gameType);
+                const detailGameMeta = resolveTournamentGameMeta(tournamentDetail.gameType);
 
                 return (
                   <div className="flex items-center gap-3 rounded-2xl border bg-muted/30 p-3">
@@ -761,7 +781,7 @@ export default function AdminTournamentsPage() {
                 <Badge variant="outline" className="gap-2">
                   {(() => {
                     const detailGameConfig = resolveTournamentGameConfig(tournamentDetail.gameType);
-                    const detailGameMeta = GAME_TYPES.find((g) => g.value === tournamentDetail.gameType);
+                    const detailGameMeta = resolveTournamentGameMeta(tournamentDetail.gameType);
 
                     return (
                       <>

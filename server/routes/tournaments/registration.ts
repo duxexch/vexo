@@ -5,6 +5,7 @@ import { tournaments, tournamentParticipants, users } from "@shared/schema";
 import { authMiddleware, AuthRequest, sensitiveRateLimiter } from "../middleware";
 import { sendNotification } from "../../websocket";
 import { getErrorMessage } from "../helpers";
+import { isTournamentRegistrationOpen } from "../../lib/tournament-utils";
 
 export function registerTournamentRegistrationRoutes(app: Express): void {
 
@@ -14,26 +15,22 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
       const { id } = req.params;
       const userId = req.user!.id;
 
-      const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, id));
-      if (!tournament) return res.status(404).json({ error: "Tournament not found" });
-
-      if (tournament.status !== 'registration' && tournament.status !== 'upcoming') {
-        return res.status(400).json({ error: "Registration is closed" });
-      }
-
       // SECURITY: Atomic registration with transaction to prevent race conditions
-      const participant = await db.transaction(async (tx) => {
-        // Check max players
-        const [{ count: currentCount }] = await tx
-          .select({ count: count() })
-          .from(tournamentParticipants)
-          .where(eq(tournamentParticipants.tournamentId, id));
+      const registrationResult = await db.transaction(async (tx) => {
+        const [lockedTournament] = await tx.select()
+          .from(tournaments)
+          .where(eq(tournaments.id, id))
+          .for('update');
 
-        if (Number(currentCount) >= tournament.maxPlayers) {
-          throw new Error("Tournament is full");
+        if (!lockedTournament) {
+          throw new Error("Tournament not found");
         }
 
-        // Check already registered
+        if (!isTournamentRegistrationOpen(lockedTournament)) {
+          throw new Error("Registration is closed");
+        }
+
+        // Check already registered first for deterministic UX.
         const [existing] = await tx.select()
           .from(tournamentParticipants)
           .where(and(
@@ -41,16 +38,30 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
             eq(tournamentParticipants.userId, userId),
           ));
 
-        if (existing) throw new Error("Already registered");
+        if (existing) {
+          throw new Error("Already registered");
+        }
+
+        const [{ count: currentCount }] = await tx
+          .select({ count: count() })
+          .from(tournamentParticipants)
+          .where(eq(tournamentParticipants.tournamentId, id));
+
+        if (Number(currentCount) >= lockedTournament.maxPlayers) {
+          throw new Error("Tournament is full");
+        }
+
+        const entryFeeValue = Number.parseFloat(lockedTournament.entryFee);
 
         // Deduct entry fee if any (with row lock)
-        if (parseFloat(tournament.entryFee) > 0) {
+        if (entryFeeValue > 0) {
           const [user] = await tx.select().from(users).where(eq(users.id, userId)).for('update');
-          if (!user || parseFloat(user.balance) < parseFloat(tournament.entryFee)) {
+          if (!user || Number.parseFloat(user.balance) < entryFeeValue) {
             throw new Error("Insufficient balance");
           }
+
           await tx.update(users)
-            .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) - ${parseFloat(tournament.entryFee)})::text` })
+            .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) - ${entryFeeValue})::text` })
             .where(eq(users.id, userId));
         }
 
@@ -61,25 +72,26 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         }).returning();
 
         // Update prize pool
-        if (parseFloat(tournament.entryFee) > 0) {
+        if (entryFeeValue > 0) {
           await tx.update(tournaments)
-            .set({ prizePool: sql`(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) + ${parseFloat(tournament.entryFee)})::text` })
+            .set({ prizePool: sql`(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) + ${entryFeeValue})::text` })
             .where(eq(tournaments.id, id));
         }
 
-        // Auto-start registration if needed
-        if (tournament.status === 'upcoming') {
+        // Normalize status to registration once first participant joins in a valid window.
+        if (lockedTournament.status === 'upcoming') {
           await tx.update(tournaments)
             .set({ status: 'registration' })
             .where(eq(tournaments.id, id));
         }
 
-        return newParticipant;
+        return { participant: newParticipant, tournament: lockedTournament };
       });
 
-      res.json(participant);
+      res.json(registrationResult.participant);
 
       // Send registration confirmation notification (non-blocking)
+      const tournament = registrationResult.tournament;
       const tName = tournament.name || 'Tournament';
       const tNameAr = tournament.nameAr || tName;
       const fee = parseFloat(tournament.entryFee) > 0 ? ` (Fee: $${tournament.entryFee})` : '';
@@ -93,12 +105,21 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         messageAr: `تم تسجيلك بنجاح في "${tNameAr}".${feeAr}`,
         link: `/tournaments/${id}`,
         metadata: JSON.stringify({ tournamentId: id, action: 'tournament_registered' }),
-      }).catch(() => {});
+      }).catch(() => { });
     } catch (error: unknown) {
       const msg = getErrorMessage(error);
-      if (msg === "Tournament is full" || msg === "Already registered" || msg === "Insufficient balance") {
+      if (
+        msg === "Tournament is full"
+        || msg === "Already registered"
+        || msg === "Insufficient balance"
+        || msg === "Registration is closed"
+      ) {
         return res.status(400).json({ error: msg });
       }
+      if (msg === "Tournament not found") {
+        return res.status(404).json({ error: msg });
+      }
+
       res.status(500).json({ error: msg });
     }
   });
@@ -109,15 +130,21 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
       const { id } = req.params;
       const userId = req.user!.id;
 
-      const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, id));
-      if (!tournament) return res.status(404).json({ error: "Tournament not found" });
-
-      if (tournament.status !== 'registration' && tournament.status !== 'upcoming') {
-        return res.status(400).json({ error: "Cannot withdraw after tournament started" });
-      }
-
       // SECURITY: Atomic unregister + refund in transaction
       await db.transaction(async (tx) => {
+        const [lockedTournament] = await tx.select()
+          .from(tournaments)
+          .where(eq(tournaments.id, id))
+          .for('update');
+
+        if (!lockedTournament) {
+          throw new Error("Tournament not found");
+        }
+
+        if (!isTournamentRegistrationOpen(lockedTournament)) {
+          throw new Error("Cannot withdraw after registration closed");
+        }
+
         const result = await tx.delete(tournamentParticipants)
           .where(and(
             eq(tournamentParticipants.tournamentId, id),
@@ -130,12 +157,14 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         }
 
         // Refund entry fee
-        if (parseFloat(tournament.entryFee) > 0) {
+        const entryFeeValue = Number.parseFloat(lockedTournament.entryFee);
+        if (entryFeeValue > 0) {
           await tx.update(users)
-            .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${parseFloat(tournament.entryFee)})::text` })
+            .set({ balance: sql`(CAST(${users.balance} AS DECIMAL(18,2)) + ${entryFeeValue})::text` })
             .where(eq(users.id, userId));
+
           await tx.update(tournaments)
-            .set({ prizePool: sql`(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) - ${parseFloat(tournament.entryFee)})::text` })
+            .set({ prizePool: sql`GREATEST(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) - ${entryFeeValue}, 0)::text` })
             .where(eq(tournaments.id, id));
         }
       });
@@ -143,9 +172,13 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
       res.json({ success: true });
     } catch (error: unknown) {
       const msg = getErrorMessage(error);
-      if (msg === "Not registered") {
+      if (msg === "Not registered" || msg === "Cannot withdraw after registration closed") {
         return res.status(400).json({ error: msg });
       }
+      if (msg === "Tournament not found") {
+        return res.status(404).json({ error: msg });
+      }
+
       res.status(500).json({ error: msg });
     }
   });

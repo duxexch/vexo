@@ -37,8 +37,53 @@ const STATUS_LABELS: Record<string, { en: string; ar: string }> = {
   cancelled: { en: 'Cancelled', ar: 'ملغاة' },
 };
 
+const TOURNAMENT_GAME_TYPE_ALIASES: Record<string, string> = {
+  dominoes: 'domino',
+};
+
 function getStatusLabel(s: string, en: boolean) {
   return en ? STATUS_LABELS[s]?.en || s : STATUS_LABELS[s]?.ar || s;
+}
+
+function normalizeTournamentGameType(gameType: string | null | undefined): string {
+  const normalized = String(gameType || '').trim().toLowerCase();
+  return TOURNAMENT_GAME_TYPE_ALIASES[normalized] || normalized;
+}
+
+function isRegistrationWindowOpen(tournament: {
+  status: string;
+  registrationStartsAt?: string | null;
+  registrationEndsAt?: string | null;
+  startsAt?: string | null;
+}): boolean {
+  if (tournament.status !== 'registration' && tournament.status !== 'upcoming') {
+    return false;
+  }
+
+  const now = Date.now();
+
+  if (tournament.registrationStartsAt) {
+    const startsAt = new Date(tournament.registrationStartsAt).getTime();
+    if (!Number.isNaN(startsAt) && now < startsAt) {
+      return false;
+    }
+  }
+
+  if (tournament.registrationEndsAt) {
+    const endsAt = new Date(tournament.registrationEndsAt).getTime();
+    if (!Number.isNaN(endsAt) && now > endsAt) {
+      return false;
+    }
+  }
+
+  if (tournament.startsAt) {
+    const startsAt = new Date(tournament.startsAt).getTime();
+    if (!Number.isNaN(startsAt) && now >= startsAt) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function useCountdown(targetDate: string | null) {
@@ -89,6 +134,8 @@ interface TournamentListItem {
   maxPlayers: number;
   entryFee: string;
   prizePool: string;
+  registrationStartsAt: string | null;
+  registrationEndsAt: string | null;
   startsAt: string | null;
   participantCount: number;
   isRegistered?: boolean;
@@ -135,6 +182,8 @@ interface TournamentDetail {
   entryFee: string;
   prizePool: string;
   prizeDistribution: string | null;
+  registrationStartsAt: string | null;
+  registrationEndsAt: string | null;
   currentRound: number;
   totalRounds: number;
   startsAt: string | null;
@@ -262,7 +311,7 @@ function TournamentListView() {
       ) : (
         <div className="space-y-4">
           {displayList.map(t => {
-            const gameInfo = tournamentGameConfig[t.gameType] || tournamentGameConfig.chess;
+            const gameInfo = tournamentGameConfig[normalizeTournamentGameType(t.gameType)] || tournamentGameConfig.chess;
             const isUpcoming = t.status === 'upcoming' || t.status === 'registration';
             return (
               <Card
@@ -341,9 +390,13 @@ function TournamentDetailView({ id }: { id: string }) {
 
   const registerMutation = useMutation({
     mutationFn: () => apiRequest('POST', `/api/tournaments/${id}/register`),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({ title: en ? 'Registered!' : 'تم التسجيل!' });
-      queryClient.invalidateQueries({ queryKey: ['/api/tournaments', id] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/tournaments', id] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/user'] }),
+      ]);
     },
     onError: (err: Error) => {
       toast({ title: en ? 'Error' : 'خطأ', description: err.message, variant: 'destructive' });
@@ -352,9 +405,13 @@ function TournamentDetailView({ id }: { id: string }) {
 
   const withdrawMutation = useMutation({
     mutationFn: () => apiRequest('DELETE', `/api/tournaments/${id}/register`),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({ title: en ? 'Withdrawn' : 'تم الانسحاب' });
-      queryClient.invalidateQueries({ queryKey: ['/api/tournaments', id] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/api/tournaments', id] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/user'] }),
+      ]);
     },
     onError: (err: Error) => {
       toast({ title: en ? 'Error' : 'خطأ', description: err.message, variant: 'destructive' });
@@ -392,9 +449,10 @@ function TournamentDetailView({ id }: { id: string }) {
     );
   }
 
-  const gameInfo = tournamentGameConfig[tournament.gameType] || tournamentGameConfig.chess;
-  const canRegister = (tournament.status === 'registration' || tournament.status === 'upcoming') && !tournament.isRegistered;
-  const canWithdraw = (tournament.status === 'registration' || tournament.status === 'upcoming') && tournament.isRegistered;
+  const gameInfo = tournamentGameConfig[normalizeTournamentGameType(tournament.gameType)] || tournamentGameConfig.chess;
+  const registrationOpen = isRegistrationWindowOpen(tournament);
+  const canRegister = registrationOpen && !tournament.isRegistered;
+  const canWithdraw = registrationOpen && tournament.isRegistered;
 
   // Build bracket data by round
   const rounds: Record<number, TournamentMatch[]> = {};

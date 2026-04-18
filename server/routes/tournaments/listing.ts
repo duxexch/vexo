@@ -4,6 +4,7 @@ import { eq, desc, and, sql, count } from "drizzle-orm";
 import { tournaments, tournamentParticipants, tournamentMatches, users, type TournamentStatus } from "@shared/schema";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage } from "../helpers";
+import { normalizeTournamentGameType } from "../../lib/tournament-utils";
 
 export function registerTournamentListingRoutes(app: Express): void {
 
@@ -11,7 +12,7 @@ export function registerTournamentListingRoutes(app: Express): void {
   app.get("/api/tournaments", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const { status, gameType } = req.query;
-      
+
       let query = db.select({
         id: tournaments.id,
         name: tournaments.name,
@@ -45,7 +46,7 @@ export function registerTournamentListingRoutes(app: Express): void {
         conditions.push(eq(tournaments.status, status as TournamentStatus));
       }
       if (gameType && typeof gameType === 'string') {
-        conditions.push(eq(tournaments.gameType, gameType));
+        conditions.push(eq(tournaments.gameType, normalizeTournamentGameType(gameType)));
       }
       if (conditions.length > 0) {
         query = query.where(and(...conditions));
@@ -62,7 +63,7 @@ export function registerTournamentListingRoutes(app: Express): void {
   app.get("/api/tournaments/:id", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const { id } = req.params;
-      
+
       const [tournament] = await db.select().from(tournaments).where(eq(tournaments.id, id));
       if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
