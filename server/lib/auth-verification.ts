@@ -189,9 +189,9 @@ export async function verifyUserAccessToken(
         }
     }
 
-    const username = typeof decoded.username === "string" && decoded.username.length > 0
-        ? decoded.username
-        : user.username;
+    // Always trust the canonical DB username so profile/name updates are reflected immediately
+    // across API responses without waiting for token refresh or re-login.
+    const username = user.username;
 
     return {
         id: userId,
@@ -311,7 +311,7 @@ export async function verifyAdminAccessToken(
 
     return {
         id: decoded.id,
-        username: decoded.username || adminUser.username,
+        username: adminUser.username,
         role: "admin",
         tokenFingerprint,
         payload: decoded,

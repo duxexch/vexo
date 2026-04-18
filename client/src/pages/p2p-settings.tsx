@@ -528,6 +528,12 @@ export default function P2PSettingsPage() {
     onSuccess: () => {
       toast({ title: t('common.success'), description: t('p2p.settings.saved') });
       queryClient.invalidateQueries({ queryKey: ['/api/p2p/settings'] });
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const firstKey = query.queryKey[0];
+          return typeof firstKey === 'string' && firstKey.startsWith('/api/p2p');
+        },
+      });
     },
     onError: (err: Error) => {
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
