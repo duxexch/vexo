@@ -148,6 +148,7 @@ export async function listCountryPaymentMethods(): Promise<CountryPaymentMethod[
 export async function createCountryPaymentMethod(method: InsertCountryPaymentMethod): Promise<CountryPaymentMethod> {
   const normalizedCountryCode = method.countryCode.trim().toUpperCase();
   const normalizedName = method.name.trim();
+  const normalizedMethodNumber = (method.methodNumber ?? "").trim();
   const normalizedCurrencyId = method.currencyId?.trim() || null;
   const candidateKey = buildCountryPaymentMethodKey({
     countryCode: normalizedCountryCode,
@@ -178,6 +179,7 @@ export async function createCountryPaymentMethod(method: InsertCountryPaymentMet
     ...method,
     countryCode: normalizedCountryCode,
     name: normalizedName,
+    methodNumber: normalizedMethodNumber,
     currencyId: normalizedCurrencyId,
   }).returning();
   return created;
@@ -195,6 +197,9 @@ export async function updateCountryPaymentMethod(id: string, data: Partial<Inser
 
   const normalizedCountryCode = (data.countryCode ?? existingMethod.countryCode).trim().toUpperCase();
   const normalizedName = (data.name ?? existingMethod.name).trim();
+  const normalizedMethodNumber = data.methodNumber !== undefined
+    ? data.methodNumber.trim()
+    : existingMethod.methodNumber;
   const normalizedType = data.type ?? existingMethod.type;
   const normalizedCurrencyId = data.currencyId !== undefined
     ? (data.currencyId?.trim() || null)
@@ -232,6 +237,7 @@ export async function updateCountryPaymentMethod(id: string, data: Partial<Inser
     ...data,
     countryCode: normalizedCountryCode,
     name: normalizedName,
+    methodNumber: normalizedMethodNumber,
     type: normalizedType,
     currencyId: normalizedCurrencyId,
   }).where(eq(countryPaymentMethods.id, id)).returning();

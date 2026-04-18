@@ -1090,6 +1090,7 @@ export const countryPaymentMethods = pgTable("country_payment_methods", {
   countryCode: text("country_code").notNull(),
   currencyId: varchar("currency_id").references(() => currencies.id),
   name: text("name").notNull(),
+  methodNumber: text("method_number").notNull().default(""),
   type: paymentMethodTypeEnum("type").notNull(),
   iconUrl: text("icon_url"),
   minAmount: decimal("min_amount", { precision: 15, scale: 2 }).notNull().default("10.00"),

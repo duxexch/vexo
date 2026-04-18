@@ -34,6 +34,7 @@ import type { CountryPaymentMethod } from "@shared/schema";
 
 const paymentMethodSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  methodNumber: z.string().min(1, "Method number is required"),
   type: z.enum(["bank_transfer", "e_wallet", "crypto", "card"]),
   countryCode: z.string().min(2, "Country code is required"),
   minAmount: z.string().min(1, "Minimum amount is required"),
@@ -160,6 +161,7 @@ export default function AdminPaymentMethodsPage() {
     resolver: zodResolver(paymentMethodSchema),
     defaultValues: {
       name: "",
+      methodNumber: "",
       type: "bank_transfer",
       countryCode: "ALL",
       minAmount: "10",
@@ -301,6 +303,7 @@ export default function AdminPaymentMethodsPage() {
     setEditingMethod(method);
     form.reset({
       name: method.name,
+      methodNumber: method.methodNumber,
       type: method.type as "bank_transfer" | "e_wallet" | "crypto" | "card",
       countryCode: method.countryCode,
       minAmount: method.minAmount,
@@ -319,6 +322,7 @@ export default function AdminPaymentMethodsPage() {
     setEditingMethod(null);
     form.reset({
       name: "",
+      methodNumber: "",
       type: "bank_transfer",
       countryCode: "ALL",
       minAmount: "10",
@@ -513,6 +517,7 @@ export default function AdminPaymentMethodsPage() {
                             )}
                             <div className="min-w-0">
                               <p className="truncate font-semibold">{method.name}</p>
+                              <p className="truncate text-xs text-muted-foreground">#{method.methodNumber || "-"}</p>
                               <p className="truncate text-sm text-muted-foreground">{TYPE_LABELS[method.type as keyof typeof TYPE_LABELS]}</p>
                             </div>
                           </div>
@@ -589,6 +594,7 @@ export default function AdminPaymentMethodsPage() {
                       </TableHead>
                       <TableHead>Icon</TableHead>
                       <TableHead>Name</TableHead>
+                      <TableHead>Method Number</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Limits</TableHead>
                       <TableHead>Country</TableHead>
@@ -622,6 +628,7 @@ export default function AdminPaymentMethodsPage() {
                             )}
                           </TableCell>
                           <TableCell className="font-medium">{method.name}</TableCell>
+                          <TableCell className="text-sm">{method.methodNumber || "-"}</TableCell>
                           <TableCell>
                             <Badge variant="outline">{TYPE_LABELS[method.type as keyof typeof TYPE_LABELS]}</Badge>
                           </TableCell>
@@ -728,6 +735,21 @@ export default function AdminPaymentMethodsPage() {
                       <FormControl>
                         <Input placeholder="e.g. Vodafone Cash" {...field} className={INPUT_SURFACE_CLASS} data-testid="input-method-name" />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="methodNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Method Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. 01012345678" {...field} className={INPUT_SURFACE_CLASS} data-testid="input-method-number" />
+                      </FormControl>
+                      <FormDescription>Number shown to users for this payment method</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

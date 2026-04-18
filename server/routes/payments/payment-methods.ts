@@ -128,7 +128,17 @@ export function registerPaymentMethodRoutes(app: Express): void {
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid payment method data", details: parsed.error.errors });
       }
-      const method = await storage.createCountryPaymentMethod(parsed.data);
+      const methodNumber = typeof parsed.data.methodNumber === "string"
+        ? parsed.data.methodNumber.trim()
+        : "";
+      if (!methodNumber) {
+        return res.status(400).json({ error: "Method number is required" });
+      }
+
+      const method = await storage.createCountryPaymentMethod({
+        ...parsed.data,
+        methodNumber,
+      });
       res.json(method);
     } catch (error: unknown) {
       if (isDuplicatePaymentMethodError(error)) {
@@ -147,7 +157,16 @@ export function registerPaymentMethodRoutes(app: Express): void {
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid payment method data", details: parsed.error.errors });
       }
-      const method = await storage.updateCountryPaymentMethod(id, parsed.data);
+
+      const payload = { ...parsed.data };
+      if (typeof payload.methodNumber === "string") {
+        payload.methodNumber = payload.methodNumber.trim();
+        if (!payload.methodNumber) {
+          return res.status(400).json({ error: "Method number is required" });
+        }
+      }
+
+      const method = await storage.updateCountryPaymentMethod(id, payload);
       if (!method) {
         return res.status(404).json({ error: "Payment method not found" });
       }

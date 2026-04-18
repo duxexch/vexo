@@ -120,6 +120,7 @@ export default function WalletPage() {
   const [convertAmount, setConvertAmount] = useState("");
   const [depositPaymentMethod, setDepositPaymentMethod] = useState("");
   const [withdrawPaymentMethod, setWithdrawPaymentMethod] = useState("");
+  const [withdrawReceiverNumber, setWithdrawReceiverNumber] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [walletNumber, setWalletNumber] = useState("");
   const [depositCurrency, setDepositCurrency] = useState("USD");
@@ -134,6 +135,7 @@ export default function WalletPage() {
 
   const withdrawAmountInputRef = useRef<HTMLInputElement | null>(null);
   const withdrawPaymentSectionRef = useRef<HTMLDivElement | null>(null);
+  const withdrawReceiverNumberInputRef = useRef<HTMLInputElement | null>(null);
   const withdrawConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const convertAmountInputRef = useRef<HTMLInputElement | null>(null);
@@ -208,6 +210,26 @@ export default function WalletPage() {
     },
     ...financialQueryOptions,
   });
+
+  const { data: depositPaymentMethods = [] } = useQuery<CountryPaymentMethod[]>({
+    queryKey: ['/api/payment-methods', 'deposit'],
+    queryFn: async () => {
+      const res = await fetch('/api/payment-methods?purpose=deposit', {
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        return [];
+      }
+      return res.json();
+    },
+    ...financialQueryOptions,
+  });
+
+  const selectedDepositMethod = useMemo(
+    () => depositPaymentMethods.find((method) => method.id === depositPaymentMethod),
+    [depositPaymentMethod, depositPaymentMethods],
+  );
 
   const hasWithdrawalMethods = withdrawalPaymentMethods.length > 0;
 
@@ -388,7 +410,7 @@ export default function WalletPage() {
   });
 
   const withdrawMutation = useMutation({
-    mutationFn: (data: { amount: number; paymentMethodId: string }) =>
+    mutationFn: (data: { amount: number; paymentMethodId: string; receiverMethodNumber: string }) =>
       apiRequestWithPaymentToken('POST', '/api/transactions/withdraw', data, 'withdraw'),
     onSuccess: () => {
       playSound('success');
@@ -398,6 +420,7 @@ export default function WalletPage() {
       setShowWithdraw(false);
       setWithdrawAmount("");
       setWithdrawPaymentMethod("");
+      setWithdrawReceiverNumber("");
     },
     onError: (err: Error) => {
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
@@ -416,7 +439,7 @@ export default function WalletPage() {
       return;
     }
 
-    if (!depositPaymentMethod) {
+    if (!selectedDepositMethod) {
       focusFirstInteractiveIn(depositPaymentSectionRef.current);
       return;
     }
@@ -428,7 +451,7 @@ export default function WalletPage() {
 
     depositMutation.mutate({
       amount: parsedAmount,
-      paymentMethod: depositPaymentMethod,
+      paymentMethod: `${selectedDepositMethod.name} | ${selectedDepositMethod.methodNumber}`,
       paymentReference: paymentReference.trim(),
       walletNumber: walletNumber.trim() || undefined,
       currency: depositCurrency,
@@ -452,7 +475,17 @@ export default function WalletPage() {
       return;
     }
 
-    withdrawMutation.mutate({ amount: parsedAmount, paymentMethodId: withdrawPaymentMethod });
+    const sanitizedReceiverNumber = withdrawReceiverNumber.trim();
+    if (!sanitizedReceiverNumber) {
+      focusAndScroll(withdrawReceiverNumberInputRef.current);
+      return;
+    }
+
+    withdrawMutation.mutate({
+      amount: parsedAmount,
+      paymentMethodId: withdrawPaymentMethod,
+      receiverMethodNumber: sanitizedReceiverNumber,
+    });
   };
 
   const handleConvertSubmit = () => {
@@ -493,13 +526,6 @@ export default function WalletPage() {
       default: return <Badge variant="outline">{status}</Badge>;
     }
   };
-
-  const paymentMethods = [
-    { id: 'bank', name: t('wallet.bankTransfer'), icon: Building2 },
-    { id: 'card', name: t('wallet.creditCard'), icon: CreditCard },
-    { id: 'ewallet', name: t('wallet.eWallet'), icon: Smartphone },
-    { id: 'crypto', name: t('wallet.crypto'), icon: Bitcoin },
-  ];
 
   const getMethodIcon = (type: string) => {
     switch (type) {
@@ -892,8 +918,8 @@ export default function WalletPage() {
             <div>
               <Label>{t('wallet.paymentMethod')}</Label>
               <div ref={depositPaymentSectionRef} className="grid grid-cols-2 gap-2 mt-2">
-                {paymentMethods.map(method => {
-                  const Icon = method.icon;
+                {depositPaymentMethods.map(method => {
+                  const Icon = getMethodIcon(method.type);
                   return (
                     <Button
                       key={method.id}
@@ -906,7 +932,8 @@ export default function WalletPage() {
                       data-testid={`button-method-${method.id}`}
                     >
                       <Icon className="h-5 w-5 mb-1" />
-                      <span className="text-xs">{method.name}</span>
+                      <span className="text-xs font-medium">{method.name}</span>
+                      <span className="text-[10px] opacity-90">{method.methodNumber || "-"}</span>
                     </Button>
                   );
                 })}
@@ -1031,15 +1058,32 @@ export default function WalletPage() {
                       className="h-auto py-3 flex-col"
                       onClick={() => {
                         setWithdrawPaymentMethod(method.id);
-                        queueFocus(withdrawConfirmButtonRef.current);
+                        queueFocus(withdrawReceiverNumberInputRef.current);
                       }}
                     >
                       <Icon className="h-5 w-5 mb-1" />
-                      <span className="text-xs">{method.name}</span>
+                      <span className="text-xs font-medium">{method.name}</span>
+                      <span className="text-[10px] opacity-90">{method.methodNumber || "-"}</span>
                     </Button>
                   );
                 })}
               </div>
+            </div>
+            <div>
+              <Label>{language === 'ar' ? 'رقم الوسيلة المستلم عليها' : 'Receiver Wallet / Account Number'}</Label>
+              <Input
+                ref={withdrawReceiverNumberInputRef}
+                value={withdrawReceiverNumber}
+                onChange={(e) => setWithdrawReceiverNumber(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  queueFocus(withdrawConfirmButtonRef.current);
+                }}
+                placeholder={language === 'ar' ? 'أدخل رقم الوسيلة المستلم عليها' : 'Enter receiver wallet or account number'}
+                enterKeyHint="done"
+                className="mt-2"
+              />
             </div>
           </div>
           <DialogFooter className="sticky bottom-0 z-10 px-4 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5 pt-3 border-t bg-background">
@@ -1048,7 +1092,7 @@ export default function WalletPage() {
               ref={withdrawConfirmButtonRef}
               className="w-full sm:w-auto min-h-11"
               onClick={handleWithdrawSubmit}
-              disabled={!withdrawAmount || !withdrawPaymentMethod || withdrawMutation.isPending || parseFloat(withdrawAmount) > availableWalletBalance}
+              disabled={!withdrawAmount || !withdrawPaymentMethod || !withdrawReceiverNumber.trim() || withdrawMutation.isPending || parseFloat(withdrawAmount) > availableWalletBalance}
               data-testid="button-confirm-withdraw"
             >
               {withdrawMutation.isPending && <RefreshCw className="h-4 w-4 me-2 animate-spin" />}

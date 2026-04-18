@@ -267,7 +267,7 @@ export function registerTransactionUserRoutes(app: Express): void {
     sensitiveRateLimiter,
     async (req: AuthRequest, res: Response) => {
       try {
-        const { amount, paymentMethodId, paymentMethod } = req.body;
+        const { amount, paymentMethodId, paymentMethod, receiverMethodNumber } = req.body;
 
         // CRITICAL: Validate amount is positive number
         if (!amount || (typeof amount !== 'string' && typeof amount !== 'number')) {
@@ -310,6 +310,18 @@ export function registerTransactionUserRoutes(app: Express): void {
 
         const requestedMethodId = typeof paymentMethodId === "string" ? paymentMethodId.trim() : "";
         const requestedMethodValue = typeof paymentMethod === "string" ? paymentMethod.trim() : "";
+        const requestedReceiverNumber = typeof receiverMethodNumber === "string"
+          ? receiverMethodNumber.trim()
+          : "";
+
+        if (!requestedReceiverNumber) {
+          return res.status(400).json({ error: "Receiver method number is required" });
+        }
+
+        const safeReceiverMethodNumber = sanitizePlainText(requestedReceiverNumber, { maxLength: 100 });
+        if (!safeReceiverMethodNumber) {
+          return res.status(400).json({ error: "Receiver method number is required" });
+        }
 
         let selectedMethod = withdrawalMethods.find((method) => {
           if (requestedMethodId) {
@@ -362,7 +374,7 @@ export function registerTransactionUserRoutes(app: Express): void {
           amount: withdrawAmountUsd.toFixed(2),
           balanceBefore: result.user.balance,
           balanceAfter: result.newBalance,
-          description: `Withdrawal request via ${selectedMethod.name} | Requested: ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} | Base: ${withdrawAmountUsd.toFixed(2)} USD`,
+          description: `Withdrawal request via ${selectedMethod.name} | Receiver: ${safeReceiverMethodNumber} | Requested: ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} | Base: ${withdrawAmountUsd.toFixed(2)} USD`,
         });
 
         await storage.createAuditLog({
@@ -376,6 +388,7 @@ export function registerTransactionUserRoutes(app: Express): void {
             amountUsd: withdrawAmountUsd,
             paymentMethodId: selectedMethod.id,
             paymentMethod: selectedMethod.name,
+            receiverMethodNumber: safeReceiverMethodNumber,
             usdToWalletRate: withdrawConversion.usdToDepositRate,
           }),
         });
