@@ -339,34 +339,35 @@ function getConnectedTileDelta(
   nextDirection: DominoDirection,
   currentFootprint: { halfWidth: number; halfHeight: number },
   nextFootprint: { halfWidth: number; halfHeight: number },
-  seamOverlap: number,
+  seamSpacing: number,
 ) {
   if (direction === nextDirection) {
     if (direction === "left" || direction === "right") {
       return {
-        dx: getDirectionSign(direction) * Math.max(0, currentFootprint.halfWidth + nextFootprint.halfWidth - seamOverlap),
+        dx: getDirectionSign(direction) * (currentFootprint.halfWidth + nextFootprint.halfWidth + seamSpacing),
         dy: 0,
       };
     }
 
     return {
       dx: 0,
-      dy: getDirectionSign(direction) * Math.max(0, currentFootprint.halfHeight + nextFootprint.halfHeight - seamOverlap),
+      dy: getDirectionSign(direction) * (currentFootprint.halfHeight + nextFootprint.halfHeight + seamSpacing),
     };
   }
 
-  const cornerOverlap = seamOverlap / 2;
+  // Use corner-to-corner spacing so 90deg turns do not overlap on tight viewports.
+  const cornerSpacing = seamSpacing;
 
   if (direction === "left" || direction === "right") {
     return {
-      dx: getDirectionSign(direction) * Math.max(0, currentFootprint.halfWidth - cornerOverlap),
-      dy: getDirectionSign(nextDirection) * Math.max(0, nextFootprint.halfHeight - cornerOverlap),
+      dx: getDirectionSign(direction) * (currentFootprint.halfWidth + nextFootprint.halfWidth + cornerSpacing),
+      dy: getDirectionSign(nextDirection) * (currentFootprint.halfHeight + nextFootprint.halfHeight + cornerSpacing),
     };
   }
 
   return {
-    dx: getDirectionSign(nextDirection) * Math.max(0, nextFootprint.halfWidth - cornerOverlap),
-    dy: getDirectionSign(direction) * Math.max(0, currentFootprint.halfHeight - cornerOverlap),
+    dx: getDirectionSign(nextDirection) * (currentFootprint.halfWidth + nextFootprint.halfWidth + cornerSpacing),
+    dy: getDirectionSign(direction) * (currentFootprint.halfHeight + nextFootprint.halfHeight + cornerSpacing),
   };
 }
 
@@ -379,9 +380,10 @@ function buildDominoSnakePlacements(
 ): DominoPathPlacement[] {
   if (entries.length === 0) return [];
 
-  const seamOverlap = compact ? 1.15 : 1.65;
+  const seamSpacing = compact ? 2.2 : 3;
   const defaultHorizontalRun = compact ? 3 : 4;
-  const horizontalRun = Math.max(3, horizontalRunOverride ?? defaultHorizontalRun);
+  const minHorizontalRun = compact ? 2 : 3;
+  const horizontalRun = Math.max(minHorizontalRun, horizontalRunOverride ?? defaultHorizontalRun);
   const verticalRun = compact ? 1 : 2;
   const directions = side === "left"
     ? (["left", "down", "right", "up"] as const)
@@ -391,7 +393,7 @@ function buildDominoSnakePlacements(
   const firstRotation = resolvePlacementRotation(entries[0].item.tile, firstDirection);
   const anchorFootprint = getTileFootprint(anchorRenderRotation, compact);
   const firstFootprint = getTileFootprint(firstRotation, compact);
-  const firstGap = Math.max(0, anchorFootprint.halfWidth + firstFootprint.halfWidth - seamOverlap);
+  const firstGap = anchorFootprint.halfWidth + firstFootprint.halfWidth + seamSpacing;
 
   let x = side === "left" ? -firstGap : firstGap;
   let y = 0;
@@ -417,7 +419,7 @@ function buildDominoSnakePlacements(
       const nextRenderRotation = resolvePlacementRotation(nextEntry.item.tile, nextDirection);
       const currentFootprint = getTileFootprint(renderRotation, compact);
       const nextFootprint = getTileFootprint(nextRenderRotation, compact);
-      const delta = getConnectedTileDelta(direction, nextDirection, currentFootprint, nextFootprint, seamOverlap);
+      const delta = getConnectedTileDelta(direction, nextDirection, currentFootprint, nextFootprint, seamSpacing);
       x += delta.dx;
       y += delta.dy;
     }
@@ -946,10 +948,11 @@ export function DominoBoard({
       ? boardLaneSize.width
       : (isCompactMobile ? 320 : 760);
     const tileLongSide = isCompactMobile ? 56 : 80;
-    const seamOverlap = isCompactMobile ? 1.15 : 1.65;
-    const rawRun = Math.floor((laneWidth - 26) / Math.max(1, tileLongSide - seamOverlap));
-    const minRun = isCompactMobile ? 3 : 4;
-    const maxRun = isCompactMobile ? 5 : 7;
+    const seamSpacing = isCompactMobile ? 2.2 : 3;
+    const wrapSafetyInset = isCompactMobile ? 88 : 132;
+    const rawRun = Math.floor((laneWidth - wrapSafetyInset) / Math.max(1, tileLongSide + seamSpacing));
+    const minRun = isCompactMobile ? 2 : 3;
+    const maxRun = isCompactMobile ? 4 : 6;
     return Math.max(minRun, Math.min(maxRun, rawRun));
   }, [boardLaneSize.width, isCompactMobile]);
 
@@ -986,15 +989,15 @@ export function DominoBoard({
 
   const boardHeight = useMemo(() => {
     const minHeight = isCompactMobile
-      ? (isSpectator ? 244 : 278)
-      : (isSpectator ? 338 : 392);
-    const verticalPadding = isCompactMobile ? 48 : 72;
+      ? (isSpectator ? 284 : 332)
+      : (isSpectator ? 362 : 430);
+    const verticalPadding = isCompactMobile ? 84 : 104;
     const requiredHeight = Math.ceil(boardBounds.height + verticalPadding);
     return Math.max(minHeight, requiredHeight);
   }, [boardBounds.height, isCompactMobile, isSpectator]);
 
   const boardZoom = useMemo(() => {
-    const safePadding = isCompactMobile ? 24 : 40;
+    const safePadding = isCompactMobile ? 34 : 52;
     const fallbackWidth = Math.max(boardBounds.width + safePadding * 2, isCompactMobile ? 320 : 760);
     const fallbackHeight = Math.max(boardBounds.height + safePadding * 2, boardHeight);
     const laneWidth = boardLaneSize.width > 0 ? boardLaneSize.width : fallbackWidth;
@@ -1004,9 +1007,17 @@ export function DominoBoard({
     const fitWidthZoom = availableWidth / Math.max(boardBounds.width, 1);
     const fitHeightZoom = availableHeight / Math.max(boardBounds.height, 1);
     const fitZoom = Math.min(1, fitWidthZoom, fitHeightZoom);
-    const minReadableZoom = isCompactMobile ? 0.86 : 0.9;
+    const minReadableZoom = isCompactMobile ? 0.5 : 0.68;
     return Math.max(minReadableZoom, fitZoom);
   }, [isCompactMobile, boardBounds.width, boardBounds.height, boardLaneSize.width, boardLaneSize.height, boardHeight]);
+
+  const boardHeightCssValue = useMemo(() => {
+    if (isCompactMobile) {
+      return `min(${boardHeight}px, 54svh)`;
+    }
+
+    return `min(${boardHeight}px, 68svh)`;
+  }, [boardHeight, isCompactMobile]);
 
   const turnFlowHint = useMemo(() => {
     if (!isTurnLive) {
@@ -1281,7 +1292,7 @@ export function DominoBoard({
             isCompactMobile ? "p-2" : "p-4 sm:p-6",
             isTurnLive ? "domino-board-turn-live" : ""
           )}
-          style={{ height: `${boardHeight}px` }}
+          style={{ height: boardHeightCssValue }}
           role="region"
           aria-label={state.boardTiles.length === 0
             ? (isSpectator ? t('domino.board') : t('domino.placeFirst'))
@@ -1351,7 +1362,7 @@ export function DominoBoard({
               {isSpectator ? t('domino.board') : t('domino.placeFirst')}
             </p>
           ) : (
-            <div ref={boardLaneRef} className="domino-board-lane relative h-full w-full max-w-full px-3 py-2 sm:px-5 sm:py-4">
+            <div ref={boardLaneRef} className="domino-board-lane relative h-full w-full max-w-full px-3 py-3 sm:px-6 sm:py-5">
               {anchorEntry && (
                 <>
                   {leftPlacements.map((placement) => (
