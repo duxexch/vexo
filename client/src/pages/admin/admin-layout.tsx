@@ -245,8 +245,53 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("adminToken");
-    setIsAuthenticated(!!token);
+    let active = true;
+
+    const validateAdminSession = async () => {
+      const token = localStorage.getItem("adminToken");
+      if (!token) {
+        if (active) {
+          setIsAuthenticated(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/admin/alerts/count", {
+          method: "GET",
+          headers: {
+            "x-admin-token": token,
+          },
+          credentials: "include",
+        });
+
+        if (!active) {
+          return;
+        }
+
+        if (response.ok) {
+          setIsAuthenticated(true);
+          return;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          localStorage.removeItem("adminToken");
+          localStorage.removeItem("adminUser");
+        }
+
+        setIsAuthenticated(false);
+      } catch {
+        if (active) {
+          setIsAuthenticated(false);
+        }
+      }
+    };
+
+    void validateAdminSession();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Show loading state while checking auth

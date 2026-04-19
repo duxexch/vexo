@@ -1030,6 +1030,7 @@ export default function ChallengeGamePage() {
         localStorage.getItem("pwm_token") ||
         sessionStorage.getItem("pwm_token_backup");
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      intentionalCloseRef.current = false;
       const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
       wsRef.current = ws;
 
@@ -1068,19 +1069,16 @@ export default function ChallengeGamePage() {
             authReadyRef.current = false;
             pendingJoinRef.current = true;
             setServerRole(null);
-
-            if (token) {
-              setWsConnState("reconnecting");
-              if (
-                ws.readyState === WebSocket.OPEN ||
-                ws.readyState === WebSocket.CONNECTING
-              ) {
-                ws.close();
-              }
-              return;
-            }
-
+            localStorage.removeItem("pwm_token");
+            sessionStorage.removeItem("pwm_token_backup");
+            intentionalCloseRef.current = true;
             setWsConnState("disconnected");
+            if (
+              ws.readyState === WebSocket.OPEN ||
+              ws.readyState === WebSocket.CONNECTING
+            ) {
+              ws.close(4001, "auth_error");
+            }
             setTimeout(() => setLocation("/login"), 500);
             return;
           }

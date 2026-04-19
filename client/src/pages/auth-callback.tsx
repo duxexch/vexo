@@ -13,7 +13,6 @@ type OAuthEventPayload = {
   reason?: string;
   redirect?: string;
   isNew?: boolean;
-  token?: string;
   ts: number;
 };
 
@@ -90,8 +89,8 @@ export default function AuthCallbackPage() {
 
     if (window.opener && !window.opener.closed) {
       try {
-        // Use wildcard target and validate on the opener side by source/origin checks.
-        window.opener.postMessage(fullPayload, "*");
+        // Restrict message target to same-origin opener context.
+        window.opener.postMessage(fullPayload, window.location.origin);
       } catch {
         // Ignore cross-window notification failures.
       }
@@ -252,7 +251,6 @@ export default function AuthCallbackPage() {
             type: "vex_oauth_success",
             redirect: successRedirect,
             isNew: data?.isNew === true,
-            token: typeof data?.token === "string" ? data.token : undefined,
           });
           if (completePopupFlow()) {
             return;

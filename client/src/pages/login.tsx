@@ -626,7 +626,7 @@ export default function LoginPage() {
       return Boolean(socialPopupRef.current && !socialPopupRef.current.closed);
     };
 
-    const handleOAuthSignal = async (payload: { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean; token?: string }) => {
+    const handleOAuthSignal = async (payload: { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean }) => {
       const isRecentOAuthEvent =
         typeof payload.ts === "number"
           ? Math.abs(Date.now() - payload.ts) <= 2 * 60_000
@@ -650,11 +650,6 @@ export default function LoginPage() {
 
       if (payload.type === "vex_oauth_success") {
         const redirectTarget = resolveOAuthEventRedirect(payload);
-        if (typeof payload.token === "string" && payload.token.trim().length > 0) {
-          const normalizedToken = payload.token.trim();
-          localStorage.setItem("pwm_token", normalizedToken);
-          sessionStorage.setItem("pwm_token_backup", normalizedToken);
-        }
         if (socialPopupRef.current && !socialPopupRef.current.closed) {
           try {
             socialPopupRef.current.close();
@@ -709,7 +704,7 @@ export default function LoginPage() {
         return;
       }
 
-      const payload = event.data as { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean; token?: string };
+      const payload = event.data as { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean };
 
       if (!isTrustedOAuthSource(event.source)) {
         const isOAuthSignal = payload.type === "vex_oauth_success" || payload.type === "vex_oauth_error";
@@ -732,7 +727,7 @@ export default function LoginPage() {
       }
 
       try {
-        const payload = JSON.parse(event.newValue) as { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean; token?: string };
+        const payload = JSON.parse(event.newValue) as { type?: string; reason?: string; ts?: number; redirect?: string; isNew?: boolean };
         await handleOAuthSignal(payload);
       } catch {
         // Ignore malformed storage payloads.
@@ -1036,25 +1031,8 @@ export default function LoginPage() {
     try {
       const result = await loginByAccount(accountLoginForm.accountId, accountLoginForm.password);
       applyLoginFlowResult(result);
-    } catch (error: unknown) {
-      const err = error as Error & { errorCode?: string };
-      if (err.errorCode === "IDENTIFIER_NOT_REGISTERED" && accountLoginForm.accountId.trim()) {
-        const offered = offerAutoCreatePrompt({
-          identifier: accountLoginForm.accountId.trim(),
-          type: "account",
-          password: accountLoginForm.password,
-        });
-
-        if (offered) {
-          return;
-        }
-
-        setShowAccountNotFoundModal(true);
-        toast({ title: t('common.error'), description: t('auth.useQuickTab'), variant: "destructive" });
-        return;
-      }
-
-      toast({ title: t('common.error'), description: err.message, variant: "destructive" });
+    } catch {
+      toast({ title: t('common.error'), description: t('auth.tryAgain'), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -1075,25 +1053,8 @@ export default function LoginPage() {
       }
       const result = await loginByPhone(phoneClean, phoneLoginForm.password);
       applyLoginFlowResult(result);
-    } catch (error: unknown) {
-      const err = error as Error & { errorCode?: string };
-      if (err.errorCode === "IDENTIFIER_NOT_REGISTERED" && phoneLoginForm.phone.trim()) {
-        const offered = offerAutoCreatePrompt({
-          identifier: phoneLoginForm.phone.trim(),
-          type: "phone",
-          password: phoneLoginForm.password,
-        });
-
-        if (offered) {
-          return;
-        }
-
-        setActiveTab("one-click");
-        toast({ title: t('common.error'), description: t('auth.useQuickTab'), variant: "destructive" });
-        return;
-      }
-
-      toast({ title: t('common.error'), description: err.message, variant: "destructive" });
+    } catch {
+      toast({ title: t('common.error'), description: t('auth.tryAgain'), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -1113,25 +1074,8 @@ export default function LoginPage() {
       }
       const result = await loginByEmail(emailLoginForm.username, emailLoginForm.password);
       applyLoginFlowResult(result);
-    } catch (error: unknown) {
-      const err = error as Error & { errorCode?: string };
-      if (err.errorCode === "IDENTIFIER_NOT_REGISTERED" && emailLoginForm.username.includes("@")) {
-        const offered = offerAutoCreatePrompt({
-          identifier: emailLoginForm.username.trim(),
-          type: "email",
-          password: emailLoginForm.password,
-        });
-
-        if (offered) {
-          return;
-        }
-
-        setActiveTab("one-click");
-        toast({ title: t('common.error'), description: t('auth.useQuickTab'), variant: "destructive" });
-        return;
-      }
-
-      toast({ title: t('common.error'), description: err.message, variant: "destructive" });
+    } catch {
+      toast({ title: t('common.error'), description: t('auth.tryAgain'), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }

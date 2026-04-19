@@ -274,6 +274,8 @@ export default function ChallengeWatchPage() {
   >(null);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const authReadyRef = useRef(false);
+  const joinSentRef = useRef(false);
   const wsErrorToastRef = useRef<{ signature: string; at: number }>({
     signature: "",
     at: 0,
@@ -742,26 +744,57 @@ export default function ChallengeWatchPage() {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
     wsRef.current = ws;
+    authReadyRef.current = false;
+    joinSentRef.current = false;
 
     ws.onopen = () => {
-      if (token) {
-        ws.send(JSON.stringify({ type: "auth", token }));
-      }
-      // Small delay to ensure auth is processed before joining
-      setTimeout(() => {
-        ws.send(
-          JSON.stringify({
-            type: "join_challenge_game",
-            challengeId,
-            isSpectator: true,
-          }),
+      if (!token) {
+        showWsErrorToast(
+          language === "ar" ? "فشل توثيق الجلسة" : "Session authentication failed",
+          "auth_error",
         );
-      }, 100);
+        ws.close(4001, "auth_error");
+        setTimeout(() => setLocation("/login"), 400);
+        return;
+      }
+
+      ws.send(JSON.stringify({ type: "auth", token }));
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as ChallengeWatchWSMessage;
+
+        if (data.type === "auth_success") {
+          authReadyRef.current = true;
+          if (!joinSentRef.current) {
+            joinSentRef.current = true;
+            ws.send(
+              JSON.stringify({
+                type: "join_challenge_game",
+                challengeId,
+                isSpectator: true,
+              }),
+            );
+          }
+          return;
+        }
+
+        if (data.type === "auth_error") {
+          authReadyRef.current = false;
+          showWsErrorToast(
+            language === "ar" ? "فشل توثيق الجلسة" : "Session authentication failed",
+            "auth_error",
+          );
+          ws.close(4001, "auth_error");
+          setTimeout(() => setLocation("/login"), 400);
+          return;
+        }
+
+        if (!authReadyRef.current) {
+          return;
+        }
+
         handleWebSocketMessage(data);
       } catch {
         showWsErrorToast(
@@ -774,12 +807,14 @@ export default function ChallengeWatchPage() {
     };
 
     return () => {
+      authReadyRef.current = false;
+      joinSentRef.current = false;
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "leave_challenge_game", challengeId }));
       }
       ws.close();
     };
-  }, [challengeId, language, showWsErrorToast]);
+  }, [challengeId, language, setLocation, showWsErrorToast]);
 
   const handleWebSocketMessage = useCallback(
     (data: ChallengeWatchWSMessage) => {
