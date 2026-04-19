@@ -33,7 +33,8 @@ import {
   RefreshCw,
   Coins,
   ArrowRightLeft,
-  Loader2
+  Loader2,
+  Copy
 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { TableSkeleton } from "@/components/skeletons";
@@ -230,6 +231,32 @@ export default function WalletPage() {
     () => depositPaymentMethods.find((method) => method.id === depositPaymentMethod),
     [depositPaymentMethod, depositPaymentMethods],
   );
+
+  const copyPaymentMethodValue = async (value: string, valueLabel: string) => {
+    const safeValue = value.trim();
+    if (!safeValue) {
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'لا توجد بيانات للنسخ' : 'No data to copy',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(safeValue);
+      toast({
+        title: language === 'ar' ? 'تم النسخ' : 'Copied',
+        description: language === 'ar' ? `تم نسخ ${valueLabel}` : `${valueLabel} copied`,
+      });
+    } catch {
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'تعذر النسخ، حاول مرة أخرى' : 'Copy failed, please try again',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const hasWithdrawalMethods = withdrawalPaymentMethods.length > 0;
 
@@ -932,12 +959,99 @@ export default function WalletPage() {
                       data-testid={`button-method-${method.id}`}
                     >
                       <Icon className="h-5 w-5 mb-1" />
-                      <span className="text-xs font-medium">{method.name}</span>
-                      <span className="text-[10px] opacity-90">{method.methodNumber || "-"}</span>
+                      <span className="text-xs font-medium max-w-full truncate" title={method.name}>{method.name}</span>
+                      <span className="text-[10px] opacity-90 max-w-full truncate" title={method.methodNumber || ""}>{method.methodNumber || "-"}</span>
                     </Button>
                   );
                 })}
               </div>
+
+              {selectedDepositMethod && (
+                <div className="mt-3 rounded-lg border bg-muted/35 p-3 space-y-2" data-testid="deposit-method-details">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {language === 'ar' ? 'اسم الوسيلة' : 'Method Name'}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => copyPaymentMethodValue(selectedDepositMethod.name, language === 'ar' ? 'اسم الوسيلة' : 'method name')}
+                    >
+                      <Copy className="h-3.5 w-3.5 me-1" />
+                      {language === 'ar' ? 'نسخ' : 'Copy'}
+                    </Button>
+                  </div>
+                  <p className="text-sm font-medium truncate" title={selectedDepositMethod.name}>{selectedDepositMethod.name}</p>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {language === 'ar' ? 'رقم الوسيلة' : 'Method Number'}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => copyPaymentMethodValue(selectedDepositMethod.methodNumber || '', language === 'ar' ? 'رقم الوسيلة' : 'method number')}
+                    >
+                      <Copy className="h-3.5 w-3.5 me-1" />
+                      {language === 'ar' ? 'نسخ' : 'Copy'}
+                    </Button>
+                  </div>
+                  <p className="text-sm font-medium truncate" title={selectedDepositMethod.methodNumber || ''}>{selectedDepositMethod.methodNumber || '-'}</p>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {language === 'ar' ? 'البيانات كاملة' : 'Full Payment Data'}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => copyPaymentMethodValue(`${selectedDepositMethod.name} | ${selectedDepositMethod.methodNumber || ''}`, language === 'ar' ? 'البيانات كاملة' : 'full payment data')}
+                    >
+                      <Copy className="h-3.5 w-3.5 me-1" />
+                      {language === 'ar' ? 'نسخ الكل' : 'Copy All'}
+                    </Button>
+                  </div>
+                  <p
+                    className="text-xs text-muted-foreground truncate"
+                    title={`${selectedDepositMethod.name} | ${selectedDepositMethod.methodNumber || ''}`}
+                  >
+                    {selectedDepositMethod.name} | {selectedDepositMethod.methodNumber || '-'}
+                  </p>
+
+                  {selectedDepositMethod.instructions?.trim() ? (
+                    <div className="rounded-md border bg-background/70 p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {language === 'ar' ? 'إرشادات التحويل' : 'Transfer Instructions'}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8"
+                          onClick={() => copyPaymentMethodValue(selectedDepositMethod.instructions || '', language === 'ar' ? 'الإرشادات' : 'instructions')}
+                        >
+                          <Copy className="h-3.5 w-3.5 me-1" />
+                          {language === 'ar' ? 'نسخ' : 'Copy'}
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-xs whitespace-pre-wrap break-words line-clamp-3" title={selectedDepositMethod.instructions || ''}>
+                        {selectedDepositMethod.instructions}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' ? 'لا توجد إرشادات إضافية لهذه الوسيلة.' : 'No additional instructions for this method.'}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <Label>{language === 'ar' ? 'رقم المرجع / إيصال الدفع' : 'Payment Reference / Receipt'}</Label>
