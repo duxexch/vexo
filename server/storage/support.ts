@@ -283,12 +283,35 @@ export async function deleteCountryPaymentMethodsBulk(ids: string[]): Promise<nu
 
 // ==================== SUPPORT SETTINGS ====================
 
+function normalizeSupportGameType(gameType: string): string {
+  return gameType.trim().toLowerCase();
+}
+
+export async function findSupportSettings(gameType: string): Promise<SupportSettings | undefined> {
+  const normalizedGameType = normalizeSupportGameType(gameType);
+  if (!normalizedGameType) {
+    return undefined;
+  }
+
+  const [result] = await db
+    .select()
+    .from(supportSettings)
+    .where(eq(supportSettings.gameType, normalizedGameType));
+
+  return result || undefined;
+}
+
 export async function getSupportSettings(gameType: string): Promise<SupportSettings | undefined> {
-  const [result] = await db.select().from(supportSettings).where(eq(supportSettings.gameType, gameType));
+  const normalizedGameType = normalizeSupportGameType(gameType);
+  if (!normalizedGameType) {
+    return undefined;
+  }
+
+  const result = await findSupportSettings(normalizedGameType);
   if (result) return result;
 
   const defaultSettings: InsertSupportSettings = {
-    gameType,
+    gameType: normalizedGameType,
     isEnabled: true,
     minSupportAmount: "1.00",
     maxSupportAmount: "1000.00",
@@ -314,9 +337,14 @@ export async function createSupportSettings(settings: InsertSupportSettings): Pr
 }
 
 export async function updateSupportSettings(gameType: string, data: Partial<InsertSupportSettings>): Promise<SupportSettings | undefined> {
+  const normalizedGameType = normalizeSupportGameType(gameType);
+  if (!normalizedGameType) {
+    return undefined;
+  }
+
   const [result] = await db.update(supportSettings)
     .set({ ...data, updatedAt: new Date() })
-    .where(eq(supportSettings.gameType, gameType))
+    .where(eq(supportSettings.gameType, normalizedGameType))
     .returning();
   return result || undefined;
 }

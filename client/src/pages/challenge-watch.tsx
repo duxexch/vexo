@@ -1202,6 +1202,31 @@ export default function ChallengeWatchPage() {
     return Number.isFinite(parsed) ? parsed : fallback;
   };
 
+  const toDisplayPercent = (value: unknown): number => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return 0;
+    }
+
+    if (parsed > 0 && parsed < 1) {
+      return parsed * 100;
+    }
+
+    return parsed;
+  };
+
+  const allowInstantSupport = oddsData?.allowInstantMatch ?? true;
+  const houseFeePercentText = useMemo(() => {
+    const feePercent = toDisplayPercent(oddsData?.houseFeePercent);
+    return feePercent.toFixed(2);
+  }, [oddsData?.houseFeePercent]);
+
+  useEffect(() => {
+    if (!allowInstantSupport && supportMode === "instant") {
+      setSupportMode("wait_for_match");
+    }
+  }, [allowInstantSupport, supportMode]);
+
   const getPlayerOdds = (playerId: string): number => {
     if (!oddsData || !challenge) return 1.5;
     const instantOdds = toSafeOdds(oddsData.instantMatchOdds, 1.8);
@@ -1329,6 +1354,20 @@ export default function ChallengeWatchPage() {
 
   const handleAddSupport = () => {
     if (!selectedPlayer || !supportAmount) return;
+
+    if (supportMode === "instant" && !allowInstantSupport) {
+      toast({
+        title: language === "ar" ? "غير متاح" : "Unavailable",
+        description:
+          language === "ar"
+            ? "المطابقة الفورية غير مفعلة لهذه اللعبة"
+            : "Instant match support is disabled for this game",
+        variant: "destructive",
+      });
+      setSupportMode("wait_for_match");
+      return;
+    }
+
     const amount = parseFloat(supportAmount);
     if (isNaN(amount) || amount <= 0) {
       toast({
@@ -2855,7 +2894,9 @@ export default function ChallengeWatchPage() {
                                 value={supportMode}
                                 onValueChange={(v) =>
                                   setSupportMode(
-                                    v as "instant" | "wait_for_match",
+                                    !allowInstantSupport && v === "instant"
+                                      ? "wait_for_match"
+                                      : (v as "instant" | "wait_for_match"),
                                   )
                                 }
                               >
@@ -2863,6 +2904,7 @@ export default function ChallengeWatchPage() {
                                   <TabsTrigger
                                     value="instant"
                                     className="gap-2"
+                                    disabled={!allowInstantSupport}
                                     data-testid="tab-instant"
                                   >
                                     <Zap className="h-4 w-4" />
@@ -2986,8 +3028,8 @@ export default function ChallengeWatchPage() {
                                   <Info className="h-3 w-3" />
                                   <span>
                                     {language === "ar"
-                                      ? `رسوم المنصة: ${oddsData.houseFeePercent}% • الحد الأدنى: ${formatChallengeAmountText(oddsData.minSupportAmount)} • الحد الأقصى: ${formatChallengeAmountText(oddsData.maxSupportAmount)}`
-                                      : `House fee: ${oddsData.houseFeePercent}% • Min: ${formatChallengeAmountText(oddsData.minSupportAmount)} • Max: ${formatChallengeAmountText(oddsData.maxSupportAmount)}`}
+                                      ? `رسوم المنصة: ${houseFeePercentText}% • الحد الأدنى: ${formatChallengeAmountText(oddsData.minSupportAmount)} • الحد الأقصى: ${formatChallengeAmountText(oddsData.maxSupportAmount)}`
+                                      : `House fee: ${houseFeePercentText}% • Min: ${formatChallengeAmountText(oddsData.minSupportAmount)} • Max: ${formatChallengeAmountText(oddsData.maxSupportAmount)}`}
                                   </span>
                                 </div>
                               )}

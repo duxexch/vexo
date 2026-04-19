@@ -56,8 +56,44 @@ const BUTTON_3D_PRIMARY_CLASS = "rounded-2xl border border-sky-500 bg-sky-500 px
 const INPUT_SURFACE_CLASS = "h-12 rounded-2xl border-slate-200 bg-white/90 shadow-none focus-visible:ring-2 focus-visible:ring-sky-200 dark:border-slate-700 dark:bg-slate-900/80 dark:focus-visible:ring-sky-900";
 const DIALOG_SURFACE_CLASS = "max-h-[92vh] overflow-y-auto rounded-[32px] border border-slate-200/80 bg-white/98 p-0 shadow-[0_24px_80px_-28px_rgba(15,23,42,0.45)] dark:border-slate-800 dark:bg-slate-950/98";
 
+const SUPPORT_GAME_TYPE_PATTERN = /^[a-z0-9][a-z0-9_-]{1,63}$/;
+
+function parseFiniteNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return parsed;
+}
+
+function toDecimalString(value: unknown, fallback: string): string {
+  const parsed = parseFiniteNumber(value);
+  if (parsed === null) {
+    return fallback;
+  }
+  return parsed.toFixed(2);
+}
+
+function toWeightNumber(value: unknown, fallback: number): number {
+  const parsed = parseFiniteNumber(value);
+  if (parsed === null) {
+    return fallback;
+  }
+  return parsed;
+}
+
+function normalizeGameTypeInput(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "-");
+}
+
 const supportSettingsSchema = z.object({
-  gameType: z.string().min(1, "نوع اللعبة مطلوب"),
+  gameType: z
+    .string()
+    .min(1, "نوع اللعبة مطلوب")
+    .transform((value) => normalizeGameTypeInput(value))
+    .refine((value) => SUPPORT_GAME_TYPE_PATTERN.test(value), {
+      message: "استخدم أحرفًا وأرقامًا فقط مع - أو _",
+    }),
   isEnabled: z.boolean(),
   oddsMode: z.enum(["automatic", "manual"]),
   defaultOddsPlayer1: z.string().min(1, "احتمالات اللاعب 1 مطلوبة"),
@@ -67,15 +103,87 @@ const supportSettingsSchema = z.object({
   houseFeePercent: z.string().min(1, "نسبة رسوم المنصة مطلوبة"),
   allowInstantMatch: z.boolean(),
   instantMatchOdds: z.string(),
-  winRateWeight: z.number().min(0).max(1),
-  experienceWeight: z.number().min(0).max(1),
-  streakWeight: z.number().min(0).max(1),
-}).refine((data) => {
+  winRateWeight: z.coerce.number().min(0).max(1),
+  experienceWeight: z.coerce.number().min(0).max(1),
+  streakWeight: z.coerce.number().min(0).max(1),
+}).superRefine((data, context) => {
+  const defaultOddsPlayer1 = parseFiniteNumber(data.defaultOddsPlayer1);
+  const defaultOddsPlayer2 = parseFiniteNumber(data.defaultOddsPlayer2);
+  const minSupportAmount = parseFiniteNumber(data.minSupportAmount);
+  const maxSupportAmount = parseFiniteNumber(data.maxSupportAmount);
+  const houseFeePercent = parseFiniteNumber(data.houseFeePercent);
+  const instantMatchOdds = parseFiniteNumber(data.instantMatchOdds);
+
+  if (defaultOddsPlayer1 === null || defaultOddsPlayer1 < 1.01 || defaultOddsPlayer1 > 100) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "احتمالات اللاعب 1 يجب أن تكون بين 1.01 و 100",
+      path: ["defaultOddsPlayer1"],
+    });
+  }
+
+  if (defaultOddsPlayer2 === null || defaultOddsPlayer2 < 1.01 || defaultOddsPlayer2 > 100) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "احتمالات اللاعب 2 يجب أن تكون بين 1.01 و 100",
+      path: ["defaultOddsPlayer2"],
+    });
+  }
+
+  if (minSupportAmount === null || minSupportAmount < 0.01 || minSupportAmount > 1_000_000) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "الحد الأدنى يجب أن يكون بين 0.01 و 1000000",
+      path: ["minSupportAmount"],
+    });
+  }
+
+  if (maxSupportAmount === null || maxSupportAmount < 0.01 || maxSupportAmount > 1_000_000) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "الحد الأقصى يجب أن يكون بين 0.01 و 1000000",
+      path: ["maxSupportAmount"],
+    });
+  }
+
+  if (
+    minSupportAmount !== null &&
+    maxSupportAmount !== null &&
+    maxSupportAmount < minSupportAmount
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "الحد الأقصى يجب أن يكون أكبر من أو يساوي الحد الأدنى",
+      path: ["maxSupportAmount"],
+    });
+  }
+
+  if (houseFeePercent === null || houseFeePercent < 0 || houseFeePercent > 100) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "رسوم المنصة يجب أن تكون بين 0% و 100%",
+      path: ["houseFeePercent"],
+    });
+  }
+
+  if (data.allowInstantMatch) {
+    if (instantMatchOdds === null || instantMatchOdds < 1.01 || instantMatchOdds > 100) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "احتمالات المطابقة الفورية يجب أن تكون بين 1.01 و 100",
+        path: ["instantMatchOdds"],
+      });
+    }
+  }
+
   const sum = data.winRateWeight + data.experienceWeight + data.streakWeight;
-  return Math.abs(sum - 1.0) < 0.01;
-}, {
-  message: "مجموع الأوزان يجب أن يساوي 1.0",
-  path: ["winRateWeight"],
+  if (Math.abs(sum - 1.0) >= 0.01) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "مجموع الأوزان يجب أن يساوي 1.0",
+      path: ["winRateWeight"],
+    });
+  }
 });
 
 type SupportSettingsFormData = z.infer<typeof supportSettingsSchema>;
@@ -99,6 +207,44 @@ interface SupportSettings {
   updatedAt: string;
 }
 
+function normalizeSupportSettings(raw: unknown): SupportSettings | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const record = raw as Record<string, unknown>;
+  const id = typeof record.id === "string" ? record.id : "";
+  const gameType = typeof record.gameType === "string" ? record.gameType : "";
+  if (!id || !gameType) {
+    return null;
+  }
+
+  return {
+    id,
+    gameType,
+    isEnabled: Boolean(record.isEnabled),
+    oddsMode: record.oddsMode === "manual" ? "manual" : "automatic",
+    defaultOddsPlayer1: toDecimalString(record.defaultOddsPlayer1, "1.90"),
+    defaultOddsPlayer2: toDecimalString(record.defaultOddsPlayer2, "1.90"),
+    minSupportAmount: toDecimalString(record.minSupportAmount, "1.00"),
+    maxSupportAmount: toDecimalString(record.maxSupportAmount, "1000.00"),
+    houseFeePercent: toDecimalString(record.houseFeePercent, "5.00"),
+    allowInstantMatch: Boolean(record.allowInstantMatch),
+    instantMatchOdds: toDecimalString(record.instantMatchOdds, "1.80"),
+    winRateWeight: toWeightNumber(record.winRateWeight, 0.6),
+    experienceWeight: toWeightNumber(record.experienceWeight, 0.25),
+    streakWeight: toWeightNumber(record.streakWeight, 0.15),
+    createdAt:
+      typeof record.createdAt === "string"
+        ? record.createdAt
+        : new Date().toISOString(),
+    updatedAt:
+      typeof record.updatedAt === "string"
+        ? record.updatedAt
+        : new Date().toISOString(),
+  };
+}
+
 function SupportSettingsForm({
   settings,
   onSuccess,
@@ -117,16 +263,16 @@ function SupportSettingsForm({
       gameType: settings?.gameType || "",
       isEnabled: settings?.isEnabled ?? true,
       oddsMode: settings?.oddsMode || "automatic",
-      defaultOddsPlayer1: settings?.defaultOddsPlayer1 || "1.80",
-      defaultOddsPlayer2: settings?.defaultOddsPlayer2 || "2.00",
-      minSupportAmount: settings?.minSupportAmount || "10.00",
-      maxSupportAmount: settings?.maxSupportAmount || "1000.00",
-      houseFeePercent: settings?.houseFeePercent || "5.00",
+      defaultOddsPlayer1: toDecimalString(settings?.defaultOddsPlayer1, "1.90"),
+      defaultOddsPlayer2: toDecimalString(settings?.defaultOddsPlayer2, "1.90"),
+      minSupportAmount: toDecimalString(settings?.minSupportAmount, "1.00"),
+      maxSupportAmount: toDecimalString(settings?.maxSupportAmount, "1000.00"),
+      houseFeePercent: toDecimalString(settings?.houseFeePercent, "5.00"),
       allowInstantMatch: settings?.allowInstantMatch ?? false,
-      instantMatchOdds: settings?.instantMatchOdds || "1.90",
-      winRateWeight: settings?.winRateWeight ?? 0.5,
-      experienceWeight: settings?.experienceWeight ?? 0.3,
-      streakWeight: settings?.streakWeight ?? 0.2,
+      instantMatchOdds: toDecimalString(settings?.instantMatchOdds, "1.80"),
+      winRateWeight: toWeightNumber(settings?.winRateWeight, 0.6),
+      experienceWeight: toWeightNumber(settings?.experienceWeight, 0.25),
+      streakWeight: toWeightNumber(settings?.streakWeight, 0.15),
     },
   });
 
@@ -183,10 +329,24 @@ function SupportSettingsForm({
   });
 
   const onSubmit = (data: SupportSettingsFormData) => {
+    const normalizedPayload: SupportSettingsFormData = {
+      ...data,
+      gameType: normalizeGameTypeInput(data.gameType),
+      defaultOddsPlayer1: toDecimalString(data.defaultOddsPlayer1, "1.90"),
+      defaultOddsPlayer2: toDecimalString(data.defaultOddsPlayer2, "1.90"),
+      minSupportAmount: toDecimalString(data.minSupportAmount, "1.00"),
+      maxSupportAmount: toDecimalString(data.maxSupportAmount, "1000.00"),
+      houseFeePercent: toDecimalString(data.houseFeePercent, "5.00"),
+      instantMatchOdds: toDecimalString(data.instantMatchOdds, "1.80"),
+      winRateWeight: Number(data.winRateWeight.toFixed(2)),
+      experienceWeight: Number(data.experienceWeight.toFixed(2)),
+      streakWeight: Number(data.streakWeight.toFixed(2)),
+    };
+
     if (isEditing) {
-      updateMutation.mutate(data);
+      updateMutation.mutate(normalizedPayload);
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(normalizedPayload);
     }
   };
 
@@ -645,7 +805,15 @@ export default function AdminSupportSettingsPage() {
         headers: { "x-admin-token": adminToken() },
       });
       if (!res.ok) throw new Error("فشل في جلب الإعدادات");
-      return res.json();
+
+      const payload = (await res.json()) as unknown;
+      if (!Array.isArray(payload)) {
+        return [];
+      }
+
+      return payload
+        .map((item) => normalizeSupportSettings(item))
+        .filter((item): item is SupportSettings => item !== null);
     },
   });
 

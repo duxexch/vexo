@@ -13,6 +13,20 @@ import {
   getChallengeSameSideParticipantIds,
 } from "../challenges/helpers";
 
+function normalizeHouseFeePercent(raw: string | number | null | undefined): number {
+  const parsed = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""));
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+
+  // Backward compatibility: support both "5" (percent) and "0.05" (decimal rate).
+  if (parsed > 0 && parsed < 1) {
+    return parsed * 100;
+  }
+
+  return Math.min(parsed, 100);
+}
+
 function buildPlayerStats(player: {
   gamesWon?: number | null;
   gamesLost?: number | null;
@@ -310,7 +324,8 @@ export function registerSupportActionRoutes(app: Express): void {
       let potentialWinnings: number;
 
       if (mode === "instant") {
-        odds = parseFloat(settings.instantMatchOdds);
+        const instantOdds = Number.parseFloat(settings.instantMatchOdds);
+        odds = Number.isFinite(instantOdds) && instantOdds > 1 ? instantOdds : 1.8;
         const winningsCalc = calculatePotentialWinnings(supportAmount, odds);
         potentialWinnings = winningsCalc.potentialWinnings;
       } else {
@@ -346,7 +361,8 @@ export function registerSupportActionRoutes(app: Express): void {
         potentialWinnings = winningsCalc.potentialWinnings;
       }
 
-      const houseFee = supportAmount * (parseFloat(settings.houseFeePercent) / 100);
+      const houseFeePercent = normalizeHouseFeePercent(settings.houseFeePercent);
+      const houseFee = supportAmount * (houseFeePercent / 100);
 
       const support = await storage.createSpectatorSupport({
         challengeId,

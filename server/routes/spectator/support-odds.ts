@@ -159,6 +159,30 @@ function formatSideName(players: Array<{ username: string }>, fallbackName: stri
   return players.map((player) => player.username).join(" + ");
 }
 
+function normalizeHouseFeePercent(raw: string | number | null | undefined): number {
+  const parsed = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""));
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+
+  if (parsed > 0 && parsed < 1) {
+    return Math.round(parsed * 10000) / 100;
+  }
+
+  return Math.round(Math.min(parsed, 100) * 100) / 100;
+}
+
+function normalizeSupportAmount(
+  raw: string | number | null | undefined,
+  fallback: number,
+): number {
+  const parsed = typeof raw === "number" ? raw : Number.parseFloat(String(raw ?? ""));
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
 export function registerSupportOddsRoutes(app: Express): void {
 
   // Get supports for a challenge
@@ -188,7 +212,7 @@ export function registerSupportOddsRoutes(app: Express): void {
     try {
       const { challenges } = await import("@shared/schema");
       const [challenge] = await db.select().from(challenges).where(eq(challenges.id, req.params.challengeId));
-      
+
       if (!challenge) {
         return res.status(404).json({ error: "Challenge not found" });
       }
@@ -210,7 +234,7 @@ export function registerSupportOddsRoutes(app: Express): void {
       if (!player1) {
         return res.status(404).json({ error: "Player 1 not found" });
       }
-      
+
       const settings = await storage.getSupportSettings(challenge.gameType);
 
       const team1Ids = getChallengeSameSideParticipantIds(challenge, challenge.player1Id);
@@ -232,6 +256,13 @@ export function registerSupportOddsRoutes(app: Express): void {
       const player1Stats = aggregatePlayerStats(team1Users.map((player) => buildPlayerStats(player)));
       const player2Stats = aggregatePlayerStats(team2Users.map((player) => buildPlayerStats(player)));
       const odds = calculateOdds(player1Stats, player2Stats, settings || undefined, challenge.gameType);
+      const minSupportAmount = normalizeSupportAmount(settings?.minSupportAmount, 1);
+      const maxSupportAmountRaw = normalizeSupportAmount(settings?.maxSupportAmount, 1000);
+      const maxSupportAmount = Math.max(maxSupportAmountRaw, minSupportAmount);
+      const houseFeePercent = normalizeHouseFeePercent(
+        settings?.houseFeePercent ?? odds.houseFeePercent,
+      );
+      const instantMatchOdds = Number.parseFloat(settings?.instantMatchOdds || "1.80");
 
       const player1Label = isTeamMode
         ? formatSideName(team1Users.map((player) => ({ username: player.username })), player1.username)
@@ -291,11 +322,14 @@ export function registerSupportOddsRoutes(app: Express): void {
             probability: odds.player2Probability,
           },
         } : null,
-        houseFeePercent: odds.houseFeePercent,
-        instantMatchOdds: settings?.instantMatchOdds || "1.80",
+        houseFeePercent,
+        instantMatchOdds:
+          Number.isFinite(instantMatchOdds) && instantMatchOdds > 1
+            ? instantMatchOdds.toFixed(2)
+            : "1.80",
         allowInstantMatch: settings?.allowInstantMatch ?? true,
-        minSupportAmount: parseFloat(settings?.minSupportAmount || "1.00"),
-        maxSupportAmount: parseFloat(settings?.maxSupportAmount || "1000.00"),
+        minSupportAmount,
+        maxSupportAmount,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

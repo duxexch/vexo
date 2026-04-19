@@ -187,6 +187,11 @@ export default function AdminExternalGames() {
   const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
   const [deleteGameName, setDeleteGameName] = useState("");
 
+  const invalidateExternalGameCaches = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/admin/external-games"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/external-games"] });
+  };
+
   const { data: games = [], isLoading } = useQuery<ExternalGame[]>({
     queryKey: ["/api/admin/external-games", searchQuery, filterCategory, filterType],
     queryFn: async () => {
@@ -216,7 +221,7 @@ export default function AdminExternalGames() {
     },
     onSuccess: (data) => {
       toast({ title: "Game created", description: `${data.nameEn} added successfully` });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/external-games"] });
+      invalidateExternalGameCaches();
       setShowDialog(false);
       setForm(defaultForm);
     },
@@ -232,7 +237,7 @@ export default function AdminExternalGames() {
     },
     onSuccess: () => {
       toast({ title: "Game updated" });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/external-games"] });
+      invalidateExternalGameCaches();
       setShowDialog(false);
       setEditingGame(null);
       setForm(defaultForm);
@@ -248,7 +253,7 @@ export default function AdminExternalGames() {
     },
     onSuccess: () => {
       toast({ title: "Game deleted" });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/external-games"] });
+      invalidateExternalGameCaches();
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -261,7 +266,7 @@ export default function AdminExternalGames() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/external-games"] });
+      invalidateExternalGameCaches();
     },
   });
 
@@ -275,7 +280,7 @@ export default function AdminExternalGames() {
         title: "ZIP uploaded successfully",
         description: `${data.filesExtracted} files extracted (${(data.totalSize / 1024).toFixed(1)} KB)`,
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/external-games"] });
+      invalidateExternalGameCaches();
       setShowUploadDialog(false);
       setUploadGameId(null);
     },

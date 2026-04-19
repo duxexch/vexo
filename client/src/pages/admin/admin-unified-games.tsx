@@ -108,6 +108,14 @@ async function adminFetch(url: string, options?: RequestInit) {
   }
   return res.json();
 }
+
+function invalidateGameConfigCaches() {
+  queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
+  queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
+  queryClient.invalidateQueries({ queryKey: ["/api/multiplayer-games"] });
+  queryClient.invalidateQueries({ queryKey: ["/api/config-version/multiplayer_games_version"] });
+}
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -524,7 +532,7 @@ function GameForm({
       toast({
         title: language === "ar" ? "تم إنشاء اللعبة بنجاح" : "Game created successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
+      invalidateGameConfigCaches();
       onSuccess();
     },
     onError: (error: Error) => {
@@ -573,8 +581,7 @@ function GameForm({
       toast({
         title: language === "ar" ? "تم تحديث اللعبة بنجاح" : "Game updated successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
+      invalidateGameConfigCaches();
       onSuccess();
     },
     onError: (error: Error) => {
@@ -995,8 +1002,7 @@ export default function AdminUnifiedGames() {
       toast({
         title: language === "ar" ? "تم حذف اللعبة بنجاح" : "Game deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
+      invalidateGameConfigCaches();
       setDeleteGameId(null);
     },
     onError: (error: Error) => {
@@ -1022,8 +1028,7 @@ export default function AdminUnifiedGames() {
       toast({
         title: language === "ar" ? "تم تحديث الحالة" : "Status updated",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
+      invalidateGameConfigCaches();
     },
     onError: (error: Error) => {
       toast({
@@ -1051,8 +1056,7 @@ export default function AdminUnifiedGames() {
       toast({
         title: language === "ar" ? "تم تحديث أماكن العرض" : "Display locations updated",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
+      invalidateGameConfigCaches();
     },
     onError: (error: Error) => {
       toast({
@@ -1110,8 +1114,7 @@ export default function AdminUnifiedGames() {
           ? (language === "ar" ? "تم رفع صورة الخلفية بنجاح" : "Background image uploaded successfully")
           : (language === "ar" ? "تم رفع الأيقونة بنجاح" : "Icon uploaded successfully"),
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
+      invalidateGameConfigCaches();
     },
     onError: (error: Error) => {
       toast({
@@ -1187,8 +1190,7 @@ export default function AdminUnifiedGames() {
         try {
           const data = JSON.parse(event.data);
           if (data.type === "game_config_changed") {
-            queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
+            invalidateGameConfigCaches();
           }
         } catch { }
       };
