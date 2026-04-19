@@ -17,7 +17,6 @@ import { useToast } from "@/hooks/use-toast";
 import { BackButton } from "@/components/BackButton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type MultiplayerGameFromAPI, buildGameConfig, getGameIconSurfaceClass, getGameIconToneClass } from "@/lib/game-config";
-import * as LucideIcons from "lucide-react";
 import {
   Trophy,
   Target,
@@ -32,6 +31,12 @@ import {
   User,
   ChevronRight,
   Award,
+  Shield,
+  BadgeCheck,
+  Crown,
+  Gem,
+  Diamond,
+  ShieldCheck,
   Ban,
   VolumeX,
   Volume2,
@@ -103,12 +108,23 @@ function isImagePath(value?: string | null): value is string {
   return normalized.startsWith("/") || /^https?:\/\//i.test(normalized);
 }
 
+const TRUST_BADGE_ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
+  Shield,
+  Medal,
+  BadgeCheck,
+  Award,
+  Crown,
+  Gem,
+  Diamond,
+  Trophy,
+  ShieldCheck,
+  Star,
+};
+
 function DynamicBadgeIcon({ name, className }: { name: string; className?: string }) {
-  const IconComponent = (LucideIcons as unknown as Record<string, ComponentType<{ className?: string }>>)[name];
-  if (IconComponent) {
-    return <IconComponent className={className} />;
-  }
-  return <Award className={className} />;
+  const normalizedName = name.trim();
+  const IconComponent = TRUST_BADGE_ICON_MAP[normalizedName] || Award;
+  return <IconComponent className={className} />;
 }
 
 const VIP_COLORS = [

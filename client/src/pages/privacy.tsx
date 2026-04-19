@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       updatedAtEn="Last Updated: February 25, 2026"
     >
       {isAr ? (
-        <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-foreground leading-relaxed">
+        <div className="legal-content max-w-none space-y-6 text-sm leading-relaxed text-foreground">
           <section>
             <h2 className="text-xl font-semibold text-primary">1. مقدمة</h2>
             <p>
@@ -152,7 +152,7 @@ export default function PrivacyPage() {
           </section>
         </div>
       ) : (
-        <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-foreground leading-relaxed">
+        <div className="legal-content max-w-none space-y-6 text-sm leading-relaxed text-foreground">
           <section>
             <h2 className="text-xl font-semibold text-primary">1. Introduction</h2>
             <p>

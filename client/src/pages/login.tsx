@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useLocation } from "wouter";
 import { useAuth, type IdentifierOtpMethod, type LoginFlowResult } from "@/lib/auth";
 import type { User as UserSchema } from "@shared/schema";
@@ -18,12 +18,46 @@ import { SiGoogle, SiFacebook, SiTelegram, SiWhatsapp, SiX, SiApple, SiDiscord, 
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SupportContactQuickLaunch } from "@/components/support-contact-quick-launch";
-import { LanguageSwitcher } from "@/lib/i18n";
 import { fetchWithCsrf } from "@/lib/csrf";
-import { Browser } from "@capacitor/browser";
-import { Capacitor } from "@capacitor/core";
-import { SocialLogin, type GoogleLoginResponse } from "@capgo/capacitor-social-login";
 import { openNotificationSettings, requestPostSignupNotificationPermissions } from "@/lib/startup-permissions";
+
+type NativeGoogleLoginResult = {
+  responseType?: string;
+  accessToken?: {
+    token?: string;
+  };
+  idToken?: string;
+};
+
+let capacitorCoreModulePromise: Promise<typeof import("@capacitor/core")> | null = null;
+let capacitorBrowserModulePromise: Promise<typeof import("@capacitor/browser")> | null = null;
+let capacitorSocialModulePromise: Promise<typeof import("@capgo/capacitor-social-login")> | null = null;
+
+const getCapacitorCore = () => {
+  if (!capacitorCoreModulePromise) {
+    capacitorCoreModulePromise = import("@capacitor/core");
+  }
+  return capacitorCoreModulePromise;
+};
+
+const getCapacitorBrowser = () => {
+  if (!capacitorBrowserModulePromise) {
+    capacitorBrowserModulePromise = import("@capacitor/browser");
+  }
+  return capacitorBrowserModulePromise;
+};
+
+const getCapacitorSocialLogin = () => {
+  if (!capacitorSocialModulePromise) {
+    capacitorSocialModulePromise = import("@capgo/capacitor-social-login");
+  }
+  return capacitorSocialModulePromise;
+};
+
+const isNativeCapacitorPlatform = async (): Promise<boolean> => {
+  const { Capacitor } = await getCapacitorCore();
+  return Capacitor.isNativePlatform();
+};
 
 interface AuthSettings {
   oneClickEnabled: boolean;
@@ -77,6 +111,10 @@ const OAUTH_EVENT_STORAGE_KEY = "vex_oauth_event";
 const AUTO_CREATE_MAX_CLIENT_ATTEMPTS = 4;
 const AUTO_CREATE_ATTEMPTS_STORAGE_KEY = "vex_auto_create_attempts_v1";
 const AUTO_CREATE_CLIENT_ID_STORAGE_KEY = "vex_auto_create_client_id_v1";
+
+const LanguageSwitcher = lazy(() =>
+  import("@/lib/i18n-ui").then((module) => ({ default: module.LanguageSwitcher })),
+);
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -316,7 +354,7 @@ export default function LoginPage() {
     return true;
   };
 
-  const extractNativeGoogleTokens = (payload: GoogleLoginResponse): { accessToken?: string; idToken?: string } => {
+  const extractNativeGoogleTokens = (payload: NativeGoogleLoginResult): { accessToken?: string; idToken?: string } => {
     if (payload.responseType === "offline") {
       return {};
     }
@@ -358,9 +396,11 @@ export default function LoginPage() {
   };
 
   const handleNativeGoogleLogin = async () => {
-    if (!Capacitor.isNativePlatform()) {
+    if (!(await isNativeCapacitorPlatform())) {
       throw new Error("google_native_not_available");
     }
+
+    const { SocialLogin } = await getCapacitorSocialLogin();
 
     const configRes = await fetch("/api/auth/social/google/native/config", {
       cache: "no-store",
@@ -394,7 +434,7 @@ export default function LoginPage() {
       },
     });
 
-    const tokens = extractNativeGoogleTokens(loginResult.result);
+    const tokens = extractNativeGoogleTokens(loginResult.result as NativeGoogleLoginResult);
     if (!tokens.accessToken && !tokens.idToken) {
       throw new Error("google_native_sdk_token_missing");
     }
@@ -423,7 +463,8 @@ export default function LoginPage() {
   const startPlatformOAuthFlow = async (platformName: string, options?: { forceConsent?: boolean }) => {
     const postLoginRedirect = resolvePostLoginRedirect();
     const startParams = new URLSearchParams({ redirect: postLoginRedirect });
-    if (!Capacitor.isNativePlatform()) {
+    const isNativePlatform = await isNativeCapacitorPlatform();
+    if (!isNativePlatform) {
       startParams.set("popup", "1");
     }
 
@@ -441,7 +482,8 @@ export default function LoginPage() {
       throw new Error(typeof data.error === "string" ? data.error : "oauth_initiation_failed");
     }
 
-    if (Capacitor.isNativePlatform()) {
+    if (isNativePlatform) {
+      const { Browser } = await getCapacitorBrowser();
       await Browser.open({ url: data.url });
       return;
     }
@@ -484,7 +526,7 @@ export default function LoginPage() {
         socialGoogleForceConsentRetriedRef.current = false;
       }
 
-      if (Capacitor.isNativePlatform() && platform.name === "google") {
+      if ((await isNativeCapacitorPlatform()) && platform.name === "google") {
         await handleNativeGoogleLogin();
         clearSocialLoginLock();
         return;
@@ -1358,7 +1400,9 @@ export default function LoginPage() {
       >
         <div className="flex items-center gap-2">
           <SupportContactQuickLaunch />
-          <LanguageSwitcher />
+          <Suspense fallback={null}>
+            <LanguageSwitcher />
+          </Suspense>
         </div>
         <ThemeToggle />
       </div>

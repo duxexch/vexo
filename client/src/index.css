@@ -675,6 +675,17 @@ svg {
   }
 }
 
+.legal-content section p+p,
+.legal-content section ul,
+.legal-content section ol {
+  margin-top: 0.75rem;
+}
+
+.legal-content section ul,
+.legal-content section ol {
+  list-style-position: outside;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;

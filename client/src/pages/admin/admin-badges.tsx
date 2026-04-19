@@ -32,6 +32,11 @@ import {
     Sparkles,
     Upload,
     Shield,
+    BadgeCheck,
+    Gem,
+    Diamond,
+    Megaphone,
+    Medal,
     Users,
     Search,
     UserPlus,
@@ -42,7 +47,6 @@ import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import * as LucideIcons from "lucide-react";
 
 function getAdminToken() {
     return localStorage.getItem("adminToken");
@@ -218,12 +222,25 @@ const TEXTAREA_SURFACE_CLASS = "min-h-[96px] rounded-xl border-slate-200/80 bg-w
 const TOGGLE_ROW_CLASS = "flex items-center justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white/75 p-4 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60";
 const DIALOG_SURFACE_CLASS = "max-h-[92vh] max-w-3xl overflow-y-auto rounded-[28px] border border-slate-200/80 bg-gradient-to-b from-white via-slate-50 to-slate-100 p-0 shadow-[0_30px_90px_-40px_rgba(15,23,42,0.6)] dark:border-slate-800/80 dark:from-slate-900 dark:via-slate-950 dark:to-slate-950";
 
+const BADGE_ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
+    Shield,
+    Medal,
+    BadgeCheck,
+    Award,
+    Crown,
+    Gem,
+    Diamond,
+    Trophy,
+    ShieldCheck,
+    Star,
+    Sparkles,
+    Megaphone,
+};
+
 function DynamicIcon({ name, className }: { name: string; className?: string }) {
-    const IconComponent = (LucideIcons as unknown as Record<string, ComponentType<{ className?: string }>>)[name];
-    if (IconComponent) {
-        return <IconComponent className={className} />;
-    }
-    return <Award className={className} />;
+    const normalizedName = name.trim();
+    const IconComponent = BADGE_ICON_MAP[normalizedName] || Award;
+    return <IconComponent className={className} />;
 }
 
 function formatLimitValue(value: string | null): string {

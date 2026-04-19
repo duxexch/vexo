@@ -22,8 +22,22 @@ interface VexLogoProps {
 }
 
 export function VexLogo({ size = 32, className = "", alt = "VEX", loading, fetchPriority }: VexLogoProps) {
-  // Use 192px source for small/medium displays, 512px for large
-  const src = size > 128 ? "/icons/vex-gaming-logo-512x512.png" : "/icons/vex-gaming-logo-192x192.png";
+  // Serve the closest pre-generated asset size to avoid over-downloading logo bytes.
+  const src = size <= 72
+    ? "/icons/vex-gaming-logo-72x72.png"
+    : size <= 96
+      ? "/icons/vex-gaming-logo-96x96.png"
+      : size <= 128
+        ? "/icons/vex-gaming-logo-128x128.png"
+        : size <= 144
+          ? "/icons/vex-gaming-logo-144x144.png"
+          : size <= 152
+            ? "/icons/vex-gaming-logo-152x152.png"
+            : size <= 192
+              ? "/icons/vex-gaming-logo-192x192.png"
+              : size <= 384
+                ? "/icons/vex-gaming-logo-384x384.png"
+                : "/icons/vex-gaming-logo-512x512.png";
   const resolvedLoading = loading ?? (size <= 48 ? "eager" : "lazy");
   const resolvedFetchPriority = fetchPriority ?? (resolvedLoading === "eager" ? "high" : "auto");
 

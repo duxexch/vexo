@@ -8,15 +8,15 @@ export default defineConfig({
     react(),
     runtimeErrorOverlay(),
     ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
+      process.env.REPL_ID !== undefined
       ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer(),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
-        ]
+        await import("@replit/vite-plugin-cartographer").then((m) =>
+          m.cartographer(),
+        ),
+        await import("@replit/vite-plugin-dev-banner").then((m) =>
+          m.devBanner(),
+        ),
+      ]
       : []),
   ],
   resolve: {
@@ -46,19 +46,22 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('react-dom')) return 'vendor-react-dom';
-            if (id.includes('react') && !id.includes('react-')) return 'vendor-react';
-            if (id.includes('@radix-ui')) return 'vendor-radix';
-            if (id.includes('@tanstack')) return 'vendor-query';
-            if (id.includes('lucide-react')) return 'vendor-icons';
-            if (id.includes('react-icons')) return 'vendor-social-icons';
-            if (id.includes('recharts')) return 'vendor-charts';
-            if (id.includes('chess.js')) return 'vendor-chess';
-            if (id.includes('date-fns')) return 'vendor-date';
-            if (id.includes('zod')) return 'vendor-validation';
-            if (id.includes('wouter')) return 'vendor-router';
-            if (id.includes('embla-carousel')) return 'vendor-carousel';
-            if (id.includes('react-hook-form')) return 'vendor-forms';
+            const moduleId = id.replace(/\\/g, '/');
+
+            if (moduleId.includes('/node_modules/react-dom/')) return 'vendor-react-dom';
+            if (moduleId.includes('/node_modules/react/')) return 'vendor-react';
+            if (moduleId.includes('/node_modules/scheduler/')) return 'vendor-react';
+
+            if (moduleId.includes('@radix-ui')) return 'vendor-radix';
+            if (moduleId.includes('@tanstack')) return 'vendor-query';
+            if (moduleId.includes('react-icons')) return 'vendor-social-icons';
+            if (moduleId.includes('recharts')) return 'vendor-charts';
+            if (moduleId.includes('chess.js')) return 'vendor-chess';
+            if (moduleId.includes('date-fns')) return 'vendor-date';
+            if (moduleId.includes('zod')) return 'vendor-validation';
+            if (moduleId.includes('wouter')) return 'vendor-router';
+            if (moduleId.includes('embla-carousel')) return 'vendor-carousel';
+            if (moduleId.includes('react-hook-form')) return 'vendor-forms';
           }
         },
       },
