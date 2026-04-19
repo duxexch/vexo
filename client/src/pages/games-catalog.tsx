@@ -47,6 +47,7 @@ interface GameConfig {
   descriptionAr: string;
   icon: LucideIcon;
   iconUrl?: string;
+  thumbnailUrl?: string;
   gradient: string;
   accentColor: string;
   players: string;
@@ -233,6 +234,7 @@ export default function GamesCatalogPage() {
         nameAr: dynamicConfig.nameAr,
         icon: dynamicConfig.icon,
         iconUrl: dynamicConfig.iconUrl,
+        thumbnailUrl: dynamicConfig.thumbnailUrl,
       };
     }),
     [multiplayerGameConfig],
@@ -364,7 +366,24 @@ export default function GamesCatalogPage() {
                 onClick={() => setSelectedGame(isSelected ? null : game.key)}
                 data-testid={`game-card-${game.key}`}
               >
-                <div className={cn("absolute inset-0 bg-gradient-to-br opacity-60", game.gradient)} />
+                {game.thumbnailUrl && (
+                  <img
+                    src={game.thumbnailUrl}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                    aria-hidden="true"
+                  />
+                )}
+                <div
+                  className={cn(
+                    "absolute inset-0",
+                    game.thumbnailUrl
+                      ? "bg-gradient-to-t from-background/90 via-background/55 to-background/20"
+                      : `bg-gradient-to-br opacity-60 ${game.gradient}`,
+                  )}
+                />
 
                 {liveCount > 0 && (
                   <div className="absolute top-3 end-3 z-10">
@@ -379,13 +398,14 @@ export default function GamesCatalogPage() {
                   <div className="flex items-start gap-4 mb-4">
                     <div
                       className={cn(
-                        "inline-flex h-20 w-20 items-center justify-center rounded-[20px] border bg-background/80 p-2.5 shadow-lg backdrop-blur-sm transition-transform group-hover:scale-110",
-                        game.iconUrl ? "border-border" : game.accentColor
+                        "inline-flex h-20 w-20 items-center justify-center rounded-[20px] border bg-background/80 shadow-lg backdrop-blur-sm transition-transform group-hover:scale-110 overflow-hidden",
+                        game.iconUrl ? "border-border p-0" : `p-2.5 ${game.accentColor}`
                       )}
                     >
                       <GameConfigIcon
                         config={game}
                         fallbackIcon={game.icon}
+                        fit={game.iconUrl ? "cover" : "contain"}
                         className={game.iconUrl ? "h-full w-full" : "h-10 w-10 sm:h-11 sm:w-11"}
                       />
                     </div>
@@ -575,10 +595,11 @@ export default function GamesCatalogPage() {
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-muted/70 p-1", gameConfig?.iconUrl ? "border-border" : gameConfig?.accentColor)}>
+                          <div className={cn("inline-flex h-10 w-10 items-center justify-center rounded-xl border bg-muted/70 overflow-hidden", gameConfig?.iconUrl ? "border-border p-0" : `p-1 ${gameConfig?.accentColor || ""}`)}>
                             <GameConfigIcon
                               config={gameConfig}
                               fallbackIcon={gameConfig?.icon || Gamepad2}
+                              fit={gameConfig?.iconUrl ? "cover" : "contain"}
                               className={gameConfig?.iconUrl ? "h-full w-full" : "h-6 w-6"}
                             />
                           </div>

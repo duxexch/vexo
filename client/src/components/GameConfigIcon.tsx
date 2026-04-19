@@ -8,6 +8,7 @@ type GameConfigIconProps = {
   className?: string;
   alt?: string;
   decorative?: boolean;
+  fit?: "contain" | "cover";
 };
 
 export function GameConfigIcon({
@@ -16,6 +17,7 @@ export function GameConfigIcon({
   className,
   alt = "",
   decorative = true,
+  fit = "cover",
 }: GameConfigIconProps) {
   const IconComponent = config?.icon || FallbackIcon;
 
@@ -25,7 +27,7 @@ export function GameConfigIcon({
         src={config.iconUrl}
         alt={decorative ? "" : alt}
         aria-hidden={decorative ? true : undefined}
-        className={cn("object-contain", className)}
+        className={cn(fit === "cover" ? "object-cover" : "object-contain", className)}
         loading="lazy"
         decoding="async"
       />

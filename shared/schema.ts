@@ -395,6 +395,7 @@ export const multiplayerGames = pgTable("multiplayer_games", {
   nameAr: text("name_ar").notNull(),
   descriptionEn: text("description_en"),
   descriptionAr: text("description_ar"),
+  thumbnailUrl: text("thumbnail_url"),
   iconName: text("icon_name").notNull().default("Gamepad2"), // Lucide icon name
   colorClass: text("color_class").notNull().default("bg-primary/20 text-primary"), // Tailwind color classes
   gradientClass: text("gradient_class").default("from-primary/20 to-primary/10"),

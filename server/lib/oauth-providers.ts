@@ -13,7 +13,11 @@ const providerNormalizers: Partial<Record<string, Normalizer>> = {
     google: (data: Record<string, unknown>): NormalizedProfile => ({
         id: String(data.id || data.sub || ""),
         email: data.email as string | undefined,
-        emailVerified: data.verified_email === true,
+        emailVerified:
+            data.verified_email === true
+            || data.verified_email === "true"
+            || data.email_verified === true
+            || data.email_verified === "true",
         displayName: (data.name || data.given_name) as string | undefined,
         avatar: data.picture as string | undefined,
         raw: data,

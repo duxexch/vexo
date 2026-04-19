@@ -24,6 +24,7 @@ interface ChessChatProps {
 export function ChessChat({ messages, onSendMessage, currentUserId }: ChessChatProps) {
   const [newMessage, setNewMessage] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isComposingRef = useRef(false);
   const { t } = useI18n();
 
   useEffect(() => {
@@ -40,6 +41,11 @@ export function ChessChat({ messages, onSendMessage, currentUserId }: ChessChatP
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    const isComposing = isComposingRef.current || e.nativeEvent.isComposing || e.key === 'Process';
+    if (isComposing) {
+      return;
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -51,7 +57,7 @@ export function ChessChat({ messages, onSendMessage, currentUserId }: ChessChatP
       <div className="p-3 border-b">
         <h3 className="font-semibold text-sm">{t('chess.chat')}</h3>
       </div>
-      
+
       <ScrollArea className="flex-1 p-3" ref={scrollRef}>
         <div className="space-y-2">
           {messages.length === 0 ? (
@@ -76,8 +82,8 @@ export function ChessChat({ messages, onSendMessage, currentUserId }: ChessChatP
                   </span>
                   <div className={cn(
                     "px-3 py-1.5 rounded-lg text-sm",
-                    isOwn 
-                      ? "bg-primary text-primary-foreground" 
+                    isOwn
+                      ? "bg-primary text-primary-foreground"
                       : "bg-muted"
                   )}>
                     {msg.message || msg.content}
@@ -93,14 +99,20 @@ export function ChessChat({ messages, onSendMessage, currentUserId }: ChessChatP
         <Input
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
+          onCompositionStart={() => {
+            isComposingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false;
+          }}
           onKeyDown={handleKeyDown}
           placeholder={t('chess.typeMessage')}
           className="flex-1"
           maxLength={500}
           data-testid="input-chat-message"
         />
-        <Button 
-          size="icon" 
+        <Button
+          size="icon"
           onClick={handleSend}
           disabled={!newMessage.trim()}
           data-testid="button-send-chat"

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,6 +98,7 @@ export function SpectatorPanel({
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showGiftPanel, setShowGiftPanel] = useState(false);
   const [showPointsDialog, setShowPointsDialog] = useState(false);
+  const isComposingRef = useRef(false);
   const isViewerPanel = panelMode === "spectator";
   const panelPlayers = [player1, player2, player3, player4].filter(
     (player): player is Player => Boolean(player),
@@ -467,7 +468,18 @@ export function SpectatorPanel({
                 <Input
                   value={chatDraft}
                   onChange={(e) => setChatDraft(e.target.value)}
+                  onCompositionStart={() => {
+                    isComposingRef.current = true;
+                  }}
+                  onCompositionEnd={() => {
+                    isComposingRef.current = false;
+                  }}
                   onKeyDown={(e) => {
+                    const isComposing = isComposingRef.current || e.nativeEvent.isComposing || e.key === "Process";
+                    if (isComposing) {
+                      return;
+                    }
+
                     if (e.key === "Enter") {
                       e.preventDefault();
                       handleSendChat();

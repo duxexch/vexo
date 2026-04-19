@@ -827,6 +827,17 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
           logger.error("[DB] Media columns migration warning", new Error(err instanceof Error ? err.message : String(err)));
         }
 
+        // Ensure multiplayer_games has thumbnail_url for card background images
+        try {
+          const { pool } = await import("./db");
+          await pool.query(`
+          ALTER TABLE multiplayer_games ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
+        `);
+          log("DB multiplayer thumbnail column verified", "db");
+        } catch (err: unknown) {
+          logger.error("[DB] Multiplayer thumbnail migration warning", new Error(err instanceof Error ? err.message : String(err)));
+        }
+
         // Ensure transactions have a globally unique public reference for user-facing support and copy flows.
         try {
           const { pool } = await import("./db");

@@ -14,6 +14,8 @@ import { useI18n } from "@/lib/i18n";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import { financialQueryOptions } from "@/lib/queryClient";
+import { formatWalletAmountFromUsd } from "@/lib/wallet-currency";
 
 interface DashboardStats {
   totalUsers: number;
@@ -25,6 +27,12 @@ interface DashboardStats {
   totalDeposits: number;
   totalWithdrawals: number;
   netRevenue: number;
+}
+
+interface DepositConfigForDashboard {
+  balanceCurrency?: string;
+  usdRateByCurrency?: Record<string, number>;
+  currencySymbolByCode?: Record<string, string>;
 }
 
 function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: string }) {
@@ -103,6 +111,12 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
     enabled: !!user?.id && isInsightsReady,
   });
 
+  const { data: depositConfig } = useQuery<DepositConfigForDashboard>({
+    queryKey: ["/api/transactions/deposit-config"],
+    ...financialQueryOptions,
+    enabled: !!user?.id,
+  });
+
   // Fetch active challenges
   const { data: challenges } = useQuery({
     queryKey: ["/api/challenges", "active"],
@@ -126,23 +140,15 @@ function PlayerDashboard({ user, dir }: { user: Record<string, unknown>; dir: st
   const currentStreak = gameStats?.currentWinStreak ?? Number(user?.currentWinStreak ?? 0);
   const bestStreak = gameStats?.longestWinStreak ?? Number(user?.longestWinStreak ?? 0);
   const activeChallengesCount = Array.isArray(challenges) ? challenges.length : 0;
-  const locale = language === "ar" ? "ar" : "en";
   const userCurrency = typeof user?.balanceCurrency === "string" && user.balanceCurrency.trim().length > 0
     ? user.balanceCurrency.trim().toUpperCase()
     : "USD";
 
-  const formatCurrency = (amount: number) => {
-    try {
-      return new Intl.NumberFormat(locale, {
-        style: "currency",
-        currency: userCurrency,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(amount);
-    } catch {
-      return `${userCurrency} ${amount.toFixed(2)}`;
-    }
-  };
+  const formatCurrency = (amount: number) => formatWalletAmountFromUsd(amount, {
+    balanceCurrency: depositConfig?.balanceCurrency || userCurrency,
+    usdRateByCurrency: depositConfig?.usdRateByCurrency,
+    currencySymbolByCode: depositConfig?.currencySymbolByCode,
+  }, { withCode: true });
 
   const quickActions = [
     { title: t('nav.wallet'), url: "/wallet", icon: Wallet, color: "bg-primary/10 text-primary" },

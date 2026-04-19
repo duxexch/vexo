@@ -356,6 +356,20 @@ function resolveGoogleNativeScope(): string {
   return Array.from(merged).join(" ");
 }
 
+function normalizeGoogleScope(scope: string): string {
+  const normalized = scope.trim().toLowerCase();
+
+  if (normalized === "https://www.googleapis.com/auth/userinfo.email") {
+    return "email";
+  }
+
+  if (normalized === "https://www.googleapis.com/auth/userinfo.profile") {
+    return "profile";
+  }
+
+  return normalized;
+}
+
 function resolveGoogleNativeClientId(fallbackClientId?: string): string {
   const androidClientId = typeof process.env.GOOGLE_ANDROID_CLIENT_ID === "string"
     ? process.env.GOOGLE_ANDROID_CLIENT_ID.trim()
@@ -527,14 +541,14 @@ async function validateGoogleNativeAccessToken(
   const requiredScopes = new Set(
     requiredScope
       .split(/[\s,]+/)
-      .map((scope) => scope.trim())
+      .map((scope) => normalizeGoogleScope(scope))
       .filter((scope) => scope.length > 0),
   );
 
   const grantedScopes = new Set(
     (typeof tokenInfo.scope === "string" ? tokenInfo.scope : "")
       .split(/[\s,]+/)
-      .map((scope) => scope.trim())
+      .map((scope) => normalizeGoogleScope(scope))
       .filter((scope) => scope.length > 0),
   );
 
@@ -763,7 +777,29 @@ export function registerOAuthFlowRoutes(app: Express) {
       const allowedAudiences = resolveGoogleAllowedAudiences(oauthCredentials.clientId);
 
       let profile;
-      if (normalizedAccessToken) {
+      if (normalizedIdToken) {
+        const idTokenValidation = await validateGoogleNativeIdToken(normalizedIdToken, allowedAudiences);
+        if (idTokenValidation.ok && idTokenValidation.profile) {
+          profile = {
+            id: String(idTokenValidation.profile.id || idTokenValidation.profile.sub || ""),
+            email: idTokenValidation.profile.email as string | undefined,
+            emailVerified: idTokenValidation.profile.verified_email === true,
+            displayName: idTokenValidation.profile.name as string | undefined,
+            avatar: idTokenValidation.profile.picture as string | undefined,
+            raw: idTokenValidation.profile,
+          };
+        } else if (!normalizedAccessToken) {
+          const reason = idTokenValidation.reason || "google_id_token_validation_failed";
+          logOAuthSecurityEvent(req, "google", reason, idTokenValidation.details);
+          const statusCode = reason === "id_tokeninfo_unavailable" ? 503 : 401;
+          const errorMessage = statusCode === 503
+            ? "Google token validation is temporarily unavailable"
+            : "Invalid Google id token";
+          return res.status(statusCode).json({ error: errorMessage });
+        }
+      }
+
+      if (!profile && normalizedAccessToken) {
         const validation = await validateGoogleNativeAccessToken(
           normalizedAccessToken,
           allowedAudiences,
@@ -786,26 +822,11 @@ export function registerOAuthFlowRoutes(app: Express) {
           logOAuthSecurityEvent(req, "google", "native_access_token_rejected");
           return res.status(401).json({ error: "Invalid Google access token" });
         }
-      } else {
-        const idTokenValidation = await validateGoogleNativeIdToken(normalizedIdToken, allowedAudiences);
-        if (!idTokenValidation.ok || !idTokenValidation.profile) {
-          const reason = idTokenValidation.reason || "google_id_token_validation_failed";
-          logOAuthSecurityEvent(req, "google", reason, idTokenValidation.details);
-          const statusCode = reason === "id_tokeninfo_unavailable" ? 503 : 401;
-          const errorMessage = statusCode === 503
-            ? "Google token validation is temporarily unavailable"
-            : "Invalid Google id token";
-          return res.status(statusCode).json({ error: errorMessage });
-        }
+      }
 
-        profile = {
-          id: String(idTokenValidation.profile.id || idTokenValidation.profile.sub || ""),
-          email: idTokenValidation.profile.email as string | undefined,
-          emailVerified: idTokenValidation.profile.verified_email === true,
-          displayName: idTokenValidation.profile.name as string | undefined,
-          avatar: idTokenValidation.profile.picture as string | undefined,
-          raw: idTokenValidation.profile,
-        };
+      if (!profile) {
+        logOAuthSecurityEvent(req, "google", "native_profile_unavailable_after_validation");
+        return res.status(401).json({ error: "Unable to validate Google profile" });
       }
 
       if (!profile.id) {

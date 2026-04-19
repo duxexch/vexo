@@ -115,7 +115,7 @@ export function registerMultiplayerRoutes(app: Express) {
       }
 
       // SECURITY: Whitelist multiplayer game update fields
-      const allowedMpFields = ['nameEn', 'nameAr', 'key', 'description', 'descriptionEn', 'descriptionAr', 'isActive', 'minPlayers', 'maxPlayers', 'minStake', 'maxStake', 'priceVex', 'houseFee', 'platformFeePercent', 'iconUrl', 'imageUrl', 'iconName', 'colorClass', 'gradientClass', 'sortOrder', 'rules', 'rulesAr', 'category', 'status', 'displayLocations', 'isFeatured', 'defaultTimeLimit', 'freePlayLimit', 'freePlayPeriod'];
+      const allowedMpFields = ['nameEn', 'nameAr', 'key', 'description', 'descriptionEn', 'descriptionAr', 'isActive', 'minPlayers', 'maxPlayers', 'minStake', 'maxStake', 'priceVex', 'houseFee', 'platformFeePercent', 'iconUrl', 'imageUrl', 'thumbnailUrl', 'iconName', 'colorClass', 'gradientClass', 'sortOrder', 'rules', 'rulesAr', 'category', 'status', 'displayLocations', 'isFeatured', 'defaultTimeLimit', 'freePlayLimit', 'freePlayPeriod'];
       const safeUpdates: Record<string, any> = {};
       for (const key of allowedMpFields) {
         if (updates[key] !== undefined) safeUpdates[key] = updates[key];

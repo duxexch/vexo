@@ -27,6 +27,7 @@ export interface MultiplayerGameFromAPI {
   isActive: boolean;
   iconName?: string;
   iconUrl?: string;
+  thumbnailUrl?: string;
   updatedAt?: string;
 }
 
@@ -41,6 +42,7 @@ export interface GameConfigItem {
   maxStake?: number;
   houseFee?: number;
   iconUrl?: string;
+  thumbnailUrl?: string;
 }
 
 function isImagePath(value?: string | null): value is string {
@@ -54,6 +56,16 @@ function withVersionSuffix(url: string, versionSeed?: string): string {
   if (!versionSeed) return url;
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}v=${encodeURIComponent(versionSeed)}`;
+}
+
+function resolveVersionSeed(game: MultiplayerGameFromAPI): string {
+  if (game.updatedAt) {
+    const timestamp = new Date(game.updatedAt).getTime();
+    if (Number.isFinite(timestamp)) {
+      return String(timestamp);
+    }
+  }
+  return game.id;
 }
 
 function resolveGameIconUrl(game: MultiplayerGameFromAPI): string | undefined {
@@ -70,8 +82,16 @@ function resolveGameIconUrl(game: MultiplayerGameFromAPI): string | undefined {
     return undefined;
   }
 
-  const versionSeed = game.updatedAt ? String(new Date(game.updatedAt).getTime()) : game.id;
-  return withVersionSuffix(imagePath, versionSeed);
+  return withVersionSuffix(imagePath, resolveVersionSeed(game));
+}
+
+function resolveGameThumbnailUrl(game: MultiplayerGameFromAPI): string | undefined {
+  const thumbnailUrl = typeof game.thumbnailUrl === "string" ? game.thumbnailUrl.trim() : "";
+  if (!isImagePath(thumbnailUrl)) {
+    return undefined;
+  }
+
+  return withVersionSuffix(thumbnailUrl, resolveVersionSeed(game));
 }
 
 const ADMIN_GAME_ICON_COMPONENTS: Record<string, LucideIcon> = {
@@ -193,6 +213,7 @@ export function buildGameConfig(apiGames: MultiplayerGameFromAPI[] | undefined):
       maxStake: parseFloat(game.maxStake),
       houseFee: parseFloat(game.houseFee),
       iconUrl: resolveGameIconUrl(game),
+      thumbnailUrl: resolveGameThumbnailUrl(game),
     };
   }
   return config;

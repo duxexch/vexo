@@ -57,6 +57,7 @@ export function GameChat({
   const [showQuickPanel, setShowQuickPanel] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isComposingRef = useRef(false);
   const { t, dir } = useI18n();
   const { toast } = useToast();
   const { user, refreshUser } = useAuth();
@@ -133,6 +134,11 @@ export function GameChat({
   }, [disabled]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
+    const isComposing = isComposingRef.current || e.nativeEvent.isComposing || e.key === "Process";
+    if (isComposing) {
+      return;
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -351,6 +357,12 @@ export function GameChat({
             ref={inputRef}
             value={messageInput}
             onChange={(e) => setMessageInput(e.target.value)}
+            onCompositionStart={() => {
+              isComposingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false;
+            }}
             onKeyDown={handleKeyPress}
             placeholder={t("chat.typeMessage")}
             className="h-10 flex-1 text-sm"

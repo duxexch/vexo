@@ -996,7 +996,7 @@ export default function LoginPage() {
       applyLoginFlowResult(result);
     } catch (error: unknown) {
       const err = error as Error & { errorCode?: string };
-      if (err.errorCode === "INVALID_CREDENTIALS" && accountLoginForm.accountId.trim()) {
+      if (err.errorCode === "IDENTIFIER_NOT_REGISTERED" && accountLoginForm.accountId.trim()) {
         const offered = offerAutoCreatePrompt({
           identifier: accountLoginForm.accountId.trim(),
           type: "account",
@@ -1035,7 +1035,7 @@ export default function LoginPage() {
       applyLoginFlowResult(result);
     } catch (error: unknown) {
       const err = error as Error & { errorCode?: string };
-      if (err.errorCode === "INVALID_CREDENTIALS" && phoneLoginForm.phone.trim()) {
+      if (err.errorCode === "IDENTIFIER_NOT_REGISTERED" && phoneLoginForm.phone.trim()) {
         const offered = offerAutoCreatePrompt({
           identifier: phoneLoginForm.phone.trim(),
           type: "phone",
@@ -1073,7 +1073,7 @@ export default function LoginPage() {
       applyLoginFlowResult(result);
     } catch (error: unknown) {
       const err = error as Error & { errorCode?: string };
-      if (err.errorCode === "INVALID_CREDENTIALS" && emailLoginForm.username.includes("@")) {
+      if (err.errorCode === "IDENTIFIER_NOT_REGISTERED" && emailLoginForm.username.includes("@")) {
         const offered = offerAutoCreatePrompt({
           identifier: emailLoginForm.username.trim(),
           type: "email",

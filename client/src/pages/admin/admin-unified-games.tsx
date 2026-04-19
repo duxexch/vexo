@@ -62,6 +62,7 @@ import {
   Filter,
   Search,
   Upload,
+  ImagePlus,
   MoreVertical,
   Check,
   X
@@ -242,6 +243,7 @@ interface MultiplayerGame {
   descriptionAr: string | null;
   iconUrl?: string | null;
   imageUrl?: string | null;
+  thumbnailUrl?: string | null;
   iconName: string;
   colorClass: string;
   gradientClass: string | null;
@@ -302,6 +304,7 @@ interface UnifiedGame {
   _type: "multiplayer" | "single";
   _original: MultiplayerGame | SinglePlayerGame;
   iconUrl: string | null;
+  thumbnailUrl: string | null;
   name: string;
   nameAr: string;
   key: string;
@@ -344,11 +347,13 @@ function fileToDataUrl(file: File): Promise<string> {
 
 function toUnifiedGame(mp: MultiplayerGame): UnifiedGame {
   const iconUrl = mp.iconUrl || mp.imageUrl || (isCustomImagePath(mp.iconName) ? mp.iconName : null);
+  const thumbnailUrl = mp.thumbnailUrl || null;
   return {
     id: mp.id,
     _type: "multiplayer",
     _original: mp,
     iconUrl,
+    thumbnailUrl,
     name: mp.nameEn,
     nameAr: mp.nameAr,
     key: mp.key,
@@ -373,6 +378,7 @@ function toUnifiedGameFromSingle(g: SinglePlayerGame): UnifiedGame {
     _type: "single",
     _original: g,
     iconUrl: g.imageUrl || g.thumbnailUrl || null,
+    thumbnailUrl: g.thumbnailUrl || g.imageUrl || null,
     name: g.name,
     nameAr: g.name, // single-player games don't have Arabic names
     key: g.name.toLowerCase().replace(/\s+/g, "_"),
@@ -954,6 +960,7 @@ export default function AdminUnifiedGames() {
   const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
   const [deleteMode, setDeleteMode] = useState<"permanent" | "remove_from_section">("permanent");
   const [iconUploadTarget, setIconUploadTarget] = useState<UnifiedGame | null>(null);
+  const [mediaUploadMode, setMediaUploadMode] = useState<"icon" | "background">("icon");
   const iconFileInputRef = useRef<HTMLInputElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -1057,7 +1064,15 @@ export default function AdminUnifiedGames() {
   });
 
   const uploadIconMutation = useMutation({
-    mutationFn: async ({ game, file }: { game: UnifiedGame; file: File }) => {
+    mutationFn: async ({
+      game,
+      file,
+      mode,
+    }: {
+      game: UnifiedGame;
+      file: File;
+      mode: "icon" | "background";
+    }) => {
       const fileData = await fileToDataUrl(file);
 
       const uploadResult = await adminFetch("/api/upload", {
@@ -1078,19 +1093,22 @@ export default function AdminUnifiedGames() {
         : `/api/admin/games/${game.id}`;
 
       const payload = game._type === "multiplayer"
-        ? { iconName: uploadedUrl }
-        : { imageUrl: uploadedUrl, thumbnailUrl: uploadedUrl };
+        ? (mode === "icon" ? { iconName: uploadedUrl } : { thumbnailUrl: uploadedUrl })
+        : (mode === "icon" ? { imageUrl: uploadedUrl } : { thumbnailUrl: uploadedUrl });
 
       await adminFetch(endpoint, {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
 
-      return uploadedUrl;
+      return { uploadedUrl, mode };
     },
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
+      const isBackgroundUpload = variables.mode === "background";
       toast({
-        title: language === "ar" ? "تم رفع الأيقونة بنجاح" : "Icon uploaded successfully",
+        title: isBackgroundUpload
+          ? (language === "ar" ? "تم رفع صورة الخلفية بنجاح" : "Background image uploaded successfully")
+          : (language === "ar" ? "تم رفع الأيقونة بنجاح" : "Icon uploaded successfully"),
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
@@ -1104,6 +1122,7 @@ export default function AdminUnifiedGames() {
     },
     onSettled: () => {
       setIconUploadTarget(null);
+      setMediaUploadMode("icon");
     },
   });
 
@@ -1116,9 +1135,10 @@ export default function AdminUnifiedGames() {
     updateDisplayLocationsMutation.mutate({ id: game.id, displayLocations: newLocations, gameType: game._type });
   };
 
-  const handleRequestIconUpload = (game: UnifiedGame) => {
+  const handleRequestMediaUpload = (game: UnifiedGame, mode: "icon" | "background") => {
     if (uploadIconMutation.isPending) return;
     setIconUploadTarget(game);
+    setMediaUploadMode(mode);
     iconFileInputRef.current?.click();
   };
 
@@ -1141,7 +1161,7 @@ export default function AdminUnifiedGames() {
       return;
     }
 
-    uploadIconMutation.mutate({ game: iconUploadTarget, file });
+    uploadIconMutation.mutate({ game: iconUploadTarget, file, mode: mediaUploadMode });
   };
 
   useEffect(() => {
@@ -1264,6 +1284,9 @@ export default function AdminUnifiedGames() {
         nameAr: sp.name,
         descriptionEn: sp.description,
         descriptionAr: null,
+        iconUrl: sp.imageUrl,
+        imageUrl: sp.imageUrl,
+        thumbnailUrl: sp.thumbnailUrl,
         iconName: getCategoryIcon(sp.category),
         colorClass: getCategoryColor(sp.category),
         gradientClass: null,
@@ -1580,8 +1603,11 @@ export default function AdminUnifiedGames() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleRequestIconUpload(game)} disabled={uploadIconMutation.isPending} data-testid={`button-upload-icon-${game.id}`}>
-                          <Upload className={`h-4 w-4 ${uploadIconMutation.isPending && iconUploadTarget?.id === game.id ? "animate-pulse" : ""}`} />
+                        <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleRequestMediaUpload(game, "icon")} disabled={uploadIconMutation.isPending} data-testid={`button-upload-icon-${game.id}`}>
+                          <Upload className={`h-4 w-4 ${uploadIconMutation.isPending && iconUploadTarget?.id === game.id && mediaUploadMode === "icon" ? "animate-pulse" : ""}`} />
+                        </Button>
+                        <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleRequestMediaUpload(game, "background")} disabled={uploadIconMutation.isPending} data-testid={`button-upload-background-${game.id}`}>
+                          <ImagePlus className={`h-4 w-4 ${uploadIconMutation.isPending && iconUploadTarget?.id === game.id && mediaUploadMode === "background" ? "animate-pulse" : ""}`} />
                         </Button>
                         <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleEdit(game)} data-testid={`button-edit-${game.id}`}>
                           <Pencil className="h-4 w-4" />
@@ -1771,8 +1797,11 @@ export default function AdminUnifiedGames() {
                       </TableCell>
                       <TableCell className="text-end">
                         <div className="flex justify-end gap-2">
-                          <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleRequestIconUpload(game)} disabled={uploadIconMutation.isPending} title={language === "ar" ? "رفع أيقونة من الجهاز" : "Upload icon from device"} data-testid={`button-upload-icon-${game.id}`}>
-                            <Upload className={`h-4 w-4 ${uploadIconMutation.isPending && iconUploadTarget?.id === game.id ? "animate-pulse" : ""}`} />
+                          <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleRequestMediaUpload(game, "icon")} disabled={uploadIconMutation.isPending} title={language === "ar" ? "رفع أيقونة من الجهاز" : "Upload icon from device"} data-testid={`button-upload-icon-${game.id}`}>
+                            <Upload className={`h-4 w-4 ${uploadIconMutation.isPending && iconUploadTarget?.id === game.id && mediaUploadMode === "icon" ? "animate-pulse" : ""}`} />
+                          </Button>
+                          <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleRequestMediaUpload(game, "background")} disabled={uploadIconMutation.isPending} title={language === "ar" ? "رفع صورة خلفية من الجهاز" : "Upload background image from device"} data-testid={`button-upload-background-${game.id}`}>
+                            <ImagePlus className={`h-4 w-4 ${uploadIconMutation.isPending && iconUploadTarget?.id === game.id && mediaUploadMode === "background" ? "animate-pulse" : ""}`} />
                           </Button>
                           <Button size="icon" className={`${BUTTON_3D_CLASS} h-10 w-10`} onClick={() => handleEdit(game)} data-testid={`button-edit-${game.id}`}>
                             <Pencil className="h-4 w-4" />

@@ -224,6 +224,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const isComposingRef = useRef(false);
   const { play: playSound } = useSoundEffects();
 
   const preselectedConversationUserId = useMemo(() => {
@@ -749,6 +750,11 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
+    const isComposing = isComposingRef.current || e.nativeEvent.isComposing || e.key === "Process";
+    if (isComposing) {
+      return;
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
@@ -1808,6 +1814,12 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                       ref={messageInputRef}
                       value={messageInput}
                       onChange={(e) => handleInputChange(e.target.value)}
+                      onCompositionStart={() => {
+                        isComposingRef.current = true;
+                      }}
+                      onCompositionEnd={() => {
+                        isComposingRef.current = false;
+                      }}
                       onKeyDown={handleKeyPress}
                       placeholder={editingMsg ? t('chat.editMessagePlaceholder') : replyTo ? t('chat.replyPlaceholder') : t("chat.typeMessage")}
                       className="min-w-0 flex-1 min-h-[44px] rounded-full px-4"

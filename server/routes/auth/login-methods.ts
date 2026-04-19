@@ -104,7 +104,10 @@ export function registerAlternativeLoginRoutes(app: Express) {
             const user = await storage.getUserByAccountId(accountId.trim());
             if (!user) {
                 await consumeInvalidLoginDelay(password);
-                return res.status(401).json({ error: "Invalid credentials", errorCode: "INVALID_CREDENTIALS" });
+                return res.status(401).json({
+                    error: "Invalid credentials",
+                    errorCode: "IDENTIFIER_NOT_REGISTERED",
+                });
             }
 
             if (await checkAccountLockout(user, res)) return;
@@ -183,7 +186,10 @@ export function registerAlternativeLoginRoutes(app: Express) {
             const user = await storage.getUserByPhone(phoneClean);
             if (!user) {
                 await consumeInvalidLoginDelay(password);
-                return res.status(401).json({ error: "Invalid credentials", errorCode: "INVALID_CREDENTIALS" });
+                return res.status(401).json({
+                    error: "Invalid credentials",
+                    errorCode: "IDENTIFIER_NOT_REGISTERED",
+                });
             }
 
             if (await checkAccountLockout(user, res)) return;
@@ -224,7 +230,10 @@ export function registerAlternativeLoginRoutes(app: Express) {
             const user = await storage.getUserByEmail(emailClean);
             if (!user) {
                 await consumeInvalidLoginDelay(password);
-                return res.status(401).json({ error: "Invalid credentials", errorCode: "INVALID_CREDENTIALS" });
+                return res.status(401).json({
+                    error: "Invalid credentials",
+                    errorCode: "IDENTIFIER_NOT_REGISTERED",
+                });
             }
 
             if (await checkAccountLockout(user, res)) return;
@@ -343,11 +352,13 @@ export function registerAlternativeLoginRoutes(app: Express) {
                 userPatch.accountDisabledAt = null;
             }
 
-            if (otpVerification.matchedMethod === "email" && !user.emailVerified) {
-                userPatch.emailVerified = true;
-            }
-            if (otpVerification.matchedMethod === "phone" && !user.phoneVerified) {
-                userPatch.phoneVerified = true;
+            if (challenge.flow === "login") {
+                if (otpVerification.matchedMethod === "email" && !user.emailVerified) {
+                    userPatch.emailVerified = true;
+                }
+                if (otpVerification.matchedMethod === "phone" && !user.phoneVerified) {
+                    userPatch.phoneVerified = true;
+                }
             }
 
             if (Object.keys(userPatch).length > 0) {

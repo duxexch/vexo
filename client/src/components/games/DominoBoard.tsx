@@ -118,7 +118,7 @@ function normalizeGameState(rawState: unknown): GameState {
     .map((tile) => normalizeDominoTile(tile))
     .filter((tile): tile is DominoTile => tile !== null);
 
-  const boardTiles = (Array.isArray(rawState.boardTiles) ? rawState.boardTiles : [])
+  const boardTilesRaw = (Array.isArray(rawState.boardTiles) ? rawState.boardTiles : [])
     .map((entry) => {
       if (!isObjectRecord(entry)) {
         return null;
@@ -135,6 +135,17 @@ function normalizeGameState(rawState: unknown): GameState {
       };
     })
     .filter((entry): entry is { tile: DominoTile; rotation: number } => entry !== null);
+
+  const boardTiles: { tile: DominoTile; rotation: number }[] = [];
+  const seenBoardTiles = new Set<string>();
+  for (const entry of boardTilesRaw) {
+    const key = tileSignature(entry.tile);
+    if (seenBoardTiles.has(key)) {
+      continue;
+    }
+    seenBoardTiles.add(key);
+    boardTiles.push(entry);
+  }
 
   const opponentTileCounts: Record<string, number> = {};
   if (isObjectRecord(rawState.opponentTileCounts)) {
@@ -384,10 +395,10 @@ function buildDominoSnakePlacements(
   const defaultHorizontalRun = compact ? 3 : 4;
   const minHorizontalRun = compact ? 2 : 3;
   const horizontalRun = Math.max(minHorizontalRun, horizontalRunOverride ?? defaultHorizontalRun);
-  const verticalRun = compact ? 1 : 2;
+  const verticalRun = 1;
   const directions = side === "left"
-    ? (["left", "down", "right", "up"] as const)
-    : (["right", "up", "left", "down"] as const);
+    ? (["left", "down", "left", "up"] as const)
+    : (["right", "up", "right", "down"] as const);
 
   const firstDirection = directions[0];
   const firstRotation = resolvePlacementRotation(entries[0].item.tile, firstDirection);
@@ -952,7 +963,7 @@ export function DominoBoard({
     const wrapSafetyInset = isCompactMobile ? 88 : 132;
     const rawRun = Math.floor((laneWidth - wrapSafetyInset) / Math.max(1, tileLongSide + seamSpacing));
     const minRun = isCompactMobile ? 2 : 3;
-    const maxRun = isCompactMobile ? 4 : 6;
+    const maxRun = isCompactMobile ? 3 : 4;
     return Math.max(minRun, Math.min(maxRun, rawRun));
   }, [boardLaneSize.width, isCompactMobile]);
 
@@ -1007,9 +1018,12 @@ export function DominoBoard({
     const fitWidthZoom = availableWidth / Math.max(boardBounds.width, 1);
     const fitHeightZoom = availableHeight / Math.max(boardBounds.height, 1);
     const fitZoom = Math.min(1, fitWidthZoom, fitHeightZoom);
-    const minReadableZoom = isCompactMobile ? 0.5 : 0.68;
+    const tileCount = state.boardTiles.length;
+    const minReadableZoom = isCompactMobile
+      ? (tileCount > 16 ? 0.2 : tileCount > 10 ? 0.24 : 0.32)
+      : (tileCount > 20 ? 0.28 : tileCount > 12 ? 0.34 : 0.44);
     return Math.max(minReadableZoom, fitZoom);
-  }, [isCompactMobile, boardBounds.width, boardBounds.height, boardLaneSize.width, boardLaneSize.height, boardHeight]);
+  }, [isCompactMobile, boardBounds.width, boardBounds.height, boardLaneSize.width, boardLaneSize.height, boardHeight, state.boardTiles.length]);
 
   const boardHeightCssValue = useMemo(() => {
     if (isCompactMobile) {
@@ -1164,7 +1178,7 @@ export function DominoBoard({
     const renderRotation = typeof forcedRotation === "number"
       ? forcedRotation
       : resolveBoardRenderRotation(boardTile, entry.item.rotation);
-    const tileKey = `${tileSignature(entry.item.tile)}-${entry.index}`;
+    const tileKey = tileSignature(entry.item.tile);
     const isLastActionTile = lastActionTileKey !== null && tileSignature(entry.item.tile) === lastActionTileKey;
 
     return (
@@ -1367,7 +1381,7 @@ export function DominoBoard({
                 <>
                   {leftPlacements.map((placement) => (
                     <div
-                      key={`left-${placement.index}`}
+                      key={`left-${tileSignature(placement.item.tile)}`}
                       className="absolute left-1/2 top-1/2"
                       style={{
                         transform: `translate(calc(-50% + ${(placement.x + boardOffset.offsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardZoom})`,
@@ -1390,7 +1404,7 @@ export function DominoBoard({
 
                   {rightPlacements.map((placement) => (
                     <div
-                      key={`right-${placement.index}`}
+                      key={`right-${tileSignature(placement.item.tile)}`}
                       className="absolute left-1/2 top-1/2"
                       style={{
                         transform: `translate(calc(-50% + ${(placement.x + boardOffset.offsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardZoom})`,
@@ -1431,7 +1445,7 @@ export function DominoBoard({
                 const isNewTile = index >= prevHandLenRef.current;
                 return (
                   <motion.div
-                    key={tile.id ?? `${tile.left}-${tile.right}-${index}`}
+                    key={tile.id ?? tileSignature(tile)}
                     initial={isNewTile ? {
                       opacity: 0,
                       x: -18,
