@@ -16,9 +16,11 @@ import {
   Zap,
   Copy,
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export default function AdminAntiCheatPage() {
   const { toast } = useToast();
+  const { t } = useI18n();
   const [activityTypeFilter, setActivityTypeFilter] = useState<"all" | "gift_sent" | "gift_received" | "platform_fee">("all");
   const [selectedActivity, setSelectedActivity] = useState<{
     user_id: string;
@@ -48,29 +50,33 @@ export default function AdminAntiCheatPage() {
 
   const suspiciousPatterns = [
     {
-      type: "Gift Velocity Burst",
-      description: "Accounts sending gifts at unusually high frequency",
+      id: "gift-velocity-burst",
+      type: t("admin.antiCheat.pattern.giftVelocityBurst.title"),
+      description: t("admin.antiCheat.pattern.giftVelocityBurst.description"),
       severity: (giftAntiCheat?.metrics?.highVelocitySenderCount || 0) > 0 ? "high" : "low",
       count: Number(giftAntiCheat?.metrics?.highVelocitySenderCount || 0),
       icon: Zap,
     },
     {
-      type: "High-Value Gift Burst",
-      description: "Abnormal gift value bursts in a short monitoring window",
+      id: "high-value-gift-burst",
+      type: t("admin.antiCheat.pattern.highValueGiftBurst.title"),
+      description: t("admin.antiCheat.pattern.highValueGiftBurst.description"),
       severity: (giftAntiCheat?.metrics?.highValueSenderCount || 0) > 0 ? "medium" : "low",
       count: Number(giftAntiCheat?.metrics?.highValueSenderCount || 0),
       icon: TrendingUp,
     },
     {
-      type: "Reference Replay Signal",
-      description: "Repeated idempotency/reference signatures detected",
+      id: "reference-replay-signal",
+      type: t("admin.antiCheat.pattern.referenceReplaySignal.title"),
+      description: t("admin.antiCheat.pattern.referenceReplaySignal.description"),
       severity: (giftAntiCheat?.metrics?.duplicateReferenceCount || 0) > 0 ? "high" : "low",
       count: Number(giftAntiCheat?.metrics?.duplicateReferenceCount || 0),
       icon: Shield,
     },
     {
-      type: "Ledger Orphan Credits",
-      description: "Gift credits without matching source send transaction",
+      id: "ledger-orphan-credits",
+      type: t("admin.antiCheat.pattern.ledgerOrphanCredits.title"),
+      description: t("admin.antiCheat.pattern.ledgerOrphanCredits.description"),
       severity: (giftIntegrity?.orphanReceivedCount || 0) > 0 ? "high" : "low",
       count: Number(giftIntegrity?.orphanReceivedCount || 0),
       icon: AlertTriangle,
@@ -98,18 +104,19 @@ export default function AdminAntiCheatPage() {
     ? recentEvents
     : recentEvents.filter((event) => event.type === activityTypeFilter);
 
-  const handleReviewPattern = (patternType: string) => {
-    const normalized = patternType.toLowerCase();
-    const nextFilter = normalized.includes("burst") || normalized.includes("replay")
-      ? "gift_sent"
-      : normalized.includes("orphan")
-        ? "gift_received"
+  const handleReviewPattern = (patternId: string) => {
+    const nextFilter = patternId === "ledger-orphan-credits"
+      ? "gift_received"
+      : (patternId === "gift-velocity-burst" || patternId === "high-value-gift-burst" || patternId === "reference-replay-signal")
+        ? "gift_sent"
         : "all";
 
     setActivityTypeFilter(nextFilter as "all" | "gift_sent" | "gift_received" | "platform_fee");
     toast({
-      title: "Review filter updated",
-      description: `Showing ${nextFilter === "all" ? "all" : nextFilter} events for investigation.`,
+      title: t("admin.antiCheat.toast.reviewFilterUpdated"),
+      description: t("admin.antiCheat.toast.showingEvents", {
+        type: nextFilter === "all" ? t("admin.antiCheat.filter.all") : t(`admin.antiCheat.filter.${nextFilter}`),
+      }),
     });
   };
 
@@ -117,17 +124,17 @@ export default function AdminAntiCheatPage() {
     if (!referenceId) return;
     try {
       await navigator.clipboard.writeText(referenceId);
-      toast({ title: "Reference copied", description: "Transaction reference copied to clipboard." });
+      toast({ title: t("admin.antiCheat.toast.referenceCopied"), description: t("admin.antiCheat.toast.referenceCopiedDescription") });
     } catch {
-      toast({ title: "Copy failed", description: "Unable to copy reference ID.", variant: "destructive" });
+      toast({ title: t("admin.antiCheat.toast.copyFailed"), description: t("admin.antiCheat.toast.copyFailedDescription"), variant: "destructive" });
     }
   };
 
   return (
     <div className="min-h-[100svh] p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Anti-Cheat System</h1>
-        <p className="text-muted-foreground">Monitor and prevent fraudulent activity</p>
+        <h1 className="text-2xl sm:text-3xl font-bold">{t("admin.antiCheat.heading")}</h1>
+        <p className="text-muted-foreground">{t("admin.antiCheat.subheading")}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -135,7 +142,7 @@ export default function AdminAntiCheatPage() {
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Flagged Users</p>
+                <p className="text-sm text-muted-foreground">{t("admin.antiCheat.stat.flaggedUsers")}</p>
                 <p className="text-2xl font-bold">{giftAntiCheat?.metrics?.highVelocitySenderCount || 0}</p>
               </div>
               <div className="p-3 rounded-full bg-red-500/10">
@@ -149,7 +156,7 @@ export default function AdminAntiCheatPage() {
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Under Review</p>
+                <p className="text-sm text-muted-foreground">{t("admin.antiCheat.stat.underReview")}</p>
                 <p className="text-2xl font-bold">{giftAntiCheat?.metrics?.duplicateReferenceCount || 0}</p>
               </div>
               <div className="p-3 rounded-full bg-yellow-500/10">
@@ -163,7 +170,7 @@ export default function AdminAntiCheatPage() {
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Banned Today</p>
+                <p className="text-sm text-muted-foreground">{t("admin.antiCheat.stat.bannedToday")}</p>
                 <p className="text-2xl font-bold">{giftIntegrity?.hasAnomaly ? 1 : 0}</p>
               </div>
               <div className="p-3 rounded-full bg-red-500/10">
@@ -177,7 +184,7 @@ export default function AdminAntiCheatPage() {
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pending Actions</p>
+                <p className="text-sm text-muted-foreground">{t("admin.antiCheat.stat.pendingActions")}</p>
                 <p className="text-2xl font-bold">{giftAntiCheat?.riskScore || 0}</p>
               </div>
               <div className="p-3 rounded-full bg-blue-500/10">
@@ -190,16 +197,16 @@ export default function AdminAntiCheatPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Detected Suspicious Patterns</CardTitle>
+          <CardTitle>{t("admin.antiCheat.detectedPatterns.title")}</CardTitle>
           <CardDescription>
-            Automated detection of potential cheating behavior
+            {t("admin.antiCheat.detectedPatterns.description")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {suspiciousPatterns.map((pattern) => (
               <div
-                key={pattern.type}
+                key={pattern.id}
                 className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 rounded-lg border"
               >
                 <div className="flex items-center gap-4">
@@ -216,7 +223,7 @@ export default function AdminAntiCheatPage() {
                     <div className="flex items-center gap-2">
                       <h4 className="font-semibold">{pattern.type}</h4>
                       <Badge variant={getSeverityColor(pattern.severity)}>
-                        {pattern.severity}
+                        {t(`admin.antiCheat.severity.${pattern.severity}`)}
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{pattern.description}</p>
@@ -228,10 +235,10 @@ export default function AdminAntiCheatPage() {
                     size="sm"
                     variant="outline"
                     className="min-h-[40px]"
-                    onClick={() => handleReviewPattern(pattern.type)}
-                    data-testid={`button-review-${pattern.type.toLowerCase().replace(/\s+/g, '-')}`}
+                    onClick={() => handleReviewPattern(pattern.id)}
+                    data-testid={`button-review-${pattern.id}`}
                   >
-                    Review
+                    {t("admin.antiCheat.review")}
                   </Button>
                 </div>
               </div>
@@ -242,7 +249,7 @@ export default function AdminAntiCheatPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Flagged Activity</CardTitle>
+          <CardTitle>{t("admin.antiCheat.recentFlaggedActivity")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
@@ -258,8 +265,8 @@ export default function AdminAntiCheatPage() {
                   <div>
                     <span className="font-medium">{activity.user_id}</span>
                     <p className="text-sm text-muted-foreground">
-                      Amount: ${Number(activity.amount || 0).toFixed(2)}
-                      {activity.reference_id ? ` | Ref: ${activity.reference_id.slice(0, 36)}` : ""}
+                      {t("admin.antiCheat.amount")}: ${Number(activity.amount || 0).toFixed(2)}
+                      {activity.reference_id ? ` | ${t("admin.antiCheat.reference")}: ${activity.reference_id.slice(0, 36)}` : ""}
                     </p>
                   </div>
                 </div>
@@ -273,7 +280,7 @@ export default function AdminAntiCheatPage() {
             ))}
             {filteredEvents.length === 0 && (
               <div className="p-3 rounded-lg bg-muted/40 text-sm text-muted-foreground">
-                No recent flagged gift events in the active monitoring window.
+                {t("admin.antiCheat.noRecentFlagged")}
               </div>
             )}
           </div>
@@ -283,21 +290,21 @@ export default function AdminAntiCheatPage() {
       <Dialog open={Boolean(selectedActivity)} onOpenChange={(open) => !open && setSelectedActivity(null)}>
         <DialogContent className="max-w-[calc(100vw-0.75rem)] sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Flagged Event Details</DialogTitle>
+            <DialogTitle>{t("admin.antiCheat.flaggedEventDetails.title")}</DialogTitle>
             <DialogDescription>
-              Inspect selected anti-cheat event and copy the reference for deeper trace lookup.
+              {t("admin.antiCheat.flaggedEventDetails.description")}
             </DialogDescription>
           </DialogHeader>
 
           {selectedActivity && (
             <div className="space-y-3 text-sm">
-              <div><span className="font-semibold">User:</span> {selectedActivity.user_id}</div>
-              <div><span className="font-semibold">Type:</span> {selectedActivity.type}</div>
-              <div><span className="font-semibold">Amount:</span> ${Number(selectedActivity.amount || 0).toFixed(2)}</div>
-              <div><span className="font-semibold">Time:</span> {new Date(selectedActivity.created_at).toLocaleString()}</div>
+              <div><span className="font-semibold">{t("admin.antiCheat.user")}:</span> {selectedActivity.user_id}</div>
+              <div><span className="font-semibold">{t("admin.antiCheat.type")}:</span> {selectedActivity.type}</div>
+              <div><span className="font-semibold">{t("admin.antiCheat.amount")}:</span> ${Number(selectedActivity.amount || 0).toFixed(2)}</div>
+              <div><span className="font-semibold">{t("admin.antiCheat.time")}:</span> {new Date(selectedActivity.created_at).toLocaleString()}</div>
               <div className="flex items-center justify-between gap-2 rounded-md border p-2">
                 <span className="truncate text-muted-foreground">
-                  {selectedActivity.reference_id || "No reference attached"}
+                  {selectedActivity.reference_id || t("admin.antiCheat.noReferenceAttached")}
                 </span>
                 <Button
                   type="button"
@@ -307,7 +314,7 @@ export default function AdminAntiCheatPage() {
                   onClick={() => copyReference(selectedActivity.reference_id)}
                 >
                   <Copy className="h-4 w-4 me-1" />
-                  Copy
+                  {t("admin.antiCheat.copy")}
                 </Button>
               </div>
             </div>

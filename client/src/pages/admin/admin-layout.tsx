@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import { AdminAlertsDropdown } from "@/components/admin/AdminAlertsDropdown";
 import { useAdminAlertCountsBySection } from "@/hooks/use-admin-alert-counts";
+import { useI18n } from "@/lib/i18n";
 
 const AdminLoginPage = lazy(() => import("./admin-login"));
 
@@ -65,6 +66,7 @@ function AdminSidebar() {
   const [location, setLocation] = useLocation();
   const { setOpenMobile, isMobile } = useSidebar();
   const { data: sectionCounts } = useAdminAlertCountsBySection();
+  const { t } = useI18n();
 
   const handleNavClick = useCallback((url: string) => {
     if (isMobile) {
@@ -86,41 +88,41 @@ function AdminSidebar() {
   };
 
   const menuItems = [
-    { title: "Dashboard", url: "/admin/dashboard", icon: LayoutDashboard },
-    { title: "Users", url: "/admin/users", icon: Users, hasBadge: true },
-    { title: "Transactions", url: "/admin/transactions", icon: DollarSign, hasBadge: true },
-    { title: "Games", url: "/admin/games", icon: Gamepad2 },
-    { title: "Game Sections", url: "/admin/game-sections", icon: LayoutGrid },
-    { title: "Challenges", url: "/admin/challenges", icon: Swords },
-    { title: "Challenge Settings", url: "/admin/challenge-settings", icon: Settings },
-    { title: "P2P Management", url: "/admin/p2p", icon: ArrowLeftRight, hasBadge: true },
-    { title: "Support Settings", url: "/admin/support-settings", icon: Heart, hasBadge: true },
-    { title: "ID Verification", url: "/admin/id-verification", icon: IdCard, hasBadge: true },
-    { title: "Support Contacts", url: "/admin/support", icon: Headset },
-    { title: "Anti-Cheat", url: "/admin/anti-cheat", icon: Shield },
-    { title: "Payment Security", url: "/admin/payment-security", icon: ShieldAlert, hasBadge: true },
-    { title: "Chat Management", url: "/admin/chat-management", icon: MessageCircle },
-    { title: "SAM9 Control", url: "/admin/sam9", icon: Bot },
-    { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
-    { title: "Disputes", url: "/admin/disputes", icon: AlertTriangle, hasBadge: true },
-    { title: "Free Play", url: "/admin/free-play", icon: Gift },
-    { title: "Marketers", url: "/admin/marketers", icon: Crown },
-    { title: "Gift Catalog", url: "/admin/gifts", icon: Gift },
-    { title: "Tournaments", url: "/admin/tournaments", icon: Trophy },
-    { title: "Audit Logs", url: "/admin/audit-logs", icon: FileText },
+    { id: "dashboard", titleKey: "admin.layout.menu.dashboard", url: "/admin/dashboard", icon: LayoutDashboard },
+    { id: "users", titleKey: "admin.layout.menu.users", url: "/admin/users", icon: Users, hasBadge: true },
+    { id: "transactions", titleKey: "admin.layout.menu.transactions", url: "/admin/transactions", icon: DollarSign, hasBadge: true },
+    { id: "games", titleKey: "admin.layout.menu.games", url: "/admin/games", icon: Gamepad2 },
+    { id: "game-sections", titleKey: "admin.layout.menu.gameSections", url: "/admin/game-sections", icon: LayoutGrid },
+    { id: "challenges", titleKey: "admin.layout.menu.challenges", url: "/admin/challenges", icon: Swords },
+    { id: "challenge-settings", titleKey: "admin.layout.menu.challengeSettings", url: "/admin/challenge-settings", icon: Settings },
+    { id: "p2p", titleKey: "admin.layout.menu.p2pManagement", url: "/admin/p2p", icon: ArrowLeftRight, hasBadge: true },
+    { id: "support-settings", titleKey: "admin.layout.menu.supportSettings", url: "/admin/support-settings", icon: Heart, hasBadge: true },
+    { id: "id-verification", titleKey: "admin.layout.menu.idVerification", url: "/admin/id-verification", icon: IdCard, hasBadge: true },
+    { id: "support", titleKey: "admin.layout.menu.supportContacts", url: "/admin/support", icon: Headset },
+    { id: "anti-cheat", titleKey: "admin.layout.menu.antiCheat", url: "/admin/anti-cheat", icon: Shield },
+    { id: "payment-security", titleKey: "admin.layout.menu.paymentSecurity", url: "/admin/payment-security", icon: ShieldAlert, hasBadge: true },
+    { id: "chat-management", titleKey: "admin.layout.menu.chatManagement", url: "/admin/chat-management", icon: MessageCircle },
+    { id: "sam9", titleKey: "admin.layout.menu.sam9Control", url: "/admin/sam9", icon: Bot },
+    { id: "analytics", titleKey: "admin.layout.menu.analytics", url: "/admin/analytics", icon: BarChart3 },
+    { id: "disputes", titleKey: "admin.layout.menu.disputes", url: "/admin/disputes", icon: AlertTriangle, hasBadge: true },
+    { id: "free-play", titleKey: "admin.layout.menu.freePlay", url: "/admin/free-play", icon: Gift },
+    { id: "marketers", titleKey: "admin.layout.menu.marketers", url: "/admin/marketers", icon: Crown },
+    { id: "gifts", titleKey: "admin.layout.menu.giftCatalog", url: "/admin/gifts", icon: Gift },
+    { id: "tournaments", titleKey: "admin.layout.menu.tournaments", url: "/admin/tournaments", icon: Trophy },
+    { id: "audit-logs", titleKey: "admin.layout.menu.auditLogs", url: "/admin/audit-logs", icon: FileText },
   ];
 
   const settingsItems = [
-    { title: "App Settings", url: "/admin/app-settings", icon: Cog },
-    { title: "Project Currency", url: "/admin/currency", icon: Coins },
-    { title: "SEO Settings", url: "/admin/seo", icon: Search },
-    { title: "Section Controls", url: "/admin/sections", icon: Settings },
-    { title: "Social Platforms", url: "/admin/social-platforms", icon: Share2 },
-    { title: "Languages", url: "/admin/languages", icon: Languages },
-    { title: "Badges", url: "/admin/badges", icon: Award },
-    { title: "Notifications", url: "/admin/notifications", icon: Bell },
-    { title: "Payment Methods", url: "/admin/payment-methods", icon: CreditCard },
-    { title: "Integrations", url: "/admin/integrations", icon: Settings },
+    { id: "app-settings", titleKey: "admin.layout.settings.appSettings", url: "/admin/app-settings", icon: Cog },
+    { id: "currency", titleKey: "admin.layout.settings.projectCurrency", url: "/admin/currency", icon: Coins },
+    { id: "seo", titleKey: "admin.layout.settings.seoSettings", url: "/admin/seo", icon: Search },
+    { id: "sections", titleKey: "admin.layout.settings.sectionControls", url: "/admin/sections", icon: Settings },
+    { id: "social-platforms", titleKey: "admin.layout.settings.socialPlatforms", url: "/admin/social-platforms", icon: Share2 },
+    { id: "languages", titleKey: "admin.layout.settings.languages", url: "/admin/languages", icon: Languages },
+    { id: "badges", titleKey: "admin.layout.settings.badges", url: "/admin/badges", icon: Award },
+    { id: "notifications", titleKey: "admin.layout.settings.notifications", url: "/admin/notifications", icon: Bell },
+    { id: "payment-methods", titleKey: "admin.layout.settings.paymentMethods", url: "/admin/payment-methods", icon: CreditCard },
+    { id: "integrations", titleKey: "admin.layout.settings.integrations", url: "/admin/integrations", icon: Settings },
   ];
 
   return (
@@ -129,14 +131,14 @@ function AdminSidebar() {
         <div className="flex items-center gap-2">
           <VexLogo size={32} />
           <div>
-            <h2 className="font-bold text-lg">VEX Admin</h2>
-            <p className="text-xs text-muted-foreground">Control Panel</p>
+            <h2 className="font-bold text-lg">{t("admin.layout.brandTitle")}</h2>
+            <p className="text-xs text-muted-foreground">{t("admin.layout.brandSubtitle")}</p>
           </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Management</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("admin.layout.group.management")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
@@ -147,7 +149,7 @@ function AdminSidebar() {
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => handleNavClick(item.url)}
-                      data-testid={`admin-link-${item.title.toLowerCase().replace(' ', '-')}`}
+                      data-testid={`admin-link-${item.id}`}
                     >
                       <div className="relative">
                         <item.icon />
@@ -157,7 +159,7 @@ function AdminSidebar() {
                           </span>
                         )}
                       </div>
-                      <span>{item.title}</span>
+                      <span>{t(item.titleKey)}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -167,7 +169,7 @@ function AdminSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>Settings</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("admin.layout.group.settings")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {settingsItems.map((item) => (
@@ -175,10 +177,10 @@ function AdminSidebar() {
                   <SidebarMenuButton
                     isActive={location === item.url}
                     onClick={() => handleNavClick(item.url)}
-                    data-testid={`admin-link-${item.title.toLowerCase().replace(' ', '-')}`}
+                    data-testid={`admin-link-${item.id}`}
                   >
                     <item.icon />
-                    <span>{item.title}</span>
+                    <span>{t(item.titleKey)}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -187,13 +189,13 @@ function AdminSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>Quick Links</SidebarGroupLabel>
+          <SidebarGroupLabel>{t("admin.layout.group.quickLinks")}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={() => window.open("/", "_blank")}>
                   <Home />
-                  <span>View User App</span>
+                  <span>{t("admin.layout.quickLinks.viewUserApp")}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -203,8 +205,8 @@ function AdminSidebar() {
       <SidebarFooter className="p-4 border-t border-sidebar-border">
         <div className="space-y-3">
           <div className="text-sm">
-            <span className="text-muted-foreground">Logged in as</span>
-            <p className="font-semibold">Administrator</p>
+            <span className="text-muted-foreground">{t("admin.layout.loggedInAs")}</span>
+            <p className="font-semibold">{t("admin.layout.administrator")}</p>
           </div>
           <Button
             variant="ghost"
@@ -214,7 +216,7 @@ function AdminSidebar() {
             data-testid="button-admin-logout"
           >
             <LogOut className="me-2 h-4 w-4" />
-            Sign Out
+            {t("admin.layout.signOut")}
           </Button>
         </div>
       </SidebarFooter>
@@ -268,7 +270,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
+      <div className="admin-clean-ui flex h-screen w-full">
         <AdminSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
           <header className="flex items-center justify-between gap-4 p-3 border-b bg-background sticky top-0 z-50">

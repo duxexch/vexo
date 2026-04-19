@@ -804,6 +804,59 @@ svg {
   left: 105%;
 }
 
+/* Admin visual cleanup: flat, professional controls without playful shadows */
+.admin-clean-ui {
+  --primary: 214 84% 45%;
+  --primary-border: 214 74% 33%;
+  --primary-foreground: 0 0% 100%;
+}
+
+.admin-clean-ui .vex-btn-3d,
+.admin-clean-ui .hover-elevate,
+.admin-clean-ui .active-elevate-2,
+.admin-clean-ui .vex-arcade-btn,
+.admin-clean-ui .vex-arcade-panel,
+.admin-clean-ui .vex-arcade-header,
+.admin-clean-ui [class*="shadow-"],
+.admin-clean-ui .shadow,
+.admin-clean-ui .shadow-sm,
+.admin-clean-ui .shadow-md,
+.admin-clean-ui .shadow-lg,
+.admin-clean-ui .shadow-xl,
+.admin-clean-ui .shadow-2xl,
+.admin-clean-ui button,
+.admin-clean-ui [role="button"] {
+  box-shadow: none !important;
+}
+
+.admin-clean-ui [class*="bg-gradient"] {
+  background-image: none !important;
+}
+
+.admin-clean-ui .vex-btn-3d::after,
+.admin-clean-ui .hover-elevate::before,
+.admin-clean-ui .active-elevate-2::after {
+  display: none !important;
+}
+
+.admin-clean-ui .vex-btn-3d:hover:not(:disabled),
+.admin-clean-ui .vex-btn-3d:active:not(:disabled),
+.admin-clean-ui .hover-elevate:hover,
+.admin-clean-ui .active-elevate-2:active {
+  transform: none !important;
+  filter: none !important;
+}
+
+.admin-clean-ui .bg-primary\/10,
+.admin-clean-ui .bg-blue-500\/10,
+.admin-clean-ui .bg-green-500\/10,
+.admin-clean-ui .bg-yellow-500\/10,
+.admin-clean-ui .bg-purple-500\/10,
+.admin-clean-ui .bg-orange-500\/10,
+.admin-clean-ui .bg-red-500\/10 {
+  background-color: hsl(var(--muted)) !important;
+}
+
 input:focus-visible {
   box-shadow:
     0 0 0 2px hsl(var(--ring) / 0.25),
