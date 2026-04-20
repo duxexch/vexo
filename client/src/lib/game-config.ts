@@ -21,6 +21,8 @@ export interface MultiplayerGameFromAPI {
   key: string;
   nameEn: string;
   nameAr: string;
+  descriptionEn?: string;
+  descriptionAr?: string;
   minStake: string;
   maxStake: string;
   houseFee: string;
@@ -28,6 +30,8 @@ export interface MultiplayerGameFromAPI {
   iconName?: string;
   iconUrl?: string;
   thumbnailUrl?: string;
+  colorClass?: string;
+  gradientClass?: string;
   updatedAt?: string;
 }
 
@@ -35,9 +39,12 @@ export interface MultiplayerGameFromAPI {
 export interface GameConfigItem {
   name: string;
   nameAr: string;
+  descriptionEn?: string;
+  descriptionAr?: string;
   icon: LucideIcon;
   color: string;
   gradient: string;
+  accentColor?: string;
   minStake?: number;
   maxStake?: number;
   houseFee?: number;
@@ -92,6 +99,16 @@ function resolveGameThumbnailUrl(game: MultiplayerGameFromAPI): string | undefin
   }
 
   return withVersionSuffix(thumbnailUrl, resolveVersionSeed(game));
+}
+
+function resolveGameColorClass(game: MultiplayerGameFromAPI, fallback: string): string {
+  const configured = typeof game.colorClass === "string" ? game.colorClass.trim() : "";
+  return configured || fallback;
+}
+
+function resolveGameGradientClass(game: MultiplayerGameFromAPI, fallback: string): string {
+  const configured = typeof game.gradientClass === "string" ? game.gradientClass.trim() : "";
+  return configured || fallback;
 }
 
 const ADMIN_GAME_ICON_COMPONENTS: Record<string, LucideIcon> = {
@@ -203,12 +220,20 @@ export function buildGameConfig(apiGames: MultiplayerGameFromAPI[] | undefined):
   const config: Record<string, GameConfigItem> = {};
   for (const game of apiGames) {
     const style = GAME_ICON_STYLES[game.key] || DEFAULT_GAME_STYLE;
+    const color = resolveGameColorClass(game, style.color);
+    const gradient = resolveGameGradientClass(game, style.gradient);
+    const descriptionEn = typeof game.descriptionEn === "string" ? game.descriptionEn.trim() : "";
+    const descriptionAr = typeof game.descriptionAr === "string" ? game.descriptionAr.trim() : "";
+
     config[game.key] = {
       name: game.nameEn,
       nameAr: game.nameAr,
+      descriptionEn: descriptionEn || undefined,
+      descriptionAr: descriptionAr || undefined,
       icon: resolveConfiguredGameIcon(game.iconName, style.icon),
-      color: style.color,
-      gradient: style.gradient,
+      color,
+      gradient,
+      accentColor: getGameIconToneClass(color),
       minStake: parseFloat(game.minStake),
       maxStake: parseFloat(game.maxStake),
       houseFee: parseFloat(game.houseFee),

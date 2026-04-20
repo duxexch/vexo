@@ -8,7 +8,7 @@ import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
-import { buildGameConfig, type MultiplayerGameFromAPI } from "@/lib/game-config";
+import { buildGameConfig, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import { cn } from "@/lib/utils";
 import {
   Crown,
@@ -232,9 +232,13 @@ export default function GamesCatalogPage() {
         ...game,
         nameEn: dynamicConfig.name,
         nameAr: dynamicConfig.nameAr,
+        descriptionEn: dynamicConfig.descriptionEn || game.descriptionEn,
+        descriptionAr: dynamicConfig.descriptionAr || game.descriptionAr,
         icon: dynamicConfig.icon,
         iconUrl: dynamicConfig.iconUrl,
         thumbnailUrl: dynamicConfig.thumbnailUrl,
+        gradient: dynamicConfig.gradient || game.gradient,
+        accentColor: dynamicConfig.accentColor || getGameIconToneClass(dynamicConfig.color),
       };
     }),
     [multiplayerGameConfig],

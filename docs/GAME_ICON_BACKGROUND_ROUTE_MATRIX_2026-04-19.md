@@ -11,9 +11,13 @@ It is designed so Admin updates (icon or background) propagate immediately after
 - Multiplayer game media: `/api/multiplayer-games`
   - icon: `iconName` or `iconUrl`
   - background: `thumbnailUrl`
+  - icon surface classes: `colorClass`
+  - card gradient classes: `gradientClass`
+  - localized description: `descriptionEn`, `descriptionAr`
 - External game media: `/api/external-games`
   - icon: `iconUrl`
   - background: `thumbnailUrl`
+  - localized description: `descriptionEn`, `descriptionAr`
 
 ## Route Inventory
 
@@ -36,6 +40,16 @@ It is designed so Admin updates (icon or background) propagate immediately after
 | `/admin/external-games` | `client/src/pages/admin/admin-external-games.tsx` | Yes | Yes | `/api/admin/external-games` |
 | `/admin/tournaments` | `client/src/pages/admin/admin-tournaments.tsx` | Yes | No (icon surface only) | `/api/multiplayer-games` |
 
+## In-Page Popups and Embedded Surfaces
+
+| Route | Popup/Surface | Icon | Background | Source |
+|---|---|---|---|---|
+| `/games` | Live matches cards inside catalog page | Yes | Icon surface only | `/api/multiplayer-games` |
+| `/lobby` | Quick Match dialog and per-game cards | Yes | Yes (`thumbnailUrl`/`gradientClass`) | `/api/multiplayer-games` |
+| `/multiplayer` | Found match + invite state dialogs | Yes | Icon surface only | `/api/multiplayer-games` |
+| `/challenges` | Create challenge dialog + challenge list cards | Yes | Icon surface only | `/api/multiplayer-games` |
+| `/tournaments` | Tournament list/detail card icon slots | Yes | Icon surface only | `/api/multiplayer-games` |
+
 ## Real-Time Sync Contract
 
 When icon/background is changed from Admin:
@@ -50,4 +64,6 @@ When icon/background is changed from Admin:
 - `/api/multiplayer-games`
 - `/api/config-version/multiplayer_games_version`
 - `/api/external-games`
+- `/api/games`
+- `/api/games/available`
 - plus admin keys (`/api/admin/multiplayer-games`, `/api/admin/games`, `/api/admin/external-games`)

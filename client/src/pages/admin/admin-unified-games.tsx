@@ -113,6 +113,9 @@ function invalidateGameConfigCaches() {
   queryClient.invalidateQueries({ queryKey: ["/api/admin/multiplayer-games"] });
   queryClient.invalidateQueries({ queryKey: ["/api/admin/games"] });
   queryClient.invalidateQueries({ queryKey: ["/api/multiplayer-games"] });
+  queryClient.invalidateQueries({ queryKey: ["/api/external-games"] });
+  queryClient.invalidateQueries({ queryKey: ["/api/games"] });
+  queryClient.invalidateQueries({ queryKey: ["/api/games/available"] });
   queryClient.invalidateQueries({ queryKey: ["/api/config-version/multiplayer_games_version"] });
 }
 
@@ -1189,7 +1192,10 @@ export default function AdminUnifiedGames() {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === "game_config_changed") {
+          if (
+            data.type === "game_config_changed" ||
+            (data.type === "system_event" && data.event?.type === "game_config_changed")
+          ) {
             invalidateGameConfigCaches();
           }
         } catch { }

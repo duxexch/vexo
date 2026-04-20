@@ -385,6 +385,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           const event = data.event;
           if (event?.type === 'game_config_changed') {
             queryClient.invalidateQueries({ queryKey: ['/api/multiplayer-games'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/external-games'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/games'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/games/available'] });
             queryClient.invalidateQueries({ queryKey: ['/api/config-version/multiplayer_games_version'] });
             playSound('notification');
             const lang = languageRef.current;
