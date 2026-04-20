@@ -190,6 +190,22 @@ const RUNTIME_SEO_DEFAULTS: RuntimeSeoSettings = {
 
 const RTL_LANG_PREFIXES = ["ar", "fa", "ur", "he", "ps", "sd", "ug", "yi"];
 
+const UUID_PROBE_ROUTE_REGEX =
+  /^\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?:-[a-z0-9-]+)?\/?$/i;
+
+function shouldForceNotFoundForProbe(pathname: string): boolean {
+  const normalized = pathname.trim().toLowerCase();
+  if (!normalized || normalized === "/") {
+    return false;
+  }
+
+  if (normalized.includes("404check")) {
+    return true;
+  }
+
+  return UUID_PROBE_ROUTE_REGEX.test(normalized);
+}
+
 let runtimeSeoCache: { value: RuntimeSeoSettings; expiresAt: number } | null = null;
 
 export function invalidateRuntimeSeoCache(): void {
@@ -257,6 +273,14 @@ async function getRuntimeSeoSettings(forceRefresh = false): Promise<RuntimeSeoSe
   };
 
   return value;
+}
+
+async function getRuntimeSeoSettingsSafely(forceRefresh = false): Promise<RuntimeSeoSettings> {
+  try {
+    return await getRuntimeSeoSettings(forceRefresh);
+  } catch {
+    return RUNTIME_SEO_DEFAULTS;
+  }
 }
 
 function getPreferredLocale(req: Request): string {
@@ -361,7 +385,7 @@ export function serveStatic(app: Express) {
 
   app.get("/sitemap.xml", publicStaticLimiter, async (_req, res) => {
     try {
-      const runtimeSeo = await getRuntimeSeoSettings();
+      const runtimeSeo = await getRuntimeSeoSettingsSafely();
       if (!runtimeSeo.enableSitemap) {
         return res.status(404).type("text/plain").send("sitemap.xml disabled");
       }
@@ -383,7 +407,7 @@ export function serveStatic(app: Express) {
 
   app.get("/sitemap-index.xml", publicStaticLimiter, async (_req, res) => {
     try {
-      const runtimeSeo = await getRuntimeSeoSettings();
+      const runtimeSeo = await getRuntimeSeoSettingsSafely();
       if (!runtimeSeo.enableSitemap) {
         return res.status(404).type("text/plain").send("sitemap-index.xml disabled");
       }
@@ -405,7 +429,7 @@ export function serveStatic(app: Express) {
 
   app.get("/sitemap-core.xml", publicStaticLimiter, async (_req, res) => {
     try {
-      const runtimeSeo = await getRuntimeSeoSettings();
+      const runtimeSeo = await getRuntimeSeoSettingsSafely();
       if (!runtimeSeo.enableSitemap) {
         return res.status(404).type("text/plain").send("sitemap-core.xml disabled");
       }
@@ -436,6 +460,7 @@ export function serveStatic(app: Express) {
   app.use("/downloads", blockPublicAabDownload, express.static(path.join(distPath, "downloads"), {
     maxAge: "1h",
     etag: true,
+    redirect: false,
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.apk')) {
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
@@ -465,6 +490,7 @@ export function serveStatic(app: Express) {
     maxAge: "1h",
     etag: true,
     index: false,
+    redirect: false,
   }));
 
   // Digital Asset Links for TWA (Android app verification)
@@ -496,12 +522,26 @@ export function serveStatic(app: Express) {
     res.status(404).json({ error: "Endpoint not found" });
   });
 
+  // Requests for non-existing HTML files should return 404 instead of SPA fallback.
+  app.get(/.*\.html$/i, publicHtmlLimiter, (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+    return res.status(404).type("text/plain").send("Not found");
+  });
+
   // fall through to index.html if the file doesn't exist (SPA)
   // Inject SEO meta tags for crawler-friendly rendering
   app.use("*", publicHtmlLimiter, async (req, res) => {
     try {
+      const pagePath = req.originalUrl.split("?")[0].replace(/\/+$/, "") || "/";
+      if (shouldForceNotFoundForProbe(pagePath)) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive");
+        return res.status(404).type("text/plain").send("Not found");
+      }
+
       const forceSeoRefresh = req.query.seo_refresh === "1" || req.query.seo_refresh === "true";
-      const runtimeSeo = await getRuntimeSeoSettings(forceSeoRefresh);
+      const runtimeSeo = await getRuntimeSeoSettingsSafely(forceSeoRefresh);
       const locale = getPreferredLocale(req);
       const localeBase = locale.split("-")[0];
       const isRtlLocale = RTL_LANG_PREFIXES.includes(localeBase);
@@ -513,7 +553,6 @@ export function serveStatic(app: Express) {
       let html = fs.readFileSync(indexPath, "utf-8");
 
       // Get SEO data for the current path
-      const pagePath = req.originalUrl.split("?")[0].replace(/\/$/, "") || "/";
       const routeSeo = SEO_PAGES[pagePath];
 
       const defaultCanonical = `https://vixo.click${pagePath === "/" ? "/" : pagePath}`;
