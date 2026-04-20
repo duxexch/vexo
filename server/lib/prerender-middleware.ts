@@ -155,7 +155,7 @@ export function createPrerenderMiddleware() {
         const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
 
         try {
-            const upstreamUrl = `${serviceBase}/${encodeURIComponent(publicUrl)}`;
+            const upstreamUrl = `${serviceBase}/${publicUrl}`;
             const upstreamHeaders = new Headers({
                 "X-Prerender-Token": token,
                 "User-Agent": typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : "",
@@ -171,6 +171,8 @@ export function createPrerenderMiddleware() {
                 headers: upstreamHeaders,
                 signal: abortController.signal,
             });
+
+            logger.info(`[SEO] Prerender upstream response ${upstreamResponse.status} for ${publicUrl}`);
 
             // If upstream is failing, serve the normal app response instead of breaking crawlers.
             if (upstreamResponse.status >= 500) {
