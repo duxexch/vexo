@@ -31,7 +31,6 @@ const CRAWLER_SIGNATURES = [
     "facebot",
     "nuzzel",
     "skypeuripreview",
-    "prerender",
     "headlesschrome",
     "chrome-lighthouse",
 ];
@@ -90,6 +89,19 @@ function shouldSkipRequest(req: Request): boolean {
     }
 
     if (typeof req.headers["x-prerender"] === "string") {
+        return true;
+    }
+
+    if (typeof req.headers["x-prerender-token"] === "string") {
+        return true;
+    }
+
+    const userAgent = typeof req.headers["user-agent"] === "string"
+        ? req.headers["user-agent"].toLowerCase()
+        : "";
+    if (userAgent.includes("prerender")) {
+        // Requests from prerender render workers must reach the app directly
+        // to avoid recursive proxying back to the prerender upstream.
         return true;
     }
 
