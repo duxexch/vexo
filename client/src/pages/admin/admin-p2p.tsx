@@ -66,20 +66,35 @@ async function adminFetch(url: string, options?: RequestInit) {
       ...options?.headers,
     },
   });
-  if (!res.ok) throw new Error("Failed to fetch");
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error || "Failed to fetch");
+  }
   return res.json();
 }
 
 interface P2POffer {
   id: string;
+  userId?: string;
   type: string;
   username?: string;
+  targetUserId?: string | null;
+  targetUsername?: string | null;
+  visibility?: "public" | "private_friend";
   currency?: string;
   amount?: string | number;
   price?: string;
   minAmount?: string;
   maxAmount?: string;
   status: string;
+  moderationReason?: string | null;
+  counterResponse?: string | null;
+  submittedForReviewAt?: string | null;
+  reviewedAt?: string | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+  reviewedBy?: string | null;
+  reviewedByUsername?: string | null;
   paymentMethods?: string[];
   createdAt?: string;
   [key: string]: unknown;
@@ -1376,6 +1391,42 @@ export default function AdminP2PPage() {
     },
   });
 
+  const approveOfferMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      return adminFetch(`/api/admin/p2p/offers/${id}/approve`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/stats"] });
+      toast({ title: "Offer Approved", description: "The P2P offer has been approved" });
+      closeDialog();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to approve offer", variant: "destructive" });
+    },
+  });
+
+  const rejectOfferMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      return adminFetch(`/api/admin/p2p/offers/${id}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/stats"] });
+      toast({ title: "Offer Rejected", description: "The P2P offer has been rejected" });
+      closeDialog();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to reject offer", variant: "destructive" });
+    },
+  });
+
   const updateAdPermissionMutation = useMutation({
     mutationFn: async ({
       userId,
@@ -1473,6 +1524,9 @@ export default function AdminP2PPage() {
       case "active": return "default";
       case "completed": return "secondary";
       case "cancelled": return "destructive";
+      case "rejected": return "destructive";
+      case "pending_approval": return "outline";
+      case "paused": return "secondary";
       case "pending": return "outline";
       case "processing": return "secondary";
       case "disputed": return "destructive";
@@ -1482,7 +1536,10 @@ export default function AdminP2PPage() {
 
   const filteredOffers = offers?.filter((offer: P2POffer) =>
     offer.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    offer.currency?.toLowerCase().includes(searchQuery.toLowerCase())
+    offer.currency?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    offer.visibility?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    offer.status?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    offer.targetUsername?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredTrades = trades?.filter((trade: P2PTrade) =>
@@ -1638,6 +1695,17 @@ export default function AdminP2PPage() {
                           <div className="text-sm text-muted-foreground">
                             {offer.amount} {offer.currency} @ {offer.price} per unit
                           </div>
+                          <div className="text-xs text-muted-foreground">
+                            {offer.visibility === "private_friend"
+                              ? `private_friend${offer.targetUsername ? ` @${offer.targetUsername}` : ""}`
+                              : "public"}
+                          </div>
+                          {offer.moderationReason && (
+                            <div className="text-xs text-destructive">{offer.moderationReason}</div>
+                          )}
+                          {offer.counterResponse && (
+                            <div className="text-xs text-sky-600 dark:text-sky-300">{offer.counterResponse}</div>
+                          )}
                         </div>
                       </div>
                       <DropdownMenu>
@@ -1651,6 +1719,31 @@ export default function AdminP2PPage() {
                             <Eye className="h-4 w-4 me-2" />
                             View Details
                           </DropdownMenuItem>
+                          {(offer.status === "pending_approval" || offer.status === "rejected") && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedOffer(offer);
+                                setActionReason("");
+                                setActionDialog("approveOffer");
+                              }}
+                            >
+                              <Check className="h-4 w-4 me-2" />
+                              Approve Offer
+                            </DropdownMenuItem>
+                          )}
+                          {offer.status === "pending_approval" && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedOffer(offer);
+                                setActionReason("");
+                                setActionDialog("rejectOffer");
+                              }}
+                              className="text-destructive"
+                            >
+                              <X className="h-4 w-4 me-2" />
+                              Reject Offer
+                            </DropdownMenuItem>
+                          )}
                           {offer.status === "active" && (
                             <DropdownMenuItem
                               onClick={() => { setSelectedOffer(offer); setActionDialog("cancelOffer"); }}
@@ -2129,6 +2222,71 @@ export default function AdminP2PPage() {
               data-testid="button-confirm-cancel"
             >
               Cancel Offer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={actionDialog === "approveOffer"} onOpenChange={() => closeDialog()}>
+        <DialogContent className={DIALOG_SURFACE_CLASS}>
+          <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <DialogTitle>Approve Offer</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 px-6 py-5">
+            <p className="text-sm text-muted-foreground">
+              Approving this offer will make it available for trading.
+            </p>
+            <div className="space-y-2">
+              <Label>Admin Note (optional)</Label>
+              <Textarea
+                placeholder="Add an optional note..."
+                className={TEXTAREA_SURFACE_CLASS}
+                value={actionReason}
+                onChange={(e) => setActionReason(e.target.value)}
+                data-testid="input-approve-note"
+              />
+            </div>
+          </div>
+          <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <Button variant="outline" className={button3dClass} onClick={closeDialog}>Cancel</Button>
+            <Button
+              className={button3dPrimaryClass}
+              onClick={() => approveOfferMutation.mutate({ id: String(selectedOffer?.id || ""), reason: actionReason.trim() || undefined })}
+              disabled={approveOfferMutation.isPending || !selectedOffer?.id}
+              data-testid="button-confirm-approve-offer"
+            >
+              {approveOfferMutation.isPending ? "Approving..." : "Approve"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={actionDialog === "rejectOffer"} onOpenChange={() => closeDialog()}>
+        <DialogContent className={DIALOG_SURFACE_CLASS}>
+          <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <DialogTitle>Reject Offer</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 px-6 py-5">
+            <div className="space-y-2">
+              <Label>Rejection Reason</Label>
+              <Textarea
+                placeholder="Enter reason for rejection..."
+                className={TEXTAREA_SURFACE_CLASS}
+                value={actionReason}
+                onChange={(e) => setActionReason(e.target.value)}
+                data-testid="input-reject-reason"
+              />
+            </div>
+          </div>
+          <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
+            <Button variant="outline" className={button3dClass} onClick={closeDialog}>Cancel</Button>
+            <Button
+              className={BUTTON_3D_DANGER_CLASS}
+              onClick={() => rejectOfferMutation.mutate({ id: String(selectedOffer?.id || ""), reason: actionReason.trim() })}
+              disabled={rejectOfferMutation.isPending || !selectedOffer?.id || !actionReason.trim()}
+              data-testid="button-confirm-reject-offer"
+            >
+              {rejectOfferMutation.isPending ? "Rejecting..." : "Reject Offer"}
             </Button>
           </DialogFooter>
         </DialogContent>

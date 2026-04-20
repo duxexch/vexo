@@ -1201,7 +1201,8 @@ export const supportContacts = pgTable("support_contacts", {
 // ==================== P2P ENUMS ====================
 
 export const p2pOfferTypeEnum = pgEnum("p2p_offer_type", ["buy", "sell"]);
-export const p2pOfferStatusEnum = pgEnum("p2p_offer_status", ["active", "paused", "completed", "cancelled"]);
+export const p2pOfferStatusEnum = pgEnum("p2p_offer_status", ["pending_approval", "active", "paused", "completed", "cancelled", "rejected"]);
+export const p2pOfferVisibilityEnum = pgEnum("p2p_offer_visibility", ["public", "private_friend"]);
 export const p2pTradeStatusEnum = pgEnum("p2p_trade_status", ["pending", "paid", "confirmed", "completed", "cancelled", "disputed"]);
 export const p2pDisputeStatusEnum = pgEnum("p2p_dispute_status", ["open", "investigating", "resolved", "closed"]);
 export const p2pFreezeRequestStatusEnum = pgEnum("p2p_freeze_request_status", ["pending", "approved", "rejected", "cancelled", "exhausted"]);
@@ -1212,7 +1213,9 @@ export const p2pOffers = pgTable("p2p_offers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
   type: p2pOfferTypeEnum("type").notNull(),
-  status: p2pOfferStatusEnum("status").notNull().default("active"),
+  status: p2pOfferStatusEnum("status").notNull().default("pending_approval"),
+  visibility: p2pOfferVisibilityEnum("visibility").notNull().default("public"),
+  targetUserId: varchar("target_user_id").references(() => users.id),
   cryptoCurrency: text("crypto_currency").notNull(),
   fiatCurrency: text("fiat_currency").notNull(),
   price: decimal("price", { precision: 15, scale: 2 }).notNull(),
@@ -1223,14 +1226,23 @@ export const p2pOffers = pgTable("p2p_offers", {
   paymentTimeLimit: integer("payment_time_limit").notNull().default(15),
   terms: text("terms"),
   autoReply: text("auto_reply"),
+  moderationReason: text("moderation_reason"),
+  counterResponse: text("counter_response"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  submittedForReviewAt: timestamp("submitted_for_review_at"),
+  reviewedAt: timestamp("reviewed_at"),
+  approvedAt: timestamp("approved_at"),
+  rejectedAt: timestamp("rejected_at"),
   completedTrades: integer("completed_trades").notNull().default(0),
   completionRate: decimal("completion_rate", { precision: 5, scale: 2 }).notNull().default("100.00"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_p2p_offers_user_id").on(table.userId),
+  index("idx_p2p_offers_target_user_id").on(table.targetUserId),
   index("idx_p2p_offers_type").on(table.type),
   index("idx_p2p_offers_status").on(table.status),
+  index("idx_p2p_offers_visibility").on(table.visibility),
   index("idx_p2p_offers_created_at").on(table.createdAt),
 ]);
 

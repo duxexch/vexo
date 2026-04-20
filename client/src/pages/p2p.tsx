@@ -25,7 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Wallet, Plus, ArrowUpRight, ArrowDownRight, Star, Filter, RefreshCw, Trash2, Edit2, Check, AlertTriangle, MessageSquare, Upload, FileCheck, Camera, Video, Ban, Clock, ChevronRight, Send, Paperclip, Eye, Shield, Scale, History, User, Settings } from "lucide-react";
+import { Wallet, Plus, ArrowUpRight, ArrowDownRight, Star, Filter, RefreshCw, Trash2, Check, AlertTriangle, MessageSquare, Upload, FileCheck, Camera, Video, Ban, Clock, ChevronRight, Send, Paperclip, Eye, Shield, Scale, History, User, Settings } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
@@ -46,8 +46,24 @@ interface P2POffer {
   autoReply?: string | null;
   rating: number;
   completedTrades: number;
-  status: "active" | "inactive" | "completed";
+  status: "pending_approval" | "active" | "paused" | "completed" | "cancelled" | "rejected" | "inactive";
+  visibility?: "public" | "private_friend";
+  targetUserId?: string | null;
+  targetUsername?: string | null;
+  moderationReason?: string | null;
+  counterResponse?: string | null;
+  submittedForReviewAt?: string | null;
+  reviewedAt?: string | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
   createdAt: string;
+}
+
+interface FriendUser {
+  id: string;
+  username?: string | null;
+  nickname?: string | null;
+  accountId?: string | null;
 }
 
 interface P2PTrade {
@@ -288,6 +304,8 @@ interface DisputeRule {
 
 const createOfferSchema = z.object({
   type: z.enum(["buy", "sell"]),
+  visibility: z.enum(["public", "private_friend"]),
+  targetUserId: z.string().optional(),
   amount: z.string().min(1),
   price: z.string().min(1),
   currency: z.string().min(1),
@@ -431,7 +449,6 @@ function TradeOfferDialog({
   const { toast } = useToast();
   const [tradeAmount, setTradeAmount] = useState("");
   const [tradePaymentMethod, setTradePaymentMethod] = useState("");
-
   useEffect(() => {
     if (!offer) {
       setTradeAmount("");
@@ -1036,6 +1053,9 @@ function MarketplaceTab() {
                         <Badge className="bg-slate-700 text-slate-100 hover:bg-slate-700">
                           {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
                         </Badge>
+                        {offer.visibility === "private_friend" && (
+                          <Badge variant="outline" className="border-sky-500/60 text-sky-300">private_friend</Badge>
+                        )}
                       </div>
 
                       <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
@@ -1083,6 +1103,16 @@ function MarketplaceTab() {
                     {t('p2p.limit')}: {formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}
                   </p>
 
+                  <div className="mt-2 space-y-1 text-[11px] text-slate-400">
+                    <p>{offer.visibility === "private_friend" ? `private_friend${offer.targetUsername ? ` @${offer.targetUsername}` : ""}` : "public"}</p>
+                    {offer.moderationReason && (
+                      <p className="text-red-300">{offer.moderationReason}</p>
+                    )}
+                    {offer.counterResponse && (
+                      <p className="text-sky-300">{offer.counterResponse}</p>
+                    )}
+                  </div>
+
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {offer.paymentMethods.slice(0, 2).map((method) => (
                       <Badge key={method} variant="outline" className="border-slate-700 text-slate-300">
@@ -1128,9 +1158,14 @@ function MarketplaceTab() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className="bg-slate-700 text-slate-100 hover:bg-slate-700">
-                        {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Badge className="bg-slate-700 text-slate-100 hover:bg-slate-700">
+                          {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
+                        </Badge>
+                        {offer.visibility === "private_friend" && (
+                          <Badge variant="outline" className="border-sky-500/60 text-sky-300">private_friend</Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell data-testid={`text-amount-${offer.id}`} className="text-slate-100 break-words">
                       <span className="tabular-nums">{formatAssetAmount(offer.amount, offer.currency, numberLocale)}</span>
@@ -1200,6 +1235,8 @@ function MyOffersTab() {
     holderName: "",
     details: "",
   });
+  const [resubmitDialogOffer, setResubmitDialogOffer] = useState<P2POffer | null>(null);
+  const [counterResponseDraft, setCounterResponseDraft] = useState("");
   const numberLocale = resolveLanguageLocale(language);
 
   const { data: myOffers, isLoading } = useQuery<P2POffer[]>({
@@ -1208,6 +1245,10 @@ function MyOffersTab() {
 
   const { data: offerEligibility, isLoading: eligibilityLoading } = useQuery<OfferEligibility>({
     queryKey: ["/api/p2p/offer-eligibility"],
+  });
+
+  const { data: friends = [] } = useQuery<FriendUser[]>({
+    queryKey: ["/api/users/friends"],
   });
 
   const { data: paymentCatalog = [] } = useQuery<CountryPaymentMethodOption[]>({
@@ -1222,6 +1263,8 @@ function MyOffersTab() {
     resolver: zodResolver(createOfferSchema),
     defaultValues: {
       type: "sell",
+      visibility: "public",
+      targetUserId: "",
       amount: "",
       price: "",
       currency: "USD",
@@ -1236,8 +1279,15 @@ function MyOffersTab() {
   });
 
   const selectedOfferType = form.watch("type");
+  const selectedOfferVisibility = form.watch("visibility");
   const selectedOfferCurrency = normalizeCurrencyCodeValue(form.watch("currency"));
   const selectedFiatCurrency = normalizeCurrencyCodeValue(form.watch("fiatCurrency"));
+
+  useEffect(() => {
+    if (selectedOfferVisibility !== "private_friend" && form.getValues("targetUserId")) {
+      form.setValue("targetUserId", "");
+    }
+  }, [form, selectedOfferVisibility]);
 
   const userWalletCurrency = normalizeCurrencyCodeValue((user as { balanceCurrency?: string } | null)?.balanceCurrency || "USD");
   const userWalletTotalBalance = Number((user as { balance?: string | number } | null)?.balance || 0);
@@ -1368,6 +1418,8 @@ function MyOffersTab() {
     mutationFn: async (data: CreateOfferForm) => {
       const res = await apiRequest("POST", "/api/p2p/offers", {
         ...data,
+        visibility: data.visibility,
+        targetUserId: data.visibility === "private_friend" ? data.targetUserId : undefined,
         paymentMethodIds: data.paymentMethodIds,
         paymentTimeLimit: Number(data.paymentTimeLimit),
         terms: data.terms.trim(),
@@ -1448,6 +1500,32 @@ function MyOffersTab() {
     },
   });
 
+  const resubmitOfferMutation = useMutation({
+    mutationFn: async ({ offerId, counterResponse }: { offerId: string; counterResponse: string }) => {
+      const response = await apiRequest("POST", `/api/p2p/offers/${offerId}/resubmit`, {
+        counterResponse,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/my-offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/offers"] });
+      setResubmitDialogOffer(null);
+      setCounterResponseDraft("");
+      toast({
+        title: t('common.success'),
+        description: t('common.pending'),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t('common.error'),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: CreateOfferForm) => {
     if (availableOfferCurrencies.length === 0) {
       toast({
@@ -1498,13 +1576,31 @@ function MyOffersTab() {
       }
     }
 
+    if (data.visibility === "private_friend" && !String(data.targetUserId || "").trim()) {
+      toast({
+        title: t('common.error'),
+        description: t('multiplayer.selectFriend'),
+        variant: "destructive",
+      });
+      return;
+    }
+
     createOfferMutation.mutate(data);
   };
 
   const goToNextCreateOfferStep = async () => {
     if (createOfferStep === 1) {
-      const isStepValid = await form.trigger(["type", "currency", "amount"]);
+      const isStepValid = await form.trigger(["type", "visibility", "targetUserId", "currency", "amount"]);
       if (!isStepValid) {
+        return;
+      }
+
+      if (selectedOfferVisibility === "private_friend" && !String(form.getValues("targetUserId") || "").trim()) {
+        toast({
+          title: t('common.error'),
+          description: t('multiplayer.selectFriend'),
+          variant: "destructive",
+        });
         return;
       }
 
@@ -1542,11 +1638,19 @@ function MyOffersTab() {
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
       active: "default",
+      pending_approval: "outline",
+      rejected: "destructive",
+      cancelled: "destructive",
+      paused: "secondary",
       inactive: "secondary",
       completed: "outline",
     };
     const labels: Record<string, string> = {
       active: t('p2p.statusActive'),
+      pending_approval: t('common.pending'),
+      rejected: t('common.rejected'),
+      cancelled: t('p2p.tradeCancelled'),
+      paused: t('p2p.statusInactive'),
       inactive: t('p2p.statusInactive'),
       completed: t('p2p.statusCompleted'),
     };
@@ -1561,14 +1665,16 @@ function MyOffersTab() {
     const counters = {
       total: sortedOffers.length,
       active: 0,
-      inactive: 0,
+      pending: 0,
       completed: 0,
+      rejected: 0,
     };
 
     for (const offer of sortedOffers) {
       if (offer.status === "active") counters.active += 1;
-      if (offer.status === "inactive") counters.inactive += 1;
+      if (offer.status === "pending_approval") counters.pending += 1;
       if (offer.status === "completed") counters.completed += 1;
+      if (offer.status === "rejected") counters.rejected += 1;
     }
 
     return counters;
@@ -1576,7 +1682,10 @@ function MyOffersTab() {
 
   const getStatusPillClass = (status: string) => {
     if (status === "active") return "border-emerald-600/40 bg-emerald-600/10 text-emerald-300";
+    if (status === "pending_approval") return "border-amber-600/40 bg-amber-600/10 text-amber-300";
+    if (status === "rejected" || status === "cancelled") return "border-red-600/40 bg-red-600/10 text-red-300";
     if (status === "inactive") return "border-slate-700 bg-slate-800 text-slate-200";
+    if (status === "paused") return "border-slate-700 bg-slate-800 text-slate-200";
     return "border-sky-600/40 bg-sky-600/10 text-sky-300";
   };
 
@@ -1685,6 +1794,61 @@ function MyOffersTab() {
                           </FormItem>
                         )}
                       />
+
+                      <FormField
+                        control={form.control}
+                        name="visibility"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('challenges.visibility')}</FormLabel>
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-offer-visibility">
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="public">public</SelectItem>
+                                <SelectItem value="private_friend">private_friend</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {selectedOfferVisibility === "private_friend" && (
+                        <FormField
+                          control={form.control}
+                          name="targetUserId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('multiplayer.selectFriend')}</FormLabel>
+                              <Select value={field.value || ""} onValueChange={field.onChange}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-offer-target-friend">
+                                    <SelectValue placeholder={t('multiplayer.selectFriend')} />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {friends.length === 0 ? (
+                                    <SelectItem value="none" disabled>{t('friends.noFriends')}</SelectItem>
+                                  ) : (
+                                    friends.map((friend) => {
+                                      const label = friend.nickname || friend.username || friend.accountId || friend.id;
+                                      const suffix = friend.accountId ? `@${friend.accountId}` : friend.username ? `@${friend.username}` : "";
+                                      return (
+                                        <SelectItem key={friend.id} value={friend.id}>{`${label}${suffix ? ` ${suffix}` : ""}`}</SelectItem>
+                                      );
+                                    })
+                                  )}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
 
                       {selectedOfferType === "sell" && (
                         <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 space-y-2">
@@ -2148,8 +2312,8 @@ function MyOffersTab() {
             <p className="mt-1 text-lg font-semibold text-slate-100">{formatNumericValue(offerStats.active, numberLocale, 0, 0)}</p>
           </div>
           <div className="rounded-lg border border-slate-800 bg-slate-900 p-2">
-            <p className="text-[11px] text-slate-400 sm:text-xs">{t('p2p.statusInactive')}</p>
-            <p className="mt-1 text-lg font-semibold text-slate-100">{formatNumericValue(offerStats.inactive, numberLocale, 0, 0)}</p>
+            <p className="text-[11px] text-slate-400 sm:text-xs">{t('common.pending')}</p>
+            <p className="mt-1 text-lg font-semibold text-slate-100">{formatNumericValue(offerStats.pending, numberLocale, 0, 0)}</p>
           </div>
         </div>
       </div>
@@ -2184,9 +2348,20 @@ function MyOffersTab() {
                     </div>
 
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" className="min-h-[40px] min-w-[40px] text-slate-300 hover:bg-slate-800" data-testid={`button-edit-offer-${offer.id}`}>
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
+                      {offer.status === "rejected" && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="min-h-[40px] min-w-[40px] text-slate-300 hover:bg-slate-800"
+                          onClick={() => {
+                            setResubmitDialogOffer(offer);
+                            setCounterResponseDraft(offer.counterResponse || "");
+                          }}
+                          data-testid={`button-resubmit-offer-${offer.id}`}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         size="icon"
                         variant="ghost"
@@ -2209,6 +2384,16 @@ function MyOffersTab() {
                       <p className="text-xs text-slate-400">{t('p2p.price')}</p>
                       <p className="mt-1 font-semibold text-slate-100">{formatFixedFiat(offer.price, numberLocale)}</p>
                     </div>
+                  </div>
+
+                  <div className="mt-2 space-y-1 text-[11px] text-slate-400">
+                    <p>{offer.visibility === "private_friend" ? `private_friend${offer.targetUsername ? ` @${offer.targetUsername}` : ""}` : "public"}</p>
+                    {offer.moderationReason && (
+                      <p className="text-red-300">{offer.moderationReason}</p>
+                    )}
+                    {offer.counterResponse && (
+                      <p className="text-sky-300">{offer.counterResponse}</p>
+                    )}
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-1.5">
@@ -2267,15 +2452,35 @@ function MyOffersTab() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={cn("border", getStatusPillClass(offer.status))}>
-                        {getStatusBadge(offer.status).props.children}
-                      </Badge>
+                      <div className="space-y-1">
+                        <Badge className={cn("border", getStatusPillClass(offer.status))}>
+                          {getStatusBadge(offer.status).props.children}
+                        </Badge>
+                        <p className="text-[11px] text-slate-400">{offer.visibility === "private_friend" ? `private_friend${offer.targetUsername ? ` @${offer.targetUsername}` : ""}` : "public"}</p>
+                        {offer.moderationReason && (
+                          <p className="text-[11px] text-red-300">{offer.moderationReason}</p>
+                        )}
+                        {offer.counterResponse && (
+                          <p className="text-[11px] text-sky-300">{offer.counterResponse}</p>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button size="icon" variant="ghost" className="min-h-[40px] min-w-[40px] text-slate-300 hover:bg-slate-800" data-testid={`button-edit-offer-${offer.id}`}>
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
+                        {offer.status === "rejected" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="min-h-[40px] min-w-[40px] text-slate-300 hover:bg-slate-800"
+                            onClick={() => {
+                              setResubmitDialogOffer(offer);
+                              setCounterResponseDraft(offer.counterResponse || "");
+                            }}
+                            data-testid={`button-resubmit-offer-${offer.id}`}
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           size="icon"
                           variant="ghost"
@@ -2295,6 +2500,63 @@ function MyOffersTab() {
           </div>
         </>
       )}
+
+      <Dialog
+        open={Boolean(resubmitDialogOffer)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setResubmitDialogOffer(null);
+            setCounterResponseDraft("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resubmit Offer</DialogTitle>
+            <DialogDescription>{resubmitDialogOffer?.moderationReason || ""}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label>{t('p2p.dispute.additionalDetails')}</Label>
+            <Textarea
+              rows={4}
+              value={counterResponseDraft}
+              onChange={(event) => setCounterResponseDraft(event.target.value)}
+              placeholder={t('p2p.dispute.additionalDetailsPlaceholder')}
+              data-testid="input-offer-counter-response"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setResubmitDialogOffer(null);
+                setCounterResponseDraft("");
+              }}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (!resubmitDialogOffer) {
+                  return;
+                }
+                resubmitOfferMutation.mutate({
+                  offerId: resubmitDialogOffer.id,
+                  counterResponse: counterResponseDraft.trim(),
+                });
+              }}
+              disabled={resubmitOfferMutation.isPending || !counterResponseDraft.trim()}
+              data-testid="button-resubmit-offer-submit"
+            >
+              {resubmitOfferMutation.isPending ? t('common.loading') : t('common.submit')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

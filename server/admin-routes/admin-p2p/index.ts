@@ -121,7 +121,10 @@ export function registerAdminP2pRoutes(app: Express) {
       const offers = await db.select({
         id: p2pOffers.id,
         userId: p2pOffers.userId,
+        targetUserId: p2pOffers.targetUserId,
+        reviewedBy: p2pOffers.reviewedBy,
         type: p2pOffers.type,
+        visibility: p2pOffers.visibility,
         availableAmount: p2pOffers.availableAmount,
         price: p2pOffers.price,
         cryptoCurrency: p2pOffers.cryptoCurrency,
@@ -130,6 +133,12 @@ export function registerAdminP2pRoutes(app: Express) {
         maxLimit: p2pOffers.maxLimit,
         paymentMethods: p2pOffers.paymentMethods,
         status: p2pOffers.status,
+        moderationReason: p2pOffers.moderationReason,
+        counterResponse: p2pOffers.counterResponse,
+        submittedForReviewAt: p2pOffers.submittedForReviewAt,
+        reviewedAt: p2pOffers.reviewedAt,
+        approvedAt: p2pOffers.approvedAt,
+        rejectedAt: p2pOffers.rejectedAt,
         createdAt: p2pOffers.createdAt,
         username: users.username,
       })
@@ -144,11 +153,20 @@ export function registerAdminP2pRoutes(app: Express) {
         currency: `${offer.cryptoCurrency}/${offer.fiatCurrency}`,
       }));
 
-      const usernamesByUserId = await getP2PUsernameMap(formattedOffers.map((offer) => offer.userId));
+      const usernamesByUserId = await getP2PUsernameMap(
+        formattedOffers.flatMap((offer) => {
+          const ids = [offer.userId, offer.targetUserId, offer.reviewedBy]
+            .map((value) => String(value || "").trim())
+            .filter((value) => value.length > 0);
+          return ids;
+        }),
+      );
 
       const normalizedOffers = formattedOffers.map((offer) => ({
         ...offer,
         username: usernamesByUserId.get(offer.userId) || offer.username || "trader_user",
+        targetUsername: offer.targetUserId ? usernamesByUserId.get(offer.targetUserId) || null : null,
+        reviewedByUsername: offer.reviewedBy ? usernamesByUserId.get(offer.reviewedBy) || null : null,
       }));
 
       res.json(normalizedOffers);
@@ -605,6 +623,138 @@ export function registerAdminP2pRoutes(app: Express) {
         monthlyTradeLimit: updatedProfile.monthlyTradeLimit,
         updatedAt: updatedProfile.updatedAt,
       });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  // ==================== APPROVE OFFER ====================
+
+  app.post("/api/admin/p2p/offers/:id/approve", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const reason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 500) : "";
+
+      const [offer] = await db.select({
+        id: p2pOffers.id,
+        userId: p2pOffers.userId,
+        status: p2pOffers.status,
+        visibility: p2pOffers.visibility,
+      })
+        .from(p2pOffers)
+        .where(eq(p2pOffers.id, id))
+        .limit(1);
+
+      if (!offer) {
+        return res.status(404).json({ error: "Offer not found" });
+      }
+
+      if (offer.visibility !== "public") {
+        return res.status(400).json({ error: "Only public offers require admin moderation" });
+      }
+
+      if (offer.status !== "pending_approval" && offer.status !== "rejected") {
+        return res.status(400).json({ error: "Only pending or rejected public offers can be approved" });
+      }
+
+      const now = new Date();
+      const [updated] = await db.update(p2pOffers)
+        .set({
+          status: "active",
+          moderationReason: reason || null,
+          reviewedBy: req.admin!.id,
+          reviewedAt: now,
+          approvedAt: now,
+          rejectedAt: null,
+          updatedAt: now,
+        })
+        .where(eq(p2pOffers.id, id))
+        .returning();
+
+      await logAdminAction(req.admin!.id, "p2p_offer_approve", "p2p_offer", id, { reason }, req);
+
+      if (updated?.userId) {
+        await notifyWithLog(updated.userId, {
+          type: "success",
+          priority: "high",
+          title: "P2P Offer Approved",
+          titleAr: "تمت الموافقة على عرض P2P",
+          message: "Your P2P offer has been approved and is now visible in the marketplace.",
+          messageAr: "تمت الموافقة على عرض P2P الخاص بك وهو الآن ظاهر في السوق.",
+          link: "/p2p",
+          metadata: JSON.stringify({ offerId: id, action: "admin_approve" }),
+        }, "approve-offer");
+      }
+
+      res.json(updated);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  // ==================== REJECT OFFER ====================
+
+  app.post("/api/admin/p2p/offers/:id/reject", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const reason = typeof req.body?.reason === "string" ? req.body.reason.trim().slice(0, 500) : "";
+
+      if (!reason) {
+        return res.status(400).json({ error: "Rejection reason is required" });
+      }
+
+      const [offer] = await db.select({
+        id: p2pOffers.id,
+        userId: p2pOffers.userId,
+        status: p2pOffers.status,
+        visibility: p2pOffers.visibility,
+      })
+        .from(p2pOffers)
+        .where(eq(p2pOffers.id, id))
+        .limit(1);
+
+      if (!offer) {
+        return res.status(404).json({ error: "Offer not found" });
+      }
+
+      if (offer.visibility !== "public") {
+        return res.status(400).json({ error: "Only public offers require admin moderation" });
+      }
+
+      if (offer.status !== "pending_approval") {
+        return res.status(400).json({ error: "Only pending public offers can be rejected" });
+      }
+
+      const now = new Date();
+      const [updated] = await db.update(p2pOffers)
+        .set({
+          status: "rejected",
+          moderationReason: reason,
+          reviewedBy: req.admin!.id,
+          reviewedAt: now,
+          approvedAt: null,
+          rejectedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(p2pOffers.id, id))
+        .returning();
+
+      await logAdminAction(req.admin!.id, "p2p_offer_reject", "p2p_offer", id, { reason }, req);
+
+      if (updated?.userId) {
+        await notifyWithLog(updated.userId, {
+          type: "warning",
+          priority: "high",
+          title: "P2P Offer Rejected",
+          titleAr: "تم رفض عرض P2P",
+          message: `Your P2P offer was rejected. Reason: ${reason}`,
+          messageAr: `تم رفض عرض P2P الخاص بك. السبب: ${reason}`,
+          link: "/p2p",
+          metadata: JSON.stringify({ offerId: id, action: "admin_reject", reason }),
+        }, "reject-offer");
+      }
+
+      res.json(updated);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

@@ -19,6 +19,7 @@ import {
 import { isCurrencyAllowedForOfferType, normalizeCurrencyCode, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../../lib/payment-security";
 import { getP2PUsernameMap } from "../../lib/p2p-username";
+import { isEitherUserBlocked } from "../../lib/user-blocking";
 import { and, eq, ne, or } from "drizzle-orm";
 
 /** GET /api/p2p/my-trades, POST /api/p2p/trades, GET /api/p2p/trades/:id */
@@ -266,7 +267,21 @@ export function registerTradeRoutes(app: Express) {
         }
 
         if (offer.status !== 'active') {
+          if (offer.status === "pending_approval") {
+            return res.status(400).json({ error: "Offer is pending admin approval" });
+          }
+
+          if (offer.status === "rejected") {
+            return res.status(400).json({ error: "Offer has been rejected and is unavailable" });
+          }
+
           return res.status(400).json({ error: "Offer is no longer active" });
+        }
+
+        if (offer.visibility === "private_friend") {
+          if (!offer.targetUserId || offer.targetUserId !== req.user!.id) {
+            return res.status(403).json({ error: "This private offer is not available to your account" });
+          }
         }
 
         const offerCurrencyCode = String(offer.cryptoCurrency ?? offer.fiatCurrency ?? "").toUpperCase();
@@ -295,6 +310,11 @@ export function registerTradeRoutes(app: Express) {
 
         if (offer.userId === req.user!.id) {
           return res.status(400).json({ error: "Cannot trade with your own offer" });
+        }
+
+        const isBlockedEitherWay = await isEitherUserBlocked(req.user!.id, offer.userId);
+        if (isBlockedEitherWay) {
+          return res.status(403).json({ error: "Cannot trade with this user due to blocking restrictions" });
         }
 
         const activeCatalogMethodNames = new Set(

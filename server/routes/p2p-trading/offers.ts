@@ -1,13 +1,16 @@
 import type { Express, Response } from "express";
 import { storage } from "../../storage";
 import { db } from "../../db";
-import { countryPaymentMethods, p2pOffers, p2pSettings, p2pTraderPaymentMethods, p2pTraderProfiles, p2pTrades } from "@shared/schema";
+import { countryPaymentMethods, p2pOffers, p2pSettings, p2pTraderPaymentMethods, p2pTraderProfiles, p2pTrades, users } from "@shared/schema";
 import { authMiddleware, AuthRequest } from "../middleware";
 import { sanitizePlainText } from "../../lib/input-security";
 import { ensureP2PUsername, getP2PUsernameMap } from "../../lib/p2p-username";
 import { isCurrencyAllowedForOfferType, normalizeCurrencyCode, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
 import { and, eq, inArray } from "drizzle-orm";
 import { getBadgeEntitlementForUser, resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
+import { isEitherUserBlocked, getBlockedUserIds } from "../../lib/user-blocking";
+import { emitSystemAlert } from "../../lib/admin-alerts";
+import { sendNotification } from "../../websocket";
 import {
   computeFreezeUntilDate,
   evaluateP2PVerificationRequirements,
@@ -45,6 +48,8 @@ function mapOwnedPaymentMethodsForClient(methods: OfferOwnedPaymentMethod[]) {
 
 function mapOfferForClient(offer: Record<string, unknown>, username: string, country?: string | null) {
   const availableAmount = String(offer.availableAmount ?? offer.amount ?? '0');
+  const visibility = String(offer.visibility || "public");
+
   return {
     id: String(offer.id),
     userId: String(offer.userId),
@@ -63,8 +68,26 @@ function mapOfferForClient(offer: Record<string, unknown>, username: string, cou
     rating: 5,
     completedTrades: Number(offer.completedTrades || 0),
     status: offer.status,
+    visibility,
+    targetUserId: offer.targetUserId ? String(offer.targetUserId) : null,
+    targetUsername: offer.targetUsername ? String(offer.targetUsername) : null,
+    moderationReason: offer.moderationReason ? String(offer.moderationReason) : null,
+    counterResponse: offer.counterResponse ? String(offer.counterResponse) : null,
+    submittedForReviewAt: offer.submittedForReviewAt ?? null,
+    reviewedAt: offer.reviewedAt ?? null,
+    approvedAt: offer.approvedAt ?? null,
+    rejectedAt: offer.rejectedAt ?? null,
     createdAt: offer.createdAt,
   };
+}
+
+async function areUsersMutualFriends(userId: string, targetUserId: string): Promise<boolean> {
+  const [following, followedBy] = await Promise.all([
+    storage.getUserRelationship(userId, targetUserId, "follow"),
+    storage.getUserRelationship(targetUserId, userId, "follow"),
+  ]);
+
+  return Boolean(following && followedBy && following.status === "active" && followedBy.status === "active");
 }
 
 function resolveConfiguredTradeBound(rawValue: unknown, fallbackValue: number): number {
@@ -126,6 +149,30 @@ async function getFrozenIncomingSellBalance(userId: string, currencyCode: string
 
 /** GET /api/p2p/offers, POST /api/p2p/offers, GET /api/p2p/my-offers, DELETE /api/p2p/offers/:id */
 export function registerOfferRoutes(app: Express) {
+
+  const notifyWithLog = async (
+    recipientId: string,
+    payload: Parameters<typeof sendNotification>[1],
+    context: string,
+  ) => {
+    await sendNotification(recipientId, payload).catch((error: unknown) => {
+      console.warn(`[P2P Offers] Notification failure (${context})`, {
+        recipientId,
+        error: getErrorMessage(error),
+      });
+    });
+  };
+
+  const emitSystemAlertWithLog = async (
+    payload: Parameters<typeof emitSystemAlert>[0],
+    context: string,
+  ) => {
+    await emitSystemAlert(payload).catch((error: unknown) => {
+      console.warn(`[P2P Offers] System alert emission failure (${context})`, {
+        error: getErrorMessage(error),
+      });
+    });
+  };
 
   app.get("/api/p2p/offer-eligibility", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -269,6 +316,7 @@ export function registerOfferRoutes(app: Express) {
   app.get("/api/p2p/offers", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const { type, currency, payment, country } = req.query;
+      const requesterId = req.user!.id;
 
       const [settings] = await db.select({
         p2pBuyCurrencies: p2pSettings.p2pBuyCurrencies,
@@ -282,6 +330,28 @@ export function registerOfferRoutes(app: Express) {
         currency: currency ? String(currency) : undefined,
         payment: payment ? String(payment) : undefined,
       });
+
+      const requesterBlockedIds = new Set(await getBlockedUserIds(requesterId));
+      const uniqueOwnerIds = Array.from(new Set(
+        offers
+          .map((offer) => String(offer.userId || "").trim())
+          .filter((userId) => userId.length > 0),
+      ));
+
+      const ownerBlockRows = uniqueOwnerIds.length > 0
+        ? await db.select({
+          id: users.id,
+          blockedUsers: users.blockedUsers,
+        })
+          .from(users)
+          .where(inArray(users.id, uniqueOwnerIds))
+        : [];
+
+      const ownerBlocksRequester = new Set(
+        ownerBlockRows
+          .filter((row) => Array.isArray(row.blockedUsers) && row.blockedUsers.includes(requesterId))
+          .map((row) => row.id),
+      );
 
       const activeCatalogMethodNames = new Set(
         (await storage.listCountryPaymentMethods())
@@ -301,6 +371,24 @@ export function registerOfferRoutes(app: Express) {
           paymentMethods: normalizedPaymentMethods,
         };
       }).filter((offer) => {
+        const ownerId = String(offer.userId || "").trim();
+        if (!ownerId) {
+          return false;
+        }
+
+        if (requesterBlockedIds.has(ownerId) || ownerBlocksRequester.has(ownerId)) {
+          return false;
+        }
+
+        const offerVisibility = String(offer.visibility || "public");
+        if (offerVisibility === "private_friend") {
+          const targetUserId = String(offer.targetUserId || "").trim();
+          const canViewPrivate = ownerId === requesterId || (targetUserId.length > 0 && targetUserId === requesterId);
+          if (!canViewPrivate) {
+            return false;
+          }
+        }
+
         const offerCurrency = normalizeCurrencyCode(offer.cryptoCurrency ?? offer.fiatCurrency);
         if (!offerCurrency) {
           return false;
@@ -313,7 +401,15 @@ export function registerOfferRoutes(app: Express) {
         return (offer.paymentMethods || []).length > 0;
       });
 
-      const usernamesByUserId = await getP2PUsernameMap(visibleOffers.map((offer) => offer.userId));
+      const usernamesByUserId = await getP2PUsernameMap(
+        visibleOffers.flatMap((offer) => {
+          const ids = [String(offer.userId || "")];
+          if (offer.targetUserId) {
+            ids.push(String(offer.targetUserId));
+          }
+          return ids.filter((id) => id.trim().length > 0);
+        }),
+      );
       const uniqueOfferUserIds = Array.from(new Set(
         visibleOffers
           .map((offer) => String(offer.userId || ""))
@@ -351,7 +447,10 @@ export function registerOfferRoutes(app: Express) {
 
       const mapped = visibleOffers
         .map((offer) => mapOfferForClient(
-          offer as unknown as Record<string, unknown>,
+          {
+            ...(offer as unknown as Record<string, unknown>),
+            targetUsername: offer.targetUserId ? usernamesByUserId.get(String(offer.targetUserId)) || null : null,
+          },
           usernamesByUserId.get(offer.userId) || "trader_user",
           countryByUserId.get(String(offer.userId)) || null,
         ))
@@ -384,6 +483,8 @@ export function registerOfferRoutes(app: Express) {
         paymentTimeLimit,
         terms,
         autoReply,
+        visibility,
+        targetUserId,
       } = req.body;
 
       const user = await storage.getUser(req.user!.id);
@@ -611,10 +712,51 @@ export function registerOfferRoutes(app: Express) {
         return res.status(400).json({ error: "Auto reply is required" });
       }
 
+      const normalizedVisibility = typeof visibility === "string" ? visibility.trim() : "public";
+      if (!["public", "private_friend"].includes(normalizedVisibility)) {
+        return res.status(400).json({ error: "Visibility must be either 'public' or 'private_friend'" });
+      }
+
+      let normalizedTargetUserId: string | null = null;
+      if (normalizedVisibility === "private_friend") {
+        if (typeof targetUserId !== "string" || targetUserId.trim().length === 0) {
+          return res.status(400).json({ error: "Target friend is required for private offers" });
+        }
+
+        normalizedTargetUserId = targetUserId.trim();
+        if (normalizedTargetUserId === req.user!.id) {
+          return res.status(400).json({ error: "You cannot target yourself" });
+        }
+
+        const [targetUser, isMutualFriend, blockedEitherWay] = await Promise.all([
+          storage.getUser(normalizedTargetUserId),
+          areUsersMutualFriends(req.user!.id, normalizedTargetUserId),
+          isEitherUserBlocked(req.user!.id, normalizedTargetUserId),
+        ]);
+
+        if (!targetUser) {
+          return res.status(404).json({ error: "Target user not found" });
+        }
+
+        if (!isMutualFriend) {
+          return res.status(403).json({ error: "Private offers can only target mutual friends" });
+        }
+
+        if (blockedEitherWay) {
+          return res.status(403).json({ error: "Cannot target a blocked user" });
+        }
+      }
+
+      const now = new Date();
+      const isPublicOffer = normalizedVisibility === "public";
+      const initialStatus = isPublicOffer ? "pending_approval" : "active";
+
       const created = await storage.createP2POffer({
         userId: req.user!.id,
         type,
-        status: 'active',
+        status: initialStatus,
+        visibility: normalizedVisibility as "public" | "private_friend",
+        targetUserId: normalizedTargetUserId,
         cryptoCurrency: normalizedCurrency,
         fiatCurrency: normalizedFiatCurrency,
         price: parsedPrice.toFixed(2),
@@ -625,10 +767,44 @@ export function registerOfferRoutes(app: Express) {
         paymentTimeLimit: parsedPaymentTimeLimit,
         terms: safeTerms || null,
         autoReply: safeAutoReply || null,
+        submittedForReviewAt: isPublicOffer ? now : null,
+        approvedAt: isPublicOffer ? null : now,
+        reviewedAt: isPublicOffer ? null : now,
       });
 
       const ownerP2PUsername = await ensureP2PUsername(req.user!.id, user?.username);
-      res.status(201).json(mapOfferForClient(created as unknown as Record<string, unknown>, ownerP2PUsername));
+      const targetUsername = normalizedTargetUserId
+        ? (await getP2PUsernameMap([normalizedTargetUserId])).get(normalizedTargetUserId) || null
+        : null;
+
+      if (isPublicOffer) {
+        await emitSystemAlertWithLog({
+          title: "New P2P Offer Pending Approval",
+          titleAr: "عرض P2P جديد بانتظار الموافقة",
+          message: `Offer from ${ownerP2PUsername} is waiting for admin approval.`,
+          messageAr: `عرض من ${ownerP2PUsername} بانتظار موافقة الإدارة.`,
+          severity: "warning",
+          deepLink: "/admin/p2p",
+          entityType: "p2p_offer",
+          entityId: String(created.id),
+        }, "offer-pending-approval");
+      } else if (normalizedTargetUserId) {
+        await notifyWithLog(normalizedTargetUserId, {
+          type: "p2p",
+          priority: "normal",
+          title: "Private P2P Offer Received",
+          titleAr: "تم استلام عرض P2P خاص",
+          message: `${ownerP2PUsername} shared a private P2P offer with you.`,
+          messageAr: `قام ${ownerP2PUsername} بمشاركة عرض P2P خاص معك.`,
+          link: "/p2p",
+          metadata: JSON.stringify({ offerId: created.id, visibility: "private_friend" }),
+        }, "private-offer-created");
+      }
+
+      res.status(201).json(mapOfferForClient({
+        ...(created as unknown as Record<string, unknown>),
+        targetUsername,
+      }, ownerP2PUsername));
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -637,6 +813,15 @@ export function registerOfferRoutes(app: Express) {
   app.get("/api/p2p/my-offers", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const myOffers = await storage.getUserP2POffers(req.user!.id);
+      const targetUserIds = Array.from(new Set(
+        myOffers
+          .map((offer) => String(offer.targetUserId || "").trim())
+          .filter((userId) => userId.length > 0),
+      ));
+      const targetUsernames = targetUserIds.length > 0
+        ? await getP2PUsernameMap(targetUserIds)
+        : new Map<string, string>();
+
       const username = await ensureP2PUsername(req.user!.id, req.user!.username);
       const [ownCountryMethod] = await db.select({
         countryCode: p2pTraderPaymentMethods.countryCode,
@@ -651,7 +836,80 @@ export function registerOfferRoutes(app: Express) {
         .limit(1);
 
       const userCountry = String(ownCountryMethod?.countryCode || ownCountryMethod?.catalogCountryCode || "").trim().toUpperCase() || null;
-      res.json(myOffers.map((offer) => mapOfferForClient(offer as unknown as Record<string, unknown>, username, userCountry)));
+      res.json(myOffers.map((offer) => mapOfferForClient({
+        ...(offer as unknown as Record<string, unknown>),
+        targetUsername: offer.targetUserId ? targetUsernames.get(String(offer.targetUserId)) || null : null,
+      }, username, userCountry)));
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/p2p/offers/:id/resubmit", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const offerId = String(req.params.id || "").trim();
+      if (!offerId) {
+        return res.status(400).json({ error: "Offer ID is required" });
+      }
+
+      const rawCounterResponse = typeof req.body?.counterResponse === "string"
+        ? req.body.counterResponse
+        : "";
+      const safeCounterResponse = sanitizePlainText(rawCounterResponse, { maxLength: 1200 }).trim();
+      if (!safeCounterResponse) {
+        return res.status(400).json({ error: "Counter response is required" });
+      }
+
+      const existingOffer = await storage.getP2POffer(offerId);
+      if (!existingOffer || existingOffer.userId !== req.user!.id) {
+        return res.status(404).json({ error: "Offer not found" });
+      }
+
+      if (existingOffer.visibility !== "public") {
+        return res.status(400).json({ error: "Only public offers can be resubmitted for review" });
+      }
+
+      if (existingOffer.status !== "rejected") {
+        return res.status(400).json({ error: "Only rejected offers can be resubmitted" });
+      }
+
+      const now = new Date();
+      const [updated] = await db.update(p2pOffers)
+        .set({
+          status: "pending_approval",
+          counterResponse: safeCounterResponse,
+          submittedForReviewAt: now,
+          reviewedBy: null,
+          reviewedAt: null,
+          approvedAt: null,
+          rejectedAt: null,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(p2pOffers.id, offerId),
+          eq(p2pOffers.userId, req.user!.id),
+        ))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: "Offer not found" });
+      }
+
+      const owner = await storage.getUser(req.user!.id);
+      const ownerP2PUsername = await ensureP2PUsername(req.user!.id, owner?.username);
+
+      await emitSystemAlertWithLog({
+        title: "P2P Offer Resubmitted",
+        titleAr: "تمت إعادة تقديم عرض P2P",
+        message: `${ownerP2PUsername} resubmitted a rejected offer for review.`,
+        messageAr: `قام ${ownerP2PUsername} بإعادة تقديم عرض مرفوض للمراجعة.`,
+        severity: "warning",
+        deepLink: "/admin/p2p",
+        entityType: "p2p_offer",
+        entityId: offerId,
+      }, "offer-resubmitted");
+
+      res.json(mapOfferForClient(updated as unknown as Record<string, unknown>, ownerP2PUsername));
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
