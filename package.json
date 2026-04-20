@@ -54,6 +54,7 @@
     "security:smoke:domino-adapter-contract": "tsx scripts/smoke-domino-challenge-adapter-contract.ts",
     "security:smoke:ws-heartbeat": "node scripts/smoke-ws-heartbeat.mjs",
     "security:smoke:domino-contract": "tsx scripts/smoke-domino-contract.ts",
+    "security:smoke:p2p-negotiation-lifecycle": "tsx scripts/smoke-p2p-negotiation-lifecycle.ts",
     "quality:mobile:domino": "node scripts/smoke-domino-mobile-check.mjs",
     "quality:mobile:fullscreen": "node scripts/smoke-game-fullscreen-mobile-ux.mjs",
     "quality:mobile:fullscreen:android-back": "node scripts/smoke-game-fullscreen-android-back.mjs",

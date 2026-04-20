@@ -19,6 +19,14 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
   paymentMethod: string;
   platformFee: string;
   expiresAt: Date;
+  dealKind?: "standard_asset" | "digital_product";
+  digitalProductType?: string | null;
+  exchangeOffered?: string | null;
+  exchangeRequested?: string | null;
+  negotiatedTerms?: string | null;
+  supportMediationRequested?: boolean;
+  negotiatedAdminFeePercentage?: string | null;
+  negotiationId?: string | null;
 }): Promise<{ success: boolean; trade?: P2PTrade; error?: string }> {
   const tradeAmount = parseFloat(params.amount);
   const tradeFiatAmount = parseFloat(params.fiatAmount);
@@ -176,6 +184,14 @@ export async function createP2PTradeProjectCurrencyAtomic(params: {
       offerId: params.offerId,
       buyerId: params.buyerId,
       sellerId: params.sellerId,
+      dealKind: params.dealKind || "standard_asset",
+      digitalProductType: params.digitalProductType || null,
+      exchangeOffered: params.exchangeOffered || null,
+      exchangeRequested: params.exchangeRequested || null,
+      negotiatedTerms: params.negotiatedTerms || null,
+      supportMediationRequested: Boolean(params.supportMediationRequested),
+      negotiatedAdminFeePercentage: params.negotiatedAdminFeePercentage || null,
+      negotiationId: params.negotiationId || null,
       status: 'pending',
       amount: params.amount,
       fiatAmount: params.fiatAmount,

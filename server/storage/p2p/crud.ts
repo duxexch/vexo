@@ -1,8 +1,10 @@
 import {
-  p2pTrades, p2pOffers, p2pTradeMessages, p2pTraderRatings, p2pTraderMetrics,
+  p2pTrades, p2pOffers, p2pOfferNegotiations, p2pTradeMessages, p2pTraderRatings, p2pTraderMetrics,
   type P2PTrade, type InsertP2PTrade,
   type P2POffer,
   type InsertP2POffer,
+  type P2POfferNegotiation,
+  type InsertP2POfferNegotiation,
   type P2PTradeMessage, type InsertP2PTradeMessage,
   type P2PTraderRating,
   type P2PTraderMetric,
@@ -136,5 +138,80 @@ export async function updateP2POffer(id: string, data: Partial<P2POffer>): Promi
     .set({ ...data, updatedAt: new Date() })
     .where(eq(p2pOffers.id, id))
     .returning();
+  return updated || undefined;
+}
+
+export async function createP2POfferNegotiation(
+  negotiation: InsertP2POfferNegotiation,
+): Promise<P2POfferNegotiation> {
+  const [created] = await db.insert(p2pOfferNegotiations).values(negotiation).returning();
+  return created;
+}
+
+export async function getP2POfferNegotiation(id: string): Promise<P2POfferNegotiation | undefined> {
+  const [row] = await db.select().from(p2pOfferNegotiations).where(eq(p2pOfferNegotiations.id, id));
+  return row || undefined;
+}
+
+export async function listP2POfferNegotiations(
+  offerId: string,
+  offerOwnerId: string,
+  counterpartyUserId: string,
+): Promise<P2POfferNegotiation[]> {
+  return db
+    .select()
+    .from(p2pOfferNegotiations)
+    .where(and(
+      eq(p2pOfferNegotiations.offerId, offerId),
+      eq(p2pOfferNegotiations.offerOwnerId, offerOwnerId),
+      eq(p2pOfferNegotiations.counterpartyUserId, counterpartyUserId),
+    ))
+    .orderBy(asc(p2pOfferNegotiations.createdAt));
+}
+
+export async function listP2POfferNegotiationsForOffer(
+  offerId: string,
+  offerOwnerId: string,
+): Promise<P2POfferNegotiation[]> {
+  return db
+    .select()
+    .from(p2pOfferNegotiations)
+    .where(and(
+      eq(p2pOfferNegotiations.offerId, offerId),
+      eq(p2pOfferNegotiations.offerOwnerId, offerOwnerId),
+    ))
+    .orderBy(asc(p2pOfferNegotiations.createdAt));
+}
+
+export async function getPendingP2POfferNegotiation(
+  offerId: string,
+  offerOwnerId: string,
+  counterpartyUserId: string,
+): Promise<P2POfferNegotiation | undefined> {
+  const [row] = await db
+    .select()
+    .from(p2pOfferNegotiations)
+    .where(and(
+      eq(p2pOfferNegotiations.offerId, offerId),
+      eq(p2pOfferNegotiations.offerOwnerId, offerOwnerId),
+      eq(p2pOfferNegotiations.counterpartyUserId, counterpartyUserId),
+      eq(p2pOfferNegotiations.status, "pending"),
+    ))
+    .orderBy(desc(p2pOfferNegotiations.createdAt))
+    .limit(1);
+
+  return row || undefined;
+}
+
+export async function updateP2POfferNegotiation(
+  id: string,
+  data: Partial<InsertP2POfferNegotiation>,
+): Promise<P2POfferNegotiation | undefined> {
+  const [updated] = await db
+    .update(p2pOfferNegotiations)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(p2pOfferNegotiations.id, id))
+    .returning();
+
   return updated || undefined;
 }

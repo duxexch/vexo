@@ -22,6 +22,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "@/lib/i18n";
 import { queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUnreadAlertEntities, useMarkAlertReadByEntity } from "@/hooks/use-admin-alert-counts";
@@ -278,8 +279,10 @@ function formatDetailValue(key: string, value: unknown): string {
 }
 
 function DetailGrid({ data }: { data?: Record<string, unknown> | null }) {
+  const { t } = useI18n();
+
   if (!data) {
-    return <p className="text-sm text-muted-foreground">No details available.</p>;
+    return <p className="text-sm text-muted-foreground">{t("admin.p2p.details.none")}</p>;
   }
 
   const entries = Object.entries(data).filter(([, value]) => value !== undefined);
@@ -301,6 +304,8 @@ function DetailGrid({ data }: { data?: Record<string, unknown> | null }) {
 }
 
 function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+  const { t } = useI18n();
+
   const defaultCurrencyCodes = ["USD", "USDT", "EUR", "GBP", "SAR", "AED", "EGP"];
   const [testAmount, setTestAmount] = useState("");
   const [calculatedFee, setCalculatedFee] = useState<{ fee: string; breakdown?: Record<string, unknown> } | null>(null);
@@ -350,10 +355,10 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/settings"] });
-      toast({ title: "Settings Updated", description: "P2P settings have been saved" });
+      toast({ title: t("admin.p2p.settings.updated.title"), description: t("admin.p2p.settings.updated.description") });
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to update settings", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("admin.p2p.settings.updated.failed"), variant: "destructive" });
     },
   });
 
@@ -386,10 +391,10 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/freeze-program"] });
-      toast({ title: "Freeze Program Saved", description: "Currency freeze program settings were updated" });
+      toast({ title: t("admin.p2p.freeze.saved.title"), description: t("admin.p2p.freeze.saved.description") });
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to update freeze program settings", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("admin.p2p.freeze.saved.failed"), variant: "destructive" });
     },
   });
 
@@ -412,10 +417,10 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/freeze-program/requests"] });
       setSelectedFreezeRequest(null);
       setFreezeRejectionReason("");
-      toast({ title: "Request Updated", description: "Freeze request status has been updated" });
+      toast({ title: t("admin.p2p.freeze.request.updated.title"), description: t("admin.p2p.freeze.request.updated.description") });
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to update freeze request", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("admin.p2p.freeze.request.updated.failed"), variant: "destructive" });
     },
   });
 
@@ -532,7 +537,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <DollarSign className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Fees Collected</p>
+                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.totalFees")}</p>
                 <p className="text-2xl font-bold" data-testid="text-total-fees">${parseFloat(analytics?.allTime?.totalFees || "0").toFixed(2)}</p>
               </div>
             </div>
@@ -546,7 +551,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <ArrowLeftRight className="h-5 w-5 text-blue-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Trade Volume</p>
+                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.totalTradeVolume")}</p>
                 <p className="text-2xl font-bold" data-testid="text-total-volume">${parseFloat(analytics?.allTime?.totalVolume || "0").toFixed(2)}</p>
               </div>
             </div>
@@ -560,7 +565,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <TrendingUp className="h-5 w-5 text-purple-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">30-Day Fees</p>
+                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.thirtyDayFees")}</p>
                 <p className="text-2xl font-bold" data-testid="text-30day-fees">${parseFloat(analytics?.last30Days?.totalFees || "0").toFixed(2)}</p>
               </div>
             </div>
@@ -574,7 +579,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 <Users className="h-5 w-5 text-orange-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Completed Trades</p>
+                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.totalCompletedTrades")}</p>
                 <p className="text-2xl font-bold" data-testid="text-total-trades">{analytics?.allTime?.totalTrades || 0}</p>
               </div>
             </div>
@@ -585,7 +590,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
       {analytics?.byStatus && analytics.byStatus.length > 0 && (
         <Card className={surfaceCardClass}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Trades by Status</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("admin.p2p.stats.tradesByStatus")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-4">
@@ -615,12 +620,12 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Percent className="h-5 w-5" />
-              Fee Configuration
+              {t("admin.p2p.settings.feeConfiguration")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Fee Type</Label>
+              <Label>{t("admin.p2p.settings.feeType")}</Label>
               <Select
                 value={settings?.feeType || "percentage"}
                 onValueChange={(value) => handleUpdateSetting("feeType", value)}
@@ -629,16 +634,16 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="percentage">Percentage Only</SelectItem>
-                  <SelectItem value="fixed">Fixed Amount Only</SelectItem>
-                  <SelectItem value="hybrid">Percentage + Fixed</SelectItem>
+                  <SelectItem value="percentage">{t("admin.p2p.settings.feeType.percentageOnly")}</SelectItem>
+                  <SelectItem value="fixed">{t("admin.p2p.settings.feeType.fixedOnly")}</SelectItem>
+                  <SelectItem value="hybrid">{t("admin.p2p.settings.feeType.hybrid")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Percentage Fee (%)</Label>
+                <Label>{t("admin.p2p.settings.percentageFee")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -653,7 +658,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 </p>
               </div>
               <div className="space-y-2">
-                <Label>Fixed Fee ($)</Label>
+                <Label>{t("admin.p2p.settings.fixedFee")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -668,7 +673,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Minimum Fee ($)</Label>
+                <Label>{t("admin.p2p.settings.minimumFee")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -679,13 +684,13 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 />
               </div>
               <div className="space-y-2">
-                <Label>Maximum Fee ($)</Label>
+                <Label>{t("admin.p2p.settings.maximumFee")}</Label>
                 <Input
                   type="number"
                   step="0.01"
                   className={INPUT_SURFACE_CLASS}
                   value={settings?.maxFee || ""}
-                  placeholder="No limit"
+                  placeholder={t("admin.p2p.settings.noLimit")}
                   onChange={(e) => handleUpdateSetting("maxFee", e.target.value || null)}
                   data-testid="input-max-fee"
                 />
@@ -695,13 +700,13 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
             <div className="pt-4 border-t">
               <Label className="flex items-center gap-2 mb-3">
                 <Calculator className="h-4 w-4" />
-                Fee Calculator
+                {t("admin.p2p.settings.feeCalculator")}
               </Label>
               <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   type="number"
                   className={INPUT_SURFACE_CLASS}
-                  placeholder="Enter trade amount"
+                  placeholder={t("admin.p2p.settings.enterTradeAmount")}
                   value={testAmount}
                   onChange={(e) => setTestAmount(e.target.value)}
                   data-testid="input-test-amount"
@@ -713,13 +718,13 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                   disabled={!testAmount}
                   data-testid="button-calculate-fee"
                 >
-                  Calculate
+                  {t("admin.p2p.settings.calculate")}
                 </Button>
               </div>
               {calculatedFee && (
                 <div className="mt-2 p-2 bg-muted rounded-md">
                   <p className="text-sm">
-                    Fee: <span className="font-bold">${calculatedFee.fee}</span>
+                    {t("admin.p2p.settings.fee")}: <span className="font-bold">${calculatedFee.fee}</span>
                   </p>
                 </div>
               )}
@@ -731,13 +736,13 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
-              Trade Limits & Timeouts
+              {t("admin.p2p.settings.tradeLimitsAndTimeouts")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Min Trade Amount ($)</Label>
+                <Label>{t("admin.p2p.settings.minTradeAmount")}</Label>
                 <Input
                   type="number"
                   className={INPUT_SURFACE_CLASS}
@@ -747,7 +752,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 />
               </div>
               <div className="space-y-2">
-                <Label>Max Trade Amount ($)</Label>
+                <Label>{t("admin.p2p.settings.maxTradeAmount")}</Label>
                 <Input
                   type="number"
                   className={INPUT_SURFACE_CLASS}
@@ -760,7 +765,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Escrow Timeout (hours)</Label>
+                <Label>{t("admin.p2p.settings.escrowTimeoutHours")}</Label>
                 <Input
                   type="number"
                   className={INPUT_SURFACE_CLASS}
@@ -770,7 +775,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 />
               </div>
               <div className="space-y-2">
-                <Label>Payment Timeout (minutes)</Label>
+                <Label>{t("admin.p2p.settings.paymentTimeoutMinutes")}</Label>
                 <Input
                   type="number"
                   className={INPUT_SURFACE_CLASS}
@@ -784,9 +789,9 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
             <div className="pt-4 border-t space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <Label>Auto-Expire Trades</Label>
+                  <Label>{t("admin.p2p.settings.autoExpireTrades")}</Label>
                   <p className="text-sm text-muted-foreground">
-                    Automatically cancel expired trades
+                    {t("admin.p2p.settings.autoExpireTrades.description")}
                   </p>
                 </div>
                 <Switch
@@ -798,9 +803,9 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
 
               <div className="flex items-center justify-between">
                 <div>
-                  <Label>P2P Trading Enabled</Label>
+                  <Label>{t("admin.p2p.settings.p2pTradingEnabled")}</Label>
                   <p className="text-sm text-muted-foreground">
-                    Enable/disable all P2P trading
+                    {t("admin.p2p.settings.p2pTradingEnabled.description")}
                   </p>
                 </div>
                 <Switch
@@ -812,17 +817,17 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
 
               <div className="border-t pt-4 space-y-4">
                 <div>
-                  <Label className="text-base">Verification Requirements</Label>
+                  <Label className="text-base">{t("admin.p2p.settings.verificationRequirements")}</Label>
                   <p className="text-sm text-muted-foreground">
-                    Control which verification checks are required before users can trade or post P2P ads.
+                    {t("admin.p2p.settings.verificationRequirements.description")}
                   </p>
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label>Require Identity Verification</Label>
+                    <Label>{t("admin.p2p.settings.requireIdentityVerification")}</Label>
                     <p className="text-sm text-muted-foreground">
-                      Users must have approved identity verification.
+                      {t("admin.p2p.settings.requireIdentityVerification.description")}
                     </p>
                   </div>
                   <Switch
@@ -834,9 +839,9 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label>Require Phone Verification</Label>
+                    <Label>{t("admin.p2p.settings.requirePhoneVerification")}</Label>
                     <p className="text-sm text-muted-foreground">
-                      Users must verify their phone number.
+                      {t("admin.p2p.settings.requirePhoneVerification.description")}
                     </p>
                   </div>
                   <Switch
@@ -848,9 +853,9 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label>Require Email Verification</Label>
+                    <Label>{t("admin.p2p.settings.requireEmailVerification")}</Label>
                     <p className="text-sm text-muted-foreground">
-                      Users must verify their email address.
+                      {t("admin.p2p.settings.requireEmailVerification.description")}
                     </p>
                   </div>
                   <Switch
@@ -869,20 +874,20 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
-            Currency Governance
+            {t("admin.p2p.settings.currencyGovernance")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
-            <Label>Allowed Currencies For Buy Ads</Label>
+            <Label>{t("admin.p2p.settings.allowedCurrenciesForBuyAds")}</Label>
             <Textarea
               className={TEXTAREA_SURFACE_CLASS}
               value={buyCurrenciesDraft}
               onChange={(event) => setBuyCurrenciesDraft(event.target.value)}
-              placeholder="USD, EUR, SAR"
+              placeholder={t("admin.p2p.settings.currencyPlaceholder")}
               data-testid="textarea-p2p-buy-currencies"
             />
-            <p className="text-xs text-muted-foreground">Comma or space separated currency codes.</p>
+            <p className="text-xs text-muted-foreground">{t("admin.p2p.settings.currencyCodesHint")}</p>
             <Button
               type="button"
               variant="outline"
@@ -891,20 +896,20 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
               disabled={updateSettingsMutation.isPending}
               data-testid="button-save-buy-currencies"
             >
-              Save Buy Currencies
+              {t("admin.p2p.settings.saveBuyCurrencies")}
             </Button>
           </div>
 
           <div className="space-y-2">
-            <Label>Allowed Currencies For Sell Ads</Label>
+            <Label>{t("admin.p2p.settings.allowedCurrenciesForSellAds")}</Label>
             <Textarea
               className={TEXTAREA_SURFACE_CLASS}
               value={sellCurrenciesDraft}
               onChange={(event) => setSellCurrenciesDraft(event.target.value)}
-              placeholder="USD, EUR, SAR"
+              placeholder={t("admin.p2p.settings.currencyPlaceholder")}
               data-testid="textarea-p2p-sell-currencies"
             />
-            <p className="text-xs text-muted-foreground">Comma or space separated currency codes.</p>
+            <p className="text-xs text-muted-foreground">{t("admin.p2p.settings.currencyCodesHint")}</p>
             <Button
               type="button"
               variant="outline"
@@ -913,20 +918,20 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
               disabled={updateSettingsMutation.isPending}
               data-testid="button-save-sell-currencies"
             >
-              Save Sell Currencies
+              {t("admin.p2p.settings.saveSellCurrencies")}
             </Button>
           </div>
 
           <div className="space-y-2">
-            <Label>Allowed Currencies For Deposit</Label>
+            <Label>{t("admin.p2p.settings.allowedCurrenciesForDeposit")}</Label>
             <Textarea
               className={TEXTAREA_SURFACE_CLASS}
               value={depositCurrenciesDraft}
               onChange={(event) => setDepositCurrenciesDraft(event.target.value)}
-              placeholder="USD, EUR, SAR"
+              placeholder={t("admin.p2p.settings.currencyPlaceholder")}
               data-testid="textarea-deposit-currencies"
             />
-            <p className="text-xs text-muted-foreground">Comma or space separated currency codes.</p>
+            <p className="text-xs text-muted-foreground">{t("admin.p2p.settings.currencyCodesHint")}</p>
             <Button
               type="button"
               variant="outline"
@@ -935,7 +940,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
               disabled={updateSettingsMutation.isPending}
               data-testid="button-save-deposit-currencies"
             >
-              Save Deposit Currencies
+              {t("admin.p2p.settings.saveDepositCurrencies")}
             </Button>
           </div>
         </CardContent>
@@ -946,13 +951,13 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
-              Freeze Benefit Program
+              {t("admin.p2p.freeze.title")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Currency</Label>
+                <Label>{t("common.currency")}</Label>
                 <Select value={selectedFreezeCurrency} onValueChange={setSelectedFreezeCurrency}>
                   <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-freeze-currency">
                     <SelectValue />
@@ -967,8 +972,8 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
 
               <div className="flex items-end justify-between rounded-2xl border border-slate-200/80 bg-white/80 p-3 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60">
                 <div>
-                  <Label>Enabled</Label>
-                  <p className="text-xs text-muted-foreground">Allow users to request freeze benefit for this currency.</p>
+                  <Label>{t("common.active")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("admin.p2p.freeze.enabled.description")}</p>
                 </div>
                 <Switch
                   checked={freezeDraft.isEnabled}
@@ -980,7 +985,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>Benefit Rate %</Label>
+                <Label>{t("admin.p2p.freeze.benefitRate")}</Label>
                 <Input
                   type="number"
                   step="0.001"
@@ -991,7 +996,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 />
               </div>
               <div className="space-y-2">
-                <Label>Base Reduction %</Label>
+                <Label>{t("admin.p2p.freeze.baseReduction")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -1002,7 +1007,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 />
               </div>
               <div className="space-y-2">
-                <Label>Max Reduction %</Label>
+                <Label>{t("admin.p2p.freeze.maxReduction")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -1013,7 +1018,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 />
               </div>
               <div className="space-y-2">
-                <Label>Minimum Amount</Label>
+                <Label>{t("admin.p2p.freeze.minimumAmount")}</Label>
                 <Input
                   type="number"
                   step="0.00000001"
@@ -1024,7 +1029,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 />
               </div>
               <div className="space-y-2">
-                <Label>Maximum Amount (optional)</Label>
+                <Label>{t("admin.p2p.freeze.maximumAmountOptional")}</Label>
                 <Input
                   type="number"
                   step="0.00000001"
@@ -1037,10 +1042,10 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
             </div>
 
             <div className="space-y-2">
-              <Label>Allowed Payment Methods</Label>
+              <Label>{t("admin.p2p.freeze.allowedPaymentMethods")}</Label>
               <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200/80 bg-white/80 p-2 dark:border-slate-800 dark:bg-slate-900/60">
                 {availableFreezePaymentMethods.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No active payment methods available.</p>
+                  <p className="text-sm text-muted-foreground">{t("admin.p2p.freeze.noActivePaymentMethods")}</p>
                 ) : (
                   availableFreezePaymentMethods.map((method) => {
                     const isSelected = freezeDraft.allowedPaymentMethodIds.includes(method.id);
@@ -1070,7 +1075,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
               disabled={updateFreezeProgramMutation.isPending}
               data-testid="button-save-freeze-program"
             >
-              Save Freeze Program
+              {t("admin.p2p.freeze.save")}
             </Button>
           </CardContent>
         </Card>
@@ -1079,12 +1084,12 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5" />
-              Freeze Requests Review
+              {t("admin.p2p.freeze.reviewTitle")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Status Filter</Label>
+              <Label>{t("admin.p2p.filters.status")}</Label>
               <Select
                 value={freezeRequestFilter}
                 onValueChange={(value) => setFreezeRequestFilter(value as typeof freezeRequestFilter)}
@@ -1093,19 +1098,19 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                  <SelectItem value="exhausted">Exhausted</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="pending">{t("common.pending")}</SelectItem>
+                  <SelectItem value="approved">{t("common.approved")}</SelectItem>
+                  <SelectItem value="rejected">{t("common.rejected")}</SelectItem>
+                  <SelectItem value="exhausted">{t("admin.p2p.freeze.status.exhausted")}</SelectItem>
+                  <SelectItem value="cancelled">{t("p2p.tradeCancelled")}</SelectItem>
+                  <SelectItem value="all">{t("common.all")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="max-h-[420px] space-y-3 overflow-auto">
               {freezeRequests.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No freeze requests found.</p>
+                <p className="text-sm text-muted-foreground">{t("admin.p2p.freeze.noRequests")}</p>
               ) : (
                 freezeRequests.map((request) => (
                   <div key={request.id} className="rounded-2xl border border-slate-200/80 bg-white/80 p-3 space-y-2 shadow-[0_10px_24px_-22px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/60" data-testid={`freeze-request-${request.id}`}>
@@ -1116,18 +1121,18 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                       </Badge>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      Requested: {request.amount} | Approved: {request.approvedAmount} | Remaining: {request.remainingAmount}
+                      {t("admin.p2p.freeze.request.amounts", { requested: request.amount, approved: request.approvedAmount, remaining: request.remainingAmount })}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Method: {request.paymentMethodName}
+                      {t("admin.p2p.freeze.request.method")}: {request.paymentMethodName}
                       {request.paymentReference ? ` • Ref: ${request.paymentReference}` : ""}
                       {request.payerName ? ` • Payer: ${request.payerName}` : ""}
                     </div>
                     {request.requestNote ? (
-                      <p className="text-xs">User note: {request.requestNote}</p>
+                      <p className="text-xs">{t("admin.p2p.freeze.request.userNote")}: {request.requestNote}</p>
                     ) : null}
                     {request.rejectionReason ? (
-                      <p className="text-xs text-destructive">Reason: {request.rejectionReason}</p>
+                      <p className="text-xs text-destructive">{t("admin.p2p.freeze.request.rejectionReason")}: {request.rejectionReason}</p>
                     ) : null}
 
                     {request.status === "pending" ? (
@@ -1140,7 +1145,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                           data-testid={`button-approve-freeze-${request.id}`}
                         >
                           <Check className="h-4 w-4 me-1" />
-                          Approve
+                          {t("common.approved")}
                         </Button>
                         <Button
                           size="sm"
@@ -1153,7 +1158,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                           data-testid={`button-reject-freeze-${request.id}`}
                         >
                           <X className="h-4 w-4 me-1" />
-                          Reject
+                          {t("common.rejected")}
                         </Button>
                       </div>
                     ) : null}
@@ -1172,7 +1177,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
         }}>
           <DialogContent className={DIALOG_SURFACE_CLASS}>
             <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
-              <DialogTitle>Reject Freeze Request</DialogTitle>
+              <DialogTitle>{t("admin.p2p.freeze.rejectDialog.title")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 px-6 py-5">
               <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
@@ -1182,10 +1187,10 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 </p>
               </div>
               <div className="space-y-2">
-                <Label>Rejection Reason</Label>
+                <Label>{t("admin.p2p.freeze.rejectDialog.reason")}</Label>
                 <Textarea
                   className={TEXTAREA_SURFACE_CLASS}
-                  placeholder="Enter reason for rejection"
+                  placeholder={t("admin.p2p.freeze.rejectDialog.reasonPlaceholder")}
                   value={freezeRejectionReason}
                   onChange={(event) => setFreezeRejectionReason(event.target.value)}
                   data-testid="input-freeze-rejection-reason"
@@ -1197,7 +1202,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 setSelectedFreezeRequest(null);
                 setFreezeRejectionReason("");
               }}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 className={BUTTON_3D_DANGER_CLASS}
@@ -1213,7 +1218,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
                 }}
                 data-testid="button-confirm-freeze-reject"
               >
-                Reject Request
+                {t("admin.p2p.freeze.rejectDialog.confirm")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1225,6 +1230,7 @@ function P2PSettingsPanel({ toast }: { toast: ReturnType<typeof useToast>["toast
 
 export default function AdminP2PPage() {
   const { toast } = useToast();
+  const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [monthlyLimitDrafts, setMonthlyLimitDrafts] = useState<Record<string, string>>({});
   const [selectedOffer, setSelectedOffer] = useState<any>(null);
@@ -1255,8 +1261,8 @@ export default function AdminP2PPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/stats"] });
 
       toast({
-        title: alert.title || "Dispute Update",
-        description: alert.message || "A dispute requires attention",
+        title: alert.title || t("admin.p2p.disputes.updateTitle"),
+        description: alert.message || t("admin.p2p.disputes.updateDescription"),
         variant: alert.severity === 'critical' ? 'destructive' : 'default',
       });
 
@@ -1383,11 +1389,11 @@ export default function AdminP2PPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/offers"] });
-      toast({ title: "Offer Cancelled", description: "The P2P offer has been cancelled" });
+      toast({ title: t("admin.p2p.offers.cancelled.title"), description: t("admin.p2p.offers.cancelled.description") });
       closeDialog();
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to cancel offer", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("admin.p2p.offers.cancelled.failed"), variant: "destructive" });
     },
   });
 
@@ -1401,11 +1407,11 @@ export default function AdminP2PPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/offers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/stats"] });
-      toast({ title: "Offer Approved", description: "The P2P offer has been approved" });
+      toast({ title: t("admin.p2p.offers.approved.title"), description: t("admin.p2p.offers.approved.description") });
       closeDialog();
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to approve offer", variant: "destructive" });
+      toast({ title: t("common.error"), description: error.message || t("admin.p2p.offers.approved.failed"), variant: "destructive" });
     },
   });
 
@@ -1419,11 +1425,11 @@ export default function AdminP2PPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/offers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/stats"] });
-      toast({ title: "Offer Rejected", description: "The P2P offer has been rejected" });
+      toast({ title: t("admin.p2p.offers.rejected.title"), description: t("admin.p2p.offers.rejected.description") });
       closeDialog();
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to reject offer", variant: "destructive" });
+      toast({ title: t("common.error"), description: error.message || t("admin.p2p.offers.rejected.failed"), variant: "destructive" });
     },
   });
 
@@ -1452,10 +1458,10 @@ export default function AdminP2PPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/ad-permissions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/offers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/stats"] });
-      toast({ title: "Permission Updated", description: "P2P permissions and limits have been updated" });
+      toast({ title: t("admin.p2p.permissions.updated.title"), description: t("admin.p2p.permissions.updated.description") });
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to update P2P permissions", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("admin.p2p.permissions.updated.failed"), variant: "destructive" });
     },
   });
 
@@ -1469,11 +1475,11 @@ export default function AdminP2PPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/disputes"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/trades"] });
-      toast({ title: "Dispute Resolved", description: "The dispute has been resolved" });
+      toast({ title: t("admin.p2p.disputes.resolved.title"), description: t("admin.p2p.disputes.resolved.description") });
       closeDialog();
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to resolve dispute", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("admin.p2p.disputes.resolved.failed"), variant: "destructive" });
     },
   });
 
@@ -1486,11 +1492,11 @@ export default function AdminP2PPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/disputes"] });
-      toast({ title: "Dispute Escalated", description: "The dispute has been escalated for investigation" });
+      toast({ title: t("admin.p2p.disputes.escalated.title"), description: t("admin.p2p.disputes.escalated.description") });
       closeDialog();
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to escalate dispute", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("admin.p2p.disputes.escalated.failed"), variant: "destructive" });
     },
   });
 
@@ -1503,11 +1509,11 @@ export default function AdminP2PPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/p2p/disputes"] });
-      toast({ title: "Dispute Closed", description: "The dispute has been closed" });
+      toast({ title: t("admin.p2p.disputes.closed.title"), description: t("admin.p2p.disputes.closed.description") });
       closeDialog();
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to close dispute", variant: "destructive" });
+      toast({ title: t("common.error"), description: t("admin.p2p.disputes.closed.failed"), variant: "destructive" });
     },
   });
 
@@ -1532,6 +1538,12 @@ export default function AdminP2PPage() {
       case "disputed": return "destructive";
       default: return "outline";
     }
+  };
+
+  const getStatusLabel = (status: string) => {
+    const key = `admin.p2p.status.${status}`;
+    const localized = t(key);
+    return localized === key ? status : localized;
   };
 
   const filteredOffers = offers?.filter((offer: P2POffer) =>
@@ -1567,13 +1579,13 @@ export default function AdminP2PPage() {
     <div className="p-3 sm:p-4 md:p-6 space-y-5 md:space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">P2P Management</h1>
-          <p className="text-sm text-muted-foreground">Manage P2P offers, trades and disputes</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{t("admin.p2p.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("admin.p2p.description")}</p>
         </div>
         <div className="relative w-full md:w-80">
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search..."
+            placeholder={t("common.search") + "..."}
             className={`${INPUT_SURFACE_CLASS} ps-10`}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -1590,7 +1602,7 @@ export default function AdminP2PPage() {
                 <ArrowLeftRight className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Active Offers</p>
+                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.activeOffers")}</p>
                 <p className="text-2xl font-bold">{stats?.activeOffers || 0}</p>
               </div>
             </div>
@@ -1603,7 +1615,7 @@ export default function AdminP2PPage() {
                 <Check className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Completed Trades</p>
+                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.completedTrades")}</p>
                 <p className="text-2xl font-bold">{stats?.completedTrades || 0}</p>
               </div>
             </div>
@@ -1616,7 +1628,7 @@ export default function AdminP2PPage() {
                 <Clock className="h-5 w-5 text-orange-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Pending Trades</p>
+                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.pendingTrades")}</p>
                 <p className="text-2xl font-bold">{stats?.pendingTrades || 0}</p>
               </div>
             </div>
@@ -1629,7 +1641,7 @@ export default function AdminP2PPage() {
                 <AlertTriangle className="h-5 w-5 text-red-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Open Disputes</p>
+                <p className="text-sm text-muted-foreground">{t("admin.p2p.stats.openDisputes")}</p>
                 <p className="text-2xl font-bold">{stats?.openDisputes || 0}</p>
               </div>
             </div>
@@ -1640,10 +1652,10 @@ export default function AdminP2PPage() {
       <Tabs defaultValue="offers">
         <div className="overflow-x-auto pb-1">
           <TabsList className={TAB_LIST_CLASS}>
-            <TabsTrigger className={TAB_TRIGGER_CLASS} value="offers" data-testid="tab-offers">Offers</TabsTrigger>
-            <TabsTrigger className={TAB_TRIGGER_CLASS} value="trades" data-testid="tab-trades">Trades</TabsTrigger>
+            <TabsTrigger className={TAB_TRIGGER_CLASS} value="offers" data-testid="tab-offers">{t("p2p.offers")}</TabsTrigger>
+            <TabsTrigger className={TAB_TRIGGER_CLASS} value="trades" data-testid="tab-trades">{t("p2p.myTrades")}</TabsTrigger>
             <TabsTrigger className={TAB_TRIGGER_CLASS} value="disputes" data-testid="tab-disputes">
-              Disputes
+              {t("p2p.disputes")}
               {disputes?.filter((d: P2PDispute) => d.status === "open" || d.status === "investigating").length > 0 && (
                 <Badge variant="destructive" className="ml-2">
                   {disputes?.filter((d: P2PDispute) => d.status === "open" || d.status === "investigating").length}
@@ -1652,11 +1664,11 @@ export default function AdminP2PPage() {
             </TabsTrigger>
             <TabsTrigger className={TAB_TRIGGER_CLASS} value="permissions" data-testid="tab-ad-permissions">
               <Shield className="h-4 w-4 me-1" />
-              Ad Permissions
+              {t("admin.p2p.permissions.tab")}
             </TabsTrigger>
             <TabsTrigger className={TAB_TRIGGER_CLASS} value="settings" data-testid="tab-settings">
               <Settings className="h-4 w-4 me-1" />
-              Settings
+              {t("nav.settings")}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -1689,7 +1701,7 @@ export default function AdminP2PPage() {
                               {offer.type?.toUpperCase()}
                             </Badge>
                             <Badge variant={getStatusColor(offer.status)}>
-                              {offer.status}
+                              {getStatusLabel(offer.status)}
                             </Badge>
                           </div>
                           <div className="text-sm text-muted-foreground">
@@ -1697,8 +1709,8 @@ export default function AdminP2PPage() {
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {offer.visibility === "private_friend"
-                              ? `private_friend${offer.targetUsername ? ` @${offer.targetUsername}` : ""}`
-                              : "public"}
+                              ? `${t("p2p.visibility.privateFriend")}${offer.targetUsername ? ` @${offer.targetUsername}` : ""}`
+                              : t("p2p.visibility.public")}
                           </div>
                           {offer.moderationReason && (
                             <div className="text-xs text-destructive">{offer.moderationReason}</div>
@@ -1717,7 +1729,7 @@ export default function AdminP2PPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => { setSelectedOffer(offer); setActionDialog("viewOffer"); }}>
                             <Eye className="h-4 w-4 me-2" />
-                            View Details
+                            {t("common.view")}
                           </DropdownMenuItem>
                           {(offer.status === "pending_approval" || offer.status === "rejected") && (
                             <DropdownMenuItem
@@ -1728,7 +1740,7 @@ export default function AdminP2PPage() {
                               }}
                             >
                               <Check className="h-4 w-4 me-2" />
-                              Approve Offer
+                              {t("admin.p2p.offers.approve")}
                             </DropdownMenuItem>
                           )}
                           {offer.status === "pending_approval" && (
@@ -1741,7 +1753,7 @@ export default function AdminP2PPage() {
                               className="text-destructive"
                             >
                               <X className="h-4 w-4 me-2" />
-                              Reject Offer
+                              {t("admin.p2p.offers.reject")}
                             </DropdownMenuItem>
                           )}
                           {offer.status === "active" && (
@@ -1750,7 +1762,7 @@ export default function AdminP2PPage() {
                               className="text-destructive"
                             >
                               <X className="h-4 w-4 me-2" />
-                              Cancel Offer
+                              {t("admin.p2p.offers.cancel")}
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -1762,7 +1774,7 @@ export default function AdminP2PPage() {
               {filteredOffers?.length === 0 && (
                 <Card className={surfaceCardClass}>
                   <CardContent className="p-6 text-center">
-                    <p className="text-muted-foreground">No offers found</p>
+                    <p className="text-muted-foreground">{t("admin.p2p.offers.none")}</p>
                   </CardContent>
                 </Card>
               )}
@@ -1795,7 +1807,7 @@ export default function AdminP2PPage() {
                               <span className="text-muted-foreground">→</span>
                               <span className="font-semibold">{trade.sellerUsername}</span>
                               <Badge variant={getStatusColor(trade.status)}>
-                                {trade.status}
+                                {getStatusLabel(trade.status)}
                               </Badge>
                             </div>
                             <div className="text-sm text-muted-foreground">
@@ -1819,7 +1831,7 @@ export default function AdminP2PPage() {
               {filteredTrades?.length === 0 && (
                 <Card className={surfaceCardClass}>
                   <CardContent className="p-6 text-center">
-                    <p className="text-muted-foreground">No trades found</p>
+                    <p className="text-muted-foreground">{t("admin.p2p.trades.none")}</p>
                   </CardContent>
                 </Card>
               )}
@@ -1832,7 +1844,7 @@ export default function AdminP2PPage() {
             <div className="flex items-center justify-between gap-2 bg-gradient-to-r from-amber-300 to-yellow-500 px-3 py-2 text-slate-950 sm:px-4 sm:py-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
-                <h3 className="text-sm font-semibold sm:text-base">Disputes Control</h3>
+                <h3 className="text-sm font-semibold sm:text-base">{t("admin.p2p.disputes.control")}</h3>
               </div>
               <Badge className="bg-slate-950 text-amber-300 hover:bg-slate-950">
                 {disputes?.length || 0}
@@ -1841,15 +1853,15 @@ export default function AdminP2PPage() {
 
             <div className="grid grid-cols-3 gap-2 p-3 sm:p-4">
               <div className="rounded-xl border border-slate-200/80 bg-white/80 p-2 dark:border-slate-800 dark:bg-slate-900/60">
-                <p className="text-[11px] text-muted-foreground sm:text-xs">Open</p>
+                <p className="text-[11px] text-muted-foreground sm:text-xs">{t("p2p.dispute.status.open")}</p>
                 <p className="mt-1 text-lg font-semibold text-foreground">{openDisputesCount}</p>
               </div>
               <div className="rounded-xl border border-slate-200/80 bg-white/80 p-2 dark:border-slate-800 dark:bg-slate-900/60">
-                <p className="text-[11px] text-muted-foreground sm:text-xs">Investigating</p>
+                <p className="text-[11px] text-muted-foreground sm:text-xs">{t("p2p.dispute.status.investigating")}</p>
                 <p className="mt-1 text-lg font-semibold text-foreground">{investigatingDisputesCount}</p>
               </div>
               <div className="rounded-xl border border-slate-200/80 bg-white/80 p-2 dark:border-slate-800 dark:bg-slate-900/60">
-                <p className="text-[11px] text-muted-foreground sm:text-xs">Resolved</p>
+                <p className="text-[11px] text-muted-foreground sm:text-xs">{t("p2p.dispute.status.resolved")}</p>
                 <p className="mt-1 text-lg font-semibold text-foreground">{resolvedDisputesCount}</p>
               </div>
             </div>
@@ -1857,36 +1869,36 @@ export default function AdminP2PPage() {
             <div className="p-3 pt-0 sm:p-4 sm:pt-0">
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Status</Label>
+                  <Label className="text-xs text-muted-foreground">{t("common.status")}</Label>
                   <Select value={disputeStatus} onValueChange={setDisputeStatus}>
                     <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-dispute-status">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="open">Open</SelectItem>
-                      <SelectItem value="investigating">Investigating</SelectItem>
-                      <SelectItem value="resolved">Resolved</SelectItem>
-                      <SelectItem value="closed">Closed</SelectItem>
+                      <SelectItem value="all">{t("common.all")}</SelectItem>
+                      <SelectItem value="open">{t("p2p.dispute.status.open")}</SelectItem>
+                      <SelectItem value="investigating">{t("p2p.dispute.status.investigating")}</SelectItem>
+                      <SelectItem value="resolved">{t("p2p.dispute.status.resolved")}</SelectItem>
+                      <SelectItem value="closed">{t("p2p.dispute.status.closed")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Sort</Label>
+                  <Label className="text-xs text-muted-foreground">{t("common.sort")}</Label>
                   <Select value={disputeSortBy} onValueChange={setDisputeSortBy}>
                     <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-dispute-sort">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="criticality">Criticality</SelectItem>
-                      <SelectItem value="date">Date</SelectItem>
+                      <SelectItem value="criticality">{t("admin.p2p.disputes.sort.criticality")}</SelectItem>
+                      <SelectItem value="date">{t("common.date")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-muted-foreground dark:border-slate-800 dark:bg-slate-900/60 sm:self-end">
-                  {(disputes?.length || 0)} disputes
+                  {t("admin.p2p.disputes.count", { count: disputes?.length || 0 })}
                 </div>
               </div>
             </div>
@@ -1915,9 +1927,9 @@ export default function AdminP2PPage() {
                           </div>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-semibold text-foreground">Dispute #{dispute.id.slice(0, 8)}</span>
+                              <span className="font-semibold text-foreground">{t("admin.p2p.disputes.itemLabel", { id: dispute.id.slice(0, 8) })}</span>
                               <Badge className={getDisputeStatusPillClass(dispute.status)}>
-                                {dispute.status}
+                                {getStatusLabel(dispute.status)}
                               </Badge>
                               {dispute.tradeAmount && (
                                 <Badge variant="outline" className="border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-300">${dispute.tradeAmount}</Badge>
@@ -1927,7 +1939,7 @@ export default function AdminP2PPage() {
                               {dispute.initiatorName} vs {dispute.respondentName}
                             </div>
                             <div className="mt-1 text-xs text-muted-foreground">
-                              Reason: {dispute.reason?.slice(0, 50)}{(dispute.reason?.length ?? 0) > 50 ? "..." : ""}
+                              {t("p2p.dispute.reason")}: {dispute.reason?.slice(0, 50)}{(dispute.reason?.length ?? 0) > 50 ? "..." : ""}
                             </div>
                           </div>
                         </div>
@@ -1942,7 +1954,7 @@ export default function AdminP2PPage() {
                               data-testid={`button-escalate-${dispute.id}`}
                             >
                               <TrendingUp className="h-4 w-4 me-1" />
-                              Escalate
+                              {t("admin.p2p.disputes.escalate")}
                             </Button>
                           )}
                           {(dispute.status === "open" || dispute.status === "investigating") && (
@@ -1954,7 +1966,7 @@ export default function AdminP2PPage() {
                                 data-testid={`button-resolve-${dispute.id}`}
                               >
                                 <Check className="h-4 w-4 me-1" />
-                                Resolve
+                                {t("admin.p2p.disputes.resolve")}
                               </Button>
                               <Button
                                 size="sm"
@@ -1964,7 +1976,7 @@ export default function AdminP2PPage() {
                                 data-testid={`button-close-${dispute.id}`}
                               >
                                 <X className="h-4 w-4 me-1" />
-                                Close
+                                {t("common.close")}
                               </Button>
                             </>
                           )}
@@ -1982,11 +1994,11 @@ export default function AdminP2PPage() {
                                 setSelectedTrade(dispute); setActionDialog("viewDispute");
                               }}>
                                 <Eye className="h-4 w-4 me-2" />
-                                View Details
+                                {t("common.view")}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => { setSelectedTrade(dispute); setActionDialog("viewLogs"); }}>
                                 <Clock className="h-4 w-4 me-2" />
-                                View Audit Log
+                                {t("admin.p2p.disputes.viewAuditLog")}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1999,7 +2011,7 @@ export default function AdminP2PPage() {
               {disputes?.length === 0 && (
                 <Card className={surfaceCardClass}>
                   <CardContent className="p-6 text-center">
-                    <p className="text-muted-foreground">No disputes found</p>
+                    <p className="text-muted-foreground">{t("admin.p2p.disputes.none")}</p>
                   </CardContent>
                 </Card>
               )}
@@ -2042,35 +2054,35 @@ export default function AdminP2PPage() {
                               <span className="text-xs text-muted-foreground">{permissionUser.email}</span>
                             )}
                             <Badge variant={permissionUser.canTradeP2P ? "default" : "secondary"}>
-                              {permissionUser.canTradeP2P ? "Trading Enabled" : "Trading Disabled"}
+                              {permissionUser.canTradeP2P ? t("admin.p2p.permissions.tradingEnabled") : t("admin.p2p.permissions.tradingDisabled")}
                             </Badge>
                             <Badge variant={permissionUser.canCreateOffers ? "default" : "secondary"}>
-                              {permissionUser.canCreateOffers ? "Ad Posting Enabled" : "Ad Posting Disabled"}
+                              {permissionUser.canCreateOffers ? t("admin.p2p.permissions.adsEnabled") : t("admin.p2p.permissions.adsDisabled")}
                             </Badge>
                             {permissionUser.verificationBypassed && (
                               <Badge variant="outline" className="border-amber-500/40 text-amber-600">
-                                Verification Override
+                                {t("admin.p2p.permissions.verificationOverride")}
                               </Badge>
                             )}
                             {permissionUser.p2pBanned && (
-                              <Badge variant="destructive">P2P Banned</Badge>
+                              <Badge variant="destructive">{t("admin.p2p.permissions.p2pBanned")}</Badge>
                             )}
                           </div>
 
                           <div className="text-sm text-muted-foreground flex flex-wrap gap-3">
-                            <span>Verification: {permissionUser.profileVerificationLevel || permissionUser.idVerificationStatus || "none"}</span>
-                            <span>Email verified: {permissionUser.emailVerified ? "Yes" : "No"}</span>
-                            <span>Phone verified: {permissionUser.phoneVerified ? "Yes" : "No"}</span>
-                            <span>Active payment methods: {permissionUser.activePaymentMethodCount}</span>
-                            <span>Active offers: {permissionUser.activeOfferCount}</span>
+                            <span>{t("admin.p2p.permissions.verification")}: {permissionUser.profileVerificationLevel || permissionUser.idVerificationStatus || t("common.none")}</span>
+                            <span>{t("admin.p2p.permissions.emailVerified")}: {permissionUser.emailVerified ? t("common.yes") : t("common.no")}</span>
+                            <span>{t("admin.p2p.permissions.phoneVerified")}: {permissionUser.phoneVerified ? t("common.yes") : t("common.no")}</span>
+                            <span>{t("admin.p2p.permissions.activePaymentMethods")}: {permissionUser.activePaymentMethodCount}</span>
+                            <span>{t("admin.p2p.permissions.activeOffers")}: {permissionUser.activeOfferCount}</span>
                             <span>
-                              Monthly volume: {permissionUser.monthlyTradedAmount.toFixed(2)}
-                              {permissionUser.monthlyTradeLimit !== null ? ` / ${permissionUser.monthlyTradeLimit.toFixed(2)}` : " / no limit"}
+                              {t("admin.p2p.permissions.monthlyVolume")}: {permissionUser.monthlyTradedAmount.toFixed(2)}
+                              {permissionUser.monthlyTradeLimit !== null ? ` / ${permissionUser.monthlyTradeLimit.toFixed(2)}` : ` / ${t("admin.p2p.settings.noLimit")}`}
                             </span>
                           </div>
 
                           {permissionUser.p2pBanReason && (
-                            <p className="text-xs text-destructive">Ban reason: {permissionUser.p2pBanReason}</p>
+                            <p className="text-xs text-destructive">{t("admin.p2p.permissions.banReason")}: {permissionUser.p2pBanReason}</p>
                           )}
                         </div>
 
@@ -2085,7 +2097,7 @@ export default function AdminP2PPage() {
                                   updateAdPermissionMutation.mutate({
                                     userId: permissionUser.userId,
                                     bypassVerification: false,
-                                    reason: "P2P verification override removed by admin",
+                                    reason: t("admin.p2p.permissions.fullPermissionRevokeReason"),
                                   });
                                   return;
                                 }
@@ -2095,16 +2107,16 @@ export default function AdminP2PPage() {
                                   canTradeP2P: true,
                                   canCreateOffers: true,
                                   bypassVerification: true,
-                                  reason: "Full P2P permission granted by admin",
+                                  reason: t("admin.p2p.permissions.fullPermissionGrantReason"),
                                 });
                               }}
                               data-testid={`button-toggle-verification-override-${permissionUser.userId}`}
                             >
                               {isUpdatingUser
-                                ? "Updating..."
+                                ? t("common.loading")
                                 : permissionUser.verificationBypassed
-                                  ? "Remove Full P2P Override"
-                                  : "Grant Full P2P"}
+                                  ? t("admin.p2p.permissions.removeFullOverride")
+                                  : t("admin.p2p.permissions.grantFull")}
                             </Button>
 
                             <Button
@@ -2118,10 +2130,10 @@ export default function AdminP2PPage() {
                               data-testid={`button-toggle-trade-permission-${permissionUser.userId}`}
                             >
                               {isUpdatingUser
-                                ? "Updating..."
+                                ? t("common.loading")
                                 : permissionUser.canTradeP2P
-                                  ? "Revoke Trade"
-                                  : "Grant Trade"}
+                                  ? t("admin.p2p.permissions.revokeTrade")
+                                  : t("admin.p2p.permissions.grantTrade")}
                             </Button>
 
                             <Button
@@ -2135,10 +2147,10 @@ export default function AdminP2PPage() {
                               data-testid={`button-toggle-ad-permission-${permissionUser.userId}`}
                             >
                               {isUpdatingUser
-                                ? "Updating..."
+                                ? t("common.loading")
                                 : permissionUser.canCreateOffers
-                                  ? "Revoke Ads"
-                                  : "Grant Ads"}
+                                  ? t("admin.p2p.permissions.revokeAds")
+                                  : t("admin.p2p.permissions.grantAds")}
                             </Button>
                           </div>
 
@@ -2147,7 +2159,7 @@ export default function AdminP2PPage() {
                               type="number"
                               min="0"
                               step="0.01"
-                              placeholder="Monthly limit"
+                              placeholder={t("admin.p2p.permissions.monthlyLimitPlaceholder")}
                               className={INPUT_SURFACE_CLASS}
                               value={monthlyLimitDraft}
                               onChange={(event) => {
@@ -2170,7 +2182,7 @@ export default function AdminP2PPage() {
                               })}
                               data-testid={`button-save-monthly-trade-limit-${permissionUser.userId}`}
                             >
-                              Save Limit
+                              {t("admin.p2p.permissions.saveLimit")}
                             </Button>
                           </div>
                         </div>
@@ -2183,7 +2195,7 @@ export default function AdminP2PPage() {
               {adPermissionUsers.length === 0 && (
                 <Card className={surfaceCardClass}>
                   <CardContent className="p-6 text-center">
-                    <p className="text-muted-foreground">No users found</p>
+                    <p className="text-muted-foreground">{t("admin.p2p.permissions.noUsers")}</p>
                   </CardContent>
                 </Card>
               )}
@@ -2199,13 +2211,13 @@ export default function AdminP2PPage() {
       <Dialog open={actionDialog === "cancelOffer"} onOpenChange={() => closeDialog()}>
         <DialogContent className={DIALOG_SURFACE_CLASS}>
           <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <DialogTitle>Cancel Offer</DialogTitle>
+            <DialogTitle>{t("admin.p2p.offers.cancelDialog.title")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
             <div className="space-y-2">
-              <Label>Reason</Label>
+              <Label>{t("p2p.dispute.reason")}</Label>
               <Textarea
-                placeholder="Enter reason for cancellation..."
+                placeholder={t("admin.p2p.offers.cancelDialog.reasonPlaceholder")}
                 className={TEXTAREA_SURFACE_CLASS}
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
@@ -2214,14 +2226,14 @@ export default function AdminP2PPage() {
             </div>
           </div>
           <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <Button variant="outline" className={button3dClass} onClick={closeDialog}>Cancel</Button>
+            <Button variant="outline" className={button3dClass} onClick={closeDialog}>{t("common.cancel")}</Button>
             <Button
               className={BUTTON_3D_DANGER_CLASS}
               onClick={() => cancelOfferMutation.mutate({ id: selectedOffer?.id, reason: actionReason })}
               disabled={!actionReason}
               data-testid="button-confirm-cancel"
             >
-              Cancel Offer
+              {t("admin.p2p.offers.cancel")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2230,16 +2242,16 @@ export default function AdminP2PPage() {
       <Dialog open={actionDialog === "approveOffer"} onOpenChange={() => closeDialog()}>
         <DialogContent className={DIALOG_SURFACE_CLASS}>
           <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <DialogTitle>Approve Offer</DialogTitle>
+            <DialogTitle>{t("admin.p2p.offers.approveDialog.title")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
             <p className="text-sm text-muted-foreground">
-              Approving this offer will make it available for trading.
+              {t("admin.p2p.offers.approveDialog.description")}
             </p>
             <div className="space-y-2">
-              <Label>Admin Note (optional)</Label>
+              <Label>{t("admin.p2p.offers.approveDialog.adminNote")}</Label>
               <Textarea
-                placeholder="Add an optional note..."
+                placeholder={t("admin.p2p.offers.approveDialog.adminNotePlaceholder")}
                 className={TEXTAREA_SURFACE_CLASS}
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
@@ -2248,14 +2260,14 @@ export default function AdminP2PPage() {
             </div>
           </div>
           <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <Button variant="outline" className={button3dClass} onClick={closeDialog}>Cancel</Button>
+            <Button variant="outline" className={button3dClass} onClick={closeDialog}>{t("common.cancel")}</Button>
             <Button
               className={button3dPrimaryClass}
               onClick={() => approveOfferMutation.mutate({ id: String(selectedOffer?.id || ""), reason: actionReason.trim() || undefined })}
               disabled={approveOfferMutation.isPending || !selectedOffer?.id}
               data-testid="button-confirm-approve-offer"
             >
-              {approveOfferMutation.isPending ? "Approving..." : "Approve"}
+              {approveOfferMutation.isPending ? t("common.loading") : t("admin.p2p.offers.approve")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2264,13 +2276,13 @@ export default function AdminP2PPage() {
       <Dialog open={actionDialog === "rejectOffer"} onOpenChange={() => closeDialog()}>
         <DialogContent className={DIALOG_SURFACE_CLASS}>
           <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <DialogTitle>Reject Offer</DialogTitle>
+            <DialogTitle>{t("admin.p2p.offers.rejectDialog.title")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
             <div className="space-y-2">
-              <Label>Rejection Reason</Label>
+              <Label>{t("admin.p2p.offers.rejectDialog.reason")}</Label>
               <Textarea
-                placeholder="Enter reason for rejection..."
+                placeholder={t("admin.p2p.offers.rejectDialog.reasonPlaceholder")}
                 className={TEXTAREA_SURFACE_CLASS}
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
@@ -2279,14 +2291,14 @@ export default function AdminP2PPage() {
             </div>
           </div>
           <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <Button variant="outline" className={button3dClass} onClick={closeDialog}>Cancel</Button>
+            <Button variant="outline" className={button3dClass} onClick={closeDialog}>{t("common.cancel")}</Button>
             <Button
               className={BUTTON_3D_DANGER_CLASS}
               onClick={() => rejectOfferMutation.mutate({ id: String(selectedOffer?.id || ""), reason: actionReason.trim() })}
               disabled={rejectOfferMutation.isPending || !selectedOffer?.id || !actionReason.trim()}
               data-testid="button-confirm-reject-offer"
             >
-              {rejectOfferMutation.isPending ? "Rejecting..." : "Reject Offer"}
+              {rejectOfferMutation.isPending ? t("common.loading") : t("admin.p2p.offers.reject")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2302,7 +2314,7 @@ export default function AdminP2PPage() {
               <Label>Winner</Label>
               <Select value={resolution} onValueChange={setResolution}>
                 <SelectTrigger className={INPUT_SURFACE_CLASS} data-testid="select-winner">
-                  <SelectValue placeholder="Select winner" />
+                  <SelectValue placeholder={t("admin.p2p.disputes.resolveDialog.selectWinner")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="initiator">Initiator ({selectedTrade?.initiatorName})</SelectItem>
@@ -2313,7 +2325,7 @@ export default function AdminP2PPage() {
             <div className="space-y-2">
               <Label>Resolution Notes</Label>
               <Textarea
-                placeholder="Enter resolution details..."
+                placeholder={t("admin.p2p.disputes.resolveDialog.resolutionPlaceholder")}
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
                 className={TEXTAREA_SURFACE_CLASS}
@@ -2343,16 +2355,16 @@ export default function AdminP2PPage() {
         <DialogContent className={DIALOG_SURFACE_CLASS}>
           <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
             <DialogTitle>
-              {actionDialog === "viewOffer" && "Offer Details"}
-              {actionDialog === "viewTrade" && "Trade Details"}
-              {actionDialog === "viewDispute" && "Dispute Details"}
+              {actionDialog === "viewOffer" && t("admin.p2p.details.offer")}
+              {actionDialog === "viewTrade" && t("admin.p2p.details.trade")}
+              {actionDialog === "viewDispute" && t("admin.p2p.details.dispute")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
             <DetailGrid data={(actionDialog === "viewOffer" ? selectedOffer : selectedTrade) as Record<string, unknown>} />
           </div>
           <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <Button className={button3dClass} onClick={closeDialog}>Close</Button>
+            <Button className={button3dClass} onClick={closeDialog}>{t("common.close")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2361,16 +2373,16 @@ export default function AdminP2PPage() {
       <Dialog open={actionDialog === "escalateDispute"} onOpenChange={() => closeDialog()}>
         <DialogContent className={DIALOG_SURFACE_CLASS}>
           <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <DialogTitle>Escalate Dispute</DialogTitle>
+            <DialogTitle>{t("admin.p2p.disputes.escalateDialog.title")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
             <p className="text-sm text-muted-foreground">
-              Escalate this dispute to investigation status. This will mark it for priority review.
+              {t("admin.p2p.disputes.escalateDialog.description")}
             </p>
             <div className="space-y-2">
-              <Label>Reason for Escalation</Label>
+              <Label>{t("admin.p2p.disputes.escalateDialog.reason")}</Label>
               <Textarea
-                placeholder="Enter reason for escalation..."
+                placeholder={t("admin.p2p.disputes.escalateDialog.reasonPlaceholder")}
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
                 className={TEXTAREA_SURFACE_CLASS}
@@ -2379,14 +2391,14 @@ export default function AdminP2PPage() {
             </div>
           </div>
           <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <Button variant="outline" className={button3dClass} onClick={closeDialog}>Cancel</Button>
+            <Button variant="outline" className={button3dClass} onClick={closeDialog}>{t("common.cancel")}</Button>
             <Button
               className="rounded-xl border border-amber-500 bg-gradient-to-b from-amber-300 to-yellow-500 text-slate-950 shadow-[0_8px_0_0_rgba(176,142,35,0.5)] transition active:translate-y-[1px] active:shadow-[0_5px_0_0_rgba(176,142,35,0.45)] hover:brightness-105"
               onClick={() => escalateDisputeMutation.mutate({ id: selectedTrade?.id, reason: actionReason })}
               disabled={escalateDisputeMutation.isPending}
               data-testid="button-confirm-escalate"
             >
-              {escalateDisputeMutation.isPending ? "Escalating..." : "Escalate"}
+              {escalateDisputeMutation.isPending ? t("common.loading") : t("admin.p2p.disputes.escalate")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2396,16 +2408,16 @@ export default function AdminP2PPage() {
       <Dialog open={actionDialog === "closeDispute"} onOpenChange={() => closeDialog()}>
         <DialogContent className={DIALOG_SURFACE_CLASS}>
           <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <DialogTitle>Close Dispute</DialogTitle>
+            <DialogTitle>{t("admin.p2p.disputes.closeDialog.title")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 px-6 py-5">
             <p className="text-sm text-muted-foreground">
-              Close this dispute without a formal resolution. Use this for disputes that were withdrawn or resolved outside the platform.
+              {t("admin.p2p.disputes.closeDialog.description")}
             </p>
             <div className="space-y-2">
-              <Label>Reason for Closing</Label>
+              <Label>{t("admin.p2p.disputes.closeDialog.reason")}</Label>
               <Textarea
-                placeholder="Enter reason for closing..."
+                placeholder={t("admin.p2p.disputes.closeDialog.reasonPlaceholder")}
                 value={actionReason}
                 onChange={(e) => setActionReason(e.target.value)}
                 className={TEXTAREA_SURFACE_CLASS}
@@ -2414,14 +2426,14 @@ export default function AdminP2PPage() {
             </div>
           </div>
           <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <Button variant="outline" className={button3dClass} onClick={closeDialog}>Cancel</Button>
+            <Button variant="outline" className={button3dClass} onClick={closeDialog}>{t("common.cancel")}</Button>
             <Button
               className={button3dClass}
               onClick={() => closeDisputeMutation.mutate({ id: selectedTrade?.id, reason: actionReason })}
               disabled={!actionReason || closeDisputeMutation.isPending}
               data-testid="button-confirm-close"
             >
-              {closeDisputeMutation.isPending ? "Closing..." : "Close Dispute"}
+              {closeDisputeMutation.isPending ? t("common.loading") : t("admin.p2p.disputes.close")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2431,13 +2443,13 @@ export default function AdminP2PPage() {
       <Dialog open={actionDialog === "viewLogs"} onOpenChange={() => closeDialog()}>
         <DialogContent className={`${DIALOG_SURFACE_CLASS} sm:max-w-3xl`}>
           <DialogHeader className="border-b border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <DialogTitle>Dispute Audit Log</DialogTitle>
+            <DialogTitle>{t("admin.p2p.disputes.auditLog")}</DialogTitle>
           </DialogHeader>
           <div className="px-6 py-5">
             <DisputeAuditLog disputeId={selectedTrade?.id} />
           </div>
           <DialogFooter className="border-t border-slate-200/70 px-6 py-5 dark:border-slate-800">
-            <Button className={button3dClass} onClick={closeDialog}>Close</Button>
+            <Button className={button3dClass} onClick={closeDialog}>{t("common.close")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2446,6 +2458,8 @@ export default function AdminP2PPage() {
 }
 
 function DisputeAuditLog({ disputeId }: { disputeId?: string }) {
+  const { t } = useI18n();
+
   const { data: logs = [], isLoading, isError } = useQuery({
     queryKey: ["/api/admin/p2p/disputes", disputeId, "logs"],
     queryFn: () => disputeId
@@ -2455,7 +2469,7 @@ function DisputeAuditLog({ disputeId }: { disputeId?: string }) {
   });
 
   if (isError) {
-    return <p className="text-center text-destructive py-4">Failed to load audit logs</p>;
+    return <p className="text-center text-destructive py-4">{t("admin.p2p.disputes.auditLog.failed")}</p>;
   }
 
   if (isLoading) {
@@ -2463,7 +2477,7 @@ function DisputeAuditLog({ disputeId }: { disputeId?: string }) {
   }
 
   if (!logs.length) {
-    return <p className="py-4 text-center text-muted-foreground">No audit logs found</p>;
+    return <p className="py-4 text-center text-muted-foreground">{t("admin.p2p.disputes.auditLog.none")}</p>;
   }
 
   return (
@@ -2477,7 +2491,7 @@ function DisputeAuditLog({ disputeId }: { disputeId?: string }) {
             </span>
           </div>
           <p className="mt-1 text-sm text-foreground">{log.description}</p>
-          <p className="mt-1 text-xs text-muted-foreground">By: {log.username}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t("admin.p2p.disputes.auditLog.by")}: {log.username}</p>
         </div>
       ))}
     </div>

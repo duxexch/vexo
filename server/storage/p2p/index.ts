@@ -11,9 +11,15 @@ export {
   getP2PTraderMetrics,
   getP2POffer,
   createP2POffer,
+  createP2POfferNegotiation,
   getActiveP2POffers,
+  getPendingP2POfferNegotiation,
+  getP2POfferNegotiation,
   getUserP2POffers,
+  listP2POfferNegotiations,
+  listP2POfferNegotiationsForOffer,
   cancelP2POfferByOwner,
+  updateP2POfferNegotiation,
   updateP2POffer,
 } from './crud';
 

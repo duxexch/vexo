@@ -1203,6 +1203,8 @@ export const supportContacts = pgTable("support_contacts", {
 export const p2pOfferTypeEnum = pgEnum("p2p_offer_type", ["buy", "sell"]);
 export const p2pOfferStatusEnum = pgEnum("p2p_offer_status", ["pending_approval", "active", "paused", "completed", "cancelled", "rejected"]);
 export const p2pOfferVisibilityEnum = pgEnum("p2p_offer_visibility", ["public", "private_friend"]);
+export const p2pDealKindEnum = pgEnum("p2p_deal_kind", ["standard_asset", "digital_product"]);
+export const p2pOfferNegotiationStatusEnum = pgEnum("p2p_offer_negotiation_status", ["pending", "accepted", "rejected"]);
 export const p2pTradeStatusEnum = pgEnum("p2p_trade_status", ["pending", "paid", "confirmed", "completed", "cancelled", "disputed"]);
 export const p2pDisputeStatusEnum = pgEnum("p2p_dispute_status", ["open", "investigating", "resolved", "closed"]);
 export const p2pFreezeRequestStatusEnum = pgEnum("p2p_freeze_request_status", ["pending", "approved", "rejected", "cancelled", "exhausted"]);
@@ -1215,6 +1217,12 @@ export const p2pOffers = pgTable("p2p_offers", {
   type: p2pOfferTypeEnum("type").notNull(),
   status: p2pOfferStatusEnum("status").notNull().default("pending_approval"),
   visibility: p2pOfferVisibilityEnum("visibility").notNull().default("public"),
+  dealKind: p2pDealKindEnum("deal_kind").notNull().default("standard_asset"),
+  digitalProductType: text("digital_product_type"),
+  exchangeOffered: text("exchange_offered"),
+  exchangeRequested: text("exchange_requested"),
+  supportMediationRequested: boolean("support_mediation_requested").notNull().default(false),
+  requestedAdminFeePercentage: decimal("requested_admin_fee_percentage", { precision: 5, scale: 4 }),
   targetUserId: varchar("target_user_id").references(() => users.id),
   cryptoCurrency: text("crypto_currency").notNull(),
   fiatCurrency: text("fiat_currency").notNull(),
@@ -1241,9 +1249,37 @@ export const p2pOffers = pgTable("p2p_offers", {
   index("idx_p2p_offers_user_id").on(table.userId),
   index("idx_p2p_offers_target_user_id").on(table.targetUserId),
   index("idx_p2p_offers_type").on(table.type),
+  index("idx_p2p_offers_deal_kind").on(table.dealKind),
   index("idx_p2p_offers_status").on(table.status),
   index("idx_p2p_offers_visibility").on(table.visibility),
   index("idx_p2p_offers_created_at").on(table.createdAt),
+]);
+
+// ==================== P2P OFFER NEGOTIATIONS ====================
+
+export const p2pOfferNegotiations = pgTable("p2p_offer_negotiations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  offerId: varchar("offer_id").notNull().references(() => p2pOffers.id, { onDelete: "cascade" }),
+  offerOwnerId: varchar("offer_owner_id").notNull().references(() => users.id),
+  counterpartyUserId: varchar("counterparty_user_id").notNull().references(() => users.id),
+  proposerId: varchar("proposer_id").notNull().references(() => users.id),
+  previousNegotiationId: varchar("previous_negotiation_id").references((): AnyPgColumn => p2pOfferNegotiations.id),
+  status: p2pOfferNegotiationStatusEnum("status").notNull().default("pending"),
+  exchangeOffered: text("exchange_offered").notNull(),
+  exchangeRequested: text("exchange_requested").notNull(),
+  proposedTerms: text("proposed_terms").notNull(),
+  supportMediationRequested: boolean("support_mediation_requested").notNull().default(false),
+  adminFeePercentage: decimal("admin_fee_percentage", { precision: 5, scale: 4 }),
+  rejectionReason: text("rejection_reason"),
+  respondedBy: varchar("responded_by").references(() => users.id),
+  respondedAt: timestamp("responded_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_p2p_offer_negotiations_offer_id").on(table.offerId),
+  index("idx_p2p_offer_negotiations_owner_counterparty").on(table.offerOwnerId, table.counterpartyUserId),
+  index("idx_p2p_offer_negotiations_status").on(table.status),
+  index("idx_p2p_offer_negotiations_created_at").on(table.createdAt),
 ]);
 
 // ==================== P2P TRADES ====================
@@ -1253,6 +1289,14 @@ export const p2pTrades = pgTable("p2p_trades", {
   offerId: varchar("offer_id").notNull().references(() => p2pOffers.id),
   buyerId: varchar("buyer_id").notNull().references(() => users.id),
   sellerId: varchar("seller_id").notNull().references(() => users.id),
+  dealKind: p2pDealKindEnum("deal_kind").notNull().default("standard_asset"),
+  digitalProductType: text("digital_product_type"),
+  exchangeOffered: text("exchange_offered"),
+  exchangeRequested: text("exchange_requested"),
+  negotiatedTerms: text("negotiated_terms"),
+  supportMediationRequested: boolean("support_mediation_requested").notNull().default(false),
+  negotiatedAdminFeePercentage: decimal("negotiated_admin_fee_percentage", { precision: 5, scale: 4 }),
+  negotiationId: varchar("negotiation_id").references(() => p2pOfferNegotiations.id),
   status: p2pTradeStatusEnum("status").notNull().default("pending"),
   amount: decimal("amount", { precision: 15, scale: 8 }).notNull(),
   fiatAmount: decimal("fiat_amount", { precision: 15, scale: 2 }).notNull(),
@@ -1280,6 +1324,8 @@ export const p2pTrades = pgTable("p2p_trades", {
   index("idx_p2p_trades_offer_id").on(table.offerId),
   index("idx_p2p_trades_buyer_id").on(table.buyerId),
   index("idx_p2p_trades_seller_id").on(table.sellerId),
+  index("idx_p2p_trades_deal_kind").on(table.dealKind),
+  index("idx_p2p_trades_negotiation_id").on(table.negotiationId),
   index("idx_p2p_trades_status").on(table.status),
   index("idx_p2p_trades_freeze_until").on(table.freezeUntil),
   index("idx_p2p_trades_created_at").on(table.createdAt),
@@ -2543,6 +2589,7 @@ export const insertThemeSchema = createInsertSchema(themes).omit({ id: true, cre
 export const insertFeatureFlagSchema = createInsertSchema(featureFlags).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertAdminAuditLogSchema = createInsertSchema(adminAuditLogs).omit({ id: true, createdAt: true });
 export const insertP2POfferSchema = createInsertSchema(p2pOffers).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertP2POfferNegotiationSchema = createInsertSchema(p2pOfferNegotiations).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertP2PTradeSchema = createInsertSchema(p2pTrades).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertP2PEscrowSchema = createInsertSchema(p2pEscrow).omit({ id: true });
 export const insertP2PDisputeSchema = createInsertSchema(p2pDisputes).omit({ id: true, createdAt: true, updatedAt: true });
@@ -2644,6 +2691,9 @@ export type AdminAuditLog = typeof adminAuditLogs.$inferSelect;
 
 export type InsertP2POffer = z.infer<typeof insertP2POfferSchema>;
 export type P2POffer = typeof p2pOffers.$inferSelect;
+
+export type InsertP2POfferNegotiation = z.infer<typeof insertP2POfferNegotiationSchema>;
+export type P2POfferNegotiation = typeof p2pOfferNegotiations.$inferSelect;
 
 export type InsertP2PTrade = z.infer<typeof insertP2PTradeSchema>;
 export type P2PTrade = typeof p2pTrades.$inferSelect;

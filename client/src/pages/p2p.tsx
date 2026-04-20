@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,6 +35,12 @@ interface P2POffer {
   username: string;
   country?: string | null;
   type: "buy" | "sell";
+  dealKind?: "standard_asset" | "digital_product";
+  digitalProductType?: string | null;
+  exchangeOffered?: string | null;
+  exchangeRequested?: string | null;
+  supportMediationRequested?: boolean;
+  requestedAdminFeePercentage?: string | null;
   amount: string;
   price: string;
   currency: string;
@@ -95,6 +101,30 @@ interface P2PTradeDetails extends P2PTrade {
   offerPaymentTimeLimit?: number | null;
 }
 
+interface P2POfferNegotiation {
+  id: string;
+  offerId: string;
+  offerOwnerId: string;
+  offerOwnerUsername?: string | null;
+  counterpartyUserId: string;
+  counterpartyUsername?: string | null;
+  proposerId: string;
+  proposerUsername?: string | null;
+  previousNegotiationId?: string | null;
+  status: "pending" | "accepted" | "rejected";
+  exchangeOffered: string;
+  exchangeRequested: string;
+  proposedTerms: string;
+  supportMediationRequested: boolean;
+  adminFeePercentage?: string | null;
+  rejectionReason?: string | null;
+  respondedBy?: string | null;
+  respondedByUsername?: string | null;
+  respondedAt?: string | null;
+  isActionRequired?: boolean;
+  createdAt: string;
+}
+
 interface P2PTradeMessage {
   id: string;
   tradeId: string;
@@ -118,6 +148,7 @@ interface TradeMessageDraft {
 }
 
 const CANCEL_HANDSHAKE_PREFIX = "[[P2P_CANCEL_HANDSHAKE_V1]]";
+const MAX_NEGOTIATED_ADMIN_FEE_RATE = 0.2;
 
 type P2PCancelHandshakeKind = "request" | "approval";
 
@@ -304,6 +335,12 @@ interface DisputeRule {
 
 const createOfferSchema = z.object({
   type: z.enum(["buy", "sell"]),
+  dealKind: z.enum(["standard_asset", "digital_product"]),
+  digitalProductType: z.string().trim().max(120).optional(),
+  exchangeOffered: z.string().trim().max(800).optional(),
+  exchangeRequested: z.string().trim().max(800).optional(),
+  supportMediationRequested: z.boolean().default(false),
+  requestedAdminFeePercentage: z.string().trim().max(10).optional(),
   visibility: z.enum(["public", "private_friend"]),
   targetUserId: z.string().optional(),
   amount: z.string().min(1),
@@ -392,6 +429,28 @@ function formatFiatRange(minValue: string | number, maxValue: string | number, l
   return `${formatFixedFiat(minValue, locale)} - ${formatFixedFiat(maxValue, locale)}`;
 }
 
+type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
+
+function getDealKindLabel(t: TranslateFn, dealKind?: "standard_asset" | "digital_product" | null): string {
+  return dealKind === "digital_product"
+    ? t('p2p.dealKind.digitalProduct')
+    : t('p2p.dealKind.standardAsset');
+}
+
+function getVisibilityLabel(
+  t: TranslateFn,
+  visibility?: "public" | "private_friend" | null,
+  targetUsername?: string | null,
+): string {
+  if (visibility === "private_friend") {
+    return targetUsername
+      ? `${t('p2p.visibility.privateFriend')} @${targetUsername}`
+      : t('p2p.visibility.privateFriend');
+  }
+
+  return t('p2p.visibility.public');
+}
+
 function resolveLanguageLocale(languageCode?: string): string {
   const normalizedCode = String(languageCode || "en").trim();
   const requestedLocale = normalizedCode === "ar" ? "ar-SA-u-nu-arab" : normalizedCode;
@@ -443,31 +502,278 @@ function TradeOfferDialog({
   numberLocale: string;
   isSubmitting: boolean;
   onClose: () => void;
-  onConfirm: (payload: { offerId: string; amount: string; paymentMethod: string }) => void;
+  onConfirm: (payload: { offerId: string; amount: string; paymentMethod: string; negotiationId?: string }) => void;
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [tradeAmount, setTradeAmount] = useState("");
   const [tradePaymentMethod, setTradePaymentMethod] = useState("");
+  const [activeCounterpartyUserId, setActiveCounterpartyUserId] = useState("");
+  const [proposalExchangeOffered, setProposalExchangeOffered] = useState("");
+  const [proposalExchangeRequested, setProposalExchangeRequested] = useState("");
+  const [proposalTerms, setProposalTerms] = useState("");
+  const [proposalAdminFeePercentage, setProposalAdminFeePercentage] = useState("");
+  const [proposalSupportMediationRequested, setProposalSupportMediationRequested] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+
+  const viewerUserId = user?.id || "";
+  const isDigitalDeal = offer?.dealKind === "digital_product";
+  const viewerIsOfferOwner = Boolean(offer && viewerUserId && offer.userId === viewerUserId);
+
+  const { data: negotiations = [], isFetching: isNegotiationsLoading } = useQuery<P2POfferNegotiation[]>({
+    queryKey: ["/api/p2p/offers", offer?.id || "", "negotiations", viewerUserId],
+    enabled: Boolean(offer && isDigitalDeal && viewerUserId),
+    refetchInterval: offer && isDigitalDeal ? 7000 : false,
+    queryFn: async () => {
+      if (!offer || !viewerUserId) {
+        return [];
+      }
+
+      const params = new URLSearchParams();
+      if (!viewerIsOfferOwner) {
+        params.set("counterpartyUserId", viewerUserId);
+      }
+
+      const suffix = params.toString().length > 0 ? `?${params.toString()}` : "";
+      const response = await apiRequest("GET", `/api/p2p/offers/${offer.id}/negotiations${suffix}`);
+      return response.json();
+    },
+  });
+
+  const counterpartyOptions = useMemo(() => {
+    const options = new Map<string, string>();
+
+    if (offer?.targetUserId) {
+      options.set(offer.targetUserId, offer.targetUsername || offer.targetUserId);
+    }
+
+    for (const row of negotiations) {
+      options.set(row.counterpartyUserId, row.counterpartyUsername || row.counterpartyUserId);
+    }
+
+    return Array.from(options.entries()).map(([id, label]) => ({ id, label }));
+  }, [negotiations, offer?.targetUserId, offer?.targetUsername]);
+
   useEffect(() => {
     if (!offer) {
       setTradeAmount("");
       setTradePaymentMethod("");
+      setActiveCounterpartyUserId("");
+      setProposalExchangeOffered("");
+      setProposalExchangeRequested("");
+      setProposalTerms("");
+      setProposalAdminFeePercentage("");
+      setProposalSupportMediationRequested(false);
+      setRejectionReason("");
       return;
     }
 
     const defaultAmount = offer.minLimit || offer.amount;
     setTradeAmount(defaultAmount);
     setTradePaymentMethod(offer.paymentMethods?.[0] || "");
-  }, [offer]);
+
+    if (offer.dealKind === "digital_product") {
+      if (viewerIsOfferOwner) {
+        setActiveCounterpartyUserId(offer.targetUserId || "");
+      } else {
+        setActiveCounterpartyUserId(viewerUserId);
+      }
+    }
+  }, [offer, viewerIsOfferOwner, viewerUserId]);
+
+  useEffect(() => {
+    if (!offer || offer.dealKind !== "digital_product") {
+      return;
+    }
+
+    if (!viewerIsOfferOwner) {
+      setActiveCounterpartyUserId(viewerUserId);
+      return;
+    }
+
+    if (activeCounterpartyUserId && counterpartyOptions.some((option) => option.id === activeCounterpartyUserId)) {
+      return;
+    }
+
+    if (offer.targetUserId && counterpartyOptions.some((option) => option.id === offer.targetUserId)) {
+      setActiveCounterpartyUserId(offer.targetUserId);
+      return;
+    }
+
+    if (counterpartyOptions.length > 0) {
+      setActiveCounterpartyUserId(counterpartyOptions[0].id);
+    }
+  }, [offer, viewerIsOfferOwner, viewerUserId, activeCounterpartyUserId, counterpartyOptions]);
+
+  const threadNegotiations = useMemo(() => {
+    if (!isDigitalDeal) {
+      return [] as P2POfferNegotiation[];
+    }
+
+    if (!viewerIsOfferOwner) {
+      return negotiations;
+    }
+
+    if (!activeCounterpartyUserId) {
+      return negotiations;
+    }
+
+    return negotiations.filter((row) => row.counterpartyUserId === activeCounterpartyUserId);
+  }, [isDigitalDeal, viewerIsOfferOwner, negotiations, activeCounterpartyUserId]);
+
+  const latestNegotiation = threadNegotiations.length > 0
+    ? threadNegotiations[threadNegotiations.length - 1]
+    : null;
+
+  const latestAcceptedNegotiation = useMemo(() => {
+    for (let index = threadNegotiations.length - 1; index >= 0; index -= 1) {
+      if (threadNegotiations[index].status === "accepted") {
+        return threadNegotiations[index];
+      }
+    }
+
+    return null;
+  }, [threadNegotiations]);
+
+  const pendingActionNegotiation = useMemo(() => {
+    return threadNegotiations.find((row) => row.status === "pending" && row.isActionRequired);
+  }, [threadNegotiations]);
+
+  const negotiationWorkflowState = useMemo(() => {
+    if (!isDigitalDeal) {
+      return "not_required";
+    }
+
+    if (latestAcceptedNegotiation) {
+      return "accepted";
+    }
+
+    if (pendingActionNegotiation) {
+      return "action_required";
+    }
+
+    if (threadNegotiations.length === 0) {
+      return "awaiting_first_proposal";
+    }
+
+    return "awaiting_counterparty";
+  }, [isDigitalDeal, latestAcceptedNegotiation, pendingActionNegotiation, threadNegotiations.length]);
+
+  useEffect(() => {
+    if (!offer || offer.dealKind !== "digital_product") {
+      return;
+    }
+
+    setProposalExchangeOffered(latestNegotiation?.exchangeOffered || offer.exchangeOffered || "");
+    setProposalExchangeRequested(latestNegotiation?.exchangeRequested || offer.exchangeRequested || "");
+    setProposalTerms(latestNegotiation?.proposedTerms || offer.terms || "");
+    setProposalAdminFeePercentage(latestNegotiation?.adminFeePercentage || offer.requestedAdminFeePercentage || "");
+    setProposalSupportMediationRequested(
+      latestNegotiation?.supportMediationRequested ?? offer.supportMediationRequested ?? false,
+    );
+    setRejectionReason("");
+  }, [offer?.id, activeCounterpartyUserId, latestNegotiation?.id]);
+
+  const proposeNegotiationMutation = useMutation({
+    mutationFn: async () => {
+      if (!offer) {
+        throw new Error("Offer not found");
+      }
+
+      const counterpartyUserId = viewerIsOfferOwner ? activeCounterpartyUserId : viewerUserId;
+      if (!counterpartyUserId) {
+        throw new Error(t('p2p.counterparty'));
+      }
+
+      const cleanExchangeOffered = proposalExchangeOffered.trim();
+      const cleanExchangeRequested = proposalExchangeRequested.trim();
+      const cleanTerms = proposalTerms.trim();
+      if (!cleanExchangeOffered || !cleanExchangeRequested || !cleanTerms) {
+        throw new Error(t('p2p.dispute.additionalDetails'));
+      }
+
+      const normalizedFee = proposalAdminFeePercentage.trim();
+      if (normalizedFee.length > 0) {
+        const parsed = Number(normalizedFee);
+        if (!Number.isFinite(parsed) || parsed < 0 || parsed > MAX_NEGOTIATED_ADMIN_FEE_RATE) {
+          throw new Error(`0 - ${MAX_NEGOTIATED_ADMIN_FEE_RATE}`);
+        }
+      }
+
+      const response = await apiRequest("POST", `/api/p2p/offers/${offer.id}/negotiations/propose`, {
+        counterpartyUserId,
+        previousNegotiationId: latestNegotiation?.id,
+        exchangeOffered: cleanExchangeOffered,
+        exchangeRequested: cleanExchangeRequested,
+        proposedTerms: cleanTerms,
+        supportMediationRequested: proposalSupportMediationRequested,
+        adminFeePercentage: normalizedFee.length > 0 ? normalizedFee : undefined,
+      });
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/offers", offer?.id || "", "negotiations", viewerUserId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/my-offers"] });
+      toast({
+        title: t('common.success'),
+        description: t('common.pending'),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t('common.error'),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rejectNegotiationMutation = useMutation({
+    mutationFn: async (payload: { negotiationId: string; reason: string }) => {
+      if (!offer) {
+        throw new Error("Offer not found");
+      }
+
+      const response = await apiRequest("POST", `/api/p2p/offers/${offer.id}/negotiations/${payload.negotiationId}/reject`, {
+        reason: payload.reason,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/offers", offer?.id || "", "negotiations", viewerUserId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/offers"] });
+      setRejectionReason("");
+      toast({
+        title: t('common.success'),
+        description: t('common.rejected'),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t('common.error'),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const closeDialog = () => {
     setTradeAmount("");
     setTradePaymentMethod("");
+    setActiveCounterpartyUserId("");
+    setProposalExchangeOffered("");
+    setProposalExchangeRequested("");
+    setProposalTerms("");
+    setProposalAdminFeePercentage("");
+    setProposalSupportMediationRequested(false);
+    setRejectionReason("");
     onClose();
   };
 
-  const submitTrade = () => {
+  const submitTrade = (options?: { negotiationIdOverride?: string }) => {
     if (!offer) {
       return;
     }
@@ -503,10 +809,24 @@ function TradeOfferDialog({
       return;
     }
 
+    const selectedNegotiation = options?.negotiationIdOverride
+      ? threadNegotiations.find((row) => row.id === options.negotiationIdOverride) || null
+      : latestAcceptedNegotiation;
+
+    if (isDigitalDeal && !selectedNegotiation) {
+      toast({
+        title: t('common.error'),
+        description: t('p2p.tradeInitiatedDesc'),
+        variant: "destructive",
+      });
+      return;
+    }
+
     onConfirm({
       offerId: offer.id,
       amount: tradeAmount,
       paymentMethod: tradePaymentMethod,
+      negotiationId: isDigitalDeal ? selectedNegotiation?.id : undefined,
     });
   };
 
@@ -537,9 +857,12 @@ function TradeOfferDialog({
             <div className="rounded-lg border p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium">{offer.username}</span>
-                <Badge variant={offer.type === "buy" ? "default" : "secondary"}>
-                  {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={offer.type === "buy" ? "default" : "secondary"}>
+                    {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
+                  </Badge>
+                  {isDigitalDeal && <Badge variant="outline">{t('p2p.dealKind.digitalProduct')}</Badge>}
+                </div>
               </div>
               <p className="text-sm text-muted-foreground mt-1">
                 {formatAssetAmount(offer.amount, offer.currency, numberLocale)} @ {formatFixedFiat(offer.price, numberLocale)}
@@ -547,7 +870,174 @@ function TradeOfferDialog({
               <p className="text-sm text-muted-foreground">
                 {t('p2p.limit')}: {formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}
               </p>
+
+              {isDigitalDeal && (
+                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  {offer.digitalProductType && <p>{offer.digitalProductType}</p>}
+                  {offer.exchangeOffered && <p>{offer.exchangeOffered}</p>}
+                  {offer.exchangeRequested && <p>{offer.exchangeRequested}</p>}
+                </div>
+              )}
             </div>
+
+            {isDigitalDeal && (
+              <div className="space-y-3 rounded-lg border border-sky-300/50 bg-sky-50/40 p-3 dark:border-sky-500/30 dark:bg-sky-500/10">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold">{t('p2p.dealKind.digitalProduct')}</span>
+                  {isNegotiationsLoading && <span className="text-xs text-muted-foreground">{t('common.loading')}</span>}
+                </div>
+
+                <div className="rounded-md border border-slate-300/70 bg-background/70 p-2 text-xs" data-testid="p2p-negotiation-workflow-state">
+                  {negotiationWorkflowState === "awaiting_first_proposal" && (
+                    <p className="text-muted-foreground">{t('p2p.negotiation.awaitingFirstProposal')}</p>
+                  )}
+                  {negotiationWorkflowState === "awaiting_counterparty" && (
+                    <p className="text-muted-foreground">{t('p2p.negotiation.awaitingCounterparty')}</p>
+                  )}
+                  {negotiationWorkflowState === "action_required" && (
+                    <p className="text-amber-700 dark:text-amber-300">{t('p2p.negotiation.actionRequired')}</p>
+                  )}
+                  {negotiationWorkflowState === "accepted" && (
+                    <p className="text-emerald-700 dark:text-emerald-300">{t('p2p.negotiation.acceptedReadyToOpen')}</p>
+                  )}
+                </div>
+
+                {viewerIsOfferOwner && counterpartyOptions.length > 1 && (
+                  <div className="space-y-2">
+                    <Label>{t('p2p.counterparty')}</Label>
+                    <Select value={activeCounterpartyUserId} onValueChange={setActiveCounterpartyUserId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('p2p.counterparty')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {counterpartyOptions.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>{t('p2p.tradeHistory')}</Label>
+                  <ScrollArea className="h-32 rounded-md border bg-background/70 p-2">
+                    <div className="space-y-2">
+                      {threadNegotiations.length === 0 && (
+                        <p className="text-xs text-muted-foreground">{t('p2p.noTrades')}</p>
+                      )}
+
+                      {threadNegotiations.map((row) => {
+                        const statusLabel = row.status === "accepted"
+                          ? t('common.approved')
+                          : row.status === "rejected"
+                            ? t('common.rejected')
+                            : t('common.pending');
+
+                        return (
+                          <div key={row.id} className="rounded-md border p-2 text-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium">{row.proposerUsername || row.proposerId}</span>
+                              <Badge variant="outline" className="text-[10px]">{statusLabel}</Badge>
+                            </div>
+                            <p className="mt-1 text-muted-foreground">{formatLocalizedDateTime(row.createdAt, numberLocale)}</p>
+                            <p className="mt-1 whitespace-pre-wrap break-words">{row.proposedTerms}</p>
+                            {row.rejectionReason && <p className="mt-1 text-red-500">{row.rejectionReason}</p>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{t('p2p.dispute.additionalDetails')}</Label>
+                  <Input
+                    value={proposalExchangeOffered}
+                    onChange={(event) => setProposalExchangeOffered(event.target.value)}
+                    placeholder={offer.exchangeOffered || ""}
+                  />
+                  <Input
+                    value={proposalExchangeRequested}
+                    onChange={(event) => setProposalExchangeRequested(event.target.value)}
+                    placeholder={offer.exchangeRequested || ""}
+                  />
+                  <Textarea
+                    rows={3}
+                    value={proposalTerms}
+                    onChange={(event) => setProposalTerms(event.target.value)}
+                    placeholder={t('p2p.dispute.additionalDetailsPlaceholder')}
+                  />
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <Input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      max={String(MAX_NEGOTIATED_ADMIN_FEE_RATE)}
+                      value={proposalAdminFeePercentage}
+                      onChange={(event) => setProposalAdminFeePercentage(event.target.value)}
+                      placeholder={`0 - ${MAX_NEGOTIATED_ADMIN_FEE_RATE}`}
+                    />
+                    <label className="flex items-center justify-between rounded-md border bg-background px-3 py-2 text-sm">
+                      <span>{t('p2p.dispute.support')}</span>
+                      <Switch
+                        checked={proposalSupportMediationRequested}
+                        onCheckedChange={setProposalSupportMediationRequested}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => proposeNegotiationMutation.mutate()}
+                      disabled={proposeNegotiationMutation.isPending || (viewerIsOfferOwner && !activeCounterpartyUserId)}
+                    >
+                      {proposeNegotiationMutation.isPending ? t('common.loading') : t('common.submit')}
+                    </Button>
+
+                    {pendingActionNegotiation && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => submitTrade({ negotiationIdOverride: pendingActionNegotiation.id })}
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? t('common.loading') : t('p2p.acceptAndOpenTrade')}
+                        </Button>
+                        <Input
+                          value={rejectionReason}
+                          onChange={(event) => setRejectionReason(event.target.value)}
+                          placeholder={t('p2p.dispute.reason')}
+                          className="max-w-[14rem]"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          onClick={() => rejectNegotiationMutation.mutate({
+                            negotiationId: pendingActionNegotiation.id,
+                            reason: rejectionReason.trim(),
+                          })}
+                          disabled={rejectNegotiationMutation.isPending || !rejectionReason.trim()}
+                        >
+                          {rejectNegotiationMutation.isPending ? t('common.loading') : t('common.rejected')}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+
+                  {!latestAcceptedNegotiation && (
+                    <p className="text-xs text-red-500">{t('p2p.negotiation.openRequiresAcceptance')}</p>
+                  )}
+
+                  {latestAcceptedNegotiation && (
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400">{t('p2p.negotiation.acceptedReadyToOpen')}</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>{t('common.amount')}</Label>
@@ -619,8 +1109,8 @@ function TradeOfferDialog({
             {t('common.cancel')}
           </Button>
           <Button
-            onClick={submitTrade}
-            disabled={isSubmitting}
+            onClick={() => submitTrade()}
+            disabled={isSubmitting || (isDigitalDeal && !latestAcceptedNegotiation)}
             data-testid="button-confirm-create-trade"
           >
             {isSubmitting ? t('common.loading') : t('common.confirm')}
@@ -638,6 +1128,8 @@ function MarketplaceTab() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [countryFilter, setCountryFilter] = useState<string>("all");
   const [currencyFilter, setCurrencyFilter] = useState<string>("all");
+  const [dealKindFilter, setDealKindFilter] = useState<string>("all");
+  const [digitalProductTypeFilter, setDigitalProductTypeFilter] = useState<string>("all");
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
   const [priceSort, setPriceSort] = useState<"none" | "asc" | "desc">("none");
   const [amountFilter, setAmountFilter] = useState("");
@@ -654,6 +1146,10 @@ function MarketplaceTab() {
 
   const { data: offers, isLoading, refetch } = useQuery<P2POffer[]>({
     queryKey: ["/api/p2p/offers"],
+  });
+
+  const { data: digitalProductTypes = [] } = useQuery<string[]>({
+    queryKey: ["/api/p2p/digital-product-types"],
   });
 
   const offersByType = useMemo(() => {
@@ -720,6 +1216,19 @@ function MarketplaceTab() {
     )).sort((a, b) => a - b);
   }, [offersByTypeCountryAndCurrency]);
 
+  const availableDigitalProductTypeOptions = useMemo(() => {
+    const fromOffers = offersByTypeCountryAndCurrency
+      .filter((offer) => offer.dealKind === "digital_product")
+      .map((offer) => String(offer.digitalProductType || "").trim())
+      .filter((value) => value.length > 0);
+
+    const fromCatalog = (digitalProductTypes || [])
+      .map((value) => String(value || "").trim())
+      .filter((value) => value.length > 0);
+
+    return Array.from(new Set([...fromOffers, ...fromCatalog])).sort((a, b) => a.localeCompare(b));
+  }, [digitalProductTypes, offersByTypeCountryAndCurrency]);
+
   useEffect(() => {
     if (countryFilter === "all") {
       return;
@@ -761,6 +1270,22 @@ function MarketplaceTab() {
     }
   }, [maxPaymentWindowFilter, paymentTimeWindowOptions]);
 
+  useEffect(() => {
+    if (dealKindFilter !== "digital_product" && digitalProductTypeFilter !== "all") {
+      setDigitalProductTypeFilter("all");
+    }
+  }, [dealKindFilter, digitalProductTypeFilter]);
+
+  useEffect(() => {
+    if (digitalProductTypeFilter === "all") {
+      return;
+    }
+
+    if (!availableDigitalProductTypeOptions.includes(digitalProductTypeFilter)) {
+      setDigitalProductTypeFilter("all");
+    }
+  }, [digitalProductTypeFilter, availableDigitalProductTypeOptions]);
+
   const filteredOffers = useMemo(() => {
     const numericAmountFilter = parseFloat(amountFilter);
     const shouldFilterByAmount = Number.isFinite(numericAmountFilter) && numericAmountFilter > 0;
@@ -770,6 +1295,13 @@ function MarketplaceTab() {
 
     let next = offersByTypeCountryAndCurrency.filter((offer) => {
       if (offer.userId === user?.id) return false;
+      if (dealKindFilter !== "all" && (offer.dealKind || "standard_asset") !== dealKindFilter) return false;
+      if (digitalProductTypeFilter !== "all") {
+        const normalizedType = String(offer.digitalProductType || "").trim();
+        if (normalizedType !== digitalProductTypeFilter) {
+          return false;
+        }
+      }
       if (paymentFilter !== "all" && !offer.paymentMethods.includes(paymentFilter)) return false;
       if (showTopRatedOnly && offer.rating < 4.8) return false;
       if (normalizedTraderSearch && !String(offer.username || "").toLowerCase().includes(normalizedTraderSearch)) return false;
@@ -806,14 +1338,15 @@ function MarketplaceTab() {
     }
 
     return next;
-  }, [offersByTypeCountryAndCurrency, paymentFilter, amountFilter, traderSearch, minimumRatingFilter, maxPaymentWindowFilter, showTopRatedOnly, priceSort, user?.id]);
+  }, [offersByTypeCountryAndCurrency, dealKindFilter, digitalProductTypeFilter, paymentFilter, amountFilter, traderSearch, minimumRatingFilter, maxPaymentWindowFilter, showTopRatedOnly, priceSort, user?.id]);
 
   const createTradeMutation = useMutation({
-    mutationFn: async (payload: { offerId: string; amount: string; paymentMethod: string }) => {
+    mutationFn: async (payload: { offerId: string; amount: string; paymentMethod: string; negotiationId?: string }) => {
       const res = await apiRequestWithPaymentToken("POST", "/api/p2p/trades", {
         offerId: payload.offerId,
         amount: payload.amount,
         paymentMethod: payload.paymentMethod,
+        negotiationId: payload.negotiationId,
       }, "p2p_trade_create");
       return res.json();
     },
@@ -847,6 +1380,8 @@ function MarketplaceTab() {
     setTypeFilter("all");
     setCountryFilter("all");
     setCurrencyFilter("all");
+    setDealKindFilter("all");
+    setDigitalProductTypeFilter("all");
     setPaymentFilter("all");
     setAmountFilter("");
     setTraderSearch("");
@@ -926,6 +1461,35 @@ function MarketplaceTab() {
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0">
+            <div className="min-w-[9.5rem] sm:min-w-[8.75rem]">
+              <Select value={dealKindFilter} onValueChange={setDealKindFilter}>
+                <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-deal-kind-filter">
+                  <SelectValue placeholder={t('p2p.type')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                  <SelectItem value="standard_asset">{t('p2p.dealKind.standardAsset')}</SelectItem>
+                  <SelectItem value="digital_product">{t('p2p.dealKind.digitalProduct')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {dealKindFilter === "digital_product" && (
+              <div className="min-w-[11rem] sm:min-w-[10rem]">
+                <Select value={digitalProductTypeFilter} onValueChange={setDigitalProductTypeFilter}>
+                  <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-digital-product-type-filter">
+                    <SelectValue placeholder={t('p2p.digitalProductType')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">{t('p2p.all')}</SelectItem>
+                    {availableDigitalProductTypeOptions.map((productType) => (
+                      <SelectItem key={productType} value={productType}>{productType}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="min-w-[9.5rem] sm:min-w-[8.75rem]">
               <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger className="border-slate-700 bg-slate-900 text-slate-100" data-testid="select-type-filter">
@@ -1053,8 +1617,11 @@ function MarketplaceTab() {
                         <Badge className="bg-slate-700 text-slate-100 hover:bg-slate-700">
                           {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
                         </Badge>
+                        {offer.dealKind === "digital_product" && (
+                          <Badge variant="outline" className="border-violet-500/60 text-violet-300">{getDealKindLabel(t, offer.dealKind)}</Badge>
+                        )}
                         {offer.visibility === "private_friend" && (
-                          <Badge variant="outline" className="border-sky-500/60 text-sky-300">private_friend</Badge>
+                          <Badge variant="outline" className="border-sky-500/60 text-sky-300">{getVisibilityLabel(t, offer.visibility)}</Badge>
                         )}
                       </div>
 
@@ -1104,7 +1671,10 @@ function MarketplaceTab() {
                   </p>
 
                   <div className="mt-2 space-y-1 text-[11px] text-slate-400">
-                    <p>{offer.visibility === "private_friend" ? `private_friend${offer.targetUsername ? ` @${offer.targetUsername}` : ""}` : "public"}</p>
+                    <p>{getVisibilityLabel(t, offer.visibility, offer.targetUsername)}</p>
+                    {offer.dealKind === "digital_product" && (
+                      <p className="text-violet-300">{offer.digitalProductType || getDealKindLabel(t, offer.dealKind)}</p>
+                    )}
                     {offer.moderationReason && (
                       <p className="text-red-300">{offer.moderationReason}</p>
                     )}
@@ -1162,8 +1732,11 @@ function MarketplaceTab() {
                         <Badge className="bg-slate-700 text-slate-100 hover:bg-slate-700">
                           {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
                         </Badge>
+                        {offer.dealKind === "digital_product" && (
+                          <Badge variant="outline" className="border-violet-500/60 text-violet-300">{getDealKindLabel(t, offer.dealKind)}</Badge>
+                        )}
                         {offer.visibility === "private_friend" && (
-                          <Badge variant="outline" className="border-sky-500/60 text-sky-300">private_friend</Badge>
+                          <Badge variant="outline" className="border-sky-500/60 text-sky-300">{getVisibilityLabel(t, offer.visibility)}</Badge>
                         )}
                       </div>
                     </TableCell>
@@ -1237,6 +1810,7 @@ function MyOffersTab() {
   });
   const [resubmitDialogOffer, setResubmitDialogOffer] = useState<P2POffer | null>(null);
   const [counterResponseDraft, setCounterResponseDraft] = useState("");
+  const [selectedTradeOffer, setSelectedTradeOffer] = useState<P2POffer | null>(null);
   const numberLocale = resolveLanguageLocale(language);
 
   const { data: myOffers, isLoading } = useQuery<P2POffer[]>({
@@ -1259,10 +1833,20 @@ function MyOffersTab() {
     queryKey: ["/api/p2p/wallet-balances"],
   });
 
+  const { data: digitalProductTypes = [] } = useQuery<string[]>({
+    queryKey: ["/api/p2p/digital-product-types"],
+  });
+
   const form = useForm<CreateOfferForm>({
     resolver: zodResolver(createOfferSchema),
     defaultValues: {
       type: "sell",
+      dealKind: "standard_asset",
+      digitalProductType: "",
+      exchangeOffered: "",
+      exchangeRequested: "",
+      supportMediationRequested: false,
+      requestedAdminFeePercentage: "",
       visibility: "public",
       targetUserId: "",
       amount: "",
@@ -1278,7 +1862,34 @@ function MyOffersTab() {
     },
   });
 
+  const openCreateOfferDialog = (dealKind: CreateOfferForm["dealKind"]) => {
+    form.reset({
+      type: "sell",
+      dealKind,
+      digitalProductType: "",
+      exchangeOffered: "",
+      exchangeRequested: "",
+      supportMediationRequested: false,
+      requestedAdminFeePercentage: "",
+      visibility: "public",
+      targetUserId: "",
+      amount: "",
+      price: "",
+      currency: availableOfferCurrencies[0] || "USD",
+      fiatCurrency: availableQuoteCurrencies[0] || "USD",
+      minLimit: adminMinTradeAmount,
+      maxLimit: adminMaxTradeAmount,
+      paymentMethodIds: [],
+      paymentTimeLimit: "15",
+      terms: "",
+      autoReply: "",
+    });
+    setCreateOfferStep(1);
+    setIsCreateDialogOpen(true);
+  };
+
   const selectedOfferType = form.watch("type");
+  const selectedDealKind = form.watch("dealKind");
   const selectedOfferVisibility = form.watch("visibility");
   const selectedOfferCurrency = normalizeCurrencyCodeValue(form.watch("currency"));
   const selectedFiatCurrency = normalizeCurrencyCodeValue(form.watch("fiatCurrency"));
@@ -1416,8 +2027,20 @@ function MyOffersTab() {
 
   const createOfferMutation = useMutation({
     mutationFn: async (data: CreateOfferForm) => {
+      const normalizedDigitalProductType = data.digitalProductType?.trim() || undefined;
+      const normalizedExchangeOffered = data.exchangeOffered?.trim() || undefined;
+      const normalizedExchangeRequested = data.exchangeRequested?.trim() || undefined;
+      const normalizedRequestedAdminFeePercentage = data.requestedAdminFeePercentage?.trim() || undefined;
+
       const res = await apiRequest("POST", "/api/p2p/offers", {
         ...data,
+        dealKind: data.dealKind,
+        digitalProductType: data.dealKind === "digital_product" ? normalizedDigitalProductType : undefined,
+        exchangeOffered: data.dealKind === "digital_product" ? normalizedExchangeOffered : undefined,
+        exchangeRequested: data.dealKind === "digital_product" ? normalizedExchangeRequested : undefined,
+        supportMediationRequested: data.dealKind === "digital_product" ? data.supportMediationRequested : false,
+        requestedAdminFeePercentage:
+          data.dealKind === "digital_product" ? normalizedRequestedAdminFeePercentage : undefined,
         visibility: data.visibility,
         targetUserId: data.visibility === "private_friend" ? data.targetUserId : undefined,
         paymentMethodIds: data.paymentMethodIds,
@@ -1433,10 +2056,60 @@ function MyOffersTab() {
       queryClient.invalidateQueries({ queryKey: ["/api/p2p/offer-eligibility"] });
       setIsCreateDialogOpen(false);
       setCreateOfferStep(1);
-      form.reset();
+      form.reset({
+        type: "sell",
+        dealKind: "standard_asset",
+        digitalProductType: "",
+        exchangeOffered: "",
+        exchangeRequested: "",
+        supportMediationRequested: false,
+        requestedAdminFeePercentage: "",
+        visibility: "public",
+        targetUserId: "",
+        amount: "",
+        price: "",
+        currency: availableOfferCurrencies[0] || "USD",
+        fiatCurrency: availableQuoteCurrencies[0] || "USD",
+        minLimit: adminMinTradeAmount,
+        maxLimit: adminMaxTradeAmount,
+        paymentMethodIds: [],
+        paymentTimeLimit: "15",
+        terms: "",
+        autoReply: "",
+      });
       toast({
         title: t('common.success'),
         description: t('p2p.offerCreated'),
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: t('common.error'),
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createTradeFromMyOfferMutation = useMutation({
+    mutationFn: async (payload: { offerId: string; amount: string; paymentMethod: string; negotiationId?: string }) => {
+      const response = await apiRequestWithPaymentToken("POST", "/api/p2p/trades", {
+        offerId: payload.offerId,
+        amount: payload.amount,
+        paymentMethod: payload.paymentMethod,
+        negotiationId: payload.negotiationId,
+      }, "p2p_trade_create");
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/my-trades"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/my-offers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/p2p/offers"] });
+      setSelectedTradeOffer(null);
+      toast({
+        title: t('p2p.tradeInitiated'),
+        description: t('p2p.tradeInitiatedDesc'),
       });
     },
     onError: (error: Error) => {
@@ -1585,14 +2258,57 @@ function MyOffersTab() {
       return;
     }
 
+    if (data.dealKind === "digital_product") {
+      const digitalProductType = String(data.digitalProductType || "").trim();
+      const exchangeOffered = String(data.exchangeOffered || "").trim();
+      const exchangeRequested = String(data.exchangeRequested || "").trim();
+
+      if (!digitalProductType || !exchangeOffered || !exchangeRequested) {
+        toast({
+          title: t('common.error'),
+          description: t('p2p.dispute.additionalDetails'),
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const feeInput = String(data.requestedAdminFeePercentage || "").trim();
+      if (feeInput.length > 0) {
+        const feeValue = Number(feeInput);
+        if (!Number.isFinite(feeValue) || feeValue < 0 || feeValue > MAX_NEGOTIATED_ADMIN_FEE_RATE) {
+          toast({
+            title: t('common.error'),
+            description: `0 - ${MAX_NEGOTIATED_ADMIN_FEE_RATE}`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+    }
+
     createOfferMutation.mutate(data);
   };
 
   const goToNextCreateOfferStep = async () => {
     if (createOfferStep === 1) {
-      const isStepValid = await form.trigger(["type", "visibility", "targetUserId", "currency", "amount"]);
+      const isStepValid = await form.trigger(["type", "dealKind", "visibility", "targetUserId", "currency", "amount"]);
       if (!isStepValid) {
         return;
+      }
+
+      if (selectedDealKind === "digital_product") {
+        const digitalProductType = String(form.getValues("digitalProductType") || "").trim();
+        const exchangeOffered = String(form.getValues("exchangeOffered") || "").trim();
+        const exchangeRequested = String(form.getValues("exchangeRequested") || "").trim();
+
+        if (!digitalProductType || !exchangeOffered || !exchangeRequested) {
+          toast({
+            title: t('common.error'),
+            description: t('p2p.dispute.additionalDetails'),
+            variant: "destructive",
+          });
+          return;
+        }
       }
 
       if (selectedOfferVisibility === "private_friend" && !String(form.getValues("targetUserId") || "").trim()) {
@@ -1732,23 +2448,39 @@ function MyOffersTab() {
             <h3 className="text-sm font-semibold sm:text-base">{t('p2p.yourOffers')}</h3>
           </div>
 
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              className="h-9 min-w-[9.5rem] bg-slate-900 text-[#f0c73f] hover:bg-slate-900/90"
+              data-testid="button-create-standard-offer"
+              disabled={eligibilityLoading}
+              onClick={() => openCreateOfferDialog("standard_asset")}
+            >
+              <Plus className="h-4 w-4 me-1" />
+              {t('p2p.createStandardOffer')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 min-w-[9.5rem] border-slate-900 bg-white/90 text-slate-900 hover:bg-white"
+              data-testid="button-create-digital-offer"
+              disabled={eligibilityLoading}
+              onClick={() => openCreateOfferDialog("digital_product")}
+            >
+              <Scale className="h-4 w-4 me-1" />
+              {t('p2p.createDigitalOffer')}
+            </Button>
+          </div>
+
           <Dialog
             open={isCreateDialogOpen}
             onOpenChange={(open) => {
               setIsCreateDialogOpen(open);
-              setCreateOfferStep(1);
+              if (!open) {
+                setCreateOfferStep(1);
+              }
             }}
           >
-            <DialogTrigger asChild>
-              <Button
-                className="h-8 bg-slate-900 text-[#f0c73f] hover:bg-slate-900/90"
-                data-testid="button-create-offer"
-                disabled={eligibilityLoading}
-              >
-                <Plus className="h-4 w-4 me-1" />
-                {t('p2p.createOffer')}
-              </Button>
-            </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{t('p2p.createOffer')}</DialogTitle>
@@ -1797,6 +2529,129 @@ function MyOffersTab() {
 
                       <FormField
                         control={form.control}
+                        name="dealKind"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('p2p.type')}</FormLabel>
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-offer-deal-kind">
+                                  <SelectValue />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="standard_asset">{t('p2p.dealKind.standardAsset')}</SelectItem>
+                                <SelectItem value="digital_product">{t('p2p.dealKind.digitalProduct')}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {selectedDealKind === "digital_product" && (
+                        <div className="space-y-4 rounded-lg border border-sky-300/50 bg-sky-50/40 p-3 dark:border-sky-500/30 dark:bg-sky-500/10">
+                          <FormField
+                            control={form.control}
+                            name="digitalProductType"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{t('p2p.type')}</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    list="p2p-digital-product-type-options"
+                                    placeholder={t('p2p.digitalProductType')}
+                                    data-testid="input-offer-digital-product-type"
+                                  />
+                                </FormControl>
+                                <datalist id="p2p-digital-product-type-options">
+                                  {digitalProductTypes.map((productType) => (
+                                    <option key={productType} value={productType} />
+                                  ))}
+                                </datalist>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <FormField
+                              control={form.control}
+                              name="exchangeOffered"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t('p2p.buy')}</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder={t('p2p.buy')} data-testid="input-offer-exchange-offered" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
+                              name="exchangeRequested"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t('p2p.sell')}</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder={t('p2p.sell')} data-testid="input-offer-exchange-requested" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <FormField
+                              control={form.control}
+                              name="requestedAdminFeePercentage"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t('wallet.commission')}</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      type="number"
+                                      step="0.0001"
+                                      min="0"
+                                      max={String(MAX_NEGOTIATED_ADMIN_FEE_RATE)}
+                                      placeholder={`0 - ${MAX_NEGOTIATED_ADMIN_FEE_RATE}`}
+                                      data-testid="input-offer-requested-admin-fee"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <FormField
+                              control={form.control}
+                              name="supportMediationRequested"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t('p2p.dispute.support')}</FormLabel>
+                                  <div className="flex h-10 items-center justify-between rounded-md border bg-background px-3">
+                                    <span className="text-sm text-muted-foreground">{t('p2p.dispute.support')}</span>
+                                    <Switch
+                                      checked={field.value}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="switch-offer-support-mediation"
+                                    />
+                                  </div>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <FormField
+                        control={form.control}
                         name="visibility"
                         render={({ field }) => (
                           <FormItem>
@@ -1808,8 +2663,8 @@ function MyOffersTab() {
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="public">public</SelectItem>
-                                <SelectItem value="private_friend">private_friend</SelectItem>
+                                <SelectItem value="public">{t('p2p.visibility.public')}</SelectItem>
+                                <SelectItem value="private_friend">{t('p2p.visibility.privateFriend')}</SelectItem>
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -2321,7 +3176,7 @@ function MyOffersTab() {
       {sortedOffers.length === 0 ? (
         <Card>
           <CardContent>
-            <EmptyState icon={Plus} title={t('p2p.noMyOffers')} description={t('p2p.noMyOffersDesc')} action={{ label: t('p2p.createFirstOffer'), onClick: () => setIsCreateDialogOpen(true) }} />
+            <EmptyState icon={Plus} title={t('p2p.noMyOffers')} description={t('p2p.noMyOffersDesc')} action={{ label: t('p2p.createFirstOffer'), onClick: () => openCreateOfferDialog("standard_asset") }} />
           </CardContent>
         </Card>
       ) : (
@@ -2340,6 +3195,9 @@ function MyOffersTab() {
                         <Badge className="bg-slate-700 text-slate-100 hover:bg-slate-700">
                           {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
                         </Badge>
+                        {offer.dealKind === "digital_product" && (
+                          <Badge variant="outline" className="border-violet-500/60 text-violet-300">{getDealKindLabel(t, offer.dealKind)}</Badge>
+                        )}
                         <Badge className={cn("border", getStatusPillClass(offer.status))}>
                           {getStatusBadge(offer.status).props.children}
                         </Badge>
@@ -2348,6 +3206,17 @@ function MyOffersTab() {
                     </div>
 
                     <div className="flex gap-1">
+                      {offer.status === "active" && offer.dealKind === "digital_product" && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="min-h-[40px] min-w-[40px] text-violet-300 hover:bg-slate-800"
+                          onClick={() => setSelectedTradeOffer(offer)}
+                          data-testid={`button-negotiate-offer-${offer.id}`}
+                        >
+                          <Scale className="h-4 w-4" />
+                        </Button>
+                      )}
                       {offer.status === "rejected" && (
                         <Button
                           size="icon"
@@ -2387,7 +3256,10 @@ function MyOffersTab() {
                   </div>
 
                   <div className="mt-2 space-y-1 text-[11px] text-slate-400">
-                    <p>{offer.visibility === "private_friend" ? `private_friend${offer.targetUsername ? ` @${offer.targetUsername}` : ""}` : "public"}</p>
+                    <p>{getVisibilityLabel(t, offer.visibility, offer.targetUsername)}</p>
+                    {offer.dealKind === "digital_product" && (
+                      <p className="text-violet-300">{offer.digitalProductType || getDealKindLabel(t, offer.dealKind)}</p>
+                    )}
                     {offer.moderationReason && (
                       <p className="text-red-300">{offer.moderationReason}</p>
                     )}
@@ -2430,9 +3302,14 @@ function MyOffersTab() {
                 {sortedOffers.map((offer) => (
                   <TableRow key={offer.id} className="border-slate-800 hover:bg-slate-900/60" data-testid={`row-my-offer-${offer.id}`}>
                     <TableCell>
-                      <Badge className="bg-slate-700 text-slate-100 hover:bg-slate-700">
-                        {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Badge className="bg-slate-700 text-slate-100 hover:bg-slate-700">
+                          {offer.type === "buy" ? t('p2p.buy') : t('p2p.sell')}
+                        </Badge>
+                        {offer.dealKind === "digital_product" && (
+                          <Badge variant="outline" className="border-violet-500/60 text-violet-300">{getDealKindLabel(t, offer.dealKind)}</Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-slate-100"><span>{formatAssetAmount(offer.amount, offer.currency, numberLocale)}</span></TableCell>
                     <TableCell className="text-slate-100 font-semibold">{formatFixedFiat(offer.price, numberLocale)}</TableCell>
@@ -2456,7 +3333,10 @@ function MyOffersTab() {
                         <Badge className={cn("border", getStatusPillClass(offer.status))}>
                           {getStatusBadge(offer.status).props.children}
                         </Badge>
-                        <p className="text-[11px] text-slate-400">{offer.visibility === "private_friend" ? `private_friend${offer.targetUsername ? ` @${offer.targetUsername}` : ""}` : "public"}</p>
+                        <p className="text-[11px] text-slate-400">{getVisibilityLabel(t, offer.visibility, offer.targetUsername)}</p>
+                        {offer.dealKind === "digital_product" && (
+                          <p className="text-[11px] text-violet-300">{offer.digitalProductType || getDealKindLabel(t, offer.dealKind)}</p>
+                        )}
                         {offer.moderationReason && (
                           <p className="text-[11px] text-red-300">{offer.moderationReason}</p>
                         )}
@@ -2467,6 +3347,17 @@ function MyOffersTab() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
+                        {offer.status === "active" && offer.dealKind === "digital_product" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="min-h-[40px] min-w-[40px] text-violet-300 hover:bg-slate-800"
+                            onClick={() => setSelectedTradeOffer(offer)}
+                            data-testid={`button-negotiate-offer-${offer.id}`}
+                          >
+                            <Scale className="h-4 w-4" />
+                          </Button>
+                        )}
                         {offer.status === "rejected" && (
                           <Button
                             size="icon"
@@ -2512,7 +3403,7 @@ function MyOffersTab() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Resubmit Offer</DialogTitle>
+            <DialogTitle>{t('p2p.resubmitOffer')}</DialogTitle>
             <DialogDescription>{resubmitDialogOffer?.moderationReason || ""}</DialogDescription>
           </DialogHeader>
 
@@ -2557,6 +3448,14 @@ function MyOffersTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TradeOfferDialog
+        offer={selectedTradeOffer}
+        numberLocale={numberLocale}
+        isSubmitting={createTradeFromMyOfferMutation.isPending}
+        onClose={() => setSelectedTradeOffer(null)}
+        onConfirm={(payload) => createTradeFromMyOfferMutation.mutate(payload)}
+      />
     </div>
   );
 }

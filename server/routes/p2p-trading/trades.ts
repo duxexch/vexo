@@ -22,6 +22,8 @@ import { getP2PUsernameMap } from "../../lib/p2p-username";
 import { isEitherUserBlocked } from "../../lib/user-blocking";
 import { and, eq, ne, or } from "drizzle-orm";
 
+const MAX_NEGOTIATED_ADMIN_FEE_RATE = 0.2;
+
 /** GET /api/p2p/my-trades, POST /api/p2p/trades, GET /api/p2p/trades/:id */
 export function registerTradeRoutes(app: Express) {
 
@@ -205,7 +207,7 @@ export function registerTradeRoutes(app: Express) {
     sensitiveRateLimiter,
     async (req: AuthRequest, res: Response) => {
       try {
-        const { offerId, amount, paymentMethod, currencyType = 'usd' } = req.body;
+        const { offerId, amount, paymentMethod, currencyType = 'usd', negotiationId } = req.body;
         const requestingUser = await storage.getUser(req.user!.id);
 
         if (!requestingUser) {
@@ -278,8 +280,95 @@ export function registerTradeRoutes(app: Express) {
           return res.status(400).json({ error: "Offer is no longer active" });
         }
 
+        let tradeCounterpartyUserId = req.user!.id;
+        let negotiatedDealContext: {
+          id: string;
+          exchangeOffered: string | null;
+          exchangeRequested: string | null;
+          proposedTerms: string;
+          supportMediationRequested: boolean;
+          adminFeePercentage: string | null;
+        } | null = null;
+        let autoAcceptedNegotiationProposerId: string | null = null;
+        const normalizedNegotiationId = typeof negotiationId === "string" ? negotiationId.trim() : "";
+
+        if (offer.dealKind === "digital_product") {
+          if (!normalizedNegotiationId) {
+            return res.status(400).json({ error: "Accepted negotiation ID is required for digital product deals" });
+          }
+
+          const negotiation = await storage.getP2POfferNegotiation(normalizedNegotiationId);
+          if (!negotiation || negotiation.offerId !== offer.id) {
+            return res.status(404).json({ error: "Negotiation round not found" });
+          }
+
+          if (negotiation.offerOwnerId !== offer.userId) {
+            return res.status(400).json({ error: "Negotiation round does not match offer owner" });
+          }
+
+          if (!negotiation.counterpartyUserId || negotiation.counterpartyUserId === offer.userId) {
+            return res.status(400).json({ error: "Negotiation round has invalid counterparty" });
+          }
+
+          const requesterIsParticipant = req.user!.id === offer.userId || req.user!.id === negotiation.counterpartyUserId;
+          if (!requesterIsParticipant) {
+            return res.status(403).json({ error: "Only negotiation participants can open this secured trade" });
+          }
+
+          let activeNegotiation = negotiation;
+          if (activeNegotiation.status === "pending") {
+            if (activeNegotiation.proposerId === req.user!.id) {
+              return res.status(403).json({ error: "Proposer cannot open secured trade from own pending negotiation" });
+            }
+
+            const acceptedNegotiation = await storage.updateP2POfferNegotiation(activeNegotiation.id, {
+              status: "accepted",
+              respondedBy: req.user!.id,
+              respondedAt: new Date(),
+              rejectionReason: null,
+            });
+
+            if (!acceptedNegotiation) {
+              return res.status(409).json({ error: "Negotiation state changed, please retry" });
+            }
+
+            autoAcceptedNegotiationProposerId = activeNegotiation.proposerId;
+            activeNegotiation = acceptedNegotiation;
+          }
+
+          if (activeNegotiation.status !== "accepted") {
+            return res.status(400).json({ error: "Only accepted negotiation rounds can open a secured trade" });
+          }
+
+          tradeCounterpartyUserId = activeNegotiation.counterpartyUserId;
+          negotiatedDealContext = {
+            id: activeNegotiation.id,
+            exchangeOffered: activeNegotiation.exchangeOffered,
+            exchangeRequested: activeNegotiation.exchangeRequested,
+            proposedTerms: activeNegotiation.proposedTerms,
+            supportMediationRequested: activeNegotiation.supportMediationRequested,
+            adminFeePercentage: activeNegotiation.adminFeePercentage,
+          };
+
+          if (autoAcceptedNegotiationProposerId) {
+            const usernamesByUserId = await getP2PUsernameMap([req.user!.id]);
+            const responderUsername = usernamesByUserId.get(req.user!.id) || req.user!.username;
+
+            await notifyWithLog(autoAcceptedNegotiationProposerId, {
+              type: "success",
+              priority: "high",
+              title: "Deal Terms Accepted",
+              titleAr: "تم قبول شروط الصفقة",
+              message: `${responderUsername} accepted your proposed terms and opened the secured trade.`,
+              messageAr: `وافق ${responderUsername} على الشروط المقترحة وفتح الصفقة المؤمنة.`,
+              link: "/p2p",
+              metadata: JSON.stringify({ offerId: offer.id, negotiationId: negotiatedDealContext.id }),
+            }, "trade-create:auto-accept-negotiation");
+          }
+        }
+
         if (offer.visibility === "private_friend") {
-          if (!offer.targetUserId || offer.targetUserId !== req.user!.id) {
+          if (!offer.targetUserId || offer.targetUserId !== tradeCounterpartyUserId) {
             return res.status(403).json({ error: "This private offer is not available to your account" });
           }
         }
@@ -308,11 +397,23 @@ export function registerTradeRoutes(app: Express) {
           return res.status(400).json({ error: "Offer is no longer available" });
         }
 
-        if (offer.userId === req.user!.id) {
+        if (tradeCounterpartyUserId !== req.user!.id) {
+          const counterpartyUser = await storage.getUser(tradeCounterpartyUserId);
+          if (!counterpartyUser || counterpartyUser.p2pBanned) {
+            return res.status(400).json({ error: "Offer is no longer available" });
+          }
+
+          const counterpartyVerificationCheck = evaluateP2PVerificationRequirements(counterpartyUser, verificationRequirements);
+          if (!counterpartyVerificationCheck.passed) {
+            return res.status(400).json({ error: "Offer is no longer available" });
+          }
+        }
+
+        if (tradeCounterpartyUserId === offer.userId) {
           return res.status(400).json({ error: "Cannot trade with your own offer" });
         }
 
-        const isBlockedEitherWay = await isEitherUserBlocked(req.user!.id, offer.userId);
+        const isBlockedEitherWay = await isEitherUserBlocked(tradeCounterpartyUserId, offer.userId);
         if (isBlockedEitherWay) {
           return res.status(403).json({ error: "Cannot trade with this user due to blocking restrictions" });
         }
@@ -351,21 +452,34 @@ export function registerTradeRoutes(app: Express) {
 
         const price = parseFloat(offer.price);
         const fiatAmount = tradeAmount * price;
-        const platformFee = await calculateP2PFee(tradeAmount);
+        let platformFee = await calculateP2PFee(tradeAmount);
 
-        const requesterLimitCheck = await checkUserP2PTradingPermission(req.user!.id, fiatAmount);
-        if (!requesterLimitCheck.allowed) {
-          return res.status(403).json({ error: requesterLimitCheck.reason });
+        if (negotiatedDealContext?.adminFeePercentage) {
+          const negotiatedFeeRate = Number(negotiatedDealContext.adminFeePercentage);
+          if (
+            Number.isFinite(negotiatedFeeRate)
+            && negotiatedFeeRate >= 0
+            && negotiatedFeeRate <= MAX_NEGOTIATED_ADMIN_FEE_RATE
+          ) {
+            platformFee = Math.min(tradeAmount * negotiatedFeeRate, tradeAmount);
+          }
         }
 
-        const ownerLimitCheck = await checkUserP2PTradingPermission(offer.userId, fiatAmount);
-        if (!ownerLimitCheck.allowed) {
-          return res.status(400).json({ error: "Offer is no longer available" });
+        const participantIds = Array.from(new Set([offer.userId, tradeCounterpartyUserId]));
+        for (const participantId of participantIds) {
+          const limitCheck = await checkUserP2PTradingPermission(participantId, fiatAmount);
+          if (!limitCheck.allowed) {
+            if (participantId === req.user!.id) {
+              return res.status(403).json({ error: limitCheck.reason });
+            }
+
+            return res.status(400).json({ error: "Offer is no longer available" });
+          }
         }
 
         const isBuyer = offer.type === "sell";
-        const buyerId = isBuyer ? req.user!.id : offer.userId;
-        const sellerId = isBuyer ? offer.userId : req.user!.id;
+        const buyerId = isBuyer ? tradeCounterpartyUserId : offer.userId;
+        const sellerId = isBuyer ? offer.userId : tradeCounterpartyUserId;
 
         let result;
         if (currencyType === 'project') {
@@ -379,6 +493,15 @@ export function registerTradeRoutes(app: Express) {
             paymentMethod: matchedPaymentMethod,
             platformFee: platformFee.toFixed(8),
             expiresAt: new Date(Date.now() + (offer.paymentTimeLimit * 60 * 1000)),
+            dealKind: offer.dealKind,
+            digitalProductType: offer.digitalProductType ?? null,
+            exchangeOffered: negotiatedDealContext?.exchangeOffered ?? offer.exchangeOffered ?? null,
+            exchangeRequested: negotiatedDealContext?.exchangeRequested ?? offer.exchangeRequested ?? null,
+            negotiatedTerms: negotiatedDealContext?.proposedTerms ?? offer.terms,
+            supportMediationRequested:
+              negotiatedDealContext?.supportMediationRequested ?? offer.supportMediationRequested ?? false,
+            negotiatedAdminFeePercentage: negotiatedDealContext?.adminFeePercentage ?? null,
+            negotiationId: negotiatedDealContext?.id ?? null,
           });
         } else {
           result = await storage.createP2PTradeAtomic({
@@ -391,6 +514,15 @@ export function registerTradeRoutes(app: Express) {
             paymentMethod: matchedPaymentMethod,
             platformFee: platformFee.toFixed(8),
             expiresAt: new Date(Date.now() + (offer.paymentTimeLimit * 60 * 1000)),
+            dealKind: offer.dealKind,
+            digitalProductType: offer.digitalProductType ?? null,
+            exchangeOffered: negotiatedDealContext?.exchangeOffered ?? offer.exchangeOffered ?? null,
+            exchangeRequested: negotiatedDealContext?.exchangeRequested ?? offer.exchangeRequested ?? null,
+            negotiatedTerms: negotiatedDealContext?.proposedTerms ?? offer.terms,
+            supportMediationRequested:
+              negotiatedDealContext?.supportMediationRequested ?? offer.supportMediationRequested ?? false,
+            negotiatedAdminFeePercentage: negotiatedDealContext?.adminFeePercentage ?? null,
+            negotiationId: negotiatedDealContext?.id ?? null,
           });
         }
 
