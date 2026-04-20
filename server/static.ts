@@ -68,9 +68,119 @@ function buildFallbackRobots(req: Request): string {
     `Sitemap: ${baseUrl}/sitemap-index.xml`,
     `Sitemap: ${baseUrl}/sitemap-core.xml`,
     `Sitemap: ${baseUrl}/sitemap.xml`,
+    `Sitemap: ${baseUrl}/sitemap-guides.xml`,
     "",
     `Host: ${hostForDirective}`,
   ].join("\n");
+}
+
+function buildFallbackSitemapCore(baseUrl: string): string {
+  const now = new Date().toISOString();
+  const publicPaths = [
+    "/",
+    "/games",
+    "/challenges",
+    "/p2p",
+    "/tournaments",
+    "/leaderboard",
+    "/free",
+    "/daily-rewards",
+    "/referral",
+    "/install-app",
+    "/terms",
+    "/privacy",
+  ];
+
+  const urls = publicPaths.map((route) => {
+    const loc = route === "/" ? `${baseUrl}/` : `${baseUrl}${route}`;
+    return [
+      "  <url>",
+      `    <loc>${loc}</loc>`,
+      `    <lastmod>${now}</lastmod>`,
+      "    <changefreq>daily</changefreq>",
+      "    <priority>0.8</priority>",
+      "  </url>",
+    ].join("\n");
+  }).join("\n");
+
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    urls,
+    "</urlset>",
+  ].join("\n");
+}
+
+function buildFallbackSitemapGuides(baseUrl: string): string {
+  const now = new Date().toISOString();
+  const guides = [
+    "/guides/index.html",
+    "/guides/vex-platform-overview.html",
+    "/guides/vex-p2p-trading-security.html",
+    "/guides/vex-games-challenges-guide.html",
+    "/guides/vex-account-wallet-verification.html",
+    "/guides/vex-online-chess-arabic-guide.html",
+    "/guides/vex-online-backgammon-zahr-guide.html",
+    "/guides/vex-online-domino-strategy-guide.html",
+    "/guides/vex-online-baloot-tarneeb-guide.html",
+    "/guides/vex-p2p-payment-methods-currencies-guide.html",
+    "/guides/vex-earn-daily-rewards-tournaments-guide.html",
+    "/guides/vex-seo-keywords-ar.html",
+    "/guides/vex-seo-keywords-en.html",
+    "/guides/vex-search-intents-faq.html",
+    "/guides/vex-html-sitemap.html",
+  ];
+
+  const urls = guides.map((route) => [
+    "  <url>",
+    `    <loc>${baseUrl}${route}</loc>`,
+    `    <lastmod>${now}</lastmod>`,
+    "    <changefreq>weekly</changefreq>",
+    "    <priority>0.72</priority>",
+    "  </url>",
+  ].join("\n")).join("\n");
+
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    urls,
+    "</urlset>",
+  ].join("\n");
+}
+
+function buildFallbackSitemapIndex(baseUrl: string): string {
+  const now = new Date().toISOString();
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    "  <sitemap>",
+    `    <loc>${baseUrl}/sitemap-core.xml</loc>`,
+    `    <lastmod>${now}</lastmod>`,
+    "  </sitemap>",
+    "  <sitemap>",
+    `    <loc>${baseUrl}/sitemap-guides.xml</loc>`,
+    `    <lastmod>${now}</lastmod>`,
+    "  </sitemap>",
+    "  <sitemap>",
+    `    <loc>${baseUrl}/sitemap.xml</loc>`,
+    `    <lastmod>${now}</lastmod>`,
+    "  </sitemap>",
+    "</sitemapindex>",
+  ].join("\n");
+}
+
+function buildRuntimeBaseUrl(req: Request): string {
+  const appUrl = (process.env.APP_URL || process.env.APP_PUBLIC_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (appUrl) {
+    return appUrl;
+  }
+
+  const forwardedProto = typeof req.headers["x-forwarded-proto"] === "string"
+    ? req.headers["x-forwarded-proto"].split(",")[0].trim()
+    : "";
+  const protocol = forwardedProto || (req.secure ? "https" : "http");
+  const host = req.get("host");
+  return host ? `${protocol}://${host}` : "https://vixo.click";
 }
 
 // SEO page titles & descriptions for crawler-friendly rendering
@@ -383,7 +493,7 @@ export function serveStatic(app: Express) {
     }
   });
 
-  app.get("/sitemap.xml", publicStaticLimiter, async (_req, res) => {
+  app.get("/sitemap.xml", publicStaticLimiter, async (req, res) => {
     try {
       const runtimeSeo = await getRuntimeSeoSettingsSafely();
       if (!runtimeSeo.enableSitemap) {
@@ -399,13 +509,15 @@ export function serveStatic(app: Express) {
         return res.sendFile(sitemapPath);
       }
 
-      return res.status(404).type("text/plain").send("sitemap.xml not found");
+      const fallbackXml = buildFallbackSitemapCore(buildRuntimeBaseUrl(req));
+      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
     } catch {
-      return res.status(500).type("text/plain").send("sitemap.xml unavailable");
+      const fallbackXml = buildFallbackSitemapCore(buildRuntimeBaseUrl(req));
+      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
     }
   });
 
-  app.get("/sitemap-index.xml", publicStaticLimiter, async (_req, res) => {
+  app.get("/sitemap-index.xml", publicStaticLimiter, async (req, res) => {
     try {
       const runtimeSeo = await getRuntimeSeoSettingsSafely();
       if (!runtimeSeo.enableSitemap) {
@@ -421,13 +533,15 @@ export function serveStatic(app: Express) {
         return res.sendFile(sitemapIndexPath);
       }
 
-      return res.status(404).type("text/plain").send("sitemap-index.xml not found");
+      const fallbackXml = buildFallbackSitemapIndex(buildRuntimeBaseUrl(req));
+      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
     } catch {
-      return res.status(500).type("text/plain").send("sitemap-index.xml unavailable");
+      const fallbackXml = buildFallbackSitemapIndex(buildRuntimeBaseUrl(req));
+      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
     }
   });
 
-  app.get("/sitemap-core.xml", publicStaticLimiter, async (_req, res) => {
+  app.get("/sitemap-core.xml", publicStaticLimiter, async (req, res) => {
     try {
       const runtimeSeo = await getRuntimeSeoSettingsSafely();
       if (!runtimeSeo.enableSitemap) {
@@ -443,9 +557,35 @@ export function serveStatic(app: Express) {
         return res.sendFile(sitemapCorePath);
       }
 
-      return res.status(404).type("text/plain").send("sitemap-core.xml not found");
+      const fallbackXml = buildFallbackSitemapCore(buildRuntimeBaseUrl(req));
+      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
     } catch {
-      return res.status(500).type("text/plain").send("sitemap-core.xml unavailable");
+      const fallbackXml = buildFallbackSitemapCore(buildRuntimeBaseUrl(req));
+      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
+    }
+  });
+
+  app.get("/sitemap-guides.xml", publicStaticLimiter, async (req, res) => {
+    try {
+      const runtimeSeo = await getRuntimeSeoSettingsSafely();
+      if (!runtimeSeo.enableSitemap) {
+        return res.status(404).type("text/plain").send("sitemap-guides.xml disabled");
+      }
+
+      const sitemapGuidesPath = path.join(distPath, "sitemap-guides.xml");
+      if (fs.existsSync(sitemapGuidesPath)) {
+        res.set({
+          "Content-Type": "application/xml; charset=utf-8",
+          "Cache-Control": "public, max-age=900",
+        });
+        return res.sendFile(sitemapGuidesPath);
+      }
+
+      const fallbackXml = buildFallbackSitemapGuides(buildRuntimeBaseUrl(req));
+      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
+    } catch {
+      const fallbackXml = buildFallbackSitemapGuides(buildRuntimeBaseUrl(req));
+      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
     }
   });
 

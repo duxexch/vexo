@@ -159,6 +159,7 @@ Crawl-delay: 1
 Sitemap: https://vixo.click/sitemap-index.xml
 Sitemap: https://vixo.click/sitemap-core.xml
 Sitemap: https://vixo.click/sitemap.xml
+Sitemap: https://vixo.click/sitemap-guides.xml
 
 # Host
 Host: vixo.click
