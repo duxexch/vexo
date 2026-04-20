@@ -15,6 +15,7 @@ import crypto from "crypto";
 import os from "os";
 import { fileURLToPath } from "url";
 import { getRedisClient, redisHealthCheck, closeRedis, trackUserOnline, getOnlineUserCount } from "./lib/redis";
+import { createPrerenderMiddleware } from "./lib/prerender-middleware";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -379,6 +380,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
   next();
 });
+
+// Prerender.io integration for crawler HTML requests.
+// Keep this before body parsing/routes so crawler requests are intercepted early.
+app.use(createPrerenderMiddleware());
 
 // Request size limits to prevent DoS attacks
 // SECURITY: Higher limit for upload routes (base64 images), lower default for API
