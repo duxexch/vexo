@@ -17,7 +17,6 @@ export class DominoEngine implements GameEngine {
   gameType = 'domino';
   minPlayers = 2;
   maxPlayers = 4;
-  private static readonly OPENING_DOUBLE_VALUE = 6;
 
   /** C7-F10: Lightweight stub — real games always use initializeWithPlayers() */
   createInitialState(): string {
@@ -406,43 +405,7 @@ export class DominoEngine implements GameEngine {
 
     const boneyard = tiles.slice(tileIndex);
 
-    const openingDoubleValue = DominoEngine.OPENING_DOUBLE_VALUE;
-    let openingPlayer = '';
-    let openingTile: DominoTile | null = null;
-
-    for (const playerId of playerIds) {
-      const openingIndex = hands[playerId].findIndex(
-        (tile) => tile.left === openingDoubleValue && tile.right === openingDoubleValue,
-      );
-      if (openingIndex !== -1) {
-        openingPlayer = playerId;
-        openingTile = hands[playerId].splice(openingIndex, 1)[0];
-        break;
-      }
-    }
-
-    if (!openingPlayer || !openingTile) {
-      const openingFromBoneyardIdx = boneyard.findIndex(
-        (tile) => tile.left === openingDoubleValue && tile.right === openingDoubleValue,
-      );
-
-      if (openingFromBoneyardIdx === -1) {
-        throw new Error(`Domino opening tile ${openingDoubleValue}/${openingDoubleValue} is required`);
-      }
-
-      openingPlayer = playerIds[0];
-      openingTile = boneyard.splice(openingFromBoneyardIdx, 1)[0];
-
-      // Keep hand-size fairness: opener still loses one hand tile after forced opening.
-      const openerHand = hands[openingPlayer];
-      const recycledTile = openerHand.pop();
-      if (recycledTile) {
-        boneyard.push(recycledTile);
-      }
-    }
-
-    const openingPlayerIndex = playerIds.indexOf(openingPlayer);
-    const startingPlayer = playerIds[(openingPlayerIndex + 1) % playerIds.length];
+    const startingPlayer = playerIds[cryptoRandomInt(playerIds.length)];
 
     const normalizedTargetScore = this.normalizeTargetScore(targetScore);
     const safeRoundNumber = Number.isInteger(roundNumber) && roundNumber > 0 ? roundNumber : 1;
@@ -451,9 +414,9 @@ export class DominoEngine implements GameEngine {
     );
 
     const initialState: DominoState = {
-      board: [{ ...openingTile, left: openingDoubleValue, right: openingDoubleValue }],
-      leftEnd: openingDoubleValue,
-      rightEnd: openingDoubleValue,
+      board: [],
+      leftEnd: -1,
+      rightEnd: -1,
       hands,
       boneyard,
       currentPlayer: startingPlayer,
@@ -468,16 +431,8 @@ export class DominoEngine implements GameEngine {
       winningTeam: undefined,
       isDraw: false,
       reason: undefined,
-      lastAction: {
-        type: 'play',
-        playerId: openingPlayer,
-        tile: { ...openingTile, left: openingDoubleValue, right: openingDoubleValue },
-        end: 'left',
-      },
+      lastAction: undefined,
     };
-
-    // Keep the game deterministic from move 1: no timer wait when the next player cannot play.
-    this.autoPassUnplayableTurns(initialState, []);
 
     return initialState;
   }

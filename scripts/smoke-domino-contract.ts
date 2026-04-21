@@ -110,6 +110,15 @@ function main(): void {
     mustDrawState.currentPlayer = currentPlayer;
     mustDrawState.drawsThisTurn = 0;
 
+    const opponentHand = mustDrawState.hands[otherPlayer] || [];
+    const boardStarter = opponentHand[0];
+    assertCondition(Boolean(boardStarter), "Expected opponent tile to seed must-draw board state");
+
+    mustDrawState.hands[otherPlayer] = opponentHand.slice(1);
+    mustDrawState.board = [{ ...boardStarter }];
+    mustDrawState.leftEnd = boardStarter.left;
+    mustDrawState.rightEnd = boardStarter.right;
+
     const playerHand = mustDrawState.hands[currentPlayer] || [];
     let chosenTile = playerHand.find((tile) =>
         tile.left !== mustDrawState.leftEnd
