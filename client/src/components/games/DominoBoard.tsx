@@ -318,7 +318,6 @@ function orientPlacementTile(
 }
 
 type DominoDirection = "left" | "right" | "up" | "down";
-type DominoLayoutMode = "snake" | "line";
 
 function resolveBoardRenderRotation(tile: DominoTile, rotation?: number): number {
   if (tile.left === tile.right) {
@@ -403,7 +402,6 @@ function buildDominoPlacements(
   compact: boolean,
   anchorRenderRotation: number,
   horizontalRunOverride: number,
-  mode: DominoLayoutMode,
   verticalStart: "up" | "down",
 ): DominoPathPlacement[] {
   if (entries.length === 0) return [];
@@ -413,13 +411,9 @@ function buildDominoPlacements(
   const horizontalRun = Math.max(minHorizontalRun, horizontalRunOverride);
   const verticalRun = 1;
   const oppositeVertical: "up" | "down" = verticalStart === "up" ? "down" : "up";
-  const directions = mode === "line"
-    ? (side === "left" ? (["left"] as const) : (["right"] as const))
-    : (
-      side === "left"
-        ? (["left", verticalStart, "left", oppositeVertical] as const)
-        : (["right", verticalStart, "right", oppositeVertical] as const)
-    );
+  const directions = side === "left"
+    ? (["left", verticalStart, "left", oppositeVertical] as const)
+    : (["right", verticalStart, "right", oppositeVertical] as const);
 
   const firstDirection = directions[0];
   const firstRotation = resolvePlacementRotation(entries[0].item.tile, firstDirection, anchorRenderRotation);
@@ -430,7 +424,7 @@ function buildDominoPlacements(
   let x = side === "left" ? -firstGap : firstGap;
   let y = 0;
   let directionIndex = 0;
-  let segmentRemaining = mode === "line" ? Number.MAX_SAFE_INTEGER : horizontalRun;
+  let segmentRemaining = horizontalRun;
   let previousRotation = anchorRenderRotation;
 
   return entries.map((entry, index) => {
@@ -464,7 +458,7 @@ function buildDominoPlacements(
       const upcomingDirection = directions[directionIndex % directions.length];
       segmentRemaining = upcomingDirection === "left" || upcomingDirection === "right"
         ? horizontalRun
-        : (mode === "line" ? Number.MAX_SAFE_INTEGER : verticalRun);
+        : verticalRun;
     }
 
     return placement;
@@ -1019,27 +1013,18 @@ export function DominoBoard({
     return Math.max(bucketStep, Math.floor(laneWidth / bucketStep) * bucketStep);
   }, [boardLaneSize.width, isCompactMobile]);
 
-  const dominoLayoutMode = useMemo<DominoLayoutMode>(() => {
-    const leftCount = anchorTileIndex > 0 ? anchorTileIndex : 0;
-    const rightCount = anchorTileIndex >= 0 ? Math.max(0, boardEntries.length - anchorTileIndex - 1) : 0;
-    const total = leftCount + rightCount;
-    if (total <= 2) {
-      return "line";
-    }
-    const imbalanceRatio = Math.abs(rightCount - leftCount) / Math.max(1, total);
-    return imbalanceRatio <= 0.12 ? "snake" : "line";
-  }, [anchorTileIndex, boardEntries.length]);
-
   const snakeHorizontalRun = useMemo(() => {
     const laneWidth = boardLaneSize.width > 0
       ? laneWidthBucket
       : (isCompactMobile ? 320 : 760);
     const tileLongSide = isCompactMobile ? 56 : 80;
     const seamSpacing = 0;
-    const wrapSafetyInset = isCompactMobile ? 88 : 132;
+    const wrapSafetyInset = isCompactMobile
+      ? Math.max(96, Math.floor(laneWidth * 0.22))
+      : Math.max(136, Math.floor(laneWidth * 0.20));
     const rawRun = Math.floor((laneWidth - wrapSafetyInset) / Math.max(1, tileLongSide + seamSpacing));
     const minRun = isCompactMobile ? 2 : 3;
-    const maxRun = isCompactMobile ? 5 : 7;
+    const maxRun = isCompactMobile ? 4 : 6;
     return Math.max(minRun, Math.min(maxRun, rawRun));
   }, [boardLaneSize.width, laneWidthBucket, isCompactMobile]);
 
@@ -1056,10 +1041,9 @@ export function DominoBoard({
       isCompactMobile,
       anchorRenderRotation,
       snakeHorizontalRun,
-      dominoLayoutMode,
       verticalStart,
     ),
-    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation, snakeHorizontalRun, dominoLayoutMode, verticalStart],
+    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation, snakeHorizontalRun, verticalStart],
   );
 
   const rightPlacements = useMemo(
@@ -1069,10 +1053,9 @@ export function DominoBoard({
       isCompactMobile,
       anchorRenderRotation,
       snakeHorizontalRun,
-      dominoLayoutMode,
       verticalStart,
     ),
-    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation, snakeHorizontalRun, dominoLayoutMode, verticalStart],
+    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation, snakeHorizontalRun, verticalStart],
   );
 
   const boardBounds = useMemo(() => {
@@ -1096,7 +1079,7 @@ export function DominoBoard({
   }, [boardBounds.height, isCompactMobile, isSpectator]);
 
   const boardZoom = useMemo(() => {
-    const safePadding = isCompactMobile ? 34 : 52;
+    const safePadding = isCompactMobile ? 48 : 64;
     const fallbackWidth = Math.max(boardBounds.width + safePadding * 2, isCompactMobile ? 320 : 760);
     const fallbackHeight = Math.max(boardBounds.height + safePadding * 2, boardHeight);
     const laneWidth = boardLaneSize.width > 0 ? boardLaneSize.width : fallbackWidth;
@@ -1165,7 +1148,7 @@ export function DominoBoard({
       return 0;
     }
 
-    const safePadding = isCompactMobile ? 34 : 52;
+    const safePadding = isCompactMobile ? 48 : 64;
     const laneWidth = boardLaneSize.width > 0
       ? boardLaneSize.width
       : Math.max(boardBounds.width + safePadding * 2, isCompactMobile ? 320 : 760);
@@ -1210,7 +1193,6 @@ export function DominoBoard({
       isCompactMobile,
       anchorRenderRotation,
       snakeHorizontalRun,
-      dominoLayoutMode,
       verticalStart,
     );
 
@@ -1224,7 +1206,6 @@ export function DominoBoard({
     isCompactMobile,
     anchorRenderRotation,
     snakeHorizontalRun,
-    dominoLayoutMode,
     verticalStart,
   ]);
 
@@ -1259,7 +1240,6 @@ export function DominoBoard({
       isCompactMobile,
       anchorRenderRotation,
       snakeHorizontalRun,
-      dominoLayoutMode,
       verticalStart,
     );
 
@@ -1273,7 +1253,6 @@ export function DominoBoard({
     isCompactMobile,
     anchorRenderRotation,
     snakeHorizontalRun,
-    dominoLayoutMode,
     verticalStart,
   ]);
 
