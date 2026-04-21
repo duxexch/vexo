@@ -863,8 +863,8 @@ export class DominoEngine implements GameEngine {
         return { success: false, events: [], error: 'Tile not found in hand' };
       }
 
-      // C11-F3: Defensive guard — verify tile fits chosen end before mutating state
       const tileRef = state.hands[playerId][tileIndex];
+      // C11-F3: Defensive guard — verify tile fits chosen end before mutating state
       if (state.board.length > 0 && !canPlayTile(state, tileRef, end)) {
         return { success: false, events: [], error: 'Tile cannot be placed on this end' };
       }

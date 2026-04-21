@@ -28,7 +28,6 @@ function main(): void {
     const currentPlayer = parsedInitial.currentPlayer;
     const otherPlayer = parsedInitial.playerOrder.find((id) => id !== currentPlayer);
     assertCondition(otherPlayer, "Unable to determine non-current player", parsedInitial);
-
     const invalidStateValidation = engine.validateMove("{bad-json", currentPlayer, { type: "pass" });
     assertCondition(!invalidStateValidation.valid, "Expected invalid state validation failure");
     assertEqual(invalidStateValidation.errorKey, "domino.invalidState", "Expected domino.invalidState error key");

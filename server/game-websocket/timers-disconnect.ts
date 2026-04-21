@@ -57,12 +57,6 @@ function selectDominoTimeoutAutoMove(validMoves: MoveData[]): MoveData | null {
     return scored[0]?.move ?? plays[0];
   }
 
-  const drawMove = validMoves.find((move) => move.type === 'draw');
-  if (drawMove) return drawMove;
-
-  const passMove = validMoves.find((move) => move.type === 'pass');
-  if (passMove) return passMove;
-
   return null;
 }
 
@@ -170,7 +164,10 @@ function selectTimeoutAutoMove(
       const botMove = parsedState && typeof engineWithBots.generateBotMoveFromState === 'function'
         ? engineWithBots.generateBotMoveFromState(parsedState, currentPlayerId)
         : null;
-      return botMove ?? selectDominoTimeoutAutoMove(validMoves);
+      if (botMove?.type === 'play') {
+        return botMove;
+      }
+      return selectDominoTimeoutAutoMove(validMoves);
     }
 
     if ((room.gameType === 'backgammon' || room.gameType === 'tarneeb' || room.gameType === 'baloot')
