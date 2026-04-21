@@ -12,8 +12,14 @@ export const IS_DEV_MODE = process.env.VEX_DEV_MODE === 'true';
 
 /** Safely extract error message from unknown catch value */
 export function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
+  const rawMessage = error instanceof Error ? error.message : String(error);
+
+  // Do not leak SQL/internal driver details to clients on auth surfaces.
+  if (/(syntax error|relation .* does not exist|column .* does not exist|database error|sql|select\s+|insert\s+|update\s+|delete\s+|from\s+users|drizzle|postgres)/i.test(rawMessage)) {
+    return "Internal server error";
+  }
+
+  return rawMessage;
 }
 
 /** Session fingerprint — short hash of user-agent for device binding */

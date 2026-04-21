@@ -2368,12 +2368,6 @@ export default function ChallengeGamePage() {
   const opponent =
     challenge.player1Id === user?.id ? challenge.player2 : challenge.player1;
   const opponentId = opponent?.id;
-  const opponentVoiceConnected = Boolean(
-    opponentId && connectedVoicePeers.includes(opponentId),
-  );
-  const opponentMutedForViewer = Boolean(
-    opponentId && voicePeerMutedMap[opponentId],
-  );
   const opponentAvatarBubble =
     opponentId && avatarChatBubbles[opponentId]
       ? avatarChatBubbles[opponentId]
@@ -2634,6 +2628,10 @@ export default function ChallengeGamePage() {
       },
     ];
   });
+
+  const connectedChallengeVoiceCount = challengeVoiceTargets.filter((target) =>
+    connectedVoicePeers.includes(target.id),
+  ).length;
 
   const gameChatMessages = (() => {
     const seenIds = new Set<string>();
@@ -3116,32 +3114,6 @@ export default function ChallengeGamePage() {
                           <MessageCircle className="h-3 w-3" />
                           <span className="sr-only">{liveChatLabel}</span>
                         </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant={
-                            opponentMutedForViewer ? "destructive" : "outline"
-                          }
-                          className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
-                          disabled={!opponentId || !opponentVoiceConnected}
-                          onClick={() => {
-                            if (opponentId) {
-                              togglePeerListening(opponentId);
-                            }
-                          }}
-                          data-testid="play-opponent-avatar-voice-toggle"
-                          title={
-                            opponentMutedForViewer
-                              ? t("chat.unmuteUser")
-                              : t("chat.muteUser")
-                          }
-                        >
-                          {opponentMutedForViewer ? (
-                            <VolumeX className="h-3 w-3" />
-                          ) : (
-                            <Volume2 className="h-3 w-3" />
-                          )}
-                        </Button>
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -3191,7 +3163,76 @@ export default function ChallengeGamePage() {
 
               <div className={`${boardShellWidthClass} mb-1`}>
                 <div className="grid min-h-[2.5rem] grid-cols-[auto,minmax(0,1fr),auto] items-center gap-2">
-                  <div className="h-8 w-8" aria-hidden="true" />
+                  <div className="min-w-0">
+                    {shouldRenderPlayerVoiceChat && challengeVoiceTargets.length > 0 ? (
+                      <div className="flex max-w-full items-center gap-1 overflow-x-auto py-0.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isVoiceMicMuted ? "destructive" : "outline"}
+                          className="h-8 shrink-0 rounded-full px-2"
+                          onClick={() => setIsVoiceMicMuted((previous) => !previous)}
+                          data-testid="play-inline-voice-mic-toggle"
+                          title={
+                            isVoiceMicMuted
+                              ? t("challenge.voiceUnmuteMic")
+                              : t("challenge.voiceMuteMic")
+                          }
+                        >
+                          {isVoiceMicMuted ? (
+                            <MicOff className="h-3.5 w-3.5" />
+                          ) : (
+                            <Mic className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+
+                        {challengeVoiceTargets.map((target) => {
+                          const isConnected = connectedVoicePeers.includes(target.id);
+                          const mutedForViewer = Boolean(voicePeerMutedMap[target.id]);
+                          const speakerLabel =
+                            target.username || `${t("domino.player")} ${target.seat}`;
+
+                          return (
+                            <Button
+                              key={`inline-voice-peer-${target.id}`}
+                              type="button"
+                              size="sm"
+                              variant={mutedForViewer ? "destructive" : "outline"}
+                              className="h-8 shrink-0 rounded-full px-2"
+                              disabled={!isConnected}
+                              onClick={() => {
+                                togglePeerListening(target.id);
+                              }}
+                              data-testid={`play-inline-voice-peer-toggle-${target.id}`}
+                              title={
+                                mutedForViewer
+                                  ? `${t("challenge.voiceUnmuteSpeaker")} ${speakerLabel}`
+                                  : `${t("challenge.voiceMuteSpeaker")} ${speakerLabel}`
+                              }
+                            >
+                              {mutedForViewer ? (
+                                <VolumeX className="h-3.5 w-3.5" />
+                              ) : (
+                                <Volume2 className="h-3.5 w-3.5" />
+                              )}
+                              <span className="max-w-[5.5rem] truncate text-[11px]">
+                                {speakerLabel}
+                              </span>
+                            </Button>
+                          );
+                        })}
+
+                        <Badge
+                          variant="outline"
+                          className="h-8 shrink-0 rounded-full border-primary/35 bg-primary/10 px-2 text-[11px] font-mono"
+                        >
+                          {connectedChallengeVoiceCount}/{challengeVoiceTargets.length}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <div className="h-8 w-8" aria-hidden="true" />
+                    )}
+                  </div>
 
                   <div className="flex min-w-0 justify-center">
                     {topTurnDescriptor && (
@@ -3480,25 +3521,6 @@ export default function ChallengeGamePage() {
                         >
                           <MessageCircle className="h-3 w-3" />
                           <span className="sr-only">{liveChatLabel}</span>
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant={isVoiceMicMuted ? "destructive" : "outline"}
-                          className="vex-avatar-mic absolute -bottom-1 ltr:-right-1 rtl:-left-1 h-6 w-6 p-0"
-                          onClick={() => setIsVoiceMicMuted((prev) => !prev)}
-                          data-testid="play-self-avatar-mic-toggle"
-                          title={
-                            isVoiceMicMuted
-                              ? t("chat.unmuteUser")
-                              : t("chat.muteUser")
-                          }
-                        >
-                          {isVoiceMicMuted ? (
-                            <MicOff className="h-3 w-3" />
-                          ) : (
-                            <Mic className="h-3 w-3" />
-                          )}
                         </Button>
                       </div>
                       <div>
