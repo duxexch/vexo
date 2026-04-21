@@ -318,6 +318,7 @@ function orientPlacementTile(
 }
 
 type DominoDirection = "left" | "right" | "up" | "down";
+type DominoLayoutMode = "snake" | "line";
 
 function resolveBoardRenderRotation(tile: DominoTile, rotation?: number): number {
   if (tile.left === tile.right) {
@@ -330,9 +331,19 @@ function resolveBoardRenderRotation(tile: DominoTile, rotation?: number): number
     : 90;
 }
 
-function resolvePlacementRotation(tile: DominoTile, direction: DominoDirection): number {
+function resolvePlacementRotation(tile: DominoTile, direction: DominoDirection, previousRotation?: number): number {
   const flowRotation = direction === "left" || direction === "right" ? 90 : 0;
-  return tile.left === tile.right ? (flowRotation === 90 ? 0 : 90) : flowRotation;
+
+  if (tile.left === tile.right) {
+    // Strict rule for doubles: perpendicular to the immediately previous placed tile when possible.
+    if (typeof previousRotation === "number" && Number.isFinite(previousRotation)) {
+      const normalizedPrev = ((previousRotation % 180) + 180) % 180;
+      return normalizedPrev === 90 ? 0 : 90;
+    }
+    return flowRotation === 90 ? 0 : 90;
+  }
+
+  return flowRotation;
 }
 
 function getDirectionSign(direction: DominoDirection): number {
@@ -386,26 +397,32 @@ function getConnectedTileDelta(
   };
 }
 
-function buildDominoSnakePlacements(
+function buildDominoPlacements(
   entries: BoardRowEntry[],
   side: "left" | "right",
   compact: boolean,
   anchorRenderRotation: number,
-  horizontalRunOverride?: number,
+  horizontalRunOverride: number,
+  mode: DominoLayoutMode,
+  verticalStart: "up" | "down",
 ): DominoPathPlacement[] {
   if (entries.length === 0) return [];
 
   const seamSpacing = 0;
-  const defaultHorizontalRun = compact ? 3 : 4;
   const minHorizontalRun = compact ? 2 : 3;
-  const horizontalRun = Math.max(minHorizontalRun, horizontalRunOverride ?? defaultHorizontalRun);
+  const horizontalRun = Math.max(minHorizontalRun, horizontalRunOverride);
   const verticalRun = 1;
-  const directions = side === "left"
-    ? (["left", "down", "left", "up"] as const)
-    : (["right", "up", "right", "down"] as const);
+  const oppositeVertical: "up" | "down" = verticalStart === "up" ? "down" : "up";
+  const directions = mode === "line"
+    ? (side === "left" ? (["left"] as const) : (["right"] as const))
+    : (
+      side === "left"
+        ? (["left", verticalStart, "left", oppositeVertical] as const)
+        : (["right", verticalStart, "right", oppositeVertical] as const)
+    );
 
   const firstDirection = directions[0];
-  const firstRotation = resolvePlacementRotation(entries[0].item.tile, firstDirection);
+  const firstRotation = resolvePlacementRotation(entries[0].item.tile, firstDirection, anchorRenderRotation);
   const anchorFootprint = getTileFootprint(anchorRenderRotation, compact);
   const firstFootprint = getTileFootprint(firstRotation, compact);
   const firstGap = anchorFootprint.halfWidth + firstFootprint.halfWidth + seamSpacing;
@@ -413,14 +430,15 @@ function buildDominoSnakePlacements(
   let x = side === "left" ? -firstGap : firstGap;
   let y = 0;
   let directionIndex = 0;
-  let segmentRemaining = horizontalRun;
+  let segmentRemaining = mode === "line" ? Number.MAX_SAFE_INTEGER : horizontalRun;
+  let previousRotation = anchorRenderRotation;
 
   return entries.map((entry, index) => {
     const direction = directions[directionIndex % directions.length];
     const nextDirection = segmentRemaining === 1
       ? directions[(directionIndex + 1) % directions.length]
       : direction;
-    const renderRotation = resolvePlacementRotation(entry.item.tile, direction);
+    const renderRotation = resolvePlacementRotation(entry.item.tile, direction, previousRotation);
 
     const placement: DominoPathPlacement = {
       ...entry,
@@ -428,10 +446,11 @@ function buildDominoSnakePlacements(
       y,
       renderRotation,
     };
+    previousRotation = renderRotation;
 
     const nextEntry = entries[index + 1];
     if (nextEntry) {
-      const nextRenderRotation = resolvePlacementRotation(nextEntry.item.tile, nextDirection);
+      const nextRenderRotation = resolvePlacementRotation(nextEntry.item.tile, nextDirection, renderRotation);
       const currentFootprint = getTileFootprint(renderRotation, compact);
       const nextFootprint = getTileFootprint(nextRenderRotation, compact);
       const delta = getConnectedTileDelta(direction, nextDirection, currentFootprint, nextFootprint, seamSpacing);
@@ -445,11 +464,15 @@ function buildDominoSnakePlacements(
       const upcomingDirection = directions[directionIndex % directions.length];
       segmentRemaining = upcomingDirection === "left" || upcomingDirection === "right"
         ? horizontalRun
-        : verticalRun;
+        : (mode === "line" ? Number.MAX_SAFE_INTEGER : verticalRun);
     }
 
     return placement;
   });
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function getDominoPlacementBounds(
@@ -972,44 +995,84 @@ export function DominoBoard({
     () => (anchorTileIndex >= 0 ? boardEntries[anchorTileIndex] : undefined),
     [boardEntries, anchorTileIndex],
   );
-  const anchorRenderRotation = useMemo(
-    () => (anchorEntry ? resolveBoardRenderRotation(anchorEntry.item.tile, anchorEntry.item.rotation) : 90),
-    [anchorEntry],
-  );
+  const anchorRenderRotation = useMemo(() => {
+    if (!anchorEntry) {
+      return 90;
+    }
+
+    const isAnchorDouble = anchorEntry.item.tile.left === anchorEntry.item.tile.right;
+    if (isAnchorDouble) {
+      const laneWidth = boardLaneSize.width > 0 ? boardLaneSize.width : (isCompactMobile ? 320 : 760);
+      const laneHeight = boardLaneSize.height > 0 ? boardLaneSize.height : (isCompactMobile ? 360 : 520);
+      // Center double follows board aspect to stay natural after screen rotation.
+      return laneWidth >= laneHeight ? 90 : 0;
+    }
+
+    return resolveBoardRenderRotation(anchorEntry.item.tile, anchorEntry.item.rotation);
+  }, [anchorEntry, boardLaneSize.width, boardLaneSize.height, isCompactMobile]);
+
+  const laneWidthBucket = useMemo(() => {
+    const laneWidth = boardLaneSize.width > 0
+      ? boardLaneSize.width
+      : (isCompactMobile ? 320 : 760);
+    const bucketStep = isCompactMobile ? 24 : 32;
+    return Math.max(bucketStep, Math.floor(laneWidth / bucketStep) * bucketStep);
+  }, [boardLaneSize.width, isCompactMobile]);
+
+  const dominoLayoutMode = useMemo<DominoLayoutMode>(() => {
+    const leftCount = anchorTileIndex > 0 ? anchorTileIndex : 0;
+    const rightCount = anchorTileIndex >= 0 ? Math.max(0, boardEntries.length - anchorTileIndex - 1) : 0;
+    const total = leftCount + rightCount;
+    if (total <= 2) {
+      return "line";
+    }
+    const imbalanceRatio = Math.abs(rightCount - leftCount) / Math.max(1, total);
+    return imbalanceRatio <= 0.12 ? "snake" : "line";
+  }, [anchorTileIndex, boardEntries.length]);
 
   const snakeHorizontalRun = useMemo(() => {
     const laneWidth = boardLaneSize.width > 0
-      ? boardLaneSize.width
+      ? laneWidthBucket
       : (isCompactMobile ? 320 : 760);
     const tileLongSide = isCompactMobile ? 56 : 80;
     const seamSpacing = 0;
     const wrapSafetyInset = isCompactMobile ? 88 : 132;
     const rawRun = Math.floor((laneWidth - wrapSafetyInset) / Math.max(1, tileLongSide + seamSpacing));
     const minRun = isCompactMobile ? 2 : 3;
-    const maxRun = isCompactMobile ? 3 : 4;
+    const maxRun = isCompactMobile ? 5 : 7;
     return Math.max(minRun, Math.min(maxRun, rawRun));
-  }, [boardLaneSize.width, isCompactMobile]);
+  }, [boardLaneSize.width, laneWidthBucket, isCompactMobile]);
+
+  const verticalStart = useMemo<"up" | "down">(() => {
+    const keySource = anchorTileKey ?? "anchor";
+    const hash = keySource.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    return hash % 2 === 0 ? "up" : "down";
+  }, [anchorTileKey]);
 
   const leftPlacements = useMemo(
-    () => buildDominoSnakePlacements(
+    () => buildDominoPlacements(
       anchorTileIndex > 0 ? [...boardEntries.slice(0, anchorTileIndex)].reverse() : [],
       "left",
       isCompactMobile,
       anchorRenderRotation,
       snakeHorizontalRun,
+      dominoLayoutMode,
+      verticalStart,
     ),
-    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation, snakeHorizontalRun],
+    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation, snakeHorizontalRun, dominoLayoutMode, verticalStart],
   );
 
   const rightPlacements = useMemo(
-    () => buildDominoSnakePlacements(
+    () => buildDominoPlacements(
       anchorTileIndex >= 0 ? boardEntries.slice(anchorTileIndex + 1) : [],
       "right",
       isCompactMobile,
       anchorRenderRotation,
       snakeHorizontalRun,
+      dominoLayoutMode,
+      verticalStart,
     ),
-    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation, snakeHorizontalRun],
+    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation, snakeHorizontalRun, dominoLayoutMode, verticalStart],
   );
 
   const boardBounds = useMemo(() => {
@@ -1027,7 +1090,9 @@ export function DominoBoard({
       : (isSpectator ? 420 : 520);
     const verticalPadding = isCompactMobile ? 84 : 104;
     const requiredHeight = Math.ceil(boardBounds.height + verticalPadding);
-    return Math.max(minHeight, requiredHeight);
+    const readableZoomFloor = isCompactMobile ? 0.30 : 0.38;
+    const readableHeight = Math.ceil(boardBounds.height * readableZoomFloor + verticalPadding);
+    return Math.max(minHeight, requiredHeight, readableHeight);
   }, [boardBounds.height, isCompactMobile, isSpectator]);
 
   const boardZoom = useMemo(() => {
@@ -1041,12 +1106,9 @@ export function DominoBoard({
     const fitWidthZoom = availableWidth / Math.max(boardBounds.width, 1);
     const fitHeightZoom = availableHeight / Math.max(boardBounds.height, 1);
     const fitZoom = Math.min(1, fitWidthZoom, fitHeightZoom);
-    const tileCount = state.boardTiles.length;
-    const minReadableZoom = isCompactMobile
-      ? (tileCount > 16 ? 0.2 : tileCount > 10 ? 0.24 : 0.32)
-      : (tileCount > 20 ? 0.28 : tileCount > 12 ? 0.34 : 0.44);
-    return Math.max(minReadableZoom, fitZoom);
-  }, [isCompactMobile, boardBounds.width, boardBounds.height, boardLaneSize.width, boardLaneSize.height, boardHeight, state.boardTiles.length]);
+    // Never exceed fit-zoom to guarantee every tile remains inside the board lane.
+    return Math.max(0.12, Math.floor(fitZoom * 1000) / 1000);
+  }, [isCompactMobile, boardBounds.width, boardBounds.height, boardLaneSize.width, boardLaneSize.height, boardHeight]);
 
   const boardHeightCssValue = useMemo(() => {
     if (isCompactMobile) {
@@ -1080,6 +1142,41 @@ export function DominoBoard({
     offsetX: boardBounds.offsetX,
     offsetY: boardBounds.offsetY,
   }), [boardBounds.offsetX, boardBounds.offsetY]);
+
+  const growthBiasShiftX = useMemo(() => {
+    if (leftPlacements.length === 0 && rightPlacements.length === 0) {
+      return 0;
+    }
+
+    const leftReach = leftPlacements.reduce((max, placement) => {
+      const footprint = getTileFootprint(placement.renderRotation, isCompactMobile);
+      return Math.max(max, Math.abs(placement.x) + footprint.halfWidth);
+    }, 0);
+    const rightReach = rightPlacements.reduce((max, placement) => {
+      const footprint = getTileFootprint(placement.renderRotation, isCompactMobile);
+      return Math.max(max, Math.abs(placement.x) + footprint.halfWidth);
+    }, 0);
+
+    const imbalance = rightReach - leftReach;
+    const totalReach = Math.max(1, rightReach + leftReach);
+    const imbalanceRatio = Math.abs(imbalance) / totalReach;
+
+    if (imbalanceRatio < 0.2) {
+      return 0;
+    }
+
+    const safePadding = isCompactMobile ? 34 : 52;
+    const laneWidth = boardLaneSize.width > 0
+      ? boardLaneSize.width
+      : Math.max(boardBounds.width + safePadding * 2, isCompactMobile ? 320 : 760);
+    const availableWidth = Math.max(140, laneWidth - safePadding * 2);
+    const logicalVisibleWidth = availableWidth / Math.max(boardZoom, 0.001);
+    const slackX = Math.max(0, (logicalVisibleWidth - boardBounds.width) / 2);
+    const preferredShift = -0.25 * imbalance;
+    return clamp(preferredShift, -slackX, slackX);
+  }, [leftPlacements, rightPlacements, isCompactMobile, boardLaneSize.width, boardBounds.width, boardZoom]);
+
+  const effectiveOffsetX = boardOffset.offsetX + growthBiasShiftX;
   const lastActionTileKey = state.lastAction?.tile ? tileSignature(state.lastAction.tile) : null;
 
   const leftPreviewPlacement = useMemo(() => {
@@ -1107,12 +1204,14 @@ export function DominoBoard({
       },
     ];
 
-    const previewPlacements = buildDominoSnakePlacements(
+    const previewPlacements = buildDominoPlacements(
       previewEntries,
       "left",
       isCompactMobile,
       anchorRenderRotation,
       snakeHorizontalRun,
+      dominoLayoutMode,
+      verticalStart,
     );
 
     return previewPlacements[previewPlacements.length - 1] ?? null;
@@ -1125,6 +1224,8 @@ export function DominoBoard({
     isCompactMobile,
     anchorRenderRotation,
     snakeHorizontalRun,
+    dominoLayoutMode,
+    verticalStart,
   ]);
 
   const rightPreviewPlacement = useMemo(() => {
@@ -1152,12 +1253,14 @@ export function DominoBoard({
       },
     ];
 
-    const previewPlacements = buildDominoSnakePlacements(
+    const previewPlacements = buildDominoPlacements(
       previewEntries,
       "right",
       isCompactMobile,
       anchorRenderRotation,
       snakeHorizontalRun,
+      dominoLayoutMode,
+      verticalStart,
     );
 
     return previewPlacements[previewPlacements.length - 1] ?? null;
@@ -1170,6 +1273,8 @@ export function DominoBoard({
     isCompactMobile,
     anchorRenderRotation,
     snakeHorizontalRun,
+    dominoLayoutMode,
+    verticalStart,
   ]);
 
   const leftGhostScreenPosition = useMemo(() => {
@@ -1178,11 +1283,11 @@ export function DominoBoard({
     }
 
     return {
-      x: (leftPreviewPlacement.x + boardOffset.offsetX) * boardZoom,
+      x: (leftPreviewPlacement.x + effectiveOffsetX) * boardZoom,
       y: (leftPreviewPlacement.y + boardOffset.offsetY) * boardZoom,
       rotation: leftPreviewPlacement.renderRotation,
     };
-  }, [leftPreviewPlacement, boardOffset.offsetX, boardOffset.offsetY, boardZoom]);
+  }, [leftPreviewPlacement, boardOffset.offsetY, boardZoom, effectiveOffsetX]);
 
   const rightGhostScreenPosition = useMemo(() => {
     if (!rightPreviewPlacement) {
@@ -1190,11 +1295,11 @@ export function DominoBoard({
     }
 
     return {
-      x: (rightPreviewPlacement.x + boardOffset.offsetX) * boardZoom,
+      x: (rightPreviewPlacement.x + effectiveOffsetX) * boardZoom,
       y: (rightPreviewPlacement.y + boardOffset.offsetY) * boardZoom,
       rotation: rightPreviewPlacement.renderRotation,
     };
-  }, [rightPreviewPlacement, boardOffset.offsetX, boardOffset.offsetY, boardZoom]);
+  }, [rightPreviewPlacement, boardOffset.offsetY, boardZoom, effectiveOffsetX]);
 
   const renderBoardTile = (entry: BoardRowEntry, rowId: string, forcedRotation?: number) => {
     const boardTile = entry.item.tile;
@@ -1273,53 +1378,58 @@ export function DominoBoard({
         </div>
 
         {(turnTimeLimit > 0 || (state.scores && Object.values(state.scores).some((s) => s >= 0)) || (state.passCount != null && state.passCount > 0)) && (
-          <div className={cn("flex flex-wrap items-center justify-center", isCompactMobile ? "gap-1.5" : "gap-2")}>
+          <div className="space-y-1">
             {turnTimeLimit > 0 && status !== 'finished' && (
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold shadow-sm",
-                  timeLeft <= 5
-                    ? "border-rose-500/45 bg-rose-500/12 text-rose-600 animate-pulse"
-                    : isTurnLive
-                      ? "border-emerald-500/40 bg-emerald-500/12 text-emerald-600"
-                      : "border-border/60 bg-background/75 text-muted-foreground",
-                )}
-                aria-live={isTurnLive ? "polite" : undefined}
-              >
-                <Clock3 className="h-3.5 w-3.5" />
-                <span>{Math.max(0, timeLeft)}s</span>
-              </span>
-            )}
-
-            {state.passCount != null && state.passCount > 0 && status !== 'finished' && (
-              <span className={cn(
-                "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
-                state.passCount >= (state.playerCount ?? 2) - 1
-                  ? "border-amber-500/40 bg-amber-500/18 text-amber-600"
-                  : "border-border/60 bg-background/75 text-muted-foreground"
-              )}>
-                {t('domino.pass')}: {state.passCount}/{state.playerCount ?? 2}
-              </span>
-            )}
-
-            {turnFlowHint && (
-              <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
-                {turnFlowHint}
-              </span>
-            )}
-
-            {state.scores && Object.entries(state.scores).length > 0 && Object.entries(state.scores).map(([pid, score]) => {
-              const label = getPlayerLabel(pid);
-              return (
+              <div className="flex justify-center">
                 <span
-                  key={pid}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/75 px-2.5 py-1 text-[11px] text-foreground shadow-sm"
+                  className={cn(
+                    "inline-flex min-w-[72px] items-center justify-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold tabular-nums shadow-sm",
+                    timeLeft <= 5
+                      ? "border-rose-500/45 bg-rose-500/12 text-rose-600 animate-pulse"
+                      : isTurnLive
+                        ? "border-emerald-500/40 bg-emerald-500/12 text-emerald-600"
+                        : "border-border/60 bg-background/75 text-muted-foreground",
+                  )}
+                  aria-live={isTurnLive ? "polite" : undefined}
                 >
-                  <span className="text-muted-foreground">{label}</span>
-                  <span className="font-semibold">{score}</span>
+                  <Clock3 className="h-3.5 w-3.5" />
+                  <span>{Math.max(0, timeLeft)}s</span>
                 </span>
-              );
-            })}
+              </div>
+            )}
+
+            <div className={cn("flex flex-wrap items-center justify-center", isCompactMobile ? "gap-1.5" : "gap-2")}>
+
+              {state.passCount != null && state.passCount > 0 && status !== 'finished' && (
+                <span className={cn(
+                  "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
+                  state.passCount >= (state.playerCount ?? 2) - 1
+                    ? "border-amber-500/40 bg-amber-500/18 text-amber-600"
+                    : "border-border/60 bg-background/75 text-muted-foreground"
+                )}>
+                  {t('domino.pass')}: {state.passCount}/{state.playerCount ?? 2}
+                </span>
+              )}
+
+              {turnFlowHint && (
+                <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
+                  {turnFlowHint}
+                </span>
+              )}
+
+              {state.scores && Object.entries(state.scores).length > 0 && Object.entries(state.scores).map(([pid, score]) => {
+                const label = getPlayerLabel(pid);
+                return (
+                  <span
+                    key={pid}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/75 px-2.5 py-1 text-[11px] text-foreground shadow-sm"
+                  >
+                    <span className="text-muted-foreground">{label}</span>
+                    <span className="font-semibold">{score}</span>
+                  </span>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -1407,7 +1517,7 @@ export function DominoBoard({
                       key={`left-${tileSignature(placement.item.tile)}`}
                       className="absolute left-1/2 top-1/2"
                       style={{
-                        transform: `translate(calc(-50% + ${(placement.x + boardOffset.offsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardZoom})`,
+                        transform: `translate(calc(-50% + ${(placement.x + effectiveOffsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardZoom})`,
                         transformOrigin: "center center",
                       }}
                     >
@@ -1418,7 +1528,7 @@ export function DominoBoard({
                   <div
                     className="absolute left-1/2 top-1/2"
                     style={{
-                      transform: `translate(calc(-50% + ${boardOffset.offsetX * boardZoom}px), calc(-50% + ${boardOffset.offsetY * boardZoom}px)) scale(${boardZoom})`,
+                      transform: `translate(calc(-50% + ${effectiveOffsetX * boardZoom}px), calc(-50% + ${boardOffset.offsetY * boardZoom}px)) scale(${boardZoom})`,
                       transformOrigin: "center center",
                     }}
                   >
@@ -1430,7 +1540,7 @@ export function DominoBoard({
                       key={`right-${tileSignature(placement.item.tile)}`}
                       className="absolute left-1/2 top-1/2"
                       style={{
-                        transform: `translate(calc(-50% + ${(placement.x + boardOffset.offsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardZoom})`,
+                        transform: `translate(calc(-50% + ${(placement.x + effectiveOffsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardZoom})`,
                         transformOrigin: "center center",
                       }}
                     >
