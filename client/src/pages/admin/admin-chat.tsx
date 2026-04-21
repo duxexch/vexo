@@ -1871,9 +1871,7 @@ export default function AdminChatPage() {
                   {text("adminChat.messages.e2eeTitle", "End-to-end encrypted chats (E2EE)")}
                 </h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  المحادثات الخاصة بين المستخدمين محمية بتشفير طرفي.
-                  لا يمكن لأي شخص بما فيهم المشرفين قراءة هذه الرسائل.
-                  يمكنك مراقبة محادثات P2P والتحديات فقط.
+                  {text("adminChat.messages.e2eeDescription", "Private chats between users are protected by end-to-end encryption. No one, including admins, can read these messages. Only P2P and challenge chats can be monitored.")}
                 </p>
                 <div className="flex justify-center gap-4 pt-2">
                   <Badge variant="outline" className="gap-1 text-emerald-500 border-emerald-500/30">
@@ -2055,8 +2053,7 @@ export default function AdminChatPage() {
                 <div>
                   <h4 className="font-semibold text-emerald-700 dark:text-emerald-400 mb-1">{text("adminChat.privacy.title", "Chat privacy")}</h4>
                   <p className="text-sm text-muted-foreground">
-                    المحادثات الخاصة بين المستخدمين مشفرة طرفياً (E2EE) ولا يمكن للمشرفين قراءتها.
-                    فقط محادثات قسم P2P/التحديات يمكن مراقبتها. هذا يضمن خصوصية تامة للمستخدمين.
+                    {text("adminChat.privacy.description", "Private user-to-user chats are end-to-end encrypted (E2EE) and cannot be read by admins. Only P2P/challenge chats can be monitored to preserve user privacy.")}
                   </p>
                 </div>
               </div>
@@ -2143,10 +2140,10 @@ export default function AdminChatPage() {
               <div className="space-y-2 rounded-[24px] border border-emerald-500/20 bg-emerald-500/5 p-4">
                 <Label className="text-emerald-700 dark:text-emerald-400">{text("adminChat.settings.privatePrivacy", "Private message privacy")}</Label>
                 <p className="text-sm text-muted-foreground">
-                  بسبب التشفير الطرفي الكامل (E2EE)، لا يمكن للنظام حذف أو قراءة الرسائل الخاصة من لوحة الإدارة.
+                  {text("adminChat.settings.e2eeNotice", "Due to full end-to-end encryption (E2EE), the system cannot delete or read private messages from the admin panel.")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  للمراجعة الإدارية استخدم فقط أدوات مراقبة محادثات P2P والتحديات المتاحة في أقسامها المخصصة.
+                  {text("adminChat.settings.e2eeGuidance", "For administrative review, use only P2P/challenge monitoring tools available in their dedicated sections.")}
                 </p>
               </div>
             </CardContent>
@@ -2227,11 +2224,11 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
       <div className="grid grid-cols-2 gap-2 text-sm">
         <div className="rounded-2xl bg-muted p-2 text-center">
           <div className="text-lg font-bold">{stats?.totalEnabled || 0}</div>
-          <div className="text-muted-foreground text-xs">مفعّلين</div>
+          <div className="text-muted-foreground text-xs">{text("adminChat.feature.enabledUsers", "Enabled users")}</div>
         </div>
         <div className="rounded-2xl bg-muted p-2 text-center">
           <div className="text-lg font-bold">{stats?.currentPrice || "—"}</div>
-          <div className="text-muted-foreground text-xs">السعر</div>
+          <div className="text-muted-foreground text-xs">{text("common.price", "Price")}</div>
         </div>
       </div>
 
@@ -2239,13 +2236,13 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
       <div className="flex gap-2">
         <Input
           type="number"
-          placeholder="السعر الجديد"
+          placeholder={text("adminChat.pricing.newPrice", "New price")}
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           className={`${INPUT_SURFACE_CLASS} flex-1`}
         />
         <Button size="sm" className={BUTTON_3D_PRIMARY_CLASS} onClick={handleUpdatePrice} disabled={!price.trim()}>
-          تحديث
+          {text("common.update", "Update")}
         </Button>
       </div>
 
@@ -2254,13 +2251,13 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
       {/* Grant to user */}
       <div className="flex gap-2">
         <Input
-          placeholder="ID المستخدم"
+          placeholder={text("adminChat.userIdPlaceholder", "User ID")}
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
           className={`${INPUT_SURFACE_CLASS} flex-1`}
         />
         <Button size="sm" className={BUTTON_3D_PRIMARY_CLASS} onClick={handleGrant} disabled={loading || !userId.trim()}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "منح"}
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : text("adminChat.feature.grant", "Grant")}
         </Button>
       </div>
 
@@ -2368,41 +2365,41 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
         <div className="rounded-2xl bg-muted p-2 text-center">
           <div className="text-lg font-bold">{stats?.voicePricePerMinute ?? 0}</div>
-          <div className="text-muted-foreground text-xs">سعر دقيقة الصوت</div>
+          <div className="text-muted-foreground text-xs">{text("adminChat.callPricing.voiceMinute", "Voice minute price")}</div>
         </div>
         <div className="rounded-2xl bg-muted p-2 text-center">
           <div className="text-lg font-bold">{stats?.videoPricePerMinute ?? 0}</div>
-          <div className="text-muted-foreground text-xs">سعر دقيقة الفيديو</div>
+          <div className="text-muted-foreground text-xs">{text("adminChat.callPricing.videoMinute", "Video minute price")}</div>
         </div>
         <div className="rounded-2xl bg-muted p-2 text-center">
           <div className="text-lg font-bold">{stats?.voiceMessagePrice ?? 0}</div>
-          <div className="text-muted-foreground text-xs">سعر الرسالة الصوتية</div>
+          <div className="text-muted-foreground text-xs">{text("adminChat.callPricing.voiceMessage", "Voice message price")}</div>
         </div>
         <div className="rounded-2xl bg-muted p-2 text-center">
           <div className="text-lg font-bold">{stats?.messageDeletePrice ?? 0}</div>
-          <div className="text-muted-foreground text-xs">سعر حذف الرسالة</div>
+          <div className="text-muted-foreground text-xs">{text("adminChat.callPricing.deleteMessage", "Message delete price")}</div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-xl border border-slate-200/70 p-2 text-center dark:border-slate-800">
           <div className="font-semibold">{stats?.totals?.voiceMinutes ?? 0}</div>
-          <div className="text-muted-foreground">دقائق صوت مفوترة</div>
+          <div className="text-muted-foreground">{text("adminChat.callPricing.billedVoiceMinutes", "Billed voice minutes")}</div>
         </div>
         <div className="rounded-xl border border-slate-200/70 p-2 text-center dark:border-slate-800">
           <div className="font-semibold">{stats?.totals?.videoMinutes ?? 0}</div>
-          <div className="text-muted-foreground">دقائق فيديو مفوترة</div>
+          <div className="text-muted-foreground">{text("adminChat.callPricing.billedVideoMinutes", "Billed video minutes")}</div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-xl border border-slate-200/70 p-2 text-center dark:border-slate-800">
           <div className="font-semibold">{stats?.totals?.voiceMessagesCharged ?? 0}</div>
-          <div className="text-muted-foreground">رسائل صوتية مفوترة</div>
+          <div className="text-muted-foreground">{text("adminChat.callPricing.billedVoiceMessages", "Billed voice messages")}</div>
         </div>
         <div className="rounded-xl border border-slate-200/70 p-2 text-center dark:border-slate-800">
           <div className="font-semibold">{stats?.totals?.deleteActionsCharged ?? 0}</div>
-          <div className="text-muted-foreground">حذف رسائل مفوتر</div>
+          <div className="text-muted-foreground">{text("adminChat.callPricing.billedDeletes", "Billed message deletions")}</div>
         </div>
       </div>
 
@@ -2411,7 +2408,7 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
           type="number"
           min="0"
           step="0.01"
-          placeholder="سعر دقيقة الصوت"
+          placeholder={text("adminChat.callPricing.voiceMinute", "Voice minute price")}
           value={voicePrice}
           onChange={(e) => setVoicePrice(e.target.value)}
           className={INPUT_SURFACE_CLASS}
@@ -2420,7 +2417,7 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
           type="number"
           min="0"
           step="0.01"
-          placeholder="سعر دقيقة الفيديو"
+          placeholder={text("adminChat.callPricing.videoMinute", "Video minute price")}
           value={videoPrice}
           onChange={(e) => setVideoPrice(e.target.value)}
           className={INPUT_SURFACE_CLASS}
@@ -2429,7 +2426,7 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
           type="number"
           min="0"
           step="0.01"
-          placeholder="سعر الرسالة الصوتية"
+          placeholder={text("adminChat.callPricing.voiceMessage", "Voice message price")}
           value={voiceMessagePrice}
           onChange={(e) => setVoiceMessagePrice(e.target.value)}
           className={INPUT_SURFACE_CLASS}
@@ -2438,7 +2435,7 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
           type="number"
           min="0"
           step="0.01"
-          placeholder="سعر حذف الرسالة"
+          placeholder={text("adminChat.callPricing.deleteMessage", "Message delete price")}
           value={messageDeletePrice}
           onChange={(e) => setMessageDeletePrice(e.target.value)}
           className={INPUT_SURFACE_CLASS}
@@ -2451,7 +2448,7 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
         onClick={handleSave}
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-        تحديث الأسعار
+        {text("adminChat.callPricing.update", "Update pricing")}
       </Button>
     </div>
   );
@@ -2484,11 +2481,11 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        يمكنك إعادة تعيين رمز PIN للمستخدم في حال نسيانه. سيتم إزالة PIN تماماً.
+        {text("adminChat.pinReset.description", "You can reset a user PIN if it is forgotten. The PIN will be removed completely.")}
       </p>
       <div className="flex gap-2">
         <Input
-          placeholder="ID المستخدم"
+          placeholder={text("adminChat.userIdPlaceholder", "User ID")}
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
           className={`${INPUT_SURFACE_CLASS} flex-1`}
@@ -2496,20 +2493,20 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button size="sm" className={BUTTON_3D_DESTRUCTIVE_CLASS} disabled={loading || !userId.trim()}>
-              إعادة تعيين
+              {text("adminChat.pinReset.action", "Reset")}
             </Button>
           </AlertDialogTrigger>
           <AlertDialogContent className={DIALOG_SURFACE_CLASS}>
             <AlertDialogHeader>
-              <AlertDialogTitle>إعادة تعيين PIN</AlertDialogTitle>
+              <AlertDialogTitle>{text("adminChat.pinReset.confirmTitle", "Reset PIN")}</AlertDialogTitle>
               <AlertDialogDescription>
-                سيتم إزالة رمز PIN للمستخدم {userId}. هل أنت متأكد؟
+                {text("adminChat.pinReset.confirmDescription", "PIN will be removed for user")} {userId}. {text("common.areYouSure", "Are you sure?")}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className={BUTTON_3D_CLASS}>إلغاء</AlertDialogCancel>
+              <AlertDialogCancel className={BUTTON_3D_CLASS}>{text("common.cancel", "Cancel")}</AlertDialogCancel>
               <AlertDialogAction className={BUTTON_3D_DESTRUCTIVE_CLASS} onClick={handleReset}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "تأكيد"}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : text("common.confirm", "Confirm")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -2518,8 +2515,7 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
 
       <div className="rounded-[24px] border border-amber-500/20 bg-amber-500/10 p-3">
         <p className="text-xs text-muted-foreground">
-          ⚠️ إعادة التعيين ستزيل حماية PIN من محادثات المستخدم.
-          استخدم فقط عندما يطلب المستخدم ذلك عبر الدعم الفني.
+          ⚠️ {text("adminChat.pinReset.warning", "Resetting will remove PIN protection from the user's chats. Use this only when requested through support.")}
         </p>
       </div>
     </div>
@@ -2590,8 +2586,8 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
       {/* Global toggle */}
       <div className="flex items-center justify-between rounded-[24px] border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
         <div>
-          <Label className="text-sm font-medium">تفعيل الوسائط عالمياً</Label>
-          <p className="text-xs text-muted-foreground">السماح لجميع المستخدمين بإرسال وسائط في الدعم</p>
+          <Label className="text-sm font-medium">{text("adminChat.supportMedia.globalToggle", "Enable media globally")}</Label>
+          <p className="text-xs text-muted-foreground">{text("adminChat.supportMedia.globalDescription", "Allow all users to send media in support")}</p>
         </div>
         <Switch
           checked={globalEnabled}
@@ -2604,16 +2600,16 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
 
       {/* Block user */}
       <div>
-        <Label className="text-xs mb-1 block">حظر وسائط لمستخدم محدد</Label>
+        <Label className="text-xs mb-1 block">{text("adminChat.supportMedia.blockUserLabel", "Block media for a specific user")}</Label>
         <div className="flex gap-2">
           <Input
-            placeholder="ID المستخدم"
+            placeholder={text("adminChat.userIdPlaceholder", "User ID")}
             value={blockUserId}
             onChange={(e) => setBlockUserId(e.target.value)}
             className={`${INPUT_SURFACE_CLASS} flex-1`}
           />
           <Button size="sm" className={BUTTON_3D_DESTRUCTIVE_CLASS} onClick={handleBlockUser} disabled={loading || !blockUserId.trim()}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "حظر"}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : text("common.block", "Block")}
           </Button>
         </div>
       </div>
@@ -2623,7 +2619,7 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
         <>
           <Separator />
           <div>
-            <Label className="text-xs mb-2 block">المستخدمون المحظورون ({mediaSettings.blockedUsers.length})</Label>
+            <Label className="text-xs mb-2 block">{text("adminChat.supportMedia.blockedUsers", "Blocked users")} ({mediaSettings.blockedUsers.length})</Label>
             <ScrollArea className="max-h-32">
               <div className="space-y-1">
                 {mediaSettings.blockedUsers.map((u: ChatFeatureUser) => (
@@ -2642,7 +2638,7 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
 
       <div className="rounded-[24px] border border-blue-500/20 bg-blue-500/10 p-3">
         <p className="text-xs text-muted-foreground">
-          💡 يمكن للمشرف إرسال وسائط دائماً. هذا التحكم يخص المستخدمين فقط.
+          💡 {text("adminChat.supportMedia.adminNotice", "Admins can always send media. This control applies to users only.")}
         </p>
       </div>
     </div>
