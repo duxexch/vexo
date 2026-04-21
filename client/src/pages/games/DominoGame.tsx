@@ -397,7 +397,7 @@ export default function DominoGame() {
   return (
     <div
       ref={fullscreenContainerRef}
-      className={`vex-arcade-stage container mx-auto max-w-6xl min-h-[100svh] px-3 sm:px-4 pt-4 sm:pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] ${isGameFullscreen ? 'vex-game-fullscreen-shell !mx-0 !w-screen !max-w-none !px-2 sm:!px-3 !pt-[max(0.5rem,env(safe-area-inset-top))]' : ''}`}
+      className={`vex-arcade-stage container mx-auto max-w-none min-h-[100svh] px-3 sm:px-4 pt-4 sm:pt-6 pb-[max(1rem,env(safe-area-inset-bottom))] ${isGameFullscreen ? 'vex-game-fullscreen-shell !mx-0 !w-screen !max-w-none !px-2 sm:!px-3 !pt-[max(0.5rem,env(safe-area-inset-top))]' : ''}`}
     >
       {/* ── Cinematic Game Start ── */}
       {showCinematic && !gameResult && (

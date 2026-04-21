@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 import { DominoEngine } from "../server/game-engines/domino/engine";
-import { createErrorHelpers } from "./lib/smoke-helpers";
+import { SmokeScriptError, createErrorHelpers } from "./lib/smoke-helpers";
 
 const { fail, assertCondition } = createErrorHelpers("SmokeError");
 
@@ -110,14 +110,6 @@ function main(): void {
     mustDrawState.currentPlayer = currentPlayer;
     mustDrawState.drawsThisTurn = 0;
 
-    const boardStarter = mustDrawState.boneyard.find((tile) => tile.left === 6 && tile.right === 6)
-        || mustDrawState.boneyard[0];
-    assertCondition(boardStarter, "Expected boneyard tile to seed must-draw board state");
-    mustDrawState.boneyard = mustDrawState.boneyard.filter((tile) => tile.id !== boardStarter.id);
-    mustDrawState.board = [{ ...boardStarter }];
-    mustDrawState.leftEnd = boardStarter.left;
-    mustDrawState.rightEnd = boardStarter.right;
-
     const playerHand = mustDrawState.hands[currentPlayer] || [];
     let chosenTile = playerHand.find((tile) =>
         tile.left !== mustDrawState.leftEnd
@@ -131,14 +123,15 @@ function main(): void {
         const movedToBoneyard = playerHand.filter((tile) => tile.id !== chosenTile!.id);
         mustDrawState.boneyard.push(...movedToBoneyard);
     } else {
-        const fallbackTile = mustDrawState.boneyard.find((tile) =>
+        const fallbackTileIndex = mustDrawState.boneyard.findIndex((tile) =>
             tile.left !== mustDrawState.leftEnd
             && tile.right !== mustDrawState.leftEnd
             && tile.left !== mustDrawState.rightEnd
             && tile.right !== mustDrawState.rightEnd,
         );
+        const fallbackTile = fallbackTileIndex >= 0 ? mustDrawState.boneyard[fallbackTileIndex] : undefined;
         assertCondition(fallbackTile, "Expected a non-playable tile for must-draw scenario");
-        mustDrawState.boneyard = mustDrawState.boneyard.filter((tile) => tile.id !== fallbackTile.id);
+        mustDrawState.boneyard.splice(fallbackTileIndex, 1);
         mustDrawState.boneyard.push(...playerHand);
         mustDrawState.hands[currentPlayer] = [{ ...fallbackTile }];
         chosenTile = fallbackTile;
@@ -206,7 +199,7 @@ try {
     main();
 } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const details = error instanceof SmokeError ? error.details : undefined;
+    const details = error instanceof SmokeScriptError && error.name === "SmokeError" ? error.details : undefined;
     console.error("[smoke:domino-contract] FAIL", message, details ?? "");
     process.exit(1);
 }

@@ -422,7 +422,23 @@ export class DominoEngine implements GameEngine {
     }
 
     if (!openingPlayer || !openingTile) {
-      throw new Error(`Domino opening tile ${openingDoubleValue}/${openingDoubleValue} is required`);
+      const openingFromBoneyardIdx = boneyard.findIndex(
+        (tile) => tile.left === openingDoubleValue && tile.right === openingDoubleValue,
+      );
+
+      if (openingFromBoneyardIdx === -1) {
+        throw new Error(`Domino opening tile ${openingDoubleValue}/${openingDoubleValue} is required`);
+      }
+
+      openingPlayer = playerIds[0];
+      openingTile = boneyard.splice(openingFromBoneyardIdx, 1)[0];
+
+      // Keep hand-size fairness: opener still loses one hand tile after forced opening.
+      const openerHand = hands[openingPlayer];
+      const recycledTile = openerHand.pop();
+      if (recycledTile) {
+        boneyard.push(recycledTile);
+      }
     }
 
     const openingPlayerIndex = playerIds.indexOf(openingPlayer);

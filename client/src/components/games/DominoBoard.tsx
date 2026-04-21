@@ -320,9 +320,14 @@ function orientPlacementTile(
 type DominoDirection = "left" | "right" | "up" | "down";
 
 function resolveBoardRenderRotation(tile: DominoTile, rotation?: number): number {
+  if (tile.left === tile.right) {
+    // Doubles keep a locked baseline orientation; snake placements enforce perpendicular rotation.
+    return 0;
+  }
+
   return Number.isFinite(rotation)
     ? (rotation as number)
-    : (tile.left === tile.right ? 0 : 90);
+    : 90;
 }
 
 function resolvePlacementRotation(tile: DominoTile, direction: DominoDirection): number {
@@ -977,7 +982,7 @@ export function DominoBoard({
       ? boardLaneSize.width
       : (isCompactMobile ? 320 : 760);
     const tileLongSide = isCompactMobile ? 56 : 80;
-    const seamSpacing = isCompactMobile ? 2.2 : 3;
+    const seamSpacing = 0;
     const wrapSafetyInset = isCompactMobile ? 88 : 132;
     const rawRun = Math.floor((laneWidth - wrapSafetyInset) / Math.max(1, tileLongSide + seamSpacing));
     const minRun = isCompactMobile ? 2 : 3;

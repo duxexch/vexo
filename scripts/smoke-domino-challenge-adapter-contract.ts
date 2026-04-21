@@ -9,6 +9,7 @@ import {
     normalizeDominoChallengePlayerView,
     type DominoTile,
 } from "../shared/domino-challenge-adapter";
+import { DominoEngine } from "../server/game-engines/domino/engine";
 import { createErrorHelpers } from "./lib/smoke-helpers";
 import { requestJson as smokeRequestJson } from "./lib/smoke-http";
 
@@ -46,6 +47,16 @@ interface WsMessage {
 }
 
 const { fail, assertCondition } = createErrorHelpers("SmokeError");
+
+class SmokeError extends Error {
+    details?: unknown;
+
+    constructor(message: string, details?: unknown) {
+        super(message);
+        this.name = "SmokeError";
+        this.details = details;
+    }
+}
 
 function parseArgs(argv: string[]): CliOptions {
     const args: CliOptions = {
@@ -321,24 +332,43 @@ async function cleanup(pool: Pool, setupData: SetupData): Promise<void> {
 }
 
 function buildAdapterContractState(player1Id: string, player2Id: string): Record<string, unknown> {
+    const engine = new DominoEngine();
+    const initialized = JSON.parse(engine.initializeWithPlayers([player1Id, player2Id])) as {
+        hands: Record<string, DominoTile[]>;
+        boneyard: DominoTile[];
+        currentPlayer: string;
+    };
+
+    const player1Hand = initialized.hands[player1Id] || [];
+    const player2Hand = initialized.hands[player2Id] || [];
+    const boneyard = initialized.boneyard || [];
+
+    const hasPlayableForSix = (tile: DominoTile) => tile.left === 6 || tile.right === 6;
+    const player1HasPlayable = player1Hand.some(hasPlayableForSix);
+
+    if (!player1HasPlayable && player1Hand.length > 0) {
+        const donorFromPlayer2Idx = player2Hand.findIndex(hasPlayableForSix);
+        if (donorFromPlayer2Idx >= 0) {
+            const donor = player2Hand[donorFromPlayer2Idx];
+            const recycle = player1Hand[0];
+            player1Hand[0] = donor;
+            player2Hand[donorFromPlayer2Idx] = recycle;
+        } else {
+            const donorFromBoneyardIdx = boneyard.findIndex(hasPlayableForSix);
+            if (donorFromBoneyardIdx >= 0) {
+                const donor = boneyard[donorFromBoneyardIdx];
+                const recycle = player1Hand[0];
+                player1Hand[0] = donor;
+                boneyard[donorFromBoneyardIdx] = recycle;
+            }
+        }
+    }
+
     return {
-        board: [],
-        leftEnd: -1,
-        rightEnd: -1,
-        hands: {
-            [player1Id]: [{ left: 6, right: 6, id: "6-6" }],
-            [player2Id]: [{ left: 0, right: 1, id: "0-1" }],
-        },
-        boneyard: [{ left: 2, right: 3, id: "2-3" }],
+        ...initialized,
         currentPlayer: player1Id,
-        playerOrder: [player1Id, player2Id],
         passCount: 0,
         drawsThisTurn: 0,
-        gameOver: false,
-        scores: {
-            [player1Id]: 0,
-            [player2Id]: 0,
-        },
     };
 }
 
