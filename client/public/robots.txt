@@ -1,5 +1,6 @@
 # VEX Platform - Robots.txt
 # https://vixo.click
+# Note: Crawl-delay and Host directives are omitted because Googlebot ignores them.
 
 # Google
 User-agent: Googlebot
@@ -52,7 +53,6 @@ Disallow: /auth/
 Disallow: /wallet
 Disallow: /transactions
 Disallow: /chat
-Crawl-delay: 2
 
 # Baidu
 User-agent: Baiduspider
@@ -63,7 +63,6 @@ Disallow: /auth/
 Disallow: /wallet
 Disallow: /transactions
 Disallow: /chat
-Crawl-delay: 3
 
 # AI crawlers and LLM agents
 User-agent: GPTBot
@@ -153,13 +152,6 @@ Disallow: /player/
 Disallow: /p2p/profile/
 Disallow: /p2p/settings
 Disallow: /profile
-Crawl-delay: 1
 
 # Sitemaps
 Sitemap: https://vixo.click/sitemap-index.xml
-Sitemap: https://vixo.click/sitemap-core.xml
-Sitemap: https://vixo.click/sitemap.xml
-Sitemap: https://vixo.click/sitemap-guides.xml
-
-# Host
-Host: vixo.click

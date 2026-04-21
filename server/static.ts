@@ -41,22 +41,6 @@ function buildFallbackRobots(req: Request): string {
     : (forwardedProto || (req.secure ? "https" : "http"));
   const host = req.get("host");
   const baseUrl = appUrl || (host ? `${protocol}://${host}` : "https://vixo.click");
-  const hostForDirective = (() => {
-    if (appUrl) {
-      try {
-        return new URL(appUrl).host;
-      } catch {
-        return appUrl.replace(/^https?:\/\//i, "");
-      }
-    }
-
-    if (host) {
-      return host;
-    }
-
-    return "vixo.click";
-  })();
-
   return [
     "# VEX Platform - Robots.txt (fallback)",
     "User-agent: *",
@@ -66,11 +50,6 @@ function buildFallbackRobots(req: Request): string {
     "Disallow: /auth/",
     "",
     `Sitemap: ${baseUrl}/sitemap-index.xml`,
-    `Sitemap: ${baseUrl}/sitemap-core.xml`,
-    `Sitemap: ${baseUrl}/sitemap.xml`,
-    `Sitemap: ${baseUrl}/sitemap-guides.xml`,
-    "",
-    `Host: ${hostForDirective}`,
   ].join("\n");
 }
 
@@ -159,10 +138,6 @@ function buildFallbackSitemapIndex(baseUrl: string): string {
     "  </sitemap>",
     "  <sitemap>",
     `    <loc>${baseUrl}/sitemap-guides.xml</loc>`,
-    `    <lastmod>${now}</lastmod>`,
-    "  </sitemap>",
-    "  <sitemap>",
-    `    <loc>${baseUrl}/sitemap.xml</loc>`,
     `    <lastmod>${now}</lastmod>`,
     "  </sitemap>",
     "</sitemapindex>",
@@ -493,100 +468,76 @@ export function serveStatic(app: Express) {
     }
   });
 
-  app.get("/sitemap.xml", publicStaticLimiter, async (req, res) => {
-    try {
-      const runtimeSeo = await getRuntimeSeoSettingsSafely();
-      if (!runtimeSeo.enableSitemap) {
-        return res.status(404).type("text/plain").send("sitemap.xml disabled");
-      }
-
-      const sitemapPath = path.join(distPath, "sitemap.xml");
-      if (fs.existsSync(sitemapPath)) {
-        res.set({
-          "Content-Type": "application/xml; charset=utf-8",
-          "Cache-Control": "public, max-age=900",
-        });
-        return res.sendFile(sitemapPath);
-      }
-
-      const fallbackXml = buildFallbackSitemapCore(buildRuntimeBaseUrl(req));
-      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
-    } catch {
-      const fallbackXml = buildFallbackSitemapCore(buildRuntimeBaseUrl(req));
-      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
+  app.get("/sitemap.xml", publicStaticLimiter, (req, res) => {
+    const sitemapPath = path.join(distPath, "sitemap.xml");
+    if (fs.existsSync(sitemapPath)) {
+      res.set({
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=3600",
+      });
+      return res.sendFile(sitemapPath);
     }
+
+    const fallbackXml = buildFallbackSitemapCore(buildRuntimeBaseUrl(req));
+    return res
+      .status(200)
+      .set("Cache-Control", "public, max-age=3600")
+      .type("application/xml; charset=utf-8")
+      .send(fallbackXml);
   });
 
-  app.get("/sitemap-index.xml", publicStaticLimiter, async (req, res) => {
-    try {
-      const runtimeSeo = await getRuntimeSeoSettingsSafely();
-      if (!runtimeSeo.enableSitemap) {
-        return res.status(404).type("text/plain").send("sitemap-index.xml disabled");
-      }
-
-      const sitemapIndexPath = path.join(distPath, "sitemap-index.xml");
-      if (fs.existsSync(sitemapIndexPath)) {
-        res.set({
-          "Content-Type": "application/xml; charset=utf-8",
-          "Cache-Control": "public, max-age=900",
-        });
-        return res.sendFile(sitemapIndexPath);
-      }
-
-      const fallbackXml = buildFallbackSitemapIndex(buildRuntimeBaseUrl(req));
-      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
-    } catch {
-      const fallbackXml = buildFallbackSitemapIndex(buildRuntimeBaseUrl(req));
-      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
+  app.get("/sitemap-index.xml", publicStaticLimiter, (req, res) => {
+    const sitemapIndexPath = path.join(distPath, "sitemap-index.xml");
+    if (fs.existsSync(sitemapIndexPath)) {
+      res.set({
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=3600",
+      });
+      return res.sendFile(sitemapIndexPath);
     }
+
+    const fallbackXml = buildFallbackSitemapIndex(buildRuntimeBaseUrl(req));
+    return res
+      .status(200)
+      .set("Cache-Control", "public, max-age=3600")
+      .type("application/xml; charset=utf-8")
+      .send(fallbackXml);
   });
 
-  app.get("/sitemap-core.xml", publicStaticLimiter, async (req, res) => {
-    try {
-      const runtimeSeo = await getRuntimeSeoSettingsSafely();
-      if (!runtimeSeo.enableSitemap) {
-        return res.status(404).type("text/plain").send("sitemap-core.xml disabled");
-      }
-
-      const sitemapCorePath = path.join(distPath, "sitemap-core.xml");
-      if (fs.existsSync(sitemapCorePath)) {
-        res.set({
-          "Content-Type": "application/xml; charset=utf-8",
-          "Cache-Control": "public, max-age=900",
-        });
-        return res.sendFile(sitemapCorePath);
-      }
-
-      const fallbackXml = buildFallbackSitemapCore(buildRuntimeBaseUrl(req));
-      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
-    } catch {
-      const fallbackXml = buildFallbackSitemapCore(buildRuntimeBaseUrl(req));
-      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
+  app.get("/sitemap-core.xml", publicStaticLimiter, (req, res) => {
+    const sitemapCorePath = path.join(distPath, "sitemap-core.xml");
+    if (fs.existsSync(sitemapCorePath)) {
+      res.set({
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=3600",
+      });
+      return res.sendFile(sitemapCorePath);
     }
+
+    const fallbackXml = buildFallbackSitemapCore(buildRuntimeBaseUrl(req));
+    return res
+      .status(200)
+      .set("Cache-Control", "public, max-age=3600")
+      .type("application/xml; charset=utf-8")
+      .send(fallbackXml);
   });
 
-  app.get("/sitemap-guides.xml", publicStaticLimiter, async (req, res) => {
-    try {
-      const runtimeSeo = await getRuntimeSeoSettingsSafely();
-      if (!runtimeSeo.enableSitemap) {
-        return res.status(404).type("text/plain").send("sitemap-guides.xml disabled");
-      }
-
-      const sitemapGuidesPath = path.join(distPath, "sitemap-guides.xml");
-      if (fs.existsSync(sitemapGuidesPath)) {
-        res.set({
-          "Content-Type": "application/xml; charset=utf-8",
-          "Cache-Control": "public, max-age=900",
-        });
-        return res.sendFile(sitemapGuidesPath);
-      }
-
-      const fallbackXml = buildFallbackSitemapGuides(buildRuntimeBaseUrl(req));
-      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
-    } catch {
-      const fallbackXml = buildFallbackSitemapGuides(buildRuntimeBaseUrl(req));
-      return res.status(200).type("application/xml; charset=utf-8").send(fallbackXml);
+  app.get("/sitemap-guides.xml", publicStaticLimiter, (req, res) => {
+    const sitemapGuidesPath = path.join(distPath, "sitemap-guides.xml");
+    if (fs.existsSync(sitemapGuidesPath)) {
+      res.set({
+        "Content-Type": "application/xml; charset=utf-8",
+        "Cache-Control": "public, max-age=3600",
+      });
+      return res.sendFile(sitemapGuidesPath);
     }
+
+    const fallbackXml = buildFallbackSitemapGuides(buildRuntimeBaseUrl(req));
+    return res
+      .status(200)
+      .set("Cache-Control", "public, max-age=3600")
+      .type("application/xml; charset=utf-8")
+      .send(fallbackXml);
   });
 
   // Downloads folder — serve public APK files only. AAB is admin-only.
