@@ -61,6 +61,17 @@ interface SpectatorPanelProps {
   canSendChat?: boolean;
 }
 
+function normalizeChatDraft(value: string): string {
+  return value
+    .replace(/[\u200B-\u200D\uFEFF\u2060]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasSendableDraft(value: string): boolean {
+  return normalizeChatDraft(value).length > 0;
+}
+
 const RANK_COLORS: Record<string, string> = {
   bronze: "bg-amber-700/20 text-amber-600",
   silver: "bg-gray-400/20 text-gray-400",
@@ -191,7 +202,7 @@ export function SpectatorPanel({
   };
 
   const handleSendChat = () => {
-    const safeMessage = chatDraft.trim();
+    const safeMessage = normalizeChatDraft(chatDraft);
     if (!safeMessage || !onSendChat || !canSendChat) return;
     onSendChat(safeMessage);
     setChatDraft("");
@@ -487,9 +498,10 @@ export function SpectatorPanel({
                   }}
                   placeholder={language === "ar" ? "اكتب رسالة للمشاهدين..." : "Write a message to viewers..."}
                   maxLength={300}
+                  dir="auto"
                   disabled={!canSendChat}
                 />
-                <Button onClick={handleSendChat} disabled={!canSendChat || !chatDraft.trim()}>
+                <Button onClick={handleSendChat} disabled={!canSendChat || !hasSendableDraft(chatDraft)}>
                   {language === "ar" ? "إرسال" : "Send"}
                 </Button>
               </div>

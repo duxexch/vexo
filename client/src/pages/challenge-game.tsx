@@ -340,8 +340,6 @@ export default function ChallengeGamePage() {
   const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(
     null,
   );
-  const liveChatPanelRef = useRef<HTMLDivElement | null>(null);
-  const liveChatInlineRef = useRef<HTMLDivElement | null>(null);
 
   const {
     containerRef: fullscreenContainerRef,
@@ -2079,37 +2077,8 @@ export default function ChallengeGamePage() {
   );
 
   const openLiveChat = useCallback(() => {
-    if (isGameFullscreen) {
-      setShowMobileChat(true);
-      return;
-    }
-
-    if (
-      typeof window !== "undefined" &&
-      window.matchMedia("(max-width: 639px)").matches
-    ) {
-      setShowMobileChat(true);
-      return;
-    }
-
-    if (liveChatPanelRef.current) {
-      liveChatPanelRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-      return;
-    }
-
-    if (liveChatInlineRef.current) {
-      liveChatInlineRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-      return;
-    }
-
     setShowMobileChat(true);
-  }, [isGameFullscreen]);
+  }, []);
 
   const clearGiftAnimation = useCallback(() => {
     setActiveGiftAnimation(null);
@@ -2971,7 +2940,7 @@ export default function ChallengeGamePage() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2">
                       <div className="min-w-0 me-2">
                         <p className="truncate text-xs text-muted-foreground">
@@ -3641,27 +3610,11 @@ export default function ChallengeGamePage() {
                 </div>
               )}
 
-              {/* Floating game chat for players (Ludo King style) */}
-              {!isSpectator && !isBackgammonGame && !isTeamGame && !isLanguageDuelGame && !isGameFullscreen && (
-                <div
-                  ref={liveChatInlineRef}
-                  className={`w-full mt-2 h-36 sm:h-40 relative ${isDominoGame ? "max-w-none" : isWideBoardGame ? "max-w-5xl" : isChessGame ? "max-w-2xl" : "max-w-lg"} ${isChessGame || isBackgammonGame ? "hidden sm:block" : ""}`}
-                >
-                  <GameChat
-                    messages={gameChatMessages}
-                    onSendMessage={sendChatMessage}
-                    quickMessages={QUICK_MESSAGES}
-                    language={language}
-                    currentUserId={user?.id}
-                  />
-                </div>
-              )}
             </div>
 
-            {/* Sidebar with gifts/comments for spectators and supported player game types */}
-            {!isGameFullscreen && (isSpectator || isDominoGame || isBackgammonGame || isTeamGame || isLanguageDuelGame) && (
+            {/* Sidebar remains spectator-only; player chat is popup-only via chat buttons */}
+            {!isGameFullscreen && isSpectator && (
               <div
-                ref={liveChatPanelRef}
                 className="w-full lg:w-[22rem] border-t lg:border-t-0 lg:border-s flex flex-col bg-card max-h-[46vh] lg:max-h-none"
               >
                 {isSpectator && challenge.gameType === "domino" && (
@@ -3735,7 +3688,6 @@ export default function ChallengeGamePage() {
         <DialogContent
           className={cn(
             "max-w-[calc(100vw-0.75rem)] overflow-hidden rounded-2xl p-0 sm:max-w-md",
-            !isGameFullscreen && "lg:hidden",
             isGameFullscreen && "lg:max-w-2xl",
           )}
         >

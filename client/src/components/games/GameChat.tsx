@@ -44,6 +44,17 @@ interface GameChatProps {
   autoFocusInput?: boolean;
 }
 
+function normalizeChatDraft(value: string): string {
+  return value
+    .replace(/[\u200B-\u200D\uFEFF\u2060]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasSendableDraft(value: string): boolean {
+  return normalizeChatDraft(value).length > 0;
+}
+
 export function GameChat({
   messages,
   onSendMessage,
@@ -102,8 +113,9 @@ export function GameChat({
   }, [autoFocusInput]);
 
   const handleSend = useCallback(() => {
-    if (!messageInput.trim() || disabled) return;
-    onSendMessage(messageInput.trim());
+    const normalizedDraft = normalizeChatDraft(messageInput);
+    if (!normalizedDraft || disabled) return;
+    onSendMessage(normalizedDraft);
     setMessageInput("");
     if (autoFocusInput) {
       setTimeout(() => {
@@ -366,6 +378,7 @@ export function GameChat({
             onKeyDown={handleKeyPress}
             placeholder={t("chat.typeMessage")}
             className="h-10 flex-1 text-sm"
+            dir="auto"
             disabled={disabled}
             autoFocus={autoFocusInput}
             data-testid="input-game-chat"
@@ -386,7 +399,7 @@ export function GameChat({
             size="icon"
             className="h-10 w-10"
             onClick={handleSend}
-            disabled={!messageInput.trim() || disabled}
+            disabled={!hasSendableDraft(messageInput) || disabled}
             data-testid="button-send-game-chat"
           >
             <Send className="h-4 w-4" />
