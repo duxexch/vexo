@@ -94,7 +94,7 @@ export function DominoChallengeContainer({
     }, [boardState]);
 
     return (
-        <div className={`relative w-full max-w-5xl mx-auto overflow-hidden rounded-2xl border border-border/60 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.55),transparent_50%),radial-gradient(circle_at_85%_82%,rgba(59,130,246,0.08),transparent_52%),linear-gradient(175deg,rgba(255,255,255,0.35),rgba(15,23,42,0.06))] ${isCompactViewport ? "p-2" : "p-2.5 sm:p-3.5"} shadow-[0_22px_40px_rgba(15,23,42,0.16)]`}>
+        <div className={`relative w-full max-w-none mx-auto overflow-hidden rounded-2xl border border-border/60 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.55),transparent_50%),radial-gradient(circle_at_85%_82%,rgba(59,130,246,0.08),transparent_52%),linear-gradient(175deg,rgba(255,255,255,0.35),rgba(15,23,42,0.06))] ${isCompactViewport ? "p-1.5" : "p-2 sm:p-2.5"} shadow-[0_22px_40px_rgba(15,23,42,0.16)]`}>
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.2),transparent_35%,transparent_65%,rgba(0,0,0,0.08))]" />
             <div className="pointer-events-none absolute -top-16 -left-14 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-20 -right-16 h-44 w-44 rounded-full bg-amber-500/10 blur-3xl" />
@@ -126,7 +126,7 @@ export function DominoChallengeContainer({
                     initial={{ opacity: 0, y: 12, scale: 0.995 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ duration: 0.3, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
-                    className="domino-board-shell rounded-2xl border border-border/45 bg-background/55 p-1 backdrop-blur-sm"
+                    className="domino-board-shell rounded-2xl border border-border/45 bg-background/55 p-0.5 backdrop-blur-sm"
                 >
                     <DominoBoard
                         gameState={boardState}

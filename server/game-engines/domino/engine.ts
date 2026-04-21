@@ -17,6 +17,7 @@ export class DominoEngine implements GameEngine {
   gameType = 'domino';
   minPlayers = 2;
   maxPlayers = 4;
+  private static readonly OPENING_DOUBLE_VALUE = 6;
 
   /** C7-F10: Lightweight stub — real games always use initializeWithPlayers() */
   createInitialState(): string {
@@ -325,12 +326,34 @@ export class DominoEngine implements GameEngine {
         break;
       }
 
-      // Respect draw-game flow: only auto-pass when drawing is not possible.
-      // If boneyard still has tiles (and draw cap not reached), keep turn on player.
-      const canDraw =
+      // Auto-draw immediately when no playable tile exists.
+      while (
         state.boneyard.length > 0 &&
-        (state.drawsThisTurn || 0) < getMaxDrawsPerTurn(state.playerOrder.length);
-      if (canDraw) {
+        (state.drawsThisTurn || 0) < getMaxDrawsPerTurn(state.playerOrder.length)
+      ) {
+        const drawIdx = cryptoRandomInt(state.boneyard.length);
+        const drawnTile = state.boneyard.splice(drawIdx, 1)[0];
+        state.hands[currentPlayer].push(drawnTile);
+        state.drawsThisTurn = (state.drawsThisTurn || 0) + 1;
+        state.lastAction = { type: 'draw', playerId: currentPlayer };
+
+        events.push({
+          type: 'move',
+          data: {
+            action: 'draw',
+            playerId: currentPlayer,
+            auto: true,
+            boneyardCount: state.boneyard.length,
+          },
+        });
+
+        if (getPlayableTiles(state, currentPlayer).length > 0) {
+          break;
+        }
+      }
+
+      if (getPlayableTiles(state, currentPlayer).length > 0) {
+        // The player can now play immediately; keep turn on the same player.
         break;
       }
 
@@ -383,22 +406,27 @@ export class DominoEngine implements GameEngine {
 
     const boneyard = tiles.slice(tileIndex);
 
-    let startingPlayer = playerIds[0];
-    let highestDouble = -1;
+    const openingDoubleValue = DominoEngine.OPENING_DOUBLE_VALUE;
+    let openingPlayer = '';
+    let openingTile: DominoTile | null = null;
 
     for (const playerId of playerIds) {
-      for (const tile of hands[playerId]) {
-        if (tile.left === tile.right && tile.left > highestDouble) {
-          highestDouble = tile.left;
-          startingPlayer = playerId;
-        }
+      const openingIndex = hands[playerId].findIndex(
+        (tile) => tile.left === openingDoubleValue && tile.right === openingDoubleValue,
+      );
+      if (openingIndex !== -1) {
+        openingPlayer = playerId;
+        openingTile = hands[playerId].splice(openingIndex, 1)[0];
+        break;
       }
     }
 
-    // C15-F5: If no opening double exists, choose starter fairly at random
-    if (highestDouble === -1) {
-      startingPlayer = playerIds[cryptoRandomInt(playerIds.length)];
+    if (!openingPlayer || !openingTile) {
+      throw new Error(`Domino opening tile ${openingDoubleValue}/${openingDoubleValue} is required`);
     }
+
+    const openingPlayerIndex = playerIds.indexOf(openingPlayer);
+    const startingPlayer = playerIds[(openingPlayerIndex + 1) % playerIds.length];
 
     const normalizedTargetScore = this.normalizeTargetScore(targetScore);
     const safeRoundNumber = Number.isInteger(roundNumber) && roundNumber > 0 ? roundNumber : 1;
@@ -406,10 +434,10 @@ export class DominoEngine implements GameEngine {
       playerIds.map((id) => [id, Number.isFinite(existingScores?.[id]) ? Number(existingScores?.[id]) : 0]),
     );
 
-    return {
-      board: [],
-      leftEnd: -1,
-      rightEnd: -1,
+    const initialState: DominoState = {
+      board: [{ ...openingTile, left: openingDoubleValue, right: openingDoubleValue }],
+      leftEnd: openingDoubleValue,
+      rightEnd: openingDoubleValue,
       hands,
       boneyard,
       currentPlayer: startingPlayer,
@@ -424,8 +452,18 @@ export class DominoEngine implements GameEngine {
       winningTeam: undefined,
       isDraw: false,
       reason: undefined,
-      lastAction: undefined,
+      lastAction: {
+        type: 'play',
+        playerId: openingPlayer,
+        tile: { ...openingTile, left: openingDoubleValue, right: openingDoubleValue },
+        end: 'left',
+      },
     };
+
+    // Keep the game deterministic from move 1: no timer wait when the next player cannot play.
+    this.autoPassUnplayableTurns(initialState, []);
+
+    return initialState;
   }
 
   /** Bot AI — strategic domino tile selection (works on parsed state directly) */
@@ -785,13 +823,46 @@ export class DominoEngine implements GameEngine {
       if (!state.hands[playerId]) {
         return { success: false, events: [], error: 'Player hand not found' };
       }
-      const drawIdx = cryptoRandomInt(state.boneyard.length);
-      const drawnTile = state.boneyard.splice(drawIdx, 1)[0];
-      state.hands[playerId].push(drawnTile);
-      state.drawsThisTurn = (state.drawsThisTurn || 0) + 1;
-      state.lastAction = { type: 'draw', playerId };
 
-      events.push({ type: 'move', data: { action: 'draw', playerId, boneyardCount: state.boneyard.length } });
+      let drewAtLeastOne = false;
+      while (
+        state.boneyard.length > 0 &&
+        (state.drawsThisTurn || 0) < getMaxDrawsPerTurn(state.playerOrder.length) &&
+        getPlayableTiles(state, playerId).length === 0
+      ) {
+        const drawIdx = cryptoRandomInt(state.boneyard.length);
+        const drawnTile = state.boneyard.splice(drawIdx, 1)[0];
+        state.hands[playerId].push(drawnTile);
+        state.drawsThisTurn = (state.drawsThisTurn || 0) + 1;
+        state.lastAction = { type: 'draw', playerId };
+        drewAtLeastOne = true;
+
+        events.push({
+          type: 'move',
+          data: { action: 'draw', playerId, auto: true, boneyardCount: state.boneyard.length },
+        });
+      }
+
+      if (!drewAtLeastOne) {
+        return { success: false, events: [], error: 'Cannot draw right now' };
+      }
+
+      if (getPlayableTiles(state, playerId).length > 0) {
+        return { success: true, state, events };
+      }
+
+      // No playable tile after draw exhaustion -> pass immediately without waiting timer.
+      state.passCount++;
+      state.lastAction = { type: 'pass', playerId };
+      events.push({ type: 'move', data: { action: 'pass', playerId, auto: true, afterDraw: true } });
+
+      if (state.passCount >= state.playerOrder.length) {
+        this.finalizeBlockedRound(state, events);
+      } else {
+        advanceTurn(state);
+        events.push({ type: 'turn_change', data: { nextPlayer: state.currentPlayer } });
+        this.autoPassUnplayableTurns(state, events);
+      }
 
       return { success: true, state, events };
     }

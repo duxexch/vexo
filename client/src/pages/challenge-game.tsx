@@ -2511,11 +2511,13 @@ export default function ChallengeGamePage() {
       ? "w-full max-w-[calc(100vw-0.75rem)]"
       : challenge.gameType === "baloot"
         ? "w-full max-w-6xl"
-        : isWideBoardGame
-          ? "w-full max-w-5xl"
-          : isChessGame
-            ? "w-full max-w-2xl"
-            : "w-full max-w-lg";
+        : isDominoGame
+          ? "w-full max-w-none"
+          : isWideBoardGame
+            ? "w-full max-w-5xl"
+            : isChessGame
+              ? "w-full max-w-2xl"
+              : "w-full max-w-lg";
   const playerOneLabel = `${t("domino.player")} 1`;
   const playerTwoLabel = `${t("domino.player")} 2`;
   const chessWhiteLabel = `⚪ ${t("chess.white")}`;
@@ -3643,7 +3645,7 @@ export default function ChallengeGamePage() {
               {!isSpectator && !isBackgammonGame && !isTeamGame && !isLanguageDuelGame && !isGameFullscreen && (
                 <div
                   ref={liveChatInlineRef}
-                  className={`w-full mt-2 h-36 sm:h-40 relative ${isWideBoardGame ? "max-w-5xl" : isChessGame ? "max-w-2xl" : "max-w-lg"} ${isChessGame || isBackgammonGame ? "hidden sm:block" : ""}`}
+                  className={`w-full mt-2 h-36 sm:h-40 relative ${isDominoGame ? "max-w-none" : isWideBoardGame ? "max-w-5xl" : isChessGame ? "max-w-2xl" : "max-w-lg"} ${isChessGame || isBackgammonGame ? "hidden sm:block" : ""}`}
                 >
                   <GameChat
                     messages={gameChatMessages}

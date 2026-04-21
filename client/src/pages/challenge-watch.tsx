@@ -1685,22 +1685,26 @@ export default function ChallengeWatchPage() {
     ? "w-full max-w-[calc(100vw-0.75rem)] mb-3"
     : challenge.gameType === "baloot"
       ? "w-full max-w-6xl mb-4"
-      : isBackgammonGame
-        ? "w-full max-w-5xl mb-2"
-        : isWideBoardGame
-          ? "w-full max-w-5xl mb-4"
-          : isChessGame
-            ? "w-full max-w-2xl mb-2"
-            : "w-full max-w-lg mb-4";
+      : isDominoGame
+        ? "w-full max-w-none mb-4"
+        : isBackgammonGame
+          ? "w-full max-w-5xl mb-2"
+          : isWideBoardGame
+            ? "w-full max-w-5xl mb-4"
+            : isChessGame
+              ? "w-full max-w-2xl mb-2"
+              : "w-full max-w-lg mb-4";
   const boardWidthClass = isGameFullscreen
     ? "w-full max-w-[calc(100vw-0.75rem)]"
     : challenge.gameType === "baloot"
       ? "w-full max-w-6xl"
-      : isWideBoardGame
-        ? "w-full max-w-5xl"
-        : isChessGame
-          ? "w-full max-w-2xl"
-          : "w-full max-w-lg";
+      : isDominoGame
+        ? "w-full max-w-none"
+        : isWideBoardGame
+          ? "w-full max-w-5xl"
+          : isChessGame
+            ? "w-full max-w-2xl"
+            : "w-full max-w-lg";
   const playerOneLabel = `${t("domino.player")} 1`;
   const playerTwoLabel = `${t("domino.player")} 2`;
   const chessWhiteLabel = `⚪ ${t("chess.white")}`;

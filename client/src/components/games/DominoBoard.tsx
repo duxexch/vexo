@@ -366,8 +366,7 @@ function getConnectedTileDelta(
     };
   }
 
-  // Use corner-to-corner spacing so 90deg turns do not overlap on tight viewports.
-  const cornerSpacing = seamSpacing;
+  const cornerSpacing = 0;
 
   if (direction === "left" || direction === "right") {
     return {
@@ -391,7 +390,7 @@ function buildDominoSnakePlacements(
 ): DominoPathPlacement[] {
   if (entries.length === 0) return [];
 
-  const seamSpacing = compact ? 2.2 : 3;
+  const seamSpacing = 0;
   const defaultHorizontalRun = compact ? 3 : 4;
   const minHorizontalRun = compact ? 2 : 3;
   const horizontalRun = Math.max(minHorizontalRun, horizontalRunOverride ?? defaultHorizontalRun);
@@ -915,6 +914,25 @@ export function DominoBoard({
     });
   };
 
+  // Production rule: when no playable move exists, draw immediately until a playable tile appears.
+  useEffect(() => {
+    if (isSpectator || !isMyTurn || status === 'finished') return;
+    if (playableTiles.length > 0) return;
+    if (!canAutoDraw) return;
+    if (drawPending || movePending || passPending) return;
+
+    handleDraw();
+  }, [
+    isSpectator,
+    isMyTurn,
+    status,
+    playableTiles.length,
+    canAutoDraw,
+    drawPending,
+    movePending,
+    passPending,
+  ]);
+
   const selectedPlayable = selectedTile !== null ? playableTiles.find(p => p.index === selectedTile) : null;
   const canChooseEnd = Boolean(selectedPlayable) && isMyTurn && !isSpectator && status !== 'finished';
   const leftEndSelectable = canChooseEnd && Boolean(selectedPlayable?.ends.includes("left"));
@@ -1000,8 +1018,8 @@ export function DominoBoard({
 
   const boardHeight = useMemo(() => {
     const minHeight = isCompactMobile
-      ? (isSpectator ? 284 : 332)
-      : (isSpectator ? 362 : 430);
+      ? (isSpectator ? 320 : 380)
+      : (isSpectator ? 420 : 520);
     const verticalPadding = isCompactMobile ? 84 : 104;
     const requiredHeight = Math.ceil(boardBounds.height + verticalPadding);
     return Math.max(minHeight, requiredHeight);
@@ -1027,10 +1045,10 @@ export function DominoBoard({
 
   const boardHeightCssValue = useMemo(() => {
     if (isCompactMobile) {
-      return `min(${boardHeight}px, 54svh)`;
+      return `min(${boardHeight}px, 64svh)`;
     }
 
-    return `min(${boardHeight}px, 68svh)`;
+    return `min(${boardHeight}px, 76svh)`;
   }, [boardHeight, isCompactMobile]);
 
   const turnFlowHint = useMemo(() => {
@@ -1303,7 +1321,7 @@ export function DominoBoard({
         <div
           className={cn(
             "domino-board-depth relative overflow-hidden rounded-2xl border border-[#1d4f3b]/70 bg-game-felt flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_18px_28px_rgba(8,26,19,0.4)]",
-            isCompactMobile ? "p-2" : "p-4 sm:p-6",
+            isCompactMobile ? "p-1" : "p-2 sm:p-3",
             isTurnLive ? "domino-board-turn-live" : ""
           )}
           style={{ height: boardHeightCssValue }}
@@ -1376,7 +1394,7 @@ export function DominoBoard({
               {isSpectator ? t('domino.board') : t('domino.placeFirst')}
             </p>
           ) : (
-            <div ref={boardLaneRef} className="domino-board-lane relative h-full w-full max-w-full px-3 py-3 sm:px-6 sm:py-5">
+            <div ref={boardLaneRef} className="domino-board-lane relative h-full w-full max-w-full px-0 py-1 sm:px-0 sm:py-2">
               {anchorEntry && (
                 <>
                   {leftPlacements.map((placement) => (
