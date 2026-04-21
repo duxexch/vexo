@@ -7,6 +7,7 @@ import { logger } from "../lib/logger";
 import type { AuthenticatedSocket } from "./shared";
 import { clients, voiceRooms, challengeGameRooms } from "./shared";
 import { handleAuth } from "./auth";
+import { getPresenceAudienceUserIds } from "./auth";
 import { handleChat } from "./chat";
 import { handleMatchmaking } from "./matchmaking";
 import { handleVoice } from "./voice";
@@ -159,21 +160,26 @@ export function setupWebSocket(server: Server) {
           clients.delete(ws.userId);
           // Track offline in Redis (replaces O(N) broadcast)
           trackUserOffline(ws.userId).catch(() => { });
-          // Broadcast offline to a limited set (max 200) to prevent O(N) storms
-          const lastSeen = new Date().toISOString();
-          const offlineNotification = JSON.stringify({ type: "user_offline", data: { userId: ws.userId, lastSeen } });
-          let broadcastCount = 0;
-          const MAX_OFFLINE_BROADCASTS = 200;
-          for (const [, sockets] of clients) {
-            if (broadcastCount >= MAX_OFFLINE_BROADCASTS) break;
-            for (const s of sockets) {
-              if (s.readyState === WebSocket.OPEN) {
-                s.send(offlineNotification);
-                break;
+          const disconnectedUserId = ws.userId;
+          void (async () => {
+            const audienceUserIds = await getPresenceAudienceUserIds(disconnectedUserId);
+            if (audienceUserIds.length === 0) {
+              return;
+            }
+
+            const lastSeen = new Date().toISOString();
+            const offlineNotification = JSON.stringify({ type: "user_offline", data: { userId: disconnectedUserId, lastSeen } });
+            for (const audienceUserId of audienceUserIds) {
+              const sockets = clients.get(audienceUserId);
+              if (!sockets) continue;
+              for (const s of sockets) {
+                if (s.readyState === WebSocket.OPEN) {
+                  s.send(offlineNotification);
+                  break;
+                }
               }
             }
-            broadcastCount++;
-          }
+          })().catch(() => { });
         }
       }
 

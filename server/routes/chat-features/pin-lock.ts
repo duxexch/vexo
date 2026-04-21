@@ -39,8 +39,8 @@ export function registerPinLockRoutes(app: Express, authMiddleware: AuthMiddlewa
         return res.status(400).json({ error: "PIN must be 4-6 digits" });
       }
 
-      const [user] = await db.select({ 
-        chatPinEnabled: users.chatPinEnabled 
+      const [user] = await db.select({
+        chatPinEnabled: users.chatPinEnabled
       }).from(users).where(eq(users.id, userId));
 
       if (user?.chatPinEnabled) {
@@ -66,7 +66,10 @@ export function registerPinLockRoutes(app: Express, authMiddleware: AuthMiddlewa
   app.put("/api/chat/pin/change", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.id;
-      const { oldPin, newPin } = req.body;
+      const oldPin = typeof req.body?.oldPin === "string"
+        ? req.body.oldPin
+        : (typeof req.body?.currentPin === "string" ? req.body.currentPin : undefined);
+      const newPin = req.body?.newPin;
 
       if (!oldPin || !newPin || !/^\d{4,6}$/.test(newPin)) {
         return res.status(400).json({ error: "Valid old and new PINs required (4-6 digits)" });
@@ -121,7 +124,7 @@ export function registerPinLockRoutes(app: Express, authMiddleware: AuthMiddlewa
 
       if (user.chatPinLockedUntil && user.chatPinLockedUntil > new Date()) {
         const remainingMs = user.chatPinLockedUntil.getTime() - Date.now();
-        return res.status(423).json({ 
+        return res.status(423).json({
           error: "PIN locked due to too many failed attempts",
           lockedUntil: user.chatPinLockedUntil,
           remainingSeconds: Math.ceil(remainingMs / 1000),
@@ -141,8 +144,9 @@ export function registerPinLockRoutes(app: Express, authMiddleware: AuthMiddlewa
 
         await db.update(users).set(updateData).where(eq(users.id, userId));
 
-        return res.status(401).json({ 
+        return res.status(401).json({
           error: "Invalid PIN",
+          remainingAttempts: Math.max(0, 5 - newAttempts),
           attemptsRemaining: Math.max(0, 5 - newAttempts),
         });
       }
@@ -156,8 +160,9 @@ export function registerPinLockRoutes(app: Express, authMiddleware: AuthMiddlewa
       const expiresAt = Date.now() + 30 * 60 * 1000;
       pinUnlockTokens.set(userId, { token: unlockToken, expiresAt });
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
+        token: unlockToken,
         unlockToken,
         expiresIn: 1800,
       });
@@ -213,6 +218,7 @@ export function registerPinLockRoutes(app: Express, authMiddleware: AuthMiddlewa
       const [user] = await db.select({
         chatPinEnabled: users.chatPinEnabled,
         chatPinLockedUntil: users.chatPinLockedUntil,
+        chatPinFailedAttempts: users.chatPinFailedAttempts,
         chatPinSetAt: users.chatPinSetAt,
       }).from(users).where(eq(users.id, userId));
 
@@ -224,6 +230,7 @@ export function registerPinLockRoutes(app: Express, authMiddleware: AuthMiddlewa
         isUnlocked: isUnlocked || false,
         isLocked: user?.chatPinLockedUntil ? user.chatPinLockedUntil > new Date() : false,
         lockedUntil: user?.chatPinLockedUntil,
+        failedAttempts: user?.chatPinFailedAttempts || 0,
         pinSetAt: user?.chatPinSetAt,
       });
     } catch (error: unknown) {

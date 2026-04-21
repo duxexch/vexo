@@ -9,6 +9,7 @@ import { getCachedUserBlockLists, getRedisClient, isChatEnabled } from "../../li
 import { sanitizePlainText } from "../../lib/input-security";
 import { sendNotification } from "../notifications";
 import { resolveChatEnabledFlagFromDb } from "../../lib/chat-settings";
+import { isPinUnlocked } from "../../routes/chat-features/pin-lock";
 
 const CHAT_MESSAGE_DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
 const CHAT_MESSAGE_DEDUPE_PENDING_TTL_MS = 60 * 1000;
@@ -164,6 +165,22 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
       await getRedisClient().del(dedupeKey).catch(() => { });
     }
     ws.send(JSON.stringify({ type: "chat_error", error: "Chat is currently disabled" }));
+    return;
+  }
+
+  const [senderPinState] = await db.select({
+    chatPinEnabled: users.chatPinEnabled,
+  }).from(users).where(eq(users.id, senderUserId)).limit(1);
+  if (senderPinState?.chatPinEnabled && !isPinUnlocked(senderUserId)) {
+    if (dedupeKey) {
+      await getRedisClient().del(dedupeKey).catch(() => { });
+    }
+    ws.send(JSON.stringify({
+      type: "chat_error",
+      error: "Chat PIN is locked. Unlock chat first.",
+      code: "chat_pin_locked",
+      clientMessageId,
+    }));
     return;
   }
 

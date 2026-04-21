@@ -1,6 +1,6 @@
 import { WebSocket } from "ws";
 import { db } from "../../db";
-import { challengeGameSessions, challengeChatMessages, challenges } from "@shared/schema";
+import { challengeGameSessions, challenges } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 import { settleChallengePayout, settleDrawPayout } from "../../lib/payout";
 import { isChallengeSessionFinalStatus } from "../../lib/challenge-game-state";
@@ -168,19 +168,7 @@ export async function handleGameResign(ws: AuthenticatedSocket, data: any): Prom
       });
     }
 
-    // Delete game chat messages after resignation
-    try {
-      const [gameSession] = await db.select().from(challengeGameSessions)
-        .where(eq(challengeGameSessions.challengeId, challengeId))
-        .orderBy(desc(challengeGameSessions.createdAt))
-        .limit(1);
-      if (gameSession) {
-        await db.delete(challengeChatMessages)
-          .where(eq(challengeChatMessages.sessionId, gameSession.id));
-      }
-    } catch (cleanupErr) {
-      logger.error('Failed to cleanup game chat (resign):', cleanupErr);
-    }
+    logger.info(`[ChallengeChatRetention] Preserved challenge chat after resignation for moderation/audit (challengeId=${challengeId})`);
   } catch (error: unknown) {
     logger.error('Resign error:', error);
     ws.send(JSON.stringify({ type: "challenge_error", error: "Failed to process resignation" }));
@@ -302,19 +290,7 @@ export async function handleRespondDraw(ws: AuthenticatedSocket, data: any): Pro
         sendNotification(playerId as string, drawMsg).catch(() => { });
       });
 
-      // Delete game chat messages after draw
-      try {
-        const [gameSession] = await db.select().from(challengeGameSessions)
-          .where(eq(challengeGameSessions.challengeId, challengeId))
-          .orderBy(desc(challengeGameSessions.createdAt))
-          .limit(1);
-        if (gameSession) {
-          await db.delete(challengeChatMessages)
-            .where(eq(challengeChatMessages.sessionId, gameSession.id));
-        }
-      } catch (cleanupErr) {
-        logger.error('Failed to cleanup game chat (draw):', cleanupErr);
-      }
+      logger.info(`[ChallengeChatRetention] Preserved challenge chat after draw agreement for moderation/audit (challengeId=${challengeId})`);
     } catch (error: unknown) {
       logger.error('Draw accept error:', error);
       ws.send(JSON.stringify({ type: "challenge_error", error: "Failed to process draw settlement" }));

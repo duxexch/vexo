@@ -201,6 +201,11 @@ type ToastFn = ReturnType<typeof useToast>["toast"];
 const ADMIN_API_BASE_PATH = "/api/admin";
 const ADMIN_API_ORIGIN = typeof window !== "undefined" ? window.location.origin : "http://localhost";
 
+function i18nText(t: (key: string) => string, key: string, fallback: string): string {
+  const translated = t(key);
+  return translated === key ? fallback : translated;
+}
+
 function normalizeAdminApiPath(path: string): string {
   const rawPath = String(path || "").trim();
   if (!rawPath) {
@@ -257,7 +262,7 @@ async function adminFetch(path: string, options: RequestInit = {}) {
   return res.json();
 }
 
-function resolvePreferredUsername(user?: { username?: unknown; nickname?: unknown; id?: unknown }, fallback = "مستخدم") {
+function resolvePreferredUsername(user?: { username?: unknown; nickname?: unknown; id?: unknown }, fallback = "User") {
   const username = typeof user?.username === "string" ? user.username.trim() : "";
   if (username) return username;
 
@@ -271,6 +276,7 @@ function resolvePreferredUsername(user?: { username?: unknown; nickname?: unknow
 export default function AdminChatPage() {
   const { toast } = useToast();
   const { t } = useI18n();
+  const text = (key: string, fallback: string) => i18nText(t, key, fallback);
   const queryClient = useQueryClient();
   const [location, setLocation] = useLocation();
   const [newBannedWord, setNewBannedWord] = useState("");
@@ -343,15 +349,15 @@ export default function AdminChatPage() {
           playSound('support');
 
           toast({
-            title: "رسالة دعم جديدة",
+            title: text("adminChat.support.newMessageTitle", "New support message"),
             description: data.data.message || data.data.messageAr,
           });
 
           // Browser notification for admin
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             try {
-              const browserNotif = new Notification("رسالة دعم جديدة - VEX", {
-                body: data.data.message || data.data.messageAr || "رسالة جديدة من المستخدم",
+              const browserNotif = new Notification(text("adminChat.support.newMessageBrowserTitle", "New support message - VEX"), {
+                body: data.data.message || data.data.messageAr || text("adminChat.support.newMessageBody", "New message from user"),
                 icon: '/icons/vex-gaming-logo-192x192.png',
                 tag: 'vex-admin-support',
                 requireInteraction: true,
@@ -533,10 +539,10 @@ export default function AdminChatPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] });
       setSupportReply("");
       setAdminMediaPreview(null);
-      toast({ title: "تم إرسال الرد" });
+      toast({ title: text("adminChat.support.replySent", "Reply sent") });
     },
     onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -547,7 +553,7 @@ export default function AdminChatPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] });
       queryClient.invalidateQueries({ queryKey: ["admin-ticket-detail", selectedTicketId] });
-      toast({ title: "تم إغلاق التذكرة" });
+      toast({ title: text("adminChat.support.ticketClosed", "Ticket closed") });
     },
   });
 
@@ -558,7 +564,7 @@ export default function AdminChatPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] });
       queryClient.invalidateQueries({ queryKey: ["admin-ticket-detail", selectedTicketId] });
-      toast({ title: "تم إعادة فتح التذكرة" });
+      toast({ title: text("adminChat.support.ticketReopened", "Ticket reopened") });
     },
   });
 
@@ -574,10 +580,10 @@ export default function AdminChatPage() {
       setNewAutoTrigger("");
       setNewAutoResponse("");
       setNewAutoResponseAr("");
-      toast({ title: "تمت إضافة الرد التلقائي" });
+      toast({ title: text("adminChat.autoReply.added", "Auto reply added") });
     },
     onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -599,7 +605,7 @@ export default function AdminChatPage() {
       adminFetch(`/api/admin/support-chat/auto-replies/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-auto-replies"] });
-      toast({ title: "تم حذف الرد التلقائي" });
+      toast({ title: text("adminChat.autoReply.deleted", "Auto reply deleted") });
     },
   });
 
@@ -612,10 +618,10 @@ export default function AdminChatPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-chat-settings"] });
-      toast({ title: "تم تحديث الإعداد" });
+      toast({ title: text("adminChat.settings.updated", "Setting updated") });
     },
     onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -629,10 +635,10 @@ export default function AdminChatPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-banned-words"] });
       setNewBannedWord("");
-      toast({ title: "تمت إضافة الكلمة" });
+      toast({ title: text("adminChat.wordFilter.wordAdded", "Word added") });
     },
     onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -642,10 +648,10 @@ export default function AdminChatPage() {
       adminFetch(`/api/admin/chat/banned-words/${encodeURIComponent(word)}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-banned-words"] });
-      toast({ title: "تم حذف الكلمة" });
+      toast({ title: text("adminChat.wordFilter.wordDeleted", "Word deleted") });
     },
     onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -658,7 +664,7 @@ export default function AdminChatPage() {
     onSuccess: (data: AiAgentChatPayload) => {
       const reply = typeof data?.reply === "string" && data.reply.trim().length > 0
         ? data.reply
-        : "تم استلام الرد بدون محتوى.";
+        : text("adminChat.ai.replyEmpty", "Reply received with no content.");
 
       setAiAgentConversation((prev) => [
         ...prev,
@@ -674,13 +680,13 @@ export default function AdminChatPage() {
 
       if (data?.source && data.source !== "ai-service") {
         toast({
-          title: "وضع احتياطي",
-          description: "تم استخدام المحرك المحلي لأن خدمة AI الخارجية غير متاحة حالياً.",
+          title: text("adminChat.ai.fallbackModeTitle", "Fallback mode"),
+          description: text("adminChat.ai.fallbackModeDescription", "Local engine was used because external AI service is currently unavailable."),
         });
       }
     },
     onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -691,7 +697,7 @@ export default function AdminChatPage() {
         body: JSON.stringify(payload),
       }) as Promise<AiAgentDataQueryPayload>,
     onError: (err: Error) => {
-      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -842,13 +848,13 @@ export default function AdminChatPage() {
         if (!uploadedUrl) throw new Error("No URL returned");
         replyMutation.mutate({
           ticketId: selectedTicketId,
-          content: trimmed || (adminMediaPreview.type === "image" ? "📷 صورة" : adminMediaPreview.type === "video" ? "🎥 فيديو" : "📎 ملف"),
+          content: trimmed || (adminMediaPreview.type === "image" ? "📷 Image" : adminMediaPreview.type === "video" ? "🎥 Video" : "📎 File"),
           mediaUrl: uploadedUrl,
           mediaType: adminMediaPreview.type,
           mediaName: adminMediaPreview.name,
         });
       } catch (err: unknown) {
-        toast({ title: "فشل رفع الملف", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+        toast({ title: text("adminChat.upload.failed", "File upload failed"), description: err instanceof Error ? err.message : String(err), variant: "destructive" });
       } finally {
         setAdminUploading(false);
       }
@@ -875,14 +881,14 @@ export default function AdminChatPage() {
               <MessageCircle className="h-7 w-7" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">إدارة الدردشة</h1>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{text("adminChat.title", "Chat Management")}</h1>
               <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-                مراقبة وإدارة جميع أنظمة الدردشة في المنصة
+                {text("adminChat.subtitle", "Monitor and manage all chat systems in the platform")}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3 rounded-[24px] border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
-            <Label htmlFor="chat-toggle" className="text-sm font-medium">تفعيل الدردشة</Label>
+            <Label htmlFor="chat-toggle" className="text-sm font-medium">{text("adminChat.settings.enableChat", "Enable chat")}</Label>
             <Switch
               id="chat-toggle"
               checked={chatEnabled}
@@ -901,11 +907,11 @@ export default function AdminChatPage() {
         <TabsList className="flex w-full gap-2 overflow-x-auto rounded-[24px] border border-slate-200/80 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-950">
           <TabsTrigger value="overview" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <BarChart3 className="h-4 w-4" />
-            نظرة عامة
+            {text("adminChat.tabs.overview", "Overview")}
           </TabsTrigger>
           <TabsTrigger value="support" className="relative min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Headphones className="h-4 w-4" />
-            دردشات الدعم
+            {text("adminChat.tabs.support", "Support chats")}
             {(supportStats?.unreadFromUsers || 0) > 0 && (
               <span className="absolute -top-1 -end-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
                 {supportStats.unreadFromUsers > 9 ? "9+" : supportStats.unreadFromUsers}
@@ -914,23 +920,23 @@ export default function AdminChatPage() {
           </TabsTrigger>
           <TabsTrigger value="messages" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Eye className="h-4 w-4" />
-            مراقبة الرسائل
+            {text("adminChat.tabs.messages", "Message monitoring")}
           </TabsTrigger>
           <TabsTrigger value="ai-agent" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Bot className="h-4 w-4" />
-            مساعد AI
+            {text("adminChat.tabs.ai", "AI Assistant")}
           </TabsTrigger>
           <TabsTrigger value="features" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Shield className="h-4 w-4" />
-            الميزات
+            {text("adminChat.tabs.features", "Features")}
           </TabsTrigger>
           <TabsTrigger value="filter" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Filter className="h-4 w-4" />
-            فلتر الكلمات
+            {text("adminChat.tabs.wordFilter", "Word filter")}
           </TabsTrigger>
           <TabsTrigger value="settings" className="min-w-[126px] flex-none gap-1.5 rounded-2xl">
             <Settings className="h-4 w-4" />
-            الإعدادات
+            {text("adminChat.tabs.settings", "Settings")}
           </TabsTrigger>
         </TabsList>
 
@@ -941,63 +947,63 @@ export default function AdminChatPage() {
               <CardContent className="pt-6 text-center">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 text-blue-500" />
                 <p className="text-2xl font-bold">{stats?.totalPrivateMessages || 0}</p>
-                <p className="text-xs text-muted-foreground">إجمالي الرسائل الخاصة</p>
+                <p className="text-xs text-muted-foreground">{text("adminChat.stats.totalPrivateMessages", "Total private messages")}</p>
               </CardContent>
             </Card>
             <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <MessageCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
                 <p className="text-2xl font-bold">{stats?.totalGameMessages || 0}</p>
-                <p className="text-xs text-muted-foreground">رسائل الألعاب</p>
+                <p className="text-xs text-muted-foreground">{text("adminChat.stats.gameMessages", "Game messages")}</p>
               </CardContent>
             </Card>
             <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <Clock className="h-8 w-8 mx-auto mb-2 text-amber-500" />
                 <p className="text-2xl font-bold">{stats?.todayPrivateMessages || 0}</p>
-                <p className="text-xs text-muted-foreground">رسائل خاصة اليوم</p>
+                <p className="text-xs text-muted-foreground">{text("adminChat.stats.privateMessagesToday", "Private messages today")}</p>
               </CardContent>
             </Card>
             <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <Clock className="h-8 w-8 mx-auto mb-2 text-orange-500" />
                 <p className="text-2xl font-bold">{stats?.todayGameMessages || 0}</p>
-                <p className="text-xs text-muted-foreground">رسائل ألعاب اليوم</p>
+                <p className="text-xs text-muted-foreground">{text("adminChat.stats.gameMessagesToday", "Game messages today")}</p>
               </CardContent>
             </Card>
             <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <Users className="h-8 w-8 mx-auto mb-2 text-purple-500" />
                 <p className="text-2xl font-bold">{stats?.activeChattersLast24h || 0}</p>
-                <p className="text-xs text-muted-foreground">متحدثون نشطون (24 ساعة)</p>
+                <p className="text-xs text-muted-foreground">{text("adminChat.stats.activeChatters24h", "Active chatters (24h)")}</p>
               </CardContent>
             </Card>
             <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <Filter className="h-8 w-8 mx-auto mb-2 text-red-500" />
                 <p className="text-2xl font-bold">{stats?.bannedWordsCount || 0}</p>
-                <p className="text-xs text-muted-foreground">كلمات محظورة</p>
+                <p className="text-xs text-muted-foreground">{text("adminChat.stats.blockedWords", "Blocked words")}</p>
               </CardContent>
             </Card>
           </div>
 
           <Card className={DATA_CARD_CLASS}>
             <CardHeader>
-              <CardTitle className="text-lg">حالة الدردشة</CardTitle>
+              <CardTitle className="text-lg">{text("adminChat.status.title", "Chat status")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
-                <span>حالة النظام</span>
+                <span>{text("adminChat.status.system", "System status")}</span>
                 <Badge variant={chatEnabled ? "default" : "destructive"}>
-                  {chatEnabled ? "مفعّل" : "معطّل"}
+                  {chatEnabled ? text("adminChat.common.enabled", "Enabled") : text("adminChat.common.disabled", "Disabled")}
                 </Badge>
               </div>
               <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
-                <span>الحد الأقصى لطول الرسالة</span>
+                <span>{text("adminChat.status.maxMessageLength", "Max message length")}</span>
                 <span className="font-mono">{settingsMap["max_message_length"] || "2000"}</span>
               </div>
               <div className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/60">
-                <span>حد معدل الرسائل</span>
+                <span>{text("adminChat.status.rateLimit", "Message rate limit")}</span>
                 <span className="font-mono">{settingsMap["chat_rate_limit"] || "5 / 3s"}</span>
               </div>
             </CardContent>
@@ -1011,7 +1017,7 @@ export default function AdminChatPage() {
               <CardTitle className="text-lg flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <Bot className="h-5 w-5 text-primary" />
-                  تقارير خدمة الذكاء الاصطناعي
+                  {text("adminChat.ai.reportTitle", "AI service reports")}
                 </span>
                 <Button
                   className={cn(BUTTON_3D_CLASS, "gap-1.5")}
@@ -1028,31 +1034,31 @@ export default function AdminChatPage() {
                       (aiAgentReportLoading || aiAgentCapabilitiesLoading || aiAgentDataSummaryLoading) && "animate-spin",
                     )}
                   />
-                  تحديث
+                  {text("common.refresh", "Refresh")}
                 </Button>
               </CardTitle>
               <CardDescription>
-                متابعة حالة خدمة AI الخارجية مع ملخص تعلم ومؤشرات الأداء.
+                {text("adminChat.ai.reportDescription", "Track external AI service health with learning and performance indicators.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="rounded-2xl border border-slate-200/80 p-3 dark:border-slate-800">
-                  <p className="text-xs text-muted-foreground mb-1">المصدر</p>
+                  <p className="text-xs text-muted-foreground mb-1">{text("adminChat.ai.source", "Source")}</p>
                   <Badge variant={aiAgentReport?.source === "ai-service" ? "default" : "secondary"}>
                     {aiAgentReport?.source === "ai-service" ? "ai-service" : "fallback"}
                   </Badge>
                 </div>
                 <div className="rounded-2xl border border-slate-200/80 p-3 dark:border-slate-800">
-                  <p className="text-xs text-muted-foreground mb-1">إجمالي الأحداث</p>
+                  <p className="text-xs text-muted-foreground mb-1">{text("adminChat.ai.totalEvents", "Total events")}</p>
                   <p className="text-lg font-semibold">{aiAgentReport?.external?.report?.learning?.totalEvents ?? 0}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200/80 p-3 dark:border-slate-800">
-                  <p className="text-xs text-muted-foreground mb-1">مباريات متتبعة</p>
+                  <p className="text-xs text-muted-foreground mb-1">{text("adminChat.ai.trackedMatches", "Tracked matches")}</p>
                   <p className="text-lg font-semibold">{aiAgentReport?.external?.report?.performance?.totalGames ?? aiAgentReport?.localFallback?.summary?.totalTrackedMoves ?? 0}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200/80 p-3 dark:border-slate-800">
-                  <p className="text-xs text-muted-foreground mb-1">نسبة فوز البوت</p>
+                  <p className="text-xs text-muted-foreground mb-1">{text("adminChat.ai.botWinRate", "Bot win rate")}</p>
                   <p className="text-lg font-semibold">{aiAgentReport?.external?.report?.performance?.aiWinRate ?? 0}%</p>
                 </div>
               </div>
@@ -1314,10 +1320,10 @@ export default function AdminChatPage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <MessageCircle className="h-5 w-5" />
-                تواصل مع مساعد AI
+                {text("adminChat.ai.chatTitle", "Chat with AI Assistant")}
               </CardTitle>
               <CardDescription>
-                اكتب سؤالاً عن أداء البوتات، المخاطر، أو توصيات تحسين اللعب المنفرد.
+                {text("adminChat.ai.chatDescription", "Ask about bot performance, risks, or solo-play optimization recommendations.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -1325,7 +1331,7 @@ export default function AdminChatPage() {
                 <div className="space-y-2">
                   {aiAgentConversation.length === 0 && (
                     <p className="text-sm text-muted-foreground">
-                      لا توجد محادثات بعد. ابدأ برسالة مثل: اعطني ملخص أداء البوت اليوم.
+                      {text("adminChat.ai.emptyConversation", "No conversation yet. Start with a message like: Give me today's bot performance summary.")}
                     </p>
                   )}
                   {aiAgentConversation.map((item) => (
@@ -1345,7 +1351,7 @@ export default function AdminChatPage() {
                   {aiAgentChatMutation.isPending && (
                     <div className="me-auto inline-flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      جاري توليد الرد...
+                      {text("adminChat.ai.generatingReply", "Generating reply...")}
                     </div>
                   )}
                 </div>
@@ -1355,7 +1361,7 @@ export default function AdminChatPage() {
                 <Input
                   value={aiAgentPrompt}
                   onChange={(e) => setAiAgentPrompt(e.target.value)}
-                  placeholder="اسأل عن تقارير AI أو مشاكل اللعب المنفرد..."
+                  placeholder={text("adminChat.ai.inputPlaceholder", "Ask about AI reports or solo-play issues...")}
                   className={INPUT_SURFACE_CLASS}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -1366,7 +1372,7 @@ export default function AdminChatPage() {
                 />
                 <Button onClick={handleAiAgentSend} disabled={aiAgentChatMutation.isPending || !aiAgentPrompt.trim()} className={cn(BUTTON_3D_PRIMARY_CLASS, "gap-1.5")}>
                   <Send className="h-4 w-4" />
-                  إرسال
+                  {text("common.send", "Send")}
                 </Button>
               </div>
             </CardContent>
@@ -1381,28 +1387,28 @@ export default function AdminChatPage() {
               <CardContent className="pt-6 text-center">
                 <Headphones className="h-7 w-7 mx-auto mb-2 text-yellow-500" />
                 <p className="text-2xl font-bold">{supportStats?.waiting || 0}</p>
-                <p className="text-xs text-muted-foreground">بانتظار الرد</p>
+                <p className="text-xs text-muted-foreground">{text("adminChat.support.waiting", "Waiting for reply")}</p>
               </CardContent>
             </Card>
             <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <MessageCircle className="h-7 w-7 mx-auto mb-2 text-green-500" />
                 <p className="text-2xl font-bold">{supportStats?.active || 0}</p>
-                <p className="text-xs text-muted-foreground">محادثات نشطة</p>
+                <p className="text-xs text-muted-foreground">{text("adminChat.support.activeChats", "Active chats")}</p>
               </CardContent>
             </Card>
             <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <Clock className="h-7 w-7 mx-auto mb-2 text-blue-500" />
                 <p className="text-2xl font-bold">{supportStats?.todayTickets || 0}</p>
-                <p className="text-xs text-muted-foreground">تذاكر اليوم</p>
+                <p className="text-xs text-muted-foreground">{text("adminChat.support.todayTickets", "Today's tickets")}</p>
               </CardContent>
             </Card>
             <Card className={STAT_CARD_CLASS}>
               <CardContent className="pt-6 text-center">
                 <CheckCircle2 className="h-7 w-7 mx-auto mb-2 text-gray-500" />
                 <p className="text-2xl font-bold">{supportStats?.closed || 0}</p>
-                <p className="text-xs text-muted-foreground">مغلقة</p>
+                <p className="text-xs text-muted-foreground">{text("adminChat.support.closed", "Closed")}</p>
               </CardContent>
             </Card>
           </div>
@@ -1414,7 +1420,7 @@ export default function AdminChatPage() {
                 <CardTitle className="text-base flex items-center justify-between">
                   <span className="flex items-center gap-2">
                     <Headphones className="h-4 w-4" />
-                    التذاكر
+                    {text("adminChat.support.tickets", "Tickets")}
                   </span>
                   <Button className={`${BUTTON_3D_CLASS} h-9 w-9 p-0`} onClick={() => refetchTickets()}>
                     <RefreshCw className="h-3.5 w-3.5" />
@@ -1429,7 +1435,7 @@ export default function AdminChatPage() {
                       className="h-7 text-xs"
                       onClick={() => setSupportFilter(f)}
                     >
-                      {f === "all" ? "الكل" : f === "waiting" ? "بانتظار" : f === "open" ? "مفتوح" : f === "active" ? "نشط" : "مغلق"}
+                      {f === "all" ? text("common.all", "All") : f === "waiting" ? text("adminChat.support.waiting", "Waiting") : f === "open" ? text("common.open", "Open") : f === "active" ? text("common.active", "Active") : text("common.closed", "Closed")}
                     </Button>
                   ))}
                 </div>
@@ -1438,7 +1444,7 @@ export default function AdminChatPage() {
                 <ScrollArea className="h-[400px]">
                   <div className="divide-y">
                     {(!supportTickets || supportTickets.length === 0) && (
-                      <p className="text-center text-muted-foreground py-8 text-sm">لا توجد تذاكر</p>
+                      <p className="text-center text-muted-foreground py-8 text-sm">{text("adminChat.support.noTickets", "No tickets")}</p>
                     )}
                     {supportTickets?.map((ticket: SupportTicket) => (
                       <button
@@ -1449,7 +1455,7 @@ export default function AdminChatPage() {
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-medium text-sm truncate">
-                            {ticket.displayUsername || ticket.username || ticket.nickname || ticket.userId || "مستخدم"}
+                            {ticket.displayUsername || ticket.username || ticket.nickname || ticket.userId || text("common.user", "User")}
                           </span>
                           <div className="flex items-center gap-1">
                             {ticket.unreadCount > 0 && (
@@ -1461,7 +1467,7 @@ export default function AdminChatPage() {
                               variant={ticket.status === "waiting" ? "default" : ticket.status === "active" ? "secondary" : "outline"}
                               className="text-[10px] h-5"
                             >
-                              {ticket.status === "waiting" ? "بانتظار" : ticket.status === "open" ? "مفتوح" : ticket.status === "active" ? "نشط" : "مغلق"}
+                              {ticket.status === "waiting" ? text("adminChat.support.waiting", "Waiting") : ticket.status === "open" ? text("common.open", "Open") : ticket.status === "active" ? text("common.active", "Active") : text("common.closed", "Closed")}
                             </Badge>
                           </div>
                         </div>
@@ -1561,7 +1567,7 @@ export default function AdminChatPage() {
                             disabled={closeTicketMutation.isPending}
                           >
                             <XCircle className="h-3.5 w-3.5" />
-                            إغلاق
+                            {text("common.close", "Close")}
                           </Button>
                         ) : (
                           <Button
@@ -1570,7 +1576,7 @@ export default function AdminChatPage() {
                             disabled={reopenTicketMutation.isPending}
                           >
                             <RefreshCw className="h-3.5 w-3.5" />
-                            إعادة فتح
+                            {text("adminChat.support.reopen", "Reopen")}
                           </Button>
                         )}
                       </div>
@@ -1594,13 +1600,13 @@ export default function AdminChatPage() {
                             >
                               {msg.senderType === "system" && (
                                 <span className="flex items-center gap-1 text-[10px] font-semibold mb-0.5">
-                                  <Bot className="h-3 w-3" /> رد تلقائي
+                                  <Bot className="h-3 w-3" /> {text("adminChat.autoReply.systemReply", "Auto reply")}
                                 </span>
                               )}
                               {/* Media display */}
                               {msg.mediaUrl && msg.mediaType === "image" && (
                                 <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="block mb-1">
-                                  <img src={msg.mediaUrl} alt={msg.mediaName || "صورة"} className="rounded-lg max-w-full max-h-48 object-cover" loading="lazy" />
+                                  <img src={msg.mediaUrl} alt={msg.mediaName || text("common.image", "Image")} className="rounded-lg max-w-full max-h-48 object-cover" loading="lazy" />
                                 </a>
                               )}
                               {msg.mediaUrl && msg.mediaType === "video" && (
@@ -1609,7 +1615,7 @@ export default function AdminChatPage() {
                               {msg.mediaUrl && msg.mediaType === "file" && (
                                 <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 p-2 mb-1 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 transition-colors">
                                   <FileText className="h-4 w-4 shrink-0" />
-                                  <span className="text-xs truncate flex-1">{msg.mediaName || "ملف"}</span>
+                                  <span className="text-xs truncate flex-1">{msg.mediaName || text("common.file", "File")}</span>
                                   <Download className="h-3 w-3 shrink-0 opacity-60" />
                                 </a>
                               )}
@@ -1687,7 +1693,7 @@ export default function AdminChatPage() {
                             onChange={(e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
-                              if (file.size > 10 * 1024 * 1024) { toast({ title: "حجم الملف كبير", variant: "destructive" }); return; }
+                              if (file.size > 10 * 1024 * 1024) { toast({ title: text("adminChat.upload.fileTooLarge", "File is too large"), variant: "destructive" }); return; }
                               const type = file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "file";
                               const reader = new FileReader();
                               reader.onload = () => setAdminMediaPreview({ url: reader.result as string, type, name: file.name, file });
@@ -1699,14 +1705,14 @@ export default function AdminChatPage() {
                             className={`${BUTTON_3D_CLASS} h-10 w-10 shrink-0 p-0`}
                             onClick={() => adminFileInputRef.current?.click()}
                             disabled={adminUploading || replyMutation.isPending}
-                            title="إرفاق ملف"
+                            title={text("adminChat.upload.attachFile", "Attach file")}
                           >
                             <Paperclip className="h-4 w-4" />
                           </Button>
                           <Input
                             value={supportReply}
                             onChange={(e) => setSupportReply(e.target.value)}
-                            placeholder="اكتب ردك..."
+                            placeholder={text("adminChat.support.replyPlaceholder", "Write your reply...")}
                             className={`${INPUT_SURFACE_CLASS} flex-1`}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey && (supportReply.trim() || adminMediaPreview)) {
@@ -1736,35 +1742,35 @@ export default function AdminChatPage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Bot className="h-5 w-5" />
-                الردود التلقائية
+                {text("adminChat.autoReply.title", "Auto replies")}
               </CardTitle>
               <CardDescription>
-                إعداد ردود تلقائية عند تطابق كلمات معينة في رسائل المستخدمين
+                {text("adminChat.autoReply.description", "Configure automatic replies when specific keywords are matched in user messages")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Add new auto-reply */}
               <div className="grid gap-3 rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4 md:grid-cols-4 dark:border-slate-800 dark:bg-slate-900/60">
                 <div>
-                  <Label className="text-xs mb-1 block">الكلمة المفتاحية</Label>
+                  <Label className="text-xs mb-1 block">{text("adminChat.autoReply.keyword", "Keyword")}</Label>
                   <Input
-                    placeholder="مثال: سحب، إيداع، welcome"
+                    placeholder={text("adminChat.autoReply.keywordPlaceholder", "Example: withdrawal, deposit, welcome")}
                     value={newAutoTrigger}
                     onChange={(e) => setNewAutoTrigger(e.target.value)}
                     className={cn(INPUT_SURFACE_CLASS, "text-sm")}
                   />
                 </div>
                 <div>
-                  <Label className="text-xs mb-1 block">الرد (عربي)</Label>
+                  <Label className="text-xs mb-1 block">{text("adminChat.autoReply.replyLocal", "Reply (local)")}</Label>
                   <Input
-                    placeholder="الرد التلقائي..."
+                    placeholder={text("adminChat.autoReply.replyPlaceholder", "Auto reply...")}
                     value={newAutoResponse}
                     onChange={(e) => setNewAutoResponse(e.target.value)}
                     className={cn(INPUT_SURFACE_CLASS, "text-sm")}
                   />
                 </div>
                 <div>
-                  <Label className="text-xs mb-1 block">الرد (English)</Label>
+                  <Label className="text-xs mb-1 block">{text("adminChat.autoReply.replyEnglish", "Reply (English)")}</Label>
                   <Input
                     placeholder="Auto reply..."
                     value={newAutoResponseAr}
@@ -1787,7 +1793,7 @@ export default function AdminChatPage() {
                     className={cn(BUTTON_3D_PRIMARY_CLASS, "w-full gap-1.5")}
                   >
                     <Plus className="h-4 w-4" />
-                    إضافة
+                    {text("common.add", "Add")}
                   </Button>
                 </div>
               </div>
@@ -1798,7 +1804,7 @@ export default function AdminChatPage() {
               <div className="space-y-2">
                 {(!autoReplies || autoReplies.length === 0) && (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    لا توجد ردود تلقائية. أضف "welcome" كرد ترحيبي تلقائي.
+                    {text("adminChat.autoReply.empty", "No auto replies yet. Add one for welcome messages.")}
                   </p>
                 )}
                 {autoReplies?.map((reply: AutoReply) => (
@@ -1806,7 +1812,7 @@ export default function AdminChatPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <Badge variant="outline" className="text-xs">{reply.trigger}</Badge>
-                        {!reply.isEnabled && <Badge variant="secondary" className="text-[10px]">معطّل</Badge>}
+                        {!reply.isEnabled && <Badge variant="secondary" className="text-[10px]">{text("common.disabled", "Disabled")}</Badge>}
                       </div>
                       <p className="text-sm text-muted-foreground truncate">{reply.response}</p>
                     </div>
@@ -1823,8 +1829,8 @@ export default function AdminChatPage() {
                         </AlertDialogTrigger>
                         <AlertDialogContent className={DIALOG_SURFACE_CLASS}>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>حذف الرد التلقائي؟</AlertDialogTitle>
-                            <AlertDialogDescription>سيتم حذف هذا الرد التلقائي نهائياً.</AlertDialogDescription>
+                            <AlertDialogTitle>{text("adminChat.autoReply.deleteTitle", "Delete auto reply?")}</AlertDialogTitle>
+                            <AlertDialogDescription>{text("adminChat.autoReply.deleteDescription", "This auto reply will be permanently deleted.")}</AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel className={BUTTON_3D_CLASS}>إلغاء</AlertDialogCancel>
@@ -1832,7 +1838,7 @@ export default function AdminChatPage() {
                               onClick={() => deleteAutoReplyMutation.mutate(reply.id)}
                               className={BUTTON_3D_DESTRUCTIVE_CLASS}
                             >
-                              حذف
+                              {text("common.delete", "Delete")}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -1851,10 +1857,10 @@ export default function AdminChatPage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Eye className="h-5 w-5" />
-                مراقبة الرسائل
+                {text("adminChat.messages.title", "Message monitoring")}
               </CardTitle>
               <CardDescription>
-                المحادثات الخاصة مشفرة - فقط محادثات P2P والتحديات يمكن مراقبتها
+                {text("adminChat.messages.description", "Private chats are encrypted - only P2P and challenge chats can be monitored")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1862,7 +1868,7 @@ export default function AdminChatPage() {
               <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-6 text-center space-y-3">
                 <Shield className="h-12 w-12 mx-auto text-emerald-500" />
                 <h3 className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
-                  محادثات مشفرة طرفياً (E2EE)
+                  {text("adminChat.messages.e2eeTitle", "End-to-end encrypted chats (E2EE)")}
                 </h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
                   المحادثات الخاصة بين المستخدمين محمية بتشفير طرفي.
@@ -1872,7 +1878,7 @@ export default function AdminChatPage() {
                 <div className="flex justify-center gap-4 pt-2">
                   <Badge variant="outline" className="gap-1 text-emerald-500 border-emerald-500/30">
                     <Shield className="h-3 w-3" />
-                    E2EE مفعّل
+                    {text("adminChat.messages.e2eeEnabled", "E2EE enabled")}
                   </Badge>
                   <Badge variant="outline" className="gap-1">
                     خوارزمية X25519 + AES-GCM
@@ -1883,7 +1889,7 @@ export default function AdminChatPage() {
               <Separator />
 
               <p className="text-sm text-muted-foreground text-center">
-                للاطلاع على محادثات P2P والتحديات، استخدم أقسام إدارة P2P والتحديات المخصصة.
+                {text("adminChat.messages.p2pHint", "To review P2P and challenge chats, use the dedicated P2P/challenges management sections.")}
               </p>
             </CardContent>
           </Card>
@@ -1895,16 +1901,16 @@ export default function AdminChatPage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Shield className="h-5 w-5" />
-                فلتر الكلمات المحظورة
+                {text("adminChat.wordFilter.title", "Blocked words filter")}
               </CardTitle>
               <CardDescription>
-                إدارة الكلمات التي يتم تصفيتها تلقائياً من الرسائل
+                {text("adminChat.wordFilter.description", "Manage words that are automatically filtered from messages")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <Input
-                  placeholder="أضف كلمة جديدة..."
+                  placeholder={text("adminChat.wordFilter.addPlaceholder", "Add a new word...")}
                   value={newBannedWord}
                   onChange={(e) => setNewBannedWord(e.target.value)}
                   className={INPUT_SURFACE_CLASS}
@@ -1924,7 +1930,7 @@ export default function AdminChatPage() {
                   className={cn(BUTTON_3D_PRIMARY_CLASS, "gap-1.5")}
                 >
                   <Plus className="h-4 w-4" />
-                  إضافة
+                  {text("common.add", "Add")}
                 </Button>
               </div>
 
@@ -1949,7 +1955,7 @@ export default function AdminChatPage() {
                 ))}
                 {(!bannedWordsData?.words || bannedWordsData.words.length === 0) && (
                   <p className="text-sm text-muted-foreground py-4">
-                    لا توجد كلمات محظورة
+                    {text("adminChat.wordFilter.empty", "No blocked words")}
                   </p>
                 )}
               </div>
@@ -1957,8 +1963,7 @@ export default function AdminChatPage() {
               <div className="mt-4 rounded-[24px] border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
                 <p className="text-sm text-muted-foreground">
                   <AlertTriangle className="h-4 w-4 inline me-1" />
-                  الكلمات المحظورة يتم استبدالها تلقائياً بـ *** في جميع الرسائل.
-                  التغييرات تسري فوراً على الرسائل الجديدة فقط.
+                  {text("adminChat.wordFilter.hint", "Blocked words are replaced automatically with *** in all messages. Changes apply immediately to new messages only.")}
                 </p>
               </div>
             </CardContent>
@@ -1972,9 +1977,9 @@ export default function AdminChatPage() {
             <Card className={DATA_CARD_CLASS}>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  📷 إدارة الوسائط
+                  📷 {text("adminChat.features.media.title", "Media management")}
                 </CardTitle>
-                <CardDescription>التحكم في ميزة إرسال الصور والفيديوهات</CardDescription>
+                <CardDescription>{text("adminChat.features.media.description", "Control image and video sending feature")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <AdminFeatureSection
@@ -1988,9 +1993,9 @@ export default function AdminChatPage() {
             <Card className={DATA_CARD_CLASS}>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  ⏱️ إدارة الحذف التلقائي
+                  ⏱️ {text("adminChat.features.autodelete.title", "Auto-delete management")}
                 </CardTitle>
-                <CardDescription>التحكم في ميزة حذف الرسائل التلقائي</CardDescription>
+                <CardDescription>{text("adminChat.features.autodelete.description", "Control automatic message deletion feature")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <AdminFeatureSection
@@ -2006,9 +2011,9 @@ export default function AdminChatPage() {
                 <CardTitle className="text-lg flex items-center gap-2">
                   <PhoneCall className="h-4 w-4" />
                   <Video className="h-4 w-4" />
-                  تسعير المكالمات وإجراءات الدردشة
+                  {text("adminChat.features.callPricing.title", "Call pricing and chat operations")}
                 </CardTitle>
-                <CardDescription>إدارة أسعار المكالمات الخاصة وسعر الرسائل الصوتية وحذف الرسائل</CardDescription>
+                <CardDescription>{text("adminChat.features.callPricing.description", "Manage private call prices, voice-message pricing, and message deletion charges")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <AdminCallPricingSection toast={toast} />
@@ -2019,9 +2024,9 @@ export default function AdminChatPage() {
             <Card className={DATA_CARD_CLASS}>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  🔐 إدارة رموز PIN
+                  🔐 {text("adminChat.features.pin.title", "PIN management")}
                 </CardTitle>
-                <CardDescription>إعادة تعيين PIN للمستخدمين عند الحاجة</CardDescription>
+                <CardDescription>{text("adminChat.features.pin.description", "Reset user PIN when needed")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <AdminPinResetSection toast={toast} />
@@ -2033,9 +2038,9 @@ export default function AdminChatPage() {
           <Card className={DATA_CARD_CLASS}>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                📎 وسائط دردشة الدعم
+                📎 {text("adminChat.features.supportMedia.title", "Support chat media")}
               </CardTitle>
-              <CardDescription>التحكم في إرسال الوسائط (صور، فيديو، ملفات) في دردشة الدعم الفني</CardDescription>
+              <CardDescription>{text("adminChat.features.supportMedia.description", "Control sending media (images, video, files) in support chat")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <AdminSupportMediaSection toast={toast} />
@@ -2048,7 +2053,7 @@ export default function AdminChatPage() {
               <div className="flex items-start gap-3">
                 <Shield className="h-6 w-6 text-emerald-500 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="font-semibold text-emerald-700 dark:text-emerald-400 mb-1">خصوصية المحادثات</h4>
+                  <h4 className="font-semibold text-emerald-700 dark:text-emerald-400 mb-1">{text("adminChat.privacy.title", "Chat privacy")}</h4>
                   <p className="text-sm text-muted-foreground">
                     المحادثات الخاصة بين المستخدمين مشفرة طرفياً (E2EE) ولا يمكن للمشرفين قراءتها.
                     فقط محادثات قسم P2P/التحديات يمكن مراقبتها. هذا يضمن خصوصية تامة للمستخدمين.
@@ -2065,12 +2070,12 @@ export default function AdminChatPage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Settings className="h-5 w-5" />
-                إعدادات الدردشة
+                {text("adminChat.settings.title", "Chat settings")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label>تفعيل الدردشة</Label>
+                <Label>{text("adminChat.settings.enableChat", "Enable chat")}</Label>
                 <div className="flex items-center gap-3">
                   <Switch
                     checked={chatEnabled}
@@ -2082,7 +2087,7 @@ export default function AdminChatPage() {
                     }}
                   />
                   <span className="text-sm text-muted-foreground">
-                    {chatEnabled ? "الدردشة مفعّلة للجميع" : "الدردشة معطّلة"}
+                    {chatEnabled ? text("adminChat.settings.enabledForAll", "Chat is enabled for everyone") : text("adminChat.settings.disabled", "Chat is disabled")}
                   </span>
                 </div>
               </div>
@@ -2090,7 +2095,7 @@ export default function AdminChatPage() {
               <Separator />
 
               <div className="space-y-2">
-                <Label>الحد الأقصى لطول الرسالة</Label>
+                <Label>{text("adminChat.settings.maxMessageLength", "Maximum message length")}</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
@@ -2106,14 +2111,14 @@ export default function AdminChatPage() {
                       }
                     }}
                   />
-                  <span className="text-sm text-muted-foreground self-center">حرف</span>
+                  <span className="text-sm text-muted-foreground self-center">{text("adminChat.settings.characters", "characters")}</span>
                 </div>
               </div>
 
               <Separator />
 
               <div className="space-y-2">
-                <Label>حد معدل الرسائل</Label>
+                <Label>{text("adminChat.settings.rateLimit", "Message rate limit")}</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
@@ -2129,14 +2134,14 @@ export default function AdminChatPage() {
                       }
                     }}
                   />
-                  <span className="text-sm text-muted-foreground self-center">رسالة / 3 ثوانٍ</span>
+                  <span className="text-sm text-muted-foreground self-center">{text("adminChat.settings.messagesPer3s", "messages / 3 seconds")}</span>
                 </div>
               </div>
 
               <Separator />
 
               <div className="space-y-2 rounded-[24px] border border-emerald-500/20 bg-emerald-500/5 p-4">
-                <Label className="text-emerald-700 dark:text-emerald-400">خصوصية الرسائل الخاصة</Label>
+                <Label className="text-emerald-700 dark:text-emerald-400">{text("adminChat.settings.privatePrivacy", "Private message privacy")}</Label>
                 <p className="text-sm text-muted-foreground">
                   بسبب التشفير الطرفي الكامل (E2EE)، لا يمكن للنظام حذف أو قراءة الرسائل الخاصة من لوحة الإدارة.
                 </p>
@@ -2154,6 +2159,8 @@ export default function AdminChatPage() {
 
 // Admin Feature Management Sub-Component
 function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "auto-delete"; toast: ToastFn }) {
+  const { t } = useI18n();
+  const text = (key: string, fallback: string) => i18nText(t, key, fallback);
   const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(false);
   const [price, setPrice] = useState("");
@@ -2172,11 +2179,11 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
         method: "POST",
         body: JSON.stringify({ userId: trimmedUserId }),
       });
-      toast({ title: `تم منح الميزة للمستخدم ${trimmedUserId}` });
+      toast({ title: `${text("adminChat.features.granted", "Feature granted to user")} ${trimmedUserId}` });
       setUserId("");
       refetch();
     } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     }
     setLoading(false);
   };
@@ -2187,17 +2194,17 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
         method: "POST",
         body: JSON.stringify({ userId: id }),
       });
-      toast({ title: "تم سحب الميزة" });
+      toast({ title: text("adminChat.features.revoked", "Feature revoked") });
       refetch();
     } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     }
   };
 
   const handleUpdatePrice = async () => {
     const parsedPrice = Number(price);
     if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
-      toast({ title: "خطأ", description: "السعر غير صالح", variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: text("adminChat.pricing.invalidPrice", "Invalid price"), variant: "destructive" });
       return;
     }
 
@@ -2206,11 +2213,11 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
         method: "PUT",
         body: JSON.stringify({ price: Number(parsedPrice.toFixed(2)) }),
       });
-      toast({ title: "تم تحديث السعر" });
+      toast({ title: text("adminChat.pricing.updated", "Price updated") });
       setPrice("");
       refetch();
     } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     }
   };
 
@@ -2280,6 +2287,8 @@ function AdminFeatureSection({ featureType, toast }: { featureType: "media" | "a
 }
 
 function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
+  const { t } = useI18n();
+  const text = (key: string, fallback: string) => i18nText(t, key, fallback);
   const [voicePrice, setVoicePrice] = useState("");
   const [videoPrice, setVideoPrice] = useState("");
   const [voiceMessagePrice, setVoiceMessagePrice] = useState("");
@@ -2297,7 +2306,7 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
     if (voicePrice.trim()) {
       const parsed = Number(voicePrice);
       if (!Number.isFinite(parsed) || parsed < 0) {
-        toast({ title: "خطأ", description: "سعر الدقيقة الصوتية غير صالح", variant: "destructive" });
+        toast({ title: text("common.error", "Error"), description: text("adminChat.callPricing.invalidVoiceMinute", "Invalid voice minute price"), variant: "destructive" });
         return;
       }
       payload.voicePricePerMinute = Number(parsed.toFixed(2));
@@ -2306,7 +2315,7 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
     if (videoPrice.trim()) {
       const parsed = Number(videoPrice);
       if (!Number.isFinite(parsed) || parsed < 0) {
-        toast({ title: "خطأ", description: "سعر الدقيقة المرئية غير صالح", variant: "destructive" });
+        toast({ title: text("common.error", "Error"), description: text("adminChat.callPricing.invalidVideoMinute", "Invalid video minute price"), variant: "destructive" });
         return;
       }
       payload.videoPricePerMinute = Number(parsed.toFixed(2));
@@ -2315,7 +2324,7 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
     if (voiceMessagePrice.trim()) {
       const parsed = Number(voiceMessagePrice);
       if (!Number.isFinite(parsed) || parsed < 0) {
-        toast({ title: "خطأ", description: "سعر الرسالة الصوتية غير صالح", variant: "destructive" });
+        toast({ title: text("common.error", "Error"), description: text("adminChat.callPricing.invalidVoiceMessage", "Invalid voice message price"), variant: "destructive" });
         return;
       }
       payload.voiceMessagePrice = Number(parsed.toFixed(2));
@@ -2324,14 +2333,14 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
     if (messageDeletePrice.trim()) {
       const parsed = Number(messageDeletePrice);
       if (!Number.isFinite(parsed) || parsed < 0) {
-        toast({ title: "خطأ", description: "سعر حذف الرسالة غير صالح", variant: "destructive" });
+        toast({ title: text("common.error", "Error"), description: text("adminChat.callPricing.invalidDeletePrice", "Invalid message delete price"), variant: "destructive" });
         return;
       }
       payload.messageDeletePrice = Number(parsed.toFixed(2));
     }
 
     if (!Object.keys(payload).length) {
-      toast({ title: "تنبيه", description: "أدخل قيمة واحدة على الأقل" });
+      toast({ title: text("common.notice", "Notice"), description: text("adminChat.callPricing.enterValue", "Enter at least one value") });
       return;
     }
 
@@ -2345,10 +2354,10 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
       setVideoPrice("");
       setVoiceMessagePrice("");
       setMessageDeletePrice("");
-      toast({ title: "تم تحديث التسعير" });
+      toast({ title: text("adminChat.callPricing.updated", "Pricing updated") });
       refetch();
     } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -2450,6 +2459,8 @@ function AdminCallPricingSection({ toast }: { toast: ToastFn }) {
 
 // Admin PIN Reset Sub-Component
 function AdminPinResetSection({ toast }: { toast: ToastFn }) {
+  const { t } = useI18n();
+  const text = (key: string, fallback: string) => i18nText(t, key, fallback);
   const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -2462,10 +2473,10 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
         method: "POST",
         body: JSON.stringify({ userId: trimmedUserId }),
       });
-      toast({ title: `تم إعادة تعيين PIN للمستخدم ${trimmedUserId}` });
+      toast({ title: `${text("adminChat.pinReset.done", "PIN reset for user")} ${trimmedUserId}` });
       setUserId("");
     } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     }
     setLoading(false);
   };
@@ -2517,6 +2528,8 @@ function AdminPinResetSection({ toast }: { toast: ToastFn }) {
 
 // Admin Support Media Settings Sub-Component
 function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
+  const { t } = useI18n();
+  const text = (key: string, fallback: string) => i18nText(t, key, fallback);
   const [blockUserId, setBlockUserId] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -2534,10 +2547,10 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
         method: "PUT",
         body: JSON.stringify({ enabled }),
       });
-      toast({ title: enabled ? "تم تفعيل وسائط الدعم" : "تم تعطيل وسائط الدعم" });
+      toast({ title: enabled ? text("adminChat.supportMedia.enabled", "Support media enabled") : text("adminChat.supportMedia.disabled", "Support media disabled") });
       refetch();
     } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     }
     setLoading(false);
   };
@@ -2550,11 +2563,11 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
         method: "POST",
         body: JSON.stringify({ userId: blockUserId.trim() }),
       });
-      toast({ title: `تم حظر الوسائط للمستخدم ${blockUserId}` });
+      toast({ title: `${text("adminChat.supportMedia.blocked", "Blocked media for user")} ${blockUserId}` });
       setBlockUserId("");
       refetch();
     } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     }
     setLoading(false);
   };
@@ -2565,10 +2578,10 @@ function AdminSupportMediaSection({ toast }: { toast: ToastFn }) {
         method: "POST",
         body: JSON.stringify({ userId }),
       });
-      toast({ title: "تم إلغاء الحظر" });
+      toast({ title: text("adminChat.supportMedia.unblocked", "Unblocked media") });
       refetch();
     } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+      toast({ title: text("common.error", "Error"), description: err instanceof Error ? err.message : String(err), variant: "destructive" });
     }
   };
 

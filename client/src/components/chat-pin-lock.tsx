@@ -5,6 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
+
+function i18nText(t: (key: string) => string, key: string, fallback: string): string {
+  const translated = t(key);
+  return translated === key ? fallback : translated;
+}
 
 interface PinLockScreenProps {
   onUnlock: (pin: string) => Promise<{ success: boolean; error?: string; remainingAttempts?: number }>;
@@ -14,6 +20,7 @@ interface PinLockScreenProps {
 }
 
 export function PinLockScreen({ onUnlock, isLocked, lockedUntil, failedAttempts = 0 }: PinLockScreenProps) {
+  const { t } = useI18n();
   const [pin, setPin] = useState<string[]>(["", "", "", "", "", ""]);
   const [pinLength, setPinLength] = useState(4);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +50,7 @@ export function PinLockScreen({ onUnlock, isLocked, lockedUntil, failedAttempts 
 
   const handleDigit = useCallback((index: number, digit: string) => {
     if (digit.length > 1 || !/^\d*$/.test(digit)) return;
-    
+
     const newPin = [...pin];
     newPin[index] = digit;
     setPin(newPin);
@@ -76,9 +83,9 @@ export function PinLockScreen({ onUnlock, isLocked, lockedUntil, failedAttempts 
     setError(null);
 
     const result = await onUnlock(pinValue);
-    
+
     if (!result.success) {
-      setError(result.error || "رمز خاطئ");
+      setError(result.error || i18nText(t, "chat.pin.invalidPin", "Invalid PIN"));
       setShake(true);
       setTimeout(() => {
         setShake(false);
@@ -95,12 +102,12 @@ export function PinLockScreen({ onUnlock, isLocked, lockedUntil, failedAttempts 
         <Card className="max-w-sm w-full">
           <CardContent className="pt-6 text-center space-y-4">
             <AlertTriangle className="mx-auto h-16 w-16 text-destructive" />
-            <h3 className="text-lg font-bold text-destructive">تم قفل المحادثات</h3>
+            <h3 className="text-lg font-bold text-destructive">{i18nText(t, "chat.pin.lockedTitle", "Chats are locked")}</h3>
             <p className="text-muted-foreground">
-              تم قفل المحادثات بسبب محاولات فاشلة متعددة
+              {i18nText(t, "chat.pin.lockedDescription", "Chats were locked due to multiple failed attempts")}
             </p>
             <div className="text-3xl font-mono font-bold text-destructive">{timeLeft}</div>
-            <p className="text-xs text-muted-foreground">يمكنك المحاولة مرة أخرى بعد انتهاء الوقت</p>
+            <p className="text-xs text-muted-foreground">{i18nText(t, "chat.pin.tryLater", "You can try again when the timer ends")}</p>
           </CardContent>
         </Card>
       </div>
@@ -119,8 +126,8 @@ export function PinLockScreen({ onUnlock, isLocked, lockedUntil, failedAttempts 
               <Shield className="h-4 w-4 text-white" />
             </div>
           </div>
-          <CardTitle className="text-xl">المحادثات مقفلة</CardTitle>
-          <CardDescription>أدخل رمز PIN للوصول إلى محادثاتك</CardDescription>
+          <CardTitle className="text-xl">{i18nText(t, "chat.pin.lockedTitle", "Chats are locked")}</CardTitle>
+          <CardDescription>{i18nText(t, "chat.pin.enterPinDescription", "Enter your PIN to unlock chats")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex justify-center gap-3 mb-6" dir="ltr">
@@ -151,7 +158,7 @@ export function PinLockScreen({ onUnlock, isLocked, lockedUntil, failedAttempts 
               <p className="text-sm text-destructive font-medium">{error}</p>
               {failedAttempts > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  محاولات فاشلة: {failedAttempts}
+                  {i18nText(t, "chat.pin.failedAttempts", "Failed attempts")}: {failedAttempts}
                 </p>
               )}
             </div>
@@ -160,7 +167,7 @@ export function PinLockScreen({ onUnlock, isLocked, lockedUntil, failedAttempts 
           <div className="text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <KeyRound className="h-3 w-3" />
-              محادثاتك محمية بالتشفير الطرفي E2EE
+              {i18nText(t, "chat.pin.e2eeNotice", "Your chats are protected with end-to-end encryption (E2EE)")}
             </p>
           </div>
         </CardContent>
@@ -186,6 +193,7 @@ interface PinSetupDialogProps {
 }
 
 export function PinSetupDialog({ open, onOpenChange, onSetup }: PinSetupDialogProps) {
+  const { t } = useI18n();
   const [step, setStep] = useState<"pin" | "confirm" | "password">("pin");
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
@@ -205,7 +213,7 @@ export function PinSetupDialog({ open, onOpenChange, onSetup }: PinSetupDialogPr
 
   const handlePinSubmit = () => {
     if (pin.length < 4 || pin.length > 6) {
-      setError("يجب أن يكون الرمز بين 4 و 6 أرقام");
+      setError(i18nText(t, "chat.pin.lengthError", "PIN must be 4 to 6 digits"));
       return;
     }
     setError(null);
@@ -214,7 +222,7 @@ export function PinSetupDialog({ open, onOpenChange, onSetup }: PinSetupDialogPr
 
   const handleConfirmSubmit = () => {
     if (confirmPin !== pin) {
-      setError("الرمز لا يتطابق");
+      setError(i18nText(t, "chat.pin.mismatch", "PIN does not match"));
       setConfirmPin("");
       return;
     }
@@ -224,18 +232,18 @@ export function PinSetupDialog({ open, onOpenChange, onSetup }: PinSetupDialogPr
 
   const handlePasswordSubmit = async () => {
     if (!password) {
-      setError("أدخل كلمة المرور");
+      setError(i18nText(t, "chat.pin.passwordRequired", "Enter account password"));
       return;
     }
     setLoading(true);
     setError(null);
-    
+
     const result = await onSetup(pin, password);
     if (result.success) {
       onOpenChange(false);
       reset();
     } else {
-      setError(result.error || "فشل في تعيين الرمز");
+      setError(result.error || i18nText(t, "chat.pin.setupFailed", "Failed to set PIN"));
     }
     setLoading(false);
   };
@@ -246,14 +254,14 @@ export function PinSetupDialog({ open, onOpenChange, onSetup }: PinSetupDialogPr
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Lock className="h-5 w-5" />
-            {step === "pin" && "تعيين رمز PIN"}
-            {step === "confirm" && "تأكيد الرمز"}
-            {step === "password" && "تأكيد كلمة المرور"}
+            {step === "pin" && i18nText(t, "chat.pin.setupTitle", "Set PIN")}
+            {step === "confirm" && i18nText(t, "chat.pin.confirmTitle", "Confirm PIN")}
+            {step === "password" && i18nText(t, "chat.pin.confirmPasswordTitle", "Confirm password")}
           </DialogTitle>
           <DialogDescription>
-            {step === "pin" && "أدخل رمز PIN من 4-6 أرقام لحماية محادثاتك"}
-            {step === "confirm" && "أعد إدخال الرمز للتأكيد"}
-            {step === "password" && "أدخل كلمة مرور حسابك للتأكيد"}
+            {step === "pin" && i18nText(t, "chat.pin.setupDescription", "Enter a 4-6 digit PIN to protect your chats")}
+            {step === "confirm" && i18nText(t, "chat.pin.reenterDescription", "Re-enter your PIN to confirm")}
+            {step === "password" && i18nText(t, "chat.pin.passwordDescription", "Enter your account password to confirm")}
           </DialogDescription>
         </DialogHeader>
 
@@ -263,7 +271,7 @@ export function PinSetupDialog({ open, onOpenChange, onSetup }: PinSetupDialogPr
               <Input
                 type="password"
                 inputMode="numeric"
-                placeholder="أدخل الرمز (4-6 أرقام)"
+                placeholder={i18nText(t, "chat.pin.enterPlaceholder", "Enter PIN (4-6 digits)")}
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 className="text-center text-xl tracking-widest"
@@ -271,7 +279,7 @@ export function PinSetupDialog({ open, onOpenChange, onSetup }: PinSetupDialogPr
                 autoFocus
               />
               <Button onClick={handlePinSubmit} className="w-full" disabled={pin.length < 4}>
-                التالي
+                {i18nText(t, "common.next", "Next")}
               </Button>
             </>
           )}
@@ -281,7 +289,7 @@ export function PinSetupDialog({ open, onOpenChange, onSetup }: PinSetupDialogPr
               <Input
                 type="password"
                 inputMode="numeric"
-                placeholder="أعد إدخال الرمز"
+                placeholder={i18nText(t, "chat.pin.confirmPlaceholder", "Re-enter PIN")}
                 value={confirmPin}
                 onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 className="text-center text-xl tracking-widest"
@@ -289,7 +297,7 @@ export function PinSetupDialog({ open, onOpenChange, onSetup }: PinSetupDialogPr
                 autoFocus
               />
               <Button onClick={handleConfirmSubmit} className="w-full" disabled={confirmPin.length < 4}>
-                تأكيد
+                {i18nText(t, "common.confirm", "Confirm")}
               </Button>
             </>
           )}
@@ -299,7 +307,7 @@ export function PinSetupDialog({ open, onOpenChange, onSetup }: PinSetupDialogPr
               <div className="relative">
                 <Input
                   type={showPassword ? "text" : "password"}
-                  placeholder="كلمة مرور الحساب"
+                  placeholder={i18nText(t, "auth.password", "Account password")}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoFocus
@@ -315,7 +323,7 @@ export function PinSetupDialog({ open, onOpenChange, onSetup }: PinSetupDialogPr
                 </Button>
               </div>
               <Button onClick={handlePasswordSubmit} className="w-full" disabled={loading || !password}>
-                {loading ? "جاري التعيين..." : "تعيين رمز PIN"}
+                {loading ? i18nText(t, "chat.pin.setting", "Setting...") : i18nText(t, "chat.pin.setupAction", "Set PIN")}
               </Button>
             </>
           )}

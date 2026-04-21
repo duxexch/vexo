@@ -1,14 +1,18 @@
 import type { Express, Response } from "express";
+import { WebSocket } from "ws";
 import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
-import { chatAutoDeletePermissions, chatMediaPermissions, chatMessages, projectCurrencyLedger, projectCurrencyWallets, systemConfig } from "@shared/schema";
+import { chatAutoDeletePermissions, chatMediaPermissions, chatMessages, projectCurrencyLedger, projectCurrencyWallets, systemConfig, users } from "@shared/schema";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import { sanitizePlainText } from "../../lib/input-security";
 import { isUserBlocked } from "../../lib/user-blocking";
 import { getRedisClient, isChatEnabled } from "../../lib/redis";
 import { resolveChatEnabledFlagFromDb } from "../../lib/chat-settings";
+import { isPinUnlocked } from "../chat-features/pin-lock";
+import { clients } from "../../websocket/shared";
+import { sendNotification } from "../../websocket/notifications";
 
 const CHAT_MESSAGE_DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
 const CHAT_MESSAGE_DEDUPE_PENDING_TTL_MS = 60 * 1000;
@@ -24,6 +28,25 @@ function normalizeClientMessageId(value: unknown): string | null {
   }
 
   return normalized.slice(0, 128);
+}
+
+function buildChatNotificationPreview(messageType: string, content: string): { en: string; ar: string } {
+  if (content && content.trim().length > 0) {
+    const preview = content.trim().slice(0, 120);
+    return { en: preview, ar: preview };
+  }
+
+  if (messageType === "image") {
+    return { en: "Sent a photo", ar: "أرسل صورة" };
+  }
+  if (messageType === "video") {
+    return { en: "Sent a video", ar: "أرسل فيديو" };
+  }
+  if (messageType === "voice") {
+    return { en: "Sent a voice message", ar: "أرسل رسالة صوتية" };
+  }
+
+  return { en: "Sent a message", ar: "أرسل رسالة" };
 }
 
 export function registerChatMessagingRoutes(app: Express): void {
@@ -140,6 +163,17 @@ export function registerChatMessagingRoutes(app: Express): void {
       if (!chatEnabled) {
         await releaseDedupeLock();
         return res.status(403).json({ error: "Chat is currently disabled" });
+      }
+
+      const [senderPinState] = await db.select({
+        chatPinEnabled: users.chatPinEnabled,
+      }).from(users).where(eq(users.id, senderId)).limit(1);
+      if (senderPinState?.chatPinEnabled && !isPinUnlocked(senderId)) {
+        await releaseDedupeLock();
+        return res.status(423).json({
+          error: "Chat PIN is locked. Unlock chat first.",
+          code: "chat_pin_locked",
+        });
       }
 
       if (!isMediaMessage && storedMessageType !== "text") {
@@ -311,6 +345,65 @@ export function registerChatMessagingRoutes(app: Express): void {
       if (dedupeKey) {
         await getRedisClient().set(dedupeKey, message.id, "PX", CHAT_MESSAGE_DEDUPE_TTL_MS).catch(() => { });
       }
+
+      const [sender, recipientVisibility] = await Promise.all([
+        db.select({
+          id: users.id,
+          username: users.username,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          avatarUrl: users.profilePicture,
+        }).from(users).where(eq(users.id, senderId)).limit(1),
+        db.select({
+          mutedUsers: users.mutedUsers,
+        }).from(users).where(eq(users.id, receiverId)).limit(1),
+      ]);
+
+      const senderRow = sender[0];
+      const recipientMutedUsers = recipientVisibility[0]?.mutedUsers || [];
+      const isMutedByRecipient = Array.isArray(recipientMutedUsers) && recipientMutedUsers.includes(senderId);
+
+      if (!isMutedByRecipient) {
+        const recipientSockets = clients.get(receiverId);
+        if (recipientSockets) {
+          const outgoing = JSON.stringify({
+            type: "new_chat_message",
+            data: {
+              ...message,
+              sender: senderRow,
+            },
+            clientMessageId,
+          });
+
+          recipientSockets.forEach((socket) => {
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.send(outgoing);
+            }
+          });
+        }
+      }
+
+      const senderDisplayName = senderRow?.firstName || senderRow?.username || "User";
+      const preview = buildChatNotificationPreview(storedMessageType, sanitizedContent);
+      const chatLinkUserId = encodeURIComponent(senderId);
+
+      void sendNotification(receiverId, {
+        type: "system",
+        priority: "normal",
+        title: `${senderDisplayName} sent you a message`,
+        titleAr: `رسالة جديدة من ${senderDisplayName}`,
+        message: preview.en,
+        messageAr: preview.ar,
+        link: `/chat?user=${chatLinkUserId}`,
+        metadata: JSON.stringify({
+          event: "chat_message",
+          senderId,
+          messageType: storedMessageType,
+          messageId: message.id,
+        }),
+      }).catch(() => {
+        // Notification failures should not break the REST fallback send flow.
+      });
 
       res.status(201).json(message);
     } catch (error: unknown) {

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useI18n } from '@/lib/i18n';
 import {
   CHAT_CALL_OP_QUEUE_UPDATED_EVENT,
   CHAT_CALL_QUEUED_END_PROCESSED_EVENT,
@@ -69,11 +70,17 @@ interface ChatCallPricingStatus {
   activeSession: ChatCallSession | null;
 }
 
+function i18nText(t: (key: string) => string, key: string, fallback: string): string {
+  const translated = t(key);
+  return translated === key ? fallback : translated;
+}
+
 export function useChatMedia() {
   const [permission, setPermission] = useState<MediaPermission | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const { t } = useI18n();
 
   const token = localStorage.getItem('pwm_token');
 
@@ -105,16 +112,16 @@ export function useChatMedia() {
         },
       });
       const data = await res.json();
-      
+
       if (res.ok) {
         await refreshStatus();
         return { success: true, newBalance: data.newBalance };
       }
       return { success: false, error: data.error || data.message };
     } catch {
-      return { success: false, error: 'خطأ في الاتصال' };
+      return { success: false, error: i18nText(t, 'chat.errors.connection', 'Connection error') };
     }
-  }, [token, refreshStatus]);
+  }, [token, refreshStatus, t]);
 
   const uploadMedia = useCallback(async (
     file: File,
@@ -123,7 +130,7 @@ export function useChatMedia() {
   ): Promise<{ success: boolean; url?: string; error?: string }> => {
     setUploading(true);
     setUploadProgress(0);
-    
+
     try {
       // Convert file to base64 for server
       const base64Data = await new Promise<string>((resolve, reject) => {
@@ -170,12 +177,15 @@ export function useChatMedia() {
       if (res.ok) {
         return { success: true, url: responseData.mediaUrl };
       }
-      return { success: false, error: responseData.error || responseData.message || 'فشل في رفع الملف' };
+      return {
+        success: false,
+        error: responseData.error || responseData.message || i18nText(t, 'chat.errors.uploadFailed', 'File upload failed'),
+      };
     } catch {
       setUploading(false);
-      return { success: false, error: 'خطأ في رفع الملف' };
+      return { success: false, error: i18nText(t, 'chat.errors.uploadError', 'Upload error') };
     }
-  }, [token]);
+  }, [token, t]);
 
   return {
     permission,
@@ -195,6 +205,7 @@ export function useChatMedia() {
 export function useChatAutoDelete() {
   const [permission, setPermission] = useState<AutoDeletePermission | null>(null);
   const [loading, setLoading] = useState(true);
+  const { t } = useI18n();
 
   const token = localStorage.getItem('pwm_token');
 
@@ -226,16 +237,16 @@ export function useChatAutoDelete() {
         },
       });
       const data = await res.json();
-      
+
       if (res.ok) {
         await refreshStatus();
         return { success: true, newBalance: data.newBalance };
       }
       return { success: false, error: data.error || data.message };
     } catch {
-      return { success: false, error: 'خطأ في الاتصال' };
+      return { success: false, error: i18nText(t, 'chat.errors.connection', 'Connection error') };
     }
-  }, [token, refreshStatus]);
+  }, [token, refreshStatus, t]);
 
   const updateSettings = useCallback(async (deleteAfterMinutes: number): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -248,16 +259,16 @@ export function useChatAutoDelete() {
         body: JSON.stringify({ deleteAfterMinutes }),
       });
       const data = await res.json();
-      
+
       if (res.ok) {
         await refreshStatus();
         return { success: true };
       }
       return { success: false, error: data.error || data.message };
     } catch {
-      return { success: false, error: 'خطأ في الاتصال' };
+      return { success: false, error: i18nText(t, 'chat.errors.connection', 'Connection error') };
     }
-  }, [token, refreshStatus]);
+  }, [token, refreshStatus, t]);
 
   return {
     permission,
@@ -278,6 +289,7 @@ export function useChatCallPricing() {
   const [loading, setLoading] = useState(true);
   const [endingSession, setEndingSession] = useState(false);
   const [queuedOperationCount, setQueuedOperationCount] = useState(0);
+  const { t } = useI18n();
   const callStatusEventName = 'vex:chat-call-status-changed';
   const processingQueueRef = useRef(false);
 
@@ -334,14 +346,14 @@ export function useChatCallPricing() {
 
       return {
         success: false,
-        error: String((data as Record<string, unknown>).error || (data as Record<string, unknown>).message || 'فشل بدء المكالمة'),
+        error: String((data as Record<string, unknown>).error || (data as Record<string, unknown>).message || i18nText(t, 'chat.errors.startCallFailed', 'Failed to start call')),
         retryable: isRetryableStatusCode(res.status),
         statusCode: res.status,
       };
     } catch {
-      return { success: false, error: 'خطأ في الاتصال', retryable: true };
+      return { success: false, error: i18nText(t, 'chat.errors.connection', 'Connection error'), retryable: true };
     }
-  }, [isRetryableStatusCode, token]);
+  }, [isRetryableStatusCode, token, t]);
 
   const requestEndCallSession = useCallback(async (
     sessionId: string,
@@ -371,14 +383,14 @@ export function useChatCallPricing() {
 
       return {
         success: false,
-        error: String((data as Record<string, unknown>).error || (data as Record<string, unknown>).message || 'فشل إنهاء المكالمة'),
+        error: String((data as Record<string, unknown>).error || (data as Record<string, unknown>).message || i18nText(t, 'chat.errors.endCallFailed', 'Failed to end call')),
         retryable: isRetryableStatusCode(res.status),
         statusCode: res.status,
       };
     } catch {
-      return { success: false, error: 'خطأ في الاتصال', retryable: true };
+      return { success: false, error: i18nText(t, 'chat.errors.connection', 'Connection error'), retryable: true };
     }
-  }, [isRetryableStatusCode, token]);
+  }, [isRetryableStatusCode, token, t]);
 
   const refreshStatus = useCallback(async () => {
     try {

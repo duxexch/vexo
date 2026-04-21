@@ -30,7 +30,7 @@ export function useChatPin() {
       if (!data.pinEnabled) {
         setIsUnlocked(true);
       }
-      
+
       // Check for saved unlock token
       const saved = sessionStorage.getItem('chat_unlock_token');
       const savedExpiry = sessionStorage.getItem('chat_unlock_expiry');
@@ -58,7 +58,7 @@ export function useChatPin() {
         body: JSON.stringify({ pin, password }),
       });
       const data = await res.json();
-      
+
       if (res.ok) {
         await refreshStatus();
         return { success: true };
@@ -78,20 +78,22 @@ export function useChatPin() {
         body: JSON.stringify({ pin }),
       });
       const data = await res.json();
-      
-      if (res.ok && data.token) {
-        setUnlockToken(data.token);
+      const returnedToken = data.token || data.unlockToken;
+      const remainingAttempts = data.remainingAttempts ?? data.attemptsRemaining;
+
+      if (res.ok && returnedToken) {
+        setUnlockToken(returnedToken);
         setIsUnlocked(true);
         // Save to session (30 minutes)
-        sessionStorage.setItem('chat_unlock_token', data.token);
+        sessionStorage.setItem('chat_unlock_token', returnedToken);
         sessionStorage.setItem('chat_unlock_expiry', String(Date.now() + 30 * 60 * 1000));
         return { success: true };
       }
-      
-      return { 
-        success: false, 
+
+      return {
+        success: false,
         error: data.message || 'رمز خاطئ',
-        remainingAttempts: data.remainingAttempts,
+        remainingAttempts,
       };
     } catch {
       return { success: false, error: 'خطأ في الاتصال' };
@@ -104,10 +106,10 @@ export function useChatPin() {
       const res = await fetch('/api/chat/pin/change', {
         method: 'PUT',
         headers: headers(),
-        body: JSON.stringify({ currentPin, newPin }),
+        body: JSON.stringify({ oldPin: currentPin, currentPin, newPin }),
       });
       const data = await res.json();
-      
+
       if (res.ok) return { success: true };
       return { success: false, error: data.message || 'فشل في تغيير الرمز' };
     } catch {
@@ -124,7 +126,7 @@ export function useChatPin() {
         body: JSON.stringify({ password }),
       });
       const data = await res.json();
-      
+
       if (res.ok) {
         setIsUnlocked(true);
         sessionStorage.removeItem('chat_unlock_token');

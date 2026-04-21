@@ -3302,7 +3302,7 @@ export default function ChallengeWatchPage() {
                       }
                     }}
                     placeholder={t("chat.typeMessage")}
-                    maxLength={300}
+                    maxLength={500}
                   />
                   <Button
                     className="vex-arcade-btn min-h-[44px]"
