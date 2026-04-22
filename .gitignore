@@ -43,3 +43,5 @@ dist/public/downloads/*.apk
 dist/public/downloads/*.aab
 ios/App/build/ts_errors.txt
 Brackeys.zip/
+
+.fake

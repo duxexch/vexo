@@ -96,7 +96,8 @@
         "the0807.uv-toolkit",
         "ms-vscode-remote.remote-wsl",
         "dotjoshjohnson.xml",
-        "redhat.vscode-yaml"
+        "redhat.vscode-yaml",
+        "ionide.ionide-fsharp"
     ],
     "unwantedRecommendations": [
         "rickyang.ocopilot",
