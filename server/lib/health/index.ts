@@ -3,8 +3,10 @@ export { THRESHOLDS } from './types';
 export {
     trackError,
     trackDominoMoveError,
+    trackReplayShadowCheck,
     getRecentErrorCount,
     getDominoMoveErrorTelemetry,
+    getReplayShadowTelemetry,
     checkDatabaseHealth,
     getSystemMetrics,
     getServiceHealth,

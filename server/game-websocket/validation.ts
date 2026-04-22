@@ -116,6 +116,7 @@ const gameWebSocketMessageSchema = z.discriminatedUnion("type", [
         payload: z.object({
             move: moveSchema,
             expectedTurn: z.number().int().nonnegative().optional(),
+            idempotencyKey: shortStringSchema.optional(),
         }),
     }),
     z.object({
@@ -170,7 +171,7 @@ export type ValidatedGameMessage =
     | { type: "ping"; payload?: unknown }
     | { type: "join_game"; payload: { sessionId: string } }
     | { type: "spectate"; payload: { sessionId: string } }
-    | { type: "make_move"; payload: { move: MoveData; expectedTurn?: number } }
+    | { type: "make_move"; payload: { move: MoveData; expectedTurn?: number; idempotencyKey?: string } }
     | { type: "chat"; payload: { message: string } }
     | {
         type: "send_gift";

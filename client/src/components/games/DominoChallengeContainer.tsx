@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { DominoBoard } from "@/components/games/DominoBoard";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 export interface DominoBoardMove {
@@ -79,13 +80,19 @@ export function DominoChallengeContainer({
             <div className="pointer-events-none absolute -top-16 -left-14 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-20 -right-16 h-44 w-44 rounded-full bg-amber-500/10 blur-3xl" />
 
-            <div className={`relative ${isCompactViewport ? "space-y-2" : "space-y-3"}`}>
+            <div className={cn(
+                "relative mx-auto grid w-full max-w-5xl grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-3",
+                isCompactViewport ? "items-start" : "items-stretch",
+            )}>
 
                 <motion.div
                     initial={{ opacity: 0, y: 12, scale: 0.995 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ duration: 0.3, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
-                    className="domino-board-shell rounded-2xl border border-border/45 bg-background/55 p-0.5 backdrop-blur-sm"
+                    className={cn(
+                        "domino-board-shell rounded-2xl border border-border/45 bg-background/55 p-0.5 backdrop-blur-sm",
+                        dominoResyncing || dominoMoveError ? "lg:col-span-1" : "lg:col-span-2",
+                    )}
                 >
                     <DominoBoard
                         gameState={boardState}
@@ -100,7 +107,7 @@ export function DominoChallengeContainer({
                 </motion.div>
 
                 {(dominoResyncing || dominoMoveError) && (
-                    <div className="w-full max-w-lg mx-auto space-y-2">
+                    <div className="w-full max-w-lg mx-auto space-y-2 lg:max-w-none lg:self-start">
                         {dominoResyncing && (
                             <motion.div
                                 initial={{ opacity: 0, y: 6 }}

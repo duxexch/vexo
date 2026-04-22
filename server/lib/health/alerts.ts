@@ -139,6 +139,41 @@ export function generateAlerts(
     });
   }
 
+  // Replay shadow drift alerts (event-replay parity signal)
+  const replayDriftsPerMinute = services.replayShadow.driftCountLastMinute;
+  if (replayDriftsPerMinute >= THRESHOLDS.replayShadowDriftCritical) {
+    alerts.push({
+      level: 'critical',
+      component: 'replay-shadow-drift',
+      message: `${replayDriftsPerMinute} replay shadow drifts in last minute`,
+      timestamp,
+    });
+  } else if (replayDriftsPerMinute >= THRESHOLDS.replayShadowDriftWarning) {
+    alerts.push({
+      level: 'warning',
+      component: 'replay-shadow-drift',
+      message: `${replayDriftsPerMinute} replay shadow drifts in last minute`,
+      timestamp,
+    });
+  }
+
+  const replayDriftRate = services.replayShadow.driftRateLastMinute;
+  if (replayDriftRate >= THRESHOLDS.replayShadowDriftRateCritical) {
+    alerts.push({
+      level: 'critical',
+      component: 'replay-shadow-drift-rate',
+      message: `Replay drift rate ${replayDriftRate}% exceeds critical threshold`,
+      timestamp,
+    });
+  } else if (replayDriftRate >= THRESHOLDS.replayShadowDriftRateWarning) {
+    alerts.push({
+      level: 'warning',
+      component: 'replay-shadow-drift-rate',
+      message: `Replay drift rate ${replayDriftRate}% is elevated`,
+      timestamp,
+    });
+  }
+
   return alerts;
 }
 

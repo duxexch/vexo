@@ -44,6 +44,8 @@
     "security:smoke:domino-e2e": "node scripts/smoke-challenge-domino-e2e.mjs",
     "quality:smoke:challenge-reconnect-sla": "tsx scripts/smoke-challenge-reconnect-sla.ts",
     "quality:smoke:challenge-gameplay-regression": "tsx scripts/smoke-challenge-gameplay-regression.ts",
+    "quality:smoke:domino-layout-snapshots": "tsx scripts/smoke-domino-layout-snapshots.ts",
+    "quality:smoke:domino-layout-snapshots:update": "tsx scripts/smoke-domino-layout-snapshots.ts --update",
     "quality:smoke:sam9-solo-e2e": "tsx scripts/smoke-sam9-solo-e2e.ts",
     "quality:perf:domino-latency": "tsx scripts/smoke-domino-load-latency.ts --profile=latency",
     "quality:perf:domino-load": "tsx scripts/smoke-domino-load-latency.ts --profile=load",

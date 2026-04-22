@@ -41,6 +41,91 @@ interface DominoPathPlacement extends BoardRowEntry {
   x: number;
   y: number;
   renderRotation: number;
+  layoutScale: number;
+}
+
+export interface DominoRect {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+interface DominoPlacementResult {
+  placements: DominoPathPlacement[];
+  layoutScale: number;
+  telemetry: DominoLayoutTelemetry;
+}
+
+export interface DominoLayoutTelemetry {
+  tilesCount: number;
+  iterationsUsed: number;
+  shrinkSteps: number;
+  failedAttempts: number;
+  overflowed: boolean;
+}
+
+const LAYOUT_QUANTIZATION = 1000;
+
+const shouldLogDominoLayoutTelemetry =
+  typeof window !== "undefined"
+  && (window as Window & { __VEX_DEBUG_DOMINO_LAYOUT__?: boolean }).__VEX_DEBUG_DOMINO_LAYOUT__ === true;
+
+class LayoutOverflowError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LayoutOverflowError";
+  }
+}
+
+function createBaseTelemetry(tilesCount: number): DominoLayoutTelemetry {
+  return {
+    tilesCount,
+    iterationsUsed: 0,
+    shrinkSteps: 0,
+    failedAttempts: 0,
+    overflowed: false,
+  };
+}
+
+function serializeLayoutTilesForHash(tiles: Array<{ key: string; x: number; y: number; renderRotation: number; layoutScale: number }>): string {
+  return JSON.stringify(tiles);
+}
+
+function fnv1aHash(input: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+
+  return `fnv1a-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export async function hashDominoLayoutTiles(
+  tiles: Array<{ key: string; x: number; y: number; renderRotation: number; layoutScale: number }>,
+): Promise<string> {
+  const serialized = serializeLayoutTilesForHash(tiles);
+
+  if (typeof TextEncoder === "undefined") {
+    return fnv1aHash(serialized);
+  }
+
+  const encoded = new TextEncoder().encode(serialized);
+  if (globalThis.crypto?.subtle) {
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", encoded);
+    return bytesToHex(new Uint8Array(digest));
+  }
+
+  return fnv1aHash(serialized);
+}
+
+export async function hashDominoLayoutOutput(output: LayoutOutput): Promise<string> {
+  return hashDominoLayoutTiles(output.tiles);
 }
 
 interface GameState {
@@ -349,15 +434,244 @@ function getDirectionSign(direction: DominoDirection): number {
   return direction === "left" || direction === "up" ? -1 : 1;
 }
 
-function getTileFootprint(renderRotation: number, compact: boolean) {
+function getTileFootprint(renderRotation: number, compact: boolean, layoutScale = 1) {
   const long = compact ? 56 : 80;
   const short = compact ? 28 : 40;
   const normalizedRotation = ((renderRotation % 360) + 360) % 360;
   const isSideways = normalizedRotation === 90 || normalizedRotation === 270;
   return {
-    halfWidth: (isSideways ? long : short) / 2,
-    halfHeight: (isSideways ? short : long) / 2,
+    halfWidth: ((isSideways ? long : short) * layoutScale) / 2,
+    halfHeight: ((isSideways ? short : long) * layoutScale) / 2,
   };
+}
+
+function getPlacementRect(
+  x: number,
+  y: number,
+  renderRotation: number,
+  compact: boolean,
+  layoutScale: number,
+): DominoRect {
+  const footprint = getTileFootprint(renderRotation, compact, layoutScale);
+  return {
+    left: x - footprint.halfWidth,
+    right: x + footprint.halfWidth,
+    top: y - footprint.halfHeight,
+    bottom: y + footprint.halfHeight,
+  };
+}
+
+function computeLayoutEpsilon(compact: boolean, layoutScale: number): number {
+  const tileLong = compact ? 56 : 80;
+  return Math.max(0.5, 0.01 * tileLong * layoutScale);
+}
+
+function isRectWithinBounds(rect: DominoRect, bounds: DominoRect, epsilon: number): boolean {
+  return (
+    rect.left >= bounds.left - epsilon
+    && rect.right <= bounds.right + epsilon
+    && rect.top >= bounds.top - epsilon
+    && rect.bottom <= bounds.bottom + epsilon
+  );
+}
+
+function isRectIntersectingAny(rect: DominoRect, placedRects: DominoRect[], epsilon: number): boolean {
+  return placedRects.some((placedRect) => !(
+    rect.right <= placedRect.left + epsilon
+    || rect.left >= placedRect.right - epsilon
+    || rect.bottom <= placedRect.top + epsilon
+    || rect.top >= placedRect.bottom - epsilon
+  ));
+}
+
+function unionDominoRect(a: DominoRect | null, b: DominoRect): DominoRect {
+  if (!a) {
+    return b;
+  }
+
+  return {
+    left: Math.min(a.left, b.left),
+    right: Math.max(a.right, b.right),
+    top: Math.min(a.top, b.top),
+    bottom: Math.max(a.bottom, b.bottom),
+  };
+}
+
+function quantizeCoordinate(value: number): number {
+  return Math.round(value * LAYOUT_QUANTIZATION) / LAYOUT_QUANTIZATION;
+}
+
+function quantizeLayoutScale(scale: number): number {
+  return Math.round(scale * LAYOUT_QUANTIZATION) / LAYOUT_QUANTIZATION;
+}
+
+function getDirectionPriority(side: "left" | "right", verticalStart: "up" | "down"): DominoDirection[] {
+  const primaryHorizontal: DominoDirection = side === "left" ? "left" : "right";
+  const secondaryHorizontal: DominoDirection = side === "left" ? "right" : "left";
+  const secondaryVertical: DominoDirection = verticalStart === "up" ? "down" : "up";
+  return [primaryHorizontal, verticalStart, secondaryHorizontal, secondaryVertical];
+}
+
+function getDirectionalSpaceScore(bounds: DominoRect, occupiedBBox: DominoRect | null, direction: DominoDirection): number {
+  if (!occupiedBBox) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  switch (direction) {
+    case "right":
+      return bounds.right - occupiedBBox.right;
+    case "left":
+      return occupiedBBox.left - bounds.left;
+    case "down":
+      return bounds.bottom - occupiedBBox.bottom;
+    case "up":
+      return occupiedBBox.top - bounds.top;
+  }
+}
+
+function getRectDistance(a: DominoRect, b: DominoRect): number {
+  const dx = Math.max(0, b.left - a.right, a.left - b.right);
+  const dy = Math.max(0, b.top - a.bottom, a.top - b.bottom);
+  return Math.hypot(dx, dy);
+}
+
+function getProximityPenalty(rect: DominoRect, occupiedBBox: DominoRect | null, compact: boolean, layoutScale: number): number {
+  if (!occupiedBBox) {
+    return 0;
+  }
+
+  const threshold = (compact ? 56 : 80) * layoutScale * 1.2;
+  const distance = getRectDistance(rect, occupiedBBox);
+  if (distance >= threshold) {
+    return 0;
+  }
+
+  return (threshold - distance) / Math.max(threshold, 1);
+}
+
+function placeDominoEntriesAtScale(
+  entries: BoardRowEntry[],
+  side: "left" | "right",
+  compact: boolean,
+  anchorRenderRotation: number,
+  safeBounds: DominoRect,
+  verticalStart: "up" | "down",
+  layoutScale: number,
+  iterationGuard: { count: number; max: number },
+  telemetry: DominoLayoutTelemetry,
+): DominoPathPlacement[] | null {
+  if (entries.length === 0) {
+    return [];
+  }
+
+  const seamSpacing = (compact ? 0 : 2) * layoutScale;
+  const directionPriority = getDirectionPriority(side, verticalStart);
+  const epsilon = computeLayoutEpsilon(compact, layoutScale);
+  const continuityWeight = 0.1;
+
+  const anchorRect = getPlacementRect(0, 0, anchorRenderRotation, compact, layoutScale);
+  const placedRects: DominoRect[] = [anchorRect];
+  let occupiedBBox: DominoRect | null = anchorRect;
+
+  let previousX = 0;
+  let previousY = 0;
+  let previousRotation = anchorRenderRotation;
+  let previousDirection: DominoDirection = side === "left" ? "left" : "right";
+
+  const placements: DominoPathPlacement[] = [];
+
+  for (const entry of entries) {
+    const previousFootprint = getTileFootprint(previousRotation, compact, layoutScale);
+    const candidates: Array<{
+      direction: DominoDirection;
+      x: number;
+      y: number;
+      renderRotation: number;
+      rect: DominoRect;
+      score: number;
+    }> = [];
+
+    for (const direction of directionPriority) {
+      iterationGuard.count += 1;
+      telemetry.iterationsUsed += 1;
+      if (iterationGuard.count > iterationGuard.max) {
+        throw new LayoutOverflowError(
+          `Domino layout exceeded iteration budget (${iterationGuard.max}).`,
+        );
+      }
+
+      const renderRotation = resolvePlacementRotation(entry.item.tile, direction, previousRotation);
+      const nextFootprint = getTileFootprint(renderRotation, compact, layoutScale);
+      const delta = getConnectedTileDelta(
+        previousDirection,
+        direction,
+        previousFootprint,
+        nextFootprint,
+        seamSpacing,
+      );
+
+      const x = quantizeCoordinate(previousX + delta.dx);
+      const y = quantizeCoordinate(previousY + delta.dy);
+      const rect = getPlacementRect(x, y, renderRotation, compact, layoutScale);
+
+      if (!isRectWithinBounds(rect, safeBounds, epsilon)) {
+        telemetry.failedAttempts += 1;
+        continue;
+      }
+
+      if (isRectIntersectingAny(rect, placedRects, epsilon)) {
+        telemetry.failedAttempts += 1;
+        continue;
+      }
+
+      const projectedBBox = unionDominoRect(occupiedBBox, rect);
+      const spaceScore = getDirectionalSpaceScore(safeBounds, projectedBBox, direction);
+      const penalty = getProximityPenalty(rect, occupiedBBox, compact, layoutScale);
+      const continuityBonus = previousDirection === direction ? continuityWeight : 0;
+      const score = spaceScore - penalty + continuityBonus;
+
+      candidates.push({
+        direction,
+        x,
+        y,
+        renderRotation,
+        rect,
+        score,
+      });
+    }
+
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    candidates.sort((a, b) => {
+      const aScore = Number.isFinite(a.score) ? a.score : Number.MAX_SAFE_INTEGER;
+      const bScore = Number.isFinite(b.score) ? b.score : Number.MAX_SAFE_INTEGER;
+      if (bScore !== aScore) {
+        return bScore - aScore;
+      }
+
+      return directionPriority.indexOf(a.direction) - directionPriority.indexOf(b.direction);
+    });
+
+    const chosen = candidates[0];
+    placements.push({
+      ...entry,
+      x: chosen.x,
+      y: chosen.y,
+      renderRotation: chosen.renderRotation,
+      layoutScale,
+    });
+
+    previousX = chosen.x;
+    previousY = chosen.y;
+    previousRotation = chosen.renderRotation;
+    previousDirection = chosen.direction;
+    occupiedBBox = unionDominoRect(occupiedBBox, chosen.rect);
+    placedRects.push(chosen.rect);
+  }
+
+  return placements;
 }
 
 function getConnectedTileDelta(
@@ -396,73 +710,229 @@ function getConnectedTileDelta(
   };
 }
 
+// Robust, standards-compliant domino snake arrangement
 function buildDominoPlacements(
   entries: BoardRowEntry[],
   side: "left" | "right",
   compact: boolean,
   anchorRenderRotation: number,
-  horizontalRunOverride: number,
+  safeBounds: DominoRect,
   verticalStart: "up" | "down",
-): DominoPathPlacement[] {
-  if (entries.length === 0) return [];
+  forcedScale?: number,
+): DominoPlacementResult {
+  const telemetry = createBaseTelemetry(entries.length);
 
-  const seamSpacing = 0;
-  const minHorizontalRun = compact ? 2 : 3;
-  const horizontalRun = Math.max(minHorizontalRun, horizontalRunOverride);
-  const verticalRun = 1;
-  const oppositeVertical: "up" | "down" = verticalStart === "up" ? "down" : "up";
-  const directions = side === "left"
-    ? (["left", verticalStart, "left", oppositeVertical] as const)
-    : (["right", verticalStart, "right", oppositeVertical] as const);
+  if (entries.length === 0) {
+    return { placements: [], layoutScale: forcedScale ?? 1, telemetry };
+  }
 
-  const firstDirection = directions[0];
-  const firstRotation = resolvePlacementRotation(entries[0].item.tile, firstDirection, anchorRenderRotation);
-  const anchorFootprint = getTileFootprint(anchorRenderRotation, compact);
-  const firstFootprint = getTileFootprint(firstRotation, compact);
-  const firstGap = anchorFootprint.halfWidth + firstFootprint.halfWidth + seamSpacing;
+  const maxLayoutEntries = 300;
+  const maxShrinkSteps = 10;
+  const minLayoutScale = 0.38;
+  const shrinkFactor = 0.92;
 
-  let x = side === "left" ? -firstGap : firstGap;
-  let y = 0;
-  let directionIndex = 0;
-  let segmentRemaining = horizontalRun;
-  let previousRotation = anchorRenderRotation;
+  if (entries.length > maxLayoutEntries) {
+    throw new LayoutOverflowError(
+      `Domino layout tile count ${entries.length} exceeded max supported ${maxLayoutEntries}.`,
+    );
+  }
 
-  return entries.map((entry, index) => {
-    const direction = directions[directionIndex % directions.length];
-    const nextDirection = segmentRemaining === 1
-      ? directions[(directionIndex + 1) % directions.length]
-      : direction;
-    const renderRotation = resolvePlacementRotation(entry.item.tile, direction, previousRotation);
+  const maxDirectionAttempts = getDirectionPriority(side, verticalStart).length;
+  const maxTotalIterations = Math.max(
+    1,
+    entries.length * maxDirectionAttempts * (maxShrinkSteps + 1),
+  );
+  const iterationGuard = {
+    count: 0,
+    max: maxTotalIterations,
+  };
 
-    const placement: DominoPathPlacement = {
-      ...entry,
-      x,
-      y,
-      renderRotation,
+  const scalesToTry = typeof forcedScale === "number"
+    ? [quantizeLayoutScale(Math.max(minLayoutScale, forcedScale))]
+    : Array.from({ length: maxShrinkSteps + 1 }, (_, index) => {
+      const rawScale = Math.pow(shrinkFactor, index);
+      return quantizeLayoutScale(Math.max(minLayoutScale, rawScale));
+    });
+
+  for (let scaleIndex = 0; scaleIndex < scalesToTry.length; scaleIndex += 1) {
+    const scale = scalesToTry[scaleIndex];
+    const placements = placeDominoEntriesAtScale(
+      entries,
+      side,
+      compact,
+      anchorRenderRotation,
+      safeBounds,
+      verticalStart,
+      scale,
+      iterationGuard,
+      telemetry,
+    );
+
+    if (placements) {
+      return {
+        placements,
+        layoutScale: scale,
+        telemetry,
+      };
+    }
+
+    const hasNextScale = scaleIndex < scalesToTry.length - 1;
+    if (hasNextScale) {
+      telemetry.shrinkSteps += 1;
+    }
+  }
+
+  return {
+    placements: [],
+    layoutScale: scalesToTry[scalesToTry.length - 1] ?? minLayoutScale,
+    telemetry,
+  };
+}
+
+function safelyBuildDominoPlacements(
+  entries: BoardRowEntry[],
+  side: "left" | "right",
+  compact: boolean,
+  anchorRenderRotation: number,
+  safeBounds: DominoRect,
+  verticalStart: "up" | "down",
+  forcedScale?: number,
+): DominoPlacementResult {
+  try {
+    return buildDominoPlacements(
+      entries,
+      side,
+      compact,
+      anchorRenderRotation,
+      safeBounds,
+      verticalStart,
+      forcedScale,
+    );
+  } catch (error) {
+    const telemetry = createBaseTelemetry(entries.length);
+    telemetry.overflowed = true;
+
+    if (error instanceof LayoutOverflowError) {
+      console.error("[DominoLayout]", error.message);
+    } else {
+      console.error("[DominoLayout] Unexpected solver error", error);
+    }
+
+    return {
+      placements: [],
+      layoutScale: forcedScale ?? 1,
+      telemetry,
     };
-    previousRotation = renderRotation;
+  }
+}
 
-    const nextEntry = entries[index + 1];
-    if (nextEntry) {
-      const nextRenderRotation = resolvePlacementRotation(nextEntry.item.tile, nextDirection, renderRotation);
-      const currentFootprint = getTileFootprint(renderRotation, compact);
-      const nextFootprint = getTileFootprint(nextRenderRotation, compact);
-      const delta = getConnectedTileDelta(direction, nextDirection, currentFootprint, nextFootprint, seamSpacing);
-      x += delta.dx;
-      y += delta.dy;
-    }
+export interface DominoLayoutSnapshotTile {
+  left: number;
+  right: number;
+  id?: string;
+}
 
-    segmentRemaining -= 1;
-    if (segmentRemaining <= 0) {
-      directionIndex += 1;
-      const upcomingDirection = directions[directionIndex % directions.length];
-      segmentRemaining = upcomingDirection === "left" || upcomingDirection === "right"
-        ? horizontalRun
-        : verticalRun;
-    }
+export interface LayoutInput {
+  chain: DominoLayoutSnapshotTile[];
+  viewport: {
+    side: "left" | "right";
+    compact: boolean;
+    anchorRenderRotation: number;
+    verticalStart: "up" | "down";
+  };
+  safeArea: DominoRect;
+  forcedScale?: number;
+}
 
-    return placement;
+export interface LayoutOutput {
+  tiles: Array<{
+    key: string;
+    x: number;
+    y: number;
+    renderRotation: number;
+    layoutScale: number;
+  }>;
+  scale: number;
+  telemetry: DominoLayoutTelemetry;
+}
+
+export interface DominoLayoutSnapshotInput {
+  side: "left" | "right";
+  compact: boolean;
+  anchorRenderRotation: number;
+  verticalStart: "up" | "down";
+  safeBounds: DominoRect;
+  forcedScale?: number;
+  tiles: DominoLayoutSnapshotTile[];
+}
+
+export interface DominoLayoutSnapshotOutput {
+  layoutScale: number;
+  placements: Array<{
+    key: string;
+    x: number;
+    y: number;
+    renderRotation: number;
+    layoutScale: number;
+  }>;
+  telemetry: DominoLayoutTelemetry;
+}
+
+export function solveDominoLayout(input: LayoutInput): LayoutOutput {
+  const entries: BoardRowEntry[] = input.chain.map((tile, index) => ({
+    item: {
+      tile: {
+        left: tile.left,
+        right: tile.right,
+        id: tile.id,
+      },
+      rotation: tile.left === tile.right ? 0 : 90,
+    },
+    index,
+    sequenceIndex: index,
+  }));
+
+  const result = safelyBuildDominoPlacements(
+    entries,
+    input.viewport.side,
+    input.viewport.compact,
+    input.viewport.anchorRenderRotation,
+    input.safeArea,
+    input.viewport.verticalStart,
+    input.forcedScale,
+  );
+
+  return {
+    scale: result.layoutScale,
+    tiles: result.placements.map((placement) => ({
+      key: tileSignature(placement.item.tile),
+      x: quantizeCoordinate(placement.x),
+      y: quantizeCoordinate(placement.y),
+      renderRotation: placement.renderRotation,
+      layoutScale: placement.layoutScale,
+    })),
+    telemetry: result.telemetry,
+  };
+}
+
+export function buildDominoLayoutSnapshot(input: DominoLayoutSnapshotInput): DominoLayoutSnapshotOutput {
+  const result = solveDominoLayout({
+    chain: input.tiles,
+    viewport: {
+      side: input.side,
+      compact: input.compact,
+      anchorRenderRotation: input.anchorRenderRotation,
+      verticalStart: input.verticalStart,
+    },
+    safeArea: input.safeBounds,
+    forcedScale: input.forcedScale,
   });
+
+  return {
+    layoutScale: result.scale,
+    placements: result.tiles,
+    telemetry: result.telemetry,
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -470,7 +940,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function getDominoPlacementBounds(
-  placements: Array<{ x: number; y: number; renderRotation: number }>,
+  placements: Array<{ x: number; y: number; renderRotation: number; layoutScale?: number }>,
   compact: boolean,
 ) {
   if (placements.length === 0) {
@@ -483,7 +953,11 @@ function getDominoPlacementBounds(
   let maxY = Number.NEGATIVE_INFINITY;
 
   for (const placement of placements) {
-    const { halfWidth, halfHeight } = getTileFootprint(placement.renderRotation, compact);
+    const { halfWidth, halfHeight } = getTileFootprint(
+      placement.renderRotation,
+      compact,
+      placement.layoutScale ?? 1,
+    );
 
     minX = Math.min(minX, placement.x - halfWidth);
     maxX = Math.max(maxX, placement.x + halfWidth);
@@ -985,6 +1459,14 @@ export function DominoBoard({
     () => state.boardTiles.map((item, index) => ({ item, index, sequenceIndex: index })),
     [state.boardTiles],
   );
+  const leftEntries = useMemo(
+    () => (anchorTileIndex > 0 ? [...boardEntries.slice(0, anchorTileIndex)].reverse() : []),
+    [boardEntries, anchorTileIndex],
+  );
+  const rightEntries = useMemo(
+    () => (anchorTileIndex >= 0 ? boardEntries.slice(anchorTileIndex + 1) : []),
+    [boardEntries, anchorTileIndex],
+  );
   const anchorEntry = useMemo(
     () => (anchorTileIndex >= 0 ? boardEntries[anchorTileIndex] : undefined),
     [boardEntries, anchorTileIndex],
@@ -1005,28 +1487,38 @@ export function DominoBoard({
     return resolveBoardRenderRotation(anchorEntry.item.tile, anchorEntry.item.rotation);
   }, [anchorEntry, boardLaneSize.width, boardLaneSize.height, isCompactMobile]);
 
-  const laneWidthBucket = useMemo(() => {
+  const laneMetrics = useMemo(() => {
     const laneWidth = boardLaneSize.width > 0
       ? boardLaneSize.width
       : (isCompactMobile ? 320 : 760);
-    const bucketStep = isCompactMobile ? 24 : 32;
-    return Math.max(bucketStep, Math.floor(laneWidth / bucketStep) * bucketStep);
-  }, [boardLaneSize.width, isCompactMobile]);
+    const laneHeight = boardLaneSize.height > 0
+      ? boardLaneSize.height
+      : (isCompactMobile ? 360 : 520);
+    return { laneWidth, laneHeight };
+  }, [boardLaneSize.width, boardLaneSize.height, isCompactMobile]);
 
-  const snakeHorizontalRun = useMemo(() => {
-    const laneWidth = boardLaneSize.width > 0
-      ? laneWidthBucket
-      : (isCompactMobile ? 320 : 760);
-    const tileLongSide = isCompactMobile ? 56 : 80;
-    const seamSpacing = 0;
-    const wrapSafetyInset = isCompactMobile
-      ? Math.max(96, Math.floor(laneWidth * 0.22))
-      : Math.max(136, Math.floor(laneWidth * 0.20));
-    const rawRun = Math.floor((laneWidth - wrapSafetyInset) / Math.max(1, tileLongSide + seamSpacing));
-    const minRun = isCompactMobile ? 2 : 3;
-    const maxRun = isCompactMobile ? 4 : 6;
-    return Math.max(minRun, Math.min(maxRun, rawRun));
-  }, [boardLaneSize.width, laneWidthBucket, isCompactMobile]);
+  const sideSafeBounds = useMemo<{ left: DominoRect; right: DominoRect }>(() => {
+    const horizontalInset = isCompactMobile ? 20 : 28;
+    const verticalInset = isCompactMobile ? 22 : 30;
+    const centerGap = isCompactMobile ? 18 : 24;
+    const halfWidth = Math.max(120, laneMetrics.laneWidth / 2 - horizontalInset);
+    const halfHeight = Math.max(140, laneMetrics.laneHeight / 2 - verticalInset);
+
+    return {
+      left: {
+        left: -halfWidth,
+        right: -centerGap,
+        top: -halfHeight,
+        bottom: halfHeight,
+      },
+      right: {
+        left: centerGap,
+        right: halfWidth,
+        top: -halfHeight,
+        bottom: halfHeight,
+      },
+    };
+  }, [laneMetrics.laneWidth, laneMetrics.laneHeight, isCompactMobile]);
 
   const verticalStart = useMemo<"up" | "down">(() => {
     const keySource = anchorTileKey ?? "anchor";
@@ -1034,38 +1526,127 @@ export function DominoBoard({
     return hash % 2 === 0 ? "up" : "down";
   }, [anchorTileKey]);
 
-  const leftPlacements = useMemo(
-    () => buildDominoPlacements(
-      anchorTileIndex > 0 ? [...boardEntries.slice(0, anchorTileIndex)].reverse() : [],
+  const leftPlacementPlan = useMemo(
+    () => safelyBuildDominoPlacements(
+      leftEntries,
       "left",
       isCompactMobile,
       anchorRenderRotation,
-      snakeHorizontalRun,
+      sideSafeBounds.left,
       verticalStart,
     ),
-    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation, snakeHorizontalRun, verticalStart],
+    [leftEntries, isCompactMobile, anchorRenderRotation, sideSafeBounds.left, verticalStart],
   );
 
-  const rightPlacements = useMemo(
-    () => buildDominoPlacements(
-      anchorTileIndex >= 0 ? boardEntries.slice(anchorTileIndex + 1) : [],
+  const rightPlacementPlan = useMemo(
+    () => safelyBuildDominoPlacements(
+      rightEntries,
       "right",
       isCompactMobile,
       anchorRenderRotation,
-      snakeHorizontalRun,
+      sideSafeBounds.right,
       verticalStart,
     ),
-    [boardEntries, anchorTileIndex, isCompactMobile, anchorRenderRotation, snakeHorizontalRun, verticalStart],
+    [rightEntries, isCompactMobile, anchorRenderRotation, sideSafeBounds.right, verticalStart],
   );
+
+  const boardLayoutScale = useMemo(() => quantizeLayoutScale(Math.min(
+    leftPlacementPlan.layoutScale,
+    rightPlacementPlan.layoutScale,
+  )), [leftPlacementPlan.layoutScale, rightPlacementPlan.layoutScale]);
+
+  const leftResolvedPlan = useMemo(
+    () => safelyBuildDominoPlacements(
+      leftEntries,
+      "left",
+      isCompactMobile,
+      anchorRenderRotation,
+      sideSafeBounds.left,
+      verticalStart,
+      boardLayoutScale,
+    ),
+    [
+      leftEntries,
+      isCompactMobile,
+      anchorRenderRotation,
+      sideSafeBounds.left,
+      verticalStart,
+      boardLayoutScale,
+    ],
+  );
+
+  const rightResolvedPlan = useMemo(
+    () => safelyBuildDominoPlacements(
+      rightEntries,
+      "right",
+      isCompactMobile,
+      anchorRenderRotation,
+      sideSafeBounds.right,
+      verticalStart,
+      boardLayoutScale,
+    ),
+    [
+      rightEntries,
+      isCompactMobile,
+      anchorRenderRotation,
+      sideSafeBounds.right,
+      verticalStart,
+      boardLayoutScale,
+    ],
+  );
+
+  const leftPlacements = leftResolvedPlan.placements;
+  const rightPlacements = rightResolvedPlan.placements;
+
+  const boardLayoutTelemetry = useMemo<DominoLayoutTelemetry>(() => ({
+    tilesCount:
+      leftResolvedPlan.telemetry.tilesCount
+      + rightResolvedPlan.telemetry.tilesCount
+      + (anchorEntry ? 1 : 0),
+    iterationsUsed:
+      leftPlacementPlan.telemetry.iterationsUsed
+      + rightPlacementPlan.telemetry.iterationsUsed
+      + leftResolvedPlan.telemetry.iterationsUsed
+      + rightResolvedPlan.telemetry.iterationsUsed,
+    shrinkSteps:
+      leftPlacementPlan.telemetry.shrinkSteps
+      + rightPlacementPlan.telemetry.shrinkSteps
+      + leftResolvedPlan.telemetry.shrinkSteps
+      + rightResolvedPlan.telemetry.shrinkSteps,
+    failedAttempts:
+      leftPlacementPlan.telemetry.failedAttempts
+      + rightPlacementPlan.telemetry.failedAttempts
+      + leftResolvedPlan.telemetry.failedAttempts
+      + rightResolvedPlan.telemetry.failedAttempts,
+    overflowed:
+      leftPlacementPlan.telemetry.overflowed
+      || rightPlacementPlan.telemetry.overflowed
+      || leftResolvedPlan.telemetry.overflowed
+      || rightResolvedPlan.telemetry.overflowed,
+  }), [
+    leftResolvedPlan.telemetry,
+    rightResolvedPlan.telemetry,
+    anchorEntry,
+    leftPlacementPlan.telemetry,
+    rightPlacementPlan.telemetry,
+  ]);
+
+  useEffect(() => {
+    if (!shouldLogDominoLayoutTelemetry) {
+      return;
+    }
+
+    console.debug("[DominoLayout][telemetry]", boardLayoutTelemetry);
+  }, [boardLayoutTelemetry]);
 
   const boardBounds = useMemo(() => {
     const placementsForBounds = [
       ...leftPlacements,
-      ...(anchorEntry ? [{ x: 0, y: 0, renderRotation: anchorRenderRotation }] : []),
+      ...(anchorEntry ? [{ x: 0, y: 0, renderRotation: anchorRenderRotation, layoutScale: boardLayoutScale }] : []),
       ...rightPlacements,
     ];
     return getDominoPlacementBounds(placementsForBounds, isCompactMobile);
-  }, [leftPlacements, anchorEntry, rightPlacements, isCompactMobile, anchorRenderRotation]);
+  }, [leftPlacements, anchorEntry, rightPlacements, isCompactMobile, anchorRenderRotation, boardLayoutScale]);
 
   const boardHeight = useMemo(() => {
     const minHeight = isCompactMobile
@@ -1092,6 +1673,11 @@ export function DominoBoard({
     // Never exceed fit-zoom to guarantee every tile remains inside the board lane.
     return Math.max(0.12, Math.floor(fitZoom * 1000) / 1000);
   }, [isCompactMobile, boardBounds.width, boardBounds.height, boardLaneSize.width, boardLaneSize.height, boardHeight]);
+
+  const boardRenderScale = useMemo(
+    () => boardZoom * boardLayoutScale,
+    [boardZoom, boardLayoutScale],
+  );
 
   const boardHeightCssValue = useMemo(() => {
     if (isCompactMobile) {
@@ -1132,11 +1718,11 @@ export function DominoBoard({
     }
 
     const leftReach = leftPlacements.reduce((max, placement) => {
-      const footprint = getTileFootprint(placement.renderRotation, isCompactMobile);
+      const footprint = getTileFootprint(placement.renderRotation, isCompactMobile, placement.layoutScale);
       return Math.max(max, Math.abs(placement.x) + footprint.halfWidth);
     }, 0);
     const rightReach = rightPlacements.reduce((max, placement) => {
-      const footprint = getTileFootprint(placement.renderRotation, isCompactMobile);
+      const footprint = getTileFootprint(placement.renderRotation, isCompactMobile, placement.layoutScale);
       return Math.max(max, Math.abs(placement.x) + footprint.halfWidth);
     }, 0);
 
@@ -1168,15 +1754,29 @@ export function DominoBoard({
     }
 
     if (state.boardTiles.length === 0) {
+      const initialRotation = leftGhostTile.left === leftGhostTile.right ? 0 : 90;
+      const initialRect = getPlacementRect(
+        0,
+        0,
+        initialRotation,
+        isCompactMobile,
+        boardLayoutScale,
+      );
+      const epsilon = computeLayoutEpsilon(isCompactMobile, boardLayoutScale);
+      if (!isRectWithinBounds(initialRect, sideSafeBounds.left, epsilon)) {
+        return null;
+      }
+
       return {
         x: 0,
         y: 0,
-        renderRotation: leftGhostTile.left === leftGhostTile.right ? 0 : 90,
+        renderRotation: initialRotation,
+        layoutScale: boardLayoutScale,
       };
     }
 
     const previewEntries = [
-      ...(anchorTileIndex > 0 ? [...boardEntries.slice(0, anchorTileIndex)].reverse() : []),
+      ...leftEntries,
       {
         item: {
           tile: leftGhostTile,
@@ -1187,26 +1787,27 @@ export function DominoBoard({
       },
     ];
 
-    const previewPlacements = buildDominoPlacements(
+    const previewPlacements = safelyBuildDominoPlacements(
       previewEntries,
       "left",
       isCompactMobile,
       anchorRenderRotation,
-      snakeHorizontalRun,
+      sideSafeBounds.left,
       verticalStart,
-    );
+      boardLayoutScale,
+    ).placements;
 
     return previewPlacements[previewPlacements.length - 1] ?? null;
   }, [
     leftGhostTile,
     leftEndSelectable,
     state.boardTiles.length,
-    anchorTileIndex,
-    boardEntries,
+    leftEntries,
     isCompactMobile,
     anchorRenderRotation,
-    snakeHorizontalRun,
+    sideSafeBounds.left,
     verticalStart,
+    boardLayoutScale,
   ]);
 
   const rightPreviewPlacement = useMemo(() => {
@@ -1215,15 +1816,29 @@ export function DominoBoard({
     }
 
     if (state.boardTiles.length === 0) {
+      const initialRotation = rightGhostTile.left === rightGhostTile.right ? 0 : 90;
+      const initialRect = getPlacementRect(
+        0,
+        0,
+        initialRotation,
+        isCompactMobile,
+        boardLayoutScale,
+      );
+      const epsilon = computeLayoutEpsilon(isCompactMobile, boardLayoutScale);
+      if (!isRectWithinBounds(initialRect, sideSafeBounds.right, epsilon)) {
+        return null;
+      }
+
       return {
         x: 0,
         y: 0,
-        renderRotation: rightGhostTile.left === rightGhostTile.right ? 0 : 90,
+        renderRotation: initialRotation,
+        layoutScale: boardLayoutScale,
       };
     }
 
     const previewEntries = [
-      ...(anchorTileIndex >= 0 ? boardEntries.slice(anchorTileIndex + 1) : []),
+      ...rightEntries,
       {
         item: {
           tile: rightGhostTile,
@@ -1234,26 +1849,27 @@ export function DominoBoard({
       },
     ];
 
-    const previewPlacements = buildDominoPlacements(
+    const previewPlacements = safelyBuildDominoPlacements(
       previewEntries,
       "right",
       isCompactMobile,
       anchorRenderRotation,
-      snakeHorizontalRun,
+      sideSafeBounds.right,
       verticalStart,
-    );
+      boardLayoutScale,
+    ).placements;
 
     return previewPlacements[previewPlacements.length - 1] ?? null;
   }, [
     rightGhostTile,
     rightEndSelectable,
     state.boardTiles.length,
-    anchorTileIndex,
-    boardEntries,
+    rightEntries,
     isCompactMobile,
     anchorRenderRotation,
-    snakeHorizontalRun,
+    sideSafeBounds.right,
     verticalStart,
+    boardLayoutScale,
   ]);
 
   const leftGhostScreenPosition = useMemo(() => {
@@ -1443,7 +2059,10 @@ export function DominoBoard({
                   aria-label={t('domino.placeLeft')}
                 >
                   <div className="rounded-lg border border-dashed border-primary/70 bg-primary/15 p-1 shadow-[0_8px_18px_rgba(0,0,0,0.28)]">
-                    <div className="opacity-50 saturate-110">
+                    <div
+                      className="opacity-50 saturate-110"
+                      style={{ transform: `scale(${boardRenderScale})`, transformOrigin: "center center" }}
+                    >
                       <DominoTileComponent
                         tile={leftGhostTile}
                         size={boardTileSize}
@@ -1469,7 +2088,10 @@ export function DominoBoard({
                   aria-label={t('domino.placeRight')}
                 >
                   <div className="rounded-lg border border-dashed border-primary/70 bg-primary/15 p-1 shadow-[0_8px_18px_rgba(0,0,0,0.28)]">
-                    <div className="opacity-50 saturate-110">
+                    <div
+                      className="opacity-50 saturate-110"
+                      style={{ transform: `scale(${boardRenderScale})`, transformOrigin: "center center" }}
+                    >
                       <DominoTileComponent
                         tile={rightGhostTile}
                         size={boardTileSize}
@@ -1496,7 +2118,7 @@ export function DominoBoard({
                       key={`left-${tileSignature(placement.item.tile)}`}
                       className="absolute left-1/2 top-1/2"
                       style={{
-                        transform: `translate(calc(-50% + ${(placement.x + effectiveOffsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardZoom})`,
+                        transform: `translate(calc(-50% + ${(placement.x + effectiveOffsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardRenderScale})`,
                         transformOrigin: "center center",
                       }}
                     >
@@ -1507,7 +2129,7 @@ export function DominoBoard({
                   <div
                     className="absolute left-1/2 top-1/2"
                     style={{
-                      transform: `translate(calc(-50% + ${effectiveOffsetX * boardZoom}px), calc(-50% + ${boardOffset.offsetY * boardZoom}px)) scale(${boardZoom})`,
+                      transform: `translate(calc(-50% + ${effectiveOffsetX * boardZoom}px), calc(-50% + ${boardOffset.offsetY * boardZoom}px)) scale(${boardRenderScale})`,
                       transformOrigin: "center center",
                     }}
                   >
@@ -1519,7 +2141,7 @@ export function DominoBoard({
                       key={`right-${tileSignature(placement.item.tile)}`}
                       className="absolute left-1/2 top-1/2"
                       style={{
-                        transform: `translate(calc(-50% + ${(placement.x + effectiveOffsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardZoom})`,
+                        transform: `translate(calc(-50% + ${(placement.x + effectiveOffsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardRenderScale})`,
                         transformOrigin: "center center",
                       }}
                     >

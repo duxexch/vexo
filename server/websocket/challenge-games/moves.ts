@@ -1,7 +1,8 @@
 import { WebSocket } from "ws";
+import { randomUUID } from "node:crypto";
 import { db } from "../../db";
-import { challengeGameSessions, challengeChatMessages, challenges } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { challengeGameSessions, challengeChatMessages, challenges, gameEvents } from "@shared/schema";
+import { eq, desc, and, asc, ne } from "drizzle-orm";
 import { getGameEngine } from "../../game-engines";
 import { settleChallengePayout, settleDrawPayout } from "../../lib/payout";
 import { isChallengeSessionPlayableStatus, normalizeChallengeGameState } from "../../lib/challenge-game-state";
@@ -11,6 +12,17 @@ import { sendNotification } from "../notifications";
 import { logger } from "../../lib/logger";
 import { getErrorMessage, type AuthenticatedSocket } from "../shared";
 import { requireChallengePlayer } from "./guards";
+import { appendGameEvent, finalizeGameEvent } from "../../lib/game-events";
+import { runReplayShadowValidation, runSessionReplayValidation } from "../../lib/game-replay-shadow";
+import type { MoveData, GameEngine } from "../../game-engines/types";
+
+const GAME_EVENT_LOG_ENABLED = process.env.GAME_EVENT_LOG_ENABLED !== "false";
+const GAME_MOVE_IDEMPOTENCY_STRICT = process.env.GAME_MOVE_IDEMPOTENCY_STRICT !== "false";
+const GAME_EVENT_APPEND_FAIL_CLOSED_CANONICAL = process.env.GAME_EVENT_APPEND_FAIL_CLOSED_CANONICAL !== "false";
+const GAME_REPLAY_SHADOW_ENABLED = process.env.GAME_REPLAY_SHADOW_ENABLED !== "false";
+const GAME_REPLAY_SESSION_SHADOW_ENABLED = process.env.GAME_REPLAY_SESSION_SHADOW_ENABLED === "true";
+const GAME_REPLAY_READ_SHADOW_ENABLED = process.env.GAME_REPLAY_READ_SHADOW_ENABLED === "true";
+const GAME_REPLAY_SESSION_SHADOW_EVERY_N_TURNS = Math.max(1, Number(process.env.GAME_REPLAY_SESSION_SHADOW_EVERY_N_TURNS || "5"));
 
 interface MoveErrorDetails {
   code: string;
@@ -199,9 +211,62 @@ function formatChallengeAmount(amount: number, currencyType: unknown): string {
   return `$${safeAmount.toFixed(2)}`;
 }
 
+function shouldRunSessionReplayShadow(turnNumber: number): boolean {
+  if (GAME_REPLAY_READ_SHADOW_ENABLED) {
+    return true;
+  }
+
+  if (turnNumber <= 1) {
+    return true;
+  }
+
+  return turnNumber % GAME_REPLAY_SESSION_SHADOW_EVERY_N_TURNS === 0;
+}
+
+function buildChallengeInitialState(
+  engine: Pick<GameEngine, "initializeWithPlayers">,
+  gameType: string,
+  challenge: typeof challenges.$inferSelect,
+): string {
+  const playerIds = [
+    challenge.player1Id,
+    challenge.player2Id,
+    challenge.player3Id,
+    challenge.player4Id,
+  ].filter(Boolean) as string[];
+
+  if (gameType === "tarneeb") {
+    return engine.initializeWithPlayers(playerIds, 31);
+  }
+
+  if (gameType === "baloot") {
+    return engine.initializeWithPlayers(playerIds, 152);
+  }
+
+  if (gameType === "backgammon") {
+    return engine.initializeWithPlayers(playerIds[0], playerIds[1]);
+  }
+
+  if (gameType === "domino") {
+    const targetScore = challenge.dominoTargetScore === 201 ? 201 : 101;
+    return engine.initializeWithPlayers(playerIds, targetScore);
+  }
+
+  if (gameType === "languageduel") {
+    return engine.initializeWithPlayers(playerIds[0], playerIds[1], {
+      nativeLanguageCode: challenge.nativeLanguageCode || "ar",
+      targetLanguageCode: challenge.targetLanguageCode || "en",
+      mode: challenge.languageDuelMode || "mixed",
+      pointsToWin: challenge.languageDuelPointsToWin || 10,
+    });
+  }
+
+  return engine.initializeWithPlayers(playerIds[0], playerIds[1]);
+}
+
 /** Handle game_move message — process a move with DB transaction and payout settlement */
 export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promise<void> {
-  const { challengeId, move } = data;
+  const { challengeId, move, idempotencyKey } = data;
   const guard = requireChallengePlayer(ws, challengeId);
   if (!guard.ok) {
     return;
@@ -258,6 +323,81 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
 
   const { room } = guard;
   let resolvedGameType: string | undefined;
+  const normalizedIdempotencyKey = typeof idempotencyKey === "string"
+    ? idempotencyKey.trim().slice(0, 128)
+    : "";
+  const eventId = normalizedIdempotencyKey || randomUUID();
+  const idempotencyReference = normalizedIdempotencyKey
+    ? `challenge_game_move_idem:${challengeId}:${userId}:${normalizedIdempotencyKey}`
+    : `challenge_game_move_evt:${challengeId}:${userId}:${eventId}`;
+
+  let isCanonicalSession = false;
+  let moveEventRecordId: string | undefined;
+  let appendFailed = false;
+
+  if (GAME_EVENT_LOG_ENABLED && (GAME_EVENT_APPEND_FAIL_CLOSED_CANONICAL || GAME_REPLAY_SHADOW_ENABLED)) {
+    try {
+      const [sessionModeRow] = await db.select({ stateMode: challengeGameSessions.stateMode })
+        .from(challengeGameSessions)
+        .where(eq(challengeGameSessions.challengeId, challengeId))
+        .orderBy(desc(challengeGameSessions.createdAt))
+        .limit(1);
+
+      isCanonicalSession = sessionModeRow?.stateMode === "CANONICAL";
+    } catch (modeError) {
+      logger.warn(`[GameEvents] Failed reading state mode for challenge ${challengeId}: ${modeError instanceof Error ? modeError.message : String(modeError)}`);
+    }
+  }
+
+  if (GAME_EVENT_LOG_ENABLED) {
+    try {
+      const eventResult = await appendGameEvent({
+        eventId,
+        idempotencyKey: idempotencyReference,
+        challengeId,
+        source: "challenge_ws",
+        eventType: "move",
+        actorId: userId,
+        actorType: "player",
+        moveType: typeof move?.type === "string" ? move.type : "move",
+        payload: {
+          move: move as Record<string, unknown>,
+        },
+      });
+
+      if (eventResult.duplicate && normalizedIdempotencyKey && GAME_MOVE_IDEMPOTENCY_STRICT) {
+        ws.send(JSON.stringify({
+          type: "move_error",
+          error: "Duplicate move request ignored",
+          code: "duplicate_event",
+          requiresSync: false,
+          challengeId,
+          moveType,
+        }));
+        return;
+      }
+
+      moveEventRecordId = eventResult.recordId;
+      if (!eventResult.duplicate && !moveEventRecordId) {
+        appendFailed = true;
+      }
+    } catch (eventError) {
+      appendFailed = true;
+      logger.warn(`[GameEvents] Failed to append challenge game event for challenge ${challengeId}: ${eventError instanceof Error ? eventError.message : String(eventError)}`);
+    }
+  }
+
+  if (appendFailed && isCanonicalSession && GAME_EVENT_APPEND_FAIL_CLOSED_CANONICAL) {
+    ws.send(JSON.stringify({
+      type: "move_error",
+      error: "Move was rejected because event logging is unavailable",
+      code: "event_log_unavailable",
+      requiresSync: true,
+      challengeId,
+      moveType,
+    }));
+    return;
+  }
 
   try {
     // Use DB transaction with row lock for atomic move processing
@@ -434,6 +574,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
         .returning();
 
       return {
+        preState: stateJson,
         updatedSession,
         newState: applyResult.newState,
         events: applyResult.events,
@@ -449,11 +590,70 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
 
     // Broadcast to players with personalized views (hide opponent cards)
     const seq = typeof result.updatedSession.totalMoves === "number" ? result.updatedSession.totalMoves : 0;
+    let readState = result.newState;
+
+    if (isCanonicalSession && GAME_REPLAY_SHADOW_ENABLED) {
+      runReplayShadowValidation({
+        scope: "challenge",
+        gameType: result.gameType,
+        challengeId,
+        sessionId: result.updatedSession.id,
+        userId,
+        move: move as MoveData,
+        preState: result.preState,
+        committedState: result.newState,
+        turnNumber: seq,
+      }, result.engine);
+    }
+
+    const shouldRunSessionReplay = isCanonicalSession
+      && (GAME_REPLAY_SESSION_SHADOW_ENABLED || GAME_REPLAY_READ_SHADOW_ENABLED)
+      && shouldRunSessionReplayShadow(seq);
+
+    if (shouldRunSessionReplay) {
+      try {
+        const replayRows = await db
+          .select({
+            actorId: gameEvents.actorId,
+            payload: gameEvents.payload,
+          })
+          .from(gameEvents)
+          .where(and(
+            eq(gameEvents.challengeId, challengeId),
+            eq(gameEvents.eventType, "move"),
+            ne(gameEvents.status, "rejected"),
+          ))
+          .orderBy(asc(gameEvents.createdAt), asc(gameEvents.id));
+
+        const initialState = buildChallengeInitialState(result.engine, result.gameType, result.challenge);
+
+        const sessionReplayResult = runSessionReplayValidation({
+          scope: "challenge",
+          gameType: result.gameType,
+          challengeId,
+          sessionId: result.updatedSession.id,
+          initialState,
+          events: replayRows,
+          committedState: result.newState,
+          turnNumber: seq,
+        }, result.engine);
+
+        if (GAME_REPLAY_READ_SHADOW_ENABLED) {
+          if (!sessionReplayResult.drift && sessionReplayResult.replayedState) {
+            readState = sessionReplayResult.replayedState;
+          } else {
+            logger.warn(`[ReplayShadow] Read shadow fallback to committed state for challenge ${challengeId} on turn ${seq}`);
+          }
+        }
+      } catch (sessionReplayError) {
+        logger.warn(`[ReplayShadow] Session replay failed for challenge ${challengeId}: ${sessionReplayError instanceof Error ? sessionReplayError.message : String(sessionReplayError)}`);
+      }
+    }
 
     room.currentState = {
       challengeId,
       gameType: result.gameType,
-      gameState: result.newState,
+      gameState: readState,
       currentTurn: result.updatedSession.currentTurn || "",
       totalMoves: seq,
       status: result.updatedSession.status,
@@ -465,7 +665,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
 
     for (const [playerId, socket] of room.players) {
       if (socket.readyState === WebSocket.OPEN) {
-        const playerView = result.engine.getPlayerView(result.newState, playerId);
+        const playerView = result.engine.getPlayerView(readState, playerId);
         socket.send(JSON.stringify({
           type: "game_move",
           session: { ...result.updatedSession, gameState: undefined },
@@ -481,7 +681,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
     // Broadcast to spectators with spectator view (hidden hands)
     for (const [, socket] of room.spectators) {
       if (socket.readyState === WebSocket.OPEN) {
-        const spectatorView = result.engine.getPlayerView(result.newState, 'spectator');
+        const spectatorView = result.engine.getPlayerView(readState, 'spectator');
         socket.send(JSON.stringify({
           type: "game_move",
           session: { ...result.updatedSession, gameState: undefined },
@@ -555,7 +755,7 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
         .where(eq(challenges.id, challengeId));
 
       // Broadcast game over
-      const gameStatus2 = result.engine.getGameStatus(result.newState);
+      const gameStatus2 = result.engine.getGameStatus(readState);
       [...room.players.values(), ...room.spectators.values()].forEach((socket) => {
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({
@@ -624,8 +824,12 @@ export async function handleGameMove(ws: AuthenticatedSocket, data: any): Promis
         logger.error('Failed to cleanup game chat:', cleanupErr);
       }
     }
+
+    await finalizeGameEvent(moveEventRecordId, "applied");
   } catch (error: unknown) {
     let payload = toMoveErrorPayload(error, resolvedGameType);
+    await finalizeGameEvent(moveEventRecordId, "rejected", payload.code.slice(0, 64));
+
     let retryAfterMs: number | undefined;
     const shouldTrackDominoError = resolvedGameType === "domino" || String(payload.errorKey || "").startsWith("domino.");
 

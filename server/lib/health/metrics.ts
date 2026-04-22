@@ -2,7 +2,7 @@ import os from 'os';
 import { db } from '../../db';
 import { sql } from 'drizzle-orm';
 import { getAllCircuitBreakerStats } from '../circuit-breaker';
-import type { SystemMetrics, DatabaseHealth, DominoMoveErrorTelemetry, ServiceHealth } from './types';
+import type { SystemMetrics, DatabaseHealth, DominoMoveErrorTelemetry, ReplayShadowTelemetry, ServiceHealth } from './types';
 
 // Recent errors tracking
 const recentErrors: { timestamp: number; message: string }[] = [];
@@ -41,6 +41,26 @@ const dominoLifetimeByKey = new Map<DominoTrackedKey, number>(
   DOMINO_TRACKED_ERROR_KEYS.map((key) => [key, 0]),
 );
 let lastDominoMoveErrorAt: number | null = null;
+
+const REPLAY_SHADOW_WINDOW_MS = 60000; // 1 minute
+
+interface ReplayShadowCheckEvent {
+  timestamp: number;
+  scope: 'live' | 'challenge';
+  drift: boolean;
+  reason: string;
+}
+
+interface ReplayShadowCheckContext {
+  scope: 'live' | 'challenge';
+  drift: boolean;
+  reason?: string;
+}
+
+const replayShadowChecks: ReplayShadowCheckEvent[] = [];
+let replayShadowLifetimeChecks = 0;
+let replayShadowLifetimeDrifts = 0;
+let lastReplayShadowDriftAt: number | null = null;
 
 function normalizeDominoErrorKey(errorKey?: string): DominoTrackedKey {
   if (errorKey === 'domino.invalidState') return 'domino.invalidState';
@@ -84,6 +104,87 @@ function pruneDominoWindow(now = Date.now()): void {
   while (dominoMoveErrors.length > 0 && dominoMoveErrors[0].timestamp < cutoff) {
     dominoMoveErrors.shift();
   }
+}
+
+function pruneReplayShadowWindow(now = Date.now()): void {
+  const cutoff = now - REPLAY_SHADOW_WINDOW_MS;
+  while (replayShadowChecks.length > 0 && replayShadowChecks[0].timestamp < cutoff) {
+    replayShadowChecks.shift();
+  }
+}
+
+function normalizeReplayReason(reason?: string): string {
+  if (!reason || typeof reason !== 'string') {
+    return 'unknown';
+  }
+
+  const trimmed = reason.trim();
+  if (!trimmed) {
+    return 'unknown';
+  }
+
+  return trimmed.slice(0, 64);
+}
+
+export function trackReplayShadowCheck(context: ReplayShadowCheckContext): void {
+  const now = Date.now();
+  const reason = normalizeReplayReason(context.reason);
+
+  replayShadowChecks.push({
+    timestamp: now,
+    scope: context.scope,
+    drift: context.drift,
+    reason,
+  });
+
+  replayShadowLifetimeChecks += 1;
+  if (context.drift) {
+    replayShadowLifetimeDrifts += 1;
+    lastReplayShadowDriftAt = now;
+  }
+
+  pruneReplayShadowWindow(now);
+}
+
+export function getReplayShadowTelemetry(): ReplayShadowTelemetry {
+  pruneReplayShadowWindow();
+
+  const byScopeLastMinute: Record<string, { checks: number; drifts: number }> = {
+    live: { checks: 0, drifts: 0 },
+    challenge: { checks: 0, drifts: 0 },
+  };
+  const byReasonLastMinute: Record<string, number> = {};
+
+  let driftCountLastMinute = 0;
+
+  replayShadowChecks.forEach((event) => {
+    byScopeLastMinute[event.scope].checks += 1;
+
+    if (event.drift) {
+      driftCountLastMinute += 1;
+      byScopeLastMinute[event.scope].drifts += 1;
+      byReasonLastMinute[event.reason] = (byReasonLastMinute[event.reason] || 0) + 1;
+    }
+  });
+
+  const totalChecksLastMinute = replayShadowChecks.length;
+  const driftRateLastMinute = totalChecksLastMinute > 0
+    ? Math.round((driftCountLastMinute / totalChecksLastMinute) * 10000) / 100
+    : 0;
+
+  return {
+    windowMs: REPLAY_SHADOW_WINDOW_MS,
+    totalChecksLastMinute,
+    driftCountLastMinute,
+    driftRateLastMinute,
+    lifetimeChecks: replayShadowLifetimeChecks,
+    lifetimeDrifts: replayShadowLifetimeDrifts,
+    byScopeLastMinute,
+    byReasonLastMinute,
+    lastDriftAt: typeof lastReplayShadowDriftAt === 'number'
+      ? new Date(lastReplayShadowDriftAt).toISOString()
+      : undefined,
+  };
 }
 
 export function trackDominoMoveError(errorKey?: string, context?: DominoMoveErrorContext): void {
@@ -238,5 +339,6 @@ export function getServiceHealth(): ServiceHealth {
     recentErrors: getRecentErrorCount(),
     activeConnections: 0, // Would need WebSocket server reference
     dominoMoveErrors: getDominoMoveErrorTelemetry(),
+    replayShadow: getReplayShadowTelemetry(),
   };
 }

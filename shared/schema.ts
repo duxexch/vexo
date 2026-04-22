@@ -27,6 +27,7 @@ export const paymentOperationTypeEnum = pgEnum("payment_operation_type", [
   "p2p_trade_confirm",
 ]);
 export const paymentOperationTokenStatusEnum = pgEnum("payment_operation_token_status", ["pending", "completed", "failed", "cancelled", "expired"]);
+export const gameStateModeEnum = pgEnum("game_state_mode", ["LEGACY", "CANONICAL"]);
 
 // ==================== ENUM TYPE HELPERS ====================
 export type UserRole = (typeof userRoleEnum.enumValues)[number];
@@ -60,6 +61,7 @@ export type SupportStatus = (typeof supportStatusEnum.enumValues)[number];
 export type DepositRequestStatus = (typeof depositRequestStatusEnum.enumValues)[number];
 export type PaymentOperationType = (typeof paymentOperationTypeEnum.enumValues)[number];
 export type PaymentOperationTokenStatus = (typeof paymentOperationTokenStatusEnum.enumValues)[number];
+export type GameStateMode = (typeof gameStateModeEnum.enumValues)[number];
 export type AccountRecoveryPurpose = "reactivate" | "restore_deleted";
 
 // ==================== USERS ====================
@@ -2070,6 +2072,7 @@ export const challengeGameSessions = pgTable("challenge_game_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   challengeId: varchar("challenge_id").notNull().references(() => challenges.id),
   gameType: text("game_type").notNull(),
+  stateMode: gameStateModeEnum("state_mode").notNull().default("LEGACY"),
   currentTurn: varchar("current_turn").references(() => users.id),
   player1TimeRemaining: integer("player1_time_remaining").notNull().default(300),
   player2TimeRemaining: integer("player2_time_remaining").notNull().default(300),
@@ -3076,6 +3079,7 @@ export const liveGameSessions = pgTable("live_game_sessions", {
   challengeId: varchar("challenge_id").references(() => challenges.id),
   gameId: varchar("game_id").notNull().references(() => games.id),
   gameType: text("game_type").notNull(),
+  stateMode: gameStateModeEnum("state_mode").notNull().default("LEGACY"),
   status: liveGameStatusEnum("status").notNull().default("waiting"),
   gameState: text("game_state"),
   currentTurn: varchar("current_turn").references(() => users.id),
@@ -3156,6 +3160,43 @@ export const gameMovesRelations = relations(gameMoves, ({ one }) => ({
 export const insertGameMoveSchema = createInsertSchema(gameMoves).omit({ id: true, createdAt: true });
 export type InsertGameMove = z.infer<typeof insertGameMoveSchema>;
 export type GameMove = typeof gameMoves.$inferSelect;
+
+// ==================== GAME EVENTS (Phase 0 Passive Event Log) ====================
+
+export const gameEvents = pgTable("game_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: text("event_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  sessionId: varchar("session_id").references(() => liveGameSessions.id),
+  challengeId: varchar("challenge_id").references(() => challenges.id),
+  challengeSessionId: varchar("challenge_session_id").references(() => challengeGameSessions.id),
+  source: text("source").notNull(),
+  eventType: text("event_type").notNull(),
+  actorId: varchar("actor_id").notNull().references(() => users.id),
+  actorType: text("actor_type").notNull().default("player"),
+  moveType: text("move_type"),
+  payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
+  status: text("status").notNull().default("recorded"),
+  errorCode: text("error_code"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  appliedAt: timestamp("applied_at"),
+}, (table) => [
+  uniqueIndex("idx_game_events_idempotency_key").on(table.idempotencyKey),
+  index("idx_game_events_event_id").on(table.eventId),
+  index("idx_game_events_session_created").on(table.sessionId, table.createdAt),
+  index("idx_game_events_challenge_created").on(table.challengeId, table.createdAt),
+]);
+
+export const gameEventsRelations = relations(gameEvents, ({ one }) => ({
+  session: one(liveGameSessions, { fields: [gameEvents.sessionId], references: [liveGameSessions.id] }),
+  challenge: one(challenges, { fields: [gameEvents.challengeId], references: [challenges.id] }),
+  challengeSession: one(challengeGameSessions, { fields: [gameEvents.challengeSessionId], references: [challengeGameSessions.id] }),
+  actor: one(users, { fields: [gameEvents.actorId], references: [users.id] }),
+}));
+
+export const insertGameEventSchema = createInsertSchema(gameEvents).omit({ id: true, createdAt: true });
+export type InsertGameEvent = z.infer<typeof insertGameEventSchema>;
+export type GameEvent = typeof gameEvents.$inferSelect;
 
 // ==================== GAME SPECTATORS ====================
 

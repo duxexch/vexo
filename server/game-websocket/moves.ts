@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { storage } from '../storage';
 import { db } from '../db';
 import { liveGameSessions, gameMoves } from '@shared/schema';
@@ -19,8 +20,15 @@ import { handleGameOver } from './game-over';
 import { startTurnTimer, clearTurnTimer } from './timers-disconnect';
 import { getErrorMessage } from './types';
 import { processAdaptiveAiTurns } from './ai-turns';
+import { appendGameEvent, finalizeGameEvent } from '../lib/game-events';
+import { runReplayShadowValidation } from '../lib/game-replay-shadow';
 
-export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move: MoveData; expectedTurn?: number }) {
+const GAME_EVENT_LOG_ENABLED = process.env.GAME_EVENT_LOG_ENABLED !== 'false';
+const GAME_MOVE_IDEMPOTENCY_STRICT = process.env.GAME_MOVE_IDEMPOTENCY_STRICT !== 'false';
+const GAME_EVENT_APPEND_FAIL_CLOSED_CANONICAL = process.env.GAME_EVENT_APPEND_FAIL_CLOSED_CANONICAL !== 'false';
+const GAME_REPLAY_SHADOW_ENABLED = process.env.GAME_REPLAY_SHADOW_ENABLED !== 'false';
+
+export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move: MoveData; expectedTurn?: number; idempotencyKey?: string }) {
   if (!ws.userId || !ws.sessionId) {
     sendError(ws, 'Not in a game');
     return;
@@ -45,6 +53,84 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
 
   const sessionId = ws.sessionId;
   const userId = ws.userId;
+  const normalizedIdempotencyKey = typeof payload.idempotencyKey === 'string'
+    ? payload.idempotencyKey.trim().slice(0, 128)
+    : '';
+  const eventId = normalizedIdempotencyKey || randomUUID();
+  const idempotencyReference = normalizedIdempotencyKey
+    ? `live_game_move_idem:${sessionId}:${userId}:${normalizedIdempotencyKey}`
+    : `live_game_move_evt:${sessionId}:${userId}:${eventId}`;
+
+  let isCanonicalSession = false;
+  let moveEventRecordId: string | undefined;
+  let appendFailed = false;
+
+  if (GAME_EVENT_LOG_ENABLED && (GAME_EVENT_APPEND_FAIL_CLOSED_CANONICAL || GAME_REPLAY_SHADOW_ENABLED)) {
+    try {
+      const [sessionModeRow] = await db
+        .select({ stateMode: liveGameSessions.stateMode })
+        .from(liveGameSessions)
+        .where(eq(liveGameSessions.id, sessionId))
+        .limit(1);
+
+      isCanonicalSession = sessionModeRow?.stateMode === 'CANONICAL';
+    } catch (modeError) {
+      logger.warn(`[GameEvents] Failed reading state mode for session ${sessionId}: ${modeError instanceof Error ? modeError.message : String(modeError)}`);
+    }
+  }
+
+  if (GAME_EVENT_LOG_ENABLED) {
+    try {
+      const eventResult = await appendGameEvent({
+        eventId,
+        idempotencyKey: idempotencyReference,
+        sessionId,
+        source: 'live_game_ws',
+        eventType: 'move',
+        actorId: userId,
+        actorType: 'player',
+        moveType: typeof payload.move?.type === 'string' ? payload.move.type : 'move',
+        payload: {
+          move: payload.move as unknown as Record<string, unknown>,
+          expectedTurn: payload.expectedTurn ?? null,
+        },
+      });
+
+      if (eventResult.duplicate && normalizedIdempotencyKey && GAME_MOVE_IDEMPOTENCY_STRICT) {
+        send(ws, {
+          type: 'move_rejected',
+          payload: {
+            error: 'Duplicate move request ignored',
+            errorKey: 'game.duplicateMove',
+            code: 'duplicate_event',
+            requiresSync: false,
+          }
+        });
+        return;
+      }
+
+      moveEventRecordId = eventResult.recordId;
+      if (!eventResult.duplicate && !moveEventRecordId) {
+        appendFailed = true;
+      }
+    } catch (eventError) {
+      appendFailed = true;
+      logger.warn(`[GameEvents] Failed to append live game event for session ${sessionId}: ${eventError instanceof Error ? eventError.message : String(eventError)}`);
+    }
+  }
+
+  if (appendFailed && isCanonicalSession && GAME_EVENT_APPEND_FAIL_CLOSED_CANONICAL) {
+    send(ws, {
+      type: 'move_rejected',
+      payload: {
+        error: 'Move was rejected because event logging is unavailable',
+        errorKey: 'game.eventLogUnavailable',
+        code: 'event_log_unavailable',
+        requiresSync: true,
+      }
+    });
+    return;
+  }
 
   try {
     const result = await db.transaction(async (tx) => {
@@ -123,6 +209,7 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
       });
 
       return {
+        preState: dbState,
         newState: applyResult.newState,
         events: applyResult.events,
         turnNumber: newTurnNumber,
@@ -136,6 +223,19 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
     });
 
     room.gameState = result.newState;
+
+    if (isCanonicalSession && GAME_REPLAY_SHADOW_ENABLED) {
+      runReplayShadowValidation({
+        scope: 'live',
+        gameType: room.gameType,
+        sessionId,
+        userId,
+        move: payload.move,
+        preState: result.preState,
+        committedState: result.newState,
+        turnNumber: result.turnNumber,
+      }, engine);
+    }
 
     await recordAdaptiveHumanMove({
       sessionId,
@@ -194,7 +294,12 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
         startTurnTimer(sessionId, nextPlayer, room.turnTimeLimitMs);
       }
     }
+
+    await finalizeGameEvent(moveEventRecordId, 'applied');
   } catch (error: unknown) {
+    const errorMessage = getErrorMessage(error);
+    await finalizeGameEvent(moveEventRecordId, 'rejected', errorMessage.slice(0, 64));
+
     console.error('[WS] Move transaction failed:', error);
 
     const syncRoom = async () => {
@@ -213,15 +318,15 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
       }
     };
 
-    if (getErrorMessage(error) === 'SESSION_NOT_FOUND') {
+    if (errorMessage === 'SESSION_NOT_FOUND') {
       sendError(ws, 'Session not found', 'SESSION_NOT_FOUND');
-    } else if (getErrorMessage(error) === 'SESSION_NOT_ACTIVE') {
+    } else if (errorMessage === 'SESSION_NOT_ACTIVE') {
       sendError(ws, 'Game is not active', 'SESSION_NOT_ACTIVE');
       await syncRoom();
-    } else if (getErrorMessage(error) === 'UNAUTHORIZED_PLAYER') {
+    } else if (errorMessage === 'UNAUTHORIZED_PLAYER') {
       sendError(ws, 'Not authorized to play in this session', 'UNAUTHORIZED');
       await syncRoom();
-    } else if (getErrorMessage(error) === 'TURN_MISMATCH') {
+    } else if (errorMessage === 'TURN_MISMATCH') {
       send(ws, {
         type: 'move_rejected',
         payload: {
@@ -231,13 +336,13 @@ export async function handleMakeMove(ws: AuthenticatedWebSocket, payload: { move
         }
       });
       await syncRoom();
-    } else if (getErrorMessage(error) === 'INVALID_MOVE') {
+    } else if (errorMessage === 'INVALID_MOVE') {
       const moveErr = error as Error & { validationError?: string; errorKey?: string };
       send(ws, {
         type: 'move_rejected',
         payload: { error: moveErr.validationError, errorKey: moveErr.errorKey }
       });
-    } else if (getErrorMessage(error) === 'MOVE_APPLY_FAILED') {
+    } else if (errorMessage === 'MOVE_APPLY_FAILED') {
       const applyErr = error as Error & { applyError?: string };
       send(ws, {
         type: 'move_rejected',

@@ -100,6 +100,7 @@ const challengeGameMessageSchema = z.discriminatedUnion("type", [
         type: z.literal("game_move"),
         challengeId: challengeIdSchema,
         move: moveSchema,
+        idempotencyKey: shortStringSchema.optional(),
     }),
     z.object({
         type: z.literal("roll_dice"),

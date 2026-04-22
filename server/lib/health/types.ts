@@ -50,11 +50,24 @@ export interface DominoMoveErrorTelemetry {
   lastEventAt?: string;
 }
 
+export interface ReplayShadowTelemetry {
+  windowMs: number;
+  totalChecksLastMinute: number;
+  driftCountLastMinute: number;
+  driftRateLastMinute: number;
+  lifetimeChecks: number;
+  lifetimeDrifts: number;
+  byScopeLastMinute: Record<string, { checks: number; drifts: number }>;
+  byReasonLastMinute: Record<string, number>;
+  lastDriftAt?: string;
+}
+
 export interface ServiceHealth {
   circuitBreakers: Record<string, { state: string; failures: number }>;
   recentErrors: number;
   activeConnections: number;
   dominoMoveErrors: DominoMoveErrorTelemetry;
+  replayShadow: ReplayShadowTelemetry;
 }
 
 export interface HealthReport {
@@ -86,4 +99,8 @@ export const THRESHOLDS = {
   dominoInvalidStateCritical: 15, // per minute
   dominoSuspiciousCodeWarning: 8, // per minute
   dominoSuspiciousCodeCritical: 20, // per minute
+  replayShadowDriftWarning: 3, // per minute
+  replayShadowDriftCritical: 10, // per minute
+  replayShadowDriftRateWarning: 5, // %
+  replayShadowDriftRateCritical: 20, // %
 };

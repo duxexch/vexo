@@ -1,0 +1,50 @@
+{
+  "desktop-straight-right": {
+    "layoutScale": 0.434,
+    "placements": [],
+    "telemetry": {
+      "tilesCount": 28,
+      "iterationsUsed": 368,
+      "shrinkSteps": 10,
+      "failedAttempts": 104,
+      "overflowed": false
+    },
+    "layoutHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "desktop-heavy-doubles-right": {
+    "layoutScale": 0.434,
+    "placements": [],
+    "telemetry": {
+      "tilesCount": 52,
+      "iterationsUsed": 272,
+      "shrinkSteps": 10,
+      "failedAttempts": 80,
+      "overflowed": false
+    },
+    "layoutHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "desktop-zigzag-left": {
+    "layoutScale": 0.434,
+    "placements": [],
+    "telemetry": {
+      "tilesCount": 64,
+      "iterationsUsed": 472,
+      "shrinkSteps": 10,
+      "failedAttempts": 174,
+      "overflowed": false
+    },
+    "layoutHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "mobile-stress-right": {
+    "layoutScale": 0.434,
+    "placements": [],
+    "telemetry": {
+      "tilesCount": 220,
+      "iterationsUsed": 288,
+      "shrinkSteps": 10,
+      "failedAttempts": 134,
+      "overflowed": false
+    },
+    "layoutHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  }
+}
