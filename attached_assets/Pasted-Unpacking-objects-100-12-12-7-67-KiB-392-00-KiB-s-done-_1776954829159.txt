@@ -1,0 +1,47 @@
+Unpacking objects: 100% (12/12), 7.67 KiB | 392.00 KiB/s, done.
+From github.com:duxexch/vexo
+ * branch            main       -> FETCH_HEAD
+   5029b5f..2419d15  main       -> origin/main
+Updating 5029b5f..2419d15
+Fast-forward
+ .env.example                                             |   4 ++++
+ .replit                                                  |   1 +
+ PROJECT_KNOWLEDGE_ENGINE/05_DOCKER_DEPLOYMENT_RUNBOOK.md | 186 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-------------------------------------------------------
+ deploy/docker-compose.traefik.yml                        |  38 ++++++++++++++++++++++++++++++++++
+ docker-compose.prod.yml                                  |   7 ++++---
+ replit.md                                                |  82 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 6 files changed, 252 insertions(+), 66 deletions(-)
+ create mode 100644 replit.md
+[INFO] Running strict update flow via prod-auto (pull latest + env reconcile + redeploy)
+[INFO] Git auth mode: ssh
+[WARN] Ubuntu 25.10 detected. If updates fail, run: sudo apt install --update rust-coreutils
+[INFO] Refreshing upstream images for infrastructure services
+[OK] Pulled image: db
+[OK] Pulled image: redis
+[OK] Pulled image: minio
+[OK] Pulled image: livekit
+[OK] Pulled image: coturn
+[INFO] Running strict production deploy
+========================================
+  VEX Production Auto Bootstrap
+  2026-04-23 14:33:27 UTC
+========================================
+[INFO] No mobile release artifacts found to remove
+[WARN] No running Traefik container detected. Falling back to default Traefik network heuristics.
+[INFO] Using Traefik network: vex-traefik
+[OK] Persistent host tuning applied: vm.overcommit_memory=1
+[OK] Docker network exists: vex-traefik
+[OK] Runtime directories prepared (logs/uploads/backups)
+[INFO] Starting dependency services
+[+] up 3/4
+ ✔ Container vex-db       Started                                                                                                                                                                                               0.9s
+ ✔ Container vex-redis    Started                                                                                                                                                                                               0.8s
+ ⠙ Container vex-minio    Starting                                                                                                                                                                                              1.1s
+ ✔ Container vex-ai-agent Started                                                                                                                                                                                               0.8s
+Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint vex-minio (7b6b52e7cfc4c0fae139487e0877781edd34401597ab62e4e4da9b237265c2f1): failed to bind host port for 127.0.0.1:9010:172.19.0.4:9000/tcp: address already in use
+CONTAINER ID   IMAGE                COMMAND                  CREATED       STATUS                           PORTS      NAMES
+5cc4e10858e1   postgres:15-alpine   "docker-entrypoint.s…"   5 hours ago   Up 1 second (health: starting)   5432/tcp   vex-db
+785a0cba72b1   vex-ai-agent         "/sbin/tini -- node …"   5 hours ago   Up 1 second (health: starting)   3100/tcp   vex-ai-agent
+4c9cdfdbef30   redis:7-alpine       "docker-entrypoint.s…"   5 hours ago   Up 1 second (health: starting)   6379/tcp   vex-redis
+curl: (22) The requested URL returned error: 404
+root@srv1118737:/docker/vex# 

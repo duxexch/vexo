@@ -129,9 +129,12 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
-    ports:
-      - "127.0.0.1:9011:9001"
-      - "127.0.0.1:9010:9000"
+    # No host port mappings — the app reaches MinIO over the vex-internal
+    # network at vex-minio:9000. Uncomment ONLY for local console access
+    # from the VPS shell (and ensure ports 9010/9011 are free on the host).
+    # ports:
+    #   - "127.0.0.1:9011:9001"
+    #   - "127.0.0.1:9010:9000"
     networks:
       - vex-internal
     healthcheck:
