@@ -80,20 +80,51 @@ async function runScenario(name: string, input: DominoLayoutSnapshotInput): Prom
     };
 }
 
+// Realistic-game scenarios MUST place all tiles. Stress scenarios are
+// allowed to degrade gracefully (some tiles dropped) but still must remain
+// deterministic. This guards against silent regressions where the solver
+// returns an empty layout that still hashes consistently.
+const REALISTIC_SCENARIOS = new Set<string>([
+    "desktop-straight-right",
+    "desktop-realistic-left",
+    "mobile-realistic-right",
+]);
+
 async function buildSuite(): Promise<SnapshotSuite> {
     const desktopLeftBounds = { left: -352, right: -24, top: -230, bottom: 230 };
     const desktopRightBounds = { left: 24, right: 352, top: -230, bottom: 230 };
     const mobileRightBounds = { left: 18, right: 152, top: -170, bottom: 170 };
 
     return {
+        // Realistic single-hand chain (~14 tiles) — must lay out completely.
         "desktop-straight-right": await runScenario("desktop-straight-right", {
             side: "right",
             compact: false,
             anchorRenderRotation: 90,
             verticalStart: "up",
             safeBounds: desktopRightBounds,
-            tiles: buildStraightTiles(28),
+            tiles: buildStraightTiles(14),
         }),
+        // Realistic full two-hand chain (~20 tiles) on left side.
+        "desktop-realistic-left": await runScenario("desktop-realistic-left", {
+            side: "left",
+            compact: false,
+            anchorRenderRotation: 90,
+            verticalStart: "down",
+            safeBounds: desktopLeftBounds,
+            tiles: buildHeavyDoublesTiles(20),
+        }),
+        // Compact mobile lane — full hand should still fit with folding.
+        "mobile-realistic-right": await runScenario("mobile-realistic-right", {
+            side: "right",
+            compact: true,
+            anchorRenderRotation: 90,
+            verticalStart: "down",
+            safeBounds: mobileRightBounds,
+            tiles: buildZigZagTiles(10),
+        }),
+        // Stress scenarios — verify the solver degrades deterministically when
+        // chain length is genuinely beyond what the lane can hold.
         "desktop-heavy-doubles-right": await runScenario("desktop-heavy-doubles-right", {
             side: "right",
             compact: false,
@@ -121,6 +152,19 @@ async function buildSuite(): Promise<SnapshotSuite> {
     };
 }
 
+function assertRealisticScenariosPlaceAllTiles(suite: SnapshotSuite) {
+    for (const [name, snapshot] of Object.entries(suite)) {
+        if (!REALISTIC_SCENARIOS.has(name)) continue;
+        const expected = snapshot.telemetry.tilesCount;
+        const actual = snapshot.placements.length;
+        assert.equal(
+            actual,
+            expected,
+            `Realistic scenario "${name}" only placed ${actual}/${expected} tiles — solver regression.`,
+        );
+    }
+}
+
 function loadFixture(): SnapshotSuite {
     if (!fs.existsSync(FIXTURE_PATH)) {
         throw new Error(`Missing snapshot fixture: ${FIXTURE_PATH}`);
@@ -141,6 +185,10 @@ function saveFixture(suite: SnapshotSuite) {
 async function main() {
     const update = process.argv.includes("--update");
     const suite = await buildSuite();
+
+    // Always check the realistic-scenario invariant — even when updating the
+    // fixture — so we never freeze in a regressed state.
+    assertRealisticScenariosPlaceAllTiles(suite);
 
     if (update) {
         saveFixture(suite);

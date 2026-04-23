@@ -512,41 +512,89 @@ function getDirectionPriority(side: "left" | "right", verticalStart: "up" | "dow
   return [primaryHorizontal, verticalStart, secondaryHorizontal, secondaryVertical];
 }
 
-function getDirectionalSpaceScore(bounds: DominoRect, occupiedBBox: DominoRect | null, direction: DominoDirection): number {
-  if (!occupiedBBox) {
-    return Number.POSITIVE_INFINITY;
+const OPPOSITE_DIRECTION: Record<DominoDirection, DominoDirection> = {
+  left: "right",
+  right: "left",
+  up: "down",
+  down: "up",
+};
+
+/**
+ * Compute the per-tile direction priority used by the snake-fold solver.
+ *
+ * Real-table domino chains follow a serpentine pattern: they flow horizontally
+ * until they reach the edge of the playing area, perform a 90° elbow into the
+ * vertical direction with the most remaining room, run one or two tile-lengths
+ * perpendicular, then a second 90° elbow rotates the chain back into the
+ * opposite horizontal direction. We anticipate that fold here by inspecting the
+ * remaining room in the previous direction *before* attempting placement —
+ * unlike the older "try primary, then fall back" strategy, this proactively
+ * rotates the chain so it never collides with the safe bound and never has to
+ * be shrunk just to fit one more tile.
+ */
+function getAdaptiveDirectionPriority(
+  side: "left" | "right",
+  verticalStart: "up" | "down",
+  previousDirection: DominoDirection,
+  headRect: DominoRect,
+  safeBounds: DominoRect,
+  previousFootprint: { halfWidth: number; halfHeight: number },
+): DominoDirection[] {
+  const primaryHorizontal: DominoDirection = side === "left" ? "left" : "right";
+  const oppositeHorizontal: DominoDirection = side === "left" ? "right" : "left";
+  const oppositeVertical: DominoDirection = verticalStart === "up" ? "down" : "up";
+
+  const tileLong = Math.max(previousFootprint.halfWidth, previousFootprint.halfHeight) * 2;
+  // Need ~1.5 tile-lengths of room to keep flowing in the same direction.
+  // Below that we plan an elbow into a perpendicular direction.
+  const turnThreshold = tileLong * 1.5;
+
+  // Room is measured from the **head of the chain** (the last placed tile),
+  // not from the global bounding box. Using the global bbox makes the planner
+  // think it's near the edge as soon as ANY tile is — which causes premature
+  // turns once the chain has folded back, even though the head still has
+  // plenty of room in front of it.
+  const roomMap: Record<DominoDirection, number> = {
+    right: safeBounds.right - headRect.right,
+    left: headRect.left - safeBounds.left,
+    down: safeBounds.bottom - headRect.bottom,
+    up: headRect.top - safeBounds.top,
+  };
+
+  const continueRoom = roomMap[previousDirection];
+  const opposite = OPPOSITE_DIRECTION[previousDirection];
+
+  // Plenty of room to keep flowing in the current direction.
+  if (continueRoom >= turnThreshold) {
+    const fallback: DominoDirection[] = [
+      previousDirection,
+      verticalStart,
+      oppositeVertical,
+      previousDirection === primaryHorizontal ? oppositeHorizontal : primaryHorizontal,
+    ];
+    return fallback.filter((d, i, arr) => arr.indexOf(d) === i);
   }
 
-  switch (direction) {
-    case "right":
-      return bounds.right - occupiedBBox.right;
-    case "left":
-      return occupiedBBox.left - bounds.left;
-    case "down":
-      return bounds.bottom - occupiedBBox.bottom;
-    case "up":
-      return occupiedBBox.top - bounds.top;
-  }
-}
-
-function getRectDistance(a: DominoRect, b: DominoRect): number {
-  const dx = Math.max(0, b.left - a.right, a.left - b.right);
-  const dy = Math.max(0, b.top - a.bottom, a.top - b.bottom);
-  return Math.hypot(dx, dy);
-}
-
-function getProximityPenalty(rect: DominoRect, occupiedBBox: DominoRect | null, compact: boolean, layoutScale: number): number {
-  if (!occupiedBBox) {
-    return 0;
+  // We're approaching the edge — plan an elbow into the perpendicular direction
+  // with the most available room. This is the snake fold.
+  const isPrevHorizontal = previousDirection === "left" || previousDirection === "right";
+  let perpendicularPair: DominoDirection[];
+  if (isPrevHorizontal) {
+    perpendicularPair = roomMap.down >= roomMap.up ? ["down", "up"] : ["up", "down"];
+    // Tiebreaker: honor the deterministic verticalStart hint when both are similar.
+    if (Math.abs(roomMap.down - roomMap.up) < tileLong * 0.5) {
+      perpendicularPair = [verticalStart, oppositeVertical];
+    }
+  } else {
+    perpendicularPair = roomMap.right >= roomMap.left ? ["right", "left"] : ["left", "right"];
   }
 
-  const threshold = (compact ? 56 : 80) * layoutScale * 1.2;
-  const distance = getRectDistance(rect, occupiedBBox);
-  if (distance >= threshold) {
-    return 0;
-  }
-
-  return (threshold - distance) / Math.max(threshold, 1);
+  // After the perpendicular run, the natural fold-back is the opposite of the
+  // previous direction. Continuing the previous direction stays last as a
+  // last-ditch fallback (only happens if the perpendicular and fold-back also
+  // collide — extremely rare on a normal-sized lane).
+  const ordered: DominoDirection[] = [...perpendicularPair, opposite, previousDirection];
+  return ordered.filter((d, i, arr) => arr.indexOf(d) === i);
 }
 
 function placeDominoEntriesAtScale(
@@ -565,13 +613,11 @@ function placeDominoEntriesAtScale(
   }
 
   const seamSpacing = (compact ? 0 : 2) * layoutScale;
-  const directionPriority = getDirectionPriority(side, verticalStart);
   const epsilon = computeLayoutEpsilon(compact, layoutScale);
-  const continuityWeight = 0.1;
 
   const anchorRect = getPlacementRect(0, 0, anchorRenderRotation, compact, layoutScale);
   const placedRects: DominoRect[] = [anchorRect];
-  let occupiedBBox: DominoRect | null = anchorRect;
+  let headRect: DominoRect = anchorRect;
 
   let previousX = 0;
   let previousY = 0;
@@ -580,18 +626,68 @@ function placeDominoEntriesAtScale(
 
   const placements: DominoPathPlacement[] = [];
 
-  for (const entry of entries) {
-    const previousFootprint = getTileFootprint(previousRotation, compact, layoutScale);
-    const candidates: Array<{
-      direction: DominoDirection;
-      x: number;
-      y: number;
-      renderRotation: number;
-      rect: DominoRect;
-      score: number;
-    }> = [];
+  type Candidate = {
+    direction: DominoDirection;
+    x: number;
+    y: number;
+    renderRotation: number;
+    rect: DominoRect;
+    priorityIndex: number;
+  };
 
-    for (const direction of directionPriority) {
+  const tryDirection = (
+    direction: DominoDirection,
+    fromX: number,
+    fromY: number,
+    fromRotation: number,
+    fromDirection: DominoDirection,
+    fromFootprint: { halfWidth: number; halfHeight: number },
+    extraRects: DominoRect[],
+    tile: { left: number; right: number },
+  ): Omit<Candidate, "priorityIndex"> | null => {
+    const renderRotation = resolvePlacementRotation(tile, direction, fromRotation);
+    const nextFootprint = getTileFootprint(renderRotation, compact, layoutScale);
+    const delta = getConnectedTileDelta(
+      fromDirection,
+      direction,
+      fromFootprint,
+      nextFootprint,
+      seamSpacing,
+    );
+    const x = quantizeCoordinate(fromX + delta.dx);
+    const y = quantizeCoordinate(fromY + delta.dy);
+    const rect = getPlacementRect(x, y, renderRotation, compact, layoutScale);
+
+    if (!isRectWithinBounds(rect, safeBounds, epsilon)) {
+      return null;
+    }
+    if (isRectIntersectingAny(rect, placedRects, epsilon)) {
+      return null;
+    }
+    if (extraRects.length > 0 && isRectIntersectingAny(rect, extraRects, epsilon)) {
+      return null;
+    }
+    return { direction, x, y, renderRotation, rect };
+  };
+
+  for (let entryIdx = 0; entryIdx < entries.length; entryIdx += 1) {
+    const entry = entries[entryIdx];
+    const previousFootprint = getTileFootprint(previousRotation, compact, layoutScale);
+    const adaptivePriority = getAdaptiveDirectionPriority(
+      side,
+      verticalStart,
+      previousDirection,
+      headRect,
+      safeBounds,
+      previousFootprint,
+    );
+
+    // Collect every viable candidate, then either accept the first that has a
+    // viable next-step (1-step lookahead) or fall back to the highest-priority
+    // viable candidate. This avoids the "first-viable dead-end" trap where a
+    // locally-valid but globally-poor choice paints the chain into a corner.
+    const candidates: Candidate[] = [];
+    for (let i = 0; i < adaptivePriority.length; i += 1) {
       iterationGuard.count += 1;
       telemetry.iterationsUsed += 1;
       if (iterationGuard.count > iterationGuard.max) {
@@ -599,62 +695,81 @@ function placeDominoEntriesAtScale(
           `Domino layout exceeded iteration budget (${iterationGuard.max}).`,
         );
       }
-
-      const renderRotation = resolvePlacementRotation(entry.item.tile, direction, previousRotation);
-      const nextFootprint = getTileFootprint(renderRotation, compact, layoutScale);
-      const delta = getConnectedTileDelta(
+      const direction = adaptivePriority[i];
+      const candidate = tryDirection(
+        direction,
+        previousX,
+        previousY,
+        previousRotation,
         previousDirection,
-        direction,
         previousFootprint,
-        nextFootprint,
-        seamSpacing,
+        [],
+        entry.item.tile,
       );
-
-      const x = quantizeCoordinate(previousX + delta.dx);
-      const y = quantizeCoordinate(previousY + delta.dy);
-      const rect = getPlacementRect(x, y, renderRotation, compact, layoutScale);
-
-      if (!isRectWithinBounds(rect, safeBounds, epsilon)) {
+      if (candidate) {
+        candidates.push({ ...candidate, priorityIndex: i });
+      } else {
         telemetry.failedAttempts += 1;
-        continue;
       }
-
-      if (isRectIntersectingAny(rect, placedRects, epsilon)) {
-        telemetry.failedAttempts += 1;
-        continue;
-      }
-
-      const projectedBBox = unionDominoRect(occupiedBBox, rect);
-      const spaceScore = getDirectionalSpaceScore(safeBounds, projectedBBox, direction);
-      const penalty = getProximityPenalty(rect, occupiedBBox, compact, layoutScale);
-      const continuityBonus = previousDirection === direction ? continuityWeight : 0;
-      const score = spaceScore - penalty + continuityBonus;
-
-      candidates.push({
-        direction,
-        x,
-        y,
-        renderRotation,
-        rect,
-        score,
-      });
     }
 
     if (candidates.length === 0) {
       return null;
     }
 
-    candidates.sort((a, b) => {
-      const aScore = Number.isFinite(a.score) ? a.score : Number.MAX_SAFE_INTEGER;
-      const bScore = Number.isFinite(b.score) ? b.score : Number.MAX_SAFE_INTEGER;
-      if (bScore !== aScore) {
-        return bScore - aScore;
+    let chosen: Candidate | null = null;
+    const nextEntry = entries[entryIdx + 1];
+    if (nextEntry) {
+      // Pick the first candidate (in priority order) whose next placement is
+      // also viable. This is a single-step lookahead: cheap, deterministic, and
+      // sufficient to escape the common one-tile-too-greedy traps.
+      for (const candidate of candidates) {
+        const nextFootprint = getTileFootprint(candidate.renderRotation, compact, layoutScale);
+        const nextPriority = getAdaptiveDirectionPriority(
+          side,
+          verticalStart,
+          candidate.direction,
+          candidate.rect,
+          safeBounds,
+          nextFootprint,
+        );
+        let nextViable = false;
+        for (const nextDirection of nextPriority) {
+          iterationGuard.count += 1;
+          telemetry.iterationsUsed += 1;
+          if (iterationGuard.count > iterationGuard.max) {
+            throw new LayoutOverflowError(
+              `Domino layout exceeded iteration budget (${iterationGuard.max}).`,
+            );
+          }
+          const probe = tryDirection(
+            nextDirection,
+            candidate.x,
+            candidate.y,
+            candidate.renderRotation,
+            candidate.direction,
+            nextFootprint,
+            [candidate.rect],
+            nextEntry.item.tile,
+          );
+          if (probe) {
+            nextViable = true;
+            break;
+          }
+        }
+        if (nextViable) {
+          chosen = candidate;
+          break;
+        }
       }
+    }
 
-      return directionPriority.indexOf(a.direction) - directionPriority.indexOf(b.direction);
-    });
+    // Fallback: no candidate's lookahead succeeded (or this is the last tile).
+    // Take the highest-priority viable candidate so we still place this tile.
+    if (!chosen) {
+      chosen = candidates[0];
+    }
 
-    const chosen = candidates[0];
     placements.push({
       ...entry,
       x: chosen.x,
@@ -667,7 +782,7 @@ function placeDominoEntriesAtScale(
     previousY = chosen.y;
     previousRotation = chosen.renderRotation;
     previousDirection = chosen.direction;
-    occupiedBBox = unionDominoRect(occupiedBBox, chosen.rect);
+    headRect = chosen.rect;
     placedRects.push(chosen.rect);
   }
 
@@ -737,10 +852,15 @@ function buildDominoPlacements(
     );
   }
 
-  const maxDirectionAttempts = getDirectionPriority(side, verticalStart).length;
+  // Each entry may probe up to 4 candidate directions, and for each candidate
+  // the lookahead in placeDominoEntriesAtScale probes another up-to-4 next-step
+  // directions — so the worst-case per-entry attempt count is 4 * (1 + 4) = 20.
+  // Multiply by the full shrink-step ladder so the budget is never the limiting
+  // factor for genuinely solvable layouts.
+  const maxAttemptsPerEntry = 4 * (1 + 4);
   const maxTotalIterations = Math.max(
     1,
-    entries.length * maxDirectionAttempts * (maxShrinkSteps + 1),
+    entries.length * maxAttemptsPerEntry * (maxShrinkSteps + 1),
   );
   const iterationGuard = {
     count: 0,
@@ -1008,7 +1128,11 @@ const DominoTileComponent = memo(function DominoTileComponent({
           <span
             key={`${value}-${index}`}
             className={cn(
-              "absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#101010] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_1px_1px_rgba(0,0,0,0.35)]",
+              // "Drilled" pip: dark warm radial center with a subtle highlight rim
+              // and an inset shadow that mimics a circular well in real bone.
+              "absolute -translate-x-1/2 -translate-y-1/2 rounded-full",
+              "bg-[radial-gradient(circle_at_32%_30%,#5c3a1c_0%,#1f110a_55%,#000_100%)]",
+              "shadow-[inset_0_1px_1.5px_rgba(255,225,170,0.35),inset_0_-1px_1px_rgba(0,0,0,0.55),0_0.5px_0.5px_rgba(255,255,255,0.45)]",
               PIP_SIZE_CLASSES[size],
             )}
             style={{ left: `${pip.x}%`, top: `${pip.y}%` }}
@@ -1032,15 +1156,18 @@ const DominoTileComponent = memo(function DominoTileComponent({
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
       className={cn(
         tileSizeClass,
-        "domino-tile-shell relative overflow-hidden rounded-lg border-[1.5px] flex flex-col select-none transition-all duration-200",
-        "border-[#3a3227] bg-[linear-gradient(146deg,#f6f0de_0%,#eee2c4_52%,#e4d2ad_100%)]",
-        "shadow-[inset_0_1px_0_rgba(255,255,255,0.68),0_6px_10px_rgba(35,24,14,0.35)]",
+        "domino-tile-shell relative overflow-hidden rounded-lg border-[1.5px] flex select-none transition-all duration-200",
+        // Carved-bone surface: warm ivory at the top, deepening to amber at the
+        // bottom for a subtle dimensional feel that reads even at small scale.
+        "border-[#5a4326] bg-[linear-gradient(176deg,#fbf6e6_0%,#f3e8cd_48%,#e1cba2_100%)]",
+        // Outer drop + inner highlight + inner amber rim form the bevel.
+        "shadow-[inset_0_1px_0_rgba(255,255,255,0.85),inset_0_-1px_0_rgba(120,82,40,0.35),0_6px_12px_rgba(35,24,14,0.4)]",
         isSelected
-          ? "domino-tile-selected border-[#d08f2d] ring-2 ring-[#d9a34a]/75 scale-[1.08] z-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_12px_18px_rgba(132,79,24,0.36)]"
+          ? "domino-tile-selected border-[#d08f2d] ring-2 ring-[#d9a34a]/75 scale-[1.08] z-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),inset_0_-1px_0_rgba(160,108,42,0.45),0_14px_22px_rgba(132,79,24,0.42)]"
           : "",
         isPlayable
-          ? "domino-tile-can-play hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_12px_16px_rgba(35,24,14,0.35)]"
-          : "opacity-80",
+          ? "domino-tile-can-play hover:-translate-y-0.5 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(120,82,40,0.4),0_12px_18px_rgba(35,24,14,0.4)]"
+          : "opacity-85",
         isPlayable && !isSelected ? "domino-tile-playable" : "",
         onClick ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:ring-offset-1 focus-visible:ring-offset-background" : "",
         onClick && isPlayable ? "cursor-pointer" : "cursor-default",
@@ -1048,22 +1175,24 @@ const DominoTileComponent = memo(function DominoTileComponent({
       )}
       data-testid={`domino-tile-${tile.left}-${tile.right}`}
     >
-      <div className="pointer-events-none absolute inset-x-1 top-1 h-[2px] rounded-full bg-white/50" />
+      {/* Top sheen — fakes a polished bone reflection */}
+      <div className="pointer-events-none absolute inset-x-1 top-[2px] h-[3px] rounded-full bg-gradient-to-b from-white/70 to-transparent" />
+      {/* Engraved center divider — dark line + light line, like real bone tiles */}
       <div className={cn(
-        "pointer-events-none absolute bg-[#3a3227]/35",
+        "pointer-events-none absolute",
         isSideways
-          ? "inset-y-1.5 left-1/2 w-px -translate-x-1/2"
-          : "inset-x-2 top-1/2 h-px -translate-y-1/2"
+          ? "inset-y-1.5 left-1/2 w-[2px] -translate-x-1/2 bg-[linear-gradient(90deg,rgba(58,40,18,0.55),rgba(255,250,235,0.55))]"
+          : "inset-x-2 top-1/2 h-[2px] -translate-y-1/2 bg-[linear-gradient(180deg,rgba(58,40,18,0.55),rgba(255,250,235,0.55))]"
       )} />
-      <div className="pointer-events-none absolute inset-y-1 left-[2px] w-[2px] rounded-full bg-[#2e271f]/10" />
-      <div className="pointer-events-none absolute inset-y-1 right-[2px] w-[2px] rounded-full bg-white/22" />
+      {/* Side bevel highlights — vertical edges only when upright */}
+      <div className="pointer-events-none absolute inset-y-1 left-[1px] w-[1px] rounded-full bg-[#2e271f]/15" />
+      <div className="pointer-events-none absolute inset-y-1 right-[1px] w-[1px] rounded-full bg-white/30" />
       <div className={cn(
-        "flex-1 flex items-center justify-center bg-[linear-gradient(180deg,rgba(255,255,255,0.44),rgba(255,255,255,0.08))]",
-        isSideways ? "border-r border-[#5f5547]/40" : "border-b border-[#5f5547]/40"
+        "flex-1 flex items-center justify-center"
       )}>
         {renderDots(tile.left)}
       </div>
-      <div className="flex-1 flex items-center justify-center bg-[linear-gradient(180deg,rgba(255,255,255,0.52),rgba(255,255,255,0.14))]">
+      <div className="flex-1 flex items-center justify-center">
         {renderDots(tile.right)}
       </div>
     </div>
