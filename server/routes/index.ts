@@ -26,6 +26,7 @@ import { registerMatchmakingRoutes } from "./matchmaking";
 import { registerGameConfigRoutes } from "./game-config";
 import { registerSupportChatRoutes } from "./support-chat";
 import { registerExternalGamesRoutes } from "./external-games";
+import { registerRtcRoutes } from "./rtc";
 import { authMiddleware } from "./middleware";
 
 export function registerModularRoutes(app: Express): void {
@@ -58,4 +59,5 @@ export function registerModularRoutes(app: Express): void {
   registerGameConfigRoutes(app);
   registerSupportChatRoutes(app);
   registerExternalGamesRoutes(app);
+  registerRtcRoutes(app);
 }

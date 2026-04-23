@@ -29,6 +29,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // ==================== WEBSOCKET SETUP ====================
   setupWebSocket(httpServer);
 
+  // ==================== SOCKET.IO SETUP (additive — alongside legacy WS) ===
+  const { setupSocketIO } = await import("./socketio");
+  setupSocketIO(httpServer);
+
   // ==================== ADMIN BOOTSTRAP (PRODUCTION-SAFE) ====================
   runAdminBootstrap();
 

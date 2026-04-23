@@ -28,6 +28,9 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import type { CountryPaymentMethod } from "@shared/schema";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
+import { useCallSession } from "@/hooks/use-call-session";
+import { CallButton } from "@/components/calls/CallButton";
+import { CallModal } from "@/components/calls/CallModal";
 import {
   adaptDominoBoardMoveToEngine,
   extractDominoHandFromPlayerView,
@@ -290,6 +293,7 @@ export default function ChallengeGamePage() {
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
+  const callSession = useCallSession();
   const [fundingShortageProject, setFundingShortageProject] = useState(0);
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
   const [dominoMoveError, setDominoMoveError] = useState<string | null>(null);
@@ -2788,6 +2792,8 @@ export default function ChallengeGamePage() {
       )}
       dir={dir}
     >
+      {/* WebRTC call modal — always mounted to receive incoming calls */}
+      <CallModal call={callSession} />
       {/* Reconnection overlay */}
       {wsConnState === "reconnecting" && (
         <div className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-center gap-4 backdrop-blur-sm">
@@ -3030,6 +3036,20 @@ export default function ChallengeGamePage() {
                                       {t("profile.wins")}: {opponentProfileStats?.gamesWon ?? opponent?.rating?.wins ?? 0}
                                     </p>
                                   </div>
+                                  {opponentId && !isSpectator && (
+                                    <div className="ml-auto flex items-center gap-1">
+                                      <CallButton
+                                        callType="voice"
+                                        disabled={callSession.status !== "idle" && callSession.status !== "ended"}
+                                        onClick={() => callSession.startCall(opponentId, "voice", { challengeId })}
+                                      />
+                                      <CallButton
+                                        callType="video"
+                                        disabled={callSession.status !== "idle" && callSession.status !== "ended"}
+                                        onClick={() => callSession.startCall(opponentId, "video", { challengeId })}
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="grid grid-cols-3 gap-2 text-center">
                                   <div className="rounded-md border bg-muted/35 px-2 py-1.5">

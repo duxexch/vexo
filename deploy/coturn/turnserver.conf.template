@@ -1,0 +1,50 @@
+# =============================================================================
+# coturn turnserver.conf — vixo.click WebRTC TURN/STUN
+# Render this template with envsubst before mounting into the container:
+#   envsubst < turnserver.conf.template > turnserver.conf
+#
+# Required env vars:
+#   TURN_HOST              public hostname (e.g. turn.vixo.click)
+#   TURN_REALM             realm string (e.g. vixo.click)
+#   TURN_STATIC_SECRET     long random string; MUST match server env
+#   TURN_EXTERNAL_IP       public IP of the host (only set if behind NAT)
+#
+# Ports exposed: 3478/udp+tcp, 5349/udp+tcp (TLS), 49152-65535/udp (relay)
+# =============================================================================
+
+listening-port=3478
+tls-listening-port=5349
+
+fingerprint
+lt-cred-mech
+use-auth-secret
+static-auth-secret=${TURN_STATIC_SECRET}
+realm=${TURN_REALM}
+
+# Server identity
+server-name=${TURN_HOST}
+
+# Relay UDP port range — must be opened on the firewall
+min-port=49152
+max-port=65535
+
+# If running on a NAT'd host, advertise the public IP
+external-ip=${TURN_EXTERNAL_IP}
+
+# TLS — provide your own certs or terminate at Traefik for turns://
+# cert=/etc/coturn/cert.pem
+# pkey=/etc/coturn/key.pem
+no-tlsv1
+no-tlsv1_1
+
+# Hardening
+no-cli
+no-loopback-peers
+no-multicast-peers
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+
+# Logging — stdout for `docker logs`
+log-file=stdout
+verbose

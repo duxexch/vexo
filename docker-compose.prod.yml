@@ -352,6 +352,30 @@ services:
       retries: 5
       start_period: 60s
 
+  # ===========================================================================
+  # coturn — self-hosted TURN/STUN for WebRTC voice/video
+  # Enable by uncommenting and providing the TURN_* env vars on both this
+  # service AND the `app` service. See deploy/coturn/README.md for setup.
+  # ---------------------------------------------------------------------------
+  # coturn:
+  #   image: coturn/coturn:latest
+  #   container_name: vex-coturn
+  #   restart: unless-stopped
+  #   network_mode: host
+  #   environment:
+  #     TURN_HOST: ${TURN_HOST}
+  #     TURN_REALM: ${TURN_REALM:-vixo.click}
+  #     TURN_STATIC_SECRET: ${TURN_STATIC_SECRET}
+  #     TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP}
+  #   volumes:
+  #     - ./deploy/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+  #   command: ["-c", "/etc/coturn/turnserver.conf"]
+  #   healthcheck:
+  #     test: ["CMD", "pgrep", "-x", "turnserver"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
 networks:
   vex-internal:
     driver: bridge
