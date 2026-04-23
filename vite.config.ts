@@ -34,6 +34,11 @@ export default defineConfig({
     cssCodeSplit: true,
     cssMinify: 'lightningcss',
     chunkSizeWarningLimit: 500, // Warn if any chunk exceeds 500 KB
+    // Explicit ES2020 baseline matches the .browserslistrc floor
+    // (Chrome 76 / iOS 13.4 / Safari 13.1) — keeps optional chaining,
+    // nullish coalescing, BigInt, and dynamic import working natively
+    // on every supported device without forcing heavy polyfills.
+    target: ['es2020', 'chrome76', 'safari13.1', 'firefox78', 'edge90'],
     minify: 'terser',
     terserOptions: {
       compress: {

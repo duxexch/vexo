@@ -1,0 +1,31 @@
+# VEX gaming platform — target audience is mobile-heavy (Android/iOS) global users.
+# These targets ensure autoprefixer + Vite emit CSS/JS compatible with the
+# real-world devices our players use, while still allowing modern syntax.
+#
+# Coverage check: `npx browserslist` shows resolved browser list.
+# Update yearly or when analytics show usage shifts.
+
+# Worldwide browsers with > 0.3% market share (broader than the default 0.5%).
+> 0.3%
+
+# Last 3 major versions of every tracked browser.
+last 3 versions
+
+# Always include browsers still receiving security updates.
+Firefox ESR
+
+# Capacitor / Android WebView floor — Android 8 (Chrome 76+).
+Chrome >= 76
+
+# iOS Safari floor — iOS 13.4 (covers iPhone 6s, last 5+ year devices).
+iOS >= 13.4
+Safari >= 13.1
+
+# Modern Edge / Samsung Internet (popular on Android).
+Edge >= 90
+Samsung >= 14
+
+# Drop browsers that are no longer maintained / receive no traffic.
+not dead
+not op_mini all
+not IE 11
