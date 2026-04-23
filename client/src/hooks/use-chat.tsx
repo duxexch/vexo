@@ -13,6 +13,17 @@ interface OutboundChatMessagePayload {
   isDisappearing: boolean;
   disappearAfterRead: boolean;
   replyToId: string | null;
+  /** Set to true after the user confirms paying the stranger-DM unlock fee. */
+  confirmUnlock?: boolean;
+}
+
+export interface ChatUnlockPrompt {
+  receiverId: string;
+  amount: number;
+  balance: number;
+  currency: "VXC";
+  insufficient: boolean;
+  clientMessageId?: string;
 }
 
 interface PendingOutboundChatMessage {
@@ -96,6 +107,9 @@ interface SendMessageOptions {
 interface UseChatReturn extends ChatState {
   sendMessage: (receiverId: string, content: string, messageType?: string, attachmentUrl?: string, options?: SendMessageOptions) => void;
   retryPendingMessage: (clientMessageId: string) => void;
+  unlockPrompt: ChatUnlockPrompt | null;
+  confirmUnlock: () => void;
+  dismissUnlock: () => void;
   setTyping: (receiverId: string, isTyping: boolean) => void;
   selectConversation: (userId: string) => void;
   loadMoreMessages: () => void;
@@ -140,6 +154,7 @@ export function useChat(): UseChatReturn {
   const maxReconnectDelay = 30000;
 
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
+  const [unlockPrompt, setUnlockPrompt] = useState<ChatUnlockPrompt | null>(null);
 
   const [state, setState] = useState<ChatState>({
     conversations: [],
@@ -251,6 +266,18 @@ export function useChat(): UseChatReturn {
         });
 
         const data = await response.json().catch(() => ({} as Record<string, unknown>));
+        if (response.status === 402 && (data?.code === "chat_unlock_required" || data?.code === "chat_unlock_insufficient")) {
+          const unlockData = (data as { unlock?: { fee?: number; balance?: number } }).unlock || {};
+          setUnlockPrompt({
+            receiverId: entry.payload.receiverId,
+            amount: Number(unlockData.fee || 0),
+            balance: Number(unlockData.balance || 0),
+            currency: "VXC",
+            insufficient: data?.code === "chat_unlock_insufficient",
+            clientMessageId,
+          });
+          return;
+        }
         if (!response.ok) {
           const message = typeof data?.error === "string"
             ? data.error
@@ -385,6 +412,20 @@ export function useChat(): UseChatReturn {
         const data = JSON.parse(event.data);
 
         if (isWsErrorType(data?.type) || data?.type === "chat_error") {
+          // Stranger DM unlock prompt — surface a confirm dialog instead of a generic error toast.
+          if (data?.code === "chat_unlock_required" || data?.code === "chat_unlock_insufficient") {
+            const unlockData = data?.unlock || {};
+            const clientMessageId = typeof data?.clientMessageId === "string" ? data.clientMessageId : undefined;
+            setUnlockPrompt({
+              receiverId: String(unlockData.receiverId || ""),
+              amount: Number(unlockData.fee || 0),
+              balance: Number(unlockData.balance || 0),
+              currency: "VXC",
+              insufficient: data?.code === "chat_unlock_insufficient",
+              clientMessageId,
+            });
+            return;
+          }
           if (typeof data?.clientMessageId === "string" && data.clientMessageId.trim().length > 0 && data?.code !== "message_in_flight") {
             const key = data.clientMessageId.trim();
             const pending = pendingOutboundRef.current.get(key);
@@ -760,6 +801,44 @@ export function useChat(): UseChatReturn {
     [sendChatPayload, sendMessageViaRestFallback, syncPendingOutgoingState]
   );
 
+  const dismissUnlock = useCallback(() => {
+    setUnlockPrompt((prev) => {
+      if (prev?.clientMessageId) {
+        const pending = pendingOutboundRef.current.get(prev.clientMessageId);
+        if (pending) {
+          pendingOutboundRef.current.set(prev.clientMessageId, { ...pending, status: "failed" });
+          syncPendingOutgoingState();
+        }
+      }
+      return null;
+    });
+  }, [syncPendingOutgoingState]);
+
+  const confirmUnlock = useCallback(() => {
+    const prompt = unlockPrompt;
+    if (!prompt || !prompt.clientMessageId) {
+      setUnlockPrompt(null);
+      return;
+    }
+    const pending = pendingOutboundRef.current.get(prompt.clientMessageId);
+    setUnlockPrompt(null);
+    if (!pending) return;
+    const retryPayload: OutboundChatMessagePayload = { ...pending.payload, confirmUnlock: true };
+    const now = Date.now();
+    pendingOutboundRef.current.set(prompt.clientMessageId, {
+      ...pending,
+      payload: retryPayload,
+      status: "pending",
+      attempts: pending.attempts + 1,
+      lastAttemptAt: now,
+    });
+    syncPendingOutgoingState();
+    if (!sendChatPayload(retryPayload)) {
+      const pendingEntry = pendingOutboundRef.current.get(prompt.clientMessageId);
+      if (pendingEntry) void sendMessageViaRestFallback(pendingEntry, prompt.clientMessageId);
+    }
+  }, [unlockPrompt, sendChatPayload, sendMessageViaRestFallback, syncPendingOutgoingState]);
+
   const retryPendingMessage = useCallback(
     (clientMessageId: string) => {
       const key = clientMessageId.trim();
@@ -969,6 +1048,9 @@ export function useChat(): UseChatReturn {
     ...state,
     sendMessage,
     retryPendingMessage,
+    unlockPrompt,
+    confirmUnlock,
+    dismissUnlock,
     setTyping,
     selectConversation,
     loadMoreMessages,

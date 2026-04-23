@@ -4,8 +4,14 @@ import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
 import { eq, and, or, sql, desc } from "drizzle-orm";
 import { users, games, gameMatches, matchmakingQueue, gameplaySettings } from "@shared/schema";
-import crypto from "crypto";
 import { isEitherUserBlocked } from "../../lib/user-blocking";
+import {
+  getUserSkill,
+  getUserSkillsBulk,
+  pickOpponentBySkill,
+  isExpired,
+  QUEUE_EXPIRY_MS,
+} from "../../lib/matchmaking-skill";
 
 export function registerQueueRoutes(app: Express): void {
 
@@ -39,7 +45,19 @@ export function registerQueueRoutes(app: Express): void {
         }
       }
 
-      // Check if already in queue
+      // Lazy-expire any of the requester's own stale waiting entries first so
+      // a previous abandoned attempt does not lock them out of new matchmaking.
+      const nowExpiry = new Date();
+      const cutoff = new Date(nowExpiry.getTime() - QUEUE_EXPIRY_MS);
+      await db.update(matchmakingQueue)
+        .set({ status: "expired" })
+        .where(and(
+          eq(matchmakingQueue.userId, userId),
+          eq(matchmakingQueue.status, "waiting"),
+          sql`${matchmakingQueue.createdAt} < ${cutoff}`,
+        ));
+
+      // Check if already in queue (post-expiry)
       const existingQueue = await db.select().from(matchmakingQueue)
         .where(and(
           eq(matchmakingQueue.userId, userId),
@@ -49,8 +67,8 @@ export function registerQueueRoutes(app: Express): void {
         return res.status(400).json({ error: "Already in matchmaking queue" });
       }
 
-      // Try to find a match - get all waiting players for random selection
-      const waitingPlayers = await db.select().from(matchmakingQueue)
+      // Try to find a match - get all waiting players, then pick by skill.
+      const waitingPlayersRaw = await db.select().from(matchmakingQueue)
         .where(and(
           eq(matchmakingQueue.gameId, gameId),
           eq(matchmakingQueue.matchType, "random"),
@@ -58,30 +76,44 @@ export function registerQueueRoutes(app: Express): void {
           sql`${matchmakingQueue.userId} != ${userId}`
         ));
 
-      if (waitingPlayers.length > 0) {
-        // Fisher-Yates shuffle using crypto.randomInt for true randomness
-        const shuffled = [...waitingPlayers];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-          const j = crypto.randomInt(0, i + 1);
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        const opponent = shuffled[0];
-
-        // Update opponent's queue status
+      // Lazy-expire stale waiters so they don't get matched after disappearing.
+      const now = new Date();
+      const expiredIds = waitingPlayersRaw.filter(w => isExpired(w.createdAt, now)).map(w => w.id);
+      if (expiredIds.length > 0) {
         await db.update(matchmakingQueue)
-          .set({ status: "matched" })
-          .where(eq(matchmakingQueue.id, opponent.id));
+          .set({ status: "expired" })
+          .where(and(
+            eq(matchmakingQueue.status, "waiting"),
+            sql`${matchmakingQueue.id} = ANY(${expiredIds})`,
+          ));
+      }
+      const waitingPlayers = waitingPlayersRaw.filter(w => !isExpired(w.createdAt, now));
 
-        // Create match
-        const [match] = await db.insert(gameMatches).values({
-          gameId,
-          player1Id: opponent.userId,
-          player2Id: userId,
-          status: "pending",
-        }).returning();
+      if (waitingPlayers.length > 0) {
+        // Skill-based opponent selection.
+        const me = await getUserSkill(userId);
+        const skills = await getUserSkillsBulk(waitingPlayers.map(w => w.userId));
+        const opponent = pickOpponentBySkill(me, waitingPlayers, skills, now);
 
-        res.json({ matched: true, match });
-      } else {
+        if (opponent) {
+          // Update opponent's queue status
+          await db.update(matchmakingQueue)
+            .set({ status: "matched" })
+            .where(eq(matchmakingQueue.id, opponent.id));
+
+          // Create match
+          const [match] = await db.insert(gameMatches).values({
+            gameId,
+            player1Id: opponent.userId,
+            player2Id: userId,
+            status: "pending",
+          }).returning();
+
+          return res.json({ matched: true, match, matchedBy: "skill" });
+        }
+        // Fall through to enqueue if no eligible opponent yet.
+      }
+      {
         // Join queue
         const [queueEntry] = await db.insert(matchmakingQueue).values({
           gameId,
@@ -90,7 +122,7 @@ export function registerQueueRoutes(app: Express): void {
           status: "waiting",
         }).returning();
 
-        res.json({ matched: false, queueEntry });
+        res.json({ matched: false, queueEntry, expiresInMs: QUEUE_EXPIRY_MS });
       }
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

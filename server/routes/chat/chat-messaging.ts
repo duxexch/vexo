@@ -8,6 +8,7 @@ import { chatAutoDeletePermissions, chatMediaPermissions, chatMessages, projectC
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import { sanitizePlainText } from "../../lib/input-security";
 import { isUserBlocked } from "../../lib/user-blocking";
+import { applyStrangerUnlockFee } from "../../lib/chat-pricing";
 import { getRedisClient, isChatEnabled } from "../../lib/redis";
 import { resolveChatEnabledFlagFromDb } from "../../lib/chat-settings";
 import { isPinUnlocked } from "../chat-features/pin-lock";
@@ -206,6 +207,27 @@ export function registerChatMessagingRoutes(app: Express): void {
       if (recipientBlockedSender) {
         await releaseDedupeLock();
         return res.status(403).json({ error: "Cannot send message to this user" });
+      }
+
+      // PRICING: Stranger DM unlock — first message to a non-friend may require a one-time fee.
+      // Friends (mutual follow) and any conversation with prior history are always free.
+      const confirmUnlock = req.body?.confirmUnlock === true;
+      const unlockResult = await applyStrangerUnlockFee({ senderId, receiverId, confirm: confirmUnlock });
+      if (unlockResult.kind === "needs_unlock") {
+        await releaseDedupeLock();
+        return res.status(402).json({
+          error: "Conversation is locked",
+          code: "chat_unlock_required",
+          unlock: { fee: unlockResult.amount, balance: unlockResult.balance, currency: "VXC" },
+        });
+      }
+      if (unlockResult.kind === "insufficient_balance") {
+        await releaseDedupeLock();
+        return res.status(402).json({
+          error: "Insufficient balance to unlock conversation",
+          code: "chat_unlock_insufficient",
+          unlock: { fee: unlockResult.required, balance: unlockResult.balance, currency: "VXC" },
+        });
       }
 
       // PRIVACY: No word filtering on private messages - user privacy first

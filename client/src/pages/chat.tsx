@@ -26,6 +26,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import { PinLockScreen, PinSetupDialog } from "@/components/chat-pin-lock";
 import { MediaUploadButton, MediaPurchaseDialog, ChatMediaRenderer } from "@/components/chat-media";
 import { AutoDeleteToggle, AutoDeletePurchaseDialog, AutoDeleteSettingsDialog, AutoDeleteCountdown } from "@/components/chat-auto-delete";
+import { ChatUnlockDialog } from "@/components/chat/ChatUnlockDialog";
 
 const QUICK_REACTIONS = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
 
@@ -151,6 +152,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     refreshConversations, deleteMessage, editMessage, reactToMessage,
     searchMessages, searchResults, markAsRead,
     pendingOutgoing, retryPendingMessage,
+    unlockPrompt, confirmUnlock, dismissUnlock,
   } = useChat();
 
   const { isLocked, hasPinEnabled, unlock, setupPin, pinStatus, loading: pinLoading } = useChatPin();
@@ -1875,6 +1877,13 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
       <AutoDeleteSettingsDialog
         open={showAutoDeleteSettings} onOpenChange={setShowAutoDeleteSettings}
         currentMinutes={deleteAfterMinutes} onSave={updateSettings}
+      />
+      <ChatUnlockDialog
+        open={!!unlockPrompt}
+        onOpenChange={(o) => { if (!o) dismissUnlock(); }}
+        amount={unlockPrompt?.amount ?? 0}
+        balance={unlockPrompt?.balance ?? 0}
+        onConfirm={confirmUnlock}
       />
     </div>
   );

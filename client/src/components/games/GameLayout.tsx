@@ -43,6 +43,10 @@ export interface GameLayoutProps {
   isFullscreen?: boolean;
   /** Extra controls placed inside the settings sheet. */
   extraSettings?: ReactNode;
+  /** Compact HUD pills rendered in the header center (e.g. timer, score, balance). */
+  hud?: ReactNode;
+  /** Optional chrome above board (status banner replacement / mini scoreboard). */
+  banner?: ReactNode;
   className?: string;
 }
 
@@ -62,6 +66,8 @@ export function GameLayout({
   onToggleFullscreen,
   isFullscreen,
   extraSettings,
+  hud,
+  banner,
   className,
 }: GameLayoutProps) {
   const { t, dir } = useI18n();
@@ -107,6 +113,15 @@ export function GameLayout({
             )}
           </div>
         </div>
+
+        {hud && (
+          <div
+            className="hidden min-w-0 flex-1 items-center justify-center gap-1.5 sm:flex"
+            data-testid="container-game-hud"
+          >
+            {hud}
+          </div>
+        )}
 
         <div className="flex shrink-0 items-center gap-1">
           {role.isSpectator && (
@@ -191,6 +206,21 @@ export function GameLayout({
           </Sheet>
         </div>
       </header>
+
+      {hud && (
+        <div
+          className="flex items-center justify-center gap-1.5 border-b border-border/40 bg-background/95 px-3 py-1.5 sm:hidden"
+          data-testid="container-game-hud-mobile"
+        >
+          {hud}
+        </div>
+      )}
+
+      {banner && (
+        <div className="border-b border-border/40 bg-muted/30 px-3 py-2" data-testid="container-game-banner">
+          {banner}
+        </div>
+      )}
 
       {statusText && (
         <div

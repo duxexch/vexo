@@ -10,6 +10,7 @@ import { sanitizePlainText } from "../../lib/input-security";
 import { sendNotification } from "../notifications";
 import { resolveChatEnabledFlagFromDb } from "../../lib/chat-settings";
 import { isPinUnlocked } from "../../routes/chat-features/pin-lock";
+import { applyStrangerUnlockFee } from "../../lib/chat-pricing";
 
 const CHAT_MESSAGE_DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
 const CHAT_MESSAGE_DEDUPE_PENDING_TTL_MS = 60 * 1000;
@@ -294,6 +295,39 @@ export async function handleChatMessage(ws: AuthenticatedSocket, data: any): Pro
     }
     ws.send(JSON.stringify({ type: "chat_error", error: "Cannot send message to this user" }));
     return;
+  }
+
+  // PRICING: Stranger DM unlock — friends-free / pay-once-per-pair model.
+  // Mirrors the REST endpoint enforcement so the WS path cannot bypass it.
+  {
+    const confirmUnlock = data?.confirmUnlock === true;
+    const unlockResult = await applyStrangerUnlockFee({
+      senderId: senderUserId,
+      receiverId,
+      confirm: confirmUnlock,
+    });
+    if (unlockResult.kind === "needs_unlock") {
+      if (dedupeKey) await getRedisClient().del(dedupeKey).catch(() => {});
+      ws.send(JSON.stringify({
+        type: "chat_error",
+        error: "Conversation is locked",
+        code: "chat_unlock_required",
+        unlock: { fee: unlockResult.amount, balance: unlockResult.balance, currency: "VXC", receiverId },
+        clientMessageId,
+      }));
+      return;
+    }
+    if (unlockResult.kind === "insufficient_balance") {
+      if (dedupeKey) await getRedisClient().del(dedupeKey).catch(() => {});
+      ws.send(JSON.stringify({
+        type: "chat_error",
+        error: "Insufficient balance to unlock conversation",
+        code: "chat_unlock_insufficient",
+        unlock: { fee: unlockResult.required, balance: unlockResult.balance, currency: "VXC", receiverId },
+        clientMessageId,
+      }));
+      return;
+    }
   }
 
   // PRIVACY: No word filtering on private messages - user privacy first

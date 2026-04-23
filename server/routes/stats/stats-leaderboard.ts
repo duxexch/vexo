@@ -2,9 +2,27 @@ import type { Express, Response } from "express";
 import { AuthRequest, authMiddleware } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
-import { eq, desc, sql } from "drizzle-orm";
-import { users } from "@shared/schema";
+import { eq, desc, sql, and } from "drizzle-orm";
+import { gameMatches, users } from "@shared/schema";
 import { cacheGet } from "../../lib/redis";
+
+type Period = "day" | "week" | "month" | "all";
+function normalizePeriod(p: unknown): Period {
+  const s = String(p || "all").toLowerCase();
+  if (s === "day" || s === "daily") return "day";
+  if (s === "week" || s === "weekly") return "week";
+  if (s === "month" || s === "monthly") return "month";
+  return "all";
+}
+function periodSinceDate(p: Period): Date | null {
+  const now = new Date();
+  switch (p) {
+    case "day": now.setHours(0, 0, 0, 0); return now;
+    case "week": { const d = new Date(); d.setDate(d.getDate() - 7); return d; }
+    case "month": { const d = new Date(); d.setMonth(d.getMonth() - 1); return d; }
+    default: return null;
+  }
+}
 
 export function registerLeaderboardRoutes(app: Express): void {
 
@@ -12,9 +30,91 @@ export function registerLeaderboardRoutes(app: Express): void {
     try {
       const sortBy = (req.query.sortBy as string) || 'wins';
       const gameType = req.query.gameType as string;
+      const region = (req.query.region as string)?.trim() || undefined;
+      const period = normalizePeriod(req.query.period);
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
 
-      const cacheKey = `leaderboard:${sortBy}:${gameType || 'all'}:${limit}`;
+      const cacheKey = `leaderboard:${sortBy}:${gameType || 'all'}:${period}:${region || 'world'}:${limit}`;
+      const since = periodSinceDate(period);
+
+      // Period-scoped path: aggregate from gameMatches in window.
+      if (since) {
+        const rankedLeaderboard = await cacheGet(cacheKey, 60, async () => {
+          // Wins per user from completed matches in window (optionally per game).
+          // CRITICAL: region filter must be applied BEFORE the LIMIT, otherwise
+          // global top-N truncation can hide regional leaders. We join the
+          // sender's country_code from user_preferences and filter inline.
+          const winsRows = await db.execute<{ user_id: string; wins_in_period: string }>(sql`
+            SELECT gm.winner_id AS user_id, COUNT(*)::text AS wins_in_period
+            FROM game_matches gm
+            ${region ? sql`INNER JOIN user_preferences up ON up.user_id = gm.winner_id AND up.country_code = ${region}` : sql``}
+            WHERE gm.status = 'completed'
+              AND gm.winner_id IS NOT NULL
+              AND gm.completed_at >= ${since}
+              ${gameType ? sql`AND gm.game_id = ${gameType}` : sql``}
+            GROUP BY gm.winner_id
+            ORDER BY COUNT(*) DESC
+            LIMIT ${limit * 3}
+          `);
+          const winsRowsArr = Array.isArray(winsRows)
+            ? winsRows
+            : ((winsRows as { rows?: Array<{ user_id: string; wins_in_period: string }> }).rows || []);
+          const userIds = winsRowsArr.map(r => r.user_id);
+          if (userIds.length === 0) return [];
+
+          const userRows = await db.execute<Record<string, unknown>>(sql`
+            SELECT u.id, u.username, u.nickname, u.profile_picture, u.vip_level,
+                   u.games_played, u.games_won, u.games_lost, u.total_earnings,
+                   u.current_win_streak, u.longest_win_streak,
+                   up.country_code AS country
+            FROM users u
+            LEFT JOIN user_preferences up ON up.user_id = u.id
+            WHERE u.id = ANY(${userIds})
+              ${region ? sql`AND up.country_code = ${region}` : sql``}
+          `);
+          const userRowsArr = Array.isArray(userRows)
+            ? userRows
+            : ((userRows as { rows?: Array<Record<string, unknown>> }).rows || []);
+          const winsByUser = new Map(winsRowsArr.map(r => [r.user_id, Number(r.wins_in_period)]));
+          const userById = new Map(userRowsArr.map(r => [String(r.id), r]));
+
+          // Sort by sortBy within the period window
+          const enriched = userIds
+            .filter(id => userById.has(id))
+            .map(id => {
+              const u = userById.get(id)!;
+              const wins = winsByUser.get(id) || 0;
+              return {
+                id,
+                username: u.username, nickname: u.nickname, profilePicture: u.profile_picture,
+                vipLevel: Number(u.vip_level || 0),
+                gamesPlayed: Number(u.games_played || 0),
+                gamesWon: Number(u.games_won || 0),
+                gamesLost: Number(u.games_lost || 0),
+                totalEarnings: u.total_earnings,
+                currentWinStreak: Number(u.current_win_streak || 0),
+                longestWinStreak: Number(u.longest_win_streak || 0),
+                country: u.country,
+                gameWon: wins,
+                gamePlayed: undefined as number | undefined,
+              };
+            });
+
+          enriched.sort((a, b) => {
+            if (sortBy === 'earnings') return Number(b.totalEarnings || 0) - Number(a.totalEarnings || 0);
+            if (sortBy === 'streak') return b.longestWinStreak - a.longestWinStreak;
+            return (b.gameWon || 0) - (a.gameWon || 0);
+          });
+
+          return enriched.slice(0, limit).map((player, index) => ({
+            rank: index + 1,
+            ...player,
+            winRate: player.gamesPlayed > 0 ? Math.round((player.gamesWon / player.gamesPlayed) * 100) : 0,
+          }));
+        });
+        return res.json(rankedLeaderboard);
+      }
+      // All-time path (legacy below). Add region filter if present.
 
       const rankedLeaderboard = await cacheGet(cacheKey, 60, async () => {
         let orderByColumn;
@@ -53,8 +153,15 @@ export function registerLeaderboardRoutes(app: Express): void {
           }
         }
 
+        // Region filter (all-time path): users.country is not on users table; use user_preferences.country_code via subquery.
+        const baseWhere = region
+          ? and(
+              sql`${users.gamesPlayed} > 0`,
+              sql`${users.id} IN (SELECT user_id FROM user_preferences WHERE country_code = ${region})`,
+            )
+          : sql`${users.gamesPlayed} > 0`;
         const leaderboard = await db.select(selectFields as Record<string, typeof users.id>)
-          .from(users).where(sql`${users.gamesPlayed} > 0`).orderBy(desc(orderByColumn)).limit(limit);
+          .from(users).where(baseWhere).orderBy(desc(orderByColumn)).limit(limit);
 
         return leaderboard.map((player, index) => ({
           rank: index + 1,

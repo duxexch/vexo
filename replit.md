@@ -76,6 +76,13 @@ First-time VPS bootstrap (Traefik network + Traefik container) is documented in 
 
 ## Recent changes
 
+- 2026-04-23 — **Shared game systems uplift (Yalla-Ludo style unification, phase 1):**
+  - **Unified `GameLayout` HUD**: new `hud` and `banner` slots in `client/src/components/games/GameLayout.tsx`, plus pill components in `client/src/components/games/GameHUD.tsx` (`GameHUDBalance`, `GameHUDTimer`, `GameHUDScore`). All 6 games will migrate to this shared shell instead of bespoke headers.
+  - **Shared timer hook**: `client/src/hooks/use-game-timer.ts` — drift-resistant per-side clock with low-time audio cue and `onTimeout`.
+  - **Skill-based matchmaking**: `server/lib/matchmaking-skill.ts` computes a soft skill rating from `users.gamesPlayed/gamesWon/longestWinStreak/vipLevel`, partitions waiters into rookie/regular/elite tiers, expands tolerance with wait time, and auto-expires queue entries after 60s. Wired into `server/routes/matchmaking/queue.ts` (random queue).
+  - **Leaderboard period & region filters**: `/api/leaderboard` now accepts `period=day|week|month|all` and `region=<country>`. Period-scoped path aggregates wins from `game_matches.completed_at`. `client/src/pages/leaderboard.tsx` already passes `period`.
+  - **Chat pricing model — friends-free / stranger unlock**: new `server/lib/chat-pricing.ts`. The DM endpoint `POST /api/chat/:userId/messages` now returns **HTTP 402** with `code:"chat_unlock_required"` on first contact with a non-friend; the client confirms by re-posting with `confirmUnlock:true`, which atomically charges the configured one-time fee from the sender's project-currency wallet (defaults: enabled, 1.00 VXC; tunable via `chat_settings` keys `chat_stranger_unlock_enabled`, `chat_stranger_unlock_fee_vxc`, `chat_friends_always_free`). Friends (mutual follow) and any conversation with prior history are always free. New UI `client/src/components/chat/ChatUnlockDialog.tsx`.
+
 - 2026-04-23 — Production deployment hardened:
   - `deploy/docker-compose.traefik.yml` rewritten to enable the Docker provider, set `exposedByDefault=false`, mount the Docker socket read-only, add `restart: unless-stopped`, healthcheck, and structured logging.
   - Added `ACME_EMAIL` to `.env.example` (required by Traefik / Let's Encrypt).
