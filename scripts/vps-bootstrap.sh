@@ -233,11 +233,16 @@ ENV_FILE="$INSTALL_DIR/.env"
 ENV_EXAMPLE="$INSTALL_DIR/.env.example"
 [[ -f "$ENV_EXAMPLE" ]] || { err ".env.example missing — corrupt repo?"; exit 1; }
 
-# Bootstrap .env from example if absent
+# Bootstrap .env from example if absent.  IMPORTANT: when we create a fresh
+# .env from the public template, every secret value in the template is treated
+# as a placeholder (the example values are visible on GitHub), so we force
+# regeneration of all secret keys below.
+FRESH_ENV="false"
 if [[ ! -f "$ENV_FILE" ]]; then
   cp "$ENV_EXAMPLE" "$ENV_FILE"
   chmod 600 "$ENV_FILE"
-  info "Created fresh $ENV_FILE from template"
+  FRESH_ENV="true"
+  info "Created fresh $ENV_FILE from template (all secrets will be regenerated)"
 else
   info "Existing .env found — will only fill missing / placeholder values"
   cp "$ENV_FILE" "${ENV_FILE}.bak.$(date +%s)"
@@ -273,12 +278,14 @@ is_placeholder() {
   esac
 }
 
-# Fill key only if missing OR placeholder
+# Fill key only if missing OR placeholder.
+# When FRESH_ENV=true (we just copied from the public template), force-regenerate
+# every secret because the template values are publicly visible on GitHub.
 ensure() {
   local key="$1" generator="$2"
   local current
   current="$(get_env "$key")"
-  if is_placeholder "$current"; then
+  if [[ "$FRESH_ENV" == "true" ]] || is_placeholder "$current"; then
     local new
     new="$(eval "$generator")"
     set_env "$key" "$new"
@@ -362,7 +369,7 @@ grep -q '^vm.overcommit_memory' /etc/sysctl.conf 2>/dev/null \
 # Bring up application stack via the canonical updater
 info "Running prod-update.sh (build + migrate + start)"
 bash "$INSTALL_DIR/prod-update.sh" \
-  --auth-mode "$([[ "$GIT_AUTH" == "ssh" ]] && echo ssh || echo https)" \
+  --auth-mode "$([[ "$GIT_AUTH" == "ssh" ]] && echo ssh || echo auto)" \
   --repo-url  "$REPO_URL" \
   --repo-dir  "$INSTALL_DIR" \
   --branch    "$REPO_BRANCH" \
