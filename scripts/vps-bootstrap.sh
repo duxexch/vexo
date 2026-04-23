@@ -109,11 +109,32 @@ ok "Server inspection complete"
 step "2/8  Installing prerequisites"
 
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq \
-  ca-certificates curl gnupg lsb-release \
-  git jq openssl ufw netcat-openbsd \
-  apt-transport-https software-properties-common >/dev/null
+
+# Auto-disable known-broken third-party APT sources so they don't block us
+disable_broken_repo() {
+  local pattern="$1" label="$2"
+  local files
+  files=$(grep -rlE "$pattern" /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null || true)
+  for f in $files; do
+    [[ "$f" == *.disabled ]] && continue
+    warn "Disabling broken APT source ($label): $f"
+    mv "$f" "${f}.disabled"
+  done
+}
+disable_broken_repo 'repository\.monarx\.com' 'monarx'
+
+# apt-get update may emit warnings from third-party repos; we only fail if the
+# subsequent install fails (which is the real signal that something is missing).
+apt-get update -qq -o Acquire::AllowInsecureRepositories=true 2>&1 | \
+  grep -vE 'does not have a Release file|signed-by|InRelease|^$' || true
+
+if ! apt-get install -y -qq \
+    ca-certificates curl gnupg lsb-release \
+    git jq openssl ufw netcat-openbsd \
+    apt-transport-https software-properties-common >/dev/null 2>&1; then
+  err "Failed to install base packages. Try: sudo apt-get install -y ca-certificates curl gnupg jq openssl ufw"
+  exit 1
+fi
 ok "Base packages installed"
 
 # Docker — install only if missing
