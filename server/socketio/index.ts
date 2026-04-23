@@ -114,10 +114,13 @@ async function isUserAllowedInRoom(userId: string, roomId: string): Promise<bool
   return false;
 }
 
-/** Apply a Redis-backed rate-limit to a socket event. Returns true if allowed. */
+/**
+ * Apply a Redis-backed rate-limit to a socket event. Returns true if allowed.
+ * `windowSec` is converted to ms because `redisRateLimit` expects milliseconds.
+ */
 async function rateLimitOk(key: string, max: number, windowSec: number): Promise<boolean> {
   try {
-    const result = await redisRateLimit(key, max, windowSec);
+    const result = await redisRateLimit(key, max, windowSec * 1000);
     return result.allowed;
   } catch {
     // Fail-open if Redis is briefly unavailable — better than silently dropping events
@@ -372,12 +375,23 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
     socket.on("rtc:end", async (payload) => {
       const sessionId = String(payload?.sessionId || "").slice(0, 64);
       if (!sessionId) return;
-      // Scoped to the call room only — no namespace-wide presence leak
-      rtcNs.to(callRoom(sessionId)).emit("rtc:ended", {
+      // Optional explicit recipient — needed when caller cancels BEFORE the
+      // callee has joined the per-call room (which only happens on first SDP).
+      const toUserId = payload?.toUserId
+        ? String(payload.toUserId).slice(0, 64)
+        : "";
+      const endedPayload = {
         sessionId,
         reason: payload?.reason,
         fromUserId: userId,
-      });
+      };
+      // Notify everyone already in the call room (the common case)
+      rtcNs.to(callRoom(sessionId)).emit("rtc:ended", endedPayload);
+      // Also direct-notify the explicit peer if provided (covers pre-SDP cancel
+      // when the callee hasn't joined the call room yet).
+      if (toUserId && toUserId !== userId) {
+        emitToUser(toUserId, "rtc:ended", endedPayload);
+      }
       // Vacate everyone from the room so it gets garbage-collected
       rtcNs.in(callRoom(sessionId)).socketsLeave(callRoom(sessionId));
     });

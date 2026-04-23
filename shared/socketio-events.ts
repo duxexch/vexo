@@ -114,6 +114,13 @@ export interface RtcEndPayload {
   sessionId: string;
   /** Optional reason ('hangup', 'failed', 'fallback', etc.) */
   reason?: string;
+  /**
+   * Optional explicit recipient user id. Required when ending a call BEFORE
+   * the SDP exchange (i.e. cancelling while ringing) because the callee
+   * hasn't joined the per-call room yet — the server uses this to deliver
+   * `rtc:ended` directly to the recipient's user-room.
+   */
+  toUserId?: string;
 }
 
 export interface RtcTierPayload {

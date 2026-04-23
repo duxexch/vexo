@@ -301,7 +301,14 @@ export function useCallSession(): UseCallSessionReturn {
 
   const declineIncoming = useCallback(() => {
     if (!incoming) return;
-    getRtcSocket().emit("rtc:end", { sessionId: incoming.sessionId, reason: "declined" });
+    // Include `toUserId` so the server can directly notify the caller even
+    // before any SDP has been exchanged (caller is in the call room, but
+    // belt-and-suspenders for pre-SDP cancellation).
+    getRtcSocket().emit("rtc:end", {
+      sessionId: incoming.sessionId,
+      reason: "declined",
+      toUserId: incoming.fromUserId,
+    });
     setIncoming(null);
     setStatus("idle");
   }, [incoming]);
@@ -310,9 +317,19 @@ export function useCallSession(): UseCallSessionReturn {
     (reason?: string) => {
       const ctx = ctxRef.current;
       if (ctx) {
-        getRtcSocket().emit("rtc:end", { sessionId: ctx.sessionId, reason: reason || "hangup" });
+        // Include the explicit peer for ringing-state cancellations where the
+        // callee may not yet have joined the per-call room.
+        getRtcSocket().emit("rtc:end", {
+          sessionId: ctx.sessionId,
+          reason: reason || "hangup",
+          toUserId: ctx.peerUserId,
+        });
       } else if (incoming) {
-        getRtcSocket().emit("rtc:end", { sessionId: incoming.sessionId, reason: reason || "hangup" });
+        getRtcSocket().emit("rtc:end", {
+          sessionId: incoming.sessionId,
+          reason: reason || "hangup",
+          toUserId: incoming.fromUserId,
+        });
         setIncoming(null);
       }
       setStatus("ended");
