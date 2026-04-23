@@ -17,6 +17,9 @@ import {
   type RtcServerToClientEvents,
 } from "../../shared/socketio-events";
 import { storage } from "../storage";
+import { db } from "../db";
+import { challenges } from "../../shared/schema";
+import { eq } from "drizzle-orm";
 
 interface AuthedSocketData {
   userId: string;
@@ -50,7 +53,10 @@ async function authenticateHandshake(socket: Socket): Promise<AuthedSocketData |
     const userAgent = socket.handshake.headers["user-agent"];
     const verified = await verifyUserAccessToken(token, {
       userAgent: typeof userAgent === "string" ? userAgent : undefined,
-      requireActiveSession: false,
+      // Enforce active session parity with REST routes — revoked / logged-out
+      // tokens must NOT be able to open a socket. Activity is not bumped per
+      // ping (would thrash the sessions table); REST traffic keeps it warm.
+      requireActiveSession: true,
       updateSessionActivity: false,
     });
     return { userId: verified.id, username: verified.username || verified.id };
@@ -62,6 +68,50 @@ async function authenticateHandshake(socket: Socket): Promise<AuthedSocketData |
     }
     return null;
   }
+}
+
+/**
+ * Check whether `userId` is allowed to join `roomId`.
+ *
+ * Accepted patterns (anything else is denied):
+ *   - `challenge:<challengeId>` — user must be one of player1..player4
+ *   - `dm:<idA>:<idB>`         — user must be A or B (sorted lexicographically)
+ *
+ * Failures (DB error, missing row) deny — fail-closed.
+ */
+async function isUserAllowedInRoom(userId: string, roomId: string): Promise<boolean> {
+  if (roomId.startsWith("challenge:")) {
+    const challengeId = roomId.slice("challenge:".length);
+    if (!challengeId) return false;
+    try {
+      const [row] = await db
+        .select({
+          p1: challenges.player1Id,
+          p2: challenges.player2Id,
+          p3: challenges.player3Id,
+          p4: challenges.player4Id,
+        })
+        .from(challenges)
+        .where(eq(challenges.id, challengeId))
+        .limit(1);
+      if (!row) return false;
+      return [row.p1, row.p2, row.p3, row.p4].includes(userId);
+    } catch (err) {
+      logger.warn?.(`[socket.io] room authz lookup failed: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
+  if (roomId.startsWith("dm:")) {
+    const parts = roomId.slice("dm:".length).split(":");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
+    // Enforce canonical sorted form so `dm:a:b` and `dm:b:a` are the same room
+    const [a, b] = [parts[0], parts[1]].sort();
+    if (`dm:${a}:${b}` !== roomId) return false;
+    return userId === a || userId === b;
+  }
+
+  return false;
 }
 
 /** Apply a Redis-backed rate-limit to a socket event. Returns true if allowed. */
@@ -134,6 +184,17 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       }
       if (!(await rateLimitOk(`sio:chat:join:${userId}`, 30, 60))) {
         socket.emit("chat:error", { code: "rate_limit", message: "Too many joins" });
+        ack?.(false);
+        return;
+      }
+      // Authorization: only allow joining rooms the user is genuinely a
+      // member of. We accept two patterns:
+      //   challenge:<id>  → user must be one of player1..player4
+      //   dm:<idA>:<idB>  → user must be A or B (sorted lexicographically)
+      // Anything else is rejected.
+      const allowed = await isUserAllowedInRoom(userId, roomId);
+      if (!allowed) {
+        socket.emit("chat:error", { code: "forbidden", message: "Not a member of this room" });
         ack?.(false);
         return;
       }
