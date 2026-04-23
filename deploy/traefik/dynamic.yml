@@ -1,49 +1,44 @@
-# File-provider configuration. This is a disaster-recovery fallback for the
-# Docker-label routers defined in docker-compose.prod.yml. Router names are
-# intentionally prefixed `vex-fallback-*` so they never collide with the
-# Docker-provider routers (`vex`, `vex-http`) when both providers are active.
+# File-provider configuration consumed by the running Traefik (currently the
+# `traefik-mrnn` compose project on the VPS). Router and service names are
+# preserved as `vex-http`, `vex-https`, `vex-service` to stay compatible with
+# the live deployment that is already routing vixo.click through these names.
 #
-# When TRAEFIK_DOCKER_PROVIDER_ENABLED=true (the production default), the
-# Docker labels win because Traefik prefers more-specific provider matches and
-# the names do not overlap. If the Docker provider is ever disabled or the app
-# container is missing labels, these routers keep the site reachable WITH the
-# same security middlewares and compression so behavior never silently
-# downgrades.
+# The security middlewares + compression are now wired in here too so the
+# file-provider path serves the same hardened response as the Docker-label
+# path in docker-compose.prod.yml — no silent downgrade if labels are off.
 
 http:
   routers:
-    vex-fallback-http:
+    vex-http:
       rule: Host(`vixo.click`) || Host(`www.vixo.click`)
       entryPoints:
         - web
       middlewares:
-        - vex-fallback-redirect-https
-      service: vex-fallback-service
-      priority: 1
+        - redirect-to-https
+      service: vex-service
 
-    vex-fallback-https:
+    vex-https:
       rule: Host(`vixo.click`) || Host(`www.vixo.click`)
       entryPoints:
         - websecure
       tls:
         certResolver: letsencrypt
       middlewares:
-        - vex-fallback-compress
-        - vex-fallback-headers
-      service: vex-fallback-service
-      priority: 1
+        - vex-compress
+        - vex-headers
+      service: vex-service
 
   middlewares:
-    vex-fallback-redirect-https:
+    redirect-to-https:
       redirectScheme:
         scheme: https
         permanent: true
 
-    vex-fallback-compress:
+    vex-compress:
       compress:
         minResponseBodyBytes: 1024
 
-    vex-fallback-headers:
+    vex-headers:
       headers:
         stsSeconds: 31536000
         stsIncludeSubdomains: true
@@ -58,7 +53,7 @@ http:
           Cross-Origin-Opener-Policy: "same-origin-allow-popups"
 
   services:
-    vex-fallback-service:
+    vex-service:
       loadBalancer:
         passHostHeader: true
         servers:

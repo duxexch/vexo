@@ -301,11 +301,13 @@ services:
       - vex-internal
       - vex-traefik
     labels:
-      # Enable Traefik. Default ON: the production deployment uses the Docker
-      # labels below as the source of truth so the security headers and
-      # compression middleware are always applied. The file-provider config in
-      # deploy/traefik/dynamic.yml is a renamed disaster-recovery fallback.
-      - "traefik.enable=${TRAEFIK_DOCKER_PROVIDER_ENABLED:-true}"
+      # Enable Traefik. Default OFF to stay compatible with the live deployment
+      # where routing is currently handled by the file-provider config in
+      # deploy/traefik/dynamic.yml (consumed by the `traefik-mrnn` container).
+      # Flip TRAEFIK_DOCKER_PROVIDER_ENABLED=true in .env on the VPS only after
+      # confirming traefik-mrnn has the Docker provider enabled and is attached
+      # to the same external network — otherwise these labels are ignored.
+      - "traefik.enable=${TRAEFIK_DOCKER_PROVIDER_ENABLED:-false}"
       - "traefik.docker.network=${TRAEFIK_EXTERNAL_NETWORK:-vex-traefik}"
       # HTTPS Router
       - "traefik.http.routers.vex.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
