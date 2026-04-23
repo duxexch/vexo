@@ -28,6 +28,11 @@ services:
       # Entrypoints
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
+      # Properly handle URL paths that contain encoded characters (Arabic
+      # slugs, %2F in IDs, etc.) so Traefik does not reject or mis-route
+      # them with the RFC3986 warning.
+      - --entrypoints.web.http.encodequerysemicolons=true
+      - --entrypoints.websecure.http.encodequerysemicolons=true
       # Let's Encrypt (HTTP-01 challenge)
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
@@ -35,10 +40,17 @@ services:
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
       # Logging
       - --accesslog=true
+      - --accesslog.bufferingsize=100
       - --log.level=INFO
-      # Disable insecure dashboard in production
+      # Disable insecure dashboard in production, but enable /ping so the
+      # container healthcheck below has a real endpoint to hit.
       - --api.dashboard=false
       - --api.insecure=false
+      - --ping=true
+      - --ping.entrypoint=web
+      # Cut noisy startup behavior + version checks in production.
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
     ports:
       - "80:80"
       - "443:443"

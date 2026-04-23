@@ -1,29 +1,69 @@
+# File-provider configuration. This is a disaster-recovery fallback for the
+# Docker-label routers defined in docker-compose.prod.yml. Router names are
+# intentionally prefixed `vex-fallback-*` so they never collide with the
+# Docker-provider routers (`vex`, `vex-http`) when both providers are active.
+#
+# When TRAEFIK_DOCKER_PROVIDER_ENABLED=true (the production default), the
+# Docker labels win because Traefik prefers more-specific provider matches and
+# the names do not overlap. If the Docker provider is ever disabled or the app
+# container is missing labels, these routers keep the site reachable WITH the
+# same security middlewares and compression so behavior never silently
+# downgrades.
+
 http:
   routers:
-    vex-http:
+    vex-fallback-http:
       rule: Host(`vixo.click`) || Host(`www.vixo.click`)
       entryPoints:
         - web
       middlewares:
-        - redirect-to-https
-      service: vex-service
+        - vex-fallback-redirect-https
+      service: vex-fallback-service
+      priority: 1
 
-    vex-https:
+    vex-fallback-https:
       rule: Host(`vixo.click`) || Host(`www.vixo.click`)
       entryPoints:
         - websecure
       tls:
         certResolver: letsencrypt
-      service: vex-service
+      middlewares:
+        - vex-fallback-compress
+        - vex-fallback-headers
+      service: vex-fallback-service
+      priority: 1
 
   middlewares:
-    redirect-to-https:
+    vex-fallback-redirect-https:
       redirectScheme:
         scheme: https
         permanent: true
 
+    vex-fallback-compress:
+      compress:
+        minResponseBodyBytes: 1024
+
+    vex-fallback-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: strict-origin-when-cross-origin
+        customResponseHeaders:
+          X-Robots-Tag: "index, follow"
+          Cross-Origin-Opener-Policy: "same-origin-allow-popups"
+
   services:
-    vex-service:
+    vex-fallback-service:
       loadBalancer:
+        passHostHeader: true
         servers:
           - url: http://vex-app:3001
+        healthCheck:
+          path: /api/health
+          interval: 30s
+          timeout: 10s
