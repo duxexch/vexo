@@ -41,6 +41,7 @@ waitForPort = 3001
 
 [agent]
 integrations = ["javascript_database:1.0.0"]
+expertMode = true
 
 [userenv]
 
