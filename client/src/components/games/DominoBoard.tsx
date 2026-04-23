@@ -597,6 +597,11 @@ function getAdaptiveDirectionPriority(
   return ordered.filter((d, i, arr) => arr.indexOf(d) === i);
 }
 
+type PlacementAttempt = {
+  placements: DominoPathPlacement[];
+  isComplete: boolean;
+};
+
 function placeDominoEntriesAtScale(
   entries: BoardRowEntry[],
   side: "left" | "right",
@@ -607,9 +612,9 @@ function placeDominoEntriesAtScale(
   layoutScale: number,
   iterationGuard: { count: number; max: number },
   telemetry: DominoLayoutTelemetry,
-): DominoPathPlacement[] | null {
+): PlacementAttempt {
   if (entries.length === 0) {
-    return [];
+    return { placements: [], isComplete: true };
   }
 
   const seamSpacing = (compact ? 0 : 2) * layoutScale;
@@ -714,7 +719,10 @@ function placeDominoEntriesAtScale(
     }
 
     if (candidates.length === 0) {
-      return null;
+      // No viable placement for this tile — return what we got so far. The
+      // orchestrator will decide whether to retry at a smaller scale or
+      // accept this partial result as the best available.
+      return { placements, isComplete: false };
     }
 
     let chosen: Candidate | null = null;
@@ -786,7 +794,7 @@ function placeDominoEntriesAtScale(
     placedRects.push(chosen.rect);
   }
 
-  return placements;
+  return { placements, isComplete: true };
 }
 
 function getConnectedTileDelta(
@@ -874,9 +882,14 @@ function buildDominoPlacements(
       return quantizeLayoutScale(Math.max(minLayoutScale, rawScale));
     });
 
+  // Track the best partial we have ever seen so that, even if no scale fits
+  // every tile, we can still surface as many tiles as possible — far better
+  // than collapsing to an empty board on long chains.
+  let bestPartial: { placements: DominoPathPlacement[]; layoutScale: number } | null = null;
+
   for (let scaleIndex = 0; scaleIndex < scalesToTry.length; scaleIndex += 1) {
     const scale = scalesToTry[scaleIndex];
-    const placements = placeDominoEntriesAtScale(
+    const attempt = placeDominoEntriesAtScale(
       entries,
       side,
       compact,
@@ -888,18 +901,35 @@ function buildDominoPlacements(
       telemetry,
     );
 
-    if (placements) {
+    if (attempt.isComplete) {
       return {
-        placements,
+        placements: attempt.placements,
         layoutScale: scale,
         telemetry,
       };
+    }
+
+    if (
+      !bestPartial ||
+      attempt.placements.length > bestPartial.placements.length
+    ) {
+      bestPartial = { placements: attempt.placements, layoutScale: scale };
     }
 
     const hasNextScale = scaleIndex < scalesToTry.length - 1;
     if (hasNextScale) {
       telemetry.shrinkSteps += 1;
     }
+  }
+
+  // No scale produced a complete layout. Use the partial with the most tiles
+  // placed so the board still shows the player's chain progress.
+  if (bestPartial && bestPartial.placements.length > 0) {
+    return {
+      placements: bestPartial.placements,
+      layoutScale: bestPartial.layoutScale,
+      telemetry,
+    };
   }
 
   return {

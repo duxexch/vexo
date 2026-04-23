@@ -144,11 +144,9 @@ async function buildSuite(): Promise<SnapshotSuite> {
             }).safeBounds,
             tiles: buildHeavyDoublesTiles(20),
         }),
-        // Long chain (28 tiles). Locks the current degradation: placement is
-        // empty at the minimum scale rather than overflowing the lane. The
-        // architect flagged that this scenario *should* fit at higher scale —
-        // tracked as a follow-up; this assertion guards against silent
-        // overflow regressions in the meantime.
+        // Long chain (28 tiles). The solver should fold the chain enough to
+        // place a substantial portion at a readable scale instead of giving
+        // up. Allows partial placement when the lane truly cannot fit all 28.
         "desktop-long-right": await runScenario("desktop-long-right", {
             side: "right",
             compact: false,
@@ -157,9 +155,9 @@ async function buildSuite(): Promise<SnapshotSuite> {
             safeBounds: register("desktop-long-right", {
                 safeBounds: desktopRightBounds,
                 compact: false,
-                minPlaced: 0,
-                minScale: 0.4,
-                minFolds: 0,
+                minPlaced: 18,
+                minScale: 0.55,
+                minFolds: 2,
             }).safeBounds,
             tiles: buildStraightTiles(28),
         }),
