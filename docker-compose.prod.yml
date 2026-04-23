@@ -301,13 +301,11 @@ services:
       - vex-internal
       - vex-traefik
     labels:
-      # Enable Traefik. Default OFF to stay compatible with the live deployment
-      # where routing is currently handled by the file-provider config in
-      # deploy/traefik/dynamic.yml (consumed by the `traefik-mrnn` container).
-      # Flip TRAEFIK_DOCKER_PROVIDER_ENABLED=true in .env on the VPS only after
-      # confirming traefik-mrnn has the Docker provider enabled and is attached
-      # to the same external network — otherwise these labels are ignored.
-      - "traefik.enable=${TRAEFIK_DOCKER_PROVIDER_ENABLED:-false}"
+      # Enable Traefik. Default ON: the live `traefik-mrnn` container reads
+      # /var/run/docker.sock and routes vixo.click via these labels — there is
+      # no file-provider mount in production. Keep the env knob so a fresh
+      # bring-up that hasn't touched .env still routes correctly.
+      - "traefik.enable=${TRAEFIK_DOCKER_PROVIDER_ENABLED:-true}"
       - "traefik.docker.network=${TRAEFIK_EXTERNAL_NETWORK:-vex-traefik}"
       # HTTPS Router
       - "traefik.http.routers.vex.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
@@ -337,8 +335,16 @@ services:
       # Gzip compression at Traefik level
       - "traefik.http.middlewares.vex-compress.compress=true"
       - "traefik.http.middlewares.vex-compress.compress.minResponseBodyBytes=1024"
-      # Chain middlewares
-      - "traefik.http.routers.vex.middlewares=vex-compress,vex-headers"
+      # Edge rate limit (defence-in-depth on top of the app-level limiter).
+      # 200 req/s sustained per source with 400-burst tolerance — generous
+      # enough for legitimate WebSocket reconnect storms but cuts off
+      # credential-stuffing / scraping floods before they touch the app.
+      - "traefik.http.middlewares.vex-ratelimit.ratelimit.average=200"
+      - "traefik.http.middlewares.vex-ratelimit.ratelimit.burst=400"
+      - "traefik.http.middlewares.vex-ratelimit.ratelimit.period=1s"
+      - "traefik.http.middlewares.vex-ratelimit.ratelimit.sourcecriterion.ipstrategy.depth=1"
+      # Chain middlewares (order matters: rate limit first, then headers, then compress)
+      - "traefik.http.routers.vex.middlewares=vex-ratelimit,vex-headers,vex-compress"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:3001/api/health" ]
       interval: 30s
