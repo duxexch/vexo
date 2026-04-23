@@ -105,6 +105,7 @@ export async function handleJoinGame(ws: AuthenticatedWebSocket, payload: { sess
 
     room.players.set(ws.userId, ws);
     ws.sessionId = sessionId;
+    ws.challengeId = session.challengeId || undefined;
     ws.isSpectator = false;
 
     // Check if this player is reconnecting — cancel forfeit timer
@@ -264,6 +265,7 @@ export async function handleSpectate(ws: AuthenticatedWebSocket, payload: { sess
     const spectatorId = ws.userId || `anon_${crypto.randomBytes(8).toString('hex')}`;
     room.spectators.set(spectatorId, ws);
     ws.sessionId = sessionId;
+    ws.challengeId = session.challengeId || undefined;
     ws.isSpectator = true;
     ws.spectatorId = spectatorId;
 

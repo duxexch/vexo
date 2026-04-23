@@ -13,6 +13,12 @@ export interface AuthenticatedWebSocket extends WebSocket {
   userAgent?: string;
   tokenFingerprint?: string;
   sessionId?: string;
+  /**
+   * Cached parent challenge id for the active session. Set on join so
+   * downstream handlers (e.g. chat) can mirror events to the Socket.IO
+   * `challenge:<id>` room without an extra DB hit per message.
+   */
+  challengeId?: string;
   isSpectator?: boolean;
   isAlive?: boolean;
   spectatorId?: string;

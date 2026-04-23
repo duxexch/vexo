@@ -30,6 +30,7 @@ import type { CountryPaymentMethod } from "@shared/schema";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
 import { useCall } from "@/components/calls/CallSessionProvider";
 import { CallButton } from "@/components/calls/CallButton";
+import { useSocketChat } from "@/hooks/use-socket-chat";
 import {
   adaptDominoBoardMoveToEngine,
   extractDominoHandFromPlayerView,
@@ -293,6 +294,15 @@ export default function ChallengeGamePage() {
   const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const callSession = useCall();
+  // Subscribe to the new realtime channel for instant chat delivery. Server
+  // mirrors legacy WS chat broadcasts here, so messages are deduped via the
+  // shared (senderId, text, timestamp) signature key. Backwards-compatible:
+  // outgoing still flows through the legacy WS so users on the old transport
+  // continue to receive messages.
+  const realtimeChat = useSocketChat({
+    roomId: challengeId ? `challenge:${challengeId}` : null,
+  });
+  const realtimeMessages = realtimeChat.messages;
   const [fundingShortageProject, setFundingShortageProject] = useState(0);
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
   const [dominoMoveError, setDominoMoveError] = useState<string | null>(null);
@@ -340,6 +350,40 @@ export default function ChallengeGamePage() {
   const chessMoveAckTimerRef = useRef<NodeJS.Timeout | null>(null);
   const timeoutSignalSentRef = useRef(false);
   const seenChatMessageKeysRef = useRef<Set<string>>(new Set());
+
+  // Merge messages received via the new realtime channel into the same
+  // `messages` list. Server emits the same (senderId, text, ts) signature
+  // for both transports, so the dedup key collapses duplicates whichever
+  // arrives first. The realtime channel is faster on flaky links, so this
+  // is the path that delivers "instant" feel; the legacy WS still fills
+  // in richer metadata (avatar, quick-message styling) when it follows.
+  useEffect(() => {
+    if (realtimeMessages.length === 0) return;
+    setMessages((prev) => {
+      let next = prev;
+      for (const m of realtimeMessages) {
+        const sigKey = `sig:${m.fromUserId}:${m.text}:${String(m.ts)}`;
+        if (seenChatMessageKeysRef.current.has(sigKey)) continue;
+        seenChatMessageKeysRef.current.add(sigKey);
+        if (seenChatMessageKeysRef.current.size > 1200) {
+          seenChatMessageKeysRef.current.clear();
+          seenChatMessageKeysRef.current.add(sigKey);
+        }
+        const normalized: ChatMsg = {
+          userId: m.fromUserId,
+          senderId: m.fromUserId,
+          username: m.fromUsername,
+          senderName: m.fromUsername,
+          message: m.text,
+          timestamp: m.ts,
+        };
+        if (next === prev) next = [...prev];
+        next.push(normalized);
+      }
+      if (next === prev) return prev;
+      return next.slice(-220);
+    });
+  }, [realtimeMessages]);
   const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(
     null,
   );

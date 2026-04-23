@@ -8,6 +8,9 @@ import { getCachedUserBlockLists } from '../lib/redis';
 import type { AuthenticatedWebSocket } from './types';
 import { rooms } from './types';
 import { send, sendError, broadcastToRoom, broadcastToRoomFiltered } from './utils';
+import { getSocketIO } from '../socketio';
+import { SOCKETIO_NS_CHAT, type ChatBroadcast } from '../../shared/socketio-events';
+import { logger } from '../lib/logger';
 
 export async function handleChat(ws: AuthenticatedWebSocket, payload: { message: string }) {
   if (!ws.sessionId) {
@@ -56,6 +59,11 @@ export async function handleChat(ws: AuthenticatedWebSocket, payload: { message:
     console.error('Error saving chat message:', error);
   });
 
+  // Use one shared timestamp so the legacy WS broadcast and the Socket.IO
+  // mirror produce identical (senderId, text, ts) signatures — that's what
+  // the client uses to dedupe between the two transports.
+  const ts = Date.now();
+
   broadcastToRoomFiltered(room, {
     type: 'chat_message',
     payload: {
@@ -63,10 +71,41 @@ export async function handleChat(ws: AuthenticatedWebSocket, payload: { message:
       username: ws.username,
       message: messageToSend,
       isSpectator: ws.isSpectator,
-      timestamp: Date.now(),
+      timestamp: ts,
       wasFiltered: !filterResult.isClean
     }
   }, ws.userId, blockedUsers);
+
+  // Mirror to the new Socket.IO /chat channel for instant delivery to
+  // clients on the new transport. We only mirror player chat (spectators
+  // remain on legacy because the /chat namespace authorizes only
+  // challenge participants). The mirror is best-effort — failures must
+  // never break the legacy broadcast above.
+  if (!ws.isSpectator && ws.challengeId) {
+    try {
+      const io = getSocketIO();
+      if (io) {
+        const broadcast: ChatBroadcast = {
+          roomId: `challenge:${ws.challengeId}`,
+          fromUserId: ws.userId,
+          fromUsername: ws.username || ws.userId,
+          text: messageToSend,
+          ts,
+        };
+        const ns = io.of(SOCKETIO_NS_CHAT);
+        // Honor the same block-list as the legacy broadcast: emit per
+        // socket in the room and skip recipients who blocked the sender.
+        const sockets = await ns.in(broadcast.roomId).fetchSockets();
+        for (const s of sockets) {
+          const recipientId = (s.data as { userId?: string } | undefined)?.userId;
+          if (recipientId && blockedUsers.includes(recipientId) && recipientId !== ws.userId) continue;
+          s.emit('chat:message', broadcast);
+        }
+      }
+    } catch (err) {
+      logger.warn?.(`[ws-chat] socket.io mirror failed: ${(err as Error).message}`);
+    }
+  }
 }
 
 export async function handleSendGift(ws: AuthenticatedWebSocket, payload: { recipientId: string; giftItemId: string; quantity: number; message?: string }) {
