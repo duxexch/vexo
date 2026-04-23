@@ -32,7 +32,8 @@ deploy/                 # Traefik + voice (LiveKit/Coturn) compose files
 docker/                 # Misc Docker config (nginx fallback)
 docs/                   # Feature playbooks and audits
 PROJECT_KNOWLEDGE_ENGINE/  # Authoritative knowledge base (READ FIRST)
-prod-update.sh          # Standard production update wrapper
+scripts/vps-bootstrap.sh # ⭐ One-shot fresh-install (inspects VPS, installs Docker, generates all secrets idempotently, deploys for vixo.click)
+prod-update.sh          # Standard production update wrapper (re-deploys after code changes)
 prod-auto.sh            # First-run bootstrap wrapper
 docker-compose.prod.yml # Production stack (db, redis, minio, ai-agent, app)
 docker-compose.yml      # Local-only stack (no Traefik)
