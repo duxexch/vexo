@@ -27,9 +27,14 @@ export function registerOneClickRoutes(app: Express) {
       const plainPassword = crypto.randomBytes(8).toString("hex");
       const hashedPassword = await bcrypt.hash(plainPassword, 12);
 
+      // NOTE: username here is a temporary placeholder to satisfy the NOT NULL/UNIQUE
+      // constraint. usernameSelectedAt is intentionally left NULL so the user is forced
+      // to choose a real username on first authenticated request (see requireUsernameSelected
+      // middleware and POST /api/auth/select-username).
       const user = await storage.createUser({
         accountId,
         username: `player_${accountId}`,
+        usernameSelectedAt: null,
         password: hashedPassword,
         role: "player",
         status: "active",

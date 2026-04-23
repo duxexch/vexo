@@ -15,6 +15,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { lazy, Suspense, useEffect } from "react";
 
 const LoginPage = lazy(() => import("@/pages/login"));
+const SelectUsernamePage = lazy(() => import("@/pages/select-username"));
 const ChallengesPage = lazy(() => import("@/pages/challenges"));
 const TournamentsPage = lazy(() => import("@/pages/tournaments"));
 const TermsPage = lazy(() => import("@/pages/terms"));
@@ -74,7 +75,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
 }
 
 function Router() {
-    const { isAuthenticated, isLoading } = useAuth();
+    const { isAuthenticated, isLoading, user } = useAuth();
     const [location] = useLocation();
 
     useEffect(() => {
@@ -139,6 +140,18 @@ function Router() {
         return (
             <Suspense fallback={<PageLoader />}>
                 <LoginPage />
+            </Suspense>
+        );
+    }
+
+    // Mandatory username selection on first login. Players whose account was
+    // created by the one-click flow have usernameSelectedAt = null and must
+    // pick a permanent username before reaching the rest of the app. Admins
+    // are exempt (matches server-side gate in authMiddleware).
+    if (user && user.role !== "admin" && !user.usernameSelectedAt) {
+        return (
+            <Suspense fallback={<PageLoader />}>
+                <SelectUsernamePage />
             </Suspense>
         );
     }

@@ -1,6 +1,6 @@
 import type { Express, Response } from "express";
 import { storage } from "../../storage";
-import { users, transactions } from "@shared/schema";
+import { users, transactions, projectCurrencyWallets, projectCurrencyLedger } from "@shared/schema";
 import { sendNotification } from "../../websocket";
 import { db } from "../../db";
 import { eq, sql } from "drizzle-orm";
@@ -223,6 +223,132 @@ export function registerUserFinancialRoutes(app: Express) {
       }).catch(() => { });
 
       res.json({ ...toSafeUser(updated), rewardSent: rewardAmount });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  // Adjust user's project currency (VXC) wallet — admin credit/debit
+  app.post("/api/admin/users/:id/vxc-adjust", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { amount, type, reason } = req.body;
+
+      if (!type || !["add", "subtract"].includes(type)) {
+        return res.status(400).json({ error: "Type must be 'add' or 'subtract'" });
+      }
+
+      const adjustAmount = parseFloat(amount);
+      if (isNaN(adjustAmount) || adjustAmount <= 0 || adjustAmount > 1_000_000) {
+        return res.status(400).json({ error: "Amount must be a positive number up to 1,000,000" });
+      }
+
+      if (!reason || typeof reason !== "string" || reason.trim().length < 3) {
+        return res.status(400).json({ error: "A reason is required (minimum 3 characters)" });
+      }
+
+      const user = await storage.getUser(id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const result = await db.transaction(async (tx) => {
+        // Lock or lazily create the wallet row.
+        let [wallet] = await tx.select()
+          .from(projectCurrencyWallets)
+          .where(eq(projectCurrencyWallets.userId, id))
+          .for("update");
+
+        if (!wallet) {
+          [wallet] = await tx.insert(projectCurrencyWallets).values({ userId: id }).returning();
+        }
+
+        const earnedBefore = parseNumeric(wallet.earnedBalance);
+        const purchasedBefore = parseNumeric(wallet.purchasedBalance);
+        const totalBefore = parseNumeric(wallet.totalBalance);
+
+        if (type === "add") {
+          // Credit goes into earnedBalance (admin grant treated as earned).
+          const newEarned = earnedBefore + adjustAmount;
+          const newTotal = totalBefore + adjustAmount;
+          const [updated] = await tx.update(projectCurrencyWallets)
+            .set({
+              earnedBalance: newEarned.toFixed(2),
+              totalBalance: newTotal.toFixed(2),
+              totalEarned: (parseNumeric(wallet.totalEarned) + adjustAmount).toFixed(2),
+              updatedAt: new Date(),
+            })
+            .where(eq(projectCurrencyWallets.id, wallet.id))
+            .returning();
+          return { success: true as const, wallet: updated, balanceBefore: totalBefore, balanceAfter: newTotal };
+        }
+
+        // Debit: take from earned first, then purchased.
+        if (totalBefore < adjustAmount) {
+          return { success: false as const, error: "Insufficient VXC balance" };
+        }
+        const fromEarned = Math.min(earnedBefore, adjustAmount);
+        const fromPurchased = adjustAmount - fromEarned;
+        const newEarned = earnedBefore - fromEarned;
+        const newPurchased = purchasedBefore - fromPurchased;
+        const newTotal = totalBefore - adjustAmount;
+
+        const [updated] = await tx.update(projectCurrencyWallets)
+          .set({
+            earnedBalance: newEarned.toFixed(2),
+            purchasedBalance: newPurchased.toFixed(2),
+            totalBalance: newTotal.toFixed(2),
+            updatedAt: new Date(),
+          })
+          .where(eq(projectCurrencyWallets.id, wallet.id))
+          .returning();
+
+        return { success: true as const, wallet: updated, balanceBefore: totalBefore, balanceAfter: newTotal };
+      });
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      const internalReference = `admin_vxc_adjust:${id}:${Date.now()}`;
+      await db.insert(projectCurrencyLedger).values({
+        userId: id,
+        walletId: result.wallet.id,
+        type: "admin_adjustment",
+        amount: (type === "add" ? adjustAmount : -adjustAmount).toFixed(2),
+        balanceBefore: result.balanceBefore.toFixed(2),
+        balanceAfter: result.balanceAfter.toFixed(2),
+        referenceId: internalReference,
+        referenceType: "admin_adjustment",
+        description: `Admin VXC adjustment: ${reason}`,
+      });
+
+      await logAdminAction(req.admin!.id, "user_balance_adjust", "user", id, {
+        previousValue: String(result.balanceBefore),
+        newValue: String(result.balanceAfter),
+        reason: `[VXC] ${reason}`,
+      }, req);
+
+      const adjustLabel = type === "add"
+        ? { en: "credited to", ar: "أضيفت إلى" }
+        : { en: "deducted from", ar: "خصمت من" };
+      await sendNotification(id, {
+        type: "transaction",
+        priority: "high",
+        title: "VXC Balance Updated",
+        titleAr: "تحديث رصيد VXC",
+        message: `${adjustAmount.toFixed(2)} VXC has been ${adjustLabel.en} your wallet. Reason: ${reason}`,
+        messageAr: `${adjustAmount.toFixed(2)} VXC ${adjustLabel.ar} محفظتك. السبب: ${reason}`,
+        link: "/wallet",
+        metadata: JSON.stringify({
+          type: "vxc_adjust",
+          amount: adjustAmount,
+          balanceAfter: result.balanceAfter,
+          referenceId: internalReference,
+        }),
+      }).catch(() => { });
+
+      res.json({ wallet: result.wallet, balanceBefore: result.balanceBefore, balanceAfter: result.balanceAfter });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

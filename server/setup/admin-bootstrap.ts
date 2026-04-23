@@ -60,6 +60,7 @@ export function runAdminBootstrap(): void {
             const hashedPassword = await bcrypt.hash(resetPassword, 12);
             await storage.createUser({
               username: resetUsername,
+              usernameSelectedAt: new Date(),
               password: hashedPassword,
               email: process.env.ADMIN_RESET_EMAIL || "admin@vex.local",
               firstName: "Admin",
@@ -91,6 +92,7 @@ export function runAdminBootstrap(): void {
           const hashedPassword = await bcrypt.hash(devPassword, 12);
           await storage.createUser({
             username: "admin",
+            usernameSelectedAt: new Date(),
             password: hashedPassword,
             email: "admin@vex.local",
             firstName: "Admin",
@@ -110,6 +112,7 @@ export function runAdminBootstrap(): void {
           const hashedPassword = await bcrypt.hash(bootstrapPassword, 12);
           await storage.createUser({
             username: "admin",
+            usernameSelectedAt: new Date(),
             password: hashedPassword,
             email: process.env.ADMIN_BOOTSTRAP_EMAIL || "admin@vex.local",
             firstName: "Admin",

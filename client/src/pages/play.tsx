@@ -23,6 +23,7 @@ import {
   MessageCircle, Send, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { VoiceChat as SharedVoiceChat } from '@/components/games/VoiceChat';
+import { BalanceDisplay } from '@/components/BalanceDisplay';
 import type { Game, Transaction, User, Announcement, GameplayEmoji, Advertisement, GameSection as GameSectionType } from '@shared/schema';
 import Autoplay from 'embla-carousel-autoplay';
 import DOMPurify from 'dompurify';
@@ -1187,7 +1188,6 @@ function AnnouncementsBanner() {
 function AccountSummaryCard({ user }: { user: User | undefined }) {
   const { t } = useI18n();
 
-  const balance = parseFloat(user?.balance || '0');
   const totalWagered = parseFloat(user?.totalWagered || '0');
   const totalWon = parseFloat(user?.totalWon || '0');
   const vipLevel = user?.vipLevel || 1;
@@ -1203,9 +1203,7 @@ function AccountSummaryCard({ user }: { user: User | undefined }) {
       <CardContent className="space-y-4">
         <div className="text-center p-4 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 border">
           <p className="text-sm text-muted-foreground mb-1">{t('play.yourBalance')}</p>
-          <p className="text-3xl font-bold text-primary" data-testid="text-balance">
-            ${balance.toFixed(2)}
-          </p>
+          <BalanceDisplay balance={user?.balance || '0'} variant="compact" />
         </div>
 
         <div className="grid grid-cols-3 gap-3">

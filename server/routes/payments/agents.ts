@@ -23,7 +23,7 @@ export function registerAgentRoutes(app: Express): void {
       const { username, password, email, firstName, lastName, ...agentData } = req.body;
       const hashedPassword = await bcrypt.hash(password, 12);
       const user = await storage.createUser({
-        username, password: hashedPassword, email, firstName, lastName, role: "agent", status: "active",
+        username, usernameSelectedAt: new Date(), password: hashedPassword, email, firstName, lastName, role: "agent", status: "active",
       });
       const agentCode = `AGT-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
       const agent = await storage.createAgent({ userId: user.id, agentCode, ...agentData });

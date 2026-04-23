@@ -66,6 +66,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useUnreadAlertEntities, useMarkAlertReadByEntity } from "@/hooks/use-admin-alert-counts";
 
 function getAdminToken() {
@@ -183,6 +184,7 @@ export default function AdminUsersPage() {
   const [actionReason, setActionReason] = useState("");
   const [actionAmount, setActionAmount] = useState("");
   const [adjustType, setAdjustType] = useState<"add" | "subtract">("add");
+  const [adjustWallet, setAdjustWallet] = useState<"usd" | "vxc">("usd");
   const [viewUserSheet, setViewUserSheet] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<UserType>>({});
@@ -296,15 +298,19 @@ export default function AdminUsersPage() {
   });
 
   const balanceAdjustMutation = useMutation({
-    mutationFn: async ({ id, amount, type, reason }: { id: string; amount: string; type: string; reason: string }) => {
-      return adminFetch(`/api/admin/users/${id}/balance-adjust`, {
+    mutationFn: async ({ id, amount, type, reason, wallet }: { id: string; amount: string; type: string; reason: string; wallet: "usd" | "vxc" }) => {
+      const endpoint = wallet === "vxc" ? "vxc-adjust" : "balance-adjust";
+      return adminFetch(`/api/admin/users/${id}/${endpoint}`, {
         method: "POST",
         body: JSON.stringify({ amount, type, reason }),
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
-      toast({ title: "Balance Updated", description: "User balance has been adjusted" });
+      toast({
+        title: variables.wallet === "vxc" ? "VXC Balance Updated" : "Balance Updated",
+        description: variables.wallet === "vxc" ? "User VXC wallet has been adjusted" : "User balance has been adjusted",
+      });
       closeDialog();
     },
     onError: (error: Error) => {
@@ -354,6 +360,8 @@ export default function AdminUsersPage() {
     setSelectedUser(null);
     setActionReason("");
     setActionAmount("");
+    setAdjustWallet("usd");
+    setAdjustType("add");
   };
 
   const handleAction = () => {
@@ -375,6 +383,7 @@ export default function AdminUsersPage() {
           amount: actionAmount,
           type: adjustType,
           reason: actionReason,
+          wallet: adjustWallet,
         });
         break;
       case "reward":
@@ -762,6 +771,15 @@ export default function AdminUsersPage() {
                 )}
               </div>
 
+              <Tabs defaultValue="profile" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="profile" data-testid="tab-profile">Profile</TabsTrigger>
+                  <TabsTrigger value="balances" data-testid="tab-balances">Balances</TabsTrigger>
+                  <TabsTrigger value="activity" data-testid="tab-activity">Activity</TabsTrigger>
+                  <TabsTrigger value="account" data-testid="tab-account">Account</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="profile" className="mt-4 space-y-6">
               <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
                 <Avatar className="h-16 w-16">
                   <AvatarImage src={selectedUser.profilePicture} />
@@ -787,21 +805,6 @@ export default function AdminUsersPage() {
                     </Badge>
                   </div>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Card className="p-4">
-                  <div className="text-sm text-muted-foreground">Balance</div>
-                  <div className="text-2xl font-bold text-primary">
-                    {formatCurrency(selectedUserOverview?.metrics?.fiatBalance ?? selectedUser.balance)}
-                  </div>
-                </Card>
-                <Card className="p-4">
-                  <div className="text-sm text-muted-foreground">Games Won</div>
-                  <div className="text-2xl font-bold text-yellow-500">
-                    {selectedUser.gamesWon ?? 0} / {selectedUser.gamesPlayed ?? 0}
-                  </div>
-                </Card>
               </div>
 
               <div className="space-y-4">
@@ -948,6 +951,29 @@ export default function AdminUsersPage() {
                   </div>
                 </div>
               </div>
+                </TabsContent>
+
+                <TabsContent value="balances" className="mt-4 space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Card className="p-4">
+                  <div className="text-xs text-muted-foreground">Primary Balance (USD)</div>
+                  <div className="text-2xl font-bold text-primary" data-testid="text-balance-usd">
+                    {formatCurrency(selectedUserOverview?.metrics?.fiatBalance ?? selectedUser.balance)}
+                  </div>
+                </Card>
+                <Card className="p-4">
+                  <div className="text-xs text-muted-foreground">Project Currency (VXC)</div>
+                  <div className="text-2xl font-bold text-primary" data-testid="text-balance-vxc">
+                    {safeNumber(selectedUserOverview?.projectWallet?.totalBalance ?? 0).toFixed(2)}
+                  </div>
+                </Card>
+                <Card className="p-4">
+                  <div className="text-xs text-muted-foreground">Games W / P</div>
+                  <div className="text-2xl font-bold text-yellow-500">
+                    {selectedUser.gamesWon ?? 0} / {selectedUser.gamesPlayed ?? 0}
+                  </div>
+                </Card>
+              </div>
 
               <div className="space-y-4">
                 <h4 className="font-semibold flex items-center gap-2">
@@ -1014,6 +1040,9 @@ export default function AdminUsersPage() {
                 )}
               </div>
 
+                </TabsContent>
+
+                <TabsContent value="activity" className="mt-4 space-y-6">
               <div className="space-y-4">
                 <h4 className="font-semibold flex items-center gap-2">
                   <Wallet className="h-4 w-4" />
@@ -1139,6 +1168,9 @@ export default function AdminUsersPage() {
                 )}
               </div>
 
+                </TabsContent>
+
+                <TabsContent value="account" className="mt-4 space-y-6">
               <div className="space-y-4">
                 <h4 className="font-semibold flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
@@ -1172,6 +1204,8 @@ export default function AdminUsersPage() {
                   )}
                 </div>
               )}
+                </TabsContent>
+              </Tabs>
             </div>
           )}
         </SheetContent>
@@ -1206,9 +1240,24 @@ export default function AdminUsersPage() {
               </div>
             )}
 
+            {actionDialog === "balance" && (
+              <div className="space-y-2">
+                <Label>Wallet</Label>
+                <Select value={adjustWallet} onValueChange={(v: "usd" | "vxc") => setAdjustWallet(v)}>
+                  <SelectTrigger data-testid="select-adjust-wallet">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="usd">Primary Balance (USD)</SelectItem>
+                    <SelectItem value="vxc">Project Currency (VXC)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {(actionDialog === "balance" || actionDialog === "reward") && (
               <div className="space-y-2">
-                <Label>Amount ($)</Label>
+                <Label>Amount {actionDialog === "balance" && adjustWallet === "vxc" ? "(VXC)" : "($)"}</Label>
                 <Input
                   type="number"
                   placeholder="Enter amount"
@@ -1227,8 +1276,8 @@ export default function AdminUsersPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="add">Add to Balance</SelectItem>
-                    <SelectItem value="subtract">Subtract from Balance</SelectItem>
+                    <SelectItem value="add">Credit (Add)</SelectItem>
+                    <SelectItem value="subtract">Debit (Subtract)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

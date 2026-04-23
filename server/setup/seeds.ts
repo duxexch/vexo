@@ -1,8 +1,30 @@
+import { sql } from "drizzle-orm";
 import { db } from "../db";
 import { themes, featureFlags } from "@shared/schema";
 import { logger } from "../lib/logger";
 
 export function runDatabaseSeeds(): void {
+  // One-time backfill: existing users (created before mandatory username flow)
+  // get usernameSelectedAt = NOW() so they're not blocked by the gate.
+  // Users with placeholder usernames like "player_<accountId>" are LEFT NULL
+  // so they go through the new selection flow on next login.
+  (async () => {
+    try {
+      await db.execute(sql`
+        UPDATE users
+        SET username_selected_at = NOW()
+        WHERE username_selected_at IS NULL
+          AND username IS NOT NULL
+          AND username NOT LIKE 'player\\_%' ESCAPE '\\'
+      `);
+    } catch (error) {
+      logger.error(
+        "Failed to backfill username_selected_at",
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    }
+  })();
+
   // Seed default themes if none exist
   (async () => {
     try {

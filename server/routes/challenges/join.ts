@@ -135,15 +135,12 @@ export function registerJoinRoute(app: Express) {
       // Use DB challenge for financial logic
       const challenge = dbChallenge;
 
-      const [currencyModeSetting] = await db.select({ value: gameplaySettings.value })
-        .from(gameplaySettings)
-        .where(eq(gameplaySettings.key, 'play_gift_currency_mode'))
-        .limit(1);
-      const enforceProjectOnly = !currencyModeSetting || currencyModeSetting.value !== 'mixed';
-      if (enforceProjectOnly && (challenge.currencyType || 'usd') === 'usd') {
+      // Mandate: gameplay uses only the project currency (VXC). Reject any
+      // legacy USD-stake challenges still lingering in the database.
+      if ((challenge.currencyType || 'usd') === 'usd') {
         challengeJoinLocks.delete(challengeId);
         return res.status(400).json({
-          error: 'Real-money gameplay is disabled. Convert to project currency to join games.',
+          error: 'Challenges must use the project currency (VXC). Convert your balance to VXC to join games.',
         });
       }
 

@@ -21,6 +21,7 @@ export interface AuthRequest extends Request {
     id: string;
     role: string;
     username: string;
+    usernameSelected?: boolean;
     tokenFingerprint?: string;
     token?: string;
   };
@@ -244,9 +245,24 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
       id: verified.id,
       role: verified.role,
       username: verified.username,
+      usernameSelected: verified.usernameSelected,
       tokenFingerprint: verified.tokenFingerprint,
       token,
     };
+
+    // Username selection gate — admins are exempt; players with a NULL
+    // username_selected_at must call /api/auth/select-username before
+    // anything else (except logout and reading their own profile).
+    if (
+      verified.usernameSelected === false &&
+      verified.role !== "admin" &&
+      !USERNAME_GATE_ALLOWLIST.has(req.path)
+    ) {
+      return res.status(428).json({
+        error: "Username selection required before continuing.",
+        errorCode: "USERNAME_SELECTION_REQUIRED",
+      });
+    }
 
     next();
   } catch (error) {
@@ -260,6 +276,42 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
 
     return res.status(401).json({ error: "Invalid token" });
   }
+};
+
+/**
+ * Paths that an authenticated user with no chosen username may still call.
+ * Any other authenticated request returns 428 USERNAME_SELECTION_REQUIRED.
+ */
+const USERNAME_GATE_ALLOWLIST = new Set<string>([
+  "/api/auth/me",
+  "/api/auth/select-username",
+  "/api/auth/logout",
+  "/api/auth/session",
+  "/api/auth/csrf-token",
+]);
+
+/**
+ * Blocks all authenticated requests when the user has not yet chosen a permanent
+ * username (one-click registration leaves usernameSelectedAt = NULL).
+ *
+ * Allowed paths (must be checked BEFORE this middleware OR explicitly bypass it):
+ *   - GET    /api/auth/me                    (so the client can read current user state)
+ *   - POST   /api/auth/select-username       (the only way to satisfy the gate)
+ *   - POST   /api/auth/logout                (always allow logout)
+ *
+ * Mount this AFTER authMiddleware on protected routers.
+ */
+export const requireUsernameSelected = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  if (req.user.usernameSelected === false) {
+    return res.status(428).json({
+      error: "Username selection required before continuing.",
+      errorCode: "USERNAME_SELECTION_REQUIRED",
+    });
+  }
+  return next();
 };
 
 export const optionalAuthMiddleware = async (req: AuthRequest, _res: Response, next: NextFunction) => {
@@ -280,6 +332,7 @@ export const optionalAuthMiddleware = async (req: AuthRequest, _res: Response, n
       id: verified.id,
       role: verified.role,
       username: verified.username,
+      usernameSelected: verified.usernameSelected,
       tokenFingerprint: verified.tokenFingerprint,
       token,
     };

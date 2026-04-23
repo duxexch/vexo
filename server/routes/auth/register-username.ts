@@ -91,6 +91,7 @@ export function registerUsernameRegistrationRoutes(app: Express) {
 
       const user = await storage.createUser({
         username: username.trim(),
+        usernameSelectedAt: new Date(),
         password: hashedPassword,
         firstName: sanitize(firstName),
         lastName: sanitize(lastName),

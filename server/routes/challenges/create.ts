@@ -260,19 +260,15 @@ export function registerCreateRoute(app: Express) {
       const sam9SoloSettings = isSam9Challenge ? await getSam9SoloSettings() : null;
       const isSam9FriendlyFixedFee = Boolean(isSam9Challenge && sam9SoloSettings?.mode === "friendly_fixed_fee");
 
-      const [currencyModeSetting] = await db.select({ value: gameplaySettings.value })
-        .from(gameplaySettings)
-        .where(eq(gameplaySettings.key, 'play_gift_currency_mode'))
-        .limit(1);
-      const enforceProjectOnly = !currencyModeSetting || currencyModeSetting.value !== 'mixed';
-
-      if (enforceProjectOnly && currencyType === 'usd') {
+      // Mandate: gameplay uses only the project currency (VXC). USD challenges
+      // are rejected unconditionally regardless of admin settings.
+      if (currencyType === 'usd') {
         return res.status(400).json({
-          error: "Real-money gameplay is disabled. Convert to project currency to play.",
+          error: "Challenges must use the project currency (VXC). Convert your balance to VXC to play.",
         });
       }
 
-      const effectiveCurrencyType = enforceProjectOnly ? 'project' : currencyType;
+      const effectiveCurrencyType = 'project';
 
       const CHESS_SYSTEMS: Record<string, { label: string; timeLimitSeconds: number }> = {
         bullet_1_0: { label: 'Bullet 1+0', timeLimitSeconds: 60 },
@@ -325,9 +321,9 @@ export function registerCreateRoute(app: Express) {
         return res.status(400).json({ error: "Invalid challenge amount" });
       }
 
-      // SECURITY: Validate betAmount is a reasonable precision (max 2 decimal places for USD)
-      if (effectiveCurrencyType === 'usd' && stakeChargeAmount > 0 && stakeChargeAmount < 0.01) {
-        return res.status(400).json({ error: "Minimum bet amount is $0.01" });
+      // SECURITY: Validate minimum stake (project currency, 2 decimal precision)
+      if (stakeChargeAmount > 0 && stakeChargeAmount < 0.01) {
+        return res.status(400).json({ error: "Minimum challenge stake is 0.01 VXC" });
       }
 
       // VALIDATION: Verify game exists and is active in database (Single Source of Truth)

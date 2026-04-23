@@ -2241,7 +2241,7 @@ const en: Record<string, string> = {
   'catalog.players': 'Players',
   'catalog.duration': 'Duration',
   'catalog.spectators': 'Spectators',
-  'catalog.bet': 'Bet',
+  'catalog.bet': 'Challenge',
   'catalog.liveMatches': 'Live Matches',
   'catalog.noLiveMatches': 'No live matches right now',
   'catalog.watching': 'Watching',

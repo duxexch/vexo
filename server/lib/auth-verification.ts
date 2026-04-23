@@ -80,6 +80,7 @@ export interface VerifiedUserToken {
     id: string;
     username: string;
     role: string;
+    usernameSelected: boolean;
     tokenFingerprint: string;
     payload: JwtUserPayloadCompat;
 }
@@ -104,6 +105,7 @@ export async function verifyUserAccessToken(
         status: users.status,
         role: users.role,
         username: users.username,
+        usernameSelectedAt: users.usernameSelectedAt,
         accountDeletedAt: users.accountDeletedAt,
         passwordChangedAt: users.passwordChangedAt,
         lockedUntil: users.lockedUntil,
@@ -197,6 +199,7 @@ export async function verifyUserAccessToken(
         id: userId,
         username,
         role: user.role,
+        usernameSelected: user.usernameSelectedAt !== null,
         tokenFingerprint,
         payload: decoded,
     };

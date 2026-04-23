@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, financialQueryOptions } from "@/lib/queryClient";
+import { formatWalletAmountFromUsd } from "@/lib/wallet-currency";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, AlertTriangle, Maximize2, Minimize2, RotateCcw, Wifi, WifiOff } from "lucide-react";
@@ -46,6 +48,24 @@ export default function GamePlayerPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentBalance, setCurrentBalance] = useState<string>("0.00");
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  const { data: depositConfig } = useQuery<{
+    balanceCurrency?: string;
+    usdRateByCurrency?: Record<string, number>;
+    currencySymbolByCode?: Record<string, string>;
+  }>({
+    queryKey: ["/api/transactions/deposit-config"],
+    ...financialQueryOptions,
+  });
+
+  const formattedBalance = useMemo(
+    () => formatWalletAmountFromUsd(currentBalance || "0", {
+      balanceCurrency: depositConfig?.balanceCurrency,
+      usdRateByCurrency: depositConfig?.usdRateByCurrency,
+      currencySymbolByCode: depositConfig?.currencySymbolByCode,
+    }, { withCode: true }),
+    [currentBalance, depositConfig?.balanceCurrency, depositConfig?.usdRateByCurrency, depositConfig?.currencySymbolByCode],
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const sessionTokenRef = useRef<string>("");
   const pendingCallbacks = useRef<Map<string, (data: any) => void>>(new Map());
@@ -342,7 +362,7 @@ export default function GamePlayerPage() {
           <div>
             <div className="font-medium text-sm leading-tight line-clamp-1 max-w-[46vw] sm:max-w-none">{gameName}</div>
             <div className="text-xs text-muted-foreground line-clamp-1 max-w-[46vw] sm:max-w-none">
-              {t("balance") || "Balance"}: ${Number(currentBalance).toFixed(2)}
+              {t("balance") || "Balance"}: {formattedBalance}
             </div>
           </div>
         </div>
@@ -378,7 +398,7 @@ export default function GamePlayerPage() {
           <div className="bg-card rounded-xl p-6 text-center space-y-4 max-w-xs mx-4">
             <h3 className="text-lg font-bold">{t("game_over") || "Game Over"}</h3>
             <p className="text-sm text-muted-foreground">
-              {t("balance") || "Balance"}: ${Number(currentBalance).toFixed(2)}
+              {t("balance") || "Balance"}: {formattedBalance}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 justify-center">
               <Button className="min-h-[44px]" variant="outline" onClick={() => setLocation("/games")}>

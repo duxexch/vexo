@@ -2231,7 +2231,7 @@ const ar: Record<string, string> = {
   'catalog.players': 'لاعبين',
   'catalog.duration': 'المدة',
   'catalog.spectators': 'المتفرجين',
-  'catalog.bet': 'الرهان',
+  'catalog.bet': 'التحدي',
   'catalog.liveMatches': 'مباريات مباشرة',
   'catalog.noLiveMatches': 'لا توجد مباريات مباشرة حالياً',
   'catalog.watching': 'مشاهدة',

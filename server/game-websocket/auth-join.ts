@@ -30,6 +30,13 @@ export async function handleAuthenticate(ws: AuthenticatedWebSocket, payload: { 
       updateSessionActivity: true,
     });
 
+    // Block users who have not chosen a permanent username yet — same gate
+    // as the REST API. Admins are exempt (matches authMiddleware behavior).
+    if (verified.usernameSelected === false && verified.role !== 'admin') {
+      sendError(ws, 'USERNAME_SELECTION_REQUIRED');
+      return;
+    }
+
     ws.userId = verified.id;
     ws.username = verified.username;
     ws.role = verified.role;
