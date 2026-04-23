@@ -285,11 +285,12 @@ services:
       TWITTER_API_KEY: ${TWITTER_API_KEY:-}
       TWITTER_API_SECRET: ${TWITTER_API_SECRET:-}
       TZ: UTC
-    # No direct ports — Traefik handles all traffic
+    # No direct ports — Traefik handles all traffic via the vex-traefik network.
+    # Uncomment the host port mapping below ONLY for local debugging from the VPS shell.
     expose:
       - "3001"
-    ports:
-      - "127.0.0.1:3001:3001"
+    # ports:
+    #   - "127.0.0.1:3001:3001"
     volumes:
       - app_logs:/app/logs
       - app_uploads:/app/uploads

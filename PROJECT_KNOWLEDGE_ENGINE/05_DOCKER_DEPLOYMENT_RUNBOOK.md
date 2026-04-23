@@ -1,102 +1,162 @@
 # 05 - Docker and Deployment Runbook
 
-This runbook standardizes local/prod-like runs and keeps port expectations explicit.
+This runbook documents the **actual production deployment** for VEX Platform.
 
 ## 0. Primary Production Runtime
 
-- Primary production runtime: Kubernetes.
-- Docker Compose is fallback/legacy only when Kubernetes is unavailable.
-- Local production-equivalent deployment should use Docker Desktop Kubernetes and [scripts/k8s-deploy-prod.ps1](scripts/k8s-deploy-prod.ps1).
+- **Primary production runtime: Docker Compose on a Hostinger VPS** (Ubuntu 25.10 KVM).
+- Production domain: `https://vixo.click` (and `www.vixo.click`).
+- Reverse proxy: **Traefik v3** (Let's Encrypt, HTTP-01 challenge).
+- Repository path on the VPS: `/docker/vex` (cloned from `git@github.com:duxexch/vexo.git`, branch `main`).
+- Local production-equivalent run can use `docker-compose.yml` (see Section 4).
+- Kubernetes manifests in `k8s/` and `scripts/k8s-deploy-prod.ps1` are **legacy / optional** and are not the primary deploy path.
 
 ## 1. Standard Port Policy
 
-- Application runtime default: `3001`.
-- Local production-like Docker run target: `http://localhost:3001`.
+- Application runtime port (inside the `vex-app` container): `3001`.
+- Public ports on the VPS: `80` (HTTP → 301 → HTTPS) and `443` (HTTPS), both owned by the Traefik container.
+- The `vex-app` container is **not** published to the host directly in production; Traefik reaches it over the shared `vex-traefik` Docker network.
 
-## 2. Local Development (Non-Docker)
+## 2. Local Development (Non-Docker, Replit / Workstation)
 
-- Start development server:
-  - `npm run dev`
+- Install dependencies once: `npm install`
+- Start dev server: `npm run dev` (listens on `http://localhost:3001`)
+- Type check: `npm run check:types`
+- Direct server start (rarely needed): `npx tsx server/index.ts`
 
-- Type check:
-  - `npx tsc --noEmit`
+## 3. Production Deployment on Hostinger VPS
 
-- Direct server start (if needed):
-  - `npx tsx server/index.ts`
+### 3.1 First-time bootstrap (one-time)
 
-## 3. Local Production-like Start with Kubernetes (Primary)
+Run as root on the VPS:
 
-Use Docker Desktop Kubernetes as the default production path.
+```bash
+# 1) Prepare the project directory
+mkdir -p /docker/vex
+cd /docker/vex
+git clone git@github.com:duxexch/vexo.git .
 
-1. Ensure Kubernetes is enabled in Docker Desktop.
-2. Ensure `.env` exists with production keys (secrets are created from it).
-3. Deploy the stack:
+# 2) Create the .env file (copy from .env.example and fill values)
+cp .env.example .env
+$EDITOR .env   # set APP_URL, ACME_EMAIL, secrets, SMTP, etc.
 
-- `pwsh -File scripts/k8s-deploy-prod.ps1`
+# 3) Create the shared Traefik network (idempotent)
+docker network create vex-traefik 2>/dev/null || true
 
-1. Verify health:
+# 4) Start Traefik (reverse proxy + Let's Encrypt)
+docker compose -f deploy/docker-compose.traefik.yml --env-file .env up -d
 
-- `curl -s -o NUL -w "%{http_code}" http://localhost:30081/api/health`
+# 5) First production deploy
+bash prod-auto.sh \
+  --auth-mode ssh \
+  --repo-url git@github.com:duxexch/vexo.git \
+  --repo-dir /docker/vex \
+  --branch main
+```
 
-## 4. Local Production-like Start with Docker Compose (Fallback)
+### 3.2 Standard update (every release)
 
-Use compose profile with production-oriented env values and mapped host port 3001.
+The canonical update command used by the team:
 
-Typical flow:
+```bash
+cd /docker/vex && bash prod-update.sh \
+  --auth-mode ssh \
+  --repo-url git@github.com:duxexch/vexo.git \
+  --repo-dir /docker/vex \
+  --branch main
+```
 
-1. Prepare `.env` (or dedicated local production env file).
-2. Build containers:
+`prod-update.sh` performs:
 
-- `docker compose -f docker-compose.yml build`
+1. Pre-update Postgres backup (skippable with `--no-backup`).
+2. `git pull --ff-only origin main` over SSH.
+3. Delegates to `prod-auto.sh` → `scripts/prod-auto.sh` (the strict deploy core), which:
+   - Validates / repairs `.env` (auto-generates missing secrets when allowed).
+   - Detects or creates the external Traefik network (`vex-traefik`).
+   - Runs `docker compose -f docker-compose.prod.yml --env-file .env up -d --build`.
+   - Rebuilds the `ai-agent` service to apply latest source.
+   - Reconciles the voice stack (`livekit` + `coturn`) when the voice compose file is present.
+   - Verifies runtime env values inside `vex-app` match `.env`.
+   - Performs deep post-deploy verification.
 
-1. Start stack:
+## 4. Local Production-like Run (Fallback, Workstation)
 
-- `docker compose -f docker-compose.yml up -d`
+For testing the production image without a VPS:
 
-1. Verify health:
+```bash
+docker compose -f docker-compose.yml build
+docker compose -f docker-compose.yml up -d
+curl -fsS http://localhost:3001/api/health
+```
 
-- `curl -s -o NUL -w "%{http_code}" http://localhost:3001/api/health`
+This stack does **not** include Traefik or HTTPS — the app is exposed on `http://localhost:3001` directly.
 
-## 5. Main Infra Files
+## 5. Production Architecture (Hostinger VPS)
 
-- `docker-compose.yml` (local/ops stack)
-- `docker-compose.prod.yml` (production-oriented stack)
-- `Dockerfile` (multi-stage build)
-- `scripts/entrypoint.sh` (migration + startup)
-- `deploy/nginx.conf` (nginx reverse proxy model)
-- `deploy/ecosystem.config.js` (PM2 process model)
+| Container | Image / Source | Role | Network(s) |
+|---|---|---|---|
+| `vex-traefik` | `traefik:v3.1` (`deploy/docker-compose.traefik.yml`) | TLS termination, HTTP→HTTPS redirect, routing | `vex-traefik` |
+| `vex-app` | Built from root `Dockerfile` | Express + WebSocket server (port 3001) | `vex-internal`, `vex-traefik` |
+| `vex-db` | `postgres:15-alpine` | Primary database | `vex-internal` |
+| `vex-redis` | `redis:7-alpine` | Cache / pub-sub / sessions | `vex-internal` |
+| `vex-minio` | `minio/minio:latest` | S3-compatible object storage (uploads) | `vex-internal` |
+| `vex-ai-agent` | Built from `ai-service/Dockerfile` | Internal AI helper service (port 3100) | `vex-internal` |
+| `livekit` + `coturn` | `deploy/docker-compose.voice.yml` (optional) | WebRTC voice / TURN | host network |
 
-## 6. Startup Safety Notes
+### Network model
 
-Entrypoint responsibilities include:
+- `vex-internal` — private Docker bridge for inter-service traffic (DB, Redis, MinIO, AI agent, app). Not exposed to the host.
+- `vex-traefik` — **external** Docker network shared between Traefik and the app, declared in both compose files and auto-created by `scripts/prod-auto.sh` if missing.
 
-- required env validation
-- DB readiness wait
-- migration execution path
-- optional seeding path
-- controlled app start with signal handling
+### Routing (two complementary sources)
 
-## 7. Cluster and High Concurrency
+1. **Docker labels** on the `app` service in `docker-compose.prod.yml` (read by Traefik's Docker provider). This is the primary source.
+2. **File provider** (`deploy/traefik/dynamic.yml`) as a static fallback that maps `vixo.click` → `http://vex-app:3001`.
 
-- Cluster entry: `server/cluster.ts`.
-- Sticky distribution is used to preserve websocket session affinity.
-- If proxy is used, keep sticky behavior and websocket upgrade headers consistent.
+## 6. Main Infra Files
 
-## 8. Pre-Deployment Checklist
+- `Dockerfile` — multi-stage build (builder → lean production image, non-root user, tini PID 1).
+- `docker-compose.prod.yml` — production stack (db, redis, minio, ai-agent, app + Traefik labels).
+- `docker-compose.yml` — local stack (no Traefik, app exposed on host port).
+- `deploy/docker-compose.traefik.yml` — Traefik v3 + Let's Encrypt.
+- `deploy/traefik/dynamic.yml` — Traefik file-provider routing for `vixo.click`.
+- `deploy/docker-compose.voice.yml` — optional LiveKit + Coturn stack.
+- `scripts/entrypoint.sh` — env validation, DB readiness wait, migrations (`drizzle-kit push --force`), optional seed, then `exec node dist/index.cjs`.
+- `prod-update.sh` / `prod-auto.sh` / `scripts/prod-auto.sh` — three-tier deploy automation (wrapper → bootstrap → strict core).
 
-- Type check passes.
-- Build succeeds.
-- Health endpoint returns success.
-- DB migrations complete or are intentionally skipped with safe reason.
-- Required secrets are present and valid length.
-- Docker services report healthy states.
+## 7. Startup Safety
 
-## 9. Incident Quick Triage
+The container entrypoint enforces:
 
-If app is not reachable on 3001:
+1. Required env vars (`DATABASE_URL`, `SESSION_SECRET`, `JWT_USER_SECRET`, `JWT_ADMIN_SECRET`) and minimum length (≥32 chars) in production.
+2. Email/SMS provider config sanity check when set to `smtp` / `sendgrid` / `twilio`.
+3. Postgres readiness wait (up to 60s).
+4. Pre-migration FK constraint name normalization (idempotent fixes).
+5. `drizzle-kit push --force` with `MIGRATION_TIMEOUT` (default 120s).
+6. Optional DB seed (`SEED_DATABASE=true`).
+7. `exec node dist/index.cjs` under `tini` for proper signal handling.
 
-- confirm compose services are up and healthy
-- confirm app container exposes/listens on expected port
-- confirm `PORT` environment value in compose and app
-- check healthcheck logs and entrypoint migration output
-- verify DB/Redis connectivity from app container
+## 8. Cluster and High Concurrency
+
+- Cluster entry: `server/cluster.ts` (sticky distribution preserves WebSocket session affinity).
+- Traefik passes WebSocket upgrade headers automatically.
+
+## 9. Pre-Deployment Checklist
+
+- `npm run check:types` passes locally.
+- Build (`npm run build`) succeeds (or trust the Docker multi-stage build).
+- `.env` on the VPS has all required secrets at correct length.
+- Traefik container is `running` and the `vex-traefik` external network exists.
+- Last `prod-update.sh` run completed with `[OK] Production update completed successfully`.
+- `https://vixo.click/api/health` returns `200`.
+
+## 10. Incident Quick Triage
+
+If the site is unreachable:
+
+1. **Containers** — `docker ps --filter name=vex-` should list all six (`traefik, app, db, redis, minio, ai-agent`) as `Up` / `healthy`.
+2. **App container** — `docker logs --tail 200 vex-app` (look for entrypoint failures, env errors, migration errors).
+3. **Traefik** — `docker logs --tail 200 vex-traefik` (look for ACME / certificate / upstream errors).
+4. **Network** — `docker network inspect vex-traefik` should show both `vex-traefik` and `vex-app` as members.
+5. **DB connectivity** — `docker exec vex-app curl -fsS http://localhost:3001/api/health` from inside the container.
+6. **Re-deploy** — when in doubt, re-run the standard update command in §3.2.
