@@ -10,6 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GameAssetUploader } from "@/components/admin/games/GameAssetUploader";
+import { GameIconPicker, GameColorPicker } from "@/components/admin/games/GameVisualPicker";
+import { GameCardPreview } from "@/components/admin/games/GameCardPreview";
 import {
   Dialog,
   DialogContent,
@@ -63,6 +67,7 @@ import {
   Search,
   Upload,
   ImagePlus,
+  Image as ImageIcon,
   MoreVertical,
   Check,
   X
@@ -241,6 +246,12 @@ const gameFormSchema = z.object({
   displayLocations: z.array(z.string()).min(1, "At least one display location is required"),
   isActive: z.boolean(),
   isFeatured: z.boolean(),
+  iconUrl: z.string().optional().default(""),
+  imageUrl: z.string().optional().default(""),
+  thumbnailUrl: z.string().optional().default(""),
+  iconName: z.string().optional().default("Gamepad2"),
+  colorClass: z.string().optional().default(""),
+  gradientClass: z.string().optional().default(""),
 });
 
 type GameFormData = z.infer<typeof gameFormSchema>;
@@ -433,6 +444,105 @@ function getIconComponent(iconName: string) {
   return icons[iconName] || Gamepad2;
 }
 
+// Visual section: asset uploaders + icon picker + color picker + live preview
+function VisualSection({
+  form,
+  language,
+}: {
+  form: ReturnType<typeof useForm<GameFormData>>;
+  language: string;
+}) {
+  const isAr = language === "ar";
+  const watched = useWatch({ control: form.control });
+  const iconUrl = String(watched.iconUrl || "");
+  const imageUrl = String(watched.imageUrl || "");
+  const thumbnailUrl = String(watched.thumbnailUrl || "");
+  const iconName = String(watched.iconName || "Gamepad2");
+  const colorClass = String(watched.colorClass || "");
+  const gradientClass = String(watched.gradientClass || "");
+  const nameEn = String(watched.nameEn || "");
+  const nameAr = String(watched.nameAr || "");
+
+  return (
+    <div className="rounded-2xl border border-border bg-muted/20 p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <ImageIcon className="h-4 w-4 text-primary" />
+        <h4 className="font-semibold">
+          {isAr ? "هوية اللعبة البصرية" : "Visual Identity"}
+        </h4>
+        <span className="text-xs text-muted-foreground">
+          {isAr ? "(يُطبَّق فى كل مكان تظهر فيه اللعبة)" : "(applied everywhere the game appears)"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <GameAssetUploader
+              label={isAr ? "أيقونة" : "Icon"}
+              description={isAr ? "PNG/SVG شفّافة" : "Transparent PNG/SVG"}
+              value={iconUrl}
+              onChange={(v) => form.setValue("iconUrl", v, { shouldDirty: true })}
+              recommendedSize="256×256"
+              language={language}
+              aspectRatio="square"
+              testIdPrefix="upload-icon"
+            />
+            <GameAssetUploader
+              label={isAr ? "مصغّرة" : "Thumbnail"}
+              description={isAr ? "تظهر فى صالة الألعاب" : "Shown in lobby"}
+              value={thumbnailUrl}
+              onChange={(v) => form.setValue("thumbnailUrl", v, { shouldDirty: true })}
+              recommendedSize="800×600"
+              language={language}
+              aspectRatio="card"
+              testIdPrefix="upload-thumbnail"
+            />
+          </div>
+          <GameAssetUploader
+            label={isAr ? "صورة الخلفية / البانر" : "Background / Banner"}
+            description={isAr ? "اختيارى — عرض كبير فى صفحة اللعبة" : "Optional — large view inside game page"}
+            value={imageUrl}
+            onChange={(v) => form.setValue("imageUrl", v, { shouldDirty: true })}
+            recommendedSize="1600×900"
+            language={language}
+            aspectRatio="wide"
+            testIdPrefix="upload-image"
+          />
+          <GameIconPicker
+            value={iconName}
+            onChange={(v) => form.setValue("iconName", v, { shouldDirty: true })}
+            language={language}
+          />
+          <GameColorPicker
+            colorClass={colorClass}
+            gradientClass={gradientClass}
+            onChange={({ colorClass: cc, gradientClass: gc }) => {
+              form.setValue("colorClass", cc, { shouldDirty: true });
+              form.setValue("gradientClass", gc, { shouldDirty: true });
+            }}
+            language={language}
+          />
+        </div>
+
+        <div className="rounded-xl border border-border bg-card/50 p-4">
+          <GameCardPreview
+            nameEn={nameEn}
+            nameAr={nameAr}
+            iconUrl={iconUrl}
+            thumbnailUrl={thumbnailUrl}
+            imageUrl={imageUrl}
+            iconName={iconName}
+            colorClass={colorClass}
+            gradientClass={gradientClass}
+            language={language}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Horizontal toggle buttons for display locations (multi-select)
 function DisplayLocationsField({
   form,
@@ -516,6 +626,12 @@ function GameForm({
       displayLocations: game?.displayLocations || ["games"],
       isActive: game?.isActive ?? true,
       isFeatured: game?.isFeatured ?? false,
+      iconUrl: game?.iconUrl || "",
+      imageUrl: game?.imageUrl || "",
+      thumbnailUrl: game?.thumbnailUrl || "",
+      iconName: (game?.iconName && !game.iconName.startsWith("/") && !/^https?:\/\//i.test(game.iconName)) ? game.iconName : "Gamepad2",
+      colorClass: game?.colorClass || "",
+      gradientClass: game?.gradientClass || "",
     },
   });
 
@@ -555,7 +671,9 @@ function GameForm({
           method: "PATCH",
           body: JSON.stringify({
             name: data.nameEn,
+            nameAr: data.nameAr,
             description: data.descriptionEn || "",
+            descriptionAr: data.descriptionAr || "",
             category: data.category,
             status: data.status,
             sections: data.displayLocations,
@@ -566,6 +684,9 @@ function GameForm({
             isFeatured: data.isFeatured,
             isFreeToPlay: parseInt(data.freePlayLimit) > 0,
             playPrice: data.priceVex,
+            iconUrl: data.iconUrl || undefined,
+            imageUrl: data.imageUrl || undefined,
+            thumbnailUrl: data.thumbnailUrl || undefined,
           }),
         });
       }
@@ -629,6 +750,8 @@ function GameForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-h-[70vh] overflow-y-auto px-1">
+        <VisualSection form={form} language={language} />
+
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}

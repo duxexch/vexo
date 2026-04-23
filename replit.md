@@ -76,6 +76,14 @@ First-time VPS bootstrap (Traefik network + Traefik container) is documented in 
 
 ## Recent changes
 
+- 2026-04-23 — **Admin · Games Management visual identity overhaul:**
+  - New reusable admin components under `client/src/components/admin/games/`:
+    - `GameAssetUploader.tsx` — drag-and-drop + file picker + URL paste, preview thumbnail, remove, recommended size hint, configurable aspect (square/wide/card). Posts to `/api/upload` via shared `adminFetch`.
+    - `GameVisualPicker.tsx` — `GameIconPicker` (Lucide icon grid, used as fallback when no image is uploaded) and `GameColorPicker` (12 Tailwind color/gradient presets).
+    - `GameCardPreview.tsx` — live lobby + compact tile preview that updates as the admin edits the form.
+  - `client/src/lib/admin-fetch.ts` — shared admin fetch helper that injects `x-admin-token` from `localStorage.adminToken`.
+  - `client/src/pages/admin/admin-unified-games.tsx` — `gameFormSchema` now includes `iconUrl/imageUrl/thumbnailUrl/iconName/colorClass/gradientClass`; new `VisualSection` rendered at the top of the Add/Edit dialog with the uploader trio + icon/color pickers + live preview. Both create/update mutations send the visual fields (multiplayer via spread; single-player explicitly mapped to `/api/admin/games/:id`). After save, `invalidateGameConfigCaches()` ensures every consumer (home, lobby, challenges, leaderboard, history, cinematic) re-renders with the new visuals — they already read from DB via `buildGameConfig`.
+
 - 2026-04-23 — **Shared game systems uplift (Yalla-Ludo style unification, phase 1):**
   - **Unified `GameLayout` HUD**: new `hud` and `banner` slots in `client/src/components/games/GameLayout.tsx`, plus pill components in `client/src/components/games/GameHUD.tsx` (`GameHUDBalance`, `GameHUDTimer`, `GameHUDScore`). All 6 games will migrate to this shared shell instead of bespoke headers.
   - **Shared timer hook**: `client/src/hooks/use-game-timer.ts` — drift-resistant per-side clock with low-time audio cue and `onTimeout`.
