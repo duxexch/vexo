@@ -730,6 +730,22 @@ export function serveStatic(app: Express) {
         `<meta property="og:url" content="${escapedUrl}"`
       );
 
+      // Keep twitter:url in sync with canonical (was previously static and drifted per page)
+      html = html.replace(
+        /<meta name="twitter:url" content="[^"]*"/,
+        `<meta name="twitter:url" content="${escapedUrl}"`
+      );
+
+      // Make og:locale match the request locale so social cards align with <html lang>
+      const ogLocaleValue = locale.includes("-")
+        ? locale.replace("-", "_")
+        : `${localeBase}_${localeBase.toUpperCase()}`;
+      const escapedOgLocale = escapeHtmlAttribute(ogLocaleValue);
+      html = html.replace(
+        /<meta property="og:locale" content="[^"]*"/,
+        `<meta property="og:locale" content="${escapedOgLocale}"`
+      );
+
       res.status(200).set({ "Content-Type": "text/html" }).end(html);
     } catch {
       res.status(500).set({ "Content-Type": "text/plain" }).end("SEO rendering error");
