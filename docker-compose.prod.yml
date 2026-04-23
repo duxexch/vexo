@@ -305,19 +305,16 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=${TRAEFIK_EXTERNAL_NETWORK:-vex-traefik}"
       # HTTPS Router
-      - "traefik.http.routers.vex.rule=Host(`vixo.click`) ||
-        Host(`www.vixo.click`)"
+      - "traefik.http.routers.vex.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
       - "traefik.http.routers.vex.entrypoints=websecure"
       - "traefik.http.routers.vex.tls=true"
       - "traefik.http.routers.vex.tls.certresolver=letsencrypt"
       # HTTP → HTTPS redirect
-      - "traefik.http.routers.vex-http.rule=Host(`vixo.click`) ||
-        Host(`www.vixo.click`)"
+      - "traefik.http.routers.vex-http.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
       - "traefik.http.routers.vex-http.entrypoints=web"
       - "traefik.http.routers.vex-http.middlewares=vex-https-redirect"
       - "traefik.http.middlewares.vex-https-redirect.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.vex-https-redirect.redirectscheme.permanent=t\
-        rue"
+      - "traefik.http.middlewares.vex-https-redirect.redirectscheme.permanent=true"
       # Service port
       - "traefik.http.services.vex.loadbalancer.server.port=3001"
       - "traefik.http.services.vex.loadbalancer.server.scheme=http"
@@ -329,16 +326,12 @@ services:
       - "traefik.http.middlewares.vex-headers.headers.frameDeny=true"
       - "traefik.http.middlewares.vex-headers.headers.contentTypeNosniff=true"
       - "traefik.http.middlewares.vex-headers.headers.browserXssFilter=true"
-      - "traefik.http.middlewares.vex-headers.headers.referrerPolicy=strict-ori\
-        gin-when-cross-origin"
-      - "traefik.http.middlewares.vex-headers.headers.customResponseHeaders.X-R\
-        obots-Tag=index, follow"
-      - "traefik.http.middlewares.vex-headers.headers.customResponseHeaders.Cro\
-        ss-Origin-Opener-Policy=same-origin-allow-popups"
+      - "traefik.http.middlewares.vex-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.vex-headers.headers.customResponseHeaders.X-Robots-Tag=index, follow"
+      - "traefik.http.middlewares.vex-headers.headers.customResponseHeaders.Cross-Origin-Opener-Policy=same-origin-allow-popups"
       # Gzip compression at Traefik level
       - "traefik.http.middlewares.vex-compress.compress=true"
-      - "traefik.http.middlewares.vex-compress.compress.minResponseBodyBytes=10\
-        24"
+      - "traefik.http.middlewares.vex-compress.compress.minResponseBodyBytes=1024"
       # Chain middlewares
       - "traefik.http.routers.vex.middlewares=vex-compress,vex-headers"
     healthcheck:
