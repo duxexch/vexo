@@ -151,6 +151,9 @@ export default function LeaderboardPage() {
             <SelectItem value="all">
               {t('leaderboard.allTime')}
             </SelectItem>
+            <SelectItem value="daily">
+              {t('leaderboard.today') || (language === 'ar' ? 'اليوم' : 'Today')}
+            </SelectItem>
             <SelectItem value="weekly">
               {t('leaderboard.thisWeek')}
             </SelectItem>
