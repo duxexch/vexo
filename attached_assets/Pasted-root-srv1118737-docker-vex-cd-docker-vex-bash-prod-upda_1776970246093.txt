@@ -1,0 +1,49 @@
+root@srv1118737:/docker/vex# cd /docker/vex && bash prod-update.sh --auth-mode ssh --repo-url git@github.com:duxexch/vexo.git --repo-dir /docker/vex --branch main
+[INFO] Update auth mode: ssh
+[WARN] Ubuntu 25.10 detected. If updates fail, run: sudo apt install --update rust-coreutils
+[OK] Backup created: /docker/vex/backups/vex_db_20260423_184415.sql.gz
+[INFO] Pre-pulling latest repository state using ssh auth
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+root@srv1118737:/docker/vex# cat /root/.ssh/vixo-deploy.pub
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOe063Zb5tnj8qTL7FqleFJQut+vaG9HXcd8PE3MXKhc vixo-deploy
+root@srv1118737:/docker/vex# cd /docker/vex && bash prod-update.sh --auth-mode ssh --repo-url git@github.com:duxexch/vexo.git --repo-dir /docker/vex --branch main
+[INFO] Update auth mode: ssh
+[WARN] Ubuntu 25.10 detected. If updates fail, run: sudo apt install --update rust-coreutils
+[OK] Backup created: /docker/vex/backups/vex_db_20260423_184657.sql.gz
+[INFO] Pre-pulling latest repository state using ssh auth
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+root@srv1118737:/docker/vex# cd /docker/vex && bash prod-update.sh \
+  --auth-mode ssh \
+  --repo-url git@github.com:duxexch/vexo.git \
+  --repo-dir /docker/vex \
+  --branch main
+[INFO] Update auth mode: ssh
+[WARN] Ubuntu 25.10 detected. If updates fail, run: sudo apt install --update rust-coreutils
+[OK] Backup created: /docker/vex/backups/vex_db_20260423_184841.sql.gz
+[INFO] Pre-pulling latest repository state using ssh auth
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+root@srv1118737:/docker/vex# cd /docker/vex && bash prod-update.sh --auth-mode ssh --repo-url git@github.com:duxexch/vexo.git --repo-dir /docker/vex --branch main
+[INFO] Update auth mode: ssh
+[WARN] Ubuntu 25.10 detected. If updates fail, run: sudo apt install --update rust-coreutils
+[OK] Backup created: /docker/vex/backups/vex_db_20260423_184926.sql.gz
+[INFO] Pre-pulling latest repository state using ssh auth
+git@github.com: Permission denied (publickey).
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+root@srv1118737:/docker/vex# ssh -T git@github.com
+git@github.com: Permission denied (publickey).
+root@srv1118737:/docker/vex# 
