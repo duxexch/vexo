@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { useGameAudio } from "@/hooks/use-game-audio";
 
 interface ChessBoardProps {
   gameState?: string;
@@ -440,7 +441,28 @@ export function ChessBoard({
   const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevBoardRef = useRef<string[][] | null>(null);
+  const prevCheckRef = useRef<string | null>(null);
+  const prevStatusRef = useRef<string | undefined>(undefined);
   const { language } = useI18n();
+  const audio = useGameAudio();
+  const playMoveSound = useCallback(
+    (captured?: string | null, isPromotion = false, isCastle = false) => {
+      if (isPromotion) {
+        audio.play("promote");
+        return;
+      }
+      if (isCastle) {
+        audio.play("castle");
+        return;
+      }
+      if (captured) {
+        audio.play("capture");
+        return;
+      }
+      audio.play("move");
+    },
+    [audio],
+  );
 
   const fenData = useMemo(() => {
     if (!gameState) {
@@ -624,6 +646,7 @@ export function ChessBoard({
       captured: capturedPiece,
       promotion: autoMove.promotion,
     });
+    playMoveSound(capturedPiece, !!autoMove.promotion);
     if (capturedPiece) {
       triggerCaptureEffect(autoMove.to, capturedPiece);
     }
@@ -656,8 +679,9 @@ export function ChessBoard({
     if (moveDelta.capturedPiece) {
       triggerCaptureEffect(moveDelta.captureSquare || moveDelta.to, moveDelta.capturedPiece);
     }
+    playMoveSound(moveDelta.capturedPiece);
     setLastMove({ from: moveDelta.from, to: moveDelta.to });
-  }, [board, lastMove, triggerCaptureEffect]);
+  }, [board, lastMove, triggerCaptureEffect, playMoveSound]);
 
   useEffect(() => {
     return () => {
@@ -707,6 +731,23 @@ export function ChessBoard({
     return null;
   }, [board, myColor]);
 
+  // Audio: play "check" sound when king first enters check
+  useEffect(() => {
+    if (kingInCheck && kingInCheck !== prevCheckRef.current) {
+      audio.play("check");
+    }
+    prevCheckRef.current = kingInCheck;
+  }, [kingInCheck, audio]);
+
+  // Audio: play game-end sound on status transition to "finished"
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (prev !== "finished" && status === "finished") {
+      audio.play(kingInCheck ? "gameLose" : "gameWin");
+    }
+  }, [status, kingInCheck, audio]);
+
   const flippedBoard = useMemo(() => {
     if (myColor === "black") {
       return board.map(row => [...row].reverse()).reverse();
@@ -745,6 +786,10 @@ export function ChessBoard({
             captured: piece || undefined,
           };
           onMove(move);
+          const isCastleMove =
+            fromPiece.toUpperCase() === "K" &&
+            Math.abs(squareToCoords(selectedSquare)[1] - squareToCoords(square)[1]) === 2;
+          playMoveSound(piece, false, isCastleMove);
           if (piece) {
             triggerCaptureEffect(square, piece);
           }
@@ -788,6 +833,7 @@ export function ChessBoard({
       promotion: promotionPiece.toLowerCase(),
     };
     onMove(move);
+    playMoveSound(capturedPiece, true);
     if (capturedPiece) {
       triggerCaptureEffect(showPromotion.to, capturedPiece);
     }
