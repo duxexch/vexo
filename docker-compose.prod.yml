@@ -302,7 +302,7 @@ services:
       - vex-traefik
     labels:
       # Enable Traefik
-      - "traefik.enable=true"
+      - "traefik.enable=${TRAEFIK_DOCKER_PROVIDER_ENABLED:-false}"
       - "traefik.docker.network=${TRAEFIK_EXTERNAL_NETWORK:-vex-traefik}"
       # HTTPS Router
       - "traefik.http.routers.vex.rule=Host(`vixo.click`) || Host(`www.vixo.click`)"
