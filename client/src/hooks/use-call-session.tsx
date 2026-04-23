@@ -240,7 +240,18 @@ export function useCallSession(): UseCallSessionReturn {
 
       const pc = await buildPeerConnection(sessionId, toUserId);
       ctxRef.current = { sessionId, peerUserId: toUserId, callType: type, pc, isCaller: true };
-      await attachLocalMedia(pc, type);
+
+      // Acquire mic/camera. If the user denies permission (or no device
+      // exists), bail out gracefully and surface 'failed' so the UI can
+      // fall back to text-only chat.
+      try {
+        await attachLocalMedia(pc, type);
+      } catch (err) {
+        setStatus("failed");
+        announceTier(sessionId, "text-only");
+        cleanup();
+        throw err instanceof Error ? err : new Error("media_unavailable");
+      }
 
       sock.emit("rtc:invite", { sessionId, toUserId, callType: type, context }, async (res) => {
         if (!res?.ok) {
@@ -249,25 +260,44 @@ export function useCallSession(): UseCallSessionReturn {
           return;
         }
         setStatus("connecting");
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        sock.emit("rtc:sdp", { sessionId, toUserId, sdp: offer });
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          sock.emit("rtc:sdp", { sessionId, toUserId, sdp: offer });
+        } catch {
+          sock.emit("rtc:end", { sessionId, reason: "sdp_failed" });
+          setStatus("failed");
+          cleanup();
+        }
       });
     },
-    [attachLocalMedia, buildPeerConnection, cleanup],
+    [announceTier, attachLocalMedia, buildPeerConnection, cleanup],
   );
 
   const acceptIncoming = useCallback(async () => {
     if (!incoming) return;
     const { sessionId, fromUserId, callType: type } = incoming;
+    const sock = getRtcSocket();
     setStatus("connecting");
-    setIncoming(null);
 
     const pc = await buildPeerConnection(sessionId, fromUserId);
     ctxRef.current = { sessionId, peerUserId: fromUserId, callType: type, pc, isCaller: false };
-    await attachLocalMedia(pc, type);
+
+    try {
+      await attachLocalMedia(pc, type);
+    } catch (err) {
+      // Permission denied / no device — decline the call deterministically
+      sock.emit("rtc:end", { sessionId, reason: "media_denied" });
+      setStatus("failed");
+      announceTier(sessionId, "text-only");
+      cleanup();
+      setIncoming(null);
+      throw err instanceof Error ? err : new Error("media_unavailable");
+    }
+
+    setIncoming(null);
     // Caller will send the SDP offer next; the listener handles it.
-  }, [attachLocalMedia, buildPeerConnection, incoming]);
+  }, [announceTier, attachLocalMedia, buildPeerConnection, cleanup, incoming]);
 
   const declineIncoming = useCallback(() => {
     if (!incoming) return;

@@ -276,6 +276,9 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       const sessionId = String(payload?.sessionId || "").slice(0, 64);
       const toUserId = String(payload?.toUserId || "").slice(0, 64);
       const callType = payload?.callType === "video" ? "video" : "voice";
+      const challengeId = payload?.context?.challengeId
+        ? String(payload.context.challengeId).slice(0, 64)
+        : "";
       if (!sessionId || !toUserId || toUserId === userId) {
         ack?.({ ok: false, error: "invalid" });
         return;
@@ -284,6 +287,46 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
         ack?.({ ok: false, error: "rate_limit" });
         return;
       }
+
+      // Authorization: caller and callee must be co-participants in an
+      // active challenge. We require a challengeId in context and verify
+      // both users are listed in players1..4 of that challenge. This
+      // prevents cross-context unsolicited call signaling.
+      if (!challengeId) {
+        ack?.({ ok: false, error: "context_required" });
+        return;
+      }
+      try {
+        const [row] = await db
+          .select({
+            p1: challenges.player1Id,
+            p2: challenges.player2Id,
+            p3: challenges.player3Id,
+            p4: challenges.player4Id,
+            status: challenges.status,
+          })
+          .from(challenges)
+          .where(eq(challenges.id, challengeId))
+          .limit(1);
+        if (!row) {
+          ack?.({ ok: false, error: "challenge_not_found" });
+          return;
+        }
+        const players = [row.p1, row.p2, row.p3, row.p4];
+        if (!players.includes(userId) || !players.includes(toUserId)) {
+          ack?.({ ok: false, error: "not_participant" });
+          return;
+        }
+        if (row.status !== "active" && row.status !== "waiting") {
+          ack?.({ ok: false, error: "challenge_inactive" });
+          return;
+        }
+      } catch (err) {
+        logger.warn?.(`[socket.io] rtc:invite authz lookup failed: ${(err as Error).message}`);
+        ack?.({ ok: false, error: "server" });
+        return;
+      }
+
       // Block-list check (best-effort, non-fatal on failure)
       try {
         const recipient = await storage.getUser(toUserId);
