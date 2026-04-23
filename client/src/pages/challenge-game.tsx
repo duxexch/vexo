@@ -376,6 +376,7 @@ export default function ChallengeGamePage() {
           senderName: m.fromUsername,
           message: m.text,
           timestamp: m.ts,
+          createdAt: new Date(m.ts).toISOString(),
         };
         if (next === prev) next = [...prev];
         next.push(normalized);
@@ -1529,7 +1530,7 @@ export default function ChallengeGamePage() {
 
             const normalizedMessageKey = normalizedMessage.id
               ? `id:${normalizedMessage.id}`
-              : `sig:${normalizedMessage.senderId || normalizedMessage.userId || ""}:${normalizedMessage.message}:${String(normalizedMessage.createdAt || normalizedMessage.timestamp || "")}`;
+              : `sig:${normalizedMessage.senderId || normalizedMessage.userId || ""}:${normalizedMessage.message}:${String(normalizedMessage.timestamp || normalizedMessage.createdAt || "")}`;
 
             if (seenChatMessageKeysRef.current.has(normalizedMessageKey)) {
               break;
@@ -1545,7 +1546,7 @@ export default function ChallengeGamePage() {
               const alreadyExists = prev.some((msg) => {
                 const existingKey = msg.id
                   ? `id:${msg.id}`
-                  : `sig:${msg.senderId || msg.userId || ""}:${msg.message}:${String(msg.createdAt || msg.timestamp || "")}`;
+                  : `sig:${msg.senderId || msg.userId || ""}:${msg.message}:${String(msg.timestamp || msg.createdAt || "")}`;
                 return existingKey === normalizedMessageKey;
               });
 

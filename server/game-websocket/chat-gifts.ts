@@ -93,13 +93,41 @@ export async function handleChat(ws: AuthenticatedWebSocket, payload: { message:
           ts,
         };
         const ns = io.of(SOCKETIO_NS_CHAT);
-        // Honor the same block-list as the legacy broadcast: emit per
-        // socket in the room and skip recipients who blocked the sender.
+        // Mirror the FULL filtering semantics of broadcastToRoomFiltered:
+        //   1. Skip the sender themselves
+        //   2. Skip recipients the sender has blocked
+        //   3. Skip recipients that have blocked or muted the sender
+        // (3) requires per-recipient cache lookups, identical to the legacy
+        // path in server/game-websocket/utils.ts (see broadcastToRoomFiltered).
         const sockets = await ns.in(broadcast.roomId).fetchSockets();
+        const recipientIds: string[] = [];
+        const idToSocket = new Map<string, typeof sockets[number]>();
         for (const s of sockets) {
           const recipientId = (s.data as { userId?: string } | undefined)?.userId;
-          if (recipientId && blockedUsers.includes(recipientId) && recipientId !== ws.userId) continue;
-          s.emit('chat:message', broadcast);
+          if (!recipientId) continue;
+          if (recipientId === ws.userId) continue;
+          if (blockedUsers.includes(recipientId)) continue;
+          recipientIds.push(recipientId);
+          idToSocket.set(recipientId, s);
+        }
+        if (recipientIds.length > 0) {
+          const checks = await Promise.all(
+            recipientIds.map(async (rid) => {
+              const c = await getCachedUserBlockLists(rid, async (id) => {
+                const u = await storage.getUser(id);
+                return u
+                  ? { blockedUsers: u.blockedUsers || [], mutedUsers: u.mutedUsers || [] }
+                  : null;
+              });
+              return { rid, blockedUsers: c.blockedUsers, mutedUsers: c.mutedUsers };
+            }),
+          );
+          for (const c of checks) {
+            if (c.blockedUsers?.includes(ws.userId)) continue;
+            if (c.mutedUsers?.includes(ws.userId)) continue;
+            const s = idToSocket.get(c.rid);
+            if (s) s.emit('chat:message', broadcast);
+          }
         }
       }
     } catch (err) {

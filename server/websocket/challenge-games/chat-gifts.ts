@@ -9,6 +9,10 @@ import { sanitizePlainText } from "../../lib/input-security";
 import type { AuthenticatedSocket } from "../shared";
 import { challengeGameRooms } from "../shared";
 import { requireChallengeParticipant, requireChallengePlayer } from "./guards";
+import { getCachedUserBlockLists } from "../../lib/redis";
+import { getSocketIO } from "../../socketio";
+import { SOCKETIO_NS_CHAT, type ChatBroadcast } from "@shared/socketio-events";
+import { logger } from "../../lib/logger";
 
 /** Handle challenge_chat message from players and broadcast it to both players and spectators */
 export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): Promise<void> {
@@ -58,10 +62,21 @@ export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): P
     isSpectator: guard.role === "spectator",
   }).returning();
 
+  // One shared numeric timestamp for both transports so client-side dedup
+  // (which keys on `sig:<senderId>:<text>:<timestamp>`) collapses the legacy
+  // WS broadcast and the Socket.IO mirror into a single rendered message.
+  const ts = savedMessage.createdAt
+    ? new Date(savedMessage.createdAt).getTime()
+    : Date.now();
+
   const messageWithSender = {
     ...savedMessage,
     senderName: sender.username,
     senderAvatar: sender.avatarUrl,
+    // `timestamp` is the dedup-friendly numeric form of `createdAt`. We keep
+    // both so older clients that look at `createdAt` continue to render
+    // correctly while the new merge path keys off `timestamp`.
+    timestamp: ts,
   };
 
   const outgoing = JSON.stringify({
@@ -69,17 +84,93 @@ export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): P
     message: messageWithSender
   });
 
-  room.players.forEach((socket) => {
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(outgoing);
-    }
-  });
+  // Resolve the sender's block list once. Players & spectators in this room
+  // who the sender has blocked, OR who have blocked/muted the sender, must
+  // not receive the message — same semantics as broadcastToRoomFiltered.
+  const senderId = ws.userId!;
+  const { blockedUsers: senderBlocked } = await getCachedUserBlockLists(
+    senderId,
+    async (id) => {
+      const u = await storage.getUser(id);
+      return u
+        ? { blockedUsers: u.blockedUsers || [], mutedUsers: u.mutedUsers || [] }
+        : null;
+    },
+  );
 
-  room.spectators.forEach((socket) => {
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(outgoing);
+  // Collect (recipientId, socket) pairs from both player + spectator maps,
+  // skipping the sender and anyone the sender has blocked. Then resolve each
+  // recipient's own block/mute lists and skip recipients that have
+  // blocked/muted the sender. This mirrors the legacy filter behavior and
+  // applies the same gate to BOTH the legacy WS broadcast and the new
+  // Socket.IO mirror, so users on either transport see identical visibility.
+  const allEntries: Array<[string, WebSocket]> = [];
+  for (const [uid, sock] of room.players) {
+    if (uid !== senderId && !senderBlocked.includes(uid)) allEntries.push([uid, sock]);
+  }
+  for (const [uid, sock] of room.spectators) {
+    if (uid !== senderId && !senderBlocked.includes(uid)) allEntries.push([uid, sock]);
+  }
+
+  const recipientChecks = await Promise.all(
+    allEntries.map(async ([rid]) => {
+      const c = await getCachedUserBlockLists(rid, async (id) => {
+        const u = await storage.getUser(id);
+        return u
+          ? { blockedUsers: u.blockedUsers || [], mutedUsers: u.mutedUsers || [] }
+          : null;
+      });
+      return { rid, blockedUsers: c.blockedUsers, mutedUsers: c.mutedUsers };
+    }),
+  );
+  const blockedRecipients = new Set(
+    recipientChecks
+      .filter(
+        (c) => c.blockedUsers?.includes(senderId) || c.mutedUsers?.includes(senderId),
+      )
+      .map((c) => c.rid),
+  );
+
+  // Sender always gets an echo so their own message appears immediately —
+  // the sender obviously hasn't blocked themselves.
+  const senderSocket = room.players.get(senderId) || room.spectators.get(senderId);
+  if (senderSocket && senderSocket.readyState === WebSocket.OPEN) {
+    senderSocket.send(outgoing);
+  }
+
+  for (const [rid, sock] of allEntries) {
+    if (blockedRecipients.has(rid)) continue;
+    if (sock.readyState === WebSocket.OPEN) sock.send(outgoing);
+  }
+
+  // Mirror onto the new Socket.IO `/chat` namespace for instant delivery.
+  // Best-effort: failures are logged but never break the legacy broadcast.
+  // The /chat namespace already authorizes only challenge participants, so
+  // non-participants cannot subscribe regardless of this code path.
+  try {
+    const io = getSocketIO();
+    if (io && challengeId) {
+      const broadcast: ChatBroadcast = {
+        roomId: `challenge:${challengeId}`,
+        fromUserId: senderId,
+        fromUsername: sender.username || senderId,
+        text: messageWithSender.message,
+        ts,
+      };
+      const ns = io.of(SOCKETIO_NS_CHAT);
+      const sockets = await ns.in(broadcast.roomId).fetchSockets();
+      for (const s of sockets) {
+        const recipientId = (s.data as { userId?: string } | undefined)?.userId;
+        if (!recipientId) continue;
+        if (recipientId === senderId) continue;
+        if (senderBlocked.includes(recipientId)) continue;
+        if (blockedRecipients.has(recipientId)) continue;
+        s.emit("chat:message", broadcast);
+      }
     }
-  });
+  } catch (err) {
+    logger.warn?.(`[challenge-chat] socket.io mirror failed: ${(err as Error).message}`);
+  }
 }
 
 /** Handle gift_to_player message — gift sent notification to players */
