@@ -851,7 +851,7 @@ function buildDominoPlacements(
 
   const maxLayoutEntries = 300;
   const maxShrinkSteps = 10;
-  const minLayoutScale = 0.38;
+  const minLayoutScale = 0.55;
   const shrinkFactor = 0.92;
 
   if (entries.length > maxLayoutEntries) {

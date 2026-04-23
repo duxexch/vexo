@@ -187,7 +187,7 @@ async function buildSuite(): Promise<SnapshotSuite> {
                 safeBounds: desktopRightBounds,
                 compact: false,
                 minPlaced: 0,
-                minScale: 0.38,
+                minScale: 0.55,
                 minFolds: 0,
             }).safeBounds,
             tiles: buildHeavyDoublesTiles(52),
@@ -201,26 +201,75 @@ async function buildSuite(): Promise<SnapshotSuite> {
                 safeBounds: desktopLeftBounds,
                 compact: false,
                 minPlaced: 0,
-                minScale: 0.38,
+                minScale: 0.55,
                 minFolds: 0,
             }).safeBounds,
             tiles: buildZigZagTiles(64),
         }),
-        "mobile-stress-right": await runScenario("mobile-stress-right", {
-            side: "right",
-            compact: true,
-            anchorRenderRotation: 90,
-            verticalStart: "down",
-            safeBounds: register("mobile-stress-right", {
-                safeBounds: mobileRightBounds,
-                compact: true,
-                minPlaced: 0,
-                minScale: 0.38,
-                minFolds: 0,
-            }).safeBounds,
-            tiles: buildStressTiles(220),
-        }),
     };
+}
+
+// Absurd-chain degradation check. The realistic snapshot suite raises the
+// minimum tile scale to ~0.55 so tiles stay readable. That floor means the
+// solver can no longer "shrink to fit" a 220-tile chain on a narrow mobile
+// lane, so this scenario lives outside the deterministic snapshot suite and
+// instead asserts the looser safe-degradation contract: the solver must run
+// deterministically, never throw, and either lay out a partial chain or
+// return cleanly with zero placements — never crash the board.
+async function verifyAbsurdMobileStressDegradation(): Promise<void> {
+    const mobileRightBounds = { left: 18, right: 152, top: -170, bottom: 170 };
+    const input: DominoLayoutSnapshotInput = {
+        side: "right",
+        compact: true,
+        anchorRenderRotation: 90,
+        verticalStart: "down",
+        safeBounds: mobileRightBounds,
+        tiles: buildStressTiles(220),
+    };
+
+    const first = buildDominoLayoutSnapshot(input);
+    const second = buildDominoLayoutSnapshot(input);
+    assert.deepStrictEqual(
+        second,
+        first,
+        "Determinism failed for absurd mobile stress (220 tiles).",
+    );
+
+    assert.ok(
+        Array.isArray(first.placements),
+        "Absurd mobile stress returned a non-array placement list.",
+    );
+    assert.ok(
+        first.placements.length <= input.tiles.length,
+        `Absurd mobile stress placed ${first.placements.length} tiles, ` +
+            `more than the ${input.tiles.length} input tiles.`,
+    );
+    for (const placement of first.placements) {
+        assert.ok(
+            Number.isFinite(placement.x) &&
+                Number.isFinite(placement.y) &&
+                Number.isFinite(placement.renderRotation) &&
+                Number.isFinite(placement.layoutScale),
+            `Absurd mobile stress produced a non-finite placement: ${JSON.stringify(placement)}.`,
+        );
+    }
+    assert.ok(
+        first.layoutScale > 0,
+        `Absurd mobile stress produced non-positive layoutScale ${first.layoutScale}.`,
+    );
+
+    const firstHash = await hashDominoLayoutTiles(first.placements);
+    const secondHash = await hashDominoLayoutTiles(second.placements);
+    assert.equal(
+        secondHash,
+        firstHash,
+        "Hash determinism failed for absurd mobile stress (220 tiles).",
+    );
+
+    console.log(
+        `[smoke:domino-layout-snapshots] absurd mobile stress degraded gracefully: ` +
+            `${first.placements.length} tiles placed at scale ${first.layoutScale}.`,
+    );
 }
 
 // Approximate per-tile half-width/half-height matching DominoBoard's
@@ -328,6 +377,11 @@ async function main() {
     // Always check the realistic-scenario invariant — even when updating the
     // fixture — so we never freeze in a regressed state.
     assertScenarioInvariants(suite);
+
+    // Looser, non-snapshot check for an absurd 220-tile chain on a narrow
+    // mobile lane — verifies graceful degradation now that the realistic
+    // floor is too high for the solver to fit such a chain via shrinking.
+    await verifyAbsurdMobileStressDegradation();
 
     if (update) {
         saveFixture(suite);
