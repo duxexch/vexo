@@ -49,3 +49,7 @@ expertMode = true
 NODE_OPTIONS = "--max-old-space-size=4096"
 
 [userenv.production]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 180000
