@@ -202,7 +202,14 @@ export function useCallSession(): UseCallSessionReturn {
     };
 
     const onEnded = (p: { sessionId: string; fromUserId: string; reason?: string }) => {
-      if (incoming?.sessionId === p.sessionId) setIncoming(null);
+      // Caller cancelled / timed out while we were still ringing (the user
+      // never accepted). Clear the inbound invite *and* reset status so the
+      // CallModal closes and we return to the page they were on.
+      if (incoming?.sessionId === p.sessionId) {
+        setIncoming(null);
+        if (!ctxRef.current) setStatus("ended");
+      }
+      // Active/accepted call ended on the wire — tear down the peer.
       if (ctxRef.current?.sessionId === p.sessionId) {
         setStatus("ended");
         cleanup();
