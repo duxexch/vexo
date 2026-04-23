@@ -28,9 +28,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import type { CountryPaymentMethod } from "@shared/schema";
 import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
-import { useCallSession } from "@/hooks/use-call-session";
+import { useCall } from "@/components/calls/CallSessionProvider";
 import { CallButton } from "@/components/calls/CallButton";
-import { CallModal } from "@/components/calls/CallModal";
 import {
   adaptDominoBoardMoveToEngine,
   extractDominoHandFromPlayerView,
@@ -293,7 +292,7 @@ export default function ChallengeGamePage() {
   const [showConvertDialog, setShowConvertDialog] = useState(false);
   const [showDepositDialog, setShowDepositDialog] = useState(false);
   const [showMobileChat, setShowMobileChat] = useState(false);
-  const callSession = useCallSession();
+  const callSession = useCall();
   const [fundingShortageProject, setFundingShortageProject] = useState(0);
   const [fundingUsdNeeded, setFundingUsdNeeded] = useState(0);
   const [dominoMoveError, setDominoMoveError] = useState<string | null>(null);
@@ -2792,8 +2791,8 @@ export default function ChallengeGamePage() {
       )}
       dir={dir}
     >
-      {/* WebRTC call modal — always mounted to receive incoming calls */}
-      <CallModal call={callSession} />
+      {/* WebRTC call modal is mounted app-wide in CallSessionProvider so the
+          ringer is reachable from every page (lobby, profile, other games). */}
       {/* Reconnection overlay */}
       {wsConnState === "reconnecting" && (
         <div className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-center gap-4 backdrop-blur-sm">

@@ -55,6 +55,7 @@ import { VexNotificationPopupProvider } from "@/components/VexNotificationPopup"
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { PrivateCallLayerProvider } from "@/components/chat/private-call-layer";
+import { CallSessionProvider } from "@/components/calls/CallSessionProvider";
 
 import NotFound from "@/pages/not-found";
 import AdminLayout from "@/pages/admin/admin-layout";
@@ -767,6 +768,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     return (
         <NotificationProvider>
             <PrivateCallLayerProvider>
+              <CallSessionProvider>
                 <SidebarProvider style={style as React.CSSProperties}>
                     <div className="flex h-screen w-full" dir={dir}>
                         <a
@@ -836,6 +838,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                         <SupportChatWidget isLoggedIn={true} showFloatingTrigger={false} />
                     </Suspense>
                 </SidebarProvider>
+              </CallSessionProvider>
             </PrivateCallLayerProvider>
         </NotificationProvider>
     );
