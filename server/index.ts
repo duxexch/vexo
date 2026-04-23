@@ -444,15 +444,25 @@ export function log(message: string, source = "express") {
   logger.info(`${formattedTime} [${source}] ${message}`);
 }
 
+// High-frequency endpoints that flood production logs without diagnostic value:
+//   /api/health   — Docker/Traefik healthcheck every 30s
+//   /api/release  — frontend release-version poll every ~5s
+// These are intentionally skipped here AND in requestLogger (logger.ts) so the
+// structured JSON log stays the single source of truth for API traffic.
+const SKIP_REQUEST_LOG_PATHS = new Set(["/api/health", "/api/release"]);
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      // Only log method, path, status, duration — never capture response bodies
-      // Response body logging was causing massive CPU/memory usage
+    if (!path.startsWith("/api")) return;
+    if (SKIP_REQUEST_LOG_PATHS.has(path)) return;
+    // Only emit the human-readable line for non-2xx so production logs aren't
+    // duplicated by the structured requestLogger. 4xx/5xx stay visible here
+    // for at-a-glance scanning during incidents.
+    if (res.statusCode >= 400) {
       log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
     }
   });

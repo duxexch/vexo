@@ -313,8 +313,12 @@ export function requestLogger() {
 
     res.on('finish', () => {
       const duration = Date.now() - startTime;
-      // Only log non-health endpoints to reduce noise
+      // Skip noisy high-frequency endpoints (kept in sync with
+      // SKIP_REQUEST_LOG_PATHS in server/index.ts).
       if (req.path?.includes('/health')) {
+        return;
+      }
+      if (req.path === '/api/release') {
         return;
       }
       

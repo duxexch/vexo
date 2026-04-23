@@ -1,0 +1,97 @@
+[✓] Changes applied
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.13.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.13.0
+npm notice To update run: npm install -g npm@11.13.0
+npm notice
+  Migrations completed
+
+[4/5] Database seeding...
+Starting seed...
+Seeding currencies...
+Seeded 68 currencies
+Seeding payment methods...
+Payment methods seed complete: inserted 0, skipped 44
+No single-player games to seed (removed).
+Seed completed successfully!
+  Seeding completed
+
+[5/5] Starting VEX Platform...
+========================================
+  Port: 3001
+  Node: v20.20.2
+  PID: 7
+========================================
+
+Starting database seed...
+{"timestamp":"2026-04-23T20:49:08.397Z","level":"INFO","message":"[SEO] Prerender enabled with upstream https://service.prerender.io"}
+{"timestamp":"2026-04-23T20:49:08.417Z","level":"INFO","message":"[Marketer Scheduler] started (interval: 300s)"}
+{"timestamp":"2026-04-23T20:49:08.418Z","level":"INFO","message":"[Scheduler] Started scheduled config changes processor (interval: 300s)"}
+{"timestamp":"2026-04-23T20:49:08.418Z","level":"INFO","message":"[AI Monitor] Started adaptive AI health monitor (interval: 300s)"}
+{"timestamp":"2026-04-23T20:49:08.418Z","level":"INFO","message":"[P2P Scheduler] Started expired trades processor (interval: 60s)"}
+{"timestamp":"2026-04-23T20:49:08.418Z","level":"INFO","message":"[P2P Dispute Scheduler] Started stale open disputes escalator (interval: 300s, timeout=10m)"}
+{"timestamp":"2026-04-23T20:49:08.418Z","level":"INFO","message":"[Notification Cleanup] Started (interval: 6h)"}
+{"timestamp":"2026-04-23T20:49:08.418Z","level":"INFO","message":"[Chess Timeout Watchdog] Started (interval: 3000ms)"}
+{"timestamp":"2026-04-23T20:49:08.419Z","level":"INFO","message":"[Domino Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-23T20:49:08.419Z","level":"INFO","message":"[Language Duel Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-23T20:49:08.419Z","level":"INFO","message":"[Baloot Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-23T20:49:08.419Z","level":"INFO","message":"[Tarneeb Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-23T20:49:08.470Z","level":"INFO","message":"8:49:08 PM [storage] Uploads directory is writable: /app/uploads"}
+{"timestamp":"2026-04-23T20:49:08.471Z","level":"INFO","message":"[MinIO] Client initialized → vex-minio:9000"}
+{"timestamp":"2026-04-23T20:49:08.484Z","level":"INFO","message":"[Redis:main] Connected"}
+{"timestamp":"2026-04-23T20:49:08.502Z","level":"INFO","message":"[MinIO] Bucket \"vex-uploads\" already exists"}
+{"timestamp":"2026-04-23T20:49:08.503Z","level":"INFO","message":"8:49:08 PM [storage] MinIO initialized successfully"}
+{"timestamp":"2026-04-23T20:49:08.505Z","level":"INFO","message":"8:49:08 PM [express] serving on port 3001"}
+{"timestamp":"2026-04-23T20:49:08.506Z","level":"INFO","message":"8:49:08 PM [redis] Redis connected successfully"}
+{"timestamp":"2026-04-23T20:49:08.579Z","level":"INFO","message":"8:49:08 PM [db] DB enum support_message verified"}
+Games already exist, skipping seed.
+{"timestamp":"2026-04-23T20:49:08.587Z","level":"INFO","message":"Multiplayer games already seeded"}
+{"timestamp":"2026-04-23T20:49:08.588Z","level":"INFO","message":"8:49:08 PM [db] DB support media columns verified"}
+Social platforms already exist, skipping seed.
+{"timestamp":"2026-04-23T20:49:08.593Z","level":"INFO","message":"8:49:08 PM [db] DB multiplayer thumbnail column verified"}
+{"timestamp":"2026-04-23T20:49:08.804Z","level":"INFO","message":"8:49:08 PM [db] DB transactions public references verified"}
+{"timestamp":"2026-04-23T20:49:08.909Z","level":"INFO","message":"8:49:08 PM [db] DB chat_messages Telegram columns verified"}
+{"timestamp":"2026-04-23T20:49:08.961Z","level":"WARN","message":"ADMIN_RESET_PASSWORD already applied — remove it from secrets"}
+{"timestamp":"2026-04-23T20:49:08.991Z","level":"INFO","message":"8:49:08 PM [express] GET /api/health 200 in 21ms"}
+Multiplayer games already seeded
+Gift catalog already seeded
+Free play settings already seeded
+{"timestamp":"2026-04-23T20:49:09.069Z","level":"INFO","message":"[Security Cleanup] Scheduled hourly cleanup job"}
+{"timestamp":"2026-04-23T20:49:09.072Z","level":"INFO","message":"[CRON] Challenge expiry job started (every 5 min)"}
+{"timestamp":"2026-04-23T20:49:11.713Z","level":"INFO","message":"8:49:11 PM [express] GET /api/auth/me 304 in 13ms"}
+{"timestamp":"2026-04-23T20:49:11.714Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1776977351699_11ce219d327d","method":"GET","path":"/api/auth/me","statusCode":304,"duration":15,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.37.235.31"}}
+{"timestamp":"2026-04-23T20:49:14.706Z","level":"INFO","message":"8:49:14 PM [express] GET /api/notifications/push/public-key 304 in 19ms"}
+{"timestamp":"2026-04-23T20:49:14.707Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1776977354687_a67b02943d78","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":20,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.37.235.31"}}
+{"timestamp":"2026-04-23T20:49:28.447Z","level":"INFO","message":"[Marketer Scheduler] success run=4f83ca74-8c41-4e2e-a873-6c8a1a473048 attempt=1 generated=0/0.00 released=0/0.00"}
+{"timestamp":"2026-04-23T20:49:37.095Z","level":"INFO","message":"8:49:37 PM [express] GET /api/release 200 in 8ms"}
+{"timestamp":"2026-04-23T20:49:37.095Z","level":"INFO","message":"GET /api/release","context":{"requestId":"req_1776977377085_20bce33cbbee","method":"GET","path":"/api/release","statusCode":200,"duration":10,"ip":"41.37.235.31"}}
+{"timestamp":"2026-04-23T20:49:39.049Z","level":"INFO","message":"8:49:39 PM [express] GET /api/health 200 in 6ms"}
+{"timestamp":"2026-04-23T20:49:42.065Z","level":"INFO","message":"8:49:42 PM [express] GET /api/release 200 in 4ms"}
+{"timestamp":"2026-04-23T20:49:42.065Z","level":"INFO","message":"GET /api/release","context":{"requestId":"req_1776977382061_e63227fae39b","method":"GET","path":"/api/release","statusCode":200,"duration":4,"ip":"41.37.235.31"}}
+{"timestamp":"2026-04-23T20:49:42.086Z","level":"INFO","message":"8:49:42 PM [express] GET /api/auth/me 304 in 26ms"}
+{"timestamp":"2026-04-23T20:49:42.088Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1776977382060_b809831ea5da","method":"GET","path":"/api/auth/me","statusCode":304,"duration":27,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.37.235.31"}}
+{"timestamp":"2026-04-23T20:49:44.692Z","level":"INFO","message":"8:49:44 PM [express] GET /api/notifications/push/public-key 304 in 9ms"}
+{"timestamp":"2026-04-23T20:49:44.693Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1776977384683_73491b486795","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":10,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.37.235.31"}}
+{"timestamp":"2026-04-23T20:50:09.105Z","level":"INFO","message":"8:50:09 PM [express] GET /api/health 200 in 6ms"}
+{"timestamp":"2026-04-23T20:50:36.678Z","level":"INFO","message":"8:50:36 PM [express] GET /api/release 200 in 2ms"}
+{"timestamp":"2026-04-23T20:50:36.678Z","level":"INFO","message":"GET /api/release","context":{"requestId":"req_1776977436676_8f6d71272ebb","method":"GET","path":"/api/release","statusCode":200,"duration":2,"ip":"41.37.235.31"}}
+{"timestamp":"2026-04-23T20:50:36.904Z","level":"INFO","message":"8:50:36 PM [express] GET /api/auth/me 304 in 10ms"}
+{"timestamp":"2026-04-23T20:50:36.904Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1776977436893_b7dd6afcf4d4","method":"GET","path":"/api/auth/me","statusCode":304,"duration":11,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.37.235.31"}}
+{"timestamp":"2026-04-23T20:50:39.157Z","level":"INFO","message":"8:50:39 PM [express] GET /api/health 200 in 5ms"}
+{"timestamp":"2026-04-23T20:50:39.704Z","level":"INFO","message":"8:50:39 PM [express] GET /api/notifications/push/public-key 304 in 6ms"}
+{"timestamp":"2026-04-23T20:50:39.704Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1776977439698_8d2964a1d215","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":6,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.37.235.31"}}
+{"timestamp":"2026-04-23T20:50:41.691Z","level":"INFO","message":"8:50:41 PM [express] GET /api/release 200 in 2ms"}
+{"timestamp":"2026-04-23T20:50:41.691Z","level":"INFO","message":"GET /api/release","context":{"requestId":"req_1776977441688_4fad0499e8b5","method":"GET","path":"/api/release","statusCode":200,"duration":3,"ip":"41.37.235.31"}}
+{"timestamp":"2026-04-23T20:51:09.213Z","level":"INFO","message":"8:51:09 PM [express] GET /api/health 200 in 4ms"}
+{"timestamp":"2026-04-23T20:51:09.520Z","level":"INFO","message":"GET /robots.txt","context":{"requestId":"req_1776977469504_3a9e30cc50cf","method":"GET","path":"/robots.txt","statusCode":200,"duration":16,"ip":"66.249.73.227"}}
+{"timestamp":"2026-04-23T20:51:09.914Z","level":"INFO","message":"GET /","context":{"requestId":"req_1776977469902_527b55d01df6","method":"GET","path":"/","statusCode":200,"duration":12,"ip":"66.249.73.226"}}
+{"timestamp":"2026-04-23T20:51:10.256Z","level":"INFO","message":"GET /vex-gaming-logo-192x192.png","context":{"requestId":"req_1776977470252_43a4d41f37a6","method":"GET","path":"/vex-gaming-logo-192x192.png","statusCode":200,"duration":3,"ip":"66.249.73.226"}}
+{"timestamp":"2026-04-23T20:51:10.287Z","level":"INFO","message":"GET /","context":{"requestId":"req_1776977470282_74dd51685020","method":"GET","path":"/","statusCode":200,"duration":5,"ip":"66.249.73.226"}}
+{"timestamp":"2026-04-23T20:51:10.502Z","level":"INFO","message":"GET /vex-gaming-logo-96x96.png","context":{"requestId":"req_1776977470500_2dc9dec7feea","method":"GET","path":"/vex-gaming-logo-96x96.png","statusCode":200,"duration":2,"ip":"66.249.73.227"}}
+{"timestamp":"2026-04-23T20:51:10.548Z","level":"INFO","message":"GET /vendor-react-Dci6tuFz.js","context":{"requestId":"req_1776977470515_ded92e5682a2","method":"GET","path":"/vendor-react-Dci6tuFz.js","statusCode":200,"duration":33,"ip":"66.249.73.228"}}
+{"timestamp":"2026-04-23T20:51:10.580Z","level":"INFO","message":"GET /vendor-router-Bu5KDbfH.js","context":{"requestId":"req_1776977470539_511adf47eb62","method":"GET","path":"/vendor-router-Bu5KDbfH.js","statusCode":200,"duration":41,"ip":"66.249.73.226"}}
+{"timestamp":"2026-04-23T20:51:10.583Z","level":"INFO","message":"GET /vendor-radix-CmeWGe32.js","context":{"requestId":"req_1776977470512_19566b25a183","method":"GET","path":"/vendor-radix-CmeWGe32.js","statusCode":200,"duration":70,"ip":"66.249.73.227"}}
+{"timestamp":"2026-04-23T20:51:10.663Z","level":"INFO","message":"GET /vendor-react-dom-QTpbwF2S.js","context":{"requestId":"req_1776977470556_faac3afa6c22","method":"GET","path":"/vendor-react-dom-QTpbwF2S.js","statusCode":200,"duration":107,"ip":"66.249.73.228"}}
+{"timestamp":"2026-04-23T20:51:10.669Z","level":"INFO","message":"GET /index-5-TbxXQ3.js","context":{"requestId":"req_1776977470566_647ef1129b36","method":"GET","path":"/index-5-TbxXQ3.js","statusCode":200,"duration":103,"ip":"66.249.73.226"}}
+{"timestamp":"2026-04-23T20:51:10.689Z","level":"INFO","message":"GET /vex-gaming-logo-96x96.png","context":{"requestId":"req_1776977470654_0166b2a6cf58","method":"GET","path":"/vex-gaming-logo-96x96.png","statusCode":200,"duration":35,"ip":"66.249.73.226"}}
+root@srv1118737:/docker/vex# 
