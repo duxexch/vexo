@@ -230,6 +230,17 @@ services:
       PUBLIC_RTC_TURN_URLS: ${PUBLIC_RTC_TURN_URLS:-}
       PUBLIC_RTC_TURN_USERNAME: ${PUBLIC_RTC_TURN_USERNAME:-}
       PUBLIC_RTC_TURN_CREDENTIAL: ${PUBLIC_RTC_TURN_CREDENTIAL:-}
+      # TURN credential issuer config — must mirror the coturn container.
+      # When TURN_HOST + TURN_STATIC_SECRET are set, /api/rtc/ice-servers
+      # returns a TURN entry with HMAC-SHA1 ephemeral creds. When unset,
+      # only public STUN is returned and clients fall back to text-only.
+      TURN_HOST: ${TURN_HOST:-}
+      TURN_REALM: ${TURN_REALM:-vixo.click}
+      TURN_PORT: ${TURN_PORT:-3478}
+      TURN_TLS_PORT: ${TURN_TLS_PORT:-5349}
+      TURN_STATIC_SECRET: ${TURN_STATIC_SECRET:-}
+      TURN_TTL_SECONDS: ${TURN_TTL_SECONDS:-3600}
+      STUN_URLS: ${STUN_URLS:-}
       SESSION_SECRET: ${SESSION_SECRET}
       SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY}
       JWT_USER_SECRET: ${JWT_SIGNING_KEY}
@@ -354,27 +365,44 @@ services:
 
   # ===========================================================================
   # coturn — self-hosted TURN/STUN for WebRTC voice/video
-  # Enable by uncommenting and providing the TURN_* env vars on both this
-  # service AND the `app` service. See deploy/coturn/README.md for setup.
+  # Activated as part of the default production stack. The service is a no-op
+  # (won't fail other services) until TURN_STATIC_SECRET is set in .env. See
+  # deploy/coturn/README.md for the full activation runbook (DNS, firewall,
+  # secret generation, config rendering, verification).
+  # Uses host networking so the relay UDP port range (49152-65535) is reachable
+  # without enumerating tens of thousands of port mappings.
   # ---------------------------------------------------------------------------
-  # coturn:
-  #   image: coturn/coturn:latest
-  #   container_name: vex-coturn
-  #   restart: unless-stopped
-  #   network_mode: host
-  #   environment:
-  #     TURN_HOST: ${TURN_HOST}
-  #     TURN_REALM: ${TURN_REALM:-vixo.click}
-  #     TURN_STATIC_SECRET: ${TURN_STATIC_SECRET}
-  #     TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP}
-  #   volumes:
-  #     - ./deploy/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
-  #   command: ["-c", "/etc/coturn/turnserver.conf"]
-  #   healthcheck:
-  #     test: ["CMD", "pgrep", "-x", "turnserver"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  coturn:
+    image: coturn/coturn:latest
+    container_name: vex-coturn
+    restart: unless-stopped
+    profiles: ["${TURN_COMPOSE_PROFILE:-coturn}"]
+    network_mode: host
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.30"
+        reservations:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      TURN_HOST: ${TURN_HOST:-}
+      TURN_REALM: ${TURN_REALM:-vixo.click}
+      TURN_STATIC_SECRET: ${TURN_STATIC_SECRET:-}
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-}
+    volumes:
+      - ./deploy/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x turnserver || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   vex-internal:
