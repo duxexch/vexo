@@ -80,20 +80,38 @@ async function runScenario(name: string, input: DominoLayoutSnapshotInput): Prom
     };
 }
 
-// Realistic-game scenarios MUST place all tiles. Stress scenarios are
-// allowed to degrade gracefully (some tiles dropped) but still must remain
-// deterministic. This guards against silent regressions where the solver
-// returns an empty layout that still hashes consistently.
-const REALISTIC_SCENARIOS = new Set<string>([
-    "desktop-straight-right",
-    "desktop-realistic-left",
-    "mobile-realistic-right",
-]);
+// Per-scenario invariants. Used to catch regressions that a hash-only
+// snapshot test cannot, e.g. a solver that silently returns empty
+// placements while keeping its output deterministic.
+type ScenarioInvariants = {
+    safeBounds: { left: number; right: number; top: number; bottom: number };
+    compact: boolean;
+    // Minimum tiles that must be placed. For realistic scenarios this is the
+    // full chain length; for long/stress scenarios it's a degradation floor.
+    minPlaced: number;
+    // Minimum scale the layout must use. Guards against the solver shrinking
+    // tiles all the way down for chains that should still be readable.
+    minScale: number;
+    // Minimum number of direction changes (elbows) we expect. Verifies the
+    // chain actually folds into a snake instead of a long straight line that
+    // overflows the lane.
+    minFolds: number;
+};
+
+const SCENARIO_INVARIANTS: Record<string, ScenarioInvariants> = {};
 
 async function buildSuite(): Promise<SnapshotSuite> {
     const desktopLeftBounds = { left: -352, right: -24, top: -230, bottom: 230 };
     const desktopRightBounds = { left: 24, right: 352, top: -230, bottom: 230 };
     const mobileRightBounds = { left: 18, right: 152, top: -170, bottom: 170 };
+
+    const register = (
+        name: string,
+        invariants: ScenarioInvariants,
+    ): ScenarioInvariants => {
+        SCENARIO_INVARIANTS[name] = invariants;
+        return invariants;
+    };
 
     return {
         // Realistic single-hand chain (~14 tiles) — must lay out completely.
@@ -102,7 +120,13 @@ async function buildSuite(): Promise<SnapshotSuite> {
             compact: false,
             anchorRenderRotation: 90,
             verticalStart: "up",
-            safeBounds: desktopRightBounds,
+            safeBounds: register("desktop-straight-right", {
+                safeBounds: desktopRightBounds,
+                compact: false,
+                minPlaced: 14,
+                minScale: 0.7,
+                minFolds: 1,
+            }).safeBounds,
             tiles: buildStraightTiles(14),
         }),
         // Realistic full two-hand chain (~20 tiles) on left side.
@@ -111,8 +135,33 @@ async function buildSuite(): Promise<SnapshotSuite> {
             compact: false,
             anchorRenderRotation: 90,
             verticalStart: "down",
-            safeBounds: desktopLeftBounds,
+            safeBounds: register("desktop-realistic-left", {
+                safeBounds: desktopLeftBounds,
+                compact: false,
+                minPlaced: 20,
+                minScale: 0.65,
+                minFolds: 2,
+            }).safeBounds,
             tiles: buildHeavyDoublesTiles(20),
+        }),
+        // Long chain (28 tiles). Locks the current degradation: placement is
+        // empty at the minimum scale rather than overflowing the lane. The
+        // architect flagged that this scenario *should* fit at higher scale —
+        // tracked as a follow-up; this assertion guards against silent
+        // overflow regressions in the meantime.
+        "desktop-long-right": await runScenario("desktop-long-right", {
+            side: "right",
+            compact: false,
+            anchorRenderRotation: 90,
+            verticalStart: "up",
+            safeBounds: register("desktop-long-right", {
+                safeBounds: desktopRightBounds,
+                compact: false,
+                minPlaced: 0,
+                minScale: 0.4,
+                minFolds: 0,
+            }).safeBounds,
+            tiles: buildStraightTiles(28),
         }),
         // Compact mobile lane — full hand should still fit with folding.
         "mobile-realistic-right": await runScenario("mobile-realistic-right", {
@@ -120,7 +169,13 @@ async function buildSuite(): Promise<SnapshotSuite> {
             compact: true,
             anchorRenderRotation: 90,
             verticalStart: "down",
-            safeBounds: mobileRightBounds,
+            safeBounds: register("mobile-realistic-right", {
+                safeBounds: mobileRightBounds,
+                compact: true,
+                minPlaced: 10,
+                minScale: 0.55,
+                minFolds: 1,
+            }).safeBounds,
             tiles: buildZigZagTiles(10),
         }),
         // Stress scenarios — verify the solver degrades deterministically when
@@ -130,7 +185,13 @@ async function buildSuite(): Promise<SnapshotSuite> {
             compact: false,
             anchorRenderRotation: 90,
             verticalStart: "down",
-            safeBounds: desktopRightBounds,
+            safeBounds: register("desktop-heavy-doubles-right", {
+                safeBounds: desktopRightBounds,
+                compact: false,
+                minPlaced: 0,
+                minScale: 0.38,
+                minFolds: 0,
+            }).safeBounds,
             tiles: buildHeavyDoublesTiles(52),
         }),
         "desktop-zigzag-left": await runScenario("desktop-zigzag-left", {
@@ -138,7 +199,13 @@ async function buildSuite(): Promise<SnapshotSuite> {
             compact: false,
             anchorRenderRotation: 90,
             verticalStart: "up",
-            safeBounds: desktopLeftBounds,
+            safeBounds: register("desktop-zigzag-left", {
+                safeBounds: desktopLeftBounds,
+                compact: false,
+                minPlaced: 0,
+                minScale: 0.38,
+                minFolds: 0,
+            }).safeBounds,
             tiles: buildZigZagTiles(64),
         }),
         "mobile-stress-right": await runScenario("mobile-stress-right", {
@@ -146,22 +213,96 @@ async function buildSuite(): Promise<SnapshotSuite> {
             compact: true,
             anchorRenderRotation: 90,
             verticalStart: "down",
-            safeBounds: mobileRightBounds,
+            safeBounds: register("mobile-stress-right", {
+                safeBounds: mobileRightBounds,
+                compact: true,
+                minPlaced: 0,
+                minScale: 0.38,
+                minFolds: 0,
+            }).safeBounds,
             tiles: buildStressTiles(220),
         }),
     };
 }
 
-function assertRealisticScenariosPlaceAllTiles(suite: SnapshotSuite) {
+// Approximate per-tile half-width/half-height matching DominoBoard's
+// getTileFootprint defaults (mirrored here so the test stays self-contained).
+function getApproximateHalfFootprint(
+    rotation: number,
+    compact: boolean,
+    layoutScale: number,
+): { halfWidth: number; halfHeight: number } {
+    const longSide = (compact ? 56 : 80) * layoutScale;
+    const shortSide = (compact ? 28 : 40) * layoutScale;
+    const normalized = ((rotation % 360) + 360) % 360;
+    const sideways = normalized === 90 || normalized === 270;
+    return sideways
+        ? { halfWidth: longSide / 2, halfHeight: shortSide / 2 }
+        : { halfWidth: shortSide / 2, halfHeight: longSide / 2 };
+}
+
+function countDirectionChanges(
+    placements: ScenarioSnapshot["placements"],
+): number {
+    if (placements.length < 2) return 0;
+    let folds = 0;
+    let lastDirection: "horizontal" | "vertical" | null = null;
+    let prevX = 0;
+    let prevY = 0;
+    for (const p of placements) {
+        const dx = p.x - prevX;
+        const dy = p.y - prevY;
+        const direction: "horizontal" | "vertical" = Math.abs(dx) >= Math.abs(dy)
+            ? "horizontal"
+            : "vertical";
+        if (lastDirection !== null && direction !== lastDirection) {
+            folds += 1;
+        }
+        lastDirection = direction;
+        prevX = p.x;
+        prevY = p.y;
+    }
+    return folds;
+}
+
+function assertScenarioInvariants(suite: SnapshotSuite) {
     for (const [name, snapshot] of Object.entries(suite)) {
-        if (!REALISTIC_SCENARIOS.has(name)) continue;
-        const expected = snapshot.telemetry.tilesCount;
-        const actual = snapshot.placements.length;
-        assert.equal(
-            actual,
-            expected,
-            `Realistic scenario "${name}" only placed ${actual}/${expected} tiles — solver regression.`,
+        const inv = SCENARIO_INVARIANTS[name];
+        if (!inv) {
+            throw new Error(`Missing invariants for scenario ${name}`);
+        }
+        const placedCount = snapshot.placements.length;
+
+        assert.ok(
+            placedCount >= inv.minPlaced,
+            `Scenario "${name}" placed ${placedCount} tiles, expected >= ${inv.minPlaced}.`,
         );
+        assert.ok(
+            snapshot.layoutScale >= inv.minScale - 1e-6,
+            `Scenario "${name}" used scale ${snapshot.layoutScale}, expected >= ${inv.minScale}.`,
+        );
+        const folds = countDirectionChanges(snapshot.placements);
+        assert.ok(
+            folds >= inv.minFolds,
+            `Scenario "${name}" folded ${folds} times, expected >= ${inv.minFolds}.`,
+        );
+        // Every placed tile must lie within the safe bounds — guards against
+        // any future overflow regression where tiles silently render off-lane.
+        for (const placement of snapshot.placements) {
+            const fp = getApproximateHalfFootprint(
+                placement.renderRotation,
+                inv.compact,
+                placement.layoutScale,
+            );
+            const tileEpsilon = 1.5;
+            assert.ok(
+                placement.x - fp.halfWidth >= inv.safeBounds.left - tileEpsilon &&
+                    placement.x + fp.halfWidth <= inv.safeBounds.right + tileEpsilon &&
+                    placement.y - fp.halfHeight >= inv.safeBounds.top - tileEpsilon &&
+                    placement.y + fp.halfHeight <= inv.safeBounds.bottom + tileEpsilon,
+                `Scenario "${name}" placed tile out of safe bounds at (${placement.x}, ${placement.y}).`,
+            );
+        }
     }
 }
 
@@ -188,7 +329,7 @@ async function main() {
 
     // Always check the realistic-scenario invariant — even when updating the
     // fixture — so we never freeze in a regressed state.
-    assertRealisticScenariosPlaceAllTiles(suite);
+    assertScenarioInvariants(suite);
 
     if (update) {
         saveFixture(suite);

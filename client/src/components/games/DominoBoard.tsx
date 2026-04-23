@@ -2043,6 +2043,17 @@ export function DominoBoard({
           "shrink-0 transition-transform duration-300",
           isLastActionTile ? "animate-domino-place" : "opacity-95",
         )}
+        style={
+          isLastActionTile
+            ? {
+                // Warm amber glow + soft pulse on the most recently placed
+                // tile so players can instantly see what just changed.
+                filter:
+                  "drop-shadow(0 0 6px rgba(255, 184, 92, 0.85)) drop-shadow(0 0 14px rgba(255, 138, 32, 0.55))",
+                animation: "domino-last-played-glow 1.6s ease-out 1",
+              }
+            : undefined
+        }
       >
         <DominoTileComponent
           tile={boardTile}

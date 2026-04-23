@@ -263,6 +263,18 @@
     },
     "layoutHash": "e2ed177c2a416b612278b845916ffd735b0582dc59c8dd50b8ec36ea72f232f8"
   },
+  "desktop-long-right": {
+    "layoutScale": 0.434,
+    "placements": [],
+    "telemetry": {
+      "tilesCount": 28,
+      "iterationsUsed": 577,
+      "shrinkSteps": 10,
+      "failedAttempts": 130,
+      "overflowed": false
+    },
+    "layoutHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
   "mobile-realistic-right": {
     "layoutScale": 0.779,
     "placements": [

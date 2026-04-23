@@ -1644,6 +1644,25 @@ body[data-vex-game-fullscreen="on"] {
   }
 }
 
+/* Domino: warm amber pulse on the most recently placed tile so players
+   can see at a glance which tile just changed on the board. */
+@keyframes domino-last-played-glow {
+  0% {
+    filter: drop-shadow(0 0 2px rgba(255, 184, 92, 0.4))
+      drop-shadow(0 0 4px rgba(255, 138, 32, 0.2));
+  }
+
+  35% {
+    filter: drop-shadow(0 0 10px rgba(255, 200, 110, 1))
+      drop-shadow(0 0 22px rgba(255, 138, 32, 0.85));
+  }
+
+  100% {
+    filter: drop-shadow(0 0 6px rgba(255, 184, 92, 0.85))
+      drop-shadow(0 0 14px rgba(255, 138, 32, 0.55));
+  }
+}
+
 /* Domino: panel highlight shimmer */
 @keyframes domino-panel-shimmer {
   0% {
