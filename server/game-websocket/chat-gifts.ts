@@ -100,16 +100,20 @@ export async function handleChat(ws: AuthenticatedWebSocket, payload: { message:
         // (3) requires per-recipient cache lookups, identical to the legacy
         // path in server/game-websocket/utils.ts (see broadcastToRoomFiltered).
         const sockets = await ns.in(broadcast.roomId).fetchSockets();
-        const recipientIds: string[] = [];
-        const idToSocket = new Map<string, typeof sockets[number]>();
+        // Group sockets by userId so multi-tab/device users get the message
+        // on every active connection, while we only resolve each recipient's
+        // block/mute list ONCE per user.
+        const idToSockets = new Map<string, Array<typeof sockets[number]>>();
         for (const s of sockets) {
           const recipientId = (s.data as { userId?: string } | undefined)?.userId;
           if (!recipientId) continue;
           if (recipientId === ws.userId) continue;
           if (blockedUsers.includes(recipientId)) continue;
-          recipientIds.push(recipientId);
-          idToSocket.set(recipientId, s);
+          const arr = idToSockets.get(recipientId);
+          if (arr) arr.push(s);
+          else idToSockets.set(recipientId, [s]);
         }
+        const recipientIds = Array.from(idToSockets.keys());
         if (recipientIds.length > 0) {
           const checks = await Promise.all(
             recipientIds.map(async (rid) => {
@@ -125,8 +129,9 @@ export async function handleChat(ws: AuthenticatedWebSocket, payload: { message:
           for (const c of checks) {
             if (c.blockedUsers?.includes(ws.userId)) continue;
             if (c.mutedUsers?.includes(ws.userId)) continue;
-            const s = idToSocket.get(c.rid);
-            if (s) s.emit('chat:message', broadcast);
+            const dests = idToSockets.get(c.rid);
+            if (!dests) continue;
+            for (const s of dests) s.emit('chat:message', broadcast);
           }
         }
       }
