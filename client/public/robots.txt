@@ -17,8 +17,11 @@ Disallow: /chat
 Disallow: /support
 Disallow: /challenge/*/play
 Disallow: /challenge/*/watch
-Disallow: /game/*/
-Disallow: /player/
+Allow: /game/
+Allow: /games/
+Allow: /player/
+Allow: /match/
+Allow: /leaderboard/
 Disallow: /p2p/profile/
 Disallow: /p2p/settings
 Disallow: /profile
@@ -42,7 +45,11 @@ Disallow: /transactions
 Disallow: /chat
 Disallow: /support
 Disallow: /challenge/*/play
-Disallow: /game/*/
+Allow: /game/
+Allow: /games/
+Allow: /player/
+Allow: /match/
+Allow: /leaderboard/
 
 # Yandex
 User-agent: Yandex
@@ -147,8 +154,11 @@ Disallow: /chat
 Disallow: /support
 Disallow: /challenge/*/play
 Disallow: /challenge/*/watch
-Disallow: /game/*/
-Disallow: /player/
+Allow: /game/
+Allow: /games/
+Allow: /player/
+Allow: /match/
+Allow: /leaderboard/
 Disallow: /p2p/profile/
 Disallow: /p2p/settings
 Disallow: /profile

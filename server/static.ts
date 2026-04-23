@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import { db } from "./db";
 import { appSettings } from "@shared/schema";
 import { inArray } from "drizzle-orm";
+import { resolveDynamicRouteSeo } from "./lib/sitemap-builder";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -643,10 +644,25 @@ export function serveStatic(app: Express) {
       const indexPath = path.resolve(distPath, "index.html");
       let html = fs.readFileSync(indexPath, "utf-8");
 
-      // Get SEO data for the current path
-      const routeSeo = SEO_PAGES[pagePath];
+      // Get SEO data for the current path — try static map first, then dynamic resolver
+      const staticRouteSeo = SEO_PAGES[pagePath];
+      const baseUrlForRoute = buildRuntimeBaseUrl(req);
+      let dynamicRouteSeo: { title: string; description: string; keywords: string; canonicalUrl: string; jsonLd?: Record<string, unknown> } | null = null;
+      if (!staticRouteSeo) {
+        try {
+          dynamicRouteSeo = await resolveDynamicRouteSeo(pagePath, baseUrlForRoute, locale);
+        } catch {
+          dynamicRouteSeo = null;
+        }
+      }
+      const routeSeo = staticRouteSeo || (dynamicRouteSeo ? {
+        title: dynamicRouteSeo.title,
+        description: dynamicRouteSeo.description,
+        keywords: dynamicRouteSeo.keywords,
+        canonicalUrl: dynamicRouteSeo.canonicalUrl,
+      } : undefined);
 
-      const defaultCanonical = `https://vixo.click${pagePath === "/" ? "/" : pagePath}`;
+      const defaultCanonical = `${baseUrlForRoute}${pagePath === "/" ? "/" : pagePath}`;
       const canonicalUrl = routeSeo?.canonicalUrl || runtimeSeo.canonicalUrl || defaultCanonical;
 
       const title = getLocaleValue(runtimeSeo.localeOverrides, locale, "siteTitle")
@@ -745,6 +761,12 @@ export function serveStatic(app: Express) {
         /<meta property="og:locale" content="[^"]*"/,
         `<meta property="og:locale" content="${escapedOgLocale}"`
       );
+
+      // Inject JSON-LD for dynamic SEO routes (programmatic landing pages)
+      if (dynamicRouteSeo?.jsonLd) {
+        const jsonLdScript = `<script type="application/ld+json">${JSON.stringify(dynamicRouteSeo.jsonLd).replace(/</g, "\\u003c")}</script>`;
+        html = html.replace("</head>", `${jsonLdScript}\n</head>`);
+      }
 
       res.status(200).set({ "Content-Type": "text/html" }).end(html);
     } catch {
