@@ -69,6 +69,27 @@ interface DeliverArgs {
 }
 
 /**
+ * Test-only seam (Task #23). Lets `scripts/smoke-dm-notifications.ts`
+ * call this entry point with stubbed storage / cache / notification
+ * deps so it can verify suppression-rule behavior end-to-end without
+ * booting Express, the real DB, Redis, or push services. Production
+ * never sets this — every field has a real-import default.
+ */
+export interface DeliverDeps {
+  createDirectMessage: typeof storage.createDirectMessage;
+  getUser: typeof storage.getUser;
+  getCachedUserBlockLists: typeof getCachedUserBlockLists;
+  sendNotification: typeof sendNotification;
+}
+
+const defaultDeps: DeliverDeps = {
+  createDirectMessage: storage.createDirectMessage.bind(storage),
+  getUser: storage.getUser.bind(storage),
+  getCachedUserBlockLists,
+  sendNotification,
+};
+
+/**
  * Resolve the peer user id from a canonical `dm:<a>:<b>` room id given
  * the sender. Returns null if `roomId` is malformed or `senderId` is
  * not one of the two participants — both are caller bugs (chat:join
@@ -87,6 +108,7 @@ function resolveDmPeer(roomId: string, senderId: string): string | null {
 
 export async function deliverRealtimeDirectMessage(
   args: DeliverArgs,
+  deps: DeliverDeps = defaultDeps,
 ): Promise<DeliverDirectMessageResult> {
   const {
     roomId,
@@ -107,7 +129,7 @@ export async function deliverRealtimeDirectMessage(
 
   // ---- Persist BEFORE emit so a successful delivery is recoverable
   //      from history even if the recipient socket disconnects mid-emit.
-  const saved = await storage.createDirectMessage({
+  const saved = await deps.createDirectMessage({
     senderId,
     receiverId: peerId,
     content: finalText,
@@ -118,13 +140,13 @@ export async function deliverRealtimeDirectMessage(
     : Date.now();
 
   // ---- Sender username (fall back to handshake value) ----
-  const senderRow = await storage.getUser(senderId);
+  const senderRow = await deps.getUser(senderId);
   const senderUsername = senderRow?.username || senderUsernameFallback;
 
   // ---- Block/mute lists (cached) ----
   const [senderLists, peerLists] = await Promise.all([
-    getCachedUserBlockLists(senderId, async (id) => {
-      const u = await storage.getUser(id);
+    deps.getCachedUserBlockLists(senderId, async (id) => {
+      const u = await deps.getUser(id);
       return u
         ? {
             blockedUsers: u.blockedUsers || [],
@@ -132,8 +154,8 @@ export async function deliverRealtimeDirectMessage(
           }
         : null;
     }),
-    getCachedUserBlockLists(peerId, async (id) => {
-      const u = await storage.getUser(id);
+    deps.getCachedUserBlockLists(peerId, async (id) => {
+      const u = await deps.getUser(id);
       return u
         ? {
             blockedUsers: u.blockedUsers || [],
@@ -196,14 +218,17 @@ export async function deliverRealtimeDirectMessage(
       peerSilencedNotifications,
     })
   ) {
-    void notifyDirectMessageRecipient({
-      senderId,
-      senderRow,
-      senderUsernameFallback: senderUsername,
-      receiverId: peerId,
-      messageId: saved.id,
-      previewText: finalText,
-    }).catch((err) => {
+    void notifyDirectMessageRecipient(
+      {
+        senderId,
+        senderRow,
+        senderUsernameFallback: senderUsername,
+        receiverId: peerId,
+        messageId: saved.id,
+        previewText: finalText,
+      },
+      deps.sendNotification,
+    ).catch((err) => {
       logger.warn?.(
         `[socket.io] DM notification failed: ${(err as Error).message}`,
       );
@@ -235,7 +260,10 @@ interface NotifyArgs {
  * sender used. Realtime DMs are text-only, so the preview is just a
  * truncated copy of the message body.
  */
-async function notifyDirectMessageRecipient(args: NotifyArgs): Promise<void> {
+async function notifyDirectMessageRecipient(
+  args: NotifyArgs,
+  send: typeof sendNotification = sendNotification,
+): Promise<void> {
   const senderDisplayName =
     args.senderRow?.firstName ||
     args.senderRow?.username ||
@@ -246,7 +274,7 @@ async function notifyDirectMessageRecipient(args: NotifyArgs): Promise<void> {
   // realtime DM transports stay byte-for-byte identical (the
   // realtime path tags `transport: "socketio"` for downstream
   // analytics; everything else mirrors the HTTP path).
-  await sendNotification(
+  await send(
     args.receiverId,
     buildDmNotificationPayload({
       senderId: args.senderId,

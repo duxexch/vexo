@@ -44,6 +44,28 @@ function runTscIncremental() {
     });
 }
 
+// Task #23: lock down the DM-notification suppression rules + payload
+// parity for both transports. Pure-logic + DI-based integration suite,
+// so it's safe to run in parallel with the typecheck and server boot.
+function runDmNotificationsSmoke() {
+    return new Promise((resolve, reject) => {
+        const child = spawn(`${npxBin()} tsx scripts/smoke-dm-notifications.ts`, [], {
+            stdio: "inherit",
+            shell: true,
+            env: process.env,
+        });
+
+        child.on("error", reject);
+        child.on("exit", (code) => {
+            if (code === 0) {
+                resolve();
+                return;
+            }
+            reject(new Error(`DM notifications smoke failed with exit code ${code}`));
+        });
+    });
+}
+
 function spawnServer() {
     const child = spawn(`${npxBin()} tsx server/index.ts`, [], {
         stdio: ["ignore", "pipe", "pipe"],
@@ -148,6 +170,7 @@ async function main() {
     try {
         await Promise.all([
             runTscIncremental(),
+            runDmNotificationsSmoke(),
             waitForHealthOrExit(server),
         ]);
         await stopServer(server);

@@ -10,6 +10,14 @@ packages = ["python312Packages.conda"]
 localPort = 3001
 externalPort = 80
 
+[[ports]]
+localPort = 3011
+externalPort = 3000
+
+[[ports]]
+localPort = 3022
+externalPort = 3001
+
 [env]
 PORT = "3001"
 
