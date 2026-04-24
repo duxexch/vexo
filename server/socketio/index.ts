@@ -24,7 +24,14 @@ import { eq } from "drizzle-orm";
 interface AuthedSocketData {
   userId: string;
   username: string;
+  // Per-room role stamped at chat:join time. Used by chat:send to enforce
+  // read-only access for spectators (Task #10). Map keyed by roomId.
+  roomRoles?: Map<string, "player" | "spectator">;
 }
+
+type RoomAuthzResult =
+  | { allowed: true; role: "player" | "spectator" }
+  | { allowed: false };
 
 type ChatSocket = Socket<ChatClientToServerEvents, ChatServerToClientEvents, Record<string, never>, AuthedSocketData>;
 type RtcSocket = Socket<RtcClientToServerEvents, RtcServerToClientEvents, Record<string, never>, AuthedSocketData>;
@@ -79,10 +86,10 @@ async function authenticateHandshake(socket: Socket): Promise<AuthedSocketData |
  *
  * Failures (DB error, missing row) deny — fail-closed.
  */
-async function isUserAllowedInRoom(userId: string, roomId: string): Promise<boolean> {
+async function isUserAllowedInRoom(userId: string, roomId: string): Promise<RoomAuthzResult> {
   if (roomId.startsWith("challenge:")) {
     const challengeId = roomId.slice("challenge:".length);
-    if (!challengeId) return false;
+    if (!challengeId) return { allowed: false };
     try {
       const [row] = await db
         .select({
@@ -90,28 +97,50 @@ async function isUserAllowedInRoom(userId: string, roomId: string): Promise<bool
           p2: challenges.player2Id,
           p3: challenges.player3Id,
           p4: challenges.player4Id,
+          gameType: challenges.gameType,
+          visibility: challenges.visibility,
+          friendAccountId: challenges.friendAccountId,
         })
         .from(challenges)
         .where(eq(challenges.id, challengeId))
         .limit(1);
-      if (!row) return false;
-      return [row.p1, row.p2, row.p3, row.p4].includes(userId);
+      if (!row) return { allowed: false };
+
+      // Players always allowed (read + write).
+      if ([row.p1, row.p2, row.p3, row.p4].includes(userId)) {
+        return { allowed: true, role: "player" };
+      }
+
+      // Spectator path (Task #10): mirror the same authz rules used by
+      // the legacy spectate WS path in server/game-websocket/auth-join.ts:
+      //   1. Private challenges: only the explicitly-invited friend may watch.
+      //   2. The game's challenge settings must allow spectators at all.
+      // Capacity (maxSpectators) is intentionally NOT enforced here — that
+      // limit governs the legacy spectate stream; the realtime channel only
+      // delivers chat to users who already secured a spectate slot.
+      if (row.visibility === "private" && row.friendAccountId !== userId) {
+        return { allowed: false };
+      }
+      const config = await storage.getChallengeSettings(row.gameType);
+      if (!config.allowSpectators) return { allowed: false };
+      return { allowed: true, role: "spectator" };
     } catch (err) {
       logger.warn?.(`[socket.io] room authz lookup failed: ${(err as Error).message}`);
-      return false;
+      return { allowed: false };
     }
   }
 
   if (roomId.startsWith("dm:")) {
     const parts = roomId.slice("dm:".length).split(":");
-    if (parts.length !== 2 || !parts[0] || !parts[1]) return false;
+    if (parts.length !== 2 || !parts[0] || !parts[1]) return { allowed: false };
     // Enforce canonical sorted form so `dm:a:b` and `dm:b:a` are the same room
     const [a, b] = [parts[0], parts[1]].sort();
-    if (`dm:${a}:${b}` !== roomId) return false;
-    return userId === a || userId === b;
+    if (`dm:${a}:${b}` !== roomId) return { allowed: false };
+    if (userId === a || userId === b) return { allowed: true, role: "player" };
+    return { allowed: false };
   }
 
-  return false;
+  return { allowed: false };
 }
 
 /**
@@ -195,13 +224,17 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       //   challenge:<id>  → user must be one of player1..player4
       //   dm:<idA>:<idB>  → user must be A or B (sorted lexicographically)
       // Anything else is rejected.
-      const allowed = await isUserAllowedInRoom(userId, roomId);
-      if (!allowed) {
+      const authz = await isUserAllowedInRoom(userId, roomId);
+      if (!authz.allowed) {
         socket.emit("chat:error", { code: "forbidden", message: "Not a member of this room" });
         ack?.(false);
         return;
       }
       await socket.join(roomId);
+      // Stamp this socket's role for the room so chat:send can enforce
+      // read-only access for spectators.
+      if (!socket.data.roomRoles) socket.data.roomRoles = new Map();
+      socket.data.roomRoles.set(roomId, authz.role);
       const room = chatNs.adapter.rooms.get(roomId);
       socket.emit("chat:joined", { roomId, members: room?.size || 1 });
       ack?.(true);
@@ -209,7 +242,10 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
 
     socket.on("chat:leave", async (payload) => {
       const roomId = String(payload?.roomId || "").slice(0, 128);
-      if (roomId) await socket.leave(roomId);
+      if (roomId) {
+        await socket.leave(roomId);
+        socket.data.roomRoles?.delete(roomId);
+      }
     });
 
     socket.on("chat:send", async (payload, ack) => {
@@ -224,6 +260,15 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
 
       if (!socket.rooms.has(roomId)) {
         ack?.({ ok: false, error: "not_in_room" });
+        return;
+      }
+
+      // Task #10: spectators are read-only on the realtime channel.
+      // They may join/listen for chat:message events but must not send.
+      const role = socket.data.roomRoles?.get(roomId);
+      if (role !== "player") {
+        socket.emit("chat:error", { code: "spectator_readonly", message: "Spectators cannot send chat" });
+        ack?.({ ok: false, error: "spectator_readonly" });
         return;
       }
 

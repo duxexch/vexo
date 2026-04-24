@@ -77,11 +77,13 @@ export async function handleChat(ws: AuthenticatedWebSocket, payload: { message:
   }, ws.userId, blockedUsers);
 
   // Mirror to the new Socket.IO /chat channel for instant delivery to
-  // clients on the new transport. We only mirror player chat (spectators
-  // remain on legacy because the /chat namespace authorizes only
-  // challenge participants). The mirror is best-effort — failures must
+  // clients on the new transport. As of Task #10, spectators are also
+  // authorized on the realtime channel (read-only), so we mirror BOTH
+  // player- and spectator-sent legacy chat into the IO room — that way
+  // anyone listening on /chat receives the message at the same latency,
+  // regardless of who sent it. The mirror is best-effort — failures must
   // never break the legacy broadcast above.
-  if (!ws.isSpectator && ws.challengeId) {
+  if (ws.challengeId) {
     try {
       const io = getSocketIO();
       if (io) {

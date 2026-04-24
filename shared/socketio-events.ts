@@ -59,7 +59,7 @@ export interface ChatBroadcast {
 }
 
 export interface ChatErrorPayload {
-  code: "auth" | "rate_limit" | "invalid" | "server" | "forbidden";
+  code: "auth" | "rate_limit" | "invalid" | "server" | "forbidden" | "spectator_readonly";
   message: string;
 }
 
