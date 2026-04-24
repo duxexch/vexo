@@ -30,6 +30,8 @@ import { PinLockScreen, PinSetupDialog } from "@/components/chat-pin-lock";
 import { MediaUploadButton, MediaPurchaseDialog, ChatMediaRenderer } from "@/components/chat-media";
 import { AutoDeleteToggle, AutoDeletePurchaseDialog, AutoDeleteSettingsDialog, AutoDeleteCountdown } from "@/components/chat-auto-delete";
 import { ChatUnlockDialog } from "@/components/chat/ChatUnlockDialog";
+import { normalizeChatDraft } from "@/lib/chat-text";
+import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 
 const QUICK_REACTIONS = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
 
@@ -191,6 +193,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     refreshStatus: refreshCallStatus,
   } = useChatCallPricing();
   const { startOutgoingCall, endCurrentCall, activeSessionId } = usePrivateCallLayer();
+  useKeyboardInset();
   const {
     getDisplayText, getTranslatedText, hasTranslation, toggleTranslation, isTranslating: isTranslatingMsg,
     isShowingOriginal, autoTranslate, setAutoTranslate, translateMessage,
@@ -290,7 +293,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     () => activeConversationPending.filter((item) => item.status === "pending").length,
     [activeConversationPending]
   );
-  const hasTypedMessage = messageInput.trim().length > 0;
+  const hasTypedMessage = normalizeChatDraft(messageInput).length > 0;
   const activeUserProfile = activeUser || (
     activeConversation && preselectedConversationUserId && activeConversation === preselectedConversationUserId
       ? directConversationUser
@@ -638,20 +641,22 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
   const handleSendMessage = () => {
     if (!activeConversation) return;
 
+    const normalizedDraft = normalizeChatDraft(messageInput);
+
     // Edit mode
     if (editingMsg) {
-      if (messageInput.trim() && messageInput.trim() !== editingMsg.content) {
-        editMessage(editingMsg.id, messageInput.trim());
+      if (normalizedDraft && normalizedDraft !== editingMsg.content) {
+        editMessage(editingMsg.id, normalizedDraft);
       }
       setEditingMsg(null);
       setMessageInput("");
       return;
     }
 
-    if (!messageInput.trim()) return;
+    if (!normalizedDraft) return;
 
     setComposerError(null);
-    sendMessage(activeConversation, messageInput.trim(), "text", undefined, {
+    sendMessage(activeConversation, normalizedDraft, "text", undefined, {
       isDisappearing: disappearingMode,
       disappearAfterRead: disappearingMode,
       replyToId: replyTo?.id,
@@ -1013,7 +1018,9 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     <div
       className={cn(
         "flex h-full min-h-0 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] md:pb-0",
-        embedded ? "pb-0" : "pb-[calc(4.5rem+env(safe-area-inset-bottom))]"
+        embedded
+          ? "pb-0"
+          : "pb-[max(calc(4.5rem_+_env(safe-area-inset-bottom)),var(--keyboard-inset-bottom,0px))]"
       )}
     >
       {/* =================== Conversation List =================== */}
@@ -1930,6 +1937,10 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                       onKeyDown={handleKeyPress}
                       placeholder={editingMsg ? t('chat.editMessagePlaceholder') : replyTo ? t('chat.replyPlaceholder') : t("chat.typeMessage")}
                       className="min-w-0 flex-1 min-h-[44px] rounded-full px-4"
+                      dir="auto"
+                      lang="auto"
+                      inputMode="text"
+                      enterKeyHint="send"
                       data-testid="input-chat-message"
                     />
 

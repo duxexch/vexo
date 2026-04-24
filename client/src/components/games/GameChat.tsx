@@ -15,6 +15,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { normalizeChatDraft, hasSendableDraft } from "@/lib/chat-text";
+import { useKeyboardInset } from "@/hooks/use-keyboard-inset";
 
 interface Message {
   id: string;
@@ -44,17 +46,6 @@ interface GameChatProps {
   autoFocusInput?: boolean;
 }
 
-function normalizeChatDraft(value: string): string {
-  return value
-    .replace(/[\u200B-\u200D\uFEFF\u2060]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function hasSendableDraft(value: string): boolean {
-  return normalizeChatDraft(value).length > 0;
-}
-
 export function GameChat({
   messages,
   onSendMessage,
@@ -72,6 +63,7 @@ export function GameChat({
   const { t, dir } = useI18n();
   const { toast } = useToast();
   const { user, refreshUser } = useAuth();
+  useKeyboardInset();
   const chatTitle = t("chat.title");
   const quickLabel = t("auth.quick");
   const quickActionsLabel = t("play.quickActions");
@@ -368,7 +360,7 @@ export function GameChat({
         </div>
       )}
 
-      <div className="border-t bg-background/80 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="border-t bg-background/80 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom),var(--keyboard-inset-bottom,0px))]">
         <div className="mb-2 flex items-center gap-1.5 overflow-x-auto pb-0.5">
           {symbolChips.map((symbol) => (
             <button
@@ -399,6 +391,9 @@ export function GameChat({
             placeholder={t("chat.typeMessage")}
             className="h-10 flex-1 text-sm"
             dir="auto"
+            lang="auto"
+            inputMode="text"
+            enterKeyHint="send"
             disabled={disabled}
             autoFocus={autoFocusInput}
             data-testid="input-game-chat"
