@@ -946,22 +946,76 @@ export function useChat(): UseChatReturn {
 
   const loadMoreMessages = useCallback(() => {
     const conv = activeConversationRef.current;
+    if (!conv) return;
+
+    // Task #20: scroll-back uses the new realtime DM history endpoint
+    // (`GET /api/dm/:peerId/history?before=<iso>`) introduced in Task
+    // #16. We page by `createdAt` cursor instead of by offset because
+    // (a) it's stable when new messages arrive between pages, and (b)
+    // it's the canonical way to consume the new realtime DM transport.
+    let oldestCreatedAt: string | null = null;
+    let shouldFetch = false;
     setState(prev => {
-      if (!conv || !prev.hasMoreMessages || prev.loadingMore) return prev;
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: "get_chat_history",
-            otherUserId: conv,
-            limit: 50,
-            offset: prev.messages.length,
-            append: true,
-          })
-        );
+      if (!prev.hasMoreMessages || prev.loadingMore) return prev;
+      if (prev.messages.length === 0) return prev;
+      // Find the oldest non-pending text message we already have so
+      // the server only returns rows strictly older than that.
+      for (const msg of prev.messages) {
+        const candidate =
+          typeof msg.createdAt === "string"
+            ? msg.createdAt
+            : msg.createdAt instanceof Date
+              ? msg.createdAt.toISOString()
+              : null;
+        if (!candidate) continue;
+        if (oldestCreatedAt === null || candidate < oldestCreatedAt) {
+          oldestCreatedAt = candidate;
+        }
       }
+      if (!oldestCreatedAt) return prev;
+      shouldFetch = true;
       return { ...prev, loadingMore: true };
     });
-  }, []);
+
+    if (!shouldFetch || !oldestCreatedAt || !token) return;
+
+    const PAGE_SIZE = 50;
+    const before = oldestCreatedAt;
+    const peerId = conv;
+    (async () => {
+      try {
+        const url = `/api/dm/${encodeURIComponent(peerId)}/history?limit=${PAGE_SIZE}&before=${encodeURIComponent(before)}`;
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) {
+          // Reset loadingMore so the user can retry by scrolling again.
+          setState(prev => ({ ...prev, loadingMore: false }));
+          return;
+        }
+        const older = (await response.json()) as Array<Record<string, unknown>>;
+        setState(prev => {
+          // Drop pages for a stale conversation switch.
+          if (activeConversationRef.current !== peerId) {
+            return { ...prev, loadingMore: false };
+          }
+          const existingIds = new Set(prev.messages.map(m => m.id));
+          const newOlder = older.filter(m => !existingIds.has(m.id as string)) as unknown as ChatMessage[];
+          return {
+            ...prev,
+            messages: [...newOlder, ...prev.messages],
+            // The endpoint clamps `limit` to [1, 200]; if we got fewer
+            // rows than requested, we've hit the start of the timeline.
+            hasMoreMessages: older.length >= PAGE_SIZE,
+            loadingMore: false,
+          };
+        });
+      } catch (error) {
+        console.error("Failed to load older DM history:", error);
+        setState(prev => ({ ...prev, loadingMore: false }));
+      }
+    })();
+  }, [token]);
 
   const markAsRead = useCallback(
     (messageId: string) => {
