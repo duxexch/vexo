@@ -44,6 +44,16 @@ interface GameChatProps {
   disabled?: boolean;
   currentUserId?: string;
   autoFocusInput?: boolean;
+  /**
+   * Task #26: live count of spectators currently watching this match.
+   * When > 0 the header renders a "N watching" / "N يشاهد" pill next
+   * to the chat title. The count is provided by the parent (sourced
+   * from the realtime chat socket's `chat:viewer_count` event) — we
+   * deliberately do not fetch it here so the same component can be
+   * used in surfaces that have no spectator concept (just omit the
+   * prop or pass 0 to hide the pill).
+   */
+  spectatorCount?: number;
 }
 
 export function GameChat({
@@ -54,6 +64,7 @@ export function GameChat({
   disabled = false,
   currentUserId,
   autoFocusInput = false,
+  spectatorCount = 0,
 }: GameChatProps) {
   const [messageInput, setMessageInput] = useState("");
   const [showQuickPanel, setShowQuickPanel] = useState(false);
@@ -184,9 +195,33 @@ export function GameChat({
           <MessageCircle className="h-4 w-4 text-primary" />
           <span className="truncate text-sm font-medium">{chatTitle}</span>
         </div>
-        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-          {messages.length}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {/* Task #26: live spectator-count pill — only rendered when at
+              least one viewer is in the room so the header stays clean
+              for empty matches. Identities are intentionally not
+              revealed; this is just a count from the realtime presence
+              channel. The amber tone matches the spectator chat badge
+              elsewhere in this component for visual consistency. */}
+          {spectatorCount > 0 && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-amber-300/60 bg-amber-100/70 px-2 py-0.5 text-[11px] font-semibold text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100"
+              data-testid="game-chat-viewer-count"
+              title={
+                language === "ar"
+                  ? `${spectatorCount} يشاهد المباراة الآن`
+                  : `${spectatorCount} watching this match`
+              }
+            >
+              <Eye className="h-3 w-3" aria-hidden="true" />
+              {language === "ar"
+                ? `${spectatorCount} يشاهد`
+                : `${spectatorCount} watching`}
+            </span>
+          )}
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+            {messages.length}
+          </span>
+        </div>
       </div>
 
       <div

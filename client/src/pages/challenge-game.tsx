@@ -3888,6 +3888,32 @@ export default function ChallengeGamePage() {
             <DialogTitle className="flex items-center gap-2 text-base">
               <MessageCircle className="h-4 w-4 text-primary" />
               {liveChatLabel}
+              {/* Task #26: live spectator count next to the dialog title.
+                  The pill is hidden when zero viewers are present. We
+                  prefer the realtime chat-channel count (driven by the
+                  Socket.IO `chat:viewer_count` event) and fall back to
+                  the legacy WS spectator presence so the header still
+                  populates in environments where the chat socket has
+                  not yet broadcast. */}
+              {(() => {
+                const viewerCount = Math.max(
+                  realtimeChat.viewerCount,
+                  gameSession?.spectatorCount ?? 0,
+                );
+                if (viewerCount <= 0) return null;
+                return (
+                  <Badge
+                    variant="outline"
+                    className="ms-2 inline-flex items-center gap-1 border-amber-300/60 bg-amber-100/60 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100"
+                    data-testid="game-chat-dialog-viewer-count"
+                  >
+                    <Eye className="h-3 w-3" aria-hidden="true" />
+                    {language === "ar"
+                      ? `${viewerCount} يشاهد`
+                      : `${viewerCount} watching`}
+                  </Badge>
+                );
+              })()}
               <Badge variant="secondary" className="ms-auto">
                 {messages.length}
               </Badge>
@@ -3903,6 +3929,10 @@ export default function ChallengeGamePage() {
               currentUserId={user?.id}
               autoFocusInput
               disabled={isSpectator}
+              spectatorCount={Math.max(
+                realtimeChat.viewerCount,
+                gameSession?.spectatorCount ?? 0,
+              )}
             />
           </div>
         </DialogContent>

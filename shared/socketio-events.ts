@@ -159,6 +159,16 @@ export interface ChatServerToClientEvents {
   "chat:message": (msg: ChatBroadcast) => void;
   "chat:error": (err: ChatErrorPayload) => void;
   "chat:joined": (p: { roomId: string; members: number }) => void;
+  /**
+   * Task #26: live spectator count for a challenge chat room. Emitted by
+   * the server whenever a spectator socket joins or leaves the room
+   * (including disconnect). Players are excluded from the count — only
+   * sockets stamped with `spectatorRoomIds.includes(roomId)` count. Sent
+   * to every socket currently in the room so player and spectator clients
+   * can render a "N watching" pill in the chat header without revealing
+   * viewer identities.
+   */
+  "chat:viewer_count": (p: { roomId: string; count: number }) => void;
 }
 
 /* ============================================================================

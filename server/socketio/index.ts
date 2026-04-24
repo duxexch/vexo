@@ -20,7 +20,11 @@ import { storage } from "../storage";
 import { db } from "../db";
 import { challenges } from "../../shared/schema";
 import { eq } from "drizzle-orm";
-import { deliverRealtimeChallengeChat, type ChatNamespace } from "./challenge-chat-bridge";
+import {
+  deliverRealtimeChallengeChat,
+  broadcastChallengeViewerCount,
+  type ChatNamespace,
+} from "./challenge-chat-bridge";
 import { deliverRealtimeDirectMessage } from "./direct-message-bridge";
 import { challengeGameRooms } from "../websocket/shared";
 import { getRedisClient } from "../lib/redis";
@@ -304,6 +308,13 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       const room = chatNs.adapter.rooms.get(roomId);
       socket.emit("chat:joined", { roomId, members: room?.size || 1 });
       ack?.(true);
+
+      // Task #26: refresh the live spectator count for this challenge
+      // chat room. We always broadcast — even when a player joins —
+      // because the player's first chat:joined arrival is also when
+      // they should see whatever spectator count is already present.
+      // The helper short-circuits for non-challenge rooms.
+      void broadcastChallengeViewerCount(chatNs, roomId);
     });
 
     socket.on("chat:leave", async (payload) => {
@@ -317,6 +328,11 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
             (r) => r !== roomId,
           );
         }
+        // Task #26: re-broadcast the spectator count after the leaver
+        // is actually out of the room. socket.leave above resolves
+        // before we emit, so the count we compute will not include the
+        // leaving socket.
+        void broadcastChallengeViewerCount(chatNs, roomId);
       }
     });
 
@@ -449,6 +465,23 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       // Unknown room pattern — chat:join authz should already have rejected
       // this, but fail-closed here too rather than leak an un-moderated emit.
       ack?.({ ok: false, error: "not_in_room" });
+    });
+
+    // Task #26: refresh viewer counts on every challenge room this socket
+    // was in when it disconnects. We snapshot the spectator-room mirror
+    // BEFORE the socket actually leaves (Socket.IO removes it from rooms
+    // between `disconnecting` and `disconnect`), then re-broadcast on the
+    // next tick so the count we compute excludes the dropped socket.
+    socket.on("disconnecting", () => {
+      const rooms = socket.data.spectatorRoomIds
+        ? [...socket.data.spectatorRoomIds]
+        : [];
+      if (rooms.length === 0) return;
+      setImmediate(() => {
+        for (const roomId of rooms) {
+          void broadcastChallengeViewerCount(chatNs, roomId);
+        }
+      });
     });
   });
 

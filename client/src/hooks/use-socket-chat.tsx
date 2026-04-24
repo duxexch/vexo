@@ -27,6 +27,14 @@ export interface UseSocketChatReturn {
   joined: boolean;
   members: number;
   messages: ChatBroadcast[];
+  /**
+   * Task #26: live count of spectator sockets currently in this chat room.
+   * Updated via the `chat:viewer_count` event whenever a spectator joins,
+   * leaves, or disconnects. `0` means no viewers — the chat header should
+   * hide the pill in that case. Resets to 0 on room change so a stale
+   * count from the previous room never leaks across.
+   */
+  viewerCount: number;
   send: (
     text: string,
     opts?: { isQuickMessage?: boolean; quickMessageKey?: string },
@@ -41,6 +49,7 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
   const [connected, setConnected] = useState(false);
   const [joined, setJoined] = useState(false);
   const [members, setMembers] = useState(0);
+  const [viewerCount, setViewerCount] = useState(0);
   const [messages, setMessages] = useState<ChatBroadcast[]>([]);
   const limitRef = useRef(historyLimit);
   limitRef.current = historyLimit;
@@ -73,6 +82,14 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
         setMembers(p.members);
       }
     };
+    // Task #26: pick up live spectator-count broadcasts for this room.
+    // Server emits on every spectator join / leave / disconnect, so the
+    // chat header pill stays in sync without polling.
+    const onViewerCount = (p: { roomId: string; count: number }) => {
+      if (p.roomId === roomId) {
+        setViewerCount(p.count);
+      }
+    };
 
     const onChatError = (info: {
       code?: ChatErrorCode;
@@ -92,6 +109,7 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
     sock.on("disconnect", onDisconnect);
     sock.on("chat:message", onMessage);
     sock.on("chat:joined", onJoined);
+    sock.on("chat:viewer_count", onViewerCount);
     sock.on("chat:error", onChatError);
 
     if (sock.connected) onConnect();
@@ -101,9 +119,13 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
       sock.off("disconnect", onDisconnect);
       sock.off("chat:message", onMessage);
       sock.off("chat:joined", onJoined);
+      sock.off("chat:viewer_count", onViewerCount);
       sock.off("chat:error", onChatError);
       if (sock.connected) sock.emit("chat:leave", { roomId });
       setJoined(false);
+      // Task #26: drop any cached viewer count from the previous room so
+      // the next room never inherits a stale "N watching" pill.
+      setViewerCount(0);
     };
   }, [roomId]);
 
@@ -142,5 +164,5 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
     [roomId],
   );
 
-  return { connected, joined, members, messages, send };
+  return { connected, joined, members, messages, viewerCount, send };
 }

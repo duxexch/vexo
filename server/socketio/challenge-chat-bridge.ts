@@ -32,6 +32,41 @@ export type ChatNamespace = Namespace<
   AuthedSocketData
 >;
 
+/**
+ * Task #26: count spectator sockets currently in `roomId` and broadcast
+ * the live total to everyone in the room as `chat:viewer_count`. Players
+ * are excluded — only sockets whose `spectatorRoomIds` mirror includes
+ * the room contribute (so a player tab joined from the same user does
+ * not inflate the count). The mirror is the same array the spectator
+ * cap check uses, so this stays consistent with the per-room role
+ * stamped at `chat:join` time and survives the Redis adapter round
+ * trip across cluster nodes (Maps do not).
+ *
+ * Idempotent and safe to call from any handler that may have changed
+ * the spectator set (chat:join / chat:leave / disconnecting). Failures
+ * are logged but never thrown — viewer count is purely informational
+ * and must not block message delivery or join handling.
+ */
+export async function broadcastChallengeViewerCount(
+  chatNs: ChatNamespace,
+  roomId: string,
+): Promise<void> {
+  if (!roomId.startsWith("challenge:")) return;
+  try {
+    const sockets = await chatNs.in(roomId).fetchSockets();
+    let count = 0;
+    for (const s of sockets) {
+      const data = s.data as
+        | (AuthedSocketData & { spectatorRoomIds?: string[] })
+        | undefined;
+      if (data?.spectatorRoomIds?.includes(roomId)) count++;
+    }
+    chatNs.to(roomId).emit("chat:viewer_count", { roomId, count });
+  } catch {
+    // intentionally swallow — viewer count is non-critical
+  }
+}
+
 export interface DeliverResult {
   ok: boolean;
   /**
