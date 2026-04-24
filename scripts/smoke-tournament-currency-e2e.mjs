@@ -472,6 +472,32 @@ async function main() {
         const notif = await findNotification(usdCancelA.id, "tournament_cancelled_refund");
         assert(notif && notif.message.includes("$10.00"), "USD cancel: notification renders $ amount", notif);
         assert(notif && notif.messageAr.includes("$10.00"), "USD cancel: AR notification renders $ amount", notif);
+
+        // Tournaments listing/detail must surface userRefund so the UI can show the refund banner
+        const playerToken = await tokenFor(usdCancelA);
+        const detailResp = await requestJson({ path: `/api/tournaments/${usdCancelT.id}`, token: playerToken });
+        assert(
+            detailResp.status === 200 &&
+                detailResp.json?.userRefund &&
+                approxEqual(Number(detailResp.json.userRefund.amount), ENTRY_FEE) &&
+                detailResp.json.userRefund.currency === "usd" &&
+                detailResp.json.userRefund.reason === "cancelled",
+            "USD cancel: GET /api/tournaments/:id returns userRefund for player",
+            detailResp.json?.userRefund,
+        );
+        const listResp = await requestJson({ path: "/api/tournaments?status=cancelled", token: playerToken });
+        const listed = Array.isArray(listResp.json)
+            ? listResp.json.find((t) => t.id === usdCancelT.id)
+            : null;
+        assert(
+            listed &&
+                listed.userRefund &&
+                approxEqual(Number(listed.userRefund.amount), ENTRY_FEE) &&
+                listed.userRefund.currency === "usd" &&
+                listed.userRefund.reason === "cancelled",
+            "USD cancel: GET /api/tournaments returns userRefund for player",
+            listed?.userRefund,
+        );
     }
 
     // ---- 4) VXC tournament: cancel with registered players → refund ----
@@ -503,6 +529,18 @@ async function main() {
         const notif = await findNotification(vxcCancelA.id, "tournament_cancelled_refund");
         assert(notif && notif.message.includes("VXC 10.00"), "VXC cancel: notification renders VXC amount", notif);
         assert(notif && notif.messageAr.includes("VXC 10.00"), "VXC cancel: AR notification renders VXC amount", notif);
+
+        const playerToken = await tokenFor(vxcCancelA);
+        const detailResp = await requestJson({ path: `/api/tournaments/${vxcCancelT.id}`, token: playerToken });
+        assert(
+            detailResp.status === 200 &&
+                detailResp.json?.userRefund &&
+                approxEqual(Number(detailResp.json.userRefund.amount), ENTRY_FEE) &&
+                detailResp.json.userRefund.currency === "project" &&
+                detailResp.json.userRefund.reason === "cancelled",
+            "VXC cancel: GET /api/tournaments/:id returns userRefund for player",
+            detailResp.json?.userRefund,
+        );
     }
 
     // ---- 5) USD tournament: player withdraw → USD refund ----

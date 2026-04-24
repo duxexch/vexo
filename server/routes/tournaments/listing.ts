@@ -1,10 +1,104 @@
 import type { Express, Response } from "express";
 import { db } from "../../db";
-import { eq, desc, and, or, sql } from "drizzle-orm";
-import { tournaments, tournamentParticipants, tournamentMatches, users, type TournamentStatus } from "@shared/schema";
+import { eq, desc, and, or, sql, inArray } from "drizzle-orm";
+import { tournaments, tournamentParticipants, tournamentMatches, users, transactions, projectCurrencyLedger, type TournamentStatus } from "@shared/schema";
 import { optionalAuthMiddleware, AuthRequest } from "../middleware";
 import { getErrorMessage } from "../helpers";
 import { normalizeTournamentGameType } from "../../lib/tournament-utils";
+import { normalizeTournamentCurrencyType, type TournamentCurrencyType } from "@shared/tournament-currency";
+
+interface UserRefundSummary {
+  amount: string;
+  currency: TournamentCurrencyType;
+  reason: "cancelled" | "deleted";
+}
+
+const REFUND_REFERENCE_REGEX = /^tournament-(cancel|delete)-refund:([^:]+):/;
+
+/**
+ * Look up the current user's tournament-cancel/delete refund rows across the
+ * USD `transactions` table and the project-currency `project_currency_ledger`,
+ * keyed by tournament id. Used to surface "Refunded $X" / "Refunded VXC X"
+ * indicators on the tournament list and detail pages so players don't have to
+ * cross-reference their wallet history. Restricted to the supplied
+ * `tournamentIds` to keep the query bounded by what the page actually shows.
+ */
+async function loadUserRefundsByTournament(
+  userId: string,
+  tournamentIds: string[],
+): Promise<Map<string, UserRefundSummary>> {
+  const map = new Map<string, UserRefundSummary>();
+  if (tournamentIds.length === 0) {
+    return map;
+  }
+
+  const usdRefundIds = tournamentIds.flatMap((id) => [
+    `tournament-cancel-refund:${id}:${userId}`,
+    `tournament-delete-refund:${id}:${userId}`,
+  ]);
+
+  const [usdRows, projectRows] = await Promise.all([
+    db
+      .select({
+        amount: transactions.amount,
+        referenceId: transactions.referenceId,
+      })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.userId, userId),
+          eq(transactions.type, "refund"),
+          inArray(transactions.referenceId, usdRefundIds),
+        ),
+      ),
+    db
+      .select({
+        amount: projectCurrencyLedger.amount,
+        referenceId: projectCurrencyLedger.referenceId,
+        referenceType: projectCurrencyLedger.referenceType,
+      })
+      .from(projectCurrencyLedger)
+      .where(
+        and(
+          eq(projectCurrencyLedger.userId, userId),
+          inArray(projectCurrencyLedger.referenceType, [
+            "tournament_cancel_refund",
+            "tournament_delete_refund",
+          ]),
+          inArray(projectCurrencyLedger.referenceId, usdRefundIds),
+        ),
+      ),
+  ]);
+
+  const ingest = (
+    referenceId: string | null,
+    amount: string,
+    currency: TournamentCurrencyType,
+  ) => {
+    if (!referenceId) return;
+    const match = REFUND_REFERENCE_REGEX.exec(referenceId);
+    if (!match) return;
+    const reason: UserRefundSummary["reason"] = match[1] === "delete" ? "deleted" : "cancelled";
+    const tournamentId = match[2];
+    // Keep the latest refund only; cancel + delete shouldn't both fire for one
+    // tournament+user pair, but if a duplicate ever appears, prefer the
+    // last-inserted row (delete supersedes cancel by lifecycle order).
+    const existing = map.get(tournamentId);
+    if (existing && existing.reason === "deleted" && reason === "cancelled") {
+      return;
+    }
+    map.set(tournamentId, { amount, currency, reason });
+  };
+
+  for (const row of usdRows) {
+    ingest(row.referenceId, row.amount, "usd");
+  }
+  for (const row of projectRows) {
+    ingest(row.referenceId, row.amount, "project");
+  }
+
+  return map;
+}
 
 export function registerTournamentListingRoutes(app: Express): void {
 
@@ -66,7 +160,31 @@ export function registerTournamentListingRoutes(app: Express): void {
       }
 
       const result = await query.limit(50);
-      res.json(result);
+
+      const viewerId = req.user?.id;
+      if (viewerId) {
+        const refundsByTournament = await loadUserRefundsByTournament(
+          viewerId,
+          result.map((row) => row.id),
+        );
+        const enriched = result.map((row) => {
+          const refund = refundsByTournament.get(row.id);
+          return refund
+            ? {
+                ...row,
+                userRefund: {
+                  amount: refund.amount,
+                  currency: normalizeTournamentCurrencyType(refund.currency),
+                  reason: refund.reason,
+                },
+              }
+            : { ...row, userRefund: null };
+        });
+        res.json(enriched);
+        return;
+      }
+
+      res.json(result.map((row) => ({ ...row, userRefund: null })));
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -127,12 +245,26 @@ export function registerTournamentListingRoutes(app: Express): void {
       const viewerId = req.user?.id;
       const isRegistered = Boolean(viewerId) && participants.some((p) => p.userId === viewerId);
 
+      let userRefund: { amount: string; currency: TournamentCurrencyType; reason: "cancelled" | "deleted" } | null = null;
+      if (viewerId) {
+        const refundsByTournament = await loadUserRefundsByTournament(viewerId, [tournamentId]);
+        const refund = refundsByTournament.get(tournamentId);
+        if (refund) {
+          userRefund = {
+            amount: refund.amount,
+            currency: normalizeTournamentCurrencyType(refund.currency),
+            reason: refund.reason,
+          };
+        }
+      }
+
       res.json({
         ...tournament,
         participants,
         matches,
         isRegistered,
         participantCount: participants.length,
+        userRefund,
       });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });

@@ -18,7 +18,7 @@ import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGame
 import {
   Trophy, Users, Clock, Swords,
   DollarSign, Calendar, ChevronRight,
-  Timer, Filter, Share2, Copy, Image as ImageIcon, Video, XCircle
+  Timer, Filter, Share2, Copy, Image as ImageIcon, Video, XCircle, ArrowDownToLine
 } from "lucide-react";
 import { ProjectCurrencySymbol } from "@/components/ProjectCurrencySymbol";
 import {
@@ -158,6 +158,12 @@ function useTournamentGameConfig() {
   );
 }
 
+interface UserRefundInfo {
+  amount: string;
+  currency: string;
+  reason: 'cancelled' | 'deleted';
+}
+
 interface TournamentListItem {
   id: string;
   name: string;
@@ -183,6 +189,7 @@ interface TournamentListItem {
   startsAt: string | null;
   participantCount: number;
   isRegistered?: boolean;
+  userRefund?: UserRefundInfo | null;
 }
 
 interface TournamentMatch {
@@ -245,6 +252,44 @@ interface TournamentDetail {
   matches: TournamentMatch[];
   isRegistered: boolean;
   participantCount: number;
+  userRefund?: UserRefundInfo | null;
+}
+
+function TournamentRefundBanner({
+  refund,
+  variant,
+  en,
+  testId,
+}: {
+  refund: UserRefundInfo;
+  variant: 'list' | 'detail';
+  en: boolean;
+  testId?: string;
+}) {
+  const amountText = formatTournamentAmountText(refund.amount, refund.currency);
+  const isProject = String(refund.currency).toLowerCase() === 'project';
+  const reasonEn = refund.reason === 'deleted' ? 'tournament was deleted' : 'tournament was cancelled';
+  const reasonAr = refund.reason === 'deleted' ? 'تم حذف البطولة' : 'تم إلغاء البطولة';
+  const walletEn = isProject ? 'project wallet' : 'cash balance';
+  const walletAr = isProject ? 'محفظتك' : 'رصيدك النقدي';
+  const headline = en
+    ? `Refunded ${amountText} to your ${walletEn}`
+    : `تم استرداد ${amountText} إلى ${walletAr}`;
+  const subline = en
+    ? `Because the ${reasonEn}.`
+    : `لأن ${reasonAr}.`;
+  const containerClass = variant === 'detail'
+    ? 'flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 sm:p-4'
+    : 'mt-3 flex items-start gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm';
+  return (
+    <div className={containerClass} data-testid={testId}>
+      <ArrowDownToLine className={variant === 'detail' ? 'mt-0.5 h-5 w-5 shrink-0 text-emerald-500' : 'mt-0.5 h-4 w-4 shrink-0 text-emerald-500'} />
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-emerald-700 dark:text-emerald-300">{headline}</div>
+        <div className="text-xs text-emerald-700/80 dark:text-emerald-300/80">{subline}</div>
+      </div>
+    </div>
+  );
 }
 
 export default function TournamentsPage() {
@@ -501,6 +546,14 @@ function TournamentListView() {
                         <ChevronRight className="hidden sm:block w-5 h-5 text-muted-foreground" />
                       </div>
                     </div>
+                    {t.userRefund && (t.status === 'cancelled' || t.userRefund.reason === 'deleted') && (
+                      <TournamentRefundBanner
+                        refund={t.userRefund}
+                        variant="list"
+                        en={en}
+                        testId={`tournament-refund-${t.id}`}
+                      />
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -715,6 +768,15 @@ function TournamentDetailView({ id }: { id: string }) {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {tournament.userRefund && (tournament.status === 'cancelled' || tournament.userRefund.reason === 'deleted') && (
+        <TournamentRefundBanner
+          refund={tournament.userRefund}
+          variant="detail"
+          en={en}
+          testId={`tournament-detail-refund-${tournament.id}`}
+        />
       )}
 
       {/* Stats cards */}
