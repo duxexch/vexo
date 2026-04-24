@@ -5,16 +5,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GameConfigIcon } from "@/components/GameConfigIcon";
+import { GameCardBackground } from "@/components/GameCardBackground";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
-import { buildGameConfig, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
+import { buildGameConfig, type GameConfigItem, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import { cn } from "@/lib/utils";
 import {
-  Crown,
   Target,
-  Shuffle,
-  Gem,
   Gamepad2,
   type LucideIcon,
   Play,
@@ -39,19 +37,31 @@ interface LiveMatch {
   status: string;
 }
 
-interface GameConfig {
+interface CatalogGameMetadata {
   key: string;
-  nameEn: string;
-  nameAr: string;
-  descriptionEn: string;
-  descriptionAr: string;
-  icon: LucideIcon;
-  iconUrl?: string;
-  thumbnailUrl?: string;
-  gradient: string;
-  accentColor: string;
   players: string;
   duration: string;
+  /** Optional defaults used ONLY for non-multiplayer browser games (snake/puzzle/memory)
+   * that aren't backed by the multiplayer DB config. Multiplayer games (chess, backgammon,
+   * domino, tarneeb, baloot) source 100% of their visuals from `multiplayerGameConfig`. */
+  fallback?: {
+    nameEn: string;
+    nameAr: string;
+    descriptionEn: string;
+    descriptionAr: string;
+    icon: LucideIcon;
+    gradient: string;
+    accentColor: string;
+  };
+}
+
+interface CatalogGame extends Omit<GameConfigItem, "minStake" | "maxStake" | "houseFee"> {
+  key: string;
+  nameEn: string;
+  descriptionEn?: string;
+  players: string;
+  duration: string;
+  accentColorClass: string;
 }
 
 interface ExternalGameItem {
@@ -72,102 +82,64 @@ interface ExternalGameItem {
   rating?: string;
 }
 
-const GAME_CATALOG: GameConfig[] = [
-  {
-    key: "chess",
-    nameEn: "Chess",
-    nameAr: "شطرنج",
-    descriptionEn: "The classic game of strategy and intellect",
-    descriptionAr: "لعبة الذكاء والاستراتيجية الكلاسيكية",
-    icon: Crown,
-    gradient: "from-amber-500/30 via-amber-600/20 to-yellow-700/10",
-    accentColor: "text-amber-500",
-    players: "2",
-    duration: "15-60 min",
-  },
-  {
-    key: "backgammon",
-    nameEn: "Backgammon",
-    nameAr: "طاولة الزهر",
-    descriptionEn: "Ancient game of luck and skill",
-    descriptionAr: "لعبة قديمة تجمع بين الحظ والمهارة",
-    icon: Shuffle,
-    gradient: "from-emerald-500/30 via-emerald-600/20 to-green-700/10",
-    accentColor: "text-emerald-500",
-    players: "2",
-    duration: "10-30 min",
-  },
-  {
-    key: "domino",
-    nameEn: "Domino",
-    nameAr: "دومينو",
-    descriptionEn: "Match and strategize with tiles",
-    descriptionAr: "طابق واستراتيجي مع البلاطات",
-    icon: Target,
-    gradient: "from-blue-500/30 via-blue-600/20 to-indigo-700/10",
-    accentColor: "text-blue-500",
-    players: "2-4",
-    duration: "15-45 min",
-  },
-  {
-    key: "tarneeb",
-    nameEn: "Tarneeb",
-    nameAr: "طرنيب",
-    descriptionEn: "Popular Middle Eastern trick-taking card game",
-    descriptionAr: "لعبة الورق الشعبية في الشرق الأوسط",
-    icon: Gem,
-    gradient: "from-purple-500/30 via-purple-600/20 to-violet-700/10",
-    accentColor: "text-purple-500",
-    players: "4",
-    duration: "20-40 min",
-  },
-  {
-    key: "baloot",
-    nameEn: "Baloot",
-    nameAr: "بلوت",
-    descriptionEn: "Traditional Saudi Arabian card game",
-    descriptionAr: "لعبة الورق التقليدية السعودية",
-    icon: Gem,
-    gradient: "from-rose-500/30 via-rose-600/20 to-pink-700/10",
-    accentColor: "text-rose-500",
-    players: "4",
-    duration: "30-60 min",
-  },
+/**
+ * Catalog metadata only — visuals (icon / gradient / color / thumbnail) for
+ * multiplayer games (chess, backgammon, domino, tarneeb, baloot) come from
+ * `multiplayerGameConfig` (which itself layers admin DB values on top of
+ * `FALLBACK_GAME_CONFIG`). This guarantees admin uploads from the Visual
+ * Identity panel propagate to the catalog without any code-level fallback
+ * shadowing them.
+ *
+ * Browser-only mini-games (snake / puzzle / memory) are not in the multiplayer
+ * DB, so their visuals live inline as `fallback` here.
+ */
+const CATALOG_METADATA: CatalogGameMetadata[] = [
+  { key: "chess", players: "2", duration: "15-60 min" },
+  { key: "backgammon", players: "2", duration: "10-30 min" },
+  { key: "domino", players: "2-4", duration: "15-45 min" },
+  { key: "tarneeb", players: "4", duration: "20-40 min" },
+  { key: "baloot", players: "4", duration: "30-60 min" },
   {
     key: "snake",
-    nameEn: "Snake Arena",
-    nameAr: "أرينا الثعبان",
-    descriptionEn: "3D snake arena with 360° movement, power-ups and weather effects",
-    descriptionAr: "ساحة الثعبان ثلاثية الأبعاد مع حركة 360 درجة ومؤثرات طقس",
-    icon: Gamepad2,
-    gradient: "from-indigo-500/30 via-indigo-600/20 to-violet-700/10",
-    accentColor: "text-indigo-500",
     players: "1-4",
     duration: "5-15 min",
+    fallback: {
+      nameEn: "Snake Arena",
+      nameAr: "أرينا الثعبان",
+      descriptionEn: "3D snake arena with 360° movement, power-ups and weather effects",
+      descriptionAr: "ساحة الثعبان ثلاثية الأبعاد مع حركة 360 درجة ومؤثرات طقس",
+      icon: Gamepad2,
+      gradient: "from-indigo-500/30 via-indigo-600/20 to-violet-700/10",
+      accentColor: "text-indigo-500",
+    },
   },
   {
     key: "puzzle",
-    nameEn: "Puzzle Challenge",
-    nameAr: "تحدي الألغاز",
-    descriptionEn: "Drag & drop jigsaw puzzle with multiple difficulty levels",
-    descriptionAr: "لغز صور بالسحب والإسقاط مع مستويات صعوبة متعددة",
-    icon: Target,
-    gradient: "from-cyan-500/30 via-cyan-600/20 to-teal-700/10",
-    accentColor: "text-cyan-500",
     players: "1",
     duration: "3-15 min",
+    fallback: {
+      nameEn: "Puzzle Challenge",
+      nameAr: "تحدي الألغاز",
+      descriptionEn: "Drag & drop jigsaw puzzle with multiple difficulty levels",
+      descriptionAr: "لغز صور بالسحب والإسقاط مع مستويات صعوبة متعددة",
+      icon: Target,
+      gradient: "from-cyan-500/30 via-cyan-600/20 to-teal-700/10",
+      accentColor: "text-cyan-500",
+    },
   },
   {
     key: "memory",
-    nameEn: "Memory Challenge",
-    nameAr: "تحدي الذاكرة",
-    descriptionEn: "Remember the color sequence and test your memory",
-    descriptionAr: "تذكّر تسلسل الألوان واختبر ذاكرتك",
-    icon: Zap,
-    gradient: "from-fuchsia-500/30 via-fuchsia-600/20 to-purple-700/10",
-    accentColor: "text-fuchsia-500",
     players: "1",
     duration: "2-10 min",
+    fallback: {
+      nameEn: "Memory Challenge",
+      nameAr: "تحدي الذاكرة",
+      descriptionEn: "Remember the color sequence and test your memory",
+      descriptionAr: "تذكّر تسلسل الألوان واختبر ذاكرتك",
+      icon: Zap,
+      gradient: "from-fuchsia-500/30 via-fuchsia-600/20 to-purple-700/10",
+      accentColor: "text-fuchsia-500",
+    },
   },
 ];
 
@@ -221,26 +193,51 @@ export default function GamesCatalogPage() {
 
   const multiplayerGameConfig = useMemo(() => buildGameConfig(apiGames), [apiGames]);
 
-  const catalogGames = useMemo(
-    () => GAME_CATALOG.map((game) => {
-      const dynamicConfig = multiplayerGameConfig[game.key];
-      if (!dynamicConfig) {
-        return game;
-      }
-
-      return {
-        ...game,
-        nameEn: dynamicConfig.name,
-        nameAr: dynamicConfig.nameAr,
-        descriptionEn: dynamicConfig.descriptionEn || game.descriptionEn,
-        descriptionAr: dynamicConfig.descriptionAr || game.descriptionAr,
-        icon: dynamicConfig.icon,
-        iconUrl: dynamicConfig.iconUrl,
-        thumbnailUrl: dynamicConfig.thumbnailUrl,
-        gradient: dynamicConfig.gradient || game.gradient,
-        accentColor: dynamicConfig.accentColor || getGameIconToneClass(dynamicConfig.color),
-      };
-    }),
+  const catalogGames = useMemo<CatalogGame[]>(
+    () =>
+      CATALOG_METADATA.map((meta) => {
+        const dynamic = multiplayerGameConfig[meta.key];
+        // Multiplayer game: 100% of visuals come from `multiplayerGameConfig`,
+        // which already layers admin DB values on top of FALLBACK_GAME_CONFIG.
+        if (dynamic) {
+          return {
+            key: meta.key,
+            name: dynamic.name,
+            nameEn: dynamic.name,
+            nameAr: dynamic.nameAr,
+            descriptionEn: dynamic.descriptionEn,
+            descriptionAr: dynamic.descriptionAr,
+            icon: dynamic.icon,
+            iconUrl: dynamic.iconUrl,
+            thumbnailUrl: dynamic.thumbnailUrl,
+            gradient: dynamic.gradient,
+            color: dynamic.color,
+            accentColor: dynamic.accentColor,
+            accentColorClass: dynamic.accentColor || dynamic.color,
+            players: meta.players,
+            duration: meta.duration,
+          };
+        }
+        // Browser-only mini-game (snake / puzzle / memory) — visuals from inline fallback.
+        const fb = meta.fallback!;
+        return {
+          key: meta.key,
+          name: fb.nameEn,
+          nameEn: fb.nameEn,
+          nameAr: fb.nameAr,
+          descriptionEn: fb.descriptionEn,
+          descriptionAr: fb.descriptionAr,
+          icon: fb.icon,
+          iconUrl: undefined,
+          thumbnailUrl: undefined,
+          gradient: fb.gradient,
+          color: fb.accentColor,
+          accentColor: fb.accentColor,
+          accentColorClass: fb.accentColor,
+          players: meta.players,
+          duration: meta.duration,
+        };
+      }),
     [multiplayerGameConfig],
   );
 
@@ -370,24 +367,7 @@ export default function GamesCatalogPage() {
                 onClick={() => setSelectedGame(isSelected ? null : game.key)}
                 data-testid={`game-card-${game.key}`}
               >
-                {game.thumbnailUrl && (
-                  <img
-                    src={game.thumbnailUrl}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover"
-                    loading="lazy"
-                    decoding="async"
-                    aria-hidden="true"
-                  />
-                )}
-                <div
-                  className={cn(
-                    "absolute inset-0",
-                    game.thumbnailUrl
-                      ? "bg-gradient-to-t from-background/90 via-background/55 to-background/20"
-                      : `bg-gradient-to-br opacity-60 ${game.gradient}`,
-                  )}
-                />
+                <GameCardBackground config={game} variant="solid" />
 
                 {liveCount > 0 && (
                   <div className="absolute top-3 end-3 z-10">
@@ -403,12 +383,12 @@ export default function GamesCatalogPage() {
                     <div
                       className={cn(
                         "inline-flex h-20 w-20 items-center justify-center rounded-[20px] border bg-background/80 shadow-lg backdrop-blur-sm transition-transform group-hover:scale-110 overflow-hidden",
-                        game.iconUrl ? "border-border p-0" : `p-2.5 ${game.accentColor}`
+                        game.iconUrl ? "border-border p-0" : `p-2.5 ${game.accentColorClass}`
                       )}
                     >
                       <GameConfigIcon
                         config={game}
-                        fallbackIcon={game.icon}
+                        fallbackIcon={game.icon || Gamepad2}
                         fit={game.iconUrl ? "cover" : "contain"}
                         className={game.iconUrl ? "h-full w-full" : "h-10 w-10 sm:h-11 sm:w-11"}
                       />

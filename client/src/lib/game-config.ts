@@ -212,12 +212,22 @@ export const FALLBACK_GAME_CONFIG: Record<string, GameConfigItem> = {
   snake: { name: "Snake Arena", nameAr: "أرينا الثعبان", icon: Gamepad2, color: "bg-indigo-500/20 text-indigo-500 border-indigo-500/30", gradient: "from-indigo-500/20 to-indigo-600/10" },
 };
 
-/** Build game config from API data, falling back to hardcoded if empty */
+/**
+ * Build game config from API data, with hardcoded `FALLBACK_GAME_CONFIG` as
+ * the base layer so any game key not yet present in the DB still renders.
+ *
+ * IMPORTANT — single source of truth:
+ *   Every surface that displays a game (cards, dialogs, popups, end-of-game
+ *   screens, notifications) MUST source its icon, gradient, color and
+ *   thumbnail from this config (or from `<GameConfigIcon />`). Do NOT import
+ *   Lucide icons keyed to a specific game directly into UI files — admin
+ *   uploads from the Visual Identity panel must propagate everywhere.
+ */
 export function buildGameConfig(apiGames: MultiplayerGameFromAPI[] | undefined): Record<string, GameConfigItem> {
+  const config: Record<string, GameConfigItem> = { ...FALLBACK_GAME_CONFIG };
   if (!apiGames || apiGames.length === 0) {
-    return { ...FALLBACK_GAME_CONFIG };
+    return config;
   }
-  const config: Record<string, GameConfigItem> = {};
   for (const game of apiGames) {
     const style = GAME_ICON_STYLES[game.key] || DEFAULT_GAME_STYLE;
     const color = resolveGameColorClass(game, style.color);

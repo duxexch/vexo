@@ -76,6 +76,11 @@ First-time VPS bootstrap (Traefik network + Traefik container) is documented in 
 
 ## Recent changes
 
+- 2026-04-24 — **Unified game visuals across every surface (Task #40):**
+  - `client/src/lib/game-config.ts` — `buildGameConfig` now always layers admin DB values on top of `FALLBACK_GAME_CONFIG`, so any game key missing from the API still renders with sane defaults. The function header documents the **single-source-of-truth rule**: every surface (cards, dialogs, popups, end-of-game screens, notifications) MUST source its icon, gradient, color and thumbnail from this config or from `<GameConfigIcon />`. Game-specific Lucide icons must NOT be hardcoded in UI files — admin uploads from the Visual Identity panel must propagate everywhere.
+  - New shared component `client/src/components/GameCardBackground.tsx` — encapsulates the `thumbnailUrl + dark overlay` vs `gradient` background pattern used on lobby and catalog cards. Adopted by `client/src/pages/game-lobby.tsx` and `client/src/pages/games-catalog.tsx`.
+  - `client/src/pages/game-history.tsx` — replaced manual `<img>` / direct icon rendering on the Active and Completed lists with `<GameConfigIcon />`, so admin icon changes apply to history rows too.
+
 - 2026-04-24 — **Room (challenge / game-room) chat fan-out gated by smoke (Task #30):**
   - New shared helper `server/lib/room-chat-payload.ts` exposes `buildRoomChatBroadcast` (canonical `ChatBroadcast` payload assembly) + `shouldDeliverRoomChatToRecipient` (per-recipient suppression rule covering sender-block, recipient-block, recipient-mute, and self-echo).
   - `server/socketio/challenge-chat-bridge.ts` (`deliverRealtimeChallengeChat`) refactored to: (a) delegate broadcast assembly to `buildRoomChatBroadcast`, (b) delegate per-recipient suppression to `shouldDeliverRoomChatToRecipient`, (c) accept an optional `ChallengeChatDeps` injection seam so smokes can stub DB / Redis / Socket.IO.

@@ -18,17 +18,14 @@ import { EmptyState } from "@/components/EmptyState";
 import { GameCardSkeletonGrid } from "@/components/skeletons";
 import { QueryErrorState } from "@/components/QueryErrorState";
 import { GameConfigIcon } from "@/components/GameConfigIcon";
+import { GameCardBackground } from "@/components/GameCardBackground";
 import {
   Gamepad2,
   Users,
-  Shuffle,
   Clock,
   Coins,
   Play,
   Search,
-  Target,
-  Crown,
-  Gem,
   Zap,
   Eye,
   TrendingUp,
@@ -273,23 +270,7 @@ const GameCard = memo(function GameCard({
       onClick={() => onSelect(gameType)}
       data-testid={`card-game-${gameType}`}
     >
-      {config.thumbnailUrl && (
-        <img
-          src={config.thumbnailUrl}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-          loading="lazy"
-          decoding="async"
-          aria-hidden="true"
-        />
-      )}
-      <div
-        className={
-          config.thumbnailUrl
-            ? "absolute inset-0 bg-gradient-to-t from-background/90 via-background/55 to-background/20"
-            : `absolute inset-0 bg-gradient-to-br ${config.gradient} opacity-50`
-        }
-      />
+      <GameCardBackground config={config} />
       <CardContent className="p-3 sm:p-4 relative">
         <div className="flex flex-col gap-3">
           <div className="flex items-start justify-between gap-2">

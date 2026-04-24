@@ -30,7 +30,8 @@ import {
   ChevronRight,
   Gamepad2,
 } from "lucide-react";
-import { type MultiplayerGameFromAPI, type GameConfigItem, buildGameConfig } from "@/lib/game-config";
+import { type MultiplayerGameFromAPI, type GameConfigItem, buildGameConfig, getGameIconToneClass } from "@/lib/game-config";
+import { GameConfigIcon } from "@/components/GameConfigIcon";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -191,18 +192,19 @@ export default function GameHistoryPage() {
           <div className="space-y-2">
             {active.map(c => {
               const cfg = gameConfig[c.gameType];
-              const GameIcon = cfg?.icon || Gamepad2;
-              const iconImageUrl = cfg?.iconUrl;
               return (
                 <Card key={c.id} className="hover-elevate cursor-pointer">
                   <CardContent className="p-3 flex flex-wrap sm:flex-nowrap items-center gap-3" onClick={() => navigate(`/challenge/${c.id}/play`)}>
-                    {iconImageUrl ? (
-                      <div className="h-8 w-8 shrink-0 rounded-md bg-muted/60 p-1">
-                        <img src={iconImageUrl} alt="" className="h-full w-full object-contain" loading="lazy" decoding="async" />
-                      </div>
-                    ) : (
-                      <GameIcon className="h-8 w-8 text-primary shrink-0" />
-                    )}
+                    <div className={cn(
+                      "h-8 w-8 shrink-0 rounded-md p-1",
+                      cfg?.iconUrl ? "bg-muted/60" : "",
+                    )}>
+                      <GameConfigIcon
+                        config={cfg}
+                        fallbackIcon={Gamepad2}
+                        className={cfg?.iconUrl ? "h-full w-full" : `h-full w-full ${getGameIconToneClass(cfg?.color)}`}
+                      />
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">
                         {language === "ar" ? cfg?.nameAr : cfg?.name}
@@ -275,8 +277,6 @@ export default function GameHistoryPage() {
                 {completed.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(c => {
                   const result = getResult(c);
                   const cfg = gameConfig[c.gameType];
-                  const GameIcon = cfg?.icon || Gamepad2;
-                  const iconImageUrl = cfg?.iconUrl;
                   const bet = parseFloat(c.betAmount) || 0;
 
                   return (
@@ -286,14 +286,18 @@ export default function GameHistoryPage() {
                           "p-2 rounded-lg shrink-0",
                           result === "win" ? "bg-green-500/10" : result === "loss" ? "bg-red-500/10" : "bg-muted"
                         )}>
-                          {iconImageUrl ? (
-                            <img src={iconImageUrl} alt="" className="h-5 w-5 object-contain" loading="lazy" decoding="async" />
-                          ) : (
-                            <GameIcon className={cn(
+                          <GameConfigIcon
+                            config={cfg}
+                            fallbackIcon={Gamepad2}
+                            className={cn(
                               "h-5 w-5",
-                              result === "win" ? "text-green-500" : result === "loss" ? "text-red-500" : "text-muted-foreground"
-                            )} />
-                          )}
+                              !cfg?.iconUrl && (result === "win"
+                                ? "text-green-500"
+                                : result === "loss"
+                                  ? "text-red-500"
+                                  : "text-muted-foreground"),
+                            )}
+                          />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
