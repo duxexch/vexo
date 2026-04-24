@@ -9,7 +9,7 @@ import { GameCardBackground } from "@/components/GameCardBackground";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
-import { buildGameConfig, type GameConfigItem, type MultiplayerGameFromAPI } from "@/lib/game-config";
+import { buildGameConfig, resolveGameConfigEntry, type GameConfigItem, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import { cn } from "@/lib/utils";
 import {
   Target,
@@ -195,12 +195,19 @@ export default function GamesCatalogPage() {
 
   const catalogGames = useMemo<CatalogGame[]>(
     () =>
-      CATALOG_METADATA.map((meta) => {
-        const dynamic = multiplayerGameConfig[meta.key];
-        // Multiplayer game: 100% of visuals come from `multiplayerGameConfig`,
-        // which already layers admin DB values on top of FALLBACK_GAME_CONFIG.
-        if (dynamic) {
-          return {
+      CATALOG_METADATA.flatMap((meta): CatalogGame[] => {
+        // Multiplayer game (no inline fallback): visuals come from
+        // `multiplayerGameConfig` (API + admin DB) and fall back to the
+        // central FALLBACK_GAME_CONFIG one key at a time, so the catalog
+        // still renders the row even when `/api/multiplayer-games?activeOnly=true`
+        // returns a subset (e.g. a game temporarily disabled in admin).
+        if (!meta.fallback) {
+          const dynamic = resolveGameConfigEntry(multiplayerGameConfig, meta.key);
+          // If neither the API nor the static fallback knows this key, skip
+          // the row instead of crashing — surfacing a partial active list
+          // is better than a white screen.
+          if (!dynamic) return [];
+          return [{
             key: meta.key,
             name: dynamic.name,
             nameEn: dynamic.name,
@@ -216,11 +223,11 @@ export default function GamesCatalogPage() {
             accentColorClass: dynamic.accentColor || dynamic.color,
             players: meta.players,
             duration: meta.duration,
-          };
+          }];
         }
         // Browser-only mini-game (snake / puzzle / memory) — visuals from inline fallback.
-        const fb = meta.fallback!;
-        return {
+        const fb = meta.fallback;
+        return [{
           key: meta.key,
           name: fb.nameEn,
           nameEn: fb.nameEn,
@@ -236,7 +243,7 @@ export default function GamesCatalogPage() {
           accentColorClass: fb.accentColor,
           players: meta.players,
           duration: meta.duration,
-        };
+        }];
       }),
     [multiplayerGameConfig],
   );
