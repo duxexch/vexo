@@ -3813,6 +3813,21 @@ export default function ChallengeGamePage() {
                   supportTotalText={supportAggregateText}
                   giftCount={giftAggregate.count}
                   giftTotalText={giftAggregateText}
+                  /*
+                   * Task #13: this page does not pass `onSendChat` (chat
+                   * lives in the dedicated GameChat dialog), so the panel
+                   * input section is not rendered at all. We still set
+                   * `canSendChat={false}` and `sendDisabledReason` here so
+                   * the read-only spectator policy is expressed
+                   * consistently in case the panel input is ever enabled
+                   * on this surface.
+                   */
+                  canSendChat={false}
+                  sendDisabledReason={
+                    language === "ar"
+                      ? "المشاهدون يستطيعون قراءة الدردشة فقط، ولا يمكنهم الإرسال."
+                      : "Spectators can read chat but can't send messages."
+                  }
                 />
               </div>
             )}
