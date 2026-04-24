@@ -27,6 +27,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, Shield, Settings2, Loader2, Monitor, Smartphone, Globe, Trash2, LogOut, CheckCircle, KeyRound, Camera, Users, ImageIcon, Volume2, VolumeX, ShieldCheck, Mail, Copy } from "lucide-react";
 import { BlockedMutedSettings } from "@/components/BlockedMutedSettings";
 import { useSoundEffects } from "@/hooks/use-sound-effects";
+import {
+  DOMINO_SPEED_MODES,
+  setDominoSpeedMode,
+  useDominoSpeedMode,
+  type DominoSpeedMode,
+} from "@/lib/domino-speed";
 import { format } from "date-fns";
 import QRCode from "qrcode";
 
@@ -1272,6 +1278,45 @@ function SoundSettingsSection() {
   );
 }
 
+function GameSpeedSection() {
+  const { t } = useI18n();
+  const speedMode = useDominoSpeedMode();
+
+  const handleChange = (value: string) => {
+    if (DOMINO_SPEED_MODES.includes(value as DominoSpeedMode)) {
+      setDominoSpeedMode(value as DominoSpeedMode);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-base font-semibold">
+        {t("settings.gameSpeed") || "Game Speed"}
+      </Label>
+      <p className="text-sm text-muted-foreground">
+        {t("settings.gameSpeedDescription")
+          || "Controls how quickly domino animations play. Faster modes shrink the wait between moves."}
+      </p>
+      <Select value={speedMode} onValueChange={handleChange}>
+        <SelectTrigger className="w-full md:w-[220px]" data-testid="select-game-speed">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="normal" data-testid="option-game-speed-normal">
+            {t("settings.gameSpeedNormal") || "Normal"}
+          </SelectItem>
+          <SelectItem value="fast" data-testid="option-game-speed-fast">
+            {t("settings.gameSpeedFast") || "Fast"}
+          </SelectItem>
+          <SelectItem value="turbo" data-testid="option-game-speed-turbo">
+            {t("settings.gameSpeedTurbo") || "Turbo"}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function PreferencesSection() {
   const { t, language, setLanguage } = useI18n();
   const { toast } = useToast();
@@ -1508,6 +1553,8 @@ function PreferencesSection() {
         </div>
 
         <SoundSettingsSection />
+
+        <GameSpeedSection />
 
         <div className="space-y-4">
           <Label className="text-base font-semibold">{t("settings.notifications")}</Label>

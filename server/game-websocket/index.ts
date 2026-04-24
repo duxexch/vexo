@@ -11,6 +11,7 @@ import { handleMakeMove } from './moves';
 import { handleChat, handleSendGift } from './chat-gifts';
 import { handleGetState, handleResign, handleOfferDraw, handleRespondDraw } from './state-resign';
 import { handleLeaveGame, handleDisconnect } from './timers-disconnect';
+import { handleSetSpeedMode } from './speed-mode';
 import { createGameWsProtocolError, validateGameMessage, type ValidatedGameMessage } from './validation';
 
 export { rooms, userConnections } from './types';
@@ -175,6 +176,9 @@ async function handleMessage(ws: AuthenticatedWebSocket, message: ValidatedGameM
       break;
     case 'respond_draw':
       await handleRespondDraw(ws, message.payload);
+      break;
+    case 'set_speed_mode':
+      await handleSetSpeedMode(ws, message.payload);
       break;
     default:
       sendError(ws, 'Unknown message type', 'unknown_type');

@@ -1764,11 +1764,11 @@ body[data-vex-game-fullscreen="on"] {
 }
 
 .animate-domino-place {
-  animation: domino-place 200ms ease-out forwards;
+  animation: domino-place 180ms ease-out forwards;
 }
 
 .animate-domino-draw {
-  animation: domino-draw 300ms ease-out forwards;
+  animation: domino-draw 220ms ease-out forwards;
 }
 
 .animate-domino-fade-in {
@@ -2256,6 +2256,9 @@ body[data-vex-game-fullscreen="on"] {
   .domino-tile-playable,
   .domino-tile-sheen,
   .animate-domino-chip-rise,
+  .animate-domino-place,
+  .animate-domino-draw,
+  .animate-domino-fade-in,
   .domino-insight-card::after,
   .tarneeb-table-live,
   .animate-tarneeb-card-deal,

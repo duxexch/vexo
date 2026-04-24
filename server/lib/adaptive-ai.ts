@@ -720,9 +720,17 @@ export async function chooseAdaptiveAIMove(params: {
     if (externalDecision) {
         const validation = engine.validateMove(stateJson, botPlayerId, externalDecision.move);
         if (validation.valid) {
+            // When the bot has a single legal move there is nothing to
+            // "think" about, so collapse the artificial delay. Otherwise
+            // honour the agent-supplied thinkMs, with a 120ms floor so
+            // trivial decisions stay responsive and a 6s ceiling.
+            const externalThinkMs = Math.floor(toNumber(externalDecision.thinkMs, 700));
+            const thinkMs = validMoves.length <= 1
+                ? clamp(Math.min(externalThinkMs, 220), 120, 320)
+                : clamp(externalThinkMs, 120, 6000);
             return {
                 move: externalDecision.move,
-                thinkMs: clamp(Math.floor(toNumber(externalDecision.thinkMs, 700)), 220, 6000),
+                thinkMs,
                 confidence: clamp(toNumber(externalDecision.confidence, 0.5), 0, 1),
                 consideredMoves: validMoves.length,
             };
@@ -779,6 +787,23 @@ export async function chooseAdaptiveAIMove(params: {
 
     const selected = scoredMoves[pickIndex] || scoredMoves[0];
     const range = thinkRangeByDifficulty(difficultyLevel);
+    // When there's only one legal move, the bot has nothing to "decide" —
+    // collapse the artificial delay to a small, snappy value so the player
+    // isn't waiting on a forced play. For richer positions we keep the
+    // difficulty/bucket-driven schedule unchanged.
+    if (validMoves.length <= 1) {
+        const trivialThink = clamp(
+            Math.floor(range.min * 0.35 * clamp(bucket.humanDelayFactor, 0.75, 1.45)),
+            120,
+            320,
+        );
+        return {
+            move: selected.move,
+            thinkMs: trivialThink,
+            confidence: clamp(1 - pickIndex / Math.max(1, scoredMoves.length), 0, 1),
+            consideredMoves: validMoves.length,
+        };
+    }
     const complexity = clamp(validMoves.length / 12, 0.6, 1.8);
     const rawThink = randomBetween(range.min, range.max);
     const thinkMs = Math.floor(rawThink * complexity * clamp(bucket.humanDelayFactor, 0.75, 1.45));

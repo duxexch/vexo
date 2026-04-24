@@ -31,6 +31,13 @@ export interface GameRoom {
   gameType: string;
   gameState: string;
   turnTimeLimitMs?: number;
+  /**
+   * Per-player AI think-time multiplier (e.g. 1 for Normal, 0.65 for Fast,
+   * 0.4 for Turbo). Reported by clients via `set_speed_mode`. The effective
+   * delay used for AI moves is the minimum across all players in the room
+   * (favoring whichever human prefers a snappier pace).
+   */
+  playerSpeedMultipliers?: Map<string, number>;
 }
 
 // === Shared mutable state ===

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, memo } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
+import { useDominoSpeedMultiplier } from "@/lib/domino-speed";
 import { motion } from "framer-motion";
 import { Clock3 } from "lucide-react";
 
@@ -1360,6 +1361,22 @@ export function DominoBoard({
   const boardLaneRef = useRef<HTMLDivElement | null>(null);
   const [boardLaneSize, setBoardLaneSize] = useState({ width: 0, height: 0 });
 
+  // Game-speed multiplier (Normal/Fast/Turbo + reduced-motion). Returns 0 when
+  // the OS reports prefers-reduced-motion so animations effectively disappear.
+  const speedMultiplier = useDominoSpeedMultiplier();
+  const animationsDisabled = speedMultiplier === 0;
+  const placeTransitionMs = Math.max(0, Math.round(180 * speedMultiplier));
+  const placeSpringStiffness = Math.round(360 / Math.max(speedMultiplier, 0.25));
+  const drawSpringStiffness = Math.round(420 / Math.max(speedMultiplier, 0.25));
+  const lastPlayedGlowMs = Math.max(0, Math.round(800 * speedMultiplier));
+  const perTileStaggerMs = Math.max(0, Math.round(30 * speedMultiplier));
+  const placeTransition = animationsDisabled
+    ? { duration: 0 }
+    : { type: "spring" as const, stiffness: placeSpringStiffness, damping: 26, mass: 0.62 };
+  const drawTransition = animationsDisabled
+    ? { duration: 0 }
+    : { type: "spring" as const, stiffness: drawSpringStiffness, damping: 26, mass: 0.55 };
+
   const state = useMemo<GameState>(() => {
     try {
       if (gameState) {
@@ -2164,21 +2181,22 @@ export function DominoBoard({
         key={`${rowId}-${tileKey}`}
         initial={isLastActionTile ? { opacity: 0, y: -10, scale: 0.9, rotate: -4 } : false}
         animate={{ opacity: 1, y: 0, scale: 1, rotate: 0.2 }}
-        transition={{ type: "spring", stiffness: 260, damping: 24, mass: 0.72 }}
+        transition={placeTransition}
         className={cn(
-          "shrink-0 transition-transform duration-300",
-          isLastActionTile ? "animate-domino-place" : "opacity-95",
+          "shrink-0",
+          isLastActionTile && !animationsDisabled ? "animate-domino-place" : "opacity-95",
         )}
         style={
           isLastActionTile
             ? {
-                // Warm amber glow + soft pulse on the most recently placed
-                // tile so players can instantly see what just changed.
+                transition: `transform ${placeTransitionMs}ms ease-out`,
                 filter:
                   "drop-shadow(0 0 6px rgba(255, 184, 92, 0.85)) drop-shadow(0 0 14px rgba(255, 138, 32, 0.55))",
-                animation: "domino-last-played-glow 1.6s ease-out 1",
+                animation: lastPlayedGlowMs > 0
+                  ? `domino-last-played-glow ${lastPlayedGlowMs}ms ease-out 1`
+                  : undefined,
               }
-            : undefined
+            : { transition: `transform ${placeTransitionMs}ms ease-out` }
         }
       >
         <DominoTileComponent
@@ -2462,9 +2480,9 @@ export function DominoBoard({
                       scale: selectedTile === index ? 1.08 : 1,
                     }}
                     whileHover={canInteract ? { y: -4, scale: 1.045 } : undefined}
-                    transition={{ type: "spring", stiffness: 300, damping: 24, mass: 0.65 }}
-                    className={isNewTile ? "animate-domino-draw" : ""}
-                    style={isNewTile ? { animationDelay: `${(index - prevHandLenRef.current) * 60}ms` } : undefined}
+                    transition={drawTransition}
+                    className={isNewTile && !animationsDisabled ? "animate-domino-draw" : ""}
+                    style={isNewTile && !animationsDisabled ? { animationDelay: `${(index - prevHandLenRef.current) * perTileStaggerMs}ms` } : undefined}
                   >
                     <DominoTileComponent
                       tile={tile}

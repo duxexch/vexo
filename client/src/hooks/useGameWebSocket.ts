@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/auth';
 import { extractWsErrorInfo, isWsErrorType } from '@/lib/ws-errors';
+import { useDominoSpeedMode } from '@/lib/domino-speed';
 
 const DEBUG_WS = import.meta.env.DEV;
 function wsLog(...args: unknown[]) { if (DEBUG_WS) console.log(...args); }
@@ -216,6 +217,9 @@ function getReconnectDelay(attempt: number): number {
 
 export function useGameWebSocket(sessionId: string | null) {
   const { user, token } = useAuth();
+  const speedMode = useDominoSpeedMode();
+  const speedModeRef = useRef(speedMode);
+  speedModeRef.current = speedMode;
   const wsRef = useRef<WebSocket | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [gameType, setGameType] = useState<string | null>(null);
@@ -317,6 +321,12 @@ export function useGameWebSocket(sessionId: string | null) {
           wsRef.current.send(JSON.stringify({
             type: 'get_state',
             payload: { sessionId: sessionIdRef.current }
+          }));
+          // Tell the server our preferred game speed so it can scale AI
+          // think delays accordingly.
+          wsRef.current.send(JSON.stringify({
+            type: 'set_speed_mode',
+            payload: { mode: speedModeRef.current }
           }));
         }
         break;
@@ -698,6 +708,19 @@ export function useGameWebSocket(sessionId: string | null) {
 
   const turnNumberRef = useRef(turnNumber);
   turnNumberRef.current = turnNumber;
+
+  // Push speed-mode preference to the server whenever it changes mid-session
+  // (e.g. the player switches Normal -> Turbo from the settings page). We
+  // also send it once after `game_joined`; this effect handles updates.
+  useEffect(() => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'set_speed_mode',
+        payload: { mode: speedMode }
+      }));
+    }
+  }, [speedMode]);
 
   const makeMove = useCallback((moveData: Record<string, unknown> | string, to?: string, promotion?: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {

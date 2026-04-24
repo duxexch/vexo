@@ -15,6 +15,7 @@ import {
     resolveCurrentPlayerFromState,
 } from '../lib/adaptive-ai';
 import type { GameRoom } from './types';
+import { getEffectiveAiSpeedMultiplier } from './speed-mode';
 import { send } from './utils';
 import { clearTurnTimer, startTurnTimer } from './timers-disconnect';
 import { handleGameOver } from './game-over';
@@ -157,7 +158,15 @@ export async function processAdaptiveAiTurns(sessionId: string, room: GameRoom):
                 break;
             }
 
-            await wait(Math.max(220, decision.thinkMs));
+            // Floor the AI think time at 120ms so trivial decisions (forced
+            // single-move plays etc.) don't feel like the bot is stalling,
+            // then scale by the room's effective speed multiplier (set by
+            // players via `set_speed_mode`). The 80ms hard floor below keeps
+            // bot moves visible — they never appear instantaneous.
+            const baseThinkMs = Math.max(120, decision.thinkMs);
+            const speedMultiplier = getEffectiveAiSpeedMultiplier(room.playerSpeedMultipliers);
+            const scaledThinkMs = Math.max(80, Math.round(baseThinkMs * speedMultiplier));
+            await wait(scaledThinkMs);
 
             const turnResult = await db.transaction(async (tx) => {
                 const [lockedSession] = await tx

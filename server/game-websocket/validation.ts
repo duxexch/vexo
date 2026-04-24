@@ -162,6 +162,12 @@ const gameWebSocketMessageSchema = z.discriminatedUnion("type", [
             accept: z.boolean(),
         }),
     }),
+    z.object({
+        type: z.literal("set_speed_mode"),
+        payload: z.object({
+            mode: z.enum(["normal", "fast", "turbo"]),
+        }),
+    }),
 ]);
 
 type ParsedMessage = z.infer<typeof gameWebSocketMessageSchema>;
@@ -186,7 +192,8 @@ export type ValidatedGameMessage =
     | { type: "get_state"; payload: { sessionId: string } }
     | { type: "resign"; payload: { sessionId: string } }
     | { type: "offer_draw"; payload: { sessionId: string } }
-    | { type: "respond_draw"; payload: { accept: boolean } };
+    | { type: "respond_draw"; payload: { accept: boolean } }
+    | { type: "set_speed_mode"; payload: { mode: "normal" | "fast" | "turbo" } };
 
 export interface GameWebSocketProtocolError {
     message: string;

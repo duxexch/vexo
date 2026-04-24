@@ -468,6 +468,7 @@ export async function handleDisconnect(ws: AuthenticatedWebSocket, isVoluntaryLe
       } else if (ws.userId) {
         const disconnectedPlayerId = ws.userId;
         room.players.delete(disconnectedPlayerId);
+        room.playerSpeedMultipliers?.delete(disconnectedPlayerId);
 
         const sessionId = ws.sessionId;
 
