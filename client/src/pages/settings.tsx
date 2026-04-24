@@ -80,6 +80,7 @@ interface UserPreferences {
   notifyTransactions: boolean;
   notifyPromotions: boolean;
   notifyP2P: boolean;
+  hideSpectatorChat?: boolean;
 }
 
 type GeoCountryOption = {
@@ -1553,6 +1554,29 @@ function PreferencesSection() {
                 checked={preferences?.notifyP2P ?? true}
                 onCheckedChange={(checked) => handleNotificationToggle("notifyP2P", checked)}
                 data-testid="switch-notify-p2p"
+              />
+            </div>
+            {/* Task #17: per-user toggle to hide spectator chat in the
+                in-game chat panel. Default off — players see everything
+                with the spectator badge so context is preserved; turning
+                this on filters spectator messages out entirely. */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label>
+                  {language === "ar"
+                    ? "إخفاء دردشة المتفرجين"
+                    : "Hide spectator chat"}
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  {language === "ar"
+                    ? "أخفِ رسائل المتفرجين في لوحة دردشة المباراة وشاهد دردشة اللاعبين فقط."
+                    : "Hide viewer messages in the in-game chat panel and see only player chat."}
+                </p>
+              </div>
+              <Switch
+                checked={preferences?.hideSpectatorChat ?? false}
+                onCheckedChange={(checked) => handleNotificationToggle("hideSpectatorChat", checked)}
+                data-testid="switch-hide-spectator-chat"
               />
             </div>
           </div>

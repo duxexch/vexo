@@ -232,6 +232,9 @@ interface ChatMsg {
   createdAt?: string;
   isQuickMessage?: boolean;
   quickMessageKey?: string;
+  // Task #17: stamped by the bridge / legacy WS so the chat panel can render
+  // a distinct "Spectator" badge on viewer messages.
+  isSpectator?: boolean;
 }
 
 interface AvatarChatBubbleState {
@@ -429,6 +432,7 @@ export default function ChallengeGamePage() {
           createdAt: new Date(m.ts).toISOString(),
           isQuickMessage: m.isQuickMessage,
           quickMessageKey: m.quickMessageKey,
+          isSpectator: Boolean(m.isSpectator),
         };
         if (next === prev) next = [...prev];
         next.push(normalized);
@@ -464,6 +468,17 @@ export default function ChallengeGamePage() {
   const { data: multiplayerGames = [] } = useQuery<MultiplayerGameFromAPI[]>({
     queryKey: ["/api/multiplayer-games"],
     staleTime: 60000,
+  });
+
+  // Task #17: per-user toggle for hiding spectator chat in the in-game
+  // panel. We only need the boolean here; the rest of the prefs payload
+  // is unused on this page so a tiny `select` keeps re-renders cheap.
+  const { data: hideSpectatorChatPref = false } = useQuery<boolean>({
+    queryKey: ["/api/user/preferences"],
+    enabled: Boolean(user?.id),
+    staleTime: 60_000,
+    select: (data: unknown) =>
+      Boolean((data as { hideSpectatorChat?: boolean } | null)?.hideSpectatorChat),
   });
 
   const { data: currencyPolicy } = useQuery<{
@@ -1578,6 +1593,12 @@ export default function ChallengeGamePage() {
                 typeof incomingMessage.quickMessageKey === "string"
                   ? incomingMessage.quickMessageKey
                   : undefined,
+              // Task #17: legacy WS payload uses isSpectator on the
+              // challenge_chat envelope (snake_case fallback for older
+              // server builds).
+              isSpectator: Boolean(
+                incomingMessage.isSpectator ?? incomingMessage.is_spectator,
+              ),
             };
 
             const normalizedMessageKey = normalizedMessage.id
@@ -2749,6 +2770,11 @@ export default function ChallengeGamePage() {
 
     return messages
       .filter((msg) => String(msg.message || "").trim().length > 0)
+      // Task #17: respect the per-user "hide spectator chat" setting.
+      // The badge on remaining messages still tells players when a chatter
+      // is a viewer; this toggle removes them entirely for players who
+      // prefer to see only fellow-player chat during a serious match.
+      .filter((msg) => !(hideSpectatorChatPref && msg.isSpectator))
       .slice(-160)
       .map((msg, index) => {
         const senderId =
@@ -2784,6 +2810,9 @@ export default function ChallengeGamePage() {
           message: String(msg.message || ""),
           isQuickMessage: Boolean(msg.isQuickMessage),
           quickMessageKey: msg.quickMessageKey,
+          // Task #17: forward the spectator flag through to GameChat so it
+          // can render an eye-icon "Spectator" badge on those bubbles.
+          isSpectator: Boolean(msg.isSpectator),
           createdAt,
         };
       });

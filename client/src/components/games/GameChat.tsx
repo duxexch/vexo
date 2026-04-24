@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { Send, MessageCircle, Zap, MoreVertical, Ban, VolumeX } from "lucide-react";
+import { Send, MessageCircle, Zap, MoreVertical, Ban, VolumeX, Eye } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -251,6 +251,21 @@ export function GameChat({
                         <span className="truncate text-[11px] font-semibold text-muted-foreground">
                           {displayName}
                         </span>
+                        {/* Task #17: visually distinguish spectator chat
+                            so players can tell at a glance the chatter is
+                            a viewer, not an opponent. The eye icon and
+                            label sit beside the sender name and inherit
+                            the parent's `dir` so they flow correctly in
+                            RTL (Arabic) and LTR. */}
+                        {msg.isSpectator && (
+                          <span
+                            className="inline-flex items-center gap-0.5 rounded-full border border-amber-300/60 bg-amber-100/70 px-1.5 py-px text-[10px] font-medium text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100"
+                            data-testid={`chat-spectator-badge-${msg.id}`}
+                          >
+                            <Eye className="h-3 w-3" aria-hidden="true" />
+                            {language === "ar" ? "مشاهد" : "Spectator"}
+                          </span>
+                        )}
                         {!isOwnMessage && typeof msg.senderId === "string" && msg.senderId.length > 0 && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -299,6 +314,11 @@ export function GameChat({
                         (isOwnMessage
                           ? "bg-amber-500 text-amber-950"
                           : "border-amber-300/70 bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100"),
+                        // Task #17: dim spectator messages so player chat
+                        // visually wins the foreground. Quick-message
+                        // amber styling above still wins for that variant.
+                        msg.isSpectator && !msg.isQuickMessage &&
+                        "bg-muted/60 text-muted-foreground border-dashed",
                       )}
                     >
                       {msg.isQuickMessage && (

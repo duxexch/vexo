@@ -1898,6 +1898,10 @@ export const userPreferences = pgTable("user_preferences", {
   emailNotifications: boolean("email_notifications").notNull().default(false),
   smsNotifications: boolean("sms_notifications").notNull().default(false),
   hideBalanceInLists: boolean("hide_balance_in_lists").notNull().default(false),
+  // Task #17: when true, the in-game chat panel hides spectator messages
+  // entirely so the player only sees fellow-player chat. The visual badge
+  // on the bubble (eye icon + "Spectator") shows regardless of this flag.
+  hideSpectatorChat: boolean("hide_spectator_chat").notNull().default(false),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_user_preferences_user_id").on(table.userId),

@@ -29,6 +29,8 @@ const preferencesUpdateSchema = z.object({
   notifyTransactions: z.boolean().optional(),
   notifyPromotions: z.boolean().optional(),
   notifyP2P: z.boolean().optional(),
+  // Task #17: per-user toggle to hide spectator chat in the in-game panel.
+  hideSpectatorChat: z.boolean().optional(),
 });
 
 function normalizeOptionalText(value: string | null | undefined, maxLength: number): string | null | undefined {
