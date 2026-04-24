@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import type { ChatMessage } from "@shared/schema";
 import { useChat } from "@/hooks/use-chat";
@@ -254,6 +254,24 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const prevMessageCountRef = useRef(0);
+  // Task #27: scroll-anchoring for "load older" pagination.
+  // When the user scrolls to the top and we trigger `loadMoreMessages`,
+  // we snapshot the container's `scrollHeight` + `scrollTop` *before*
+  // the older page is prepended, plus the id of the current oldest
+  // message so we can later confirm a real prepend happened (vs a
+  // brand-new message arriving at the bottom while the older fetch
+  // is still in flight). After React commits the new messages (in a
+  // `useLayoutEffect`, before paint) we restore the viewport so the
+  // message the user was reading stays at the same on-screen
+  // position — no jump. The "justRestoredAnchor" flag tells the
+  // existing auto-scroll-to-bottom effect to skip this tick so it
+  // doesn't immediately yank the viewport down to the latest message.
+  const prependAnchorRef = useRef<{
+    scrollHeight: number;
+    scrollTop: number;
+    firstMessageId: string | undefined;
+  } | null>(null);
+  const justRestoredAnchorRef = useRef(false);
   const messageInputRef = useRef<HTMLInputElement>(null);
   const hasAutoSelectedConversationRef = useRef(false);
   const typingActiveRef = useRef(false);
@@ -461,8 +479,65 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     };
   }, [conversations, preselectedConversationUserId, token]);
 
+  // Task #27: scroll-anchor restoration runs as a layout effect so the
+  // viewport is corrected *before* the browser paints — the user
+  // never sees a flash or jump when an older page is prepended. We
+  // intentionally do this in chat.tsx (rather than inside use-chat)
+  // because the scroll container lives here; the hook only needs to
+  // tell us when the page has landed (which we infer from the
+  // `messages` reference change while `prependAnchorRef` is set).
+  useLayoutEffect(() => {
+    const container = scrollAreaRef.current;
+    const anchor = prependAnchorRef.current;
+    if (!anchor || !container) return;
+    // Only restore if a real prepend actually happened. We confirm by
+    // comparing the current oldest message id against the one captured
+    // at snapshot time — if it changed, older rows landed at the top.
+    // This guards against two false-positive cases:
+    //   (a) a brand-new message arrived at the bottom while the older
+    //       fetch was still in flight (height grew, but not from a
+    //       prepend — restoring would push the user off the content
+    //       they were reading), and
+    //   (b) the server returned 0 new rows (all dedup'd) — the first
+    //       id is unchanged, so we skip and just drop the anchor on
+    //       the next tick once the in-flight fetch settles.
+    const currentFirstId =
+      messages[0]?.id !== undefined ? String(messages[0].id) : undefined;
+    const prependHappened =
+      anchor.firstMessageId !== undefined &&
+      currentFirstId !== undefined &&
+      currentFirstId !== anchor.firstMessageId &&
+      container.scrollHeight > anchor.scrollHeight;
+    if (!prependHappened) {
+      // Keep the anchor alive: the older page may still be in flight.
+      // It will be cleared by the next prepend, by a conversation
+      // switch, or by a fresh snapshot if the user scrolls again.
+      return;
+    }
+    container.scrollTop =
+      container.scrollHeight - anchor.scrollHeight + anchor.scrollTop;
+    prependAnchorRef.current = null;
+    // Tell the auto-bottom-scroll effect below to skip this tick so it
+    // doesn't immediately yank the viewport down to the latest message.
+    // Only set this when we actually restored — if we'd set it on a
+    // false-positive tick we'd swallow the next legitimate auto-scroll.
+    justRestoredAnchorRef.current = true;
+    // Keep the message-count baseline in sync so the bottom-scroll
+    // effect's "did length grow?" check stays accurate on the next
+    // genuine new-message tick.
+    prevMessageCountRef.current = messages.length;
+  }, [messages]);
+
   // Auto scroll and sound on new messages
   useEffect(() => {
+    // Task #27: skip the auto-bottom-scroll on the same tick we just
+    // restored an older-page anchor — otherwise the smooth-scroll
+    // would override our pin and snap the viewport back to the
+    // latest message, defeating the whole point.
+    if (justRestoredAnchorRef.current) {
+      justRestoredAnchorRef.current = false;
+      return;
+    }
     if (messages.length > prevMessageCountRef.current && prevMessageCountRef.current > 0) {
       const lastMsg = messages[messages.length - 1];
       if (lastMsg && lastMsg.senderId !== user?.id) {
@@ -475,6 +550,15 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     }
     prevMessageCountRef.current = messages.length;
   }, [messages]);
+
+  // Task #27: clear any pending scroll anchor when the user switches
+  // conversations — a stale anchor from the previous thread would
+  // cause a wrong-direction jump the first time an older page lands
+  // in the new thread.
+  useEffect(() => {
+    prependAnchorRef.current = null;
+    justRestoredAnchorRef.current = false;
+  }, [activeConversation]);
 
   useEffect(() => {
     refreshConversations();
@@ -634,12 +718,26 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     const target = e.currentTarget;
     // Load more when scrolled near top
     if (target.scrollTop < 100 && hasMoreMessages && !loadingMore) {
+      // Task #27: snapshot the container's scroll metrics *now*, before
+      // the older page is fetched and prepended. We also capture the
+      // current oldest message id so the layout-effect restoration
+      // can confirm a real prepend happened before adjusting scrollTop
+      // (otherwise an unrelated bottom-arriving message during the
+      // fetch could trick us into pinning to the wrong content). The
+      // `!loadingMore` guard above already prevents us from
+      // overwriting an in-flight anchor.
+      prependAnchorRef.current = {
+        scrollHeight: target.scrollHeight,
+        scrollTop: target.scrollTop,
+        firstMessageId:
+          messages[0]?.id !== undefined ? String(messages[0].id) : undefined,
+      };
       loadMoreMessages();
     }
     // Show/hide scroll down button
     const isNearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 200;
     setShowScrollDown(!isNearBottom);
-  }, [hasMoreMessages, loadingMore, loadMoreMessages]);
+  }, [hasMoreMessages, loadingMore, loadMoreMessages, messages]);
 
   // Search in chat
   useEffect(() => {

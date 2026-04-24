@@ -76,6 +76,10 @@ First-time VPS bootstrap (Traefik network + Traefik container) is documented in 
 
 ## Recent changes
 
+- 2026-04-24 — **DM scroll-anchor on "load older" pagination (Task #27):**
+  - `client/src/pages/chat.tsx` — added a `prependAnchorRef` + `justRestoredAnchorRef` pair and a new `useLayoutEffect` that runs *before* paint to pin the viewport whenever an older page lands. `handleScroll` snapshots `{ scrollHeight, scrollTop }` the moment we trigger `loadMoreMessages()`; the layout effect computes `scrollTop = newScrollHeight - oldScrollHeight + oldScrollTop` once React commits the prepended messages, so the message the user was reading stays at the same on-screen position with no flash. The existing auto-scroll-to-bottom effect now early-returns when the anchor was just restored, so it can't yank the viewport back to the latest message. Anchor is also cleared on `activeConversation` change to avoid wrong-direction jumps after a thread switch. Direction-agnostic (works for RTL + LTR), input-agnostic (mouse-wheel + touch).
+  - No hook signature change in `client/src/hooks/use-chat.tsx` — we infer "page loaded" from the `messages` reference change while the anchor is set, which is sufficient and avoids a new event channel.
+
 - 2026-04-24 — **In-game chat viewer-count pill (Task #26):**
   - `shared/socketio-events.ts` — new `chat:viewer_count` server→client event with `{ roomId, count }` payload, broadcast on every spectator join/leave/disconnect for the chat namespace.
   - `server/socketio/challenge-chat-bridge.ts` — exported `broadcastChallengeViewerCount(chatNs, roomId)` that counts sockets whose `socket.data.spectatorRoomIds` array includes the room (Redis-adapter-safe presence mirror) and emits the count to that room. Also keeps the array up-to-date on chat:join/leave.
