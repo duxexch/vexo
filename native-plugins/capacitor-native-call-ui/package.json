@@ -1,0 +1,40 @@
+{
+  "name": "capacitor-native-call-ui",
+  "version": "1.0.0",
+  "description": "Capacitor plugin that surfaces incoming/outgoing calls through the OS native call UI (CallKit on iOS, ConnectionService on Android).",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "files": [
+    "android/src/main/",
+    "android/build.gradle",
+    "ios/Sources",
+    "Package.swift",
+    "CapacitorNativeCallUI.podspec",
+    "dist/"
+  ],
+  "author": "VEX",
+  "license": "MIT",
+  "scripts": {
+    "verify:web": "echo \"no web build needed; pre-built\" && exit 0"
+  },
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "native",
+    "callkit",
+    "connectionservice",
+    "voip"
+  ],
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  }
+}

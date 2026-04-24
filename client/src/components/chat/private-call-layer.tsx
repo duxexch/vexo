@@ -18,6 +18,12 @@ import { useToast } from "@/hooks/use-toast";
 import { ensureCallRationale } from "@/lib/call-permission-rationale";
 import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
 import { registerCallActionHandler } from "@/lib/call-actions";
+import {
+  endNativeCall,
+  presentIncomingCall,
+  reportOutgoingCall,
+  updateNativeCallState,
+} from "@/lib/native-call-ui";
 import { Minimize2, Maximize2, Mic, MicOff, PhoneOff, Video, VideoOff, Loader2, Phone } from "lucide-react";
 
 type CallType = "voice" | "video";
@@ -150,14 +156,26 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
    * local-notification on mobile — from the call lifecycle. We ring while
    * an unanswered invite is sitting in the inbox and stop the moment the
    * call is accepted, declined, cancelled, or times out.
+   *
+   * Also presents the OS-native incoming-call UI (CallKit on iOS,
+   * ConnectionService on Android) so the call takes over the lock screen
+   * and accept/decline works on Bluetooth headsets and CarPlay/Auto.
+   * `startCallRingtone` defers to the native UI when it's available so
+   * we never double-ring.
    */
   useEffect(() => {
     const wantsRing = !!incomingInvite && phase === "ringing" && !activeCall;
-    if (wantsRing) {
+    if (wantsRing && incomingInvite) {
       startCallRingtone({
         title: t("rtcCall.incomingTitle"),
         body: t("rtcCall.incomingBody"),
         includeNativeNotification: true,
+      });
+      void presentIncomingCall({
+        callId: incomingInvite.sessionId,
+        handle: incomingInvite.callerId,
+        callType: incomingInvite.callType,
+        conversationId: incomingInvite.callerId,
       });
     } else {
       void stopCallRingtone();
@@ -167,6 +185,29 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
       void stopCallRingtone();
     };
   }, [activeCall, incomingInvite, phase, t]);
+
+  /**
+   * Mirror the active-call lifecycle to the OS-native UI: report
+   * outgoing calls so they show up in the system recents list, push
+   * connecting → connected updates so the lock-screen UI matches the
+   * in-app phase, and tear down the native UI when the call ends.
+   */
+  useEffect(() => {
+    if (activeCall && activeCall.isCaller && phase === "connecting") {
+      void reportOutgoingCall({
+        callId: activeCall.sessionId,
+        handle: activeCall.peerUserId,
+        callType: activeCall.callType,
+        conversationId: activeCall.peerUserId,
+      });
+    }
+    if (activeCall && (phase === "connecting" || phase === "connected")) {
+      void updateNativeCallState(
+        activeCall.sessionId,
+        phase === "connected" ? "connected" : "connecting",
+      );
+    }
+  }, [activeCall, phase]);
 
   const clearJoinTimeout = useCallback(() => {
     if (joinTimeoutRef.current !== null) {
@@ -498,10 +539,12 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
         const sessionId = String(data.sessionId || "");
         if (activeCallRef.current?.sessionId === sessionId) {
           cleanupAfterCall();
+          void endNativeCall(sessionId, "remoteEnded");
         }
         if (incomingInviteRef.current?.sessionId === sessionId) {
           setIncomingInvite(null);
           setPhase("idle");
+          void endNativeCall(sessionId, "missed");
         }
         emitCallStatusChanged();
         return;
@@ -904,6 +947,7 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
     const sessionId = incomingInvite.sessionId;
     setIncomingInvite(null);
     setPhase("idle");
+    void endNativeCall(sessionId, "declined");
     await endSessionApi(sessionId);
     emitCallStatusChanged();
   }, [emitCallStatusChanged, endSessionApi, incomingInvite]);
@@ -916,6 +960,7 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
 
     leaveVoiceRoom();
     cleanupAfterCall();
+    void endNativeCall(active.sessionId, "userHangup");
     await endSessionApi(active.sessionId);
     emitCallStatusChanged();
   }, [cleanupAfterCall, emitCallStatusChanged, endSessionApi, leaveVoiceRoom]);
@@ -929,19 +974,26 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     return registerCallActionHandler(async (ctx) => {
       const invite = incomingInviteRef.current;
-      if (!invite) return false;
-      if (ctx.callId && ctx.callId !== invite.sessionId) return false;
-      if (ctx.action === "accept") {
-        await acceptInvite();
-        return true;
+      const active = activeCallRef.current;
+      if (invite) {
+        if (ctx.callId && ctx.callId !== invite.sessionId) return false;
+        if (ctx.action === "accept") {
+          await acceptInvite();
+          return true;
+        }
+        if (ctx.action === "decline") {
+          await rejectInvite();
+          return true;
+        }
       }
-      if (ctx.action === "decline") {
-        await rejectInvite();
+      if (active && ctx.action === "hangup") {
+        if (ctx.callId && ctx.callId !== active.sessionId) return false;
+        await endCurrentCall();
         return true;
       }
       return false;
     });
-  }, [acceptInvite, rejectInvite]);
+  }, [acceptInvite, endCurrentCall, rejectInvite]);
 
   const minimizeCallWidget = useCallback(() => {
     setIsMinimized(true);

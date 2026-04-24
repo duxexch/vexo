@@ -3,6 +3,12 @@ import { getRtcSocket } from "@/lib/socket-io-client";
 import { ensureCallRationale } from "@/lib/call-permission-rationale";
 import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
 import { registerCallActionHandler } from "@/lib/call-actions";
+import {
+  endNativeCall,
+  presentIncomingCall,
+  reportOutgoingCall,
+  updateNativeCallState,
+} from "@/lib/native-call-ui";
 import type { CallTier, CallType, IceServersResponse } from "@shared/socketio-events";
 
 export type CallStatus =
@@ -426,43 +432,87 @@ export function useCallSession(): UseCallSessionReturn {
    */
   useEffect(() => {
     return registerCallActionHandler(async (ctx) => {
-      if (!incoming) return false;
-      if (ctx.callId && ctx.callId !== incoming.sessionId) return false;
-      if (ctx.action === "accept") {
-        try {
-          await acceptIncoming();
-        } catch {
-          // acceptIncoming already dispatched rtc:end on media error.
+      const activeSessionId = ctxRef.current?.sessionId;
+      if (incoming) {
+        if (ctx.callId && ctx.callId !== incoming.sessionId) return false;
+        if (ctx.action === "accept") {
+          try {
+            await acceptIncoming();
+          } catch {
+            // acceptIncoming already dispatched rtc:end on media error.
+          }
+          return true;
         }
-        return true;
+        if (ctx.action === "decline") {
+          declineIncoming();
+          return true;
+        }
       }
-      if (ctx.action === "decline") {
-        declineIncoming();
+      if (activeSessionId && ctx.action === "hangup") {
+        if (ctx.callId && ctx.callId !== activeSessionId) return false;
+        hangup("native_ui_hangup");
         return true;
       }
       return false;
     });
-  }, [acceptIncoming, declineIncoming, incoming]);
+  }, [acceptIncoming, declineIncoming, hangup, incoming]);
 
   /**
    * Drive the ringtone purely off `status` so we never miss a transition.
    * `ringing-in`  → loud ring + native local-notification (incoming call).
    * `ringing-out` → quieter web-only "ringback" tone for the caller.
    * Anything else → silence.
+   *
+   * Also drives the OS-native call UI (CallKit / ConnectionService) so
+   * incoming calls take over the lock screen and outgoing calls show up
+   * in the system recents list. `startCallRingtone` itself defers to
+   * the native UI when it's available so we never double-ring.
    */
   useEffect(() => {
-    if (status === "ringing-in") {
+    if (status === "ringing-in" && incoming) {
       startCallRingtone({ includeNativeNotification: true });
+      void presentIncomingCall({
+        callId: incoming.sessionId,
+        handle: incoming.fromUsername,
+        callType: incoming.callType,
+        conversationId: incoming.fromUserId,
+      });
     } else if (status === "ringing-out") {
       startCallRingtone({ includeNativeNotification: false });
+      const ctx = ctxRef.current;
+      if (ctx) {
+        void reportOutgoingCall({
+          callId: ctx.sessionId,
+          handle: ctx.peerUserId,
+          callType: ctx.callType,
+          conversationId: ctx.peerUserId,
+        });
+      }
     } else {
       void stopCallRingtone();
+    }
+
+    if (status === "connecting" || status === "connected") {
+      const ctx = ctxRef.current;
+      if (ctx) {
+        void updateNativeCallState(ctx.sessionId, status === "connected" ? "connected" : "connecting");
+      }
+    }
+
+    if (status === "ended" || status === "failed" || status === "idle") {
+      const ctx = ctxRef.current;
+      const sessionId = ctx?.sessionId || incoming?.sessionId;
+      if (sessionId) {
+        const reason =
+          status === "failed" ? "failed" : status === "ended" ? "remoteEnded" : "userHangup";
+        void endNativeCall(sessionId, reason);
+      }
     }
 
     return () => {
       void stopCallRingtone();
     };
-  }, [status]);
+  }, [status, incoming]);
 
   return {
     status,

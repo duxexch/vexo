@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { isNativeCallUIAvailable, isNativeCallUIAvailableSync } from "@/lib/native-call-ui";
 
 const LocalNotifications = registerPlugin<any>("LocalNotifications");
 
@@ -280,6 +281,12 @@ async function startNativeRingtone(options: { title: string; body: string }): Pr
     if (activeNativeHandle) return;
     if (!Capacitor.isNativePlatform()) return;
 
+    // When the OS-native call UI plugin (CallKit / ConnectionService) is
+    // available, it takes over the lock-screen ring + ringtone — falling
+    // back to a local-notification ringer here would double-ring and lose
+    // accept/decline. Skip in that case.
+    if (await isNativeCallUIAvailable()) return;
+
     await ensureNativeChannel();
 
     const handle: NativeRingerHandle = { cancelled: false, intervalId: null };
@@ -340,4 +347,13 @@ export async function stopCallRingtone(): Promise<void> {
 
 export function isCallRingtoneActive(): boolean {
     return !!activeOscillator || !!activeNativeHandle || !!activeAudioElement;
+}
+
+/**
+ * Synchronous best-effort accessor used by tests and observability —
+ * `true` when a previous `isNativeCallUIAvailable()` probe has cached an
+ * affirmative answer. Mirrors the helper exported from `native-call-ui`.
+ */
+export function isNativeCallUIRingerActive(): boolean {
+    return isNativeCallUIAvailableSync();
 }

@@ -80,6 +80,17 @@ const config: CapacitorConfig = {
         twitter: false,
       },
     },
+    NativeCallUI: {
+      // Display name shown for the call provider in the OS UI (CallKit
+      // settings / Android phone account picker). Localization is wired
+      // through the JS layer when present.
+      providerName: 'VEX',
+      supportsVideo: true,
+      includesCallsInRecents: true,
+      // Drop the audio session back to the app after a call ends so we
+      // don't keep the phone speaker pinned to "in-call" routing.
+      ringtoneSound: 'notification.wav',
+    },
   },
 
   ios: {

@@ -15,7 +15,7 @@
  * the dispatcher can try the next manager.
  */
 
-export type CallAction = "accept" | "decline";
+export type CallAction = "accept" | "decline" | "hangup";
 
 export interface CallActionContext {
     action: CallAction;
