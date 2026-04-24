@@ -191,6 +191,9 @@ async function scan() {
       // key (e.g. a game toggled inactive in admin) — exactly the catalog
       // crash the validator caught. Force every per-key lookup to go
       // through `resolveGameConfigEntry()` so the fallback layer is honored.
+      // We allow access to the `.chess` literal (used as the last-resort
+      // default after `resolveGameConfigEntry` returns undefined) but block
+      // anything indexing with `[`.
       const directLookupRe =
         /\b(?:gameConfig|GAME_CONFIG|multiplayerGameConfig)\s*\[/g;
       const lookupMatch = directLookupRe.exec(source);
@@ -212,6 +215,45 @@ async function scan() {
   pass(`scanned ${SCAN_ROOTS.length} roots; no game-keyed Lucide imports outside central config`);
   pass(`scanned ${SCAN_ROOTS.length} roots; no direct bracket-access lookups on game config maps`);
   pass(`no legacy GAME_CATALOG-style hardcoded icon+gradient+accentColor blocks found`);
+
+  // ─── Acceptance-critical surface coverage ─────────────────────────────
+  // Modal/dialog and list surfaces that render a game's identity (icon /
+  // name / accent) MUST source it via <GameConfigIcon /> so admin Visual
+  // Identity changes propagate. If any of these files stops importing
+  // GameConfigIcon, it has almost certainly regressed back to a hardcoded
+  // icon — fail loudly.
+  const REQUIRED_GAMECONFIGICON_FILES = [
+    "client/src/pages/multiplayer.tsx",
+    "client/src/pages/challenges.tsx",
+    "client/src/pages/game-lobby.tsx",
+    "client/src/pages/game-history.tsx",
+    "client/src/pages/challenge-game.tsx",
+    "client/src/pages/challenge-watch.tsx",
+    "client/src/pages/player-profile.tsx",
+    "client/src/pages/games-catalog.tsx",
+    "client/src/components/games/GameStartCinematic.tsx",
+  ];
+  for (const rel of REQUIRED_GAMECONFIGICON_FILES) {
+    const abs = path.join(REPO_ROOT, rel);
+    let source: string;
+    try {
+      source = await fs.readFile(abs, "utf8");
+    } catch {
+      // File renamed / removed — surface it so the allowlist stays honest.
+      fail(
+        `${rel}: required acceptance-critical surface is missing`,
+        `Either restore the file or remove it from REQUIRED_GAMECONFIGICON_FILES in this smoke.`,
+      );
+      continue;
+    }
+    if (!/from\s+["']@\/components\/GameConfigIcon["']/.test(source)) {
+      fail(
+        `${rel}: acceptance-critical surface does not import GameConfigIcon`,
+        `Game-identity rendering on this surface must go through <GameConfigIcon /> so admin Visual Identity uploads propagate. Use buildGameConfig + resolveGameConfigEntry to obtain the entry.`,
+      );
+    }
+  }
+  pass(`scanned ${REQUIRED_GAMECONFIGICON_FILES.length} acceptance-critical surfaces; all import GameConfigIcon`);
 }
 
 async function main() {
