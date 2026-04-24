@@ -55,6 +55,17 @@ function createClientMessageId(): string {
 }
 
 function buildOutgoingPreview(content: string, messageType: string): string {
+  if (messageType === "call_missed") {
+    // Don't leak the JSON envelope into the conversation list — render a
+    // human-readable preview that matches the chat bubble (Task #55).
+    try {
+      const parsed = JSON.parse(content || "{}");
+      if (parsed?.callType === "video") return "[missed video call]";
+      return "[missed voice call]";
+    } catch {
+      return "[missed call]";
+    }
+  }
   const trimmed = content.trim();
   if (trimmed.length > 0) {
     return trimmed.slice(0, 120);
@@ -145,7 +156,8 @@ function buildConversationFromReceiver(
 }
 
 export function useChat(): UseChatReturn {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const currentUserIdRef = useRef<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const activeConversationRef = useRef<string | null>(null);
@@ -174,6 +186,13 @@ export function useChat(): UseChatReturn {
   useEffect(() => {
     activeConversationRef.current = state.activeConversation;
   }, [state.activeConversation]);
+
+  // Mirror the auth user id into a ref so the WS handler can identify the
+  // local participant without re-binding (Task #55 — needed to derive the
+  // "other user" for events that arrive on the caller side too).
+  useEffect(() => {
+    currentUserIdRef.current = user?.id ? String(user.id) : null;
+  }, [user?.id]);
 
   const fetchConversations = useCallback(async () => {
     if (!token) return;
@@ -463,10 +482,27 @@ export function useChat(): UseChatReturn {
                 prev.activeConversation === newMessage.senderId ||
                 prev.activeConversation === newMessage.receiverId;
 
-              const otherUserId = String(newMessage.senderId || "");
+              // Task #55 — synthetic events (e.g. missed-call entries) are
+              // pushed to BOTH participants. The "other user" depends on
+              // which side is receiving the event: when the local user is
+              // the sender, the other party is the receiver, not vice versa.
+              const localUserId = currentUserIdRef.current;
+              const senderIdStr = String(newMessage.senderId || "");
+              const receiverIdStr = String(newMessage.receiverId || "");
+              const otherUserId =
+                localUserId && senderIdStr === localUserId
+                  ? receiverIdStr
+                  : senderIdStr;
               const existingConversationIndex = prev.conversations.findIndex((conv) => conv.otherUserId === otherUserId);
 
               let nextConversations = prev.conversations;
+              // Snap a new conversation row in only when the embedded sender
+              // snapshot actually describes the *other* user. On the caller
+              // side of a synthetic event (e.g. their own missed-call entry,
+              // Task #55) the sender is themselves, so we'd otherwise show
+              // a self-conversation. In that case, fetch the real list.
+              const senderDescribesOtherUser =
+                !!newMessage.sender && String(newMessage.sender.id) === otherUserId;
 
               if (existingConversationIndex >= 0) {
                 nextConversations = prev.conversations.map((conv, idx) => {
@@ -477,7 +513,7 @@ export function useChat(): UseChatReturn {
                     unreadCount: isActiveChat ? 0 : conv.unreadCount + 1,
                   };
                 });
-              } else if (newMessage.sender && otherUserId) {
+              } else if (senderDescribesOtherUser && newMessage.sender) {
                 nextConversations = [
                   {
                     otherUserId,
@@ -494,6 +530,13 @@ export function useChat(): UseChatReturn {
                   },
                   ...prev.conversations,
                 ];
+              } else if (otherUserId) {
+                // No local snapshot to build the conversation entry from —
+                // ask the server for the canonical list. Defer to avoid
+                // mutating state inside the same setState pass.
+                queueMicrotask(() => {
+                  void fetchConversations();
+                });
               }
 
               nextConversations = sortConversationsByLastMessage(nextConversations);

@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Send, Check, CheckCheck, Loader2, AlertCircle, Search, Timer, ArrowLeft, Shield, Lock, Paperclip, Reply, Trash2, Pencil, Smile, X, CornerDownRight, Mic, MicOff, ChevronDown, Languages, Palette, Phone, Video, PhoneCall, PhoneOff, MoreHorizontal, Bell, BellOff } from "lucide-react";
+import { MessageCircle, Send, Check, CheckCheck, Loader2, AlertCircle, Search, Timer, ArrowLeft, Shield, Lock, Paperclip, Reply, Trash2, Pencil, Smile, X, CornerDownRight, Mic, MicOff, ChevronDown, Languages, Palette, Phone, Video, PhoneCall, PhoneOff, MoreHorizontal, Bell, BellOff, PhoneMissed } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -98,6 +98,33 @@ function formatDateSeparator(dateValue: string | Date, t: (key: string, params?:
 function getInitials(user: { firstName?: string | null; lastName?: string | null; username?: string }) {
   if (user.firstName && user.lastName) return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
   return user.username?.substring(0, 2).toUpperCase() || "??";
+}
+
+/**
+ * Task #55 — Decode the JSON envelope stored in `chat_messages.content`
+ * for missed-call entries. Returns null if the row isn't actually a
+ * missed-call event (so legacy plain-text rows degrade gracefully to the
+ * normal text render path).
+ */
+interface MissedCallEntry {
+  callType: "voice" | "video";
+  outcome: "missed" | "declined";
+  sessionId: string;
+}
+
+function parseMissedCallEntry(content: string | null | undefined): MissedCallEntry | null {
+  if (!content) return null;
+  try {
+    const parsed = JSON.parse(content);
+    if (!parsed || parsed.kind !== "call_missed") return null;
+    return {
+      callType: parsed.callType === "video" ? "video" : "voice",
+      outcome: parsed.outcome === "declined" ? "declined" : "missed",
+      sessionId: typeof parsed.sessionId === "string" ? parsed.sessionId : "",
+    };
+  } catch {
+    return null;
+  }
 }
 
 const VOICE_MIME_CANDIDATES = [
@@ -1110,11 +1137,25 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                         </div>
                         <div className="flex items-start justify-between gap-2">
                           <p className="line-clamp-2 text-sm text-muted-foreground leading-snug break-words [overflow-wrap:anywhere]">
-                            {conv.lastMessage?.messageType === "image" ? t("chat.photo") :
-                              conv.lastMessage?.messageType === "video" ? t("chat.video") :
-                                conv.lastMessage?.messageType === "voice" ? t("chat.voiceMsg") :
-                                  conv.lastMessage?.messageType === "deleted" ? t("chat.deletedMessage") :
-                                    conv.lastMessage?.content || ""}
+                            {(() => {
+                              // Task #55 — Render missed-call rows in the
+                              // conversation list as a localized "Missed
+                              // call" line instead of the raw JSON envelope.
+                              if (conv.lastMessage?.messageType === "call_missed") {
+                                const entry = parseMissedCallEntry(conv.lastMessage?.content);
+                                if (entry) {
+                                  return entry.callType === "video"
+                                    ? t("chat.missedVideoCall")
+                                    : t("chat.missedVoiceCall");
+                                }
+                                return t("chat.missedVoiceCall");
+                              }
+                              if (conv.lastMessage?.messageType === "image") return t("chat.photo");
+                              if (conv.lastMessage?.messageType === "video") return t("chat.video");
+                              if (conv.lastMessage?.messageType === "voice") return t("chat.voiceMsg");
+                              if (conv.lastMessage?.messageType === "deleted") return t("chat.deletedMessage");
+                              return conv.lastMessage?.content || "";
+                            })()}
                           </p>
                           {conv.unreadCount > 0 && (
                             <Badge variant="default" className="h-5 min-w-5 text-xs justify-center shrink-0">
@@ -1522,6 +1563,38 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                       const repliedMsg = findReplyMessage(msg.replyToId ?? undefined);
                       const reactions = msg.reactions || {};
                       const reactionEntries = Object.entries(reactions);
+
+                      // Task #55 — Missed-call entries render as a centered
+                      // system row, not a normal bubble. Tapping the row
+                      // re-initiates the call to the same peer & call type.
+                      if (msg.messageType === "call_missed") {
+                        const entry = parseMissedCallEntry(msg.content);
+                        const callType: "voice" | "video" = entry?.callType || "voice";
+                        const label = callType === "video"
+                          ? t("chat.missedVideoCall")
+                          : t("chat.missedVoiceCall");
+                        const timeLabel = formatMessageTime(msg.createdAt, t);
+                        const recallLabel = t("chat.callBack");
+                        return (
+                          <div key={msg.id} className="flex justify-center my-2">
+                            <button
+                              type="button"
+                              onClick={() => { void handleStartCallSession(callType); }}
+                              className={cn(
+                                "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs",
+                                "bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-300",
+                                "hover:bg-rose-500/20 transition-colors",
+                              )}
+                              aria-label={`${label} · ${recallLabel}`}
+                            >
+                              <PhoneMissed className="h-3.5 w-3.5" />
+                              <span className="font-medium">{label}</span>
+                              <span className="opacity-70">· {timeLabel}</span>
+                              <span className="ms-1 underline opacity-90">{recallLabel}</span>
+                            </button>
+                          </div>
+                        );
+                      }
 
                       // Show avatar for consecutive messages from same sender
                       const showAvatar = mi === 0 || group.messages[mi - 1]?.senderId !== msg.senderId;

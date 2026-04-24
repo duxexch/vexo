@@ -23,6 +23,8 @@ import { eq } from "drizzle-orm";
 import { deliverRealtimeChallengeChat, type ChatNamespace } from "./challenge-chat-bridge";
 import { deliverRealtimeDirectMessage } from "./direct-message-bridge";
 import { challengeGameRooms } from "../websocket/shared";
+import { getRedisClient } from "../lib/redis";
+import { insertMissedCallChatMessage } from "../lib/chat-call-event";
 
 interface AuthedSocketData {
   userId: string;
@@ -479,6 +481,80 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
      */
     const callRoom = (sessionId: string) => `call:${sessionId}`;
 
+    /**
+     * Task #55 — Track legacy (in-game) call sessions in Redis so we can
+     * tell a missed call apart from a normal hang-up at rtc:end time and
+     * post a "Missed call" entry into the DM thread for both participants.
+     * The REST DM-call path (server/routes/chat-features/calls.ts) records
+     * its own state in Postgres; this keyspace only covers the rtc:* path.
+     */
+    const rtcSessionKey = (sessionId: string) => `rtc:session:${sessionId}`;
+    const RTC_SESSION_TTL_SECONDS = 60 * 60; // 1h covers any plausible call.
+
+    interface RtcSessionState {
+      callerId: string;
+      receiverId: string;
+      callType: "voice" | "video";
+      connected: 0 | 1;
+    }
+
+    const recordRtcInvite = async (state: RtcSessionState, sessionId: string) => {
+      try {
+        await getRedisClient().set(
+          rtcSessionKey(sessionId),
+          JSON.stringify(state),
+          "EX",
+          RTC_SESSION_TTL_SECONDS,
+        );
+      } catch {
+        // Without Redis we can't detect missed calls on this path; the
+        // chat thread simply won't get a synthetic entry. The call itself
+        // still works because nothing else depends on this state.
+      }
+    };
+
+    const loadRtcSession = async (sessionId: string): Promise<RtcSessionState | null> => {
+      try {
+        const raw = await getRedisClient().get(rtcSessionKey(sessionId));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed?.callerId || !parsed?.receiverId) return null;
+        return {
+          callerId: String(parsed.callerId),
+          receiverId: String(parsed.receiverId),
+          callType: parsed.callType === "video" ? "video" : "voice",
+          connected: parsed.connected === 1 ? 1 : 0,
+        };
+      } catch {
+        return null;
+      }
+    };
+
+    const markRtcConnected = async (sessionId: string) => {
+      const state = await loadRtcSession(sessionId);
+      if (!state || state.connected === 1) return;
+      state.connected = 1;
+      try {
+        await getRedisClient().set(
+          rtcSessionKey(sessionId),
+          JSON.stringify(state),
+          "EX",
+          RTC_SESSION_TTL_SECONDS,
+        );
+      } catch {
+        // Best-effort; worst case we'd post a false "missed" entry which
+        // the dedupe key on `sessionId` keeps to a single row at most.
+      }
+    };
+
+    const clearRtcSession = async (sessionId: string) => {
+      try {
+        await getRedisClient().del(rtcSessionKey(sessionId));
+      } catch {
+        // Key will TTL out on its own.
+      }
+    };
+
     socket.on("rtc:invite", async (payload, ack) => {
       const sessionId = String(payload?.sessionId || "").slice(0, 64);
       const toUserId = String(payload?.toUserId || "").slice(0, 64);
@@ -546,6 +622,13 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       // Caller joins the call room immediately; callee will join on incoming
       await socket.join(callRoom(sessionId));
 
+      // Stash the call's identity so rtc:end can tell missed-vs-hangup apart
+      // and post a chat thread entry for the right pair of users (Task #55).
+      await recordRtcInvite(
+        { callerId: userId, receiverId: toUserId, callType, connected: 0 },
+        sessionId,
+      );
+
       emitToUser(toUserId, "rtc:incoming", {
         sessionId,
         toUserId,
@@ -565,6 +648,13 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       if (!(await rateLimitOk(`sio:rtc:sdp:${userId}`, 30, 60))) return;
       // Ensure both sides are in the call room (callee joins on first SDP)
       await socket.join(callRoom(sessionId));
+      // Task #55 — An SDP from the receiver back to the caller (i.e. an
+      // "answer") is the cleanest signal that the call actually connected.
+      // Mark it so the rtc:end handler can tell missed apart from hangup.
+      const session = await loadRtcSession(sessionId);
+      if (session && session.receiverId === userId && session.connected === 0) {
+        await markRtcConnected(sessionId);
+      }
       emitToUser(toUserId, "rtc:sdp", { sessionId, fromUserId: userId, sdp: payload.sdp });
     });
 
@@ -598,11 +688,41 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       }
       // Vacate everyone from the room so it gets garbage-collected
       rtcNs.in(callRoom(sessionId)).socketsLeave(callRoom(sessionId));
+
+      // Task #55 — If the call ended without ever connecting, drop a
+      // "Missed call" entry into the DM thread for both participants. The
+      // helper dedupes on `sessionId`, so even if the caller and callee
+      // both fire rtc:end (which they often do) only one row is inserted.
+      const session = await loadRtcSession(sessionId);
+      if (session && session.connected === 0) {
+        // `media_denied` / `sdp_failed` are technical failures that aren't
+        // really "missed" from a human perspective — skip those so we don't
+        // pollute the chat with infrastructure noise.
+        const reason = typeof payload?.reason === "string" ? payload.reason : "";
+        const skipReasons = new Set(["media_denied", "sdp_failed"]);
+        if (!skipReasons.has(reason)) {
+          const outcome = userId === session.receiverId ? "declined" : "missed";
+          await insertMissedCallChatMessage({
+            callerId: session.callerId,
+            receiverId: session.receiverId,
+            callType: session.callType,
+            outcome,
+            sessionId,
+          }).catch(() => {
+            // Helper already swallows storage errors; this catch keeps the
+            // signaling path resilient if the DB or Redis hiccups.
+          });
+        }
+      }
+      await clearRtcSession(sessionId);
     });
 
-    socket.on("rtc:tier", (payload) => {
+    socket.on("rtc:tier", async (payload) => {
       const sessionId = String(payload?.sessionId || "").slice(0, 64);
       if (!sessionId || !payload?.tier) return;
+      // A tier event is fired from inside an established call, so use it as
+      // a defensive secondary signal that the call connected (Task #55).
+      await markRtcConnected(sessionId);
       rtcNs.to(callRoom(sessionId)).emit("rtc:tier", {
         sessionId,
         tier: payload.tier,

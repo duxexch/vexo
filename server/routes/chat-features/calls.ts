@@ -8,6 +8,7 @@ import { clients } from "../../websocket/shared";
 import { sendNotification } from "../../websocket/notifications";
 import { sendCallVoipPush } from "../../lib/voip-push";
 import { logger } from "../../lib/logger";
+import { insertMissedCallChatMessage } from "../../lib/chat-call-event";
 import type { AuthRequest } from "../middleware";
 import { checkRateLimit, getConfigDecimal, getErrorMessage, type AuthMiddleware } from "./helpers";
 
@@ -83,7 +84,7 @@ async function cancelStaleUnconnectedCallSessions(participantUserIds: string[]):
 
   const staleBefore = new Date(Date.now() - CALL_RING_TIMEOUT_SECONDS * 1000);
 
-  await db
+  const cancelledSessions = await db
     .update(chatCallSessions)
     .set({
       status: "cancelled",
@@ -97,7 +98,29 @@ async function cancelStaleUnconnectedCallSessions(participantUserIds: string[]):
         lt(chatCallSessions.startedAt, staleBefore),
         or(...participantClauses),
       ),
-    );
+    )
+    .returning({
+      id: chatCallSessions.id,
+      callerId: chatCallSessions.callerId,
+      receiverId: chatCallSessions.receiverId,
+      callType: chatCallSessions.callType,
+    });
+
+  // Drop a "Missed call" chat entry into the DM thread for any timed-out
+  // session — Task #55. The helper is idempotent on `sessionId` so racing
+  // with the user-initiated end path will only emit once.
+  for (const session of cancelledSessions) {
+    void insertMissedCallChatMessage({
+      callerId: session.callerId,
+      receiverId: session.receiverId,
+      callType: session.callType === "video" ? "video" : "voice",
+      outcome: "missed",
+      sessionId: session.id,
+    }).catch(() => {
+      // Logged as a chat insert failure inside the helper; do not fail
+      // the cleanup pass on a single bad session.
+    });
+  }
 }
 
 export function registerCallRoutes(app: Express, authMiddleware: AuthMiddleware): void {
@@ -501,6 +524,24 @@ export function registerCallRoutes(app: Express, authMiddleware: AuthMiddleware)
       const isMissedCall = resultPayload.status === "cancelled";
       const endedLabelEn = resultPayload.callType === "video" ? "Video call" : "Voice call";
       const endedLabelAr = resultPayload.callType === "video" ? "مكالمة الفيديو" : "المكالمة الصوتية";
+
+      // Task #55 — Drop a "Missed call" entry into the DM thread when a
+      // call ends without ever connecting. Receiver-declines, caller-
+      // cancels-while-ringing, and timeouts all land here. The helper
+      // dedupes on `sessionId` so racing termination paths can't post
+      // the entry twice.
+      if (isMissedCall) {
+        const outcome = actorUserId === resultPayload.receiverId ? "declined" : "missed";
+        void insertMissedCallChatMessage({
+          callerId: resultPayload.callerId,
+          receiverId: resultPayload.receiverId,
+          callType: resultPayload.callType === "video" ? "video" : "voice",
+          outcome,
+          sessionId: resultPayload.sessionId,
+        }).catch(() => {
+          // Already isolated inside the helper; do not block the response.
+        });
+      }
 
       void sendNotification(peerUserId, {
         type: "system",
