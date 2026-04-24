@@ -57,7 +57,7 @@ import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import { useGameFullscreen } from "@/hooks/use-game-fullscreen";
 import { useSocketChat } from "@/hooks/use-socket-chat";
-import type { ChatErrorCode } from "@shared/socketio-events";
+import { isChatTransportErrorCode, type ChatErrorCode } from "@shared/socketio-events";
 import {
   Clock,
   Trophy,
@@ -244,10 +244,12 @@ export default function ChallengeWatchPage() {
     roomId: challengeId ? `challenge:${challengeId}` : "",
     onError: useCallback(
       (info: { code: ChatErrorCode; reason?: string }) => {
-        // Typed Partial<Record<ChatErrorCode, ...>> so adding a new
-        // server-side code without extending shared/socketio-events.ts
-        // is a compile error here.
-        const map: Partial<Record<ChatErrorCode, string>> = {
+        // Typed as the FULL Record<ChatErrorCode, ...> (not Partial) so
+        // adding/removing a code in shared/socketio-events.ts forces an
+        // explicit decision here at compile time. `null` means "use the
+        // generic fallback toast"; "" means "silent — no toast".
+        const fallback = language === "ar" ? "تعذّر إرسال الرسالة" : "Could not send message";
+        const map: Record<ChatErrorCode, string | null> = {
           rate_limit: language === "ar"
             ? "أبطئ قليلًا — رسائل كثيرة جدًا"
             : "Slow down — too many messages",
@@ -261,8 +263,15 @@ export default function ChallengeWatchPage() {
           disconnected: language === "ar"
             ? "الاتصال غير جاهز الآن"
             : "Connection is not ready right now",
+          invalid: null,
+          not_in_room: null,
+          no_room: null,
+          failed: null,
+          server: null,
+          auth: null,
+          forbidden: null,
         };
-        const msg = map[info.code] ?? (language === "ar" ? "تعذّر إرسال الرسالة" : "Could not send message");
+        const msg = map[info.code] ?? fallback;
         if (!msg) return;
         toast({
           title: language === "ar" ? "خطأ" : "Error",
@@ -1429,8 +1438,14 @@ export default function ChallengeWatchPage() {
         return;
       }
 
-      await spectatorRealtimeChat.send(safeMessage);
-      setMobileChatInput("");
+      // Task #15: classify ack failures into transport vs semantic via the
+      // shared `CHAT_TRANSPORT_ERROR_CODES` set (single source of truth).
+      // Keep the typed message in the input on transport-level failures so
+      // the user can retry once the connection comes back.
+      const ack = await spectatorRealtimeChat.send(safeMessage);
+      if (ack.ok || !isChatTransportErrorCode(ack.error)) {
+        setMobileChatInput("");
+      }
     },
     [language, spectatorRealtimeChat, toast, user],
   );

@@ -116,6 +116,21 @@ export const CHAT_TRANSPORT_ERROR_CODES = [
 
 export type ChatTransportErrorCode = (typeof CHAT_TRANSPORT_ERROR_CODES)[number];
 
+/**
+ * Type guard: true when the given chat error code represents a transport-level
+ * failure (the server was never reached or the room was never joined). Use
+ * this in send paths to distinguish "we never got there" from semantic
+ * server-side rejections (rate_limit, no_session, spectator_not_seated, ...).
+ *
+ * Backed by `CHAT_TRANSPORT_ERROR_CODES` so the runtime list and the type
+ * narrowing stay in sync via the `as const satisfies` constraint above.
+ */
+export function isChatTransportErrorCode(
+  code: ChatErrorCode | undefined,
+): code is ChatTransportErrorCode {
+  return !!code && (CHAT_TRANSPORT_ERROR_CODES as readonly string[]).includes(code);
+}
+
 export interface ChatErrorPayload {
   code: ChatErrorCode;
   message: string;

@@ -31,7 +31,7 @@ import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
 import { useCall } from "@/components/calls/CallSessionProvider";
 import { CallButton } from "@/components/calls/CallButton";
 import { useSocketChat } from "@/hooks/use-socket-chat";
-import type { ChatErrorCode } from "@shared/socketio-events";
+import { isChatTransportErrorCode, type ChatErrorCode } from "@shared/socketio-events";
 import {
   adaptDominoBoardMoveToEngine,
   extractDominoHandFromPlayerView,
@@ -308,10 +308,12 @@ export default function ChallengeGamePage() {
         // Surface server-side chat failures (rate_limit, no_session,
         // spectator_not_seated, server, etc.) so the user knows their
         // message was rejected. Without this, send() would silently drop.
-        // Typed as Partial<Record<ChatErrorCode, ...>> so adding a new
-        // server-side code without extending shared/socketio-events.ts
-        // is a compile error here.
-        const map: Partial<Record<ChatErrorCode, string>> = {
+        // Typed as the FULL Record<ChatErrorCode, ...> (not Partial) so
+        // adding/removing a code in shared/socketio-events.ts forces an
+        // explicit decision here at compile time. `null` means "use the
+        // generic fallback toast"; "" means "silent — no toast".
+        const fallback = language === "ar" ? "تعذّر إرسال الرسالة" : "Could not send message";
+        const map: Record<ChatErrorCode, string | null> = {
           rate_limit: language === "ar"
             ? "أبطئ قليلًا — رسائل كثيرة جدًا"
             : "Slow down — too many messages",
@@ -325,8 +327,15 @@ export default function ChallengeGamePage() {
           disconnected: language === "ar"
             ? "الاتصال غير جاهز الآن"
             : "Connection is not ready right now",
+          invalid: null,
+          not_in_room: null,
+          no_room: null,
+          failed: null,
+          server: null,
+          auth: null,
+          forbidden: null,
         };
-        const msg = map[info.code] ?? (language === "ar" ? "تعذّر إرسال الرسالة" : "Could not send message");
+        const msg = map[info.code] ?? fallback;
         if (!msg) return;
         toast({
           title: language === "ar" ? "خطأ" : "Error",
@@ -2114,11 +2123,21 @@ export default function ChallengeGamePage() {
       // realtime Socket.IO channel. The legacy WS `challenge_chat` handler
       // has been removed server-side, so any fallback here would just be
       // dropped on the floor. The hook surfaces transport/semantic errors
-      // via its own `chat:error` toast, so we just await + return.
-      await realtimeChat.send(trimmed, {
+      // via its own `chat:error` toast.
+      //
+      // Task #15: classify ack failures into transport vs semantic using the
+      // shared `CHAT_TRANSPORT_ERROR_CODES` set so future fallback gating
+      // (e.g. retry only on transport failures) has a single source of truth.
+      const ack = await realtimeChat.send(trimmed, {
         isQuickMessage,
         quickMessageKey,
       });
+      if (!ack.ok && isChatTransportErrorCode(ack.error)) {
+        // Transport-level failure (no_room / disconnected / not_in_room) —
+        // server was never reached. Restore the input so the user can retry
+        // once the connection comes back instead of losing what they typed.
+        setMessageInput(message);
+      }
     },
     [realtimeChat],
   );
