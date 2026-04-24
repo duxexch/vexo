@@ -20,6 +20,8 @@ import { storage } from "../storage";
 import { db } from "../db";
 import { challenges } from "../../shared/schema";
 import { eq } from "drizzle-orm";
+import { deliverRealtimeChallengeChat } from "./challenge-chat-bridge";
+import { challengeGameRooms } from "../websocket/shared";
 
 interface AuthedSocketData {
   userId: string;
@@ -252,6 +254,10 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       const roomId = String(payload?.roomId || "").slice(0, 128);
       const text = String(payload?.text || "").slice(0, 500).trim();
       const clientMsgId = payload?.clientMsgId ? String(payload.clientMsgId).slice(0, 64) : undefined;
+      const isQuickMessage = Boolean(payload?.isQuickMessage);
+      const quickMessageKey = payload?.quickMessageKey
+        ? String(payload.quickMessageKey).slice(0, 50)
+        : undefined;
 
       if (!roomId || !text) {
         ack?.({ ok: false, error: "invalid" });
@@ -263,12 +269,11 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
         return;
       }
 
-      // Task #10: spectators are read-only on the realtime channel.
-      // They may join/listen for chat:message events but must not send.
+      // Role must have been stamped by chat:join. Missing role means the
+      // client is trying to send into a room it never joined.
       const role = socket.data.roomRoles?.get(roomId);
-      if (role !== "player") {
-        socket.emit("chat:error", { code: "spectator_readonly", message: "Spectators cannot send chat" });
-        ack?.({ ok: false, error: "spectator_readonly" });
+      if (!role) {
+        ack?.({ ok: false, error: "not_in_room" });
         return;
       }
 
@@ -278,6 +283,70 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
         return;
       }
 
+      // Task #9: outgoing chat for challenge rooms is now the authoritative
+      // path. We persist + apply the legacy filter pipeline + reverse-mirror
+      // to legacy WS clients so behavior is identical regardless of which
+      // transport the sender or recipients use. Spectator chat is allowed
+      // here (Task #9 lifts the Task #10 spectator_readonly gate); the
+      // bridge stamps `isSpectator` on the broadcast so the UI can label it.
+      if (roomId.startsWith("challenge:")) {
+        const challengeId = roomId.slice("challenge:".length);
+
+        // Hardening: chat:join's authz only checks that the user *could* be a
+        // spectator (visibility + allowSpectators). It does NOT prove they
+        // actually claimed a spectate seat through the legacy spectate flow.
+        // For spectators, require concrete presence in the live game room's
+        // spectator map before letting them post — players are gated by the
+        // player1..4 row check in chat:join and don't need this extra step.
+        if (role === "spectator") {
+          const liveRoom = challengeGameRooms.get(challengeId);
+          if (!liveRoom || !liveRoom.spectators.has(userId)) {
+            socket.emit("chat:error", {
+              code: "forbidden",
+              message: "Join the game as a spectator before chatting",
+            });
+            ack?.({ ok: false, error: "spectator_not_seated" });
+            return;
+          }
+        }
+
+        try {
+          const result = await deliverRealtimeChallengeChat({
+            challengeId,
+            roomId,
+            senderId: userId,
+            senderUsernameFallback: socket.data.username,
+            text,
+            isQuickMessage,
+            quickMessageKey,
+            isSpectator: role === "spectator",
+            clientMsgId,
+            chatNs,
+          });
+          if (result.ok) {
+            ack?.({ ok: true });
+          } else if (result.reason === "empty") {
+            // Sanitization stripped everything — soft fail, no error toast.
+            ack?.({ ok: false, error: "empty" });
+          } else {
+            socket.emit("chat:error", {
+              code: "invalid",
+              message: result.reason === "no_session"
+                ? "Game session not active"
+                : "Failed to send",
+            });
+            ack?.({ ok: false, error: result.reason || "failed" });
+          }
+        } catch (err) {
+          logger.warn?.(`[socket.io] chat:send delivery failed: ${(err as Error).message}`);
+          socket.emit("chat:error", { code: "server", message: "Failed to send" });
+          ack?.({ ok: false, error: "server" });
+        }
+        return;
+      }
+
+      // DM rooms (and any future room patterns): keep the simple pass-through
+      // emit. Block-list / persistence for DMs is out of scope for Task #9.
       const broadcast: ChatBroadcast = {
         roomId,
         fromUserId: userId,

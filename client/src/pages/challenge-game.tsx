@@ -377,6 +377,8 @@ export default function ChallengeGamePage() {
           message: m.text,
           timestamp: m.ts,
           createdAt: new Date(m.ts).toISOString(),
+          isQuickMessage: m.isQuickMessage,
+          quickMessageKey: m.quickMessageKey,
         };
         if (next === prev) next = [...prev];
         next.push(normalized);
@@ -2068,21 +2070,47 @@ export default function ChallengeGamePage() {
   );
 
   const sendChatMessage = useCallback(
-    (message: string, isQuickMessage = false, quickMessageKey?: string) => {
+    async (message: string, isQuickMessage = false, quickMessageKey?: string) => {
+      const trimmed = message.trim();
+      setMessageInput("");
+      if (!trimmed) return;
+
+      // Task #9: outgoing chat now flows through the realtime Socket.IO
+      // channel. The server persists, applies the word/block/mute filters,
+      // and reverse-mirrors to legacy WS clients so old transports still
+      // receive the message. We only fall back to the legacy WS if the
+      // realtime channel is unavailable (transport-level failure). For
+      // semantic failures (rate_limit, no_session, spectator_not_seated,
+      // server) we honor the new path's authority and let its chat:error
+      // toast surface — falling back would silently bypass those gates.
+      const result = await realtimeChat.send(trimmed, {
+        isQuickMessage,
+        quickMessageKey,
+      });
+      if (result.ok) return;
+
+      const transportFailures = new Set([
+        "disconnected",
+        "no_room",
+        "not_in_room",
+      ]);
+      if (!transportFailures.has(result.error || "")) {
+        return;
+      }
+
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(
           JSON.stringify({
             type: "challenge_chat",
             challengeId,
-            message,
+            message: trimmed,
             isQuickMessage,
             quickMessageKey,
           }),
         );
       }
-      setMessageInput("");
     },
-    [challengeId],
+    [challengeId, realtimeChat],
   );
 
   const sendGiftToPlayer = useCallback(

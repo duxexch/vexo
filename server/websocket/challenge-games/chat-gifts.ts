@@ -150,12 +150,21 @@ export async function handleChallengeChat(ws: AuthenticatedSocket, data: any): P
   try {
     const io = getSocketIO();
     if (io && challengeId) {
+      // Carry the same UX metadata over the realtime channel that the legacy
+      // WS payload carries (quick-message styling, spectator label, filter
+      // marker). Without these fields, mixed-transport clients dedup on
+      // (sender,text,ts) and may keep whichever copy arrives first — losing
+      // the metadata if the IO mirror wins the race.
       const broadcast: ChatBroadcast = {
         roomId: `challenge:${challengeId}`,
         fromUserId: senderId,
         fromUsername: sender.username || senderId,
         text: messageWithSender.message,
         ts,
+        isSpectator: guard.role === "spectator",
+        isQuickMessage: messageWithSender.isQuickMessage || undefined,
+        quickMessageKey: messageWithSender.quickMessageKey || undefined,
+        wasFiltered: !chatFilterResult.isClean || undefined,
       };
       const ns = io.of(SOCKETIO_NS_CHAT);
       const sockets = await ns.in(broadcast.roomId).fetchSockets();

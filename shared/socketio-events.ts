@@ -46,6 +46,14 @@ export interface ChatMessagePayload {
   text: string;
   /** Optional client-generated id for de-dup / ack */
   clientMsgId?: string;
+  /**
+   * Optional quick-message metadata. When the user picks a canned phrase from
+   * the GameChat quick-bar instead of typing free text, the client sets these
+   * so other clients can render the message with the special "quick message"
+   * styling (avatar bubble, accent color).
+   */
+  isQuickMessage?: boolean;
+  quickMessageKey?: string;
 }
 
 export interface ChatBroadcast {
@@ -56,6 +64,13 @@ export interface ChatBroadcast {
   ts: number;
   /** Echo of clientMsgId if provided */
   clientMsgId?: string;
+  /** True when the sender was acting as a spectator (read-only seat). */
+  isSpectator?: boolean;
+  /** Mirrors the sender's quick-message metadata so styling survives transport. */
+  isQuickMessage?: boolean;
+  quickMessageKey?: string;
+  /** True when the server's word filter scrubbed the original text. */
+  wasFiltered?: boolean;
 }
 
 export interface ChatErrorPayload {

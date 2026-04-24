@@ -14,7 +14,10 @@ export interface UseSocketChatReturn {
   joined: boolean;
   members: number;
   messages: ChatBroadcast[];
-  send: (text: string) => Promise<{ ok: boolean; error?: string }>;
+  send: (
+    text: string,
+    opts?: { isQuickMessage?: boolean; quickMessageKey?: string },
+  ) => Promise<{ ok: boolean; error?: string }>;
 }
 
 /**
@@ -74,13 +77,26 @@ export function useSocketChat({ roomId, historyLimit = 100 }: UseSocketChatOptio
   }, [roomId]);
 
   const send = useCallback(
-    (text: string) =>
+    (
+      text: string,
+      opts?: { isQuickMessage?: boolean; quickMessageKey?: string },
+    ) =>
       new Promise<{ ok: boolean; error?: string }>((resolve) => {
         if (!roomId) return resolve({ ok: false, error: "no_room" });
         const sock = getChatSocket();
         if (!sock.connected) return resolve({ ok: false, error: "disconnected" });
         const clientMsgId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        sock.emit("chat:send", { roomId, text, clientMsgId }, (res) => resolve(res));
+        sock.emit(
+          "chat:send",
+          {
+            roomId,
+            text,
+            clientMsgId,
+            isQuickMessage: opts?.isQuickMessage,
+            quickMessageKey: opts?.quickMessageKey,
+          },
+          (res) => resolve(res),
+        );
       }),
     [roomId],
   );

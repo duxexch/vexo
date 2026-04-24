@@ -1,0 +1,255 @@
+import { WebSocket } from "ws";
+import type { Namespace } from "socket.io";
+import { eq } from "drizzle-orm";
+import { db } from "../db";
+import {
+  users,
+  challengeGameSessions,
+  challengeChatMessages,
+} from "../../shared/schema";
+import { storage } from "../storage";
+import { filterMessage } from "../lib/word-filter";
+import { sanitizePlainText } from "../lib/input-security";
+import { getCachedUserBlockLists } from "../lib/redis";
+import { challengeGameRooms } from "../websocket/shared";
+import { logger } from "../lib/logger";
+import type { ChatBroadcast } from "../../shared/socketio-events";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ChatNamespace = Namespace<any, any, any, any>;
+
+export interface DeliverResult {
+  ok: boolean;
+  /** Machine-readable reason when ok=false. */
+  reason?: "no_session" | "empty";
+}
+
+interface DeliverArgs {
+  challengeId: string;
+  roomId: string;
+  senderId: string;
+  /** Username from the socket's auth payload — used if the DB lookup fails. */
+  senderUsernameFallback: string;
+  text: string;
+  isQuickMessage: boolean;
+  quickMessageKey?: string;
+  isSpectator: boolean;
+  clientMsgId?: string;
+  chatNs: ChatNamespace;
+}
+
+/**
+ * Full feature-parity replacement for the legacy `handleChallengeChat` path
+ * when the message originates on the realtime Socket.IO `/chat` channel.
+ *
+ * Responsibilities (mirrors server/websocket/challenge-games/chat-gifts.ts):
+ *   1. Sanitize + word-filter the text.
+ *   2. Persist into `challenge_chat_messages` so history endpoints see it.
+ *   3. Resolve sender + per-recipient block/mute lists.
+ *   4. Emit `chat:message` to every IO socket in the room — sender always
+ *      gets an echo, recipients filtered by block/mute.
+ *   5. Reverse-mirror the same payload to the legacy WS `chat_message`
+ *      channel so older clients still in the challenge room keep receiving.
+ *
+ * Both transports share the persisted message's `createdAt` timestamp so
+ * the client-side `(senderId, text, ts)` dedup key collapses duplicates.
+ */
+export async function deliverRealtimeChallengeChat(
+  args: DeliverArgs,
+): Promise<DeliverResult> {
+  const {
+    challengeId,
+    roomId,
+    senderId,
+    senderUsernameFallback,
+    isQuickMessage,
+    quickMessageKey,
+    isSpectator,
+    clientMsgId,
+    chatNs,
+  } = args;
+
+  const safeMessage = sanitizePlainText(args.text, { maxLength: 500 });
+  if (!safeMessage.trim()) return { ok: false, reason: "empty" };
+
+  const filterResult = filterMessage(safeMessage);
+  const finalText = filterResult.filteredMessage;
+
+  const [session] = await db
+    .select({ id: challengeGameSessions.id })
+    .from(challengeGameSessions)
+    .where(eq(challengeGameSessions.challengeId, challengeId))
+    .limit(1);
+  if (!session) return { ok: false, reason: "no_session" };
+
+  const [sender] = await db
+    .select({
+      id: users.id,
+      username: users.username,
+      avatarUrl: users.profilePicture,
+    })
+    .from(users)
+    .where(eq(users.id, senderId));
+  const senderUsername = sender?.username || senderUsernameFallback;
+
+  const safeQuickKey = quickMessageKey
+    ? String(quickMessageKey).slice(0, 50)
+    : undefined;
+
+  const [savedMessage] = await db
+    .insert(challengeChatMessages)
+    .values({
+      sessionId: session.id,
+      senderId,
+      message: finalText,
+      isQuickMessage: isQuickMessage || false,
+      quickMessageKey: safeQuickKey,
+      isSpectator,
+    })
+    .returning();
+
+  const ts = savedMessage.createdAt
+    ? new Date(savedMessage.createdAt).getTime()
+    : Date.now();
+
+  // ---- Sender block list (cached) ----
+  const { blockedUsers: senderBlocked } = await getCachedUserBlockLists(
+    senderId,
+    async (id) => {
+      const u = await storage.getUser(id);
+      return u
+        ? {
+            blockedUsers: u.blockedUsers || [],
+            mutedUsers: u.mutedUsers || [],
+          }
+        : null;
+    },
+  );
+
+  // ---- Collect legacy WS recipients (skipping sender + sender-blocked) ----
+  const room = challengeGameRooms.get(challengeId);
+  const legacyEntries: Array<[string, WebSocket]> = [];
+  if (room) {
+    for (const [uid, sock] of room.players) {
+      if (uid !== senderId && !senderBlocked.includes(uid))
+        legacyEntries.push([uid, sock]);
+    }
+    for (const [uid, sock] of room.spectators) {
+      if (uid !== senderId && !senderBlocked.includes(uid))
+        legacyEntries.push([uid, sock]);
+    }
+  }
+
+  // ---- Collect IO recipients ----
+  const ioSockets = await chatNs.in(roomId).fetchSockets();
+
+  // ---- Per-recipient block/mute resolution (union of both transports) ----
+  const recipientIds = new Set<string>();
+  for (const [uid] of legacyEntries) recipientIds.add(uid);
+  for (const s of ioSockets) {
+    const rid = s.data?.userId;
+    if (!rid || rid === senderId) continue;
+    if (senderBlocked.includes(rid)) continue;
+    recipientIds.add(rid);
+  }
+
+  const checks =
+    recipientIds.size === 0
+      ? []
+      : await Promise.all(
+          Array.from(recipientIds).map(async (rid) => {
+            const c = await getCachedUserBlockLists(rid, async (id) => {
+              const u = await storage.getUser(id);
+              return u
+                ? {
+                    blockedUsers: u.blockedUsers || [],
+                    mutedUsers: u.mutedUsers || [],
+                  }
+                : null;
+            });
+            return {
+              rid,
+              blocked:
+                c.blockedUsers?.includes(senderId) ||
+                c.mutedUsers?.includes(senderId),
+            };
+          }),
+        );
+  const blockedRecipients = new Set(
+    checks.filter((c) => c.blocked).map((c) => c.rid),
+  );
+
+  // ---- Realtime IO emit (per-socket so we can apply filtering) ----
+  const broadcast: ChatBroadcast = {
+    roomId,
+    fromUserId: senderId,
+    fromUsername: senderUsername,
+    text: finalText,
+    ts,
+    clientMsgId,
+    isSpectator,
+    isQuickMessage: isQuickMessage || undefined,
+    quickMessageKey: safeQuickKey,
+    wasFiltered: !filterResult.isClean || undefined,
+  };
+
+  for (const s of ioSockets) {
+    const rid = s.data?.userId;
+    if (!rid) continue;
+    if (rid !== senderId) {
+      // sender always gets the echo; everyone else is filtered
+      if (senderBlocked.includes(rid)) continue;
+      if (blockedRecipients.has(rid)) continue;
+    }
+    s.emit("chat:message", broadcast);
+  }
+
+  // ---- Legacy WS reverse-mirror (so old clients keep receiving) ----
+  if (room) {
+    const messageWithSender = {
+      id: savedMessage.id,
+      sessionId: savedMessage.sessionId,
+      senderId,
+      message: finalText,
+      isQuickMessage: !!isQuickMessage,
+      quickMessageKey: safeQuickKey ?? null,
+      isSpectator,
+      createdAt: savedMessage.createdAt,
+      senderName: senderUsername,
+      senderAvatar: sender?.avatarUrl || null,
+      timestamp: ts,
+    };
+    const outgoing = JSON.stringify({
+      type: "chat_message",
+      message: messageWithSender,
+    });
+
+    // Sender echo on legacy WS too — matches handleChallengeChat behavior
+    const senderLegacySocket =
+      room.players.get(senderId) || room.spectators.get(senderId);
+    if (senderLegacySocket && senderLegacySocket.readyState === WebSocket.OPEN) {
+      try {
+        senderLegacySocket.send(outgoing);
+      } catch (err) {
+        logger.warn?.(
+          `[socket.io] legacy sender echo failed: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    for (const [rid, sock] of legacyEntries) {
+      if (blockedRecipients.has(rid)) continue;
+      if (sock.readyState === WebSocket.OPEN) {
+        try {
+          sock.send(outgoing);
+        } catch (err) {
+          logger.warn?.(
+            `[socket.io] legacy mirror send failed for ${rid}: ${(err as Error).message}`,
+          );
+        }
+      }
+    }
+  }
+
+  return { ok: true };
+}
