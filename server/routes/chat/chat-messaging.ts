@@ -14,7 +14,10 @@ import { resolveChatEnabledFlagFromDb } from "../../lib/chat-settings";
 import { isPinUnlocked } from "../chat-features/pin-lock";
 import { clients } from "../../websocket/shared";
 import { sendNotification } from "../../websocket/notifications";
-import { buildDmNotificationPayload } from "../../lib/dm-notification-payload";
+import {
+  buildDmNotificationPayload,
+  dispatchHttpDmNotification,
+} from "../../lib/dm-notification-payload";
 
 const CHAT_MESSAGE_DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
 const CHAT_MESSAGE_DEDUPE_PENDING_TTL_MS = 60 * 1000;
@@ -401,22 +404,20 @@ export function registerChatMessagingRoutes(app: Express): void {
       // this conversation on notification-only mute. The message has
       // already been persisted and (above) emitted in realtime, so
       // they still see it when they open the chat.
-      // Task #23: payload built via the shared helper so HTTP and
-      // realtime DM transports stay byte-for-byte identical.
-      if (!recipientSilencedNotifications) {
-        void sendNotification(
+      // Task #23: dispatch via shared helper so the smoke suite can
+      // exercise the exact runtime path with a stub `sendNotification`.
+      dispatchHttpDmNotification(
+        {
+          recipientSilencedNotifications,
           receiverId,
-          buildDmNotificationPayload({
-            senderId,
-            senderDisplayName,
-            messageType: storedMessageType,
-            content: sanitizedContent,
-            messageId: message.id,
-          }),
-        ).catch(() => {
-          // Notification failures should not break the REST fallback send flow.
-        });
-      }
+          senderId,
+          senderDisplayName,
+          messageType: storedMessageType,
+          sanitizedContent,
+          messageId: message.id,
+        },
+        sendNotification,
+      );
 
       res.status(201).json(message);
     } catch (error: unknown) {

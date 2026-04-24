@@ -110,3 +110,46 @@ export function shouldNotifyDmRecipient(
   if (inputs.peerSilencedNotifications) return false;
   return true;
 }
+
+/**
+ * Task #23: HTTP-side dispatch helper. The HTTP DM route already
+ * short-circuits on a hard block (returns 403 long before this
+ * function is reached), so the only suppression gate left is the
+ * per-conversation notification-mute (Task #22). Centralizing this
+ * lets the smoke suite invoke the exact runtime path with a stub
+ * `send`, instead of relying on a regex over the route source.
+ */
+export interface DispatchHttpDmNotificationArgs {
+  recipientSilencedNotifications: boolean;
+  receiverId: string;
+  senderId: string;
+  senderDisplayName: string;
+  messageType: string;
+  sanitizedContent: string;
+  messageId: string;
+}
+
+export type SendNotificationFn = (
+  receiverId: string,
+  payload: DmNotificationPayload,
+) => Promise<unknown> | unknown;
+
+export function dispatchHttpDmNotification(
+  args: DispatchHttpDmNotificationArgs,
+  send: SendNotificationFn,
+): { sent: boolean; payload?: DmNotificationPayload } {
+  if (args.recipientSilencedNotifications) {
+    return { sent: false };
+  }
+  const payload = buildDmNotificationPayload({
+    senderId: args.senderId,
+    senderDisplayName: args.senderDisplayName,
+    messageType: args.messageType,
+    content: args.sanitizedContent,
+    messageId: args.messageId,
+  });
+  void Promise.resolve(send(args.receiverId, payload)).catch(() => {
+    // Notification failures must not break the REST send flow.
+  });
+  return { sent: true, payload };
+}

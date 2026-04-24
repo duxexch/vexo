@@ -30,7 +30,9 @@ import { resolve } from "node:path";
 import {
   buildDmNotificationPayload,
   buildDmNotificationPreview,
+  dispatchHttpDmNotification,
   shouldNotifyDmRecipient,
+  type DmNotificationPayload,
 } from "../server/lib/dm-notification-payload";
 import {
   deliverRealtimeDirectMessage,
@@ -264,6 +266,7 @@ function makeStubChatNs(): {
 
 function makeDepsWithLists(opts: {
   peerBlocks?: boolean;
+  peerMutes?: boolean;
   peerNotifMutes?: boolean;
 }): {
   deps: DeliverDeps;
@@ -295,7 +298,7 @@ function makeDepsWithLists(opts: {
         username: "peer",
         firstName: "Peer",
         blockedUsers: opts.peerBlocks ? ["user-sender-1"] : [],
-        mutedUsers: [],
+        mutedUsers: opts.peerMutes ? ["user-sender-1"] : [],
         notificationMutedUsers: opts.peerNotifMutes
           ? ["user-sender-1"]
           : [],
@@ -383,6 +386,33 @@ async function testBridgeIntegration(): Promise<void> {
     logPass("bridge integration: peer blocked → no notification");
   }
 
+  // (b2) Peer muted sender (regular `mutedUsers`, the legacy "soft
+  //      block" list shared with chat suppression) → zero
+  //      notifications. The bridge treats `mutedUsers` exactly like
+  //      `blockedUsers` for the purposes of fan-out + notification,
+  //      so a regression that drops the muted check would otherwise
+  //      silently start spamming the bell here.
+  {
+    const { ns } = makeStubChatNs();
+    const { deps, captured } = makeDepsWithLists({ peerMutes: true });
+    const result = await deliverRealtimeDirectMessage(
+      { ...baseArgs, chatNs: ns },
+      deps,
+    );
+    assertCondition(
+      result.ok,
+      "Bridge still persists message when peer muted sender",
+      result,
+    );
+    await new Promise((r) => setImmediate(r));
+    assertEqual(
+      captured.length,
+      0,
+      "Muted recipient (mutedUsers) must NOT receive notification on real bridge",
+    );
+    logPass("bridge integration: peer muted (mutedUsers) → no notification");
+  }
+
   // (c) Peer notification-muted sender → zero notifications, message
   //     still persisted (the bridge already fan-outs the chat:message
   //     emit; that branch is checked above).
@@ -404,41 +434,107 @@ async function testBridgeIntegration(): Promise<void> {
   }
 }
 
-// ---- 5. HTTP path call-site enforcement ----------------------------------
+// ---- 5. HTTP path runtime integration ------------------------------------
 //
-// The HTTP DM route is deeply embedded in Express + DB + Redis, so
-// instead of booting it we lock the call site down via a structural
-// assertion. If a future change removes the helper call or the
-// suppression gate, this fails loudly.
+// `dispatchHttpDmNotification` is the exact runtime helper called by
+// `server/routes/chat/chat-messaging.ts`. We exercise it directly so
+// the HTTP-side suppression + payload assembly is verified at runtime,
+// not by string-matching the route source.
+//
+// The hard-block branch (peer in `blockedUsers`) is still validated
+// structurally below, because the HTTP route enforces it via
+// `isUserBlocked(receiverId, senderId)` BEFORE this helper is reached
+// (returns 403 to the caller). The structural check guards that
+// short-circuit from being silently removed.
 
-function testHttpCallSiteEnforcement(): void {
+function testHttpRuntimeIntegration(): void {
+  const baseHttpArgs = {
+    receiverId: "user-peer-2",
+    senderId: "user-sender-1",
+    senderDisplayName: "Layla",
+    messageType: "text",
+    sanitizedContent: "Hello over HTTP",
+    messageId: "msg-http-1",
+  };
+
+  // (a) Allowed → exactly one runtime sendNotification call to peer.
+  {
+    const captured: Array<{
+      receiverId: string;
+      payload: DmNotificationPayload;
+    }> = [];
+    const result = dispatchHttpDmNotification(
+      { ...baseHttpArgs, recipientSilencedNotifications: false },
+      (rid, payload) => {
+        captured.push({ receiverId: rid, payload });
+      },
+    );
+    assertCondition(result.sent, "HTTP dispatch must report sent=true when allowed");
+    assertEqual(captured.length, 1, "HTTP runtime: must invoke send exactly once");
+    assertEqual(
+      captured[0].receiverId,
+      "user-peer-2",
+      "HTTP runtime: notification must be addressed to receiverId",
+    );
+    const meta = JSON.parse(captured[0].payload.metadata) as {
+      event: string;
+      transport?: string;
+      senderId: string;
+      messageId: string;
+    };
+    assertEqual(meta.event, "chat_message", "HTTP runtime: metadata.event");
+    assertEqual(meta.senderId, "user-sender-1", "HTTP runtime: metadata.senderId");
+    assertEqual(meta.messageId, "msg-http-1", "HTTP runtime: metadata.messageId");
+    assertCondition(
+      meta.transport === undefined,
+      "HTTP runtime: metadata.transport must be omitted (it's a realtime-only tag)",
+    );
+    assertCondition(
+      captured[0].payload.title.includes("Layla"),
+      "HTTP runtime: title must include sender display name",
+    );
+    logPass("HTTP runtime: allowed → exactly one sendNotification with correct payload");
+  }
+
+  // (b) Recipient notification-muted sender → zero sendNotification calls.
+  {
+    const captured: unknown[] = [];
+    const result = dispatchHttpDmNotification(
+      { ...baseHttpArgs, recipientSilencedNotifications: true },
+      (rid, payload) => {
+        captured.push({ rid, payload });
+      },
+    );
+    assertCondition(
+      !result.sent,
+      "HTTP dispatch must report sent=false when recipient silenced",
+    );
+    assertEqual(
+      captured.length,
+      0,
+      "HTTP runtime: silenced recipient must NOT receive sendNotification",
+    );
+    logPass("HTTP runtime: notification-muted recipient → no sendNotification");
+  }
+
+  // (c) Hard-block enforcement: the route must short-circuit on
+  //     `isUserBlocked(receiverId, senderId)` BEFORE reaching the
+  //     dispatch helper. Locked down structurally so a regression
+  //     can't bypass it without breaking this check.
   const path = resolve(
     process.cwd(),
     "server/routes/chat/chat-messaging.ts",
   );
   const src = readFileSync(path, "utf8");
-
   assertCondition(
-    src.includes(
-      'import { buildDmNotificationPayload } from "../../lib/dm-notification-payload"',
-    ),
-    "HTTP DM route must import buildDmNotificationPayload from the shared helper",
-  );
-  assertCondition(
-    src.includes("buildDmNotificationPayload({"),
-    "HTTP DM route must call buildDmNotificationPayload",
-  );
-  assertCondition(
-    /if\s*\(\s*!recipientSilencedNotifications\s*\)\s*\{[\s\S]{0,400}sendNotification\s*\(/.test(
-      src,
-    ),
-    "HTTP DM route must gate sendNotification on !recipientSilencedNotifications",
+    src.includes("dispatchHttpDmNotification"),
+    "HTTP DM route must call dispatchHttpDmNotification",
   );
   assertCondition(
     /isUserBlocked\s*\(\s*receiverId\s*,\s*senderId\s*\)/.test(src),
     "HTTP DM route must short-circuit when recipient blocked sender",
   );
-  logPass("HTTP path call-site enforcement: helper + gates wired correctly");
+  logPass("HTTP runtime: hard-block short-circuit still wired in route");
 }
 
 async function main(): Promise<void> {
@@ -446,7 +542,7 @@ async function main(): Promise<void> {
   testPayloadParity();
   testPreviewRules();
   await testBridgeIntegration();
-  testHttpCallSiteEnforcement();
+  testHttpRuntimeIntegration();
   console.log("[smoke:dm-notifications] OK — all checks passed");
 }
 
