@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { Capacitor } from "@capacitor/core";
 
 const CSS_VAR_NAME = "--keyboard-inset-bottom";
 
@@ -57,15 +56,25 @@ function detachListeners(): void {
  * the height of the on-screen keyboard (or 0 when no keyboard is open
  * or the platform doesn't support `visualViewport`).
  *
- * On Capacitor native shells (iOS + Android) the inset is forced to 0:
- * the OS / WebView already lifts the chat composer above the keyboard
- * via Capacitor's `Keyboard.resize: 'body'` (iOS) and Android's default
- * `windowSoftInputMode=adjustResize`. Adding our own padding on top
- * would double-shift the composer (Task #43).
- *
  * Use the variable in arbitrary Tailwind values to lift sticky chat
  * composers above the keyboard, e.g.
  * `pb-[max(0.75rem,env(safe-area-inset-bottom),var(--keyboard-inset-bottom,0px))]`.
+ *
+ * Platform behavior summary (Task #43 analysis):
+ * - Mobile web (iOS Safari, Chrome, etc.): `vv.height` shrinks by the
+ *   keyboard amount; the inset is the keyboard height. The composer
+ *   gets lifted by our CSS variable.
+ * - Android Capacitor (default `windowSoftInputMode=adjustResize`):
+ *   the WebView itself shrinks, so `window.innerHeight` decreases and
+ *   `vv.height` matches it. The math gives inset = 0 — exactly what we
+ *   want, because the OS already lifted the composer by resizing the
+ *   WebView.
+ * - Android Capacitor with `adjustPan`: `innerHeight` stays full but
+ *   `vv.height` shrinks; the math gives inset = keyboardHeight, which
+ *   correctly lifts the composer over the keyboard.
+ * Real-device verification on Android Capacitor is recommended (see
+ * the follow-up task) — the math is sound but a hardware pass on the
+ * latest build is the only way to lock the behavior.
  *
  * Safe to call from multiple components simultaneously: the underlying
  * listener is reference-counted so an unmount never clobbers the value
@@ -76,12 +85,6 @@ export function useKeyboardInset(): void {
     if (typeof window === "undefined") return;
 
     const root = document.documentElement;
-
-    // Native: the OS / Capacitor already lifts the composer.
-    if (Capacitor.isNativePlatform()) {
-      root.style.setProperty(CSS_VAR_NAME, "0px");
-      return;
-    }
 
     if (!window.visualViewport) {
       root.style.setProperty(CSS_VAR_NAME, "0px");
