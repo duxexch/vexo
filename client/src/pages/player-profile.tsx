@@ -16,7 +16,7 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { BackButton } from "@/components/BackButton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type MultiplayerGameFromAPI, buildGameConfig, getGameIconSurfaceClass, getGameIconToneClass } from "@/lib/game-config";
+import { type MultiplayerGameFromAPI, buildGameConfig, resolveGameConfigEntry, getGameIconSurfaceClass, getGameIconToneClass } from "@/lib/game-config";
 import {
   Trophy,
   Target,
@@ -474,7 +474,7 @@ export default function PlayerProfilePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {stats.gameStats.map((game) => {
-                const config = GAME_CONFIG[game.game] || GAME_CONFIG.chess;
+                const config = resolveGameConfigEntry(GAME_CONFIG, game.game) || GAME_CONFIG.chess;
 
                 return (
                   <div key={game.game} className="space-y-2">
@@ -535,7 +535,7 @@ export default function PlayerProfilePage() {
                 <ScrollArea className="h-[400px]">
                   <div className="space-y-3">
                     {matches.map((match) => {
-                      const config = GAME_CONFIG[match.gameType] || GAME_CONFIG.chess;
+                      const config = resolveGameConfigEntry(GAME_CONFIG, match.gameType) || GAME_CONFIG.chess;
 
                       return (
                         <div
