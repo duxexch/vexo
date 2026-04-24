@@ -11,7 +11,7 @@
  * existing HTTP routes.
  */
 
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { db } from "../db";
 import { chatMessages } from "../../shared/schema";
 
@@ -77,6 +77,12 @@ export async function getDirectMessageHistory(
   // scrolls plain text only and treats anything else as out-of-band.
   const conversation = and(
     eq(chatMessages.messageType, "text"),
+    // Hide messages soft-deleted globally OR per-user. The
+    // `deleted_for_users` array tracks "delete for me" recipients;
+    // `deleted_at` is the global hard-delete tombstone used by
+    // disappearing/auto-delete sweeps.
+    isNull(chatMessages.deletedAt),
+    sql`NOT (${chatMessages.deletedForUsers} @> ARRAY[${args.userId}]::text[])`,
     or(
       and(
         eq(chatMessages.senderId, args.userId),
