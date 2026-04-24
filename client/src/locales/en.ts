@@ -2342,6 +2342,21 @@ const en: Record<string, string> = {
   'rtcCall.tier.text-only': 'Text-only fallback',
   'rtcCall.permissionDenied': 'Microphone or camera permission was denied',
   'rtcCall.busy': 'Already in another call',
+  'rtcCall.incomingTitle': 'Incoming call',
+  'rtcCall.incomingBody': 'Tap to answer',
+  'callPermission.voiceTitle': 'Allow microphone for voice calls?',
+  'callPermission.videoTitle': 'Allow camera and microphone for video calls?',
+  'callPermission.voiceDescription': 'We use your microphone only while a call is active so the other person can hear you. Audio is never recorded or stored.',
+  'callPermission.videoDescription': 'We use your camera and microphone only while a call is active. Video and audio are streamed peer-to-peer and are never recorded or stored.',
+  'callPermission.deniedTitle': 'Permission required',
+  'callPermission.deniedDescription': 'Calls cannot connect because microphone or camera access is blocked. Open settings to grant permission and try again.',
+  'callPermission.micLabel': 'Microphone',
+  'callPermission.micHelper': 'Used during a live call so your voice is heard.',
+  'callPermission.cameraLabel': 'Camera',
+  'callPermission.cameraHelper': 'Used during a live video call so the other person can see you.',
+  'callPermission.allow': 'Allow',
+  'callPermission.notNow': 'Not now',
+  'callPermission.openSettings': 'Open settings',
 };
 
 export default en;

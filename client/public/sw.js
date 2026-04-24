@@ -192,12 +192,22 @@ self.addEventListener('push', (event) => {
 
   const notifType = data.notificationType || data.type || 'system';
   const priority = data.priority || 'normal';
+  const isIncomingCall = notifType === 'private_call_invite';
+
+  // Standard incoming-call action set — keep aligned with the server payload
+  // and the page-side WAKE_RINGER handler.
+  const callActions = [
+    { action: 'accept', title: 'Accept' },
+    { action: 'decline', title: 'Decline' },
+  ];
 
   const opts = {
     body: data.body || 'You have a new notification',
     icon: data.icon || TYPE_ICONS[notifType] || '/icons/vex-gaming-logo-192x192.png',
     badge: '/icons/vex-gaming-logo-96x96.png',
-    vibrate: VIBRATE_PATTERNS[priority] || VIBRATE_PATTERNS.normal,
+    vibrate: isIncomingCall
+      ? [400, 200, 400, 200, 400, 200, 400, 200, 400]
+      : (VIBRATE_PATTERNS[priority] || VIBRATE_PATTERNS.normal),
     data: {
       url: data.url || '/',
       dateOfArrival: Date.now(),
@@ -205,16 +215,38 @@ self.addEventListener('push', (event) => {
       notificationType: notifType,
       priority: priority,
       soundType: data.soundType || notifType,
+      callId: data.callId,
+      conversationId: data.conversationId,
     },
-    actions: data.actions || [],
-    tag: data.tag || `vex-${notifType}`,
-    renotify: !!data.tag,
-    requireInteraction: priority === 'urgent' || priority === 'high',
+    actions: isIncomingCall ? callActions : (data.actions || []),
+    tag: data.tag || (isIncomingCall ? `vex-call-${data.callId || data.conversationId || 'incoming'}` : `vex-${notifType}`),
+    renotify: !!data.tag || isIncomingCall,
+    requireInteraction: isIncomingCall || priority === 'urgent' || priority === 'high',
     silent: false,
     timestamp: Date.now(),
     dir: data.dir || 'auto',
     lang: data.lang || 'en',
   };
+
+  // Wake any open client so the in-app continuous ring can start even if the
+  // page tab is in the background. The page handles WAKE_RINGER by calling
+  // startCallRingtone().
+  if (isIncomingCall) {
+    event.waitUntil((async () => {
+      try {
+        const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        list.forEach((c) => c.postMessage({
+          type: 'WAKE_RINGER',
+          callId: data.callId,
+          conversationId: data.conversationId,
+          url: data.url,
+        }));
+      } catch (_) { /* ignore */ }
+      await self.registration.showNotification(data.title || 'Incoming call', opts);
+    })());
+    return;
+  }
+
   event.waitUntil(self.registration.showNotification(data.title || 'VEX', opts));
 });
 
@@ -224,12 +256,18 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   const url = data.url || '/';
   const action = event.action;
+  const isCall = data.notificationType === 'private_call_invite';
 
-  if (action === 'dismiss') return;
-  if (action && action !== 'open_call') {
-    return;
+  // For non-call notifications, "dismiss" is a no-op and any custom action
+  // other than "open_call" is treated as already handled.
+  if (!isCall) {
+    if (action === 'dismiss') return;
+    if (action && action !== 'open_call') return;
   }
 
+  // For call notifications, "decline" should still focus / wake the page so
+  // the in-app handler can tear down the ringtone and signal a decline; we
+  // pass the action along so the page can act on it.
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
@@ -237,9 +275,17 @@ self.addEventListener('notificationclick', (event) => {
           c.postMessage({
             type: 'NOTIFICATION_CLICK',
             url: url,
+            action: action || (isCall ? 'accept' : undefined),
             notificationType: data.notificationType,
             soundType: data.soundType,
+            callId: data.callId,
+            conversationId: data.conversationId,
           });
+          if (isCall && action === 'decline') {
+            // Don't pull focus on decline — just wake the SPA so it can
+            // dismiss the ring. Skip navigation/focus.
+            return c;
+          }
           c.navigate(url);
           return c.focus();
         }

@@ -15,8 +15,9 @@ import {
   type ChatCallQueuedOperation,
 } from "@/lib/chat-call-ops-queue";
 import { useToast } from "@/hooks/use-toast";
-import { openAppSettings, openMicrophoneSettings } from "@/lib/startup-permissions";
-import { Capacitor } from "@capacitor/core";
+import { ensureCallRationale } from "@/lib/call-permission-rationale";
+import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
+import { registerCallActionHandler } from "@/lib/call-actions";
 import { Minimize2, Maximize2, Mic, MicOff, PhoneOff, Video, VideoOff, Loader2, Phone } from "lucide-react";
 
 type CallType = "voice" | "video";
@@ -143,6 +144,29 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     incomingInviteRef.current = incomingInvite;
   }, [incomingInvite]);
+
+  /**
+   * Drive the continuous ringtone — including the high-priority Capacitor
+   * local-notification on mobile — from the call lifecycle. We ring while
+   * an unanswered invite is sitting in the inbox and stop the moment the
+   * call is accepted, declined, cancelled, or times out.
+   */
+  useEffect(() => {
+    const wantsRing = !!incomingInvite && phase === "ringing" && !activeCall;
+    if (wantsRing) {
+      startCallRingtone({
+        title: t("rtcCall.incomingTitle"),
+        body: t("rtcCall.incomingBody"),
+        includeNativeNotification: true,
+      });
+    } else {
+      void stopCallRingtone();
+    }
+
+    return () => {
+      void stopCallRingtone();
+    };
+  }, [activeCall, incomingInvite, phase, t]);
 
   const clearJoinTimeout = useCallback(() => {
     if (joinTimeoutRef.current !== null) {
@@ -377,6 +401,12 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
       return false;
     }
 
+    const decision = await ensureCallRationale(needsVideo ? "video" : "voice");
+    if (decision !== "allow") {
+      setPhase("idle");
+      return false;
+    }
+
     try {
       localStreamRef.current = await navigator.mediaDevices.getUserMedia({
         audio: true,
@@ -394,10 +424,12 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
           description: t("challenge.voiceErrorRetry"),
         });
 
-        void openMicrophoneSettings();
-        if (Capacitor.isNativePlatform()) {
-          void openAppSettings();
-        }
+        // Re-show the rationale in "forced" mode so the user has a clear,
+        // user-driven path back to the system settings via the modal's
+        // "Open settings" CTA. We deliberately do NOT auto-jump to the
+        // OS settings screen here — popping the user out of VEX without
+        // an explicit tap is jarring and was flagged in code review.
+        void ensureCallRationale(needsVideo ? "video" : "voice", { force: true });
       }
       setPhase("error");
       return false;
@@ -887,6 +919,29 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
     await endSessionApi(active.sessionId);
     emitCallStatusChanged();
   }, [cleanupAfterCall, emitCallStatusChanged, endSessionApi, leaveVoiceRoom]);
+
+  /**
+   * Register a global handler so push-notification accept/decline buttons
+   * (or any other out-of-band trigger via `dispatchCallAction`) drive the
+   * DM call lifecycle. Only claims the action when the inbound invite's
+   * sessionId matches — falls through to the next manager otherwise.
+   */
+  useEffect(() => {
+    return registerCallActionHandler(async (ctx) => {
+      const invite = incomingInviteRef.current;
+      if (!invite) return false;
+      if (ctx.callId && ctx.callId !== invite.sessionId) return false;
+      if (ctx.action === "accept") {
+        await acceptInvite();
+        return true;
+      }
+      if (ctx.action === "decline") {
+        await rejectInvite();
+        return true;
+      }
+      return false;
+    });
+  }, [acceptInvite, rejectInvite]);
 
   const minimizeCallWidget = useCallback(() => {
     setIsMinimized(true);

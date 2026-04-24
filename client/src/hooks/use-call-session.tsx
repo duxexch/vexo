@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getRtcSocket } from "@/lib/socket-io-client";
+import { ensureCallRationale } from "@/lib/call-permission-rationale";
+import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
+import { registerCallActionHandler } from "@/lib/call-actions";
 import type { CallTier, CallType, IceServersResponse } from "@shared/socketio-events";
 
 export type CallStatus =
@@ -179,10 +182,27 @@ export function useCallSession(): UseCallSessionReturn {
   );
 
   const attachLocalMedia = useCallback(async (pc: RTCPeerConnection, type: CallType): Promise<MediaStream> => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: type === "video" ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
-    });
+    const decision = await ensureCallRationale(type === "video" ? "video" : "voice");
+    if (decision !== "allow") {
+      throw new Error("permission_dismissed");
+    }
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: type === "video" ? { width: { ideal: 640 }, height: { ideal: 480 } } : false,
+      });
+    } catch (err) {
+      const errorName = (err as { name?: string } | null)?.name;
+      if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
+        // Re-show the rationale in "forced" mode so the user can jump to
+        // system settings.
+        void ensureCallRationale(type === "video" ? "video" : "voice", { force: true });
+      }
+      throw err;
+    }
+
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
     setLocalStream(stream);
     return stream;
@@ -396,6 +416,53 @@ export function useCallSession(): UseCallSessionReturn {
 
   // Cleanup on unmount
   useEffect(() => () => cleanup(), [cleanup]);
+
+  /**
+   * Register a global handler so push-notification accept/decline buttons
+   * (or any other out-of-band trigger via `dispatchCallAction`) can drive
+   * the call lifecycle. The handler claims the action only if the
+   * incoming sessionId matches — otherwise it returns false so the next
+   * registered manager (DM call layer) gets a chance.
+   */
+  useEffect(() => {
+    return registerCallActionHandler(async (ctx) => {
+      if (!incoming) return false;
+      if (ctx.callId && ctx.callId !== incoming.sessionId) return false;
+      if (ctx.action === "accept") {
+        try {
+          await acceptIncoming();
+        } catch {
+          // acceptIncoming already dispatched rtc:end on media error.
+        }
+        return true;
+      }
+      if (ctx.action === "decline") {
+        declineIncoming();
+        return true;
+      }
+      return false;
+    });
+  }, [acceptIncoming, declineIncoming, incoming]);
+
+  /**
+   * Drive the ringtone purely off `status` so we never miss a transition.
+   * `ringing-in`  → loud ring + native local-notification (incoming call).
+   * `ringing-out` → quieter web-only "ringback" tone for the caller.
+   * Anything else → silence.
+   */
+  useEffect(() => {
+    if (status === "ringing-in") {
+      startCallRingtone({ includeNativeNotification: true });
+    } else if (status === "ringing-out") {
+      startCallRingtone({ includeNativeNotification: false });
+    } else {
+      void stopCallRingtone();
+    }
+
+    return () => {
+      void stopCallRingtone();
+    };
+  }, [status]);
 
   return {
     status,

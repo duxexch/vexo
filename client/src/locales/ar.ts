@@ -2330,6 +2330,21 @@ const ar: Record<string, string> = {
   'rtcCall.tier.text-only': 'نص فقط (احتياطي)',
   'rtcCall.permissionDenied': 'تم رفض إذن الميكروفون أو الكاميرا',
   'rtcCall.busy': 'أنت بالفعل في مكالمة أخرى',
+  'rtcCall.incomingTitle': 'مكالمة واردة',
+  'rtcCall.incomingBody': 'اضغط للرد',
+  'callPermission.voiceTitle': 'هل تسمح بالوصول إلى الميكروفون للمكالمات الصوتية؟',
+  'callPermission.videoTitle': 'هل تسمح بالوصول إلى الكاميرا والميكروفون لمكالمات الفيديو؟',
+  'callPermission.voiceDescription': 'نستخدم الميكروفون فقط أثناء المكالمة لكي يسمعك الطرف الآخر. لا يتم تسجيل الصوت أو تخزينه أبداً.',
+  'callPermission.videoDescription': 'نستخدم الكاميرا والميكروفون فقط أثناء المكالمة. يتم بث الفيديو والصوت مباشرة بين الجهازين ولا يتم تسجيلهما أو تخزينهما.',
+  'callPermission.deniedTitle': 'الإذن مطلوب',
+  'callPermission.deniedDescription': 'لا يمكن إجراء المكالمات لأن الوصول إلى الميكروفون أو الكاميرا محظور. افتح الإعدادات لمنح الإذن ثم حاول مجدداً.',
+  'callPermission.micLabel': 'الميكروفون',
+  'callPermission.micHelper': 'يُستخدم أثناء المكالمة فقط ليسمع الطرف الآخر صوتك.',
+  'callPermission.cameraLabel': 'الكاميرا',
+  'callPermission.cameraHelper': 'تُستخدم أثناء مكالمة الفيديو فقط ليرى الطرف الآخر صورتك.',
+  'callPermission.allow': 'السماح',
+  'callPermission.notNow': 'ليس الآن',
+  'callPermission.openSettings': 'فتح الإعدادات',
 };
 
 export default ar;

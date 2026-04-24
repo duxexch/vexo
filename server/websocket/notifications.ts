@@ -235,10 +235,17 @@ async function sendWebPushToUser(
 
   const actions = isIncomingPrivateCall
     ? [
-      { action: "open_call", title: "Open Call" },
-      { action: "dismiss", title: "Dismiss" },
+      { action: "accept", title: "Accept" },
+      { action: "decline", title: "Decline" },
     ]
     : [{ action: "dismiss", title: "Dismiss" }];
+
+  const callSessionId = typeof metadataPayload.sessionId === "string"
+    ? metadataPayload.sessionId
+    : undefined;
+  const conversationId = typeof metadataPayload.conversationId === "string"
+    ? metadataPayload.conversationId
+    : undefined;
 
   const payload = JSON.stringify({
     title: notification.title,
@@ -246,16 +253,23 @@ async function sendWebPushToUser(
     icon: "/icons/icon-192x192.png",
     badge: "/icons/icon-72x72.png",
     tag: pushTag,
-    priority: notification.priority,
+    // Incoming-call pushes must always be treated as urgent so the SW
+    // surfaces them with vibrate + requireInteraction. We coerce here so a
+    // stale `notification.priority` cannot accidentally downgrade them.
+    priority: isIncomingPrivateCall ? "urgent" : notification.priority,
     notificationType: pushNotificationType,
     soundType: isIncomingPrivateCall ? "challenge" : notification.type,
     actions,
+    requireInteraction: isIncomingPrivateCall ? true : undefined,
+    callId: callSessionId,
+    conversationId,
     data: {
       url: notification.link || "/notifications",
       notificationId: notification.id,
       type: pushNotificationType,
       event: metadataEvent || undefined,
-      sessionId: typeof metadataPayload.sessionId === "string" ? metadataPayload.sessionId : undefined,
+      sessionId: callSessionId,
+      conversationId,
       createdAt: notification.createdAt,
     },
   });

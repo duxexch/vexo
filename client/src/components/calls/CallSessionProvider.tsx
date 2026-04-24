@@ -2,6 +2,9 @@ import { createContext, useContext, useEffect, useRef, type ReactNode } from "re
 import { useLocation } from "wouter";
 import { useCallSession, type UseCallSessionReturn } from "@/hooks/use-call-session";
 import { CallModal } from "./CallModal";
+import { CallPermissionPrompt } from "./CallPermissionPrompt";
+import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
+import { dispatchCallAction, type CallAction } from "@/lib/call-actions";
 
 const CallSessionContext = createContext<UseCallSessionReturn | null>(null);
 
@@ -46,10 +49,47 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [call.status, location, navigate]);
 
+  /**
+   * Listen for the service-worker WAKE_RINGER push so the in-app continuous
+   * ringer fires the moment a backgrounded tab receives an incoming-call
+   * push, even before the WebSocket reconnects.
+   */
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const handler = (event: MessageEvent) => {
+      const msg = event.data;
+      if (!msg || typeof msg !== "object") return;
+      if (msg.type === "WAKE_RINGER") {
+        startCallRingtone({ includeNativeNotification: true });
+        return;
+      }
+      if (msg.type === "NOTIFICATION_CLICK" && msg.notificationType === "private_call_invite") {
+        const rawAction = typeof msg.action === "string" ? msg.action : "accept";
+        // Treat "open_call" (legacy) as accept so we don't regress old tabs.
+        const action: CallAction = rawAction === "decline" ? "decline" : "accept";
+        // Stop the in-app ringer immediately — the user has resolved the
+        // call from the OS UI either way.
+        void stopCallRingtone();
+        // Drive the actual call signaling through the registered manager.
+        // If no manager owns this call (e.g. WS hadn't reconnected yet),
+        // the dispatcher is a no-op and the user lands on the call URL via
+        // the SW's existing focus/navigate path.
+        void dispatchCallAction({
+          action,
+          callId: typeof msg.callId === "string" ? msg.callId : undefined,
+          conversationId: typeof msg.conversationId === "string" ? msg.conversationId : undefined,
+        });
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", handler);
+    return () => navigator.serviceWorker.removeEventListener("message", handler);
+  }, []);
+
   return (
     <CallSessionContext.Provider value={call}>
       {children}
       <CallModal call={call} />
+      <CallPermissionPrompt />
     </CallSessionContext.Provider>
   );
 }
