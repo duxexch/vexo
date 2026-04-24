@@ -111,13 +111,6 @@ const challengeGameMessageSchema = z.discriminatedUnion("type", [
         challengeId: challengeIdSchema,
     }),
     z.object({
-        type: z.literal("challenge_chat"),
-        challengeId: challengeIdSchema,
-        message: z.string().trim().min(1).max(500),
-        isQuickMessage: z.boolean().optional(),
-        quickMessageKey: shortStringSchema.optional(),
-    }),
-    z.object({
         type: z.literal("game_resign"),
         challengeId: challengeIdSchema,
         reason: z.enum(["resignation", "timeout"]).optional(),

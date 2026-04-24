@@ -56,6 +56,7 @@ import { FullScreenGiftPanel } from "@/components/games/FullScreenGiftPanel";
 import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import { useGameFullscreen } from "@/hooks/use-game-fullscreen";
+import { useSocketChat } from "@/hooks/use-socket-chat";
 import {
   Clock,
   Trophy,
@@ -233,6 +234,11 @@ export default function ChallengeWatchPage() {
   const { toast } = useToast();
   const challengeId = params?.id;
 
+  // Task #9: spectator chat send is now realtime-only (legacy WS handler removed).
+  const spectatorRealtimeChat = useSocketChat({
+    roomId: challengeId ? `challenge:${challengeId}` : "",
+  });
+
   const [gameSession, setGameSession] = useState<GameSession | null>(null);
   const [playerView, setPlayerView] = useState<Record<string, unknown> | null>(
     null,
@@ -281,6 +287,45 @@ export default function ChallengeWatchPage() {
     at: 0,
   });
   const seenChatMessageKeysRef = useRef<Set<string>>(new Set());
+
+  // Task #9: merge chat received via the realtime Socket.IO channel into
+  // the same `messages` list. Same dedup signature key as the legacy WS
+  // `chat_message` handler below so a message that arrives over both
+  // transports collapses into a single rendered bubble.
+  const realtimeSpectatorMessages = spectatorRealtimeChat.messages;
+  useEffect(() => {
+    if (realtimeSpectatorMessages.length === 0) return;
+    setMessages((prev) => {
+      let next = prev;
+      for (const m of realtimeSpectatorMessages) {
+        const sigKey = `sig:${m.fromUserId}:${m.text}:${String(m.ts)}`;
+        if (seenChatMessageKeysRef.current.has(sigKey)) continue;
+        seenChatMessageKeysRef.current.add(sigKey);
+        if (seenChatMessageKeysRef.current.size > 1200) {
+          seenChatMessageKeysRef.current.clear();
+          seenChatMessageKeysRef.current.add(sigKey);
+        }
+        const normalized: WatchChatMessage = {
+          userId: m.fromUserId,
+          senderId: m.fromUserId,
+          username: m.fromUsername,
+          senderName: m.fromUsername,
+          message: m.text,
+          timestamp: m.ts,
+          createdAt: new Date(m.ts).toISOString(),
+          isQuickMessage: m.isQuickMessage,
+          quickMessageKey: m.quickMessageKey,
+        };
+        if (next === prev) next = [...prev];
+        next.push(normalized);
+        if (m.fromUserId && m.text) {
+          pushAvatarChatBubble(m.fromUserId, m.fromUsername, m.text);
+        }
+      }
+      if (next === prev) return prev;
+      return next.slice(-160);
+    });
+  }, [realtimeSpectatorMessages]);
   const lastGiftAttemptRef = useRef<{ giftId: string; price: number } | null>(
     null,
   );
@@ -947,9 +992,13 @@ export default function ChallengeWatchPage() {
                   : undefined,
             };
 
+            // Task #9: prefer numeric `timestamp` first so the legacy WS
+            // dedup key matches the realtime channel's
+            // `sig:<from>:<text>:<ts>` exactly. createdAt is the ISO
+            // fallback only when no numeric timestamp is present.
             const normalizedMessageKey = normalizedMessage.id
               ? `id:${normalizedMessage.id}`
-              : `sig:${normalizedMessage.senderId || normalizedMessage.userId || ""}:${normalizedMessage.message}:${String(normalizedMessage.createdAt || normalizedMessage.timestamp || "")}`;
+              : `sig:${normalizedMessage.senderId || normalizedMessage.userId || ""}:${normalizedMessage.message}:${String(normalizedMessage.timestamp ?? normalizedMessage.createdAt ?? "")}`;
 
             if (seenChatMessageKeysRef.current.has(normalizedMessageKey)) {
               break;
@@ -1313,7 +1362,7 @@ export default function ChallengeWatchPage() {
   );
 
   const sendLiveChatMessage = useCallback(
-    (message: string) => {
+    async (message: string) => {
       const safeMessage = message.trim();
       if (!safeMessage) return;
 
@@ -1329,7 +1378,11 @@ export default function ChallengeWatchPage() {
         return;
       }
 
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      // Task #9: spectator chat now flows over the realtime Socket.IO
+      // channel only. The legacy WS challenge_chat handler has been
+      // removed server-side. The hook surfaces transport/semantic
+      // errors via its own chat:error toast.
+      if (!spectatorRealtimeChat.joined) {
         toast({
           title: language === "ar" ? "خطأ" : "Error",
           description:
@@ -1341,16 +1394,10 @@ export default function ChallengeWatchPage() {
         return;
       }
 
-      wsRef.current.send(
-        JSON.stringify({
-          type: "challenge_chat",
-          challengeId,
-          message: safeMessage,
-        }),
-      );
+      await spectatorRealtimeChat.send(safeMessage);
       setMobileChatInput("");
     },
-    [challengeId, language, toast, user],
+    [language, spectatorRealtimeChat, toast, user],
   );
 
   const openGiftPanel = useCallback(() => {

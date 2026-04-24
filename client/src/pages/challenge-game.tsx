@@ -2075,42 +2075,17 @@ export default function ChallengeGamePage() {
       setMessageInput("");
       if (!trimmed) return;
 
-      // Task #9: outgoing chat now flows through the realtime Socket.IO
-      // channel. The server persists, applies the word/block/mute filters,
-      // and reverse-mirrors to legacy WS clients so old transports still
-      // receive the message. We only fall back to the legacy WS if the
-      // realtime channel is unavailable (transport-level failure). For
-      // semantic failures (rate_limit, no_session, spectator_not_seated,
-      // server) we honor the new path's authority and let its chat:error
-      // toast surface — falling back would silently bypass those gates.
-      const result = await realtimeChat.send(trimmed, {
+      // Task #9 — full migration: outgoing chat is now sent SOLELY over the
+      // realtime Socket.IO channel. The legacy WS `challenge_chat` handler
+      // has been removed server-side, so any fallback here would just be
+      // dropped on the floor. The hook surfaces transport/semantic errors
+      // via its own `chat:error` toast, so we just await + return.
+      await realtimeChat.send(trimmed, {
         isQuickMessage,
         quickMessageKey,
       });
-      if (result.ok) return;
-
-      const transportFailures = new Set([
-        "disconnected",
-        "no_room",
-        "not_in_room",
-      ]);
-      if (!transportFailures.has(result.error || "")) {
-        return;
-      }
-
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: "challenge_chat",
-            challengeId,
-            message: trimmed,
-            isQuickMessage,
-            quickMessageKey,
-          }),
-        );
-      }
     },
-    [challengeId, realtimeChat],
+    [realtimeChat],
   );
 
   const sendGiftToPlayer = useCallback(

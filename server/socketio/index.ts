@@ -20,7 +20,7 @@ import { storage } from "../storage";
 import { db } from "../db";
 import { challenges } from "../../shared/schema";
 import { eq } from "drizzle-orm";
-import { deliverRealtimeChallengeChat } from "./challenge-chat-bridge";
+import { deliverRealtimeChallengeChat, type ChatNamespace } from "./challenge-chat-bridge";
 import { challengeGameRooms } from "../websocket/shared";
 
 interface AuthedSocketData {
@@ -195,7 +195,7 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
   }
 
   /* ---------------------------- /chat namespace --------------------------- */
-  const chatNs = io.of(SOCKETIO_NS_CHAT);
+  const chatNs: ChatNamespace = io.of(SOCKETIO_NS_CHAT) as unknown as ChatNamespace;
 
   chatNs.use(async (socket, next) => {
     const auth = await authenticateHandshake(socket);

@@ -23,7 +23,6 @@ const challengeMessageTypes = new Set([
   "game_move",
   "roll_dice",
   "end_turn",
-  "challenge_chat",
   "game_resign",
   "offer_draw",
   "respond_draw",

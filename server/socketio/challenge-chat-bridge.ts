@@ -1,4 +1,3 @@
-import { WebSocket } from "ws";
 import type { Namespace } from "socket.io";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
@@ -11,12 +10,23 @@ import { storage } from "../storage";
 import { filterMessage } from "../lib/word-filter";
 import { sanitizePlainText } from "../lib/input-security";
 import { getCachedUserBlockLists } from "../lib/redis";
-import { challengeGameRooms } from "../websocket/shared";
-import { logger } from "../lib/logger";
-import type { ChatBroadcast } from "../../shared/socketio-events";
+import type {
+  ChatBroadcast,
+  ChatClientToServerEvents,
+  ChatServerToClientEvents,
+} from "../../shared/socketio-events";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type ChatNamespace = Namespace<any, any, any, any>;
+interface AuthedSocketData {
+  userId: string;
+  username: string;
+}
+
+export type ChatNamespace = Namespace<
+  ChatClientToServerEvents,
+  ChatServerToClientEvents,
+  Record<string, never>,
+  AuthedSocketData
+>;
 
 export interface DeliverResult {
   ok: boolean;
@@ -48,11 +58,10 @@ interface DeliverArgs {
  *   3. Resolve sender + per-recipient block/mute lists.
  *   4. Emit `chat:message` to every IO socket in the room — sender always
  *      gets an echo, recipients filtered by block/mute.
- *   5. Reverse-mirror the same payload to the legacy WS `chat_message`
- *      channel so older clients still in the challenge room keep receiving.
  *
- * Both transports share the persisted message's `createdAt` timestamp so
- * the client-side `(senderId, text, ts)` dedup key collapses duplicates.
+ * Task #9: this is the SOLE outbound chat path for challenge rooms. The
+ * legacy WS `challenge_chat` handler has been removed; clients receive
+ * via the IO `chat:message` event only.
  */
 export async function deliverRealtimeChallengeChat(
   args: DeliverArgs,
@@ -126,26 +135,11 @@ export async function deliverRealtimeChallengeChat(
     },
   );
 
-  // ---- Collect legacy WS recipients (skipping sender + sender-blocked) ----
-  const room = challengeGameRooms.get(challengeId);
-  const legacyEntries: Array<[string, WebSocket]> = [];
-  if (room) {
-    for (const [uid, sock] of room.players) {
-      if (uid !== senderId && !senderBlocked.includes(uid))
-        legacyEntries.push([uid, sock]);
-    }
-    for (const [uid, sock] of room.spectators) {
-      if (uid !== senderId && !senderBlocked.includes(uid))
-        legacyEntries.push([uid, sock]);
-    }
-  }
-
   // ---- Collect IO recipients ----
   const ioSockets = await chatNs.in(roomId).fetchSockets();
 
-  // ---- Per-recipient block/mute resolution (union of both transports) ----
+  // ---- Per-recipient block/mute resolution ----
   const recipientIds = new Set<string>();
-  for (const [uid] of legacyEntries) recipientIds.add(uid);
   for (const s of ioSockets) {
     const rid = s.data?.userId;
     if (!rid || rid === senderId) continue;
@@ -202,53 +196,6 @@ export async function deliverRealtimeChallengeChat(
       if (blockedRecipients.has(rid)) continue;
     }
     s.emit("chat:message", broadcast);
-  }
-
-  // ---- Legacy WS reverse-mirror (so old clients keep receiving) ----
-  if (room) {
-    const messageWithSender = {
-      id: savedMessage.id,
-      sessionId: savedMessage.sessionId,
-      senderId,
-      message: finalText,
-      isQuickMessage: !!isQuickMessage,
-      quickMessageKey: safeQuickKey ?? null,
-      isSpectator,
-      createdAt: savedMessage.createdAt,
-      senderName: senderUsername,
-      senderAvatar: sender?.avatarUrl || null,
-      timestamp: ts,
-    };
-    const outgoing = JSON.stringify({
-      type: "chat_message",
-      message: messageWithSender,
-    });
-
-    // Sender echo on legacy WS too — matches handleChallengeChat behavior
-    const senderLegacySocket =
-      room.players.get(senderId) || room.spectators.get(senderId);
-    if (senderLegacySocket && senderLegacySocket.readyState === WebSocket.OPEN) {
-      try {
-        senderLegacySocket.send(outgoing);
-      } catch (err) {
-        logger.warn?.(
-          `[socket.io] legacy sender echo failed: ${(err as Error).message}`,
-        );
-      }
-    }
-
-    for (const [rid, sock] of legacyEntries) {
-      if (blockedRecipients.has(rid)) continue;
-      if (sock.readyState === WebSocket.OPEN) {
-        try {
-          sock.send(outgoing);
-        } catch (err) {
-          logger.warn?.(
-            `[socket.io] legacy mirror send failed for ${rid}: ${(err as Error).message}`,
-          );
-        }
-      }
-    }
   }
 
   return { ok: true };
