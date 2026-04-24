@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n";
@@ -97,7 +98,7 @@ export function BlockedMutedSettings() {
     navigate(`/chat?user=${userId}`);
   };
 
-  const renderUserCard = (userInfo: UserInfo, onAction: () => void, actionLabel: string, isPending: boolean, Icon: typeof UserCheck) => {
+  const renderUserCard = (userInfo: UserInfo, onAction: () => void, actionLabel: string, tooltipText: string, isPending: boolean, Icon: typeof UserCheck) => {
     const displayName = userInfo.nickname || userInfo.username;
     const openLabel = `${t('settings.openConversation')} - @${userInfo.username}`;
     return (
@@ -129,19 +130,27 @@ export function BlockedMutedSettings() {
             <p className="text-sm text-muted-foreground">@{userInfo.username}</p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAction();
-          }}
-          disabled={isPending}
-          data-testid={`button-action-${userInfo.id}`}
-        >
-          <Icon className="w-4 h-4 me-2" />
-          {actionLabel}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAction();
+              }}
+              disabled={isPending}
+              data-testid={`button-action-${userInfo.id}`}
+              aria-label={tooltipText}
+            >
+              <Icon className="w-4 h-4 me-2" />
+              {actionLabel}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent data-testid={`tooltip-action-${userInfo.id}`}>
+            <p>{tooltipText}</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
     );
   };
@@ -202,6 +211,7 @@ export function BlockedMutedSettings() {
                       userInfo,
                       () => unblockMutation.mutate(userInfo.id),
                       t('chat.unblockUser'),
+                      t('settings.unblockActionTooltip'),
                       unblockMutation.isPending,
                       UserCheck
                     )
@@ -232,6 +242,7 @@ export function BlockedMutedSettings() {
                       userInfo,
                       () => unmuteMutation.mutate(userInfo.id),
                       t('chat.unmuteUser'),
+                      t('settings.unmuteActionTooltip'),
                       unmuteMutation.isPending,
                       Volume2
                     )
@@ -262,6 +273,7 @@ export function BlockedMutedSettings() {
                       userInfo,
                       () => unmuteNotificationsMutation.mutate(userInfo.id),
                       t('chat.unmuteNotifications'),
+                      t('settings.unmuteNotificationsActionTooltip'),
                       unmuteNotificationsMutation.isPending,
                       Bell
                     )
