@@ -30,10 +30,18 @@ interface AuthedSocketData {
   // Per-room role stamped at chat:join time. Used by chat:send to enforce
   // read-only access for spectators (Task #10). Map keyed by roomId.
   roomRoles?: Map<string, "player" | "spectator">;
+  // Task #14: serialization-friendly mirror of the spectator entries in
+  // `roomRoles`. Native `Map`s don't survive the Socket.IO Redis adapter's
+  // JSON serialization for `fetchSockets()` across nodes, so the cap check
+  // reads from this array instead. Always kept in sync with `roomRoles`.
+  spectatorRoomIds?: string[];
 }
 
 type RoomAuthzResult =
-  | { allowed: true; role: "player" | "spectator" }
+  | { allowed: true; role: "player" }
+  // Task #14: spectator decisions also carry the per-game cap so the
+  // chat:join handler can enforce capacity without a second DB lookup.
+  | { allowed: true; role: "spectator"; maxSpectators: number }
   | { allowed: false };
 
 type ChatSocket = Socket<ChatClientToServerEvents, ChatServerToClientEvents, Record<string, never>, AuthedSocketData>;
@@ -118,15 +126,15 @@ async function isUserAllowedInRoom(userId: string, roomId: string): Promise<Room
       // the legacy spectate WS path in server/game-websocket/auth-join.ts:
       //   1. Private challenges: only the explicitly-invited friend may watch.
       //   2. The game's challenge settings must allow spectators at all.
-      // Capacity (maxSpectators) is intentionally NOT enforced here — that
-      // limit governs the legacy spectate stream; the realtime channel only
-      // delivers chat to users who already secured a spectate slot.
+      //   3. Per-game spectator capacity is enforced in chat:join — see
+      //      Task #14. We surface `maxSpectators` here so that handler can
+      //      run the count without a second DB round trip.
       if (row.visibility === "private" && row.friendAccountId !== userId) {
         return { allowed: false };
       }
       const config = await storage.getChallengeSettings(row.gameType);
       if (!config.allowSpectators) return { allowed: false };
-      return { allowed: true, role: "spectator" };
+      return { allowed: true, role: "spectator", maxSpectators: config.maxSpectators };
     } catch (err) {
       logger.warn?.(`[socket.io] room authz lookup failed: ${(err as Error).message}`);
       return { allowed: false };
@@ -233,11 +241,64 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
         ack?.(false);
         return;
       }
+
+      // Task #14: enforce per-game spectator cap on the realtime chat
+      // channel. Players are exempt — only spectator joins count toward
+      // the cap. We count by socket (matches the legacy
+      // `room.spectators.size` semantics) across the whole cluster via
+      // the Redis adapter (`fetchSockets` is adapter-aware). The current
+      // socket has not yet joined the room, so it is not double-counted.
+      // Same user re-joining from another tab DOES count — mirroring the
+      // legacy stream where each WS connection consumes a slot.
+      if (authz.role === "spectator") {
+        try {
+          const sockets = await chatNs.in(roomId).fetchSockets();
+          let spectatorCount = 0;
+          for (const s of sockets) {
+            // Use the array mirror (`spectatorRoomIds`) instead of the
+            // `roomRoles` Map: when sockets live on a different node, the
+            // Redis adapter serializes `data` as JSON and `Map`s come back
+            // as `{}`. Arrays survive the round trip.
+            const data = s.data as AuthedSocketData | undefined;
+            if (data?.spectatorRoomIds?.includes(roomId)) spectatorCount++;
+          }
+          if (spectatorCount >= authz.maxSpectators) {
+            socket.emit("chat:error", {
+              code: "spectator_full",
+              message: "Spectator limit reached for this game",
+              roomId,
+            });
+            ack?.(false);
+            return;
+          }
+        } catch (err) {
+          logger.warn?.(`[socket.io] spectator cap check failed for ${roomId}: ${(err as Error).message}`);
+          // Fail-closed on cap errors: better to refuse than over-fan-out.
+          socket.emit("chat:error", { code: "server", message: "Could not verify capacity" });
+          ack?.(false);
+          return;
+        }
+      }
+
       await socket.join(roomId);
       // Stamp this socket's role for the room so chat:send can enforce
       // read-only access for spectators.
       if (!socket.data.roomRoles) socket.data.roomRoles = new Map();
       socket.data.roomRoles.set(roomId, authz.role);
+      // Task #14: keep the cluster-visible spectator mirror in sync.
+      // Defensive: also strip `roomId` from the mirror when joining as a
+      // player so a stale spectator entry from a prior join can't inflate
+      // the cap count.
+      if (authz.role === "spectator") {
+        if (!socket.data.spectatorRoomIds) socket.data.spectatorRoomIds = [];
+        if (!socket.data.spectatorRoomIds.includes(roomId)) {
+          socket.data.spectatorRoomIds.push(roomId);
+        }
+      } else if (socket.data.spectatorRoomIds) {
+        socket.data.spectatorRoomIds = socket.data.spectatorRoomIds.filter(
+          (r) => r !== roomId,
+        );
+      }
       const room = chatNs.adapter.rooms.get(roomId);
       socket.emit("chat:joined", { roomId, members: room?.size || 1 });
       ack?.(true);
@@ -248,6 +309,12 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       if (roomId) {
         await socket.leave(roomId);
         socket.data.roomRoles?.delete(roomId);
+        // Task #14: keep the cluster-visible spectator mirror in sync.
+        if (socket.data.spectatorRoomIds) {
+          socket.data.spectatorRoomIds = socket.data.spectatorRoomIds.filter(
+            (r) => r !== roomId,
+          );
+        }
       }
     });
 

@@ -89,6 +89,7 @@ export const CHAT_ERROR_CODES = [
   "rate_limit",           // per-user rate limiter tripped
   "spectator_not_seated", // sender is in a `challenge:*` room but not in spectator presence
   "spectator_readonly",   // Task #13: spectators may receive but never send on the new transport
+  "spectator_full",       // Task #14: per-game spectator cap reached on the realtime chat channel
   "no_session",           // bridge couldn't find an active game session for the room
   "empty",                // message sanitized to empty string — silently dropped
   "failed",               // generic delivery failure

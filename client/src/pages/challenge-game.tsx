@@ -323,6 +323,9 @@ export default function ChallengeGamePage() {
           spectator_readonly: language === "ar"
             ? "المشاهدون يستطيعون قراءة الدردشة فقط، ولا يمكنهم الإرسال."
             : "Spectators can read chat but can't send messages.",
+          spectator_full: language === "ar"
+            ? "اكتمل عدد المشاهدين لهذه المباراة."
+            : "This match has reached its spectator limit.",
           no_session: language === "ar"
             ? "جلسة اللعبة غير متوفرة"
             : "Game session unavailable",
