@@ -21,6 +21,7 @@ import { db } from "../db";
 import { challenges } from "../../shared/schema";
 import { eq } from "drizzle-orm";
 import { deliverRealtimeChallengeChat, type ChatNamespace } from "./challenge-chat-bridge";
+import { deliverRealtimeDirectMessage } from "./direct-message-bridge";
 import { challengeGameRooms } from "../websocket/shared";
 
 interface AuthedSocketData {
@@ -345,18 +346,43 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
         return;
       }
 
-      // DM rooms (and any future room patterns): keep the simple pass-through
-      // emit. Block-list / persistence for DMs is out of scope for Task #9.
-      const broadcast: ChatBroadcast = {
-        roomId,
-        fromUserId: userId,
-        fromUsername: socket.data.username,
-        text,
-        ts: Date.now(),
-        clientMsgId,
-      };
-      chatNs.to(roomId).emit("chat:message", broadcast);
-      ack?.({ ok: true });
+      // DM rooms — Task #16: full feature parity with the challenge bridge:
+      // word filter + per-recipient block/mute filtering + persistence into
+      // `chat_messages` so the inbox UI can scroll history back. Sender
+      // always receives an echo; the peer is suppressed when either side
+      // has blocked or muted the other (the message is still persisted).
+      if (roomId.startsWith("dm:")) {
+        try {
+          const result = await deliverRealtimeDirectMessage({
+            roomId,
+            senderId: userId,
+            senderUsernameFallback: socket.data.username,
+            text,
+            clientMsgId,
+            chatNs,
+          });
+          if (result.ok) {
+            ack?.({ ok: true });
+          } else if (result.reason === "empty") {
+            ack?.({ ok: false, error: "empty" });
+          } else {
+            socket.emit("chat:error", {
+              code: "invalid",
+              message: "Invalid DM room",
+            });
+            ack?.({ ok: false, error: "invalid" });
+          }
+        } catch (err) {
+          logger.warn?.(`[socket.io] DM chat:send delivery failed: ${(err as Error).message}`);
+          socket.emit("chat:error", { code: "server", message: "Failed to send" });
+          ack?.({ ok: false, error: "server" });
+        }
+        return;
+      }
+
+      // Unknown room pattern — chat:join authz should already have rejected
+      // this, but fail-closed here too rather than leak an un-moderated emit.
+      ack?.({ ok: false, error: "not_in_room" });
     });
   });
 

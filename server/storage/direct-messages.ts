@@ -1,0 +1,111 @@
+/**
+ * Direct-message persistence + history queries used by the realtime
+ * Socket.IO `/chat` DM channel (Task #16).
+ *
+ * Reuses the existing `chat_messages` table — the same one used by the
+ * legacy HTTP `/api/chat/:userId/messages` endpoint — so a single
+ * conversation timeline backs both transports. We deliberately stick to
+ * the plain text-message subset of that table (content / messageType
+ * "text") because the realtime channel is a lightweight chat surface;
+ * media, payments, E2EE, and disappearing-message handling stay in the
+ * existing HTTP routes.
+ */
+
+import { and, desc, eq, lt, or } from "drizzle-orm";
+import { db } from "../db";
+import { chatMessages } from "../../shared/schema";
+
+export interface CreateDirectMessageArgs {
+  senderId: string;
+  receiverId: string;
+  content: string;
+}
+
+export interface DirectMessageRow {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  messageType: string;
+  createdAt: Date | null;
+}
+
+export async function createDirectMessage(
+  args: CreateDirectMessageArgs,
+): Promise<DirectMessageRow> {
+  const [row] = await db
+    .insert(chatMessages)
+    .values({
+      senderId: args.senderId,
+      receiverId: args.receiverId,
+      content: args.content,
+      messageType: "text",
+    })
+    .returning({
+      id: chatMessages.id,
+      senderId: chatMessages.senderId,
+      receiverId: chatMessages.receiverId,
+      content: chatMessages.content,
+      messageType: chatMessages.messageType,
+      createdAt: chatMessages.createdAt,
+    });
+  return row;
+}
+
+export interface GetDirectMessageHistoryArgs {
+  userId: string;
+  peerId: string;
+  /** Page size, clamped to [1, 200]; default 50. */
+  limit?: number;
+  /** When provided, only messages strictly older than this are returned. */
+  before?: Date;
+}
+
+/**
+ * Returns the most recent N text messages exchanged between `userId` and
+ * `peerId`, in ascending chronological order (oldest → newest) so the
+ * inbox UI can append them directly to its scroll buffer.
+ */
+export async function getDirectMessageHistory(
+  args: GetDirectMessageHistoryArgs,
+): Promise<DirectMessageRow[]> {
+  const limit = Math.min(Math.max(args.limit ?? 50, 1), 200);
+
+  // Constrain to the realtime text-only projection. The shared
+  // `chat_messages` table also stores media / voice / payment-attached
+  // variants written by the legacy HTTP path; the realtime DM inbox
+  // scrolls plain text only and treats anything else as out-of-band.
+  const conversation = and(
+    eq(chatMessages.messageType, "text"),
+    or(
+      and(
+        eq(chatMessages.senderId, args.userId),
+        eq(chatMessages.receiverId, args.peerId),
+      ),
+      and(
+        eq(chatMessages.senderId, args.peerId),
+        eq(chatMessages.receiverId, args.userId),
+      ),
+    ),
+  );
+
+  const where = args.before
+    ? and(conversation, lt(chatMessages.createdAt, args.before))
+    : conversation;
+
+  const rows = await db
+    .select({
+      id: chatMessages.id,
+      senderId: chatMessages.senderId,
+      receiverId: chatMessages.receiverId,
+      content: chatMessages.content,
+      messageType: chatMessages.messageType,
+      createdAt: chatMessages.createdAt,
+    })
+    .from(chatMessages)
+    .where(where)
+    .orderBy(desc(chatMessages.createdAt))
+    .limit(limit);
+
+  return rows.reverse();
+}

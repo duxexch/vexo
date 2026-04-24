@@ -3,10 +3,12 @@ import { registerChatConversationRoutes } from "./chat-conversations";
 import { registerChatMessagingRoutes } from "./chat-messaging";
 import { registerBlockingRoutes } from "./blocking";
 import { registerChatTranslationRoutes } from "./chat-translation";
+import { registerDirectMessageHistoryRoutes } from "./dm-history";
 
 export function registerChatRoutes(app: Express): void {
   registerChatConversationRoutes(app);
   registerChatMessagingRoutes(app);
   registerBlockingRoutes(app);
   registerChatTranslationRoutes(app);
+  registerDirectMessageHistoryRoutes(app);
 }

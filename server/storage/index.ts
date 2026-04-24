@@ -38,6 +38,7 @@ import * as seasonsStorage from "./seasons";
 import * as adminStorage from "./admin";
 import * as notificationStorage from "./notifications";
 import * as supportStorage from "./support";
+import * as directMessageStorage from "./direct-messages";
 
 // Compose the unified storage object
 export const storage = {
@@ -69,6 +70,8 @@ export const storage = {
   ...notificationStorage,
   // Support & Complaints
   ...supportStorage,
+  // Direct Messages (realtime DM channel — Task #16)
+  ...directMessageStorage,
 };
 
 // ==================== SEED MULTIPLAYER GAMES ====================
