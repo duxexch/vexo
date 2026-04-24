@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { applyMove as applyBackgammonMove, createNewGame as createBackgammonGame, getGameStatus as getBackgammonStatus } from "../server/game-engines/backgammon/moves";
 import { validateMove as validateBackgammonMove } from "../server/game-engines/backgammon/validation";
 import type { BackgammonState } from "../server/game-engines/backgammon/types";
-import { createErrorHelpers } from "./lib/smoke-helpers";
+import { createErrorHelpers, SmokeScriptError as SmokeError } from "./lib/smoke-helpers";
 import { requestJson as smokeRequestJson } from "./lib/smoke-http";
 
 const SMOKE_USER_AGENT = "smoke-challenge-gameplay-regression/1.0";

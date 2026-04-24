@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { WebSocket } from "ws";
 import { Pool } from "pg";
-import { createErrorHelpers } from "./lib/smoke-helpers";
+import { createErrorHelpers, SmokeScriptError as PerfError } from "./lib/smoke-helpers";
 import { requestJson as smokeRequestJson } from "./lib/smoke-http";
 
 const SMOKE_USER_AGENT = "smoke-domino-load-latency/1.0";
