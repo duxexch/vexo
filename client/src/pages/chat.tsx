@@ -1164,6 +1164,22 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                   <span className="line-clamp-2 break-words [overflow-wrap:anywhere]">
                     {activeUserProfile?.firstName || activeUserProfile?.username || `@${activeConversation}`}
                   </span>
+                  {isActiveConversationNotifMuted && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          className="inline-flex shrink-0 items-center text-muted-foreground"
+                          aria-label={t('chat.muteNotificationsSuccess')}
+                          data-testid="chat-header-muted-badge"
+                        >
+                          <BellOff className="h-3.5 w-3.5" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{t('chat.muteNotificationsSuccess')}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Badge variant="outline" className="h-5 shrink-0 gap-1 border-emerald-500/30 px-1.5 py-0 text-[10px] text-emerald-500">
