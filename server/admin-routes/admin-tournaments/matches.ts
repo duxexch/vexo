@@ -308,7 +308,7 @@ export function registerTournamentMatchRoutes(app: Express) {
           if (totalRefundAmount > 0) {
             await tx.update(tournaments)
               .set({
-                prizePool: sql`GREATEST(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) - ${totalRefundAmount}, 0)::text`,
+                prizePool: sql`GREATEST(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) - ${totalRefundAmount}, 0)`,
                 updatedAt: new Date(),
               })
               .where(eq(tournaments.id, id));

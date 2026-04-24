@@ -161,7 +161,7 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         // Update prize pool
         if (normalizedEntryFee > 0) {
           await tx.update(tournaments)
-            .set({ prizePool: sql`(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) + ${normalizedEntryFee})::text` })
+            .set({ prizePool: sql`(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) + ${normalizedEntryFee})` })
             .where(eq(tournaments.id, tournamentId));
         }
 
@@ -335,7 +335,7 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
           }
 
           await tx.update(tournaments)
-            .set({ prizePool: sql`GREATEST(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) - ${normalizedEntryFee}, 0)::text` })
+            .set({ prizePool: sql`GREATEST(CAST(${tournaments.prizePool} AS DECIMAL(18,2)) - ${normalizedEntryFee}, 0)` })
             .where(eq(tournaments.id, tournamentId));
         }
       });
