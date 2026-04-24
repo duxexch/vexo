@@ -88,6 +88,29 @@ function runRoomNotificationsSmoke() {
     });
 }
 
+// Task #56: cross-manager call-action bridge contract — guards the
+// dispatchCallAction registry so push-button accept/decline/hangup
+// taps from the SW + native call UI keep routing to the right call
+// manager. Pure unit + source-pattern checks, no DB / server.
+function runCallActionsSmoke() {
+    return new Promise((resolve, reject) => {
+        const child = spawn(`${npxBin()} tsx scripts/smoke-call-actions.ts`, [], {
+            stdio: "inherit",
+            shell: true,
+            env: process.env,
+        });
+
+        child.on("error", reject);
+        child.on("exit", (code) => {
+            if (code === 0) {
+                resolve();
+                return;
+            }
+            reject(new Error(`Call-actions smoke failed with exit code ${code}`));
+        });
+    });
+}
+
 function spawnServer() {
     const child = spawn(`${npxBin()} tsx server/index.ts`, [], {
         stdio: ["ignore", "pipe", "pipe"],
@@ -194,6 +217,7 @@ async function main() {
             runTscIncremental(),
             runDmNotificationsSmoke(),
             runRoomNotificationsSmoke(),
+            runCallActionsSmoke(),
             waitForHealthOrExit(server),
         ]);
         await stopServer(server);
