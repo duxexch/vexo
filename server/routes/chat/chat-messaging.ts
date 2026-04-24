@@ -14,10 +14,7 @@ import { resolveChatEnabledFlagFromDb } from "../../lib/chat-settings";
 import { isPinUnlocked } from "../chat-features/pin-lock";
 import { clients } from "../../websocket/shared";
 import { sendNotification } from "../../websocket/notifications";
-import {
-  buildDmNotificationPayload,
-  dispatchHttpDmNotification,
-} from "../../lib/dm-notification-payload";
+import { dispatchHttpDmNotification } from "../../lib/dm-notification-payload";
 
 const CHAT_MESSAGE_DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
 const CHAT_MESSAGE_DEDUPE_PENDING_TTL_MS = 60 * 1000;
