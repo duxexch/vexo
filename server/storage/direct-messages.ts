@@ -82,7 +82,7 @@ export async function getDirectMessageHistory(
     // `deleted_at` is the global hard-delete tombstone used by
     // disappearing/auto-delete sweeps.
     isNull(chatMessages.deletedAt),
-    sql`NOT (${chatMessages.deletedForUsers} @> ARRAY[${args.userId}]::text[])`,
+    sql`NOT (COALESCE(${chatMessages.deletedForUsers}, ARRAY[]::text[]) @> ARRAY[${args.userId}]::text[])`,
     or(
       and(
         eq(chatMessages.senderId, args.userId),
