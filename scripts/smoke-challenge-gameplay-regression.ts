@@ -7,7 +7,18 @@ import { Pool } from "pg";
 import { applyMove as applyBackgammonMove, createNewGame as createBackgammonGame, getGameStatus as getBackgammonStatus } from "../server/game-engines/backgammon/moves";
 import { validateMove as validateBackgammonMove } from "../server/game-engines/backgammon/validation";
 import type { BackgammonState } from "../server/game-engines/backgammon/types";
-import { createErrorHelpers, SmokeScriptError as SmokeError } from "./lib/smoke-helpers";
+import { createErrorHelpers, SmokeScriptError } from "./lib/smoke-helpers";
+
+// Local subclass so existing call sites can do `new SmokeError(message, details)`
+// without having to thread the error-name through every constructor call.
+// SmokeScriptError's signature is (errorName, message, details?) — we lock the
+// errorName to "SmokeError" here so the readable failure shape matches what
+// `createErrorHelpers("SmokeError")` produces from `fail()`.
+class SmokeError extends SmokeScriptError {
+  constructor(message: string, details?: unknown) {
+    super("SmokeError", message, details);
+  }
+}
 import { requestJson as smokeRequestJson } from "./lib/smoke-http";
 
 const SMOKE_USER_AGENT = "smoke-challenge-gameplay-regression/1.0";
