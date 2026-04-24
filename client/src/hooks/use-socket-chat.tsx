@@ -7,6 +7,13 @@ interface UseSocketChatOptions {
   roomId: string | null;
   /** Limit of messages kept in memory */
   historyLimit?: number;
+  /**
+   * Invoked when the server emits `chat:error` for this room or when a
+   * `send()` ack returns `{ ok: false }`. Use this to show a toast so
+   * rate-limit / spectator-not-seated / no_session etc. surface to the
+   * user instead of silently dropping the message.
+   */
+  onError?: (info: { code: string; reason?: string }) => void;
 }
 
 export interface UseSocketChatReturn {
@@ -24,13 +31,15 @@ export interface UseSocketChatReturn {
  * Subscribes to a Socket.IO chat room. Auto-joins when a roomId is supplied
  * and auto-leaves on cleanup. Buffers received messages locally.
  */
-export function useSocketChat({ roomId, historyLimit = 100 }: UseSocketChatOptions): UseSocketChatReturn {
+export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocketChatOptions): UseSocketChatReturn {
   const [connected, setConnected] = useState(false);
   const [joined, setJoined] = useState(false);
   const [members, setMembers] = useState(0);
   const [messages, setMessages] = useState<ChatBroadcast[]>([]);
   const limitRef = useRef(historyLimit);
   limitRef.current = historyLimit;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   useEffect(() => {
     if (!roomId) return;
@@ -59,10 +68,18 @@ export function useSocketChat({ roomId, historyLimit = 100 }: UseSocketChatOptio
       }
     };
 
+    const onChatError = (info: { code?: string; reason?: string; roomId?: string }) => {
+      // Only surface errors targeted at this room (server may include roomId).
+      // If server omits roomId, surface anyway — the user just attempted a send.
+      if (info.roomId && info.roomId !== roomId) return;
+      onErrorRef.current?.({ code: info.code || "server", reason: info.reason });
+    };
+
     sock.on("connect", onConnect);
     sock.on("disconnect", onDisconnect);
     sock.on("chat:message", onMessage);
     sock.on("chat:joined", onJoined);
+    sock.on("chat:error", onChatError);
 
     if (sock.connected) onConnect();
 
@@ -71,6 +88,7 @@ export function useSocketChat({ roomId, historyLimit = 100 }: UseSocketChatOptio
       sock.off("disconnect", onDisconnect);
       sock.off("chat:message", onMessage);
       sock.off("chat:joined", onJoined);
+      sock.off("chat:error", onChatError);
       if (sock.connected) sock.emit("chat:leave", { roomId });
       setJoined(false);
     };
@@ -95,7 +113,17 @@ export function useSocketChat({ roomId, historyLimit = 100 }: UseSocketChatOptio
             isQuickMessage: opts?.isQuickMessage,
             quickMessageKey: opts?.quickMessageKey,
           },
-          (res) => resolve(res),
+          (res) => {
+            // Mirror ack failures into the same onError pipeline so callers
+            // only need to wire one toast handler. The transport doesn't
+            // re-emit chat:error for ack-only failures.
+            if (!res?.ok) {
+              onErrorRef.current?.({
+                code: res?.error || "server",
+              });
+            }
+            resolve(res);
+          },
         );
       }),
     [roomId],

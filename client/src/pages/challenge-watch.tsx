@@ -234,9 +234,40 @@ export default function ChallengeWatchPage() {
   const { toast } = useToast();
   const challengeId = params?.id;
 
-  // Task #9: spectator chat send is now realtime-only (legacy WS handler removed).
+  // Task #9 — full migration: spectator chat (send + receive) flows
+  // exclusively over the realtime Socket.IO channel. The legacy WS
+  // challenge_chat handler has been removed server-side. `onError`
+  // surfaces server semantic failures (rate_limit, spectator_not_seated,
+  // etc.) as toasts so sends don't silently drop.
   const spectatorRealtimeChat = useSocketChat({
     roomId: challengeId ? `challenge:${challengeId}` : "",
+    onError: useCallback(
+      (info: { code: string; reason?: string }) => {
+        const map: Record<string, string> = {
+          rate_limit: language === "ar"
+            ? "أبطئ قليلًا — رسائل كثيرة جدًا"
+            : "Slow down — too many messages",
+          spectator_not_seated: language === "ar"
+            ? "انضم كمتفرج أولًا قبل إرسال الدردشة"
+            : "Join as a spectator before chatting",
+          no_session: language === "ar"
+            ? "جلسة اللعبة غير متوفرة"
+            : "Game session unavailable",
+          empty: "",
+          disconnected: language === "ar"
+            ? "الاتصال غير جاهز الآن"
+            : "Connection is not ready right now",
+        };
+        const msg = map[info.code] ?? (language === "ar" ? "تعذّر إرسال الرسالة" : "Could not send message");
+        if (!msg) return;
+        toast({
+          title: language === "ar" ? "خطأ" : "Error",
+          description: msg,
+          variant: "destructive",
+        });
+      },
+      [language],
+    ),
   });
 
   const [gameSession, setGameSession] = useState<GameSession | null>(null);

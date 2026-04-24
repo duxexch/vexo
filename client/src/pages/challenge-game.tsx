@@ -295,12 +295,43 @@ export default function ChallengeGamePage() {
   const [showMobileChat, setShowMobileChat] = useState(false);
   const callSession = useCall();
   // Subscribe to the new realtime channel for instant chat delivery. Server
-  // mirrors legacy WS chat broadcasts here, so messages are deduped via the
-  // shared (senderId, text, timestamp) signature key. Backwards-compatible:
-  // outgoing still flows through the legacy WS so users on the old transport
-  // continue to receive messages.
+  // Task #9 — full migration: this is the SOLE chat transport for the
+  // challenge room (send + receive). The legacy WS challenge_chat path
+  // has been removed. `onError` surfaces server-side semantic failures
+  // (rate_limit, spectator_not_seated, etc.) as toasts so sends don't
+  // silently drop after the input is cleared.
   const realtimeChat = useSocketChat({
     roomId: challengeId ? `challenge:${challengeId}` : null,
+    onError: useCallback(
+      (info: { code: string; reason?: string }) => {
+        // Surface server-side chat failures (rate_limit, no_session,
+        // spectator_not_seated, server, etc.) so the user knows their
+        // message was rejected. Without this, send() would silently drop.
+        const map: Record<string, string> = {
+          rate_limit: language === "ar"
+            ? "أبطئ قليلًا — رسائل كثيرة جدًا"
+            : "Slow down — too many messages",
+          spectator_not_seated: language === "ar"
+            ? "يجب أن تكون متفرجًا في هذه الغرفة لإرسال الدردشة"
+            : "You must be a seated spectator to chat",
+          no_session: language === "ar"
+            ? "جلسة اللعبة غير متوفرة"
+            : "Game session unavailable",
+          empty: "",
+          disconnected: language === "ar"
+            ? "الاتصال غير جاهز الآن"
+            : "Connection is not ready right now",
+        };
+        const msg = map[info.code] ?? (language === "ar" ? "تعذّر إرسال الرسالة" : "Could not send message");
+        if (!msg) return;
+        toast({
+          title: language === "ar" ? "خطأ" : "Error",
+          description: msg,
+          variant: "destructive",
+        });
+      },
+      [language],
+    ),
   });
   const realtimeMessages = realtimeChat.messages;
   const [fundingShortageProject, setFundingShortageProject] = useState(0);
