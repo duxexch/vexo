@@ -320,6 +320,9 @@ export default function ChallengeGamePage() {
           spectator_not_seated: language === "ar"
             ? "يجب أن تكون متفرجًا في هذه الغرفة لإرسال الدردشة"
             : "You must be a seated spectator to chat",
+          spectator_readonly: language === "ar"
+            ? "المشاهدون يستطيعون قراءة الدردشة فقط، ولا يمكنهم الإرسال."
+            : "Spectators can read chat but can't send messages.",
           no_session: language === "ar"
             ? "جلسة اللعبة غير متوفرة"
             : "Game session unavailable",
@@ -3852,6 +3855,7 @@ export default function ChallengeGamePage() {
               language={language}
               currentUserId={user?.id}
               autoFocusInput
+              disabled={isSpectator}
             />
           </div>
         </DialogContent>

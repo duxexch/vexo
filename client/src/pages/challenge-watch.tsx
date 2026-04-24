@@ -256,6 +256,9 @@ export default function ChallengeWatchPage() {
           spectator_not_seated: language === "ar"
             ? "انضم كمتفرج أولًا قبل إرسال الدردشة"
             : "Join as a spectator before chatting",
+          spectator_readonly: language === "ar"
+            ? "المشاهدون يستطيعون قراءة الدردشة فقط، ولا يمكنهم الإرسال."
+            : "Spectators can read chat but can't send messages.",
           no_session: language === "ar"
             ? "جلسة اللعبة غير متوفرة"
             : "Game session unavailable",
@@ -3294,7 +3297,12 @@ export default function ChallengeWatchPage() {
                   giftTotalText={`${Number(giftAggregate?.totalValue ?? 0).toFixed(2)} VXC`}
                   onSendGift={handleSendGift}
                   onSendChat={sendLiveChatMessage}
-                  canSendChat={Boolean(user)}
+                  canSendChat={false}
+                  sendDisabledReason={
+                    language === "ar"
+                      ? "المشاهدون يستطيعون قراءة الدردشة فقط، ولا يمكنهم الإرسال."
+                      : "Spectators can read chat but can't send messages."
+                  }
                 />
               </div>
             )}
@@ -3372,68 +3380,22 @@ export default function ChallengeWatchPage() {
             )}
           </div>
 
+          {/*
+            Task #13: spectators are read-only on the realtime chat
+            transport — they still receive every message broadcast for
+            this challenge but cannot send. We replace the legacy
+            spectator input form with a clear, localized notice so the
+            policy is obvious instead of failing silently after a send.
+          */}
           <div className="border-t px-4 py-3">
-            {user ? (
-              <div className="space-y-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant={showMobileQuickReplies ? "secondary" : "outline"}
-                    size="icon"
-                    className="min-h-[44px] min-w-[44px]"
-                    onClick={() => setShowMobileQuickReplies((previous) => !previous)}
-                    disabled={mobileQuickMessages.length === 0}
-                    aria-label={t("chat.quickReplies")}
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                  </Button>
-                  <Input
-                    className="min-h-[44px]"
-                    value={mobileChatInput}
-                    onChange={(e) => setMobileChatInput(e.target.value)}
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        sendLiveChatMessage(mobileChatInput);
-                      }
-                    }}
-                    placeholder={t("chat.typeMessage")}
-                    maxLength={500}
-                  />
-                  <Button
-                    className="vex-arcade-btn min-h-[44px]"
-                    onClick={() => sendLiveChatMessage(mobileChatInput)}
-                    disabled={!mobileChatInput.trim()}
-                  >
-                    {t("chat.sendMessage")}
-                  </Button>
-                </div>
-                {showMobileQuickReplies && mobileQuickMessages.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {mobileQuickMessages.map((message) => (
-                      <Button
-                        key={message}
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="h-8 rounded-full px-3 text-xs"
-                        onClick={() => {
-                          setShowMobileQuickReplies(false);
-                          sendLiveChatMessage(message);
-                        }}
-                      >
-                        {message}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {`${t("auth.signIn")} · ${liveChatLabel}`}
-              </p>
-            )}
+            <p
+              className="text-sm text-muted-foreground"
+              data-testid="watch-mobile-chat-spectator-readonly"
+            >
+              {language === "ar"
+                ? "المشاهدون يستطيعون قراءة الدردشة فقط، ولا يمكنهم الإرسال."
+                : "Spectators can read chat but can't send messages."}
+            </p>
           </div>
         </DialogContent>
       </Dialog>

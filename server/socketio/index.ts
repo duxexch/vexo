@@ -287,28 +287,25 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       // Task #9: outgoing chat for challenge rooms is now the authoritative
       // path. We persist + apply the legacy filter pipeline + reverse-mirror
       // to legacy WS clients so behavior is identical regardless of which
-      // transport the sender or recipients use. Spectator chat is allowed
-      // here (Task #9 lifts the Task #10 spectator_readonly gate); the
-      // bridge stamps `isSpectator` on the broadcast so the UI can label it.
+      // transport the sender or recipients use.
+      //
+      // Task #13: spectators are read-only on this transport. They still
+      // RECEIVE every broadcast (so the live chat panel works), but any
+      // attempt to send is rejected with the dedicated `spectator_readonly`
+      // code so the client can render a polite localized notice instead of
+      // a generic failure. The check runs before the per-room presence
+      // check below because role is the cheaper, more authoritative gate.
       if (roomId.startsWith("challenge:")) {
         const challengeId = roomId.slice("challenge:".length);
 
-        // Hardening: chat:join's authz only checks that the user *could* be a
-        // spectator (visibility + allowSpectators). It does NOT prove they
-        // actually claimed a spectate seat through the legacy spectate flow.
-        // For spectators, require concrete presence in the live game room's
-        // spectator map before letting them post — players are gated by the
-        // player1..4 row check in chat:join and don't need this extra step.
         if (role === "spectator") {
-          const liveRoom = challengeGameRooms.get(challengeId);
-          if (!liveRoom || !liveRoom.spectators.has(userId)) {
-            socket.emit("chat:error", {
-              code: "forbidden",
-              message: "Join the game as a spectator before chatting",
-            });
-            ack?.({ ok: false, error: "spectator_not_seated" });
-            return;
-          }
+          socket.emit("chat:error", {
+            code: "spectator_readonly",
+            message: "Spectators can read chat but cannot send messages",
+            roomId,
+          });
+          ack?.({ ok: false, error: "spectator_readonly" });
+          return;
         }
 
         try {
@@ -320,7 +317,7 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
             text,
             isQuickMessage,
             quickMessageKey,
-            isSpectator: role === "spectator",
+            isSpectator: false,
             clientMsgId,
             chatNs,
           });

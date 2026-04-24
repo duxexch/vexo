@@ -59,6 +59,13 @@ interface SpectatorPanelProps {
   giftTotalText?: string;
   onSendChat?: (message: string) => void;
   canSendChat?: boolean;
+  /**
+   * Optional explanation shown under the chat input when `canSendChat` is
+   * false. When omitted, the panel falls back to the generic "sign in to
+   * participate" hint. Set this to surface, for example, the Task #13
+   * read-only spectator notice.
+   */
+  sendDisabledReason?: string;
 }
 
 function normalizeChatDraft(value: string): string {
@@ -99,6 +106,7 @@ export function SpectatorPanel({
   giftTotalText,
   onSendChat,
   canSendChat = false,
+  sendDisabledReason,
 }: SpectatorPanelProps) {
   const { language, t } = useI18n();
   const { toast } = useToast();
@@ -523,8 +531,10 @@ export function SpectatorPanel({
                 </div>
               )}
               {!canSendChat && (
-                <p className="text-xs text-muted-foreground">
-                  {language === "ar" ? "سجّل الدخول للمشاركة في الدردشة المباشرة." : "Sign in to participate in live chat."}
+                <p className="text-xs text-muted-foreground" data-testid="spectator-chat-disabled-reason">
+                  {sendDisabledReason ?? (language === "ar"
+                    ? "سجّل الدخول للمشاركة في الدردشة المباشرة."
+                    : "Sign in to participate in live chat.")}
                 </p>
               )}
             </div>
