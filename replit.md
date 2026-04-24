@@ -76,6 +76,12 @@ First-time VPS bootstrap (Traefik network + Traefik container) is documented in 
 
 ## Recent changes
 
+- 2026-04-24 — **Chat-notifications gated before each release:**
+  - `quality:smoke:dm-notifications` (15 checks: helper-level suppression rules, HTTP↔realtime payload parity, preview rules, real-bridge integration via DI for allowed/blocked/`mutedUsers`/`notificationMutedUsers`, and HTTP runtime integration via `dispatchHttpDmNotification`) is now part of the existing release-readiness aggregate `quality:gate:phase-e` and runs first so any DM-notification regression surfaces in seconds.
+  - New `quality:gate:chat` aggregate (`check:types && quality:smoke:dm-notifications`) for fast chat-only verification when iterating on `server/routes/chat/*` or `server/socketio/direct-message-bridge.ts`.
+  - The same smoke also runs in parallel inside `verify:fast` (Task #23 wiring), so local pre-commit verification catches regressions too.
+  - Run before publishing: `npm run quality:gate:phase-e` (full release gate) or `npm run quality:gate:chat` (chat-only fast check).
+
 - 2026-04-23 — **Admin · Games Management visual identity overhaul:**
   - New reusable admin components under `client/src/components/admin/games/`:
     - `GameAssetUploader.tsx` — drag-and-drop + file picker + URL paste, preview thumbnail, remove, recommended size hint, configurable aspect (square/wide/card). Posts to `/api/upload` via shared `adminFetch`.
