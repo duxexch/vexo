@@ -243,8 +243,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
 
   const isActiveConversationNotifMuted = useMemo(() => {
     if (!activeConversation) return false;
-    const list = (user as { notificationMutedUsers?: string[] } | null)
-      ?.notificationMutedUsers;
+    const list = user?.notificationMutedUsers;
     return Array.isArray(list) && list.includes(activeConversation);
   }, [user, activeConversation]);
 
