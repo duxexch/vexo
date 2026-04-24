@@ -82,7 +82,7 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
                         <ul className="space-y-1">
                             <li><Link href="/games/board" className="hover:underline">{dir === "rtl" ? "ألعاب الطاولة" : "Board games"}</Link></li>
                             <li><Link href="/games/card" className="hover:underline">{dir === "rtl" ? "ألعاب الورق" : "Card games"}</Link></li>
-                            <li><Link href="/games/educational" className="hover:underline">{dir === "rtl" ? "ألعاب تعليمية" : "Educational"}</Link></li>
+                            <li><Link href="/games/language" className="hover:underline">{dir === "rtl" ? "تحدي اللغات" : "Language"}</Link></li>
                         </ul>
                     </div>
                     <div>

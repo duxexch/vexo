@@ -427,7 +427,7 @@ export async function resolveDynamicRouteSeo(
         endedAt: liveGameSessions.endedAt,
         status: liveGameSessions.status,
       }).from(liveGameSessions).where(eq(liveGameSessions.id, matchId));
-      if (!row) {
+      if (!row || row.status !== "completed") {
         metaSet(cacheKey, null);
         return null;
       }
