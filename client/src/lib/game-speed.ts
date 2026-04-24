@@ -1,23 +1,25 @@
 import { useEffect, useState } from "react";
 
-export type DominoSpeedMode = "normal" | "fast" | "turbo";
+export type GameSpeedMode = "normal" | "fast" | "turbo";
 
+// Storage key kept under the original `vex.dominoSpeedMode` name so that
+// existing players' Fast/Turbo preference survives this rename.
 const STORAGE_KEY = "vex.dominoSpeedMode";
-const CHANGE_EVENT = "vex:domino-speed-change";
+const CHANGE_EVENT = "vex:game-speed-change";
 
-export const DOMINO_SPEED_MODES: DominoSpeedMode[] = ["normal", "fast", "turbo"];
+export const GAME_SPEED_MODES: GameSpeedMode[] = ["normal", "fast", "turbo"];
 
-export const DOMINO_SPEED_MULTIPLIERS: Record<DominoSpeedMode, number> = {
+export const GAME_SPEED_MULTIPLIERS: Record<GameSpeedMode, number> = {
     normal: 1,
     fast: 0.65,
     turbo: 0.4,
 };
 
-function isSpeedMode(value: unknown): value is DominoSpeedMode {
+function isSpeedMode(value: unknown): value is GameSpeedMode {
     return value === "normal" || value === "fast" || value === "turbo";
 }
 
-export function getDominoSpeedMode(): DominoSpeedMode {
+export function getGameSpeedMode(): GameSpeedMode {
     if (typeof window === "undefined") return "normal";
     try {
         const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -28,7 +30,7 @@ export function getDominoSpeedMode(): DominoSpeedMode {
     return "normal";
 }
 
-export function setDominoSpeedMode(mode: DominoSpeedMode): void {
+export function setGameSpeedMode(mode: GameSpeedMode): void {
     if (typeof window === "undefined") return;
     try {
         window.localStorage.setItem(STORAGE_KEY, mode);
@@ -48,13 +50,13 @@ export function prefersReducedMotion(): boolean {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export function getDominoSpeedMultiplier(mode: DominoSpeedMode = getDominoSpeedMode()): number {
+export function getGameSpeedMultiplier(mode: GameSpeedMode = getGameSpeedMode()): number {
     if (prefersReducedMotion()) return 0;
-    return DOMINO_SPEED_MULTIPLIERS[mode] ?? 1;
+    return GAME_SPEED_MULTIPLIERS[mode] ?? 1;
 }
 
-export function useDominoSpeedMode(): DominoSpeedMode {
-    const [mode, setMode] = useState<DominoSpeedMode>(() => getDominoSpeedMode());
+export function useGameSpeedMode(): GameSpeedMode {
+    const [mode, setMode] = useState<GameSpeedMode>(() => getGameSpeedMode());
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -64,13 +66,13 @@ export function useDominoSpeedMode(): DominoSpeedMode {
             if (isSpeedMode(detail)) {
                 setMode(detail);
             } else {
-                setMode(getDominoSpeedMode());
+                setMode(getGameSpeedMode());
             }
         };
 
         const handleStorage = (event: StorageEvent) => {
             if (event.key === STORAGE_KEY) {
-                setMode(getDominoSpeedMode());
+                setMode(getGameSpeedMode());
             }
         };
 
@@ -85,8 +87,8 @@ export function useDominoSpeedMode(): DominoSpeedMode {
     return mode;
 }
 
-export function useDominoSpeedMultiplier(): number {
-    const mode = useDominoSpeedMode();
+export function useGameSpeedMultiplier(): number {
+    const mode = useGameSpeedMode();
     const [reduced, setReduced] = useState<boolean>(() => prefersReducedMotion());
 
     useEffect(() => {
@@ -103,5 +105,5 @@ export function useDominoSpeedMultiplier(): number {
     }, []);
 
     if (reduced) return 0;
-    return DOMINO_SPEED_MULTIPLIERS[mode] ?? 1;
+    return GAME_SPEED_MULTIPLIERS[mode] ?? 1;
 }

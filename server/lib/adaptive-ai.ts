@@ -791,6 +791,10 @@ export async function chooseAdaptiveAIMove(params: {
     // collapse the artificial delay to a small, snappy value so the player
     // isn't waiting on a forced play. For richer positions we keep the
     // difficulty/bucket-driven schedule unchanged.
+    // Applies to every game type (domino, chess, backgammon, baloot,
+    // tarneeb, language duel) — the snappy floor lives here so the
+    // server-side think behavior stays consistent with the client-side
+    // Game Speed picker.
     if (validMoves.length <= 1) {
         const trivialThink = clamp(
             Math.floor(range.min * 0.35 * clamp(bucket.humanDelayFactor, 0.75, 1.45)),

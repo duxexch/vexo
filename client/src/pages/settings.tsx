@@ -28,11 +28,11 @@ import { User, Shield, Settings2, Loader2, Monitor, Smartphone, Globe, Trash2, L
 import { BlockedMutedSettings } from "@/components/BlockedMutedSettings";
 import { useSoundEffects } from "@/hooks/use-sound-effects";
 import {
-  DOMINO_SPEED_MODES,
-  setDominoSpeedMode,
-  useDominoSpeedMode,
-  type DominoSpeedMode,
-} from "@/lib/domino-speed";
+  GAME_SPEED_MODES,
+  setGameSpeedMode,
+  useGameSpeedMode,
+  type GameSpeedMode,
+} from "@/lib/game-speed";
 import { format } from "date-fns";
 import QRCode from "qrcode";
 
@@ -1280,11 +1280,11 @@ function SoundSettingsSection() {
 
 function GameSpeedSection() {
   const { t } = useI18n();
-  const speedMode = useDominoSpeedMode();
+  const speedMode = useGameSpeedMode();
 
   const handleChange = (value: string) => {
-    if (DOMINO_SPEED_MODES.includes(value as DominoSpeedMode)) {
-      setDominoSpeedMode(value as DominoSpeedMode);
+    if (GAME_SPEED_MODES.includes(value as GameSpeedMode)) {
+      setGameSpeedMode(value as GameSpeedMode);
     }
   };
 

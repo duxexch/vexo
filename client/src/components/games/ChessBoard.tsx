@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { useGameAudio } from "@/hooks/use-game-audio";
+import { useGameSpeedMultiplier } from "@/lib/game-speed";
 
 interface ChessBoardProps {
   gameState?: string;
@@ -440,6 +441,22 @@ export function ChessBoard({
   const [captureFx, setCaptureFx] = useState<{ square: string; piece: string } | null>(null);
   const animTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const captureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Game-speed multiplier (Normal/Fast/Turbo + reduced-motion). Returns 0
+  // when the OS reports prefers-reduced-motion so animations effectively
+  // disappear. Each derived duration mirrors the matching CSS keyframe in
+  // client/src/index.css so the React-side cleanup timers stay in lockstep
+  // with the visual animation length.
+  const speedMultiplier = useGameSpeedMultiplier();
+  const animationsDisabled = speedMultiplier === 0;
+  const chessMoveAnimMs = animationsDisabled ? 0 : Math.max(1, Math.round(360 * speedMultiplier));
+  const chessCaptureAnimMs = animationsDisabled ? 0 : Math.max(1, Math.round(290 * speedMultiplier));
+  const chessCaptureRingAnimMs = animationsDisabled ? 0 : Math.max(1, Math.round(320 * speedMultiplier));
+  // Cleanup fires just after the longest concurrent animation so state
+  // clears without stranding the visual on screen.
+  const slideAnimationMs = animationsDisabled ? 0 : chessMoveAnimMs + 10;
+  const captureFxMs = animationsDisabled
+    ? 0
+    : Math.max(chessCaptureAnimMs, chessCaptureRingAnimMs) + 10;
   const prevBoardRef = useRef<string[][] | null>(null);
   const prevCheckRef = useRef<string | null>(null);
   const prevStatusRef = useRef<string | undefined>(undefined);
@@ -515,6 +532,7 @@ export function ChessBoard({
   }, [myColor]);
 
   const animateMoveBetweenSquares = useCallback((fromSquare: string, toSquare: string) => {
+    if (animationsDisabled) return;
     const [fromRow, fromCol] = squareToCoords(fromSquare);
     const [toRow, toCol] = squareToCoords(toSquare);
     const fromVisual = toVisualCoords(fromRow, fromCol);
@@ -527,16 +545,17 @@ export function ChessBoard({
     setAnimSquare(toSquare);
 
     if (animTimerRef.current) clearTimeout(animTimerRef.current);
-    animTimerRef.current = setTimeout(() => setAnimSquare(null), 340);
-  }, [toVisualCoords]);
+    animTimerRef.current = setTimeout(() => setAnimSquare(null), slideAnimationMs);
+  }, [toVisualCoords, slideAnimationMs, animationsDisabled]);
 
   const triggerCaptureEffect = useCallback((square: string, capturedPiece?: string) => {
     if (!capturedPiece) return;
+    if (animationsDisabled) return;
 
     setCaptureFx({ square, piece: capturedPiece });
     if (captureTimerRef.current) clearTimeout(captureTimerRef.current);
-    captureTimerRef.current = setTimeout(() => setCaptureFx(null), 320);
-  }, []);
+    captureTimerRef.current = setTimeout(() => setCaptureFx(null), captureFxMs);
+  }, [captureFxMs, animationsDisabled]);
 
   const fallbackMoves = useMemo(() => {
     const moves: AuthoritativeMove[] = [];
@@ -919,27 +938,32 @@ export function ChessBoard({
                       className={cn(
                         "text-[clamp(1.3rem,5.4vw,2.25rem)] select-none chess-piece",
                         isWhitePiece(piece) ? "chess-piece-white" : "chess-piece-black",
-                        animSquare === square && "animate-chess-move chess-piece-moving"
+                        animSquare === square && !animationsDisabled && "animate-chess-move chess-piece-moving"
                       )}
                       style={animSquare === square ? {
                         "--move-from-col": `${animDelta.dx}`,
                         "--move-from-row": `${animDelta.dy}`,
+                        animationDuration: animationsDisabled ? undefined : `${chessMoveAnimMs}ms`,
                       } as React.CSSProperties : undefined}
                     >
                       {PIECE_SYMBOLS[piece]}
                     </span>
                   )}
-                  {captureFx?.square === square && (
+                  {captureFx?.square === square && !animationsDisabled && (
                     <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
                       <span
                         className={cn(
                           "text-[clamp(1.3rem,5.4vw,2.25rem)] select-none chess-piece animate-chess-capture",
                           isWhitePiece(captureFx.piece) ? "chess-piece-white" : "chess-piece-black"
                         )}
+                        style={{ animationDuration: `${chessCaptureAnimMs}ms` }}
                       >
                         {PIECE_SYMBOLS[captureFx.piece]}
                       </span>
-                      <span className="absolute inset-1 rounded-full border border-red-500/50 animate-chess-capture-ring" />
+                      <span
+                        className="absolute inset-1 rounded-full border border-red-500/50 animate-chess-capture-ring"
+                        style={{ animationDuration: `${chessCaptureRingAnimMs}ms` }}
+                      />
                     </div>
                   )}
                   {isValidMove && !piece && (

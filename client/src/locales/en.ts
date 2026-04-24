@@ -1214,7 +1214,7 @@ const en: Record<string, string> = {
   'settings.testCoin': 'Coin',
   'settings.testWin': 'Win',
   'settings.gameSpeed': 'Game Speed',
-  'settings.gameSpeedDescription': 'Controls how quickly domino animations play. Faster modes shrink the wait between moves.',
+  'settings.gameSpeedDescription': 'Applies to every classic game (chess, dominoes, and more). Faster modes shrink the wait between moves and shorten board animations.',
   'settings.gameSpeedNormal': 'Normal',
   'settings.gameSpeedFast': 'Fast',
   'settings.gameSpeedTurbo': 'Turbo',

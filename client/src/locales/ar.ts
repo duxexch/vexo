@@ -1214,7 +1214,7 @@ const ar: Record<string, string> = {
   'settings.testCoin': 'عملة',
   'settings.testWin': 'فوز',
   'settings.gameSpeed': 'سرعة اللعبة',
-  'settings.gameSpeedDescription': 'يتحكم في سرعة الرسوم المتحركة لقطع الدومينو. الأوضاع الأسرع تقلّص الانتظار بين الحركات.',
+  'settings.gameSpeedDescription': 'تُطبَّق على جميع الألعاب الكلاسيكية (الشطرنج والدومينو وغيرها). الأوضاع الأسرع تُقلّص الانتظار بين الحركات وتُقصّر الرسوم المتحركة على الرقعة.',
   'settings.gameSpeedNormal': 'عادية',
   'settings.gameSpeedFast': 'سريعة',
   'settings.gameSpeedTurbo': 'فائقة',

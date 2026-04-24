@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, memo } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n";
-import { useDominoSpeedMultiplier } from "@/lib/domino-speed";
+import { useGameSpeedMultiplier } from "@/lib/game-speed";
 import { motion } from "framer-motion";
 import { Clock3 } from "lucide-react";
 
@@ -1363,7 +1363,7 @@ export function DominoBoard({
 
   // Game-speed multiplier (Normal/Fast/Turbo + reduced-motion). Returns 0 when
   // the OS reports prefers-reduced-motion so animations effectively disappear.
-  const speedMultiplier = useDominoSpeedMultiplier();
+  const speedMultiplier = useGameSpeedMultiplier();
   const animationsDisabled = speedMultiplier === 0;
   const placeTransitionMs = Math.max(0, Math.round(180 * speedMultiplier));
   const placeSpringStiffness = Math.round(360 / Math.max(speedMultiplier, 0.25));

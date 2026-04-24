@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/auth';
 import { extractWsErrorInfo, isWsErrorType } from '@/lib/ws-errors';
-import { useDominoSpeedMode } from '@/lib/domino-speed';
+import { useGameSpeedMode } from '@/lib/game-speed';
 
 const DEBUG_WS = import.meta.env.DEV;
 function wsLog(...args: unknown[]) { if (DEBUG_WS) console.log(...args); }
@@ -217,7 +217,7 @@ function getReconnectDelay(attempt: number): number {
 
 export function useGameWebSocket(sessionId: string | null) {
   const { user, token } = useAuth();
-  const speedMode = useDominoSpeedMode();
+  const speedMode = useGameSpeedMode();
   const speedModeRef = useRef(speedMode);
   speedModeRef.current = speedMode;
   const wsRef = useRef<WebSocket | null>(null);

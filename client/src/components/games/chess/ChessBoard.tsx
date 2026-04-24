@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import type { BoardTheme } from '@/lib/chess-themes';
 import { getDefaultTheme } from '@/lib/chess-themes';
+import { useGameSpeedMultiplier } from '@/lib/game-speed';
 
 interface ChessPiece {
   type: 'p' | 'n' | 'b' | 'r' | 'q' | 'k';
@@ -52,6 +53,14 @@ export function ChessBoard({
   // For slide animation
   const [animating, setAnimating] = useState<{ from: string; to: string; piece: ChessPiece } | null>(null);
   const prevPositionRef = useRef<Record<string, ChessPiece>>({});
+  // Game-speed multiplier (Normal/Fast/Turbo + reduced-motion). Returns 0
+  // when the OS reports prefers-reduced-motion so animations effectively
+  // disappear. Floor each derived duration at 1ms so the cleanup timer
+  // always fires on the next tick instead of being lost.
+  const speedMultiplier = useGameSpeedMultiplier();
+  const animationsDisabled = speedMultiplier === 0;
+  const slideTransitionSec = animationsDisabled ? 0 : Math.max(0.001, 0.25 * speedMultiplier);
+  const slideCleanupMs = animationsDisabled ? 0 : Math.max(1, Math.round(350 * speedMultiplier));
 
   const isPlayerTurn = currentTurn === playerColor;
   const flipped = playerColor === 'b';
@@ -76,12 +85,12 @@ export function ChessBoard({
             });
           });
           // Fallback cleanup
-          setTimeout(() => setAnimating(null), 350);
+          setTimeout(() => setAnimating(null), slideCleanupMs);
         }
       }
     }
     prevPositionRef.current = { ...position };
-  }, [position, lastMove, playerColor]);
+  }, [position, lastMove, playerColor, slideCleanupMs]);
 
   const getValidMovesForSquare = useCallback((square: string): string[] => {
     return validMoves
@@ -380,7 +389,9 @@ export function ChessBoard({
                     )}
                     style={{
                       filter: t_.pieceFilter || undefined,
-                      transition: 'transform 0.25s cubic-bezier(.2,.8,.3,1)',
+                      transition: animationsDisabled
+                        ? 'none'
+                        : `transform ${slideTransitionSec}s cubic-bezier(.2,.8,.3,1)`,
                       transform: animOffset
                         ? `translate(${animOffset.x}%, ${animOffset.y}%)`
                         : undefined,
