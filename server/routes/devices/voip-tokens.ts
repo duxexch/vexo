@@ -3,7 +3,7 @@ import { z } from "zod";
 import { authMiddleware, type AuthRequest } from "../middleware";
 import {
   registerDevicePushToken,
-  deactivateDevicePushToken,
+  deactivateDevicePushTokenForUser,
 } from "../../storage/notifications";
 import { logger } from "../../lib/logger";
 
@@ -71,7 +71,17 @@ export function registerVoipTokenRoutes(app: Express): void {
       return res.status(400).json({ error: "Invalid unregistration", details: parsed.error.flatten() });
     }
     try {
-      const removed = await deactivateDevicePushToken(parsed.data.token, parsed.data.kind);
+      // User-scoped: only deactivate the token if it's still owned by
+      // the authenticated user. If the same physical device has been
+      // re-registered to a different account this is a no-op, which
+      // keeps the new owner's ringer working — otherwise a delayed
+      // logout from the previous user could silently disable an
+      // active token (race condition flagged in code review).
+      const removed = await deactivateDevicePushTokenForUser(
+        req.user!.id,
+        parsed.data.token,
+        parsed.data.kind,
+      );
       res.json({ success: true, removed });
     } catch (err) {
       logger.warn("[voip-token] unregister failed", { error: err instanceof Error ? err.message : String(err) });

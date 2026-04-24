@@ -229,6 +229,38 @@ async function main(): Promise<void> {
     fail("/api/devices/voip-token routes are wired into the routes index");
   }
 
+  // ── 7b. The DELETE handler must be user-scoped, not global. A delayed
+  // logout from User A on a shared device must NOT deactivate the same
+  // physical token after User B has just registered it. The route uses
+  // `deactivateDevicePushTokenForUser(req.user!.id, ...)`; the global
+  // `deactivateDevicePushToken(token, kind)` is reserved for the
+  // gateway-driven dead-token path inside voip-push.ts.
+  if (
+    voipRoute
+    && /deactivateDevicePushTokenForUser\s*\(\s*req\.user!\.id/.test(voipRoute)
+    && !/[^F]deactivateDevicePushToken\s*\(/.test(voipRoute)
+  ) {
+    pass("DELETE /api/devices/voip-token uses the user-scoped deactivation (account-switch race fix)");
+  } else {
+    fail(
+      "DELETE /api/devices/voip-token uses the user-scoped deactivation (account-switch race fix)",
+      "If the route calls the global deactivateDevicePushToken(token, kind), a logout request from User A can disable a token that has just been re-registered to User B on the same physical device, silently breaking B's lock-screen ringer.",
+    );
+  }
+
+  // ── 7c. The user-scoped helper exists, filters on userId, and the
+  // global helper documents that it is gateway-only.
+  const storageSrc = await readText(path.join(REPO_ROOT, "server/storage/notifications.ts"));
+  if (
+    storageSrc
+    && /export\s+async\s+function\s+deactivateDevicePushTokenForUser\s*\(/.test(storageSrc)
+    && /eq\s*\(\s*devicePushTokens\.userId\s*,\s*userId\s*\)[\s\S]{0,200}eq\s*\(\s*devicePushTokens\.token/.test(storageSrc)
+  ) {
+    pass("storage exposes deactivateDevicePushTokenForUser scoped on userId+token+kind");
+  } else {
+    fail("storage exposes deactivateDevicePushTokenForUser scoped on userId+token+kind");
+  }
+
   // ── 8. Schema includes device_push_tokens with the right kinds
   const schemaSrc = await readText(path.join(REPO_ROOT, "shared/schema.ts"));
   if (

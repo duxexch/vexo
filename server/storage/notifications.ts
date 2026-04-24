@@ -214,10 +214,45 @@ export async function getActiveDevicePushTokens(userId: string): Promise<Array<{
   }));
 }
 
+/**
+ * Deactivate a token globally — only safe when the **gateway** has told
+ * us the token is dead (APNs 410 Unregistered, FCM 404 UNREGISTERED).
+ * In that case the OS guarantees the physical token can never be
+ * reissued to a different user, so it's correct to drop the row no
+ * matter who currently owns it.
+ *
+ * Do NOT call this from a user-initiated logout flow — use
+ * `deactivateDevicePushTokenForUser` instead. Otherwise a delayed
+ * logout request from User A can race against a fresh registration
+ * from User B (same physical device) and silently disable B's ringer.
+ */
 export async function deactivateDevicePushToken(token: string, kind: string): Promise<boolean> {
   const result = await db.update(devicePushTokens)
     .set({ isActive: false, updatedAt: new Date() })
     .where(and(
+      eq(devicePushTokens.token, token),
+      eq(devicePushTokens.kind, kind),
+      eq(devicePushTokens.isActive, true),
+    ));
+  return (result.rowCount || 0) > 0;
+}
+
+/**
+ * User-scoped deactivation — used by `DELETE /api/devices/voip-token`
+ * on logout. Only flips rows still owned by the authenticated user.
+ * If the token has already been re-registered by a different user
+ * (account switch on the same device) this is a no-op, which is
+ * exactly what we want — the new owner's ringer keeps working.
+ */
+export async function deactivateDevicePushTokenForUser(
+  userId: string,
+  token: string,
+  kind: string,
+): Promise<boolean> {
+  const result = await db.update(devicePushTokens)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(
+      eq(devicePushTokens.userId, userId),
       eq(devicePushTokens.token, token),
       eq(devicePushTokens.kind, kind),
       eq(devicePushTokens.isActive, true),
