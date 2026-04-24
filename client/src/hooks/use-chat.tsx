@@ -977,7 +977,13 @@ export function useChat(): UseChatReturn {
       return { ...prev, loadingMore: true };
     });
 
-    if (!shouldFetch || !oldestCreatedAt || !token) return;
+    if (!shouldFetch || !oldestCreatedAt || !token) {
+      // We may have just flipped `loadingMore` true above; clear it
+      // when we abort so the spinner doesn't stick on a logged-out or
+      // edge-case state.
+      if (shouldFetch) setState(prev => ({ ...prev, loadingMore: false }));
+      return;
+    }
 
     const PAGE_SIZE = 50;
     const before = oldestCreatedAt;
