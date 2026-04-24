@@ -10,7 +10,7 @@ import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Ban, Volume2, UserCheck, VolumeX, Users } from "lucide-react";
+import { Ban, Volume2, UserCheck, VolumeX, Users, Bell, BellOff } from "lucide-react";
 
 interface UserInfo {
   id: string;
@@ -26,6 +26,7 @@ export function BlockedMutedSettings() {
 
   const blockedUserIds = user?.blockedUsers || [];
   const mutedUserIds = user?.mutedUsers || [];
+  const notificationMutedUserIds = user?.notificationMutedUsers || [];
 
   const { data: blockedUsersInfo, isLoading: loadingBlocked } = useQuery<UserInfo[]>({
     queryKey: ['/api/users/batch', blockedUserIds],
@@ -47,6 +48,16 @@ export function BlockedMutedSettings() {
     enabled: mutedUserIds.length > 0,
   });
 
+  const { data: notificationMutedUsersInfo, isLoading: loadingNotificationMuted } = useQuery<UserInfo[]>({
+    queryKey: ['/api/users/batch', notificationMutedUserIds],
+    queryFn: async () => {
+      if (notificationMutedUserIds.length === 0) return [];
+      const res = await apiRequest('POST', '/api/users/batch', { userIds: notificationMutedUserIds });
+      return res.json();
+    },
+    enabled: notificationMutedUserIds.length > 0,
+  });
+
   const unblockMutation = useMutation({
     mutationFn: (userId: string) => apiRequest('DELETE', `/api/users/${userId}/block`),
     onSuccess: () => {
@@ -62,6 +73,17 @@ export function BlockedMutedSettings() {
     mutationFn: (userId: string) => apiRequest('DELETE', `/api/users/${userId}/mute`),
     onSuccess: () => {
       toast({ title: t('chat.unmuteSuccess') });
+      refreshUser();
+    },
+    onError: (err: Error) => {
+      toast({ title: t('common.error'), description: err.message, variant: 'destructive' });
+    }
+  });
+
+  const unmuteNotificationsMutation = useMutation({
+    mutationFn: (userId: string) => apiRequest('DELETE', `/api/users/${userId}/notification-mute`),
+    onSuccess: () => {
+      toast({ title: t('chat.unmuteNotificationsSuccess') });
       refreshUser();
     },
     onError: (err: Error) => {
@@ -111,7 +133,7 @@ export function BlockedMutedSettings() {
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="blocked" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 gap-1">
+          <TabsList className="grid w-full grid-cols-3 gap-1">
             <TabsTrigger value="blocked" data-testid="tab-blocked-users">
               <Ban className="w-4 h-4 me-2" />
               {t('settings.blockedUsers')}
@@ -124,6 +146,13 @@ export function BlockedMutedSettings() {
               {t('settings.mutedUsers')}
               {mutedUserIds.length > 0 && (
                 <Badge variant="secondary" className="ms-2">{mutedUserIds.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="notification-muted" data-testid="tab-notification-muted-users">
+              <BellOff className="w-4 h-4 me-2" />
+              {t('settings.notificationMutedUsers')}
+              {notificationMutedUserIds.length > 0 && (
+                <Badge variant="secondary" className="ms-2">{notificationMutedUserIds.length}</Badge>
               )}
             </TabsTrigger>
           </TabsList>
@@ -181,6 +210,36 @@ export function BlockedMutedSettings() {
                       t('chat.unmuteUser'),
                       unmuteMutation.isPending,
                       Volume2
+                    )
+                  )}
+                </div>
+              </ScrollArea>
+            )}
+          </TabsContent>
+
+          <TabsContent value="notification-muted" className="mt-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              {t('settings.notificationMutedUsersDesc')}
+            </p>
+            {loadingNotificationMuted ? (
+              <div className="space-y-3">
+                {[1, 2].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+              </div>
+            ) : notificationMutedUserIds.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground" data-testid="empty-notification-muted">
+                <BellOff className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>{t('settings.noNotificationMutedUsers')}</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[300px]">
+                <div className="space-y-3">
+                  {(notificationMutedUsersInfo || []).map(userInfo =>
+                    renderUserCard(
+                      userInfo,
+                      () => unmuteNotificationsMutation.mutate(userInfo.id),
+                      t('chat.unmuteNotifications'),
+                      unmuteNotificationsMutation.isPending,
+                      Bell
                     )
                   )}
                 </div>
