@@ -73,9 +73,59 @@ export interface ChatBroadcast {
   wasFiltered?: boolean;
 }
 
+/**
+ * Centralized union of every chat error code the client may observe — either
+ * via a `chat:send` ack failure, a server-emitted `chat:error` event, or a
+ * client-side transport failure raised inside `useSocketChat.send` itself.
+ *
+ * Single source of truth so client and server cannot drift. Adding a new
+ * server-side error string without extending this union is a compile error
+ * on every consumer (server emit site, hook ack signature, page onError map).
+ */
+export const CHAT_ERROR_CODES = [
+  // ---- ack failures returned by `chat:send` ack ----
+  "invalid",              // payload validation failed
+  "not_in_room",          // sender hasn't joined the target room yet
+  "rate_limit",           // per-user rate limiter tripped
+  "spectator_not_seated", // sender is in a `challenge:*` room but not in spectator presence
+  "no_session",           // bridge couldn't find an active game session for the room
+  "empty",                // message sanitized to empty string — silently dropped
+  "failed",               // generic delivery failure
+  "server",               // unhandled exception
+  // ---- transport-level (client only — emitted by `useSocketChat.send`) ----
+  "no_room",              // hook not configured with a roomId
+  "disconnected",         // socket not connected at send time
+  // ---- additional codes the server emits via `chat:error` event only ----
+  "auth",                 // authentication required
+  "forbidden",            // not allowed in this room (e.g. join rejected)
+] as const;
+
+export type ChatErrorCode = (typeof CHAT_ERROR_CODES)[number];
+
+/**
+ * Subset of `ChatErrorCode` that indicates a transport-level failure — the
+ * server was never reached (or never finished joining). Reserved for future
+ * fallback gating logic; current `sendChatMessage` paths surface every
+ * failure to the user via toast and do not auto-retry on any other transport.
+ */
+export const CHAT_TRANSPORT_ERROR_CODES = [
+  "no_room",
+  "disconnected",
+  "not_in_room",
+] as const satisfies readonly ChatErrorCode[];
+
+export type ChatTransportErrorCode = (typeof CHAT_TRANSPORT_ERROR_CODES)[number];
+
 export interface ChatErrorPayload {
-  code: "auth" | "rate_limit" | "invalid" | "server" | "forbidden" | "spectator_readonly";
+  code: ChatErrorCode;
   message: string;
+  /** Optional room scoping so the client can ignore errors for other rooms. */
+  roomId?: string;
+}
+
+export interface ChatSendAck {
+  ok: boolean;
+  error?: ChatErrorCode;
 }
 
 export interface ChatClientToServerEvents {
@@ -83,7 +133,7 @@ export interface ChatClientToServerEvents {
   "chat:leave": (p: ChatJoinPayload) => void;
   "chat:send": (
     p: ChatMessagePayload,
-    ack?: (res: { ok: boolean; error?: string }) => void,
+    ack?: (res: ChatSendAck) => void,
   ) => void;
   "ping": (ack: (pong: { ts: number }) => void) => void;
 }

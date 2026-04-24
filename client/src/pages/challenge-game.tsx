@@ -31,6 +31,7 @@ import { extractWsErrorInfo, isWsErrorType } from "@/lib/ws-errors";
 import { useCall } from "@/components/calls/CallSessionProvider";
 import { CallButton } from "@/components/calls/CallButton";
 import { useSocketChat } from "@/hooks/use-socket-chat";
+import type { ChatErrorCode } from "@shared/socketio-events";
 import {
   adaptDominoBoardMoveToEngine,
   extractDominoHandFromPlayerView,
@@ -303,11 +304,14 @@ export default function ChallengeGamePage() {
   const realtimeChat = useSocketChat({
     roomId: challengeId ? `challenge:${challengeId}` : null,
     onError: useCallback(
-      (info: { code: string; reason?: string }) => {
+      (info: { code: ChatErrorCode; reason?: string }) => {
         // Surface server-side chat failures (rate_limit, no_session,
         // spectator_not_seated, server, etc.) so the user knows their
         // message was rejected. Without this, send() would silently drop.
-        const map: Record<string, string> = {
+        // Typed as Partial<Record<ChatErrorCode, ...>> so adding a new
+        // server-side code without extending shared/socketio-events.ts
+        // is a compile error here.
+        const map: Partial<Record<ChatErrorCode, string>> = {
           rate_limit: language === "ar"
             ? "أبطئ قليلًا — رسائل كثيرة جدًا"
             : "Slow down — too many messages",

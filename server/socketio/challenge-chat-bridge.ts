@@ -13,6 +13,7 @@ import { getCachedUserBlockLists } from "../lib/redis";
 import type {
   ChatBroadcast,
   ChatClientToServerEvents,
+  ChatErrorCode,
   ChatServerToClientEvents,
 } from "../../shared/socketio-events";
 
@@ -30,8 +31,12 @@ export type ChatNamespace = Namespace<
 
 export interface DeliverResult {
   ok: boolean;
-  /** Machine-readable reason when ok=false. */
-  reason?: "no_session" | "empty";
+  /**
+   * Machine-readable reason when ok=false. Constrained to the centralized
+   * `ChatErrorCode` union via `Extract<>` so adding a new bridge failure
+   * mode requires extending the shared union first.
+   */
+  reason?: Extract<ChatErrorCode, "no_session" | "empty">;
 }
 
 interface DeliverArgs {

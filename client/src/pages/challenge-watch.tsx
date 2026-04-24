@@ -57,6 +57,7 @@ import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import { useGameFullscreen } from "@/hooks/use-game-fullscreen";
 import { useSocketChat } from "@/hooks/use-socket-chat";
+import type { ChatErrorCode } from "@shared/socketio-events";
 import {
   Clock,
   Trophy,
@@ -242,8 +243,11 @@ export default function ChallengeWatchPage() {
   const spectatorRealtimeChat = useSocketChat({
     roomId: challengeId ? `challenge:${challengeId}` : "",
     onError: useCallback(
-      (info: { code: string; reason?: string }) => {
-        const map: Record<string, string> = {
+      (info: { code: ChatErrorCode; reason?: string }) => {
+        // Typed Partial<Record<ChatErrorCode, ...>> so adding a new
+        // server-side code without extending shared/socketio-events.ts
+        // is a compile error here.
+        const map: Partial<Record<ChatErrorCode, string>> = {
           rate_limit: language === "ar"
             ? "أبطئ قليلًا — رسائل كثيرة جدًا"
             : "Slow down — too many messages",

@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getChatSocket } from "@/lib/socket-io-client";
-import type { ChatBroadcast } from "@shared/socketio-events";
+import type {
+  ChatBroadcast,
+  ChatErrorCode,
+  ChatSendAck,
+} from "@shared/socketio-events";
 
 interface UseSocketChatOptions {
   /** Logical room id (e.g. `challenge:<id>`) — null disables the hook */
@@ -11,9 +15,11 @@ interface UseSocketChatOptions {
    * Invoked when the server emits `chat:error` for this room or when a
    * `send()` ack returns `{ ok: false }`. Use this to show a toast so
    * rate-limit / spectator-not-seated / no_session etc. surface to the
-   * user instead of silently dropping the message.
+   * user instead of silently dropping the message. `code` is a member of
+   * the centralized `ChatErrorCode` union — adding a new server code
+   * without extending the union is a compile error here.
    */
-  onError?: (info: { code: string; reason?: string }) => void;
+  onError?: (info: { code: ChatErrorCode; reason?: string }) => void;
 }
 
 export interface UseSocketChatReturn {
@@ -24,7 +30,7 @@ export interface UseSocketChatReturn {
   send: (
     text: string,
     opts?: { isQuickMessage?: boolean; quickMessageKey?: string },
-  ) => Promise<{ ok: boolean; error?: string }>;
+  ) => Promise<ChatSendAck>;
 }
 
 /**
@@ -68,11 +74,18 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
       }
     };
 
-    const onChatError = (info: { code?: string; reason?: string; roomId?: string }) => {
+    const onChatError = (info: {
+      code?: ChatErrorCode;
+      message?: string;
+      roomId?: string;
+    }) => {
       // Only surface errors targeted at this room (server may include roomId).
       // If server omits roomId, surface anyway — the user just attempted a send.
       if (info.roomId && info.roomId !== roomId) return;
-      onErrorRef.current?.({ code: info.code || "server", reason: info.reason });
+      onErrorRef.current?.({
+        code: info.code ?? "server",
+        reason: info.message,
+      });
     };
 
     sock.on("connect", onConnect);
@@ -99,7 +112,7 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
       text: string,
       opts?: { isQuickMessage?: boolean; quickMessageKey?: string },
     ) =>
-      new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      new Promise<ChatSendAck>((resolve) => {
         if (!roomId) return resolve({ ok: false, error: "no_room" });
         const sock = getChatSocket();
         if (!sock.connected) return resolve({ ok: false, error: "disconnected" });
