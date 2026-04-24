@@ -378,12 +378,20 @@ export function registerChatMessagingRoutes(app: Express): void {
         }).from(users).where(eq(users.id, senderId)).limit(1),
         db.select({
           mutedUsers: users.mutedUsers,
+          notificationMutedUsers: users.notificationMutedUsers,
         }).from(users).where(eq(users.id, receiverId)).limit(1),
       ]);
 
       const senderRow = sender[0];
       const recipientMutedUsers = recipientVisibility[0]?.mutedUsers || [];
+      const recipientNotificationMutedUsers =
+        recipientVisibility[0]?.notificationMutedUsers || [];
       const isMutedByRecipient = Array.isArray(recipientMutedUsers) && recipientMutedUsers.includes(senderId);
+      // Task #22: per-conversation "notifications-only" mute. Message
+      // is still delivered, only the bell/push is silenced.
+      const recipientSilencedNotifications =
+        Array.isArray(recipientNotificationMutedUsers) &&
+        recipientNotificationMutedUsers.includes(senderId);
 
       if (!isMutedByRecipient) {
         const recipientSockets = clients.get(receiverId);
@@ -409,23 +417,29 @@ export function registerChatMessagingRoutes(app: Express): void {
       const preview = buildChatNotificationPreview(storedMessageType, sanitizedContent);
       const chatLinkUserId = encodeURIComponent(senderId);
 
-      void sendNotification(receiverId, {
-        type: "system",
-        priority: "normal",
-        title: `${senderDisplayName} sent you a message`,
-        titleAr: `رسالة جديدة من ${senderDisplayName}`,
-        message: preview.en,
-        messageAr: preview.ar,
-        link: `/chat?user=${chatLinkUserId}`,
-        metadata: JSON.stringify({
-          event: "chat_message",
-          senderId,
-          messageType: storedMessageType,
-          messageId: message.id,
-        }),
-      }).catch(() => {
-        // Notification failures should not break the REST fallback send flow.
-      });
+      // Task #22: skip the bell/push fanout if the recipient has put
+      // this conversation on notification-only mute. The message has
+      // already been persisted and (above) emitted in realtime, so
+      // they still see it when they open the chat.
+      if (!recipientSilencedNotifications) {
+        void sendNotification(receiverId, {
+          type: "system",
+          priority: "normal",
+          title: `${senderDisplayName} sent you a message`,
+          titleAr: `رسالة جديدة من ${senderDisplayName}`,
+          message: preview.en,
+          messageAr: preview.ar,
+          link: `/chat?user=${chatLinkUserId}`,
+          metadata: JSON.stringify({
+            event: "chat_message",
+            senderId,
+            messageType: storedMessageType,
+            messageId: message.id,
+          }),
+        }).catch(() => {
+          // Notification failures should not break the REST fallback send flow.
+        });
+      }
 
       res.status(201).json(message);
     } catch (error: unknown) {

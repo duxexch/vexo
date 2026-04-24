@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useMutation } from "@tanstack/react-query";
 import type { ChatMessage } from "@shared/schema";
 import { useChat } from "@/hooks/use-chat";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { useSoundEffects } from "@/hooks/use-sound-effects";
 import { useChatPin } from "@/hooks/use-chat-pin";
 import { useChatMedia, useChatAutoDelete, useChatCallPricing } from "@/hooks/use-chat-features";
@@ -18,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Send, Check, CheckCheck, Loader2, AlertCircle, Search, Timer, ArrowLeft, Shield, Lock, Paperclip, Reply, Trash2, Pencil, Smile, X, CornerDownRight, Mic, MicOff, ChevronDown, Languages, Palette, Phone, Video, PhoneCall, PhoneOff, MoreHorizontal } from "lucide-react";
+import { MessageCircle, Send, Check, CheckCheck, Loader2, AlertCircle, Search, Timer, ArrowLeft, Shield, Lock, Paperclip, Reply, Trash2, Pencil, Smile, X, CornerDownRight, Mic, MicOff, ChevronDown, Languages, Palette, Phone, Video, PhoneCall, PhoneOff, MoreHorizontal, Bell, BellOff } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
@@ -143,7 +146,8 @@ interface ChatPageProps {
 
 export default function ChatPage({ embedded = false }: ChatPageProps) {
   const { t } = useI18n();
-  const { user, token } = useAuth();
+  const { user, token, refreshUser } = useAuth();
+  const { toast } = useToast();
   const {
     conversations, activeConversation, messages, typingUsers,
     isConnected, isChatEnabled, onlineUsers, lastSeenMap,
@@ -236,6 +240,39 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
   }, []);
 
   const activeUser = conversations.find((c) => c.otherUserId === activeConversation)?.otherUser;
+
+  const isActiveConversationNotifMuted = useMemo(() => {
+    if (!activeConversation) return false;
+    const list = (user as { notificationMutedUsers?: string[] } | null)
+      ?.notificationMutedUsers;
+    return Array.isArray(list) && list.includes(activeConversation);
+  }, [user, activeConversation]);
+
+  const notificationMuteMutation = useMutation({
+    mutationFn: async ({ peerId, mute }: { peerId: string; mute: boolean }) => {
+      await apiRequest(
+        mute ? "POST" : "DELETE",
+        `/api/users/${peerId}/notification-mute`,
+      );
+      return mute;
+    },
+    onSuccess: (mute) => {
+      toast({
+        title: mute
+          ? t("chat.muteNotificationsSuccess")
+          : t("chat.unmuteNotificationsSuccess"),
+      });
+      void refreshUser();
+    },
+    onError: (err: Error) => {
+      toast({
+        title: t("common.error"),
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const activeConversationPending = useMemo(() => {
     if (!activeConversation) {
       return [];
@@ -1177,6 +1214,36 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                     <DropdownMenuItem onClick={() => setShowPinSetup(true)} className="gap-2">
                       <Lock className={cn("h-4 w-4", hasPinEnabled ? "text-emerald-500" : "text-muted-foreground")} />
                       <span>{hasPinEnabled ? t('chat.pinSettings') : t('chat.setPin')}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={!activeConversation || notificationMuteMutation.isPending}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        if (activeConversation) {
+                          notificationMuteMutation.mutate({
+                            peerId: activeConversation,
+                            mute: !isActiveConversationNotifMuted,
+                          });
+                        }
+                      }}
+                      className="gap-2"
+                      data-testid="toggle-notification-mute"
+                    >
+                      {isActiveConversationNotifMuted ? (
+                        <BellOff className="h-4 w-4 text-amber-500" />
+                      ) : (
+                        <Bell className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <div className="flex min-w-0 flex-col">
+                        <span className="truncate">
+                          {isActiveConversationNotifMuted
+                            ? t('chat.unmuteNotifications')
+                            : t('chat.muteNotifications')}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {t('chat.muteNotificationsDesc')}
+                        </span>
+                      </div>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

@@ -134,6 +134,7 @@ export async function deliverRealtimeDirectMessage(
         ? {
             blockedUsers: u.blockedUsers || [],
             mutedUsers: u.mutedUsers || [],
+            notificationMutedUsers: u.notificationMutedUsers || [],
           }
         : null;
     }),
@@ -173,13 +174,19 @@ export async function deliverRealtimeDirectMessage(
     s.emit("chat:message", broadcast);
   }
 
-  // ---- Task #21: parity with the HTTP DM path — fan out a "new
+  // ---- Task #21/#22: parity with the HTTP DM path — fan out a "new
   //      message" notification (push + bell + WS broadcast) so a
   //      recipient whose inbox tab is closed still gets a heads-up.
-  //      Suppressed when the peer has blocked or muted the sender, so
-  //      a muted conversation stays silent. Failures are logged and
-  //      swallowed: the message is already persisted and delivered.
-  if (!peerBlocksSender) {
+  //      Suppressed when:
+  //        - the peer has blocked or muted the sender (Task #21), OR
+  //        - the peer added the sender to their per-conversation
+  //          notification mute list (Task #22) — message still
+  //          arrives, only the bell/push is silenced.
+  //      Failures are logged and swallowed: the message is already
+  //      persisted and delivered.
+  const peerSilencedNotifications =
+    peerLists.notificationMutedUsers?.includes(senderId) ?? false;
+  if (!peerBlocksSender && !peerSilencedNotifications) {
     void notifyDirectMessageRecipient({
       senderId,
       senderRow,

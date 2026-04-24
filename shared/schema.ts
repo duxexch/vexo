@@ -141,6 +141,11 @@ export const users = pgTable("users", {
   registrationType: text("registration_type"),
   blockedUsers: text("blocked_users").array().notNull().default(sql`'{}'::text[]`),
   mutedUsers: text("muted_users").array().notNull().default(sql`'{}'::text[]`),
+  // Per-conversation "notifications-only" mute. When peerId is in this
+  // list the recipient still receives the message (realtime + history)
+  // but no bell/push notification fires. Distinct from `mutedUsers`,
+  // which suppresses the message itself.
+  notificationMutedUsers: text("notification_muted_users").array().notNull().default(sql`'{}'::text[]`),
   // E2EE key pair
   e2eePublicKey: text("e2ee_public_key"),
   e2eeEncryptedPrivateKey: text("e2ee_encrypted_private_key"),

@@ -139,7 +139,14 @@ export async function publish(channel: string, data: Record<string, unknown> | s
 interface UserCacheEntry {
   blockedUsers: string[];
   mutedUsers: string[];
+  notificationMutedUsers: string[];
   fetchedAt: number;
+}
+
+export interface UserBlockLists {
+  blockedUsers: string[];
+  mutedUsers: string[];
+  notificationMutedUsers: string[];
 }
 
 const userBlockCache = new Map<string, UserCacheEntry>();
@@ -149,18 +156,23 @@ const USER_CACHE_MAX_SIZE = 10000;
 /** Get cached block/mute lists for a user, with DB fallback */
 export async function getCachedUserBlockLists(
   userId: string,
-  fetchFn: (id: string) => Promise<{ blockedUsers: string[]; mutedUsers: string[] } | null>
-): Promise<{ blockedUsers: string[]; mutedUsers: string[] }> {
+  fetchFn: (id: string) => Promise<Partial<UserBlockLists> | null>,
+): Promise<UserBlockLists> {
   const now = Date.now();
   const cached = userBlockCache.get(userId);
   if (cached && now - cached.fetchedAt < USER_CACHE_TTL_MS) {
-    return { blockedUsers: cached.blockedUsers, mutedUsers: cached.mutedUsers };
+    return {
+      blockedUsers: cached.blockedUsers,
+      mutedUsers: cached.mutedUsers,
+      notificationMutedUsers: cached.notificationMutedUsers,
+    };
   }
 
   const user = await fetchFn(userId);
-  const result = {
+  const result: UserBlockLists = {
     blockedUsers: user?.blockedUsers || [],
     mutedUsers: user?.mutedUsers || [],
+    notificationMutedUsers: user?.notificationMutedUsers || [],
   };
 
   // Evict oldest entries if cache is full
