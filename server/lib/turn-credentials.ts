@@ -2,6 +2,26 @@ import crypto from "crypto";
 import type { IceServerConfig, IceServersResponse } from "../../shared/socketio-events";
 
 /**
+ * Sign a coturn `time-limited shared secret` username.
+ *
+ * coturn's `static-auth-secret` REST API mandates HMAC-SHA1 — see
+ * https://github.com/coturn/coturn/blob/master/turndb/schema.userdb.sql
+ * and the IETF draft `draft-uberti-behave-turn-rest-00`. Switching to a
+ * stronger HMAC would require coturn-side configuration changes and
+ * would break every deployed WebRTC client (the credential format is
+ * baked into the protocol). Isolating the call here keeps the
+ * weak-cryptographic-algorithm CodeQL alert (#136) confined to a
+ * single, justified site.
+ *
+ * lgtm[js/weak-cryptographic-algorithm]
+ * codeql[js/weak-cryptographic-algorithm]
+ */
+function signTurnUsername(secret: string, username: string): string {
+  // codeql[js/weak-cryptographic-algorithm] — protocol requirement; see comment above.
+  return crypto.createHmac("sha1", secret).update(username).digest("base64");
+}
+
+/**
  * Generate ephemeral TURN credentials using the standard "time-limited shared
  * secret" mechanism that coturn implements with `use-auth-secret` +
  * `static-auth-secret`.
@@ -41,10 +61,7 @@ export function buildIceServers(userId: string): IceServersResponse {
     const tlsPort = parseInt(process.env.TURN_TLS_PORT || "5349", 10);
     const expiry = Math.floor(Date.now() / 1000) + ttlSeconds;
     const username = `${expiry}:${userId}`;
-    const credential = crypto
-      .createHmac("sha1", secret)
-      .update(username)
-      .digest("base64");
+    const credential = signTurnUsername(secret, username);
 
     iceServers.push({
       urls: [

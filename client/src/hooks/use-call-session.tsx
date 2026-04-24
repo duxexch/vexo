@@ -50,6 +50,39 @@ async function fetchIceServers(): Promise<IceServersResponse> {
 }
 
 /**
+ * Generate a cryptographically-strong call session id.
+ *
+ * The session id is used by both peers (and the signalling server) as
+ * the unique key for this call, so it must be unguessable — otherwise
+ * an attacker could spoof signalling messages for an in-flight call.
+ * `Math.random()` / `Date.now()` are not suitable (CodeQL alert #135),
+ * so we use Web Crypto exclusively and refuse to start a call if no
+ * secure source is available.
+ */
+function generateSessionId(): string {
+  const subtle = typeof window !== "undefined" ? window.crypto : undefined;
+  if (!subtle) {
+    throw new Error("secure_random_unavailable");
+  }
+  if (typeof subtle.randomUUID === "function") {
+    return subtle.randomUUID();
+  }
+  if (typeof subtle.getRandomValues === "function") {
+    // RFC 4122 v4 UUID built from 16 secure random bytes.
+    const bytes = new Uint8Array(16);
+    subtle.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant
+    const hex: string[] = [];
+    for (let i = 0; i < bytes.length; i += 1) {
+      hex.push(bytes[i].toString(16).padStart(2, "0"));
+    }
+    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+  }
+  throw new Error("secure_random_unavailable");
+}
+
+/**
  * Single-call session manager.
  *
  * Implements the 3-tier fallback contract:
@@ -240,7 +273,7 @@ export function useCallSession(): UseCallSessionReturn {
   const startCall = useCallback(
     async (toUserId: string, type: CallType, context?: { challengeId?: string }) => {
       if (ctxRef.current) throw new Error("already_in_call");
-      const sessionId = (window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).toString();
+      const sessionId = generateSessionId();
       const sock = getRtcSocket();
       setCallType(type);
       setStatus("ringing-out");

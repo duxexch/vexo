@@ -199,49 +199,84 @@ const AI_QUERY_COLUMN_LABELS: Record<string, string> = {
 type ToastFn = ReturnType<typeof useToast>["toast"];
 
 const ADMIN_API_BASE_PATH = "/api/admin";
-const ADMIN_API_ORIGIN = typeof window !== "undefined" ? window.location.origin : "http://localhost";
 
 function i18nText(t: (key: string) => string, key: string, fallback: string): string {
   const translated = t(key);
   return translated === key ? fallback : translated;
 }
 
-function normalizeAdminApiPath(path: string): string {
+/**
+ * Build a same-origin admin endpoint string from a caller-supplied path.
+ *
+ * The caller is trusted to supply a path under `/api/admin/*`, but some
+ * call sites interpolate user-controlled IDs into the path. To stop a
+ * crafted ID from steering the request away from `/api/admin/`
+ * (CodeQL alert #133) we:
+ *   1. reject any input that looks like an absolute URL or
+ *      protocol-relative URL,
+ *   2. reject backslashes and `..` segments (no traversal),
+ *   3. normalize so the result always begins with `/api/admin/`,
+ *   4. return a pathname-only string — never a fully-qualified URL —
+ *      so the resulting `fetch` is unconditionally same-origin.
+ *
+ * No `new URL(...)` call is involved, so there is no path that can
+ * resolve to a different origin.
+ */
+function buildSafeAdminEndpoint(path: string): string {
   const rawPath = String(path || "").trim();
   if (!rawPath) {
     throw new Error("Invalid admin endpoint");
   }
 
+  // Reject absolute URLs (`http://...`, `https://...`, `javascript:`,
+  // etc.) and protocol-relative URLs (`//evil.example/...`).
   if (rawPath.startsWith("//") || /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(rawPath)) {
     throw new Error("Absolute URLs are not allowed");
   }
 
-  const normalized = rawPath.startsWith(ADMIN_API_BASE_PATH)
+  // Strip an optional leading `/api/admin` so callers can use either
+  // `"/api/admin/foo"` or `"/foo"`.
+  const withoutPrefix = rawPath.startsWith(ADMIN_API_BASE_PATH)
     ? rawPath.slice(ADMIN_API_BASE_PATH.length)
     : rawPath;
+  const relative = withoutPrefix.startsWith("/")
+    ? withoutPrefix
+    : `/${withoutPrefix}`;
 
-  const safeRelativePath = normalized.startsWith("/") ? normalized : `/${normalized}`;
-
-  if (safeRelativePath.includes("\\") || safeRelativePath.includes("..")) {
+  // No traversal, no Windows-style separators, no embedded NULs.
+  if (
+    relative.includes("\\") ||
+    relative.includes("..") ||
+    relative.includes("\0")
+  ) {
     throw new Error("Invalid admin endpoint path");
   }
 
-  return safeRelativePath;
-}
-
-function buildSafeAdminEndpoint(path: string): string {
-  const safeRelativePath = normalizeAdminApiPath(path);
-  const endpointUrl = new URL(`${ADMIN_API_BASE_PATH}${safeRelativePath}`, ADMIN_API_ORIGIN);
-
-  if (endpointUrl.origin !== ADMIN_API_ORIGIN) {
-    throw new Error("Cross-origin admin endpoints are not allowed");
+  // Split off any query/fragment so we can guarantee the path part
+  // starts with `/api/admin/`. Splitting by hand (instead of using
+  // `new URL`) keeps the value pathname-only and same-origin.
+  let pathname = relative;
+  let suffix = "";
+  const hashIndex = pathname.indexOf("#");
+  if (hashIndex !== -1) {
+    suffix = pathname.slice(hashIndex) + suffix;
+    pathname = pathname.slice(0, hashIndex);
+  }
+  const queryIndex = pathname.indexOf("?");
+  if (queryIndex !== -1) {
+    suffix = pathname.slice(queryIndex) + suffix;
+    pathname = pathname.slice(0, queryIndex);
   }
 
-  if (!endpointUrl.pathname.startsWith(`${ADMIN_API_BASE_PATH}/`) && endpointUrl.pathname !== ADMIN_API_BASE_PATH) {
+  const endpointPath = `${ADMIN_API_BASE_PATH}${pathname}`;
+  if (
+    !endpointPath.startsWith(`${ADMIN_API_BASE_PATH}/`) &&
+    endpointPath !== ADMIN_API_BASE_PATH
+  ) {
     throw new Error("Invalid admin endpoint path");
   }
 
-  return `${endpointUrl.pathname}${endpointUrl.search}`;
+  return `${endpointPath}${suffix}`;
 }
 
 async function adminFetch(path: string, options: RequestInit = {}) {

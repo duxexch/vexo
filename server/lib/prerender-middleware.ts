@@ -113,7 +113,28 @@ function shouldSkipRequest(req: Request): boolean {
     return false;
 }
 
-function resolvePublicUrl(req: Request): string | null {
+// Only HTTP(S) protocols are valid for the public URL we hand to the
+// prerender upstream — anything else (file:, javascript:, data:, …) is
+// either nonsense or an SSRF attempt.
+const ALLOWED_PUBLIC_PROTOCOLS = new Set(["http", "https"]);
+
+// Strict hostname allowlist for the `Host` header, populated from
+// `PRERENDER_PUBLIC_HOSTS` (comma-separated). When empty we still
+// resolve a public URL but only after sanitization, so a forged
+// `Host:` cannot steer the upstream call to a different origin.
+function parsePublicHostAllowlist(): Set<string> {
+    return new Set(
+        (process.env.PRERENDER_PUBLIC_HOSTS || "")
+            .split(",")
+            .map((h) => h.trim().toLowerCase())
+            .filter(Boolean),
+    );
+}
+
+function resolvePublicUrl(
+    req: Request,
+    publicHostAllowlist: Set<string>,
+): URL | null {
     const host = req.get("host");
     if (!host) {
         return null;
@@ -124,11 +145,35 @@ function resolvePublicUrl(req: Request): string | null {
         ? forwardedProtoHeader[0]
         : forwardedProtoHeader;
 
-    const protocol = typeof forwardedProto === "string" && forwardedProto.trim().length > 0
+    const rawProtocol = typeof forwardedProto === "string" && forwardedProto.trim().length > 0
         ? forwardedProto.split(",")[0].trim()
         : req.protocol;
+    const protocol = rawProtocol.toLowerCase();
 
-    return `${protocol}://${host}${req.originalUrl}`;
+    if (!ALLOWED_PUBLIC_PROTOCOLS.has(protocol)) {
+        return null;
+    }
+
+    // Validate the host header before letting it influence the upstream
+    // URL. URL parsing alone is not enough — `evil.example?@trusted.com`
+    // is a legal hostname but a clear redirection attempt.
+    let parsed: URL;
+    try {
+        parsed = new URL(req.originalUrl, `${protocol}://${host}`);
+    } catch {
+        return null;
+    }
+
+    if (!ALLOWED_PUBLIC_PROTOCOLS.has(parsed.protocol.replace(/:$/, ""))) {
+        return null;
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+    if (publicHostAllowlist.size > 0 && !publicHostAllowlist.has(hostname)) {
+        return null;
+    }
+
+    return parsed;
 }
 
 function copyProxyHeaders(source: Headers, res: Response): void {
@@ -142,7 +187,7 @@ function copyProxyHeaders(source: Headers, res: Response): void {
 
 export function createPrerenderMiddleware() {
     const token = (process.env.PRERENDER_TOKEN || process.env.PRERENDER_IO_TOKEN || "").trim();
-    const serviceBase = (process.env.PRERENDER_SERVICE_URL || "https://service.prerender.io").replace(/\/+$/, "");
+    const rawServiceBase = (process.env.PRERENDER_SERVICE_URL || "https://service.prerender.io").trim();
     const timeoutMsRaw = Number.parseInt(process.env.PRERENDER_TIMEOUT_MS || "10000", 10);
     const timeoutMs = Number.isFinite(timeoutMsRaw) && timeoutMsRaw > 0 ? timeoutMsRaw : 10000;
 
@@ -151,14 +196,36 @@ export function createPrerenderMiddleware() {
         return (_req: Request, _res: Response, next: NextFunction) => next();
     }
 
-    logger.info(`[SEO] Prerender enabled with upstream ${serviceBase}`);
+    // Parse the upstream once so we can pin the outbound origin and
+    // refuse any URL whose origin doesn't match it. This is what
+    // prevents a forged Host/X-Forwarded-Proto header from steering the
+    // outbound `fetch` to a different host (CodeQL alert #134).
+    let upstreamBase: URL;
+    try {
+        upstreamBase = new URL(rawServiceBase);
+    } catch {
+        logger.warn(`[SEO] Prerender disabled (invalid PRERENDER_SERVICE_URL: ${rawServiceBase})`);
+        return (_req: Request, _res: Response, next: NextFunction) => next();
+    }
+    if (!ALLOWED_PUBLIC_PROTOCOLS.has(upstreamBase.protocol.replace(/:$/, ""))) {
+        logger.warn(`[SEO] Prerender disabled (unsupported PRERENDER_SERVICE_URL protocol: ${upstreamBase.protocol})`);
+        return (_req: Request, _res: Response, next: NextFunction) => next();
+    }
+    const upstreamOrigin = upstreamBase.origin;
+    const upstreamBasePath = upstreamBase.pathname.replace(/\/+$/, "");
+
+    const publicHostAllowlist = parsePublicHostAllowlist();
+
+    logger.info(
+        `[SEO] Prerender enabled with upstream ${upstreamOrigin}${upstreamBasePath} (host allowlist: ${publicHostAllowlist.size > 0 ? Array.from(publicHostAllowlist).join(",") : "<none>"})`,
+    );
 
     return async (req: Request, res: Response, next: NextFunction) => {
         if (shouldSkipRequest(req) || !isCrawlerRequest(req)) {
             return next();
         }
 
-        const publicUrl = resolvePublicUrl(req);
+        const publicUrl = resolvePublicUrl(req, publicHostAllowlist);
         if (!publicUrl) {
             return next();
         }
@@ -167,7 +234,20 @@ export function createPrerenderMiddleware() {
         const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
 
         try {
-            const upstreamUrl = `${serviceBase}/${publicUrl}`;
+            // Build the upstream URL by treating the (validated) public
+            // URL as a path segment under the fixed upstream base. We
+            // re-validate the resulting origin against the configured
+            // upstream so even a buggy URL constructor branch can't
+            // exfiltrate the request to a different host.
+            const upstreamUrl = new URL(
+                `${upstreamBasePath}/${encodeURIComponent(publicUrl.toString())}`,
+                upstreamBase,
+            );
+            if (upstreamUrl.origin !== upstreamOrigin) {
+                logger.warn(`[SEO] Prerender refused: upstream origin drift (${upstreamUrl.origin} != ${upstreamOrigin})`);
+                return next();
+            }
+
             const upstreamHeaders = new Headers({
                 "X-Prerender-Token": token,
                 "User-Agent": typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : "",
