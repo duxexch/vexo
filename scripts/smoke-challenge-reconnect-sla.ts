@@ -4,7 +4,13 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { WebSocket } from "ws";
 import { Pool } from "pg";
-import { createErrorHelpers } from "./lib/smoke-helpers";
+import { createErrorHelpers, SmokeScriptError } from "./lib/smoke-helpers";
+
+class SmokeError extends SmokeScriptError {
+  constructor(message: string, details?: unknown) {
+    super("SmokeError", message, details);
+  }
+}
 import { requestJson as smokeRequestJson } from "./lib/smoke-http";
 
 const SMOKE_USER_AGENT = "smoke-challenge-reconnect-sla/1.0";
