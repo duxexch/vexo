@@ -51,6 +51,7 @@
     "quality:smoke:domino-playthrough-bounds": "tsx scripts/smoke-domino-playthrough-bounds.ts",
     "quality:smoke:dm-notifications": "tsx scripts/smoke-dm-notifications.ts",
     "quality:smoke:call-experience": "tsx scripts/smoke-call-experience.ts",
+    "quality:smoke:ringtone-asset": "tsx scripts/smoke-ringtone-asset.ts",
     "quality:smoke:room-notifications": "tsx scripts/smoke-room-notifications.ts",
     "quality:smoke:sam9-solo-e2e": "tsx scripts/smoke-sam9-solo-e2e.ts",
     "quality:smoke:game-icon-purity": "tsx scripts/smoke-game-icon-purity.ts",
