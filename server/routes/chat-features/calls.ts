@@ -6,6 +6,8 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { clients } from "../../websocket/shared";
 import { sendNotification } from "../../websocket/notifications";
+import { sendCallVoipPush } from "../../lib/voip-push";
+import { logger } from "../../lib/logger";
 import type { AuthRequest } from "../middleware";
 import { checkRateLimit, getConfigDecimal, getErrorMessage, type AuthMiddleware } from "./helpers";
 
@@ -258,6 +260,26 @@ export function registerCallRoutes(app: Express, authMiddleware: AuthMiddleware)
         receiverId,
         callType,
         ratePerMinute: parseFloat(createdSession.ratePerMinute || "0"),
+      });
+
+      // Wake any registered native devices via APNs VoIP / FCM data
+      // message so the OS surfaces CallKit / ConnectionService even
+      // when the app is backgrounded or killed. Runs alongside (not
+      // instead of) the existing in-app socket invite + alert push so
+      // both live and killed clients ring.
+      void sendCallVoipPush({
+        sessionId: createdSession.id,
+        callerId,
+        callerUsername: caller.username,
+        receiverId,
+        callType,
+        ratePerMinute: parseFloat(createdSession.ratePerMinute || "0"),
+        conversationId: callerId,
+      }).catch((err) => {
+        logger.warn("[chat-call] VoIP push failed", {
+          error: err instanceof Error ? err.message : String(err),
+          sessionId: createdSession.id,
+        });
       });
 
       const callTypeLabelEn = callType === "video" ? "video call" : "voice call";

@@ -28,6 +28,7 @@ import { registerSupportChatRoutes } from "./support-chat";
 import { registerExternalGamesRoutes } from "./external-games";
 import { registerRtcRoutes } from "./rtc";
 import { registerSeoRoutes } from "./seo";
+import { registerVoipTokenRoutes } from "./devices/voip-tokens";
 import { authMiddleware } from "./middleware";
 
 export function registerModularRoutes(app: Express): void {
@@ -62,4 +63,5 @@ export function registerModularRoutes(app: Express): void {
   registerExternalGamesRoutes(app);
   registerRtcRoutes(app);
   registerSeoRoutes(app);
+  registerVoipTokenRoutes(app);
 }

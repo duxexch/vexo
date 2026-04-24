@@ -54,6 +54,7 @@
     "quality:smoke:tournament-currency": "node scripts/smoke-tournament-currency-e2e.mjs",
     "quality:smoke:call-experience": "tsx scripts/smoke-call-experience.ts",
     "quality:smoke:ringtone-asset": "tsx scripts/smoke-ringtone-asset.ts",
+    "quality:smoke:voip-push": "tsx scripts/smoke-voip-push.ts",
     "quality:smoke:room-notifications": "tsx scripts/smoke-room-notifications.ts",
     "quality:smoke:sam9-solo-e2e": "tsx scripts/smoke-sam9-solo-e2e.ts",
     "quality:smoke:game-icon-purity": "tsx scripts/smoke-game-icon-purity.ts",

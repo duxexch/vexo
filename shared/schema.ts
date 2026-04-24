@@ -1786,6 +1786,35 @@ export const webPushSubscriptionsRelations = relations(webPushSubscriptions, ({ 
   user: one(users, { fields: [webPushSubscriptions.userId], references: [users.id] }),
 }));
 
+// ==================== DEVICE PUSH TOKENS (APNs / FCM for VoIP + alerts) ====================
+// Tracks native device tokens registered by Capacitor builds. iOS sends two
+// distinct tokens per device (PushKit VoIP token + standard APNs token); we
+// store them as separate rows distinguished by `kind` so the server can pick
+// the right one (`voip` for incoming-call wakes, `apns` for non-call alerts,
+// `fcm` for Android FCM).
+export const devicePushTokens = pgTable("device_push_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  platform: varchar("platform").notNull(), // 'ios' | 'android'
+  kind: varchar("kind").notNull(), // 'voip' | 'apns' | 'fcm'
+  token: text("token").notNull(),
+  bundleId: text("bundle_id"),
+  appVersion: text("app_version"),
+  isActive: boolean("is_active").notNull().default(true),
+  lastUsedAt: timestamp("last_used_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_device_push_tokens_token_kind_unique").on(table.token, table.kind),
+  index("idx_device_push_tokens_user_id").on(table.userId),
+  index("idx_device_push_tokens_user_active").on(table.userId, table.isActive),
+  index("idx_device_push_tokens_user_kind_active").on(table.userId, table.kind, table.isActive),
+]);
+
+export const devicePushTokensRelations = relations(devicePushTokens, ({ one }) => ({
+  user: one(users, { fields: [devicePushTokens.userId], references: [users.id] }),
+}));
+
 // ==================== USER SESSIONS ====================
 
 export const userSessions = pgTable("user_sessions", {

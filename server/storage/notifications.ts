@@ -4,9 +4,22 @@ import {
   type Announcement, type InsertAnnouncement,
   type AnnouncementStatus,
   webPushSubscriptions,
+  devicePushTokens,
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, desc, and, sql } from "drizzle-orm";
+
+export type DevicePushTokenKind = "voip" | "apns" | "fcm";
+export type DevicePushTokenPlatform = "ios" | "android";
+
+export interface RegisterDevicePushTokenInput {
+  userId: string;
+  platform: DevicePushTokenPlatform;
+  kind: DevicePushTokenKind;
+  token: string;
+  bundleId?: string | null;
+  appVersion?: string | null;
+}
 
 export interface WebPushSubscriptionPayload {
   endpoint: string;
@@ -145,6 +158,89 @@ export async function touchWebPushSubscription(endpoint: string): Promise<void> 
   await db.update(webPushSubscriptions)
     .set({ lastUsedAt: new Date(), updatedAt: new Date() })
     .where(eq(webPushSubscriptions.endpoint, endpoint));
+}
+
+// ==================== DEVICE PUSH TOKENS (APNs / FCM for VoIP + alerts) ====================
+
+export async function registerDevicePushToken(input: RegisterDevicePushTokenInput): Promise<void> {
+  const now = new Date();
+  await db.insert(devicePushTokens).values({
+    userId: input.userId,
+    platform: input.platform,
+    kind: input.kind,
+    token: input.token,
+    bundleId: input.bundleId ?? null,
+    appVersion: input.appVersion ?? null,
+    isActive: true,
+    lastUsedAt: now,
+    updatedAt: now,
+  }).onConflictDoUpdate({
+    // The unique index is (token, kind) — same physical token may map to
+    // different users over the lifetime of the device, so we always
+    // re-bind to the current user on registration.
+    target: [devicePushTokens.token, devicePushTokens.kind],
+    set: {
+      userId: input.userId,
+      platform: input.platform,
+      bundleId: input.bundleId ?? null,
+      appVersion: input.appVersion ?? null,
+      isActive: true,
+      lastUsedAt: now,
+      updatedAt: now,
+    },
+  });
+}
+
+export async function getActiveDevicePushTokens(userId: string): Promise<Array<{
+  platform: "ios" | "android";
+  kind: "voip" | "apns" | "fcm";
+  token: string;
+}>> {
+  const rows = await db.select({
+    platform: devicePushTokens.platform,
+    kind: devicePushTokens.kind,
+    token: devicePushTokens.token,
+  })
+    .from(devicePushTokens)
+    .where(and(
+      eq(devicePushTokens.userId, userId),
+      eq(devicePushTokens.isActive, true),
+    ));
+  // Narrow the column-string types to the documented unions for callers.
+  return rows.map((row) => ({
+    platform: row.platform as "ios" | "android",
+    kind: row.kind as "voip" | "apns" | "fcm",
+    token: row.token,
+  }));
+}
+
+export async function deactivateDevicePushToken(token: string, kind: string): Promise<boolean> {
+  const result = await db.update(devicePushTokens)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(
+      eq(devicePushTokens.token, token),
+      eq(devicePushTokens.kind, kind),
+      eq(devicePushTokens.isActive, true),
+    ));
+  return (result.rowCount || 0) > 0;
+}
+
+export async function deactivateDevicePushTokensForUser(userId: string): Promise<void> {
+  await db.update(devicePushTokens)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(
+      eq(devicePushTokens.userId, userId),
+      eq(devicePushTokens.isActive, true),
+    ));
+}
+
+export async function touchDevicePushToken(token: string, kind: string): Promise<void> {
+  await db.update(devicePushTokens)
+    .set({ lastUsedAt: new Date(), updatedAt: new Date() })
+    .where(and(
+      eq(devicePushTokens.token, token),
+      eq(devicePushTokens.kind, kind),
+    ));
 }
 
 /**
