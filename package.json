@@ -46,6 +46,8 @@
     "quality:smoke:challenge-gameplay-regression": "tsx scripts/smoke-challenge-gameplay-regression.ts",
     "quality:smoke:domino-layout-snapshots": "tsx scripts/smoke-domino-layout-snapshots.ts",
     "quality:smoke:domino-layout-snapshots:update": "tsx scripts/smoke-domino-layout-snapshots.ts --update",
+    "quality:smoke:domino-tile-orientation": "tsx scripts/smoke-domino-tile-orientation.ts",
+    "quality:smoke:domino-tile-orientation:update": "tsx scripts/smoke-domino-tile-orientation.ts --update",
     "quality:smoke:domino-playthrough-bounds": "tsx scripts/smoke-domino-playthrough-bounds.ts",
     "quality:smoke:dm-notifications": "tsx scripts/smoke-dm-notifications.ts",
     "quality:smoke:call-experience": "tsx scripts/smoke-call-experience.ts",

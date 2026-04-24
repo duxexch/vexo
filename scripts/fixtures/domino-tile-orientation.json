@@ -1,0 +1,1620 @@
+{
+  "right-blank-leading": {
+    "side": "right",
+    "placements": [
+      {
+        "key": "o-0-0-3",
+        "canonicalLeft": 0,
+        "canonicalRight": 3,
+        "displayLeft": 0,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-3-5",
+        "canonicalLeft": 3,
+        "canonicalRight": 5,
+        "displayLeft": 3,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-5-2",
+        "canonicalLeft": 5,
+        "canonicalRight": 2,
+        "displayLeft": 5,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-2-6",
+        "canonicalLeft": 2,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-4-6-1",
+        "canonicalLeft": 6,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-1-4",
+        "canonicalLeft": 1,
+        "canonicalRight": 4,
+        "displayLeft": 4,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      }
+    ]
+  },
+  "left-blank-leading": {
+    "side": "left",
+    "placements": [
+      {
+        "key": "o-0-3-0",
+        "canonicalLeft": 3,
+        "canonicalRight": 0,
+        "displayLeft": 3,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-5-3",
+        "canonicalLeft": 5,
+        "canonicalRight": 3,
+        "displayLeft": 5,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-2-5",
+        "canonicalLeft": 2,
+        "canonicalRight": 5,
+        "displayLeft": 2,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-6-2",
+        "canonicalLeft": 6,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-4-1-6",
+        "canonicalLeft": 1,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-4-1",
+        "canonicalLeft": 4,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 4,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      }
+    ]
+  },
+  "right-blank-middle": {
+    "side": "right",
+    "placements": [
+      {
+        "key": "o-0-3-0",
+        "canonicalLeft": 3,
+        "canonicalRight": 0,
+        "displayLeft": 3,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-0-5",
+        "canonicalLeft": 0,
+        "canonicalRight": 5,
+        "displayLeft": 0,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-5-2",
+        "canonicalLeft": 5,
+        "canonicalRight": 2,
+        "displayLeft": 5,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-2-6",
+        "canonicalLeft": 2,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "left-blank-middle": {
+    "side": "left",
+    "placements": [
+      {
+        "key": "o-0-0-3",
+        "canonicalLeft": 0,
+        "canonicalRight": 3,
+        "displayLeft": 0,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-5-0",
+        "canonicalLeft": 5,
+        "canonicalRight": 0,
+        "displayLeft": 5,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-2-5",
+        "canonicalLeft": 2,
+        "canonicalRight": 5,
+        "displayLeft": 2,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-6-2",
+        "canonicalLeft": 6,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "right-fivezero-case": {
+    "side": "right",
+    "placements": [
+      {
+        "key": "o-0-5-0",
+        "canonicalLeft": 5,
+        "canonicalRight": 0,
+        "displayLeft": 5,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-0-4",
+        "canonicalLeft": 0,
+        "canonicalRight": 4,
+        "displayLeft": 0,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-4-1",
+        "canonicalLeft": 4,
+        "canonicalRight": 1,
+        "displayLeft": 4,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-1-6",
+        "canonicalLeft": 1,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-4-6-2",
+        "canonicalLeft": 6,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-2-3",
+        "canonicalLeft": 2,
+        "canonicalRight": 3,
+        "displayLeft": 3,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      }
+    ]
+  },
+  "left-fivezero-case": {
+    "side": "left",
+    "placements": [
+      {
+        "key": "o-0-0-5",
+        "canonicalLeft": 0,
+        "canonicalRight": 5,
+        "displayLeft": 0,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-4-0",
+        "canonicalLeft": 4,
+        "canonicalRight": 0,
+        "displayLeft": 4,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-1-4",
+        "canonicalLeft": 1,
+        "canonicalRight": 4,
+        "displayLeft": 1,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-6-1",
+        "canonicalLeft": 6,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-4-2-6",
+        "canonicalLeft": 2,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-3-2",
+        "canonicalLeft": 3,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 3,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      }
+    ]
+  },
+  "right-doubles-elbows": {
+    "side": "right",
+    "placements": [
+      {
+        "key": "o-0-6-6",
+        "canonicalLeft": 6,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-1-6-3",
+        "canonicalLeft": 6,
+        "canonicalRight": 3,
+        "displayLeft": 6,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-3-3",
+        "canonicalLeft": 3,
+        "canonicalRight": 3,
+        "displayLeft": 3,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-3-3-1",
+        "canonicalLeft": 3,
+        "canonicalRight": 1,
+        "displayLeft": 3,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-4-1-1",
+        "canonicalLeft": 1,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-1-5",
+        "canonicalLeft": 1,
+        "canonicalRight": 5,
+        "displayLeft": 5,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-6-5-5",
+        "canonicalLeft": 5,
+        "canonicalRight": 5,
+        "displayLeft": 5,
+        "displayRight": 5,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-7-5-2",
+        "canonicalLeft": 5,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 5,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-8-2-2",
+        "canonicalLeft": 2,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-9-2-4",
+        "canonicalLeft": 2,
+        "canonicalRight": 4,
+        "displayLeft": 2,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "down",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "left-doubles-elbows": {
+    "side": "left",
+    "placements": [
+      {
+        "key": "o-0-6-6",
+        "canonicalLeft": 6,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-1-3-6",
+        "canonicalLeft": 3,
+        "canonicalRight": 6,
+        "displayLeft": 3,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-3-3",
+        "canonicalLeft": 3,
+        "canonicalRight": 3,
+        "displayLeft": 3,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-3-1-3",
+        "canonicalLeft": 1,
+        "canonicalRight": 3,
+        "displayLeft": 1,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-4-1-1",
+        "canonicalLeft": 1,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-5-1",
+        "canonicalLeft": 5,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 5,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-6-5-5",
+        "canonicalLeft": 5,
+        "canonicalRight": 5,
+        "displayLeft": 5,
+        "displayRight": 5,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-7-2-5",
+        "canonicalLeft": 2,
+        "canonicalRight": 5,
+        "displayLeft": 5,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-8-2-2",
+        "canonicalLeft": 2,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-9-4-2",
+        "canonicalLeft": 4,
+        "canonicalRight": 2,
+        "displayLeft": 4,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "right-long-fold": {
+    "side": "right",
+    "placements": [
+      {
+        "key": "o-0-0-1",
+        "canonicalLeft": 0,
+        "canonicalRight": 1,
+        "displayLeft": 0,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-1-2",
+        "canonicalLeft": 1,
+        "canonicalRight": 2,
+        "displayLeft": 1,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-2-3",
+        "canonicalLeft": 2,
+        "canonicalRight": 3,
+        "displayLeft": 2,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-3-4",
+        "canonicalLeft": 3,
+        "canonicalRight": 4,
+        "displayLeft": 3,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-4-4-5",
+        "canonicalLeft": 4,
+        "canonicalRight": 5,
+        "displayLeft": 4,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-5-5-6",
+        "canonicalLeft": 5,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 5,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-6-6-0",
+        "canonicalLeft": 6,
+        "canonicalRight": 0,
+        "displayLeft": 0,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-7-0-1",
+        "canonicalLeft": 0,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 0,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-8-1-2",
+        "canonicalLeft": 1,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-9-2-3",
+        "canonicalLeft": 2,
+        "canonicalRight": 3,
+        "displayLeft": 3,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-10-3-4",
+        "canonicalLeft": 3,
+        "canonicalRight": 4,
+        "displayLeft": 4,
+        "displayRight": 3,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-11-4-5",
+        "canonicalLeft": 4,
+        "canonicalRight": 5,
+        "displayLeft": 5,
+        "displayRight": 4,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-12-5-6",
+        "canonicalLeft": 5,
+        "canonicalRight": 6,
+        "displayLeft": 5,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-13-6-0",
+        "canonicalLeft": 6,
+        "canonicalRight": 0,
+        "displayLeft": 6,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "down",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "left-long-fold": {
+    "side": "left",
+    "placements": [
+      {
+        "key": "o-0-5-6",
+        "canonicalLeft": 5,
+        "canonicalRight": 6,
+        "displayLeft": 5,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-4-5",
+        "canonicalLeft": 4,
+        "canonicalRight": 5,
+        "displayLeft": 4,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-3-4",
+        "canonicalLeft": 3,
+        "canonicalRight": 4,
+        "displayLeft": 3,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-2-3",
+        "canonicalLeft": 2,
+        "canonicalRight": 3,
+        "displayLeft": 2,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-4-1-2",
+        "canonicalLeft": 1,
+        "canonicalRight": 2,
+        "displayLeft": 1,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-5-0-1",
+        "canonicalLeft": 0,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 0,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-6-6-0",
+        "canonicalLeft": 6,
+        "canonicalRight": 0,
+        "displayLeft": 0,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-7-5-6",
+        "canonicalLeft": 5,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 5,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-8-4-5",
+        "canonicalLeft": 4,
+        "canonicalRight": 5,
+        "displayLeft": 5,
+        "displayRight": 4,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-9-3-4",
+        "canonicalLeft": 3,
+        "canonicalRight": 4,
+        "displayLeft": 4,
+        "displayRight": 3,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-10-2-3",
+        "canonicalLeft": 2,
+        "canonicalRight": 3,
+        "displayLeft": 3,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-11-1-2",
+        "canonicalLeft": 1,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-12-0-1",
+        "canonicalLeft": 0,
+        "canonicalRight": 1,
+        "displayLeft": 0,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-13-6-0",
+        "canonicalLeft": 6,
+        "canonicalRight": 0,
+        "displayLeft": 6,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "mobile-right-blanks": {
+    "side": "right",
+    "placements": [
+      {
+        "key": "o-0-3-0",
+        "canonicalLeft": 3,
+        "canonicalRight": 0,
+        "displayLeft": 3,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-0-5",
+        "canonicalLeft": 0,
+        "canonicalRight": 5,
+        "displayLeft": 5,
+        "displayRight": 0,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-2-5-6",
+        "canonicalLeft": 5,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 5,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-3-6-4",
+        "canonicalLeft": 6,
+        "canonicalRight": 4,
+        "displayLeft": 6,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-4-4-1",
+        "canonicalLeft": 4,
+        "canonicalRight": 1,
+        "displayLeft": 4,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-1-2",
+        "canonicalLeft": 1,
+        "canonicalRight": 2,
+        "displayLeft": 1,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "down",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "mobile-left-blanks": {
+    "side": "left",
+    "placements": [
+      {
+        "key": "o-0-0-3",
+        "canonicalLeft": 0,
+        "canonicalRight": 3,
+        "displayLeft": 0,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-5-0",
+        "canonicalLeft": 5,
+        "canonicalRight": 0,
+        "displayLeft": 0,
+        "displayRight": 5,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-2-6-5",
+        "canonicalLeft": 6,
+        "canonicalRight": 5,
+        "displayLeft": 5,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-3-4-6",
+        "canonicalLeft": 4,
+        "canonicalRight": 6,
+        "displayLeft": 4,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-4-1-4",
+        "canonicalLeft": 1,
+        "canonicalRight": 4,
+        "displayLeft": 1,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-2-1",
+        "canonicalLeft": 2,
+        "canonicalRight": 1,
+        "displayLeft": 2,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "right-double-then-fold": {
+    "side": "right",
+    "placements": [
+      {
+        "key": "o-0-6-6",
+        "canonicalLeft": 6,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-1-6-5",
+        "canonicalLeft": 6,
+        "canonicalRight": 5,
+        "displayLeft": 6,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-5-4",
+        "canonicalLeft": 5,
+        "canonicalRight": 4,
+        "displayLeft": 5,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-4-3",
+        "canonicalLeft": 4,
+        "canonicalRight": 3,
+        "displayLeft": 3,
+        "displayRight": 4,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-4-3-2",
+        "canonicalLeft": 3,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 3,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-2-1",
+        "canonicalLeft": 2,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-6-1-0",
+        "canonicalLeft": 1,
+        "canonicalRight": 0,
+        "displayLeft": 0,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-7-0-6",
+        "canonicalLeft": 0,
+        "canonicalRight": 6,
+        "displayLeft": 0,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "down",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "left-double-then-fold": {
+    "side": "left",
+    "placements": [
+      {
+        "key": "o-0-6-6",
+        "canonicalLeft": 6,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-1-5-6",
+        "canonicalLeft": 5,
+        "canonicalRight": 6,
+        "displayLeft": 5,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-4-5",
+        "canonicalLeft": 4,
+        "canonicalRight": 5,
+        "displayLeft": 4,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-3-4",
+        "canonicalLeft": 3,
+        "canonicalRight": 4,
+        "displayLeft": 4,
+        "displayRight": 3,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-4-2-3",
+        "canonicalLeft": 2,
+        "canonicalRight": 3,
+        "displayLeft": 3,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-1-2",
+        "canonicalLeft": 1,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-6-0-1",
+        "canonicalLeft": 0,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 0,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-7-6-0",
+        "canonicalLeft": 6,
+        "canonicalRight": 0,
+        "displayLeft": 6,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "right-half-set": {
+    "side": "right",
+    "placements": [
+      {
+        "key": "o-0-0-6",
+        "canonicalLeft": 0,
+        "canonicalRight": 6,
+        "displayLeft": 0,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-6-5",
+        "canonicalLeft": 6,
+        "canonicalRight": 5,
+        "displayLeft": 6,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-5-4",
+        "canonicalLeft": 5,
+        "canonicalRight": 4,
+        "displayLeft": 5,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-4-3",
+        "canonicalLeft": 4,
+        "canonicalRight": 3,
+        "displayLeft": 4,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-4-3-2",
+        "canonicalLeft": 3,
+        "canonicalRight": 2,
+        "displayLeft": 3,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-5-2-1",
+        "canonicalLeft": 2,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-6-1-0",
+        "canonicalLeft": 1,
+        "canonicalRight": 0,
+        "displayLeft": 0,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-7-0-6",
+        "canonicalLeft": 0,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 0,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-8-6-5",
+        "canonicalLeft": 6,
+        "canonicalRight": 5,
+        "displayLeft": 5,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-9-5-4",
+        "canonicalLeft": 5,
+        "canonicalRight": 4,
+        "displayLeft": 4,
+        "displayRight": 5,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-10-4-3",
+        "canonicalLeft": 4,
+        "canonicalRight": 3,
+        "displayLeft": 3,
+        "displayRight": 4,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-11-3-2",
+        "canonicalLeft": 3,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 3,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-12-2-1",
+        "canonicalLeft": 2,
+        "canonicalRight": 1,
+        "displayLeft": 2,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-13-1-0",
+        "canonicalLeft": 1,
+        "canonicalRight": 0,
+        "displayLeft": 1,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "down",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "left-half-set": {
+    "side": "left",
+    "placements": [
+      {
+        "key": "o-0-6-0",
+        "canonicalLeft": 6,
+        "canonicalRight": 0,
+        "displayLeft": 6,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-5-6",
+        "canonicalLeft": 5,
+        "canonicalRight": 6,
+        "displayLeft": 5,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-4-5",
+        "canonicalLeft": 4,
+        "canonicalRight": 5,
+        "displayLeft": 4,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-3-4",
+        "canonicalLeft": 3,
+        "canonicalRight": 4,
+        "displayLeft": 3,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-4-2-3",
+        "canonicalLeft": 2,
+        "canonicalRight": 3,
+        "displayLeft": 2,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-5-1-2",
+        "canonicalLeft": 1,
+        "canonicalRight": 2,
+        "displayLeft": 2,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-6-0-1",
+        "canonicalLeft": 0,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 0,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-7-6-0",
+        "canonicalLeft": 6,
+        "canonicalRight": 0,
+        "displayLeft": 0,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-8-5-6",
+        "canonicalLeft": 5,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 5,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-9-4-5",
+        "canonicalLeft": 4,
+        "canonicalRight": 5,
+        "displayLeft": 5,
+        "displayRight": 4,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-10-3-4",
+        "canonicalLeft": 3,
+        "canonicalRight": 4,
+        "displayLeft": 4,
+        "displayRight": 3,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-11-2-3",
+        "canonicalLeft": 2,
+        "canonicalRight": 3,
+        "displayLeft": 3,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-12-1-2",
+        "canonicalLeft": 1,
+        "canonicalRight": 2,
+        "displayLeft": 1,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-13-0-1",
+        "canonicalLeft": 0,
+        "canonicalRight": 1,
+        "displayLeft": 0,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "right-many-blanks": {
+    "side": "right",
+    "placements": [
+      {
+        "key": "o-0-4-0",
+        "canonicalLeft": 4,
+        "canonicalRight": 0,
+        "displayLeft": 4,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-0-5",
+        "canonicalLeft": 0,
+        "canonicalRight": 5,
+        "displayLeft": 0,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-5-0",
+        "canonicalLeft": 5,
+        "canonicalRight": 0,
+        "displayLeft": 5,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-0-1",
+        "canonicalLeft": 0,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 0,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-4-1-0",
+        "canonicalLeft": 1,
+        "canonicalRight": 0,
+        "displayLeft": 0,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "up",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-0-6",
+        "canonicalLeft": 0,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 0,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-6-6-0",
+        "canonicalLeft": 6,
+        "canonicalRight": 0,
+        "displayLeft": 0,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-7-0-2",
+        "canonicalLeft": 0,
+        "canonicalRight": 2,
+        "displayLeft": 0,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "down",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "left-many-blanks": {
+    "side": "left",
+    "placements": [
+      {
+        "key": "o-0-0-4",
+        "canonicalLeft": 0,
+        "canonicalRight": 4,
+        "displayLeft": 0,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-1-5-0",
+        "canonicalLeft": 5,
+        "canonicalRight": 0,
+        "displayLeft": 5,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-2-0-5",
+        "canonicalLeft": 0,
+        "canonicalRight": 5,
+        "displayLeft": 0,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "left",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-3-1-0",
+        "canonicalLeft": 1,
+        "canonicalRight": 0,
+        "displayLeft": 0,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-4-0-1",
+        "canonicalLeft": 0,
+        "canonicalRight": 1,
+        "displayLeft": 1,
+        "displayRight": 0,
+        "flipped": true,
+        "direction": "down",
+        "renderRotation": 0
+      },
+      {
+        "key": "o-5-6-0",
+        "canonicalLeft": 6,
+        "canonicalRight": 0,
+        "displayLeft": 0,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-6-0-6",
+        "canonicalLeft": 0,
+        "canonicalRight": 6,
+        "displayLeft": 6,
+        "displayRight": 0,
+        "flipped": true,
+        "direction": "right",
+        "renderRotation": 90
+      },
+      {
+        "key": "o-7-2-0",
+        "canonicalLeft": 2,
+        "canonicalRight": 0,
+        "displayLeft": 2,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
+      }
+    ]
+  },
+  "right-vertical-anchor": {
+    "side": "right",
+    "placements": []
+  },
+  "left-vertical-anchor": {
+    "side": "left",
+    "placements": []
+  }
+}

@@ -41,6 +41,11 @@ interface DominoPathPlacement extends BoardRowEntry {
   x: number;
   y: number;
   renderRotation: number;
+  // C19-F1: Direction the chain was flowing when this tile was placed. Needed
+  // to decide whether the visual halves must be swapped so the matching pip
+  // sits on the edge that touches the previous tile (e.g. a tile placed
+  // leftward of the anchor needs its matching pip on the RIGHT, not the LEFT).
+  direction: DominoDirection;
   layoutScale: number;
 }
 
@@ -232,6 +237,26 @@ function normalizeGameState(rawState: unknown): GameState {
     boardTiles.push(entry);
   }
 
+  // C19-F1: Dev-only sanity check. The server guarantees the chain invariant
+  // `board[i].right === board[i+1].left` (engine.ts flips tiles on placement
+  // to maintain this). If we ever receive a board that violates it, the
+  // visual flip rule will produce nonsense — surface a console warning so
+  // the bug is caught instead of silently rendering misaligned tiles.
+  if (import.meta.env?.DEV && boardTiles.length > 1) {
+    for (let i = 0; i < boardTiles.length - 1; i += 1) {
+      const current = boardTiles[i].tile;
+      const next = boardTiles[i + 1].tile;
+      if (current.right !== next.left) {
+        console.warn(
+          `[DominoBoard] Chain invariant violated at index ${i}: ` +
+            `board[${i}].right=${current.right} but board[${i + 1}].left=${next.left}. ` +
+            `Server should flip tiles to maintain board[i].right === board[i+1].left.`,
+        );
+        break; // Single warning per render is enough; no point spamming.
+      }
+    }
+  }
+
   const opponentTileCounts: Record<string, number> = {};
   if (isObjectRecord(rawState.opponentTileCounts)) {
     for (const [playerId, count] of Object.entries(rawState.opponentTileCounts)) {
@@ -403,6 +428,37 @@ function orientPlacementTile(
 }
 
 type DominoDirection = "left" | "right" | "up" | "down";
+
+/**
+ * C19-F1: Returns true when a board placement's visual halves must be swapped
+ * so the matching pip sits on the edge that touches the previous tile in the
+ * chain. Without this swap, a tile placed with a chain direction opposite to
+ * its natural left→right reading order would render with its pips on the
+ * wrong sides — e.g. a [3,0] tile played leftward of the anchor would show
+ * the blank on the LEFT (matching pip 3 ends up on the right, away from the
+ * connection), instead of showing 3 on the right (next to the anchor).
+ *
+ * Rule:
+ *  - Tiles placed on the right side of the anchor (`side === "right"`) have
+ *    their matching pip = `tile.left`. Their natural rendering puts left
+ *    first, so they only need a flip when the chain folded back leftward
+ *    (direction "left") or upward (direction "up").
+ *  - Tiles placed on the left side of the anchor (`side === "left"`) come
+ *    from the reversed left-slice of the board, so their matching pip =
+ *    `tile.right`. They flip when flowing rightward or downward.
+ *
+ * Doubles (`tile.left === tile.right`) are visually symmetric so the flip is
+ * a no-op for them; it is still safe to apply.
+ */
+export function shouldFlipDominoHalves(
+  side: "left" | "right",
+  direction: DominoDirection,
+): boolean {
+  if (side === "right") {
+    return direction === "left" || direction === "up";
+  }
+  return direction === "right" || direction === "down";
+}
 
 function resolveBoardRenderRotation(tile: DominoTile, rotation?: number): number {
   if (tile.left === tile.right) {
@@ -783,6 +839,7 @@ function placeDominoEntriesAtScale(
       x: chosen.x,
       y: chosen.y,
       renderRotation: chosen.renderRotation,
+      direction: chosen.direction,
       layoutScale,
     });
 
@@ -1000,6 +1057,7 @@ export interface LayoutOutput {
     x: number;
     y: number;
     renderRotation: number;
+    direction: DominoDirection;
     layoutScale: number;
   }>;
   scale: number;
@@ -1023,6 +1081,7 @@ export interface DominoLayoutSnapshotOutput {
     x: number;
     y: number;
     renderRotation: number;
+    direction: DominoDirection;
     layoutScale: number;
   }>;
   telemetry: DominoLayoutTelemetry;
@@ -1059,6 +1118,7 @@ export function solveDominoLayout(input: LayoutInput): LayoutOutput {
       x: quantizeCoordinate(placement.x),
       y: quantizeCoordinate(placement.y),
       renderRotation: placement.renderRotation,
+      direction: placement.direction,
       layoutScale: placement.layoutScale,
     })),
     telemetry: result.telemetry,
@@ -1131,6 +1191,7 @@ const DominoTileComponent = memo(function DominoTileComponent({
   isPlayable,
   size = "md",
   rotation = 0,
+  flipHalves = false,
 }: {
   tile: DominoTile;
   isSelected?: boolean;
@@ -1138,6 +1199,14 @@ const DominoTileComponent = memo(function DominoTileComponent({
   isPlayable?: boolean;
   size?: DominoTileSize;
   rotation?: number;
+  /**
+   * C19-F1: When true, render the right pip in the first slot and the left
+   * pip in the second slot. Used for board placements whose chain direction
+   * runs opposite to the natural left→right reading order so the matching
+   * pip lands on the edge facing the previous tile. The underlying `tile`
+   * data, testid, and aria-label remain canonical.
+   */
+  flipHalves?: boolean;
 }) {
   const { t } = useI18n();
 
@@ -1220,10 +1289,10 @@ const DominoTileComponent = memo(function DominoTileComponent({
       <div className={cn(
         "flex-1 flex items-center justify-center"
       )}>
-        {renderDots(tile.left)}
+        {renderDots(flipHalves ? tile.right : tile.left)}
       </div>
       <div className="flex-1 flex items-center justify-center">
-        {renderDots(tile.right)}
+        {renderDots(flipHalves ? tile.left : tile.right)}
       </div>
     </div>
   );
@@ -2068,13 +2137,27 @@ export function DominoBoard({
     };
   }, [rightPreviewPlacement, boardOffset.offsetY, boardZoom, effectiveOffsetX]);
 
-  const renderBoardTile = (entry: BoardRowEntry, rowId: string, forcedRotation?: number) => {
+  const renderBoardTile = (
+    entry: BoardRowEntry,
+    rowId: string,
+    forcedRotation?: number,
+    chainSide?: "left" | "right",
+  ) => {
     const boardTile = entry.item.tile;
     const renderRotation = typeof forcedRotation === "number"
       ? forcedRotation
       : resolveBoardRenderRotation(boardTile, entry.item.rotation);
     const tileKey = tileSignature(entry.item.tile);
     const isLastActionTile = lastActionTileKey !== null && tileSignature(entry.item.tile) === lastActionTileKey;
+
+    // C19-F1: Snake placements provide a `direction`. Combined with whether
+    // the tile sits on the LEFT or RIGHT half of the chain (relative to the
+    // anchor), we compute whether the visual halves must be swapped so the
+    // matching pip touches the previous tile. The anchor itself never flips.
+    const placementDirection = (entry as Partial<DominoPathPlacement>).direction;
+    const flipHalves = chainSide && placementDirection
+      ? shouldFlipDominoHalves(chainSide, placementDirection)
+      : false;
 
     return (
       <motion.div
@@ -2102,6 +2185,7 @@ export function DominoBoard({
           tile={boardTile}
           size={boardTileSize}
           rotation={renderRotation}
+          flipHalves={flipHalves}
         />
       </motion.div>
     );
@@ -2305,7 +2389,7 @@ export function DominoBoard({
                         transformOrigin: "center center",
                       }}
                     >
-                      {renderBoardTile(placement, "left-snake", placement.renderRotation)}
+                      {renderBoardTile(placement, "left-snake", placement.renderRotation, "left")}
                     </div>
                   ))}
 
@@ -2328,7 +2412,7 @@ export function DominoBoard({
                         transformOrigin: "center center",
                       }}
                     >
-                      {renderBoardTile(placement, "right-snake", placement.renderRotation)}
+                      {renderBoardTile(placement, "right-snake", placement.renderRotation, "right")}
                     </div>
                   ))}
                 </>
