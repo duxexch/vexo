@@ -51,34 +51,13 @@ function detachListeners(): void {
 }
 
 /**
- * Subscribes to the visual viewport so the
- * `--keyboard-inset-bottom` CSS variable on the document root reflects
- * the height of the on-screen keyboard (or 0 when no keyboard is open
- * or the platform doesn't support `visualViewport`).
- *
- * Use the variable in arbitrary Tailwind values to lift sticky chat
- * composers above the keyboard, e.g.
- * `pb-[max(0.75rem,env(safe-area-inset-bottom),var(--keyboard-inset-bottom,0px))]`.
- *
- * Platform behavior summary (Task #43 analysis):
- * - Mobile web (iOS Safari, Chrome, etc.): `vv.height` shrinks by the
- *   keyboard amount; the inset is the keyboard height. The composer
- *   gets lifted by our CSS variable.
- * - Android Capacitor (default `windowSoftInputMode=adjustResize`):
- *   the WebView itself shrinks, so `window.innerHeight` decreases and
- *   `vv.height` matches it. The math gives inset = 0 — exactly what we
- *   want, because the OS already lifted the composer by resizing the
- *   WebView.
- * - Android Capacitor with `adjustPan`: `innerHeight` stays full but
- *   `vv.height` shrinks; the math gives inset = keyboardHeight, which
- *   correctly lifts the composer over the keyboard.
- * Real-device verification on Android Capacitor is recommended (see
- * the follow-up task) — the math is sound but a hardware pass on the
- * latest build is the only way to lock the behavior.
- *
- * Safe to call from multiple components simultaneously: the underlying
- * listener is reference-counted so an unmount never clobbers the value
- * for another mounted consumer.
+ * Drives the `--keyboard-inset-bottom` CSS variable on the document
+ * root from `window.visualViewport`, so sticky chat composers can use
+ * it (e.g.
+ * `pb-[max(0.75rem,env(safe-area-inset-bottom),var(--keyboard-inset-bottom,0px))]`)
+ * to stay above the on-screen keyboard. Falls back to 0 when no
+ * `visualViewport` is available. Reference-counted so multiple
+ * consumers can mount safely.
  */
 export function useKeyboardInset(): void {
   useEffect(() => {
