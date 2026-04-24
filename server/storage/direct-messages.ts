@@ -62,13 +62,34 @@ export interface GetDirectMessageHistoryArgs {
 }
 
 /**
+ * Result of a paged history fetch. `messages` is in ascending
+ * chronological order (oldest → newest) so the inbox UI can prepend
+ * the page directly to its scroll buffer. `hasMore` is the definitive
+ * "is anything older than this page?" flag — true means at least one
+ * more row exists strictly older than `messages[0].createdAt`, false
+ * means this page reached the very start of the conversation.
+ */
+export interface DirectMessageHistoryPage {
+  messages: DirectMessageRow[];
+  hasMore: boolean;
+}
+
+/**
  * Returns the most recent N text messages exchanged between `userId` and
  * `peerId`, in ascending chronological order (oldest → newest) so the
  * inbox UI can append them directly to its scroll buffer.
+ *
+ * To produce a definitive `hasMore` flag (Task #28 — fixes the case
+ * where the last page is exactly `limit` rows but really *is* the
+ * start of history), we over-fetch by one: ask the DB for `limit + 1`
+ * rows, return `limit` of them, and report `hasMore = true` iff that
+ * extra row existed. This is one extra row read per scroll-back —
+ * cheaper than a separate "is anything older?" probe round-trip and
+ * always accurate, regardless of whether the page came back full.
  */
 export async function getDirectMessageHistory(
   args: GetDirectMessageHistoryArgs,
-): Promise<DirectMessageRow[]> {
+): Promise<DirectMessageHistoryPage> {
   const limit = Math.min(Math.max(args.limit ?? 50, 1), 200);
 
   // Constrain to the realtime text-only projection. The shared
@@ -99,6 +120,7 @@ export async function getDirectMessageHistory(
     ? and(conversation, lt(chatMessages.createdAt, args.before))
     : conversation;
 
+  // Over-fetch by one to detect "anything older?" without a probe.
   const rows = await db
     .select({
       id: chatMessages.id,
@@ -111,7 +133,11 @@ export async function getDirectMessageHistory(
     .from(chatMessages)
     .where(where)
     .orderBy(desc(chatMessages.createdAt))
-    .limit(limit);
+    .limit(limit + 1);
 
-  return rows.reverse();
+  const hasMore = rows.length > limit;
+  // Trim the sentinel row (if any) before returning. The remaining
+  // rows are still in DESC order from the query, so reverse for ASC.
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  return { messages: page.reverse(), hasMore };
 }

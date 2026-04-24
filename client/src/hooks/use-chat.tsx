@@ -1042,7 +1042,26 @@ export function useChat(): UseChatReturn {
           setState(prev => ({ ...prev, loadingMore: false }));
           return;
         }
-        const older = (await response.json()) as Array<Record<string, unknown>>;
+        // Task #28: the endpoint now returns `{ messages, hasMore }`
+        // so we get a definitive end-of-history signal instead of
+        // having to guess from the row count (which would mislead us
+        // when the last page happens to come back exactly full). We
+        // keep a back-compat branch for the legacy array shape so the
+        // client doesn't break if it's ever pointed at an older
+        // server build during a deploy window.
+        const payload = (await response.json()) as
+          | Array<Record<string, unknown>>
+          | { messages?: Array<Record<string, unknown>>; hasMore?: boolean };
+        const isWrapped =
+          payload !== null &&
+          typeof payload === "object" &&
+          !Array.isArray(payload);
+        const older: Array<Record<string, unknown>> = isWrapped
+          ? (payload as { messages?: Array<Record<string, unknown>> }).messages ?? []
+          : (payload as Array<Record<string, unknown>>);
+        const serverHasMore = isWrapped
+          ? Boolean((payload as { hasMore?: boolean }).hasMore)
+          : older.length >= PAGE_SIZE;
         setState(prev => {
           // Drop pages for a stale conversation switch.
           if (activeConversationRef.current !== peerId) {
@@ -1053,9 +1072,7 @@ export function useChat(): UseChatReturn {
           return {
             ...prev,
             messages: [...newOlder, ...prev.messages],
-            // The endpoint clamps `limit` to [1, 200]; if we got fewer
-            // rows than requested, we've hit the start of the timeline.
-            hasMoreMessages: older.length >= PAGE_SIZE,
+            hasMoreMessages: serverHasMore,
             loadingMore: false,
           };
         });

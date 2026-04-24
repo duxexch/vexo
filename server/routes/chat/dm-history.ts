@@ -39,14 +39,18 @@ export function registerDirectMessageHistoryRoutes(app: Express): void {
             ? beforeRaw
             : undefined;
 
-        const messages = await storage.getDirectMessageHistory({
+        // Task #28: storage now returns a definitive `hasMore` flag
+        // alongside the page so the client never has to guess from row
+        // count. We forward both verbatim — the client uses `hasMore`
+        // to drive the "start of conversation" indicator.
+        const page = await storage.getDirectMessageHistory({
           userId,
           peerId,
           limit,
           before,
         });
 
-        res.json(messages);
+        res.json(page);
       } catch (error: unknown) {
         res.status(500).json({ error: getErrorMessage(error) });
       }
