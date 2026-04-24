@@ -241,11 +241,15 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
 
   const activeUser = conversations.find((c) => c.otherUserId === activeConversation)?.otherUser;
 
+  const notificationMutedUserIds = useMemo(() => {
+    const list = user?.notificationMutedUsers;
+    return new Set(Array.isArray(list) ? list : []);
+  }, [user]);
+
   const isActiveConversationNotifMuted = useMemo(() => {
     if (!activeConversation) return false;
-    const list = user?.notificationMutedUsers;
-    return Array.isArray(list) && list.includes(activeConversation);
-  }, [user, activeConversation]);
+    return notificationMutedUserIds.has(activeConversation);
+  }, [notificationMutedUserIds, activeConversation]);
 
   const notificationMuteMutation = useMutation({
     mutationFn: async ({ peerId, mute }: { peerId: string; mute: boolean }) => {
@@ -1049,6 +1053,7 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
             <div className="p-2 space-y-1">
               {filteredConversations.map((conv) => {
                 const userOnline = onlineUsers.has(conv.otherUserId);
+                const isNotifMuted = notificationMutedUserIds.has(conv.otherUserId);
                 return (
                   <button
                     key={conv.otherUserId}
@@ -1071,9 +1076,27 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
                       </div>
                       <div className="flex-1 min-w-0 space-y-0.5">
                         <div className="flex items-start justify-between gap-2">
-                          <span className="line-clamp-2 text-start font-medium leading-tight break-words [overflow-wrap:anywhere]">
-                            {conv.otherUser.firstName || conv.otherUser.username}
-                          </span>
+                          <div className="flex min-w-0 flex-1 items-start gap-1.5">
+                            <span className="line-clamp-2 min-w-0 text-start font-medium leading-tight break-words [overflow-wrap:anywhere]">
+                              {conv.otherUser.firstName || conv.otherUser.username}
+                            </span>
+                            {isNotifMuted && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span
+                                    className="inline-flex shrink-0 items-center text-muted-foreground mt-0.5"
+                                    aria-label={t('chat.muteNotificationsSuccess')}
+                                    data-testid={`chat-conversation-muted-badge-${conv.otherUserId}`}
+                                  >
+                                    <BellOff className="h-3.5 w-3.5" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{t('chat.muteNotificationsSuccess')}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
                           <span className="text-xs text-muted-foreground shrink-0">
                             {conv.lastMessage?.createdAt ? formatMessageTime(conv.lastMessage.createdAt, t) : ""}
                           </span>
