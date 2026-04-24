@@ -213,8 +213,15 @@ export const FALLBACK_GAME_CONFIG: Record<string, GameConfigItem> = {
 };
 
 /**
- * Build game config from API data, with hardcoded `FALLBACK_GAME_CONFIG` as
- * the base layer so any game key not yet present in the DB still renders.
+ * Build game config from API data. Returns ONLY the games the API knows
+ * about (so list iterations like `Object.entries(GAME_CONFIG)` in the
+ * multiplayer lobby never surface fallback-only keys such as
+ * `snake`/`puzzle`/`memory`). When the API is unavailable, falls back to
+ * `FALLBACK_GAME_CONFIG` as a complete replacement so the UI still renders.
+ *
+ * For per-key lookups that must tolerate a missing API entry, use
+ * `resolveGameConfigEntry()` below — it explicitly opts into the
+ * fallback layer one key at a time without polluting list semantics.
  *
  * IMPORTANT — single source of truth:
  *   Every surface that displays a game (cards, dialogs, popups, end-of-game
@@ -224,10 +231,10 @@ export const FALLBACK_GAME_CONFIG: Record<string, GameConfigItem> = {
  *   uploads from the Visual Identity panel must propagate everywhere.
  */
 export function buildGameConfig(apiGames: MultiplayerGameFromAPI[] | undefined): Record<string, GameConfigItem> {
-  const config: Record<string, GameConfigItem> = { ...FALLBACK_GAME_CONFIG };
   if (!apiGames || apiGames.length === 0) {
-    return config;
+    return { ...FALLBACK_GAME_CONFIG };
   }
+  const config: Record<string, GameConfigItem> = {};
   for (const game of apiGames) {
     const style = GAME_ICON_STYLES[game.key] || DEFAULT_GAME_STYLE;
     const color = resolveGameColorClass(game, style.color);
@@ -252,6 +259,25 @@ export function buildGameConfig(apiGames: MultiplayerGameFromAPI[] | undefined):
     };
   }
   return config;
+}
+
+/**
+ * Per-key resolver: prefer the API-driven entry (which includes admin
+ * Visual Identity uploads), then fall back to the static
+ * `FALLBACK_GAME_CONFIG` for any key the API hasn't returned yet.
+ *
+ * Use this for spot lookups (notification rows, history items, end-of-game
+ * dialogs, etc.) instead of `apiConfig[key] ?? FALLBACK_GAME_CONFIG[key]`
+ * scattered across the codebase. List rendering should keep using
+ * `buildGameConfig()` directly so fallback-only keys never leak into
+ * multiplayer-only surfaces.
+ */
+export function resolveGameConfigEntry(
+  apiConfig: Record<string, GameConfigItem> | undefined,
+  key: string | undefined,
+): GameConfigItem | undefined {
+  if (!key) return undefined;
+  return apiConfig?.[key] ?? FALLBACK_GAME_CONFIG[key];
 }
 
 /** Build game config with an "all" entry prepended (for leaderboard filters) */

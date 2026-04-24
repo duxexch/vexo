@@ -142,13 +142,17 @@ function findHardcodedMultiplayerVisual(
   for (const key of MULTIPLAYER_GAME_KEYS) {
     // Negative lookahead `(?!key\s*:)` keeps the match inside the same
     // object-literal entry (won't tunnel across the next `{ key: ... }`).
+    // We flag if the entry hardcodes ANY of the visual fields the admin
+    // Visual Identity panel owns (icon / gradient / color / accentColor /
+    // thumbnail / iconUrl) — catching the regression even if a future
+    // PR uses a non-game-keyed icon like Crown for chess.
     const re = new RegExp(
-      `key\\s*:\\s*['"\`]${key}['"\`]((?:(?!key\\s*:).){0,400}?)icon\\s*:\\s*[A-Z][A-Za-z0-9]+`,
+      `key\\s*:\\s*['"\`]${key}['"\`]((?:(?!key\\s*:).){0,400}?)(icon|gradient|accentColor|color|thumbnailUrl|iconUrl)\\s*:\\s*['"\`A-Z]`,
       "s",
     );
     const match = re.exec(source);
     if (match) {
-      const snippet = match[0].replace(/\s+/g, " ").slice(0, 140);
+      const snippet = match[0].replace(/\s+/g, " ").slice(0, 160);
       return { key, snippet };
     }
   }
