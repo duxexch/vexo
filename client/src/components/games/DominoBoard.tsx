@@ -1230,24 +1230,37 @@ const DominoTileComponent = memo(function DominoTileComponent({
 });
 
 // C8-F7: Compact placeholder — shows count badge + mini tile stack (max 3 icons)
+// Carved-bone face-down preview that matches the in-hand DominoTileComponent so
+// opponent tile counts and challenge previews share the same warm visual language.
 function PlaceholderTile({ count }: { count: number }) {
   const visibleCount = Math.min(count, 3);
   return (
-    <div className="flex items-end gap-1">
+    <div className="flex items-end gap-1" data-testid="placeholder-tile-stack">
       {Array.from({ length: visibleCount }).map((_, i) => (
         <div
           key={i}
-          className="relative w-6 h-12 rounded-md border border-slate-900/70 bg-[linear-gradient(170deg,#1e3a8a_0%,#12306f_52%,#0b1f49_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_4px_8px_rgba(2,6,23,0.45)]"
+          className={cn(
+            "relative w-6 h-12 rounded-md border-[1.5px] border-[#5a4326] overflow-hidden",
+            // Same warm-ivory → amber gradient as the live tile face.
+            "bg-[linear-gradient(176deg,#fbf6e6_0%,#f3e8cd_48%,#e1cba2_100%)]",
+            // Outer drop + inner light highlight + inner amber rim form the bevel.
+            "shadow-[inset_0_1px_0_rgba(255,255,255,0.85),inset_0_-1px_0_rgba(120,82,40,0.35),0_4px_8px_rgba(35,24,14,0.4)]",
+          )}
           style={{ transform: `translateX(${-i * 5}px)`, zIndex: visibleCount - i }}
         >
-          <div className="absolute inset-x-1 top-1 h-[2px] rounded-full bg-white/35" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-4 h-4 rounded-full bg-blue-300/20 border border-blue-200/15" />
-          </div>
+          {/* Top sheen — fakes a polished bone reflection */}
+          <div className="pointer-events-none absolute inset-x-1 top-[2px] h-[2px] rounded-full bg-gradient-to-b from-white/70 to-transparent" />
+          {/* Engraved center divider — matches DominoTileComponent */}
+          <div className="pointer-events-none absolute inset-x-1 top-1/2 h-[2px] -translate-y-1/2 bg-[linear-gradient(180deg,rgba(58,40,18,0.55),rgba(255,250,235,0.55))]" />
+          {/* Side bevel highlights */}
+          <div className="pointer-events-none absolute inset-y-1 left-[1px] w-[1px] rounded-full bg-[#2e271f]/15" />
+          <div className="pointer-events-none absolute inset-y-1 right-[1px] w-[1px] rounded-full bg-white/30" />
         </div>
       ))}
       {count > 3 && (
-        <span className="text-xs font-semibold text-muted-foreground bg-muted/80 rounded-full px-1.5 py-0.5 border border-border/60">x{count}</span>
+        <span className="text-xs font-semibold text-[#5a4326] bg-[#f3e8cd]/90 rounded-full px-1.5 py-0.5 border border-[#5a4326]/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+          x{count}
+        </span>
       )}
     </div>
   );
