@@ -29,7 +29,19 @@ export default function GameLandingPage() {
     enabled: !!slug,
   });
 
+  const { data: lbData } = useQuery<{ players: Array<{ username: string; nickname?: string | null }> }>({
+    queryKey: [`/api/public/leaderboard/${slug}`],
+    enabled: !!slug,
+  });
+
+  const { data: matchesData } = useQuery<{ matches: Array<{ id: string; endedAt: string | null }> }>({
+    queryKey: [`/api/public/games/${slug}/recent-matches`],
+    enabled: !!slug,
+  });
+
   const game = data?.game;
+  const topPlayers = (lbData?.players || []).slice(0, 10);
+  const recentMatches = (matchesData?.matches || []).slice(0, 10);
   const name = game ? (isAr ? game.nameAr : game.nameEn) : slug;
   const description = game ? (isAr ? game.descriptionAr : game.descriptionEn) : "";
 
@@ -77,6 +89,50 @@ export default function GameLandingPage() {
           </div>
         </CardContent>
       </Card>
+
+      {topPlayers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">{isAr ? `أفضل لاعبي ${name}` : `Top ${name} players`}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 text-sm" data-testid="section-top-players">
+            {topPlayers.map((p) => (
+              <Link
+                key={p.username}
+                href={`/player/${p.username}`}
+                className="hover:underline"
+                data-testid={`link-player-${p.username}`}
+              >
+                {p.nickname || p.username}
+              </Link>
+            ))}
+            <Link href={`/leaderboard/${slug}`} className="hover:underline text-primary mt-2">
+              {isAr ? "عرض كل المتصدرين" : "View full leaderboard"}
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {recentMatches.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">{isAr ? `آخر مباريات ${name}` : `Recent ${name} matches`}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 text-sm" data-testid="section-recent-matches">
+            {recentMatches.map((m) => (
+              <Link
+                key={m.id}
+                href={`/match/${m.id}`}
+                className="hover:underline"
+                data-testid={`link-match-${m.id}`}
+              >
+                {isAr ? "مباراة" : "Match"} #{m.id.slice(0, 8)}
+                {m.endedAt ? ` — ${new Date(m.endedAt).toLocaleDateString(isAr ? "ar" : "en")}` : ""}
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

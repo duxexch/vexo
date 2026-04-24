@@ -31,8 +31,24 @@ export default function PlayerProfilePublicPage() {
     enabled: !!username,
   });
 
+  const { data: matchesData } = useQuery<{ matches: Array<{ id: string; gameType: string; endedAt: string | null }> }>({
+    queryKey: [`/api/public/players/${username}/recent-matches`],
+    enabled: !!username,
+  });
+
   const player = data?.player;
   const display = player?.nickname || player?.username || username;
+  const recentMatches = (matchesData?.matches || []).slice(0, 10);
+
+  const gamesPlayed: Array<{ key: string; ar: string; en: string; wins: number }> = player
+    ? [
+        { key: "chess", ar: "شطرنج", en: "Chess", wins: player.chessWon },
+        { key: "backgammon", ar: "طاولة", en: "Backgammon", wins: player.backgammonWon },
+        { key: "domino", ar: "دومينو", en: "Domino", wins: player.dominoWon },
+        { key: "tarneeb", ar: "طرنيب", en: "Tarneeb", wins: player.tarneebWon },
+        { key: "baloot", ar: "بلوت", en: "Baloot", wins: player.balootWon },
+      ].filter((g) => g.wins > 0)
+    : [];
 
   return (
     <div className="max-w-3xl mx-auto space-y-6" data-testid="page-player-public">
@@ -72,6 +88,47 @@ export default function PlayerProfilePublicPage() {
           )}
         </CardContent>
       </Card>
+
+      {gamesPlayed.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">{isAr ? "الألعاب التي يشارك فيها" : "Games played"}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3 text-sm" data-testid="section-player-games">
+            {gamesPlayed.map((g) => (
+              <Link
+                key={g.key}
+                href={`/game/${g.key}`}
+                className="hover:underline px-3 py-1 rounded-full bg-muted/50"
+                data-testid={`link-game-${g.key}`}
+              >
+                {isAr ? g.ar : g.en} ({g.wins})
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {recentMatches.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">{isAr ? "آخر المباريات" : "Recent matches"}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 text-sm" data-testid="section-player-matches">
+            {recentMatches.map((m) => (
+              <Link
+                key={m.id}
+                href={`/match/${m.id}`}
+                className="hover:underline"
+                data-testid={`link-match-${m.id}`}
+              >
+                {(isAr ? "مباراة " : "Match ")}#{m.id.slice(0, 8)} — {m.gameType}
+                {m.endedAt ? ` — ${new Date(m.endedAt).toLocaleDateString(isAr ? "ar" : "en")}` : ""}
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

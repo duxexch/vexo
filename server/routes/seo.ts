@@ -263,6 +263,65 @@ export function registerSeoRoutes(app: Express): void {
     }
   });
 
+  // Recent completed matches for a given game (used by game-landing for
+  // crawlable internal links to /match/:id). Limited and read-through cached.
+  app.get("/api/public/games/:key/recent-matches", publicSeoLimiter, async (req, res) => {
+    const key = String(req.params.key || "").toLowerCase();
+    if (!SEO_GAME_KEYS.includes(key as SeoGameKey)) {
+      return res.status(404).json({ error: "not_found" });
+    }
+    try {
+      const rows = await db.select({
+        id: liveGameSessions.id,
+        winnerId: liveGameSessions.winnerId,
+        endedAt: liveGameSessions.endedAt,
+      })
+        .from(liveGameSessions)
+        .where(and(eq(liveGameSessions.gameType, key), eq(liveGameSessions.status, "completed")))
+        .orderBy(desc(liveGameSessions.endedAt))
+        .limit(20);
+      res.set("Cache-Control", "public, max-age=600").json({ matches: rows });
+    } catch (e) {
+      logger.error("[SEO] /api/public/games/:key/recent-matches failed", e instanceof Error ? e : undefined);
+      res.status(500).json({ error: "internal" });
+    }
+  });
+
+  // Recent completed matches for a player (used by player profile for crawlable
+  // links to /match/:id). Joined to enrich with the game type for the link label.
+  app.get("/api/public/players/:username/recent-matches", publicSeoLimiter, async (req, res) => {
+    const username = String(req.params.username || "");
+    if (!/^[A-Za-z0-9_.-]+$/.test(username)) {
+      return res.status(400).json({ error: "invalid_username" });
+    }
+    try {
+      const [user] = await db.select({ id: users.id }).from(users).where(eq(users.username, username));
+      if (!user) return res.status(404).json({ error: "not_found" });
+      const rows = await db.select({
+        id: liveGameSessions.id,
+        gameType: liveGameSessions.gameType,
+        winnerId: liveGameSessions.winnerId,
+        endedAt: liveGameSessions.endedAt,
+      })
+        .from(liveGameSessions)
+        .where(and(
+          eq(liveGameSessions.status, "completed"),
+          or(
+            eq(liveGameSessions.player1Id, user.id),
+            eq(liveGameSessions.player2Id, user.id),
+            eq(liveGameSessions.player3Id, user.id),
+            eq(liveGameSessions.player4Id, user.id),
+          ),
+        ))
+        .orderBy(desc(liveGameSessions.endedAt))
+        .limit(20);
+      res.set("Cache-Control", "public, max-age=600").json({ matches: rows });
+    } catch (e) {
+      logger.error("[SEO] /api/public/players/:username/recent-matches failed", e instanceof Error ? e : undefined);
+      res.status(500).json({ error: "internal" });
+    }
+  });
+
   // Static helpers
   app.get("/api/public/categories", publicSeoLimiter, (_req, res) => {
     res.set("Cache-Control", "public, max-age=3600").json({

@@ -629,6 +629,25 @@ export function startSchedulers(): void {
   setInterval(cleanupOldNotifications, CLEANUP_INTERVAL);
   logger.info(`[Notification Cleanup] Started (interval: ${CLEANUP_INTERVAL / 3600000}h)`);
 
+  // ==================== SITEMAP REBUILD SCHEDULER ====================
+  // Proactively refresh programmatic-SEO sitemap caches and per-route SEO meta
+  // every 30 minutes so search engines see fresh URLs (new players, matches,
+  // game name updates) without waiting for a TTL miss on each request.
+  const SITEMAP_REBUILD_INTERVAL = 30 * 60 * 1000;
+  async function rebuildSitemapCaches() {
+    try {
+      const { invalidateSitemapCache, clearDynamicSeoCache } = await import("../lib/sitemap-builder");
+      invalidateSitemapCache();
+      clearDynamicSeoCache();
+      logger.info(`[Sitemap Rebuild] Cleared sitemap and dynamic SEO caches`);
+    } catch (error) {
+      logger.error('[Sitemap Rebuild] Error', error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+  setTimeout(rebuildSitemapCaches, 60_000);
+  setInterval(rebuildSitemapCaches, SITEMAP_REBUILD_INTERVAL);
+  logger.info(`[Sitemap Rebuild] Started (interval: ${SITEMAP_REBUILD_INTERVAL / 60000}m)`);
+
   // ==================== CHESS TIMEOUT WATCHDOG ====================
   // Server-authoritative timeout settlement for active challenge chess games.
   const CHESS_TIMEOUT_WATCHDOG_INTERVAL = 3000;

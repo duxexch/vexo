@@ -75,6 +75,48 @@ function PublicLayout({ children }: { children: React.ReactNode }) {
                 </div>
             </header>
             <main className="p-4">{children}</main>
+            <footer className="border-t mt-8 px-4 py-6 text-sm" data-testid="footer-seo-links">
+                <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div>
+                        <div className="font-semibold mb-2">{dir === "rtl" ? "الفئات" : "Categories"}</div>
+                        <ul className="space-y-1">
+                            <li><Link href="/games/board" className="hover:underline">{dir === "rtl" ? "ألعاب الطاولة" : "Board games"}</Link></li>
+                            <li><Link href="/games/card" className="hover:underline">{dir === "rtl" ? "ألعاب الورق" : "Card games"}</Link></li>
+                            <li><Link href="/games/educational" className="hover:underline">{dir === "rtl" ? "ألعاب تعليمية" : "Educational"}</Link></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <div className="font-semibold mb-2">{dir === "rtl" ? "الألعاب" : "Games"}</div>
+                        <ul className="space-y-1">
+                            <li><Link href="/game/chess" className="hover:underline">{dir === "rtl" ? "شطرنج" : "Chess"}</Link></li>
+                            <li><Link href="/game/backgammon" className="hover:underline">{dir === "rtl" ? "طاولة" : "Backgammon"}</Link></li>
+                            <li><Link href="/game/domino" className="hover:underline">{dir === "rtl" ? "دومينو" : "Domino"}</Link></li>
+                            <li><Link href="/game/tarneeb" className="hover:underline">{dir === "rtl" ? "طرنيب" : "Tarneeb"}</Link></li>
+                            <li><Link href="/game/baloot" className="hover:underline">{dir === "rtl" ? "بلوت" : "Baloot"}</Link></li>
+                            <li><Link href="/game/languageduel" className="hover:underline">{dir === "rtl" ? "تحدي اللغة" : "Language Duel"}</Link></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <div className="font-semibold mb-2">{dir === "rtl" ? "المتصدرون" : "Leaderboards"}</div>
+                        <ul className="space-y-1">
+                            <li><Link href="/leaderboard/chess" className="hover:underline">{dir === "rtl" ? "شطرنج" : "Chess"}</Link></li>
+                            <li><Link href="/leaderboard/backgammon" className="hover:underline">{dir === "rtl" ? "طاولة" : "Backgammon"}</Link></li>
+                            <li><Link href="/leaderboard/domino" className="hover:underline">{dir === "rtl" ? "دومينو" : "Domino"}</Link></li>
+                            <li><Link href="/leaderboard/tarneeb" className="hover:underline">{dir === "rtl" ? "طرنيب" : "Tarneeb"}</Link></li>
+                            <li><Link href="/leaderboard/baloot" className="hover:underline">{dir === "rtl" ? "بلوت" : "Baloot"}</Link></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <div className="font-semibold mb-2">{dir === "rtl" ? "روابط" : "Links"}</div>
+                        <ul className="space-y-1">
+                            <li><Link href="/tournaments" className="hover:underline">{dir === "rtl" ? "البطولات" : "Tournaments"}</Link></li>
+                            <li><Link href="/challenges" className="hover:underline">{dir === "rtl" ? "التحديات" : "Challenges"}</Link></li>
+                            <li><Link href="/terms" className="hover:underline">{dir === "rtl" ? "الشروط" : "Terms"}</Link></li>
+                            <li><Link href="/privacy" className="hover:underline">{dir === "rtl" ? "الخصوصية" : "Privacy"}</Link></li>
+                        </ul>
+                    </div>
+                </div>
+            </footer>
         </div>
     );
 }
