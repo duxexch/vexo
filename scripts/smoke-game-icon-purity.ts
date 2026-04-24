@@ -185,10 +185,32 @@ async function scan() {
         );
         continue;
       }
+
+      // Direct bracket-access on a game config map silently skips the
+      // central FALLBACK_GAME_CONFIG layer when the API doesn't return that
+      // key (e.g. a game toggled inactive in admin) — exactly the catalog
+      // crash the validator caught. Force every per-key lookup to go
+      // through `resolveGameConfigEntry()` so the fallback layer is honored.
+      const directLookupRe =
+        /\b(?:gameConfig|GAME_CONFIG|multiplayerGameConfig)\s*\[/g;
+      const lookupMatch = directLookupRe.exec(source);
+      if (lookupMatch) {
+        const idx = lookupMatch.index;
+        const lineStart = source.lastIndexOf("\n", idx) + 1;
+        const lineEnd = source.indexOf("\n", idx);
+        const lineNo = source.slice(0, idx).split("\n").length;
+        const snippet = source.slice(lineStart, lineEnd === -1 ? source.length : lineEnd).trim().slice(0, 160);
+        fail(
+          `${rel}:${lineNo}: direct bracket-access lookup on a game config map`,
+          `Use resolveGameConfigEntry(<config>, <key>) so the central FALLBACK_GAME_CONFIG fallback is honored when the API returns a partial set. Found: ${snippet}`,
+        );
+        continue;
+      }
     }
   }
 
   pass(`scanned ${SCAN_ROOTS.length} roots; no game-keyed Lucide imports outside central config`);
+  pass(`scanned ${SCAN_ROOTS.length} roots; no direct bracket-access lookups on game config maps`);
   pass(`no legacy GAME_CATALOG-style hardcoded icon+gradient+accentColor blocks found`);
 }
 

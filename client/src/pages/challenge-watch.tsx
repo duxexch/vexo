@@ -54,7 +54,7 @@ import {
 import { FloatingGiftsOverlay } from "@/components/games/TikTokGiftBar";
 import { FullScreenGiftPanel } from "@/components/games/FullScreenGiftPanel";
 import { GameConfigIcon } from "@/components/GameConfigIcon";
-import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
+import { buildGameConfig, FALLBACK_GAME_CONFIG, resolveGameConfigEntry, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import { useGameFullscreen } from "@/hooks/use-game-fullscreen";
 import { useSocketChat } from "@/hooks/use-socket-chat";
 import { isChatTransportErrorCode, type ChatErrorCode } from "@shared/socketio-events";
@@ -1688,7 +1688,7 @@ export default function ChallengeWatchPage() {
     ...FALLBACK_GAME_CONFIG,
     ...buildGameConfig(multiplayerGames),
   };
-  const gameInfo = multiplayerGameConfig[challenge.gameType] || multiplayerGameConfig.chess;
+  const gameInfo = resolveGameConfigEntry(multiplayerGameConfig, challenge.gameType) || multiplayerGameConfig.chess;
   const isLanguageDuelGame = challenge.gameType === "languageduel";
   const isTarneebGame = challenge.gameType === "tarneeb";
   const isDominoGame = challenge.gameType === "domino";

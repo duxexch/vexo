@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
+import { buildGameConfig, FALLBACK_GAME_CONFIG, resolveGameConfigEntry, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import { Shuffle, UserPlus, X, Loader2, Clock, Gamepad2, Check, XCircle, Users, UserCheck, Wifi } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -365,7 +365,7 @@ export default function MultiplayerPage() {
       return undefined;
     }
 
-    return multiplayerGameConfig[routeSegment] || multiplayerGameConfig.chess;
+    return resolveGameConfigEntry(multiplayerGameConfig, routeSegment) || multiplayerGameConfig.chess;
   };
 
   const selectedGameConfig = resolveConfiguredGame(undefined, selectedGameId);

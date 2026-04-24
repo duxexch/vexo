@@ -37,7 +37,7 @@ import {
   X,
   Gift
 } from "lucide-react";
-import { type GameConfigItem, type MultiplayerGameFromAPI, buildGameConfig, DEFAULT_GAME_STYLE, getGameIconSurfaceClass, getGameIconToneClass } from "@/lib/game-config";
+import { type GameConfigItem, type MultiplayerGameFromAPI, buildGameConfig, resolveGameConfigEntry, DEFAULT_GAME_STYLE, getGameIconSurfaceClass, getGameIconToneClass } from "@/lib/game-config";
 
 interface Challenge {
   id: string;
@@ -133,8 +133,8 @@ const ChallengeRow = memo(function ChallengeRow({
   t,
   gameConfig
 }: ChallengeRowProps) {
-  const fallbackConfig = { name: challenge.gameType, nameAr: challenge.gameType, icon: Gamepad2, color: DEFAULT_GAME_STYLE.color, gradient: DEFAULT_GAME_STYLE.gradient };
-  const config = gameConfig[challenge.gameType] || fallbackConfig;
+  const fallbackConfig: GameConfigItem = { name: challenge.gameType, nameAr: challenge.gameType, icon: Gamepad2, color: DEFAULT_GAME_STYLE.color, gradient: DEFAULT_GAME_STYLE.gradient };
+  const config: GameConfigItem = resolveGameConfigEntry(gameConfig, challenge.gameType) || fallbackConfig;
 
   return (
     <div
@@ -825,7 +825,7 @@ export default function GameLobbyPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
                 {(() => {
-                  const config = GAME_CONFIG[quickMatchGame];
+                  const config = resolveGameConfigEntry(GAME_CONFIG, quickMatchGame);
                   return (
                     <>
                       <div className={`inline-flex h-14 w-14 items-center justify-center rounded-2xl border p-2 ${getGameIconSurfaceClass(config)}`}>
@@ -852,8 +852,8 @@ export default function GameLobbyPage() {
                   <Slider
                     value={[quickMatchBet]}
                     onValueChange={(value) => setQuickMatchBet(value[0])}
-                    min={quickMatchGame ? (GAME_CONFIG[quickMatchGame]?.minStake || 10) : 10}
-                    max={quickMatchGame ? (GAME_CONFIG[quickMatchGame]?.maxStake || 500) : 500}
+                    min={resolveGameConfigEntry(GAME_CONFIG, quickMatchGame)?.minStake || 10}
+                    max={resolveGameConfigEntry(GAME_CONFIG, quickMatchGame)?.maxStake || 500}
                     step={10}
                     className="flex-1"
                     data-testid="slider-quickmatch-bet"

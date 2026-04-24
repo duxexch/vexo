@@ -30,7 +30,7 @@ import {
   ChevronRight,
   Gamepad2,
 } from "lucide-react";
-import { type MultiplayerGameFromAPI, type GameConfigItem, buildGameConfig, getGameIconToneClass } from "@/lib/game-config";
+import { type MultiplayerGameFromAPI, type GameConfigItem, buildGameConfig, resolveGameConfigEntry, getGameIconToneClass } from "@/lib/game-config";
 import { GameConfigIcon } from "@/components/GameConfigIcon";
 
 const ITEMS_PER_PAGE = 20;
@@ -191,7 +191,7 @@ export default function GameHistoryPage() {
           </h2>
           <div className="space-y-2">
             {active.map(c => {
-              const cfg = gameConfig[c.gameType];
+              const cfg = resolveGameConfigEntry(gameConfig, c.gameType);
               return (
                 <Card key={c.id} className="hover-elevate cursor-pointer">
                   <CardContent className="p-3 flex flex-wrap sm:flex-nowrap items-center gap-3" onClick={() => navigate(`/challenge/${c.id}/play`)}>
@@ -276,7 +276,7 @@ export default function GameHistoryPage() {
               <div className="space-y-2 pe-2">
                 {completed.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE).map(c => {
                   const result = getResult(c);
-                  const cfg = gameConfig[c.gameType];
+                  const cfg = resolveGameConfigEntry(gameConfig, c.gameType);
                   const bet = parseFloat(c.betAmount) || 0;
 
                   return (

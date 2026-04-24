@@ -66,7 +66,7 @@ import { GiftAnimation } from "@/components/games/GiftAnimation";
 import { GameConfigIcon } from "@/components/GameConfigIcon";
 import { ProjectCurrencyAmount } from "@/components/ProjectCurrencySymbol";
 import { cn } from "@/lib/utils";
-import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
+import { buildGameConfig, FALLBACK_GAME_CONFIG, resolveGameConfigEntry, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from "@/lib/game-config";
 import { useGameFullscreen } from "@/hooks/use-game-fullscreen";
 import {
   Clock,
@@ -2581,7 +2581,7 @@ export default function ChallengeGamePage() {
     ...FALLBACK_GAME_CONFIG,
     ...buildGameConfig(multiplayerGames),
   };
-  const gameInfo = multiplayerGameConfig[challenge.gameType] || multiplayerGameConfig.chess;
+  const gameInfo = resolveGameConfigEntry(multiplayerGameConfig, challenge.gameType) || multiplayerGameConfig.chess;
   const challengeCurrencyType =
     challenge.currencyType === "project" ? "project" : "usd";
   const isProjectChallengeCurrency = challengeCurrencyType === "project";

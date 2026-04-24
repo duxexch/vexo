@@ -5,7 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { cinematicSounds } from '@/lib/cinematic-sounds';
 import { Swords, Crown, Users, Eye } from 'lucide-react';
 import { GameConfigIcon } from '@/components/GameConfigIcon';
-import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from '@/lib/game-config';
+import { buildGameConfig, FALLBACK_GAME_CONFIG, resolveGameConfigEntry, getGameIconSurfaceClass, getGameIconToneClass, type MultiplayerGameFromAPI } from '@/lib/game-config';
 
 // ── Types ──
 
@@ -185,7 +185,7 @@ export function GameStartCinematic({
   );
 
   const isTeamGame = gameType === 'tarneeb' || gameType === 'baloot';
-  const gameInfo = multiplayerGameConfig[gameType] || multiplayerGameConfig.chess;
+  const gameInfo = resolveGameConfigEntry(multiplayerGameConfig, gameType) || multiplayerGameConfig.chess;
 
   const finish = useCallback(() => {
     if (completedRef.current) return;
