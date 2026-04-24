@@ -47,18 +47,7 @@ const config: CapacitorConfig = {
       overlaysWebView: false,
     },
     Keyboard: {
-      // Task #43: was 'body'. Switched to 'none' so Capacitor never
-      // resizes the body element when the keyboard appears. Combined
-      // with Android's default windowSoftInputMode=adjustResize this
-      // previously caused a double-shift — the body was resized by
-      // Capacitor AND our useKeyboardInset hook added a second
-      // keyboard-height padding via the --keyboard-inset-bottom CSS
-      // variable. The composer ended up floating ~keyboardHeight px
-      // above the keyboard on Android. With 'none' the inset is
-      // driven exclusively by the Capacitor Keyboard plugin events
-      // wired into useKeyboardInset, giving identical single-shift
-      // behavior on iOS, Android, and web.
-      resize: 'none',
+      resize: 'body',
       style: 'dark',
       resizeOnFullScreen: true,
     },
