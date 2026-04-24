@@ -35,6 +35,16 @@ export interface UseSocketChatReturn {
    * count from the previous room never leaks across.
    */
   viewerCount: number;
+  /**
+   * Task #26: `true` once the server has emitted at least one
+   * `chat:viewer_count` for the current room. Consumers can use this to
+   * decide whether `viewerCount` is authoritative — before the first
+   * broadcast arrives a UI may want to fall back to a legacy count
+   * source (e.g. WS spectator presence). After the first broadcast the
+   * realtime value is authoritative even when it transitions to 0.
+   * Resets to `false` whenever the room changes.
+   */
+  viewerCountReceived: boolean;
   send: (
     text: string,
     opts?: { isQuickMessage?: boolean; quickMessageKey?: string },
@@ -50,6 +60,7 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
   const [joined, setJoined] = useState(false);
   const [members, setMembers] = useState(0);
   const [viewerCount, setViewerCount] = useState(0);
+  const [viewerCountReceived, setViewerCountReceived] = useState(false);
   const [messages, setMessages] = useState<ChatBroadcast[]>([]);
   const limitRef = useRef(historyLimit);
   limitRef.current = historyLimit;
@@ -88,6 +99,7 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
     const onViewerCount = (p: { roomId: string; count: number }) => {
       if (p.roomId === roomId) {
         setViewerCount(p.count);
+        setViewerCountReceived(true);
       }
     };
 
@@ -124,8 +136,12 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
       if (sock.connected) sock.emit("chat:leave", { roomId });
       setJoined(false);
       // Task #26: drop any cached viewer count from the previous room so
-      // the next room never inherits a stale "N watching" pill.
+      // the next room never inherits a stale "N watching" pill, and
+      // clear the "received" flag so consumers fall back to their
+      // legacy count source until the new room emits its first
+      // broadcast.
       setViewerCount(0);
+      setViewerCountReceived(false);
     };
   }, [roomId]);
 
@@ -164,5 +180,13 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
     [roomId],
   );
 
-  return { connected, joined, members, messages, viewerCount, send };
+  return {
+    connected,
+    joined,
+    members,
+    messages,
+    viewerCount,
+    viewerCountReceived,
+    send,
+  };
 }

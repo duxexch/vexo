@@ -3889,17 +3889,19 @@ export default function ChallengeGamePage() {
               <MessageCircle className="h-4 w-4 text-primary" />
               {liveChatLabel}
               {/* Task #26: live spectator count next to the dialog title.
-                  The pill is hidden when zero viewers are present. We
-                  prefer the realtime chat-channel count (driven by the
-                  Socket.IO `chat:viewer_count` event) and fall back to
-                  the legacy WS spectator presence so the header still
-                  populates in environments where the chat socket has
-                  not yet broadcast. */}
+                  The pill is hidden when zero viewers are present. The
+                  realtime chat-channel count (driven by the Socket.IO
+                  `chat:viewer_count` event) is authoritative once we
+                  have received our first broadcast — that way a true
+                  drop to zero is reflected immediately and isn't masked
+                  by a stale legacy value. Until that first broadcast
+                  arrives we fall back to the legacy WS spectator
+                  presence so the header still populates on slow
+                  connections. */}
               {(() => {
-                const viewerCount = Math.max(
-                  realtimeChat.viewerCount,
-                  gameSession?.spectatorCount ?? 0,
-                );
+                const viewerCount = realtimeChat.viewerCountReceived
+                  ? realtimeChat.viewerCount
+                  : (gameSession?.spectatorCount ?? 0);
                 if (viewerCount <= 0) return null;
                 return (
                   <Badge
@@ -3929,10 +3931,11 @@ export default function ChallengeGamePage() {
               currentUserId={user?.id}
               autoFocusInput
               disabled={isSpectator}
-              spectatorCount={Math.max(
-                realtimeChat.viewerCount,
-                gameSession?.spectatorCount ?? 0,
-              )}
+              spectatorCount={
+                realtimeChat.viewerCountReceived
+                  ? realtimeChat.viewerCount
+                  : (gameSession?.spectatorCount ?? 0)
+              }
             />
           </div>
         </DialogContent>
