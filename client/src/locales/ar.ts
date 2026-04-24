@@ -1240,6 +1240,7 @@ const ar: Record<string, string> = {
   'settings.notificationMutedUsers': 'إشعارات مكتومة',
   'settings.notificationMutedUsersDesc': 'المحادثات التي تم كتم إشعاراتها. الرسائل ستصلك كالمعتاد.',
   'settings.noNotificationMutedUsers': 'لا توجد محادثات مكتومة الإشعارات',
+  'settings.openConversation': 'فتح المحادثة',
   'settings.changePassword': 'تغيير كلمة المرور',
   'settings.changePasswordDescription': 'تحديث كلمة مرور حسابك',
   'settings.currentPassword': 'كلمة المرور الحالية',

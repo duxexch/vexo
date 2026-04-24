@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Ban, Volume2, UserCheck, VolumeX, Users, Bell, BellOff } from "lucide-react";
+import { useLocation } from "wouter";
 
 interface UserInfo {
   id: string;
@@ -23,6 +24,7 @@ export function BlockedMutedSettings() {
   const { t, language, dir } = useI18n();
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
   const blockedUserIds = user?.blockedUsers || [];
   const mutedUserIds = user?.mutedUsers || [];
@@ -91,36 +93,58 @@ export function BlockedMutedSettings() {
     }
   });
 
-  const renderUserCard = (userInfo: UserInfo, onAction: () => void, actionLabel: string, isPending: boolean, Icon: typeof UserCheck) => (
-    <div
-      key={userInfo.id}
-      className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-      data-testid={`user-card-${userInfo.id}`}
-    >
-      <div className="flex items-center gap-3">
-        <Avatar className="h-10 w-10">
-          <AvatarImage src={userInfo.profilePicture} />
-          <AvatarFallback>
-            {(userInfo.nickname || userInfo.username)?.[0]?.toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-        <div>
-          <p className="font-medium">{userInfo.nickname || userInfo.username}</p>
-          <p className="text-sm text-muted-foreground">@{userInfo.username}</p>
-        </div>
-      </div>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onAction}
-        disabled={isPending}
-        data-testid={`button-action-${userInfo.id}`}
+  const openConversation = (userId: string) => {
+    navigate(`/chat?user=${userId}`);
+  };
+
+  const renderUserCard = (userInfo: UserInfo, onAction: () => void, actionLabel: string, isPending: boolean, Icon: typeof UserCheck) => {
+    const displayName = userInfo.nickname || userInfo.username;
+    const openLabel = `${t('settings.openConversation')} - @${userInfo.username}`;
+    return (
+      <div
+        key={userInfo.id}
+        role="button"
+        tabIndex={0}
+        aria-label={openLabel}
+        title={t('settings.openConversation')}
+        onClick={() => openConversation(userInfo.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openConversation(userInfo.id);
+          }
+        }}
+        className="flex items-center justify-between p-3 rounded-lg bg-muted/50 cursor-pointer hover:bg-muted transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        data-testid={`user-card-${userInfo.id}`}
       >
-        <Icon className="w-4 h-4 me-2" />
-        {actionLabel}
-      </Button>
-    </div>
-  );
+        <div className="flex items-center gap-3">
+          <Avatar className="h-10 w-10">
+            <AvatarImage src={userInfo.profilePicture} />
+            <AvatarFallback>
+              {displayName?.[0]?.toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <p className="font-medium">{displayName}</p>
+            <p className="text-sm text-muted-foreground">@{userInfo.username}</p>
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAction();
+          }}
+          disabled={isPending}
+          data-testid={`button-action-${userInfo.id}`}
+        >
+          <Icon className="w-4 h-4 me-2" />
+          {actionLabel}
+        </Button>
+      </div>
+    );
+  };
 
   return (
     <Card>

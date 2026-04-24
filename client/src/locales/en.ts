@@ -1240,6 +1240,7 @@ const en: Record<string, string> = {
   'settings.notificationMutedUsers': 'Notifications Muted',
   'settings.notificationMutedUsersDesc': 'Conversations whose notifications are silenced. Messages still arrive normally.',
   'settings.noNotificationMutedUsers': 'No silenced conversations',
+  'settings.openConversation': 'Open conversation',
   'settings.changePassword': 'Change Password',
   'settings.changePasswordDescription': 'Update your account password',
   'settings.currentPassword': 'Current Password',
