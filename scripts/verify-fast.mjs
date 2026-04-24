@@ -66,6 +66,28 @@ function runDmNotificationsSmoke() {
     });
 }
 
+// Task #30: room/challenge chat fan-out + per-recipient suppression.
+// Same DI pattern as the DM smoke — pure-logic + bridge integration via
+// stubbed deps, safe to run in parallel.
+function runRoomNotificationsSmoke() {
+    return new Promise((resolve, reject) => {
+        const child = spawn(`${npxBin()} tsx scripts/smoke-room-notifications.ts`, [], {
+            stdio: "inherit",
+            shell: true,
+            env: process.env,
+        });
+
+        child.on("error", reject);
+        child.on("exit", (code) => {
+            if (code === 0) {
+                resolve();
+                return;
+            }
+            reject(new Error(`Room notifications smoke failed with exit code ${code}`));
+        });
+    });
+}
+
 function spawnServer() {
     const child = spawn(`${npxBin()} tsx server/index.ts`, [], {
         stdio: ["ignore", "pipe", "pipe"],
@@ -171,6 +193,7 @@ async function main() {
         await Promise.all([
             runTscIncremental(),
             runDmNotificationsSmoke(),
+            runRoomNotificationsSmoke(),
             waitForHealthOrExit(server),
         ]);
         await stopServer(server);

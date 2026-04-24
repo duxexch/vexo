@@ -10,8 +10,11 @@ import { storage } from "../storage";
 import { filterMessage } from "../lib/word-filter";
 import { sanitizePlainText } from "../lib/input-security";
 import { getCachedUserBlockLists } from "../lib/redis";
+import {
+  buildRoomChatBroadcast,
+  shouldDeliverRoomChatToRecipient,
+} from "../lib/room-chat-payload";
 import type {
-  ChatBroadcast,
   ChatClientToServerEvents,
   ChatErrorCode,
   ChatServerToClientEvents,
@@ -54,6 +57,64 @@ interface DeliverArgs {
 }
 
 /**
+ * Test-only seam (Task #30). Lets `scripts/smoke-room-notifications.ts`
+ * call this entry point with stubbed deps so it can verify per-recipient
+ * suppression + payload assembly across a multi-socket room without
+ * booting Express, the real DB, Redis, or push services. Production
+ * never sets this — every field has a real-import default.
+ */
+type ChallengeSessionLookupResult = { id: string } | undefined;
+type SenderLookupResult =
+  | { id: string; username: string | null; avatarUrl?: string | null }
+  | undefined;
+
+export interface ChallengeChatDeps {
+  fetchChallengeSession: (challengeId: string) => Promise<ChallengeSessionLookupResult>;
+  fetchSender: (senderId: string) => Promise<SenderLookupResult>;
+  insertChallengeChatMessage: (row: {
+    sessionId: string;
+    senderId: string;
+    message: string;
+    isQuickMessage: boolean;
+    quickMessageKey?: string;
+    isSpectator: boolean;
+  }) => Promise<{ id: string; createdAt: Date | null }>;
+  getCachedUserBlockLists: typeof getCachedUserBlockLists;
+  getUser: typeof storage.getUser;
+}
+
+const defaultDeps: ChallengeChatDeps = {
+  fetchChallengeSession: async (challengeId) => {
+    const [session] = await db
+      .select({ id: challengeGameSessions.id })
+      .from(challengeGameSessions)
+      .where(eq(challengeGameSessions.challengeId, challengeId))
+      .limit(1);
+    return session;
+  },
+  fetchSender: async (senderId) => {
+    const [sender] = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        avatarUrl: users.profilePicture,
+      })
+      .from(users)
+      .where(eq(users.id, senderId));
+    return sender;
+  },
+  insertChallengeChatMessage: async (row) => {
+    const [saved] = await db
+      .insert(challengeChatMessages)
+      .values(row)
+      .returning();
+    return { id: saved.id, createdAt: saved.createdAt };
+  },
+  getCachedUserBlockLists,
+  getUser: storage.getUser.bind(storage),
+};
+
+/**
  * Full feature-parity replacement for the legacy `handleChallengeChat` path
  * when the message originates on the realtime Socket.IO `/chat` channel.
  *
@@ -70,6 +131,7 @@ interface DeliverArgs {
  */
 export async function deliverRealtimeChallengeChat(
   args: DeliverArgs,
+  deps: ChallengeChatDeps = defaultDeps,
 ): Promise<DeliverResult> {
   const {
     challengeId,
@@ -89,48 +151,34 @@ export async function deliverRealtimeChallengeChat(
   const filterResult = filterMessage(safeMessage);
   const finalText = filterResult.filteredMessage;
 
-  const [session] = await db
-    .select({ id: challengeGameSessions.id })
-    .from(challengeGameSessions)
-    .where(eq(challengeGameSessions.challengeId, challengeId))
-    .limit(1);
+  const session = await deps.fetchChallengeSession(challengeId);
   if (!session) return { ok: false, reason: "no_session" };
 
-  const [sender] = await db
-    .select({
-      id: users.id,
-      username: users.username,
-      avatarUrl: users.profilePicture,
-    })
-    .from(users)
-    .where(eq(users.id, senderId));
+  const sender = await deps.fetchSender(senderId);
   const senderUsername = sender?.username || senderUsernameFallback;
 
   const safeQuickKey = quickMessageKey
     ? String(quickMessageKey).slice(0, 50)
     : undefined;
 
-  const [savedMessage] = await db
-    .insert(challengeChatMessages)
-    .values({
-      sessionId: session.id,
-      senderId,
-      message: finalText,
-      isQuickMessage: isQuickMessage || false,
-      quickMessageKey: safeQuickKey,
-      isSpectator,
-    })
-    .returning();
+  const savedMessage = await deps.insertChallengeChatMessage({
+    sessionId: session.id,
+    senderId,
+    message: finalText,
+    isQuickMessage: isQuickMessage || false,
+    quickMessageKey: safeQuickKey,
+    isSpectator,
+  });
 
   const ts = savedMessage.createdAt
     ? new Date(savedMessage.createdAt).getTime()
     : Date.now();
 
   // ---- Sender block list (cached) ----
-  const { blockedUsers: senderBlocked } = await getCachedUserBlockLists(
+  const { blockedUsers: senderBlocked } = await deps.getCachedUserBlockLists(
     senderId,
     async (id) => {
-      const u = await storage.getUser(id);
+      const u = await deps.getUser(id);
       return u
         ? {
             blockedUsers: u.blockedUsers || [],
@@ -148,57 +196,69 @@ export async function deliverRealtimeChallengeChat(
   for (const s of ioSockets) {
     const rid = s.data?.userId;
     if (!rid || rid === senderId) continue;
-    if (senderBlocked.includes(rid)) continue;
     recipientIds.add(rid);
   }
 
-  const checks =
-    recipientIds.size === 0
-      ? []
-      : await Promise.all(
-          Array.from(recipientIds).map(async (rid) => {
-            const c = await getCachedUserBlockLists(rid, async (id) => {
-              const u = await storage.getUser(id);
-              return u
-                ? {
-                    blockedUsers: u.blockedUsers || [],
-                    mutedUsers: u.mutedUsers || [],
-                  }
-                : null;
-            });
-            return {
-              rid,
-              blocked:
-                c.blockedUsers?.includes(senderId) ||
-                c.mutedUsers?.includes(senderId),
-            };
-          }),
-        );
-  const blockedRecipients = new Set(
-    checks.filter((c) => c.blocked).map((c) => c.rid),
+  // Pre-fetch every distinct recipient's lists in parallel so the
+  // suppression rule (in `room-chat-payload.ts`) can be applied
+  // synchronously per socket below.
+  const recipientLists = new Map<
+    string,
+    { blockedUsers: readonly string[]; mutedUsers: readonly string[] }
+  >();
+  await Promise.all(
+    Array.from(recipientIds).map(async (rid) => {
+      const c = await deps.getCachedUserBlockLists(rid, async (id) => {
+        const u = await deps.getUser(id);
+        return u
+          ? {
+              blockedUsers: u.blockedUsers || [],
+              mutedUsers: u.mutedUsers || [],
+            }
+          : null;
+      });
+      recipientLists.set(rid, {
+        blockedUsers: c.blockedUsers || [],
+        mutedUsers: c.mutedUsers || [],
+      });
+    }),
   );
 
-  // ---- Realtime IO emit (per-socket so we can apply filtering) ----
-  const broadcast: ChatBroadcast = {
+  // ---- Realtime IO emit (per-socket so we can apply filtering via
+  //      the shared suppression helper). Task #30: every recipient
+  //      goes through `shouldDeliverRoomChatToRecipient` so the rule
+  //      is identical to whatever future transport (HTTP fallback,
+  //      push) routes through here.
+  const broadcast = buildRoomChatBroadcast({
     roomId,
-    fromUserId: senderId,
-    fromUsername: senderUsername,
+    senderId,
+    senderUsername,
     text: finalText,
     ts,
     clientMsgId,
     isSpectator,
-    isQuickMessage: isQuickMessage || undefined,
+    isQuickMessage,
     quickMessageKey: safeQuickKey,
-    wasFiltered: !filterResult.isClean || undefined,
-  };
+    wasFiltered: !filterResult.isClean,
+  });
 
   for (const s of ioSockets) {
     const rid = s.data?.userId;
     if (!rid) continue;
-    if (rid !== senderId) {
-      // sender always gets the echo; everyone else is filtered
-      if (senderBlocked.includes(rid)) continue;
-      if (blockedRecipients.has(rid)) continue;
+    const lists = recipientLists.get(rid) ?? {
+      blockedUsers: [],
+      mutedUsers: [],
+    };
+    if (
+      !shouldDeliverRoomChatToRecipient({
+        recipientId: rid,
+        senderId,
+        senderBlockedUsers: senderBlocked,
+        recipientBlockedUsers: lists.blockedUsers,
+        recipientMutedUsers: lists.mutedUsers,
+      })
+    ) {
+      continue;
     }
     s.emit("chat:message", broadcast);
   }

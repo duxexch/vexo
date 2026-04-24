@@ -76,9 +76,15 @@ First-time VPS bootstrap (Traefik network + Traefik container) is documented in 
 
 ## Recent changes
 
+- 2026-04-24 — **Room (challenge / game-room) chat fan-out gated by smoke (Task #30):**
+  - New shared helper `server/lib/room-chat-payload.ts` exposes `buildRoomChatBroadcast` (canonical `ChatBroadcast` payload assembly) + `shouldDeliverRoomChatToRecipient` (per-recipient suppression rule covering sender-block, recipient-block, recipient-mute, and self-echo).
+  - `server/socketio/challenge-chat-bridge.ts` (`deliverRealtimeChallengeChat`) refactored to: (a) delegate broadcast assembly to `buildRoomChatBroadcast`, (b) delegate per-recipient suppression to `shouldDeliverRoomChatToRecipient`, (c) accept an optional `ChallengeChatDeps` injection seam so smokes can stub DB / Redis / Socket.IO.
+  - New `scripts/smoke-room-notifications.ts` (6 checks: 4 suppression-rule cases incl. self-echo, 2 broadcast-assembly shapes, 5-socket bridge fan-out asserting only allowed peers receive AND every emit carries an identical canonical payload, plus solo-sender and empty-text edges).
+  - Wired into `quality:smoke:room-notifications`, prepended to `quality:gate:phase-e`, added to `quality:gate:chat`, and runs in parallel inside `verify:fast` alongside the typecheck and DM smoke.
+
 - 2026-04-24 — **Chat-notifications gated before each release:**
   - `quality:smoke:dm-notifications` (15 checks: helper-level suppression rules, HTTP↔realtime payload parity, preview rules, real-bridge integration via DI for allowed/blocked/`mutedUsers`/`notificationMutedUsers`, and HTTP runtime integration via `dispatchHttpDmNotification`) is now part of the existing release-readiness aggregate `quality:gate:phase-e` and runs first so any DM-notification regression surfaces in seconds.
-  - New `quality:gate:chat` aggregate (`check:types && quality:smoke:dm-notifications`) for fast chat-only verification when iterating on `server/routes/chat/*` or `server/socketio/direct-message-bridge.ts`.
+  - `quality:gate:chat` aggregate now also runs `quality:smoke:room-notifications` for fast chat-only verification covering both DM and room paths.
   - The same smoke also runs in parallel inside `verify:fast` (Task #23 wiring), so local pre-commit verification catches regressions too.
   - Run before publishing: `npm run quality:gate:phase-e` (full release gate) or `npm run quality:gate:chat` (chat-only fast check).
 
