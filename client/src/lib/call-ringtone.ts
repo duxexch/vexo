@@ -36,6 +36,18 @@ let activeOscillator: OscillatorContext | null = null;
 let activeNativeHandle: NativeRingerHandle | null = null;
 let activeAudioElement: HTMLAudioElement | null = null;
 
+/**
+ * Monotonically-incrementing token for the current "ringing" intent.
+ * Each call to `startWebRingtone()` bumps this; `stopWebRingtone()`
+ * also bumps it. Async callbacks (such as a rejected `play()` promise
+ * from a stale `startFileRingtone` attempt) capture the token they
+ * were started under and refuse to fall back to the synth ringer if
+ * the live token has moved on. Without this, a slow `play()` rejection
+ * arriving AFTER the user has answered or hung up would leak a "ghost"
+ * synth ringtone.
+ */
+let webRingtoneToken = 0;
+
 function makeAudioContext(): AudioContext | null {
     try {
         const Ctor = (window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
@@ -137,9 +149,12 @@ function startSynthRingtone(): void {
  * not expose `Audio` (e.g. SSR / non-DOM environment). If
  * `audio.play()` is rejected later — typically because the browser
  * blocks autoplay until a user gesture — we fall back to the synth
- * tones automatically so the call still rings.
+ * tones automatically so the call still rings, BUT only if the
+ * ring-intent token captured at start time is still the live one
+ * (otherwise the user has already answered/declined and we must not
+ * leak a "ghost" synth ringtone).
  */
-function startFileRingtone(): HTMLAudioElement | null {
+function startFileRingtone(intentToken: number): HTMLAudioElement | null {
     if (typeof window === "undefined" || typeof Audio === "undefined") return null;
     let audio: HTMLAudioElement;
     try {
@@ -154,13 +169,16 @@ function startFileRingtone(): HTMLAudioElement | null {
     const playPromise = audio.play();
     if (playPromise && typeof playPromise.then === "function") {
         playPromise.catch(() => {
-            // Autoplay blocked or asset failed to load — release the
-            // element and start the Web-Audio synth fallback so the
-            // ringer still produces sound.
+            // Always release this stale element first.
             try { audio.pause(); } catch { /* ignore */ }
             if (activeAudioElement === audio) {
                 activeAudioElement = null;
             }
+            // Only start the synth fallback if the user is STILL
+            // expecting to hear a ring. If `stopWebRingtone()` (or a
+            // subsequent restart) has bumped the token, this rejection
+            // belongs to a stale start and must not produce sound.
+            if (intentToken !== webRingtoneToken) return;
             startSynthRingtone();
         });
     }
@@ -179,6 +197,9 @@ function stopFileRingtone(): void {
 }
 
 function stopWebRingtone(): void {
+    // Bump the intent token so any in-flight `play()` rejection
+    // arriving after this call cannot start the synth fallback.
+    webRingtoneToken += 1;
     stopFileRingtone();
     stopSynthRingtone();
 }
@@ -186,10 +207,16 @@ function stopWebRingtone(): void {
 function startWebRingtone(): void {
     if (activeAudioElement || activeOscillator) return;
 
+    // Bump the intent token so the new attempt has its own identity.
+    // Async callbacks from this attempt will compare against this value
+    // and refuse to act if it has moved on.
+    webRingtoneToken += 1;
+    const intentToken = webRingtoneToken;
+
     // Prefer the bundled audio asset (musical, mute-switch-aware on
     // iOS). Synth fallback only runs if the file ringer fails to
     // initialise or its play() promise is rejected.
-    const audio = startFileRingtone();
+    const audio = startFileRingtone(intentToken);
     if (audio) {
         activeAudioElement = audio;
         return;
@@ -312,5 +339,5 @@ export async function stopCallRingtone(): Promise<void> {
 }
 
 export function isCallRingtoneActive(): boolean {
-    return !!activeOscillator || !!activeNativeHandle;
+    return !!activeOscillator || !!activeNativeHandle || !!activeAudioElement;
 }

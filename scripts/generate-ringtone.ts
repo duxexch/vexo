@@ -22,6 +22,7 @@
  * audio source, so the asset is owned by the project and royalty-free.
  */
 
+import { spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,7 +30,9 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "..");
-const OUTPUT_PATH = path.join(REPO_ROOT, "client/public/sounds/notification.wav");
+const OUTPUT_DIR = path.join(REPO_ROOT, "client/public/sounds");
+const OUTPUT_WAV = path.join(OUTPUT_DIR, "notification.wav");
+const OUTPUT_MP3 = path.join(OUTPUT_DIR, "notification.mp3");
 
 const SAMPLE_RATE = 44100;
 const NUM_CHANNELS = 1;
@@ -128,11 +131,32 @@ async function main(): Promise<void> {
   out[totalSamples - 1] = 0;
 
   const wav = encodeWav(out);
-  await fs.mkdir(path.dirname(OUTPUT_PATH), { recursive: true });
-  await fs.writeFile(OUTPUT_PATH, wav);
+  await fs.mkdir(OUTPUT_DIR, { recursive: true });
+  await fs.writeFile(OUTPUT_WAV, wav);
 
-  const sizeKb = (wav.length / 1024).toFixed(1);
-  console.log(`[generate-ringtone] wrote ${path.relative(REPO_ROOT, OUTPUT_PATH)} (${sizeKb} KB, ${LOOP_SECONDS.toFixed(2)}s loop)`);
+  const wavSizeKb = (wav.length / 1024).toFixed(1);
+  console.log(`[generate-ringtone] wrote ${path.relative(REPO_ROOT, OUTPUT_WAV)} (${wavSizeKb} KB, ${LOOP_SECONDS.toFixed(2)}s loop)`);
+
+  // Companion MP3 produced from the WAV via ffmpeg (LAME). Smaller
+  // (~25KB) and useful for any UI surface that wants a lightweight
+  // preview without re-downloading the full PCM file. We tolerate
+  // ffmpeg being unavailable so the WAV stays the source of truth and
+  // the script still succeeds in environments without ffmpeg.
+  const ff = spawnSync(
+    "ffmpeg",
+    ["-y", "-loglevel", "error", "-i", OUTPUT_WAV, "-codec:a", "libmp3lame", "-b:a", "128k", OUTPUT_MP3],
+    { stdio: ["ignore", "inherit", "inherit"] },
+  );
+  if (ff.status === 0) {
+    const mp3 = await fs.readFile(OUTPUT_MP3);
+    const mp3SizeKb = (mp3.length / 1024).toFixed(1);
+    console.log(`[generate-ringtone] wrote ${path.relative(REPO_ROOT, OUTPUT_MP3)} (${mp3SizeKb} KB, libmp3lame 128k)`);
+  } else if (ff.error || (ff.status !== null && ff.status !== 0)) {
+    console.warn(
+      `[generate-ringtone] WARN: ffmpeg unavailable or failed (status=${ff.status})` +
+      `, skipping MP3 companion. Install ffmpeg to regenerate ${path.relative(REPO_ROOT, OUTPUT_MP3)}.`,
+    );
+  }
 }
 
 void main().catch((err) => {

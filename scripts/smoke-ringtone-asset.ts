@@ -35,6 +35,7 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "..");
 
 const RINGTONE_PATH = path.join(REPO_ROOT, "client/public/sounds/notification.wav");
+const RINGTONE_MP3_PATH = path.join(REPO_ROOT, "client/public/sounds/notification.mp3");
 const CALL_RINGTONE_TS = path.join(REPO_ROOT, "client/src/lib/call-ringtone.ts");
 const CAPACITOR_CONFIG = path.join(REPO_ROOT, "capacitor.config.ts");
 
@@ -141,7 +142,53 @@ async function main(): Promise<void> {
     }
   }
 
-  // 7. Capacitor config plugin section still references notification.wav.
+  // 7. MP3 companion exists (smaller, useful for previews / older browsers).
+  const mp3 = await tryReadFile(RINGTONE_MP3_PATH);
+  if (!mp3) {
+    fail(
+      "MP3 companion exists at client/public/sounds/notification.mp3",
+      "Run `npx tsx scripts/generate-ringtone.ts` (with ffmpeg installed) to regenerate.",
+    );
+  } else if (mp3.length < 5_000) {
+    fail(
+      "MP3 companion is at least 5KB (real audio data, not a stub)",
+      `Size: ${mp3.length} bytes`,
+    );
+  } else if (!(mp3[0] === 0xff && (mp3[1] & 0xe0) === 0xe0) && !(mp3.slice(0, 3).toString() === "ID3")) {
+    fail(
+      "MP3 companion has a valid MPEG / ID3 header",
+      `First bytes: ${[...mp3.slice(0, 4)].map((b) => b.toString(16).padStart(2, "0")).join(" ")}`,
+    );
+  } else {
+    pass("MP3 companion exists at client/public/sounds/notification.mp3 with a valid header");
+  }
+
+  // 8. Race-condition guard: the file ringer must consult an intent
+  // token before falling back to synth, so a slow play() rejection
+  // arriving after stopWebRingtone() cannot leak a ghost ringtone.
+  if (!ringtoneSrc) {
+    // Already failed above; nothing to add.
+  } else if (/webRingtoneToken|intentToken/.test(ringtoneSrc) &&
+             /intentToken\s*!==\s*webRingtoneToken/.test(ringtoneSrc)) {
+    pass("file ringer guards synth fallback with an intent token (no race after stop)");
+  } else {
+    fail(
+      "file ringer guards synth fallback with an intent token",
+      "startFileRingtone()'s play().catch handler must check the live ring-intent token before calling startSynthRingtone(), otherwise a stale rejection can leak audio after stopCallRingtone().",
+    );
+  }
+
+  // 9. State helper reflects the file-backed ringer too.
+  if (ringtoneSrc && /isCallRingtoneActive[\s\S]{0,200}activeAudioElement/.test(ringtoneSrc)) {
+    pass("isCallRingtoneActive() includes activeAudioElement in its truthiness check");
+  } else if (ringtoneSrc) {
+    fail(
+      "isCallRingtoneActive() includes activeAudioElement in its truthiness check",
+      "When the file-backed ringer is the active path, isCallRingtoneActive() must report true so callers see the correct ringing state.",
+    );
+  }
+
+  // 10. Capacitor config plugin section still references notification.wav.
   const capacitorSrc = await tryReadText(CAPACITOR_CONFIG);
   if (!capacitorSrc) {
     fail(
