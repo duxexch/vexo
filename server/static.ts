@@ -32,6 +32,15 @@ function escapeHtmlAttribute(value: string): string {
   return escapeHtml(value);
 }
 
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 function buildFallbackRobots(req: Request): string {
   const appUrl = (process.env.APP_URL || "").trim().replace(/\/+$/, "");
   const forwardedProto = typeof req.headers["x-forwarded-proto"] === "string"
@@ -75,7 +84,7 @@ function buildFallbackSitemapCore(baseUrl: string): string {
     const loc = route === "/" ? `${baseUrl}/` : `${baseUrl}${route}`;
     return [
       "  <url>",
-      `    <loc>${loc}</loc>`,
+      `    <loc>${escapeXml(loc)}</loc>`,
       `    <lastmod>${now}</lastmod>`,
       "    <changefreq>daily</changefreq>",
       "    <priority>0.8</priority>",
@@ -113,7 +122,7 @@ function buildFallbackSitemapGuides(baseUrl: string): string {
 
   const urls = guides.map((route) => [
     "  <url>",
-    `    <loc>${baseUrl}${route}</loc>`,
+    `    <loc>${escapeXml(`${baseUrl}${route}`)}</loc>`,
     `    <lastmod>${now}</lastmod>`,
     "    <changefreq>weekly</changefreq>",
     "    <priority>0.72</priority>",
@@ -134,11 +143,11 @@ function buildFallbackSitemapIndex(baseUrl: string): string {
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     "  <sitemap>",
-    `    <loc>${baseUrl}/sitemap-core.xml</loc>`,
+    `    <loc>${escapeXml(`${baseUrl}/sitemap-core.xml`)}</loc>`,
     `    <lastmod>${now}</lastmod>`,
     "  </sitemap>",
     "  <sitemap>",
-    `    <loc>${baseUrl}/sitemap-guides.xml</loc>`,
+    `    <loc>${escapeXml(`${baseUrl}/sitemap-guides.xml`)}</loc>`,
     `    <lastmod>${now}</lastmod>`,
     "  </sitemap>",
     "</sitemapindex>",
@@ -632,18 +641,36 @@ export function serveStatic(app: Express) {
         return res.status(404).type("text/plain").send("Not found");
       }
 
-      const forceSeoRefresh = req.query.seo_refresh === "1" || req.query.seo_refresh === "true";
-      const runtimeSeo = await getRuntimeSeoSettingsSafely(forceSeoRefresh);
-      const locale = getPreferredLocale(req);
-      const localeBase = locale.split("-")[0];
-      const isRtlLocale = RTL_LANG_PREFIXES.includes(localeBase);
-
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      res.setHeader("X-Robots-Tag", runtimeSeo.robotsContent);
-
       const indexPath = path.resolve(distPath, "index.html");
-      let html = fs.readFileSync(indexPath, "utf-8");
+      const baseHtml = fs.readFileSync(indexPath, "utf-8");
+      const { html, robotsContent } = await renderHtmlWithSeo(req, baseHtml);
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("X-Robots-Tag", robotsContent);
+      res.status(200).set({ "Content-Type": "text/html" }).end(html);
+    } catch {
+      res.status(500).set({ "Content-Type": "text/plain" }).end("SEO rendering error");
+    }
+  });
+}
 
+/**
+ * Apply dynamic SEO meta + JSON-LD to an HTML template based on the request.
+ * Used by both the production static handler and the dev Vite middleware so
+ * programmatic SEO landing pages get correct titles/canonicals in every mode.
+ */
+export async function renderHtmlWithSeo(
+  req: Request,
+  baseHtml: string,
+): Promise<{ html: string; robotsContent: string }> {
+  const pagePath = req.originalUrl.split("?")[0].replace(/\/+$/, "") || "/";
+  const forceSeoRefresh = req.query.seo_refresh === "1" || req.query.seo_refresh === "true";
+  const runtimeSeo = await getRuntimeSeoSettingsSafely(forceSeoRefresh);
+  const locale = getPreferredLocale(req);
+  const localeBase = locale.split("-")[0];
+  const isRtlLocale = RTL_LANG_PREFIXES.includes(localeBase);
+  let html = baseHtml;
+
+  {
       // Get SEO data for the current path — try static map first, then dynamic resolver
       const staticRouteSeo = SEO_PAGES[pagePath];
       const baseUrlForRoute = buildRuntimeBaseUrl(req);
@@ -665,20 +692,29 @@ export function serveStatic(app: Express) {
       const defaultCanonical = `${baseUrlForRoute}${pagePath === "/" ? "/" : pagePath}`;
       const canonicalUrl = routeSeo?.canonicalUrl || runtimeSeo.canonicalUrl || defaultCanonical;
 
-      const title = getLocaleValue(runtimeSeo.localeOverrides, locale, "siteTitle")
-        || routeSeo?.title
+      // Priority: per-route SEO (static map or dynamic resolver) > admin locale overrides
+      // > runtime defaults. For programmatic landing pages we want the page-specific
+      // title/description to outrank the site-wide locale override.
+      const title = routeSeo?.title
+        || getLocaleValue(runtimeSeo.localeOverrides, locale, "siteTitle")
         || runtimeSeo.siteTitle
         || RUNTIME_SEO_DEFAULTS.siteTitle;
-      const description = getLocaleValue(runtimeSeo.localeOverrides, locale, "siteDescription")
-        || routeSeo?.description
+      const description = routeSeo?.description
+        || getLocaleValue(runtimeSeo.localeOverrides, locale, "siteDescription")
         || runtimeSeo.siteDescription
         || RUNTIME_SEO_DEFAULTS.siteDescription;
-      const keywords = getLocaleValue(runtimeSeo.localeOverrides, locale, "siteKeywords")
-        || routeSeo?.keywords
+      const keywords = routeSeo?.keywords
+        || getLocaleValue(runtimeSeo.localeOverrides, locale, "siteKeywords")
         || runtimeSeo.siteKeywords
         || RUNTIME_SEO_DEFAULTS.siteKeywords;
-      const ogTitle = getLocaleValue(runtimeSeo.localeOverrides, locale, "ogTitle") || runtimeSeo.ogTitle || title;
-      const ogDescription = getLocaleValue(runtimeSeo.localeOverrides, locale, "ogDescription") || runtimeSeo.ogDescription || description;
+      const ogTitle = routeSeo?.title
+        || getLocaleValue(runtimeSeo.localeOverrides, locale, "ogTitle")
+        || runtimeSeo.ogTitle
+        || title;
+      const ogDescription = routeSeo?.description
+        || getLocaleValue(runtimeSeo.localeOverrides, locale, "ogDescription")
+        || runtimeSeo.ogDescription
+        || description;
 
       const escapedTitle = escapeHtmlAttribute(title);
       const escapedDescription = escapeHtmlAttribute(description);
@@ -767,10 +803,7 @@ export function serveStatic(app: Express) {
         const jsonLdScript = `<script type="application/ld+json">${JSON.stringify(dynamicRouteSeo.jsonLd).replace(/</g, "\\u003c")}</script>`;
         html = html.replace("</head>", `${jsonLdScript}\n</head>`);
       }
+  }
 
-      res.status(200).set({ "Content-Type": "text/html" }).end(html);
-    } catch {
-      res.status(500).set({ "Content-Type": "text/plain" }).end("SEO rendering error");
-    }
-  });
+  return { html, robotsContent: runtimeSeo.robotsContent };
 }

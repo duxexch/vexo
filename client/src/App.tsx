@@ -18,6 +18,11 @@ const LoginPage = lazy(() => import("@/pages/login"));
 const SelectUsernamePage = lazy(() => import("@/pages/select-username"));
 const ChallengesPage = lazy(() => import("@/pages/challenges"));
 const TournamentsPage = lazy(() => import("@/pages/tournaments"));
+const SeoGameLandingPage = lazy(() => import("@/pages/seo/game-landing"));
+const SeoCategoryHubPage = lazy(() => import("@/pages/seo/category-hub"));
+const SeoPlayerProfilePage = lazy(() => import("@/pages/seo/player-profile-public"));
+const SeoMatchRecapPage = lazy(() => import("@/pages/seo/match-recap"));
+const SeoLeaderboardGamePage = lazy(() => import("@/pages/seo/leaderboard-game"));
 const TermsPage = lazy(() => import("@/pages/terms"));
 const PrivacyPage = lazy(() => import("@/pages/privacy"));
 const AuthCallbackPage = lazy(() => import("@/pages/auth-callback"));
@@ -110,6 +115,37 @@ function Router() {
                 <Suspense fallback={<PageLoader />}>
                     <ErrorBoundary>
                         <TournamentsPage />
+                    </ErrorBoundary>
+                </Suspense>
+            </PublicLayout>
+        );
+    }
+
+    // ==================== Programmatic SEO public routes ====================
+    // These crawlable landing pages are accessible to both authenticated and
+    // anonymous users so search engines can index them. Authenticated users get
+    // the same content; the global app shell handles navigation back to the app.
+    const isSeoPublicRoute =
+        /^\/game\/[A-Za-z0-9_-]+$/.test(location)
+        || /^\/games\/[A-Za-z0-9_-]+$/.test(location)
+        || /^\/player\/[A-Za-z0-9_.-]+$/.test(location)
+        || /^\/match\/[A-Fa-f0-9-]{8,}$/.test(location)
+        || /^\/leaderboard\/[A-Za-z0-9_-]+$/.test(location);
+
+    // Render unconditionally so search engines AND authenticated users land on
+    // the same crawlable page (auth status only affects header CTA).
+    if (isSeoPublicRoute) {
+        return (
+            <PublicLayout>
+                <Suspense fallback={<PageLoader />}>
+                    <ErrorBoundary>
+                        <Switch>
+                            <Route path="/game/:slug" component={SeoGameLandingPage} />
+                            <Route path="/games/:category" component={SeoCategoryHubPage} />
+                            <Route path="/player/:username" component={SeoPlayerProfilePage} />
+                            <Route path="/match/:id" component={SeoMatchRecapPage} />
+                            <Route path="/leaderboard/:game" component={SeoLeaderboardGamePage} />
+                        </Switch>
                     </ErrorBoundary>
                 </Suspense>
             </PublicLayout>

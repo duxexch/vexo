@@ -218,7 +218,7 @@ export function buildSitemapIndex(baseUrl: string): string {
   ];
   const items = sitemaps.map((name) => [
     "  <sitemap>",
-    `    <loc>${baseUrl}/${name}</loc>`,
+    `    <loc>${escapeXml(`${baseUrl}/${name}`)}</loc>`,
     `    <lastmod>${now}</lastmod>`,
     "  </sitemap>",
   ].join("\n")).join("\n");
@@ -493,16 +493,29 @@ export function isSeoLandingPath(pagePath: string): boolean {
     || /^\/leaderboard\/[a-z0-9_-]+$/i.test(p);
 }
 
-// Helper: leaderboard top players (used by public API)
+// Helper: leaderboard top players (used by public API).
+// IMPORTANT: column names are derived from `game`. To eliminate any SQL-injection
+// surface (even via internal callers), we resolve them through a strict whitelist
+// keyed by the SeoGameKey union before passing to sql.raw.
+const LEADERBOARD_COLUMNS: Record<SeoGameKey, { wins: string; played: string }> = {
+  chess: { wins: "chess_won", played: "chess_played" },
+  backgammon: { wins: "backgammon_won", played: "backgammon_played" },
+  domino: { wins: "domino_won", played: "domino_played" },
+  tarneeb: { wins: "tarneeb_won", played: "tarneeb_played" },
+  baloot: { wins: "baloot_won", played: "baloot_played" },
+  languageduel: { wins: "languageduel_won", played: "languageduel_played" },
+};
+
 export async function getPublicLeaderboard(game: SeoGameKey, limit = 50): Promise<Array<{ username: string; nickname: string | null; profilePicture: string | null; wins: number; played: number }>> {
-  const winsCol = `${game}_won`;
-  const playedCol = `${game}_played`;
+  const cols = LEADERBOARD_COLUMNS[game];
+  if (!cols) return [];
+  const safeLimit = Math.min(Math.max(1, Math.floor(limit)), 200);
   const rows = await db.execute(sql`
-    SELECT username, nickname, profile_picture, ${sql.raw(winsCol)} AS wins, ${sql.raw(playedCol)} AS played
+    SELECT username, nickname, profile_picture, ${sql.raw(cols.wins)} AS wins, ${sql.raw(cols.played)} AS played
     FROM users
-    WHERE status = 'active' AND ${sql.raw(winsCol)} > 0
-    ORDER BY ${sql.raw(winsCol)} DESC
-    LIMIT ${limit}
+    WHERE status = 'active' AND ${sql.raw(cols.wins)} > 0
+    ORDER BY ${sql.raw(cols.wins)} DESC
+    LIMIT ${safeLimit}
   `);
   return (rows.rows as Array<Record<string, unknown>>).map((r) => ({
     username: String(r.username),

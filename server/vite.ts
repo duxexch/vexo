@@ -104,7 +104,11 @@ export async function setupVite(server: Server, app: Express) {
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
       const page = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      const { renderHtmlWithSeo } = await import("./static");
+      const { html: pageWithSeo, robotsContent } = await renderHtmlWithSeo(req, page);
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("X-Robots-Tag", robotsContent);
+      res.status(200).set({ "Content-Type": "text/html" }).end(pageWithSeo);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);
