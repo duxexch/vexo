@@ -47,6 +47,7 @@
     "quality:smoke:domino-layout-snapshots": "tsx scripts/smoke-domino-layout-snapshots.ts",
     "quality:smoke:domino-layout-snapshots:update": "tsx scripts/smoke-domino-layout-snapshots.ts --update",
     "quality:smoke:domino-playthrough-bounds": "tsx scripts/smoke-domino-playthrough-bounds.ts",
+    "quality:smoke:dm-notifications": "tsx scripts/smoke-dm-notifications.ts",
     "quality:smoke:sam9-solo-e2e": "tsx scripts/smoke-sam9-solo-e2e.ts",
     "quality:perf:domino-latency": "tsx scripts/smoke-domino-load-latency.ts --profile=latency",
     "quality:perf:domino-load": "tsx scripts/smoke-domino-load-latency.ts --profile=load",

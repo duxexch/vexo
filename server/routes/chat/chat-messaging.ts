@@ -14,6 +14,7 @@ import { resolveChatEnabledFlagFromDb } from "../../lib/chat-settings";
 import { isPinUnlocked } from "../chat-features/pin-lock";
 import { clients } from "../../websocket/shared";
 import { sendNotification } from "../../websocket/notifications";
+import { buildDmNotificationPayload } from "../../lib/dm-notification-payload";
 
 const CHAT_MESSAGE_DEDUPE_TTL_MS = 24 * 60 * 60 * 1000;
 const CHAT_MESSAGE_DEDUPE_PENDING_TTL_MS = 60 * 1000;
@@ -29,25 +30,6 @@ function normalizeClientMessageId(value: unknown): string | null {
   }
 
   return normalized.slice(0, 128);
-}
-
-function buildChatNotificationPreview(messageType: string, content: string): { en: string; ar: string } {
-  if (content && content.trim().length > 0) {
-    const preview = content.trim().slice(0, 120);
-    return { en: preview, ar: preview };
-  }
-
-  if (messageType === "image") {
-    return { en: "Sent a photo", ar: "أرسل صورة" };
-  }
-  if (messageType === "video") {
-    return { en: "Sent a video", ar: "أرسل فيديو" };
-  }
-  if (messageType === "voice") {
-    return { en: "Sent a voice message", ar: "أرسل رسالة صوتية" };
-  }
-
-  return { en: "Sent a message", ar: "أرسل رسالة" };
 }
 
 export function registerChatMessagingRoutes(app: Express): void {
@@ -414,29 +396,24 @@ export function registerChatMessagingRoutes(app: Express): void {
       }
 
       const senderDisplayName = senderRow?.firstName || senderRow?.username || "User";
-      const preview = buildChatNotificationPreview(storedMessageType, sanitizedContent);
-      const chatLinkUserId = encodeURIComponent(senderId);
 
       // Task #22: skip the bell/push fanout if the recipient has put
       // this conversation on notification-only mute. The message has
       // already been persisted and (above) emitted in realtime, so
       // they still see it when they open the chat.
+      // Task #23: payload built via the shared helper so HTTP and
+      // realtime DM transports stay byte-for-byte identical.
       if (!recipientSilencedNotifications) {
-        void sendNotification(receiverId, {
-          type: "system",
-          priority: "normal",
-          title: `${senderDisplayName} sent you a message`,
-          titleAr: `رسالة جديدة من ${senderDisplayName}`,
-          message: preview.en,
-          messageAr: preview.ar,
-          link: `/chat?user=${chatLinkUserId}`,
-          metadata: JSON.stringify({
-            event: "chat_message",
+        void sendNotification(
+          receiverId,
+          buildDmNotificationPayload({
             senderId,
+            senderDisplayName,
             messageType: storedMessageType,
+            content: sanitizedContent,
             messageId: message.id,
           }),
-        }).catch(() => {
+        ).catch(() => {
           // Notification failures should not break the REST fallback send flow.
         });
       }

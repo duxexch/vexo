@@ -24,6 +24,10 @@ import { filterMessage } from "../lib/word-filter";
 import { sanitizePlainText } from "../lib/input-security";
 import { getCachedUserBlockLists } from "../lib/redis";
 import { sendNotification } from "../websocket/notifications";
+import {
+  buildDmNotificationPayload,
+  shouldNotifyDmRecipient,
+} from "../lib/dm-notification-payload";
 import { logger } from "../lib/logger";
 import type {
   ChatBroadcast,
@@ -186,7 +190,12 @@ export async function deliverRealtimeDirectMessage(
   //      persisted and delivered.
   const peerSilencedNotifications =
     peerLists.notificationMutedUsers?.includes(senderId) ?? false;
-  if (!peerBlocksSender && !peerSilencedNotifications) {
+  if (
+    shouldNotifyDmRecipient({
+      peerBlockedSender: peerBlocksSender,
+      peerSilencedNotifications,
+    })
+  ) {
     void notifyDirectMessageRecipient({
       senderId,
       senderRow,
@@ -233,24 +242,19 @@ async function notifyDirectMessageRecipient(args: NotifyArgs): Promise<void> {
     args.senderUsernameFallback ||
     "User";
 
-  const trimmed = args.previewText.trim();
-  const preview = trimmed.length > 0 ? trimmed.slice(0, 120) : "Sent a message";
-  const previewAr = trimmed.length > 0 ? trimmed.slice(0, 120) : "أرسل رسالة";
-
-  await sendNotification(args.receiverId, {
-    type: "system",
-    priority: "normal",
-    title: `${senderDisplayName} sent you a message`,
-    titleAr: `رسالة جديدة من ${senderDisplayName}`,
-    message: preview,
-    messageAr: previewAr,
-    link: `/chat?user=${encodeURIComponent(args.senderId)}`,
-    metadata: JSON.stringify({
-      event: "chat_message",
+  // Task #23: payload built via the shared helper so HTTP and
+  // realtime DM transports stay byte-for-byte identical (the
+  // realtime path tags `transport: "socketio"` for downstream
+  // analytics; everything else mirrors the HTTP path).
+  await sendNotification(
+    args.receiverId,
+    buildDmNotificationPayload({
       senderId: args.senderId,
+      senderDisplayName,
       messageType: "text",
+      content: args.previewText,
       messageId: args.messageId,
       transport: "socketio",
     }),
-  });
+  );
 }
