@@ -41,26 +41,20 @@ function assert(label: string, ok: boolean, detail?: string) {
   }
 }
 
+// Strictly typed fixture — only the required fields per the
+// MultiplayerGameFromAPI interface. Optional fields are omitted entirely
+// (no `as unknown as` casts) so any future widening of the interface
+// surfaces here at compile time instead of being silently bypassed.
 const fakeApiGame = (key: string): MultiplayerGameFromAPI => ({
   id: `id-${key}`,
   key,
   nameEn: `Name ${key}`,
   nameAr: `اسم ${key}`,
-  descriptionEn: "",
-  descriptionAr: "",
-  iconName: undefined as unknown as string,
-  iconUrl: undefined as unknown as string,
-  thumbnailUrl: undefined as unknown as string,
-  color: "",
-  gradient: "",
   minStake: "1",
   maxStake: "100",
   houseFee: "0",
   isActive: true,
-  sortOrder: 0,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-} as unknown as MultiplayerGameFromAPI);
+});
 
 // 1. Empty / missing API → buildGameConfig returns the full fallback set.
 {
