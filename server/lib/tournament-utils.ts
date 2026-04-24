@@ -5,10 +5,25 @@ import {
     tournamentParticipants,
     transactions,
     users,
+    projectCurrencyWallets,
+    projectCurrencyLedger,
     type TournamentStatus,
 } from "@shared/schema";
 import { db } from "../db";
 import { sendNotification } from "../websocket";
+import {
+    TOURNAMENT_CURRENCY_TYPES,
+    type TournamentCurrencyType,
+    normalizeTournamentCurrencyType,
+    formatTournamentAmountText,
+} from "@shared/tournament-currency";
+
+export {
+    TOURNAMENT_CURRENCY_TYPES,
+    normalizeTournamentCurrencyType,
+    formatTournamentAmountText,
+};
+export type { TournamentCurrencyType };
 
 const TOURNAMENT_GAME_TYPE_ALIASES: Record<string, string> = {
     dominoes: "domino",
@@ -217,6 +232,7 @@ export interface NormalizedTournamentPayload {
     autoStartPlayerCount: number | null;
     entryFee: string;
     prizePool: string;
+    currency: TournamentCurrencyType;
     prizeDistributionMethod: string;
     prizeDistribution: string;
     startsAt: Date | null;
@@ -244,6 +260,7 @@ export function normalizeTournamentPayload(payload: Record<string, unknown>): No
     const coverImageUrl = parseOptionalMediaUrl(payload.coverImageUrl, "coverImageUrl");
     const promoVideoUrl = parseOptionalMediaUrl(payload.promoVideoUrl, "promoVideoUrl");
     const prizeDistributionMethod = String(payload.prizeDistributionMethod || "top_3").trim().toLowerCase();
+    const currency = normalizeTournamentCurrencyType(payload.currency);
 
     if (!name || !nameAr || !gameType) {
         throw new Error("Name, Arabic name, and game type are required");
@@ -331,6 +348,7 @@ export function normalizeTournamentPayload(payload: Record<string, unknown>): No
         autoStartPlayerCount,
         entryFee: parseCurrencyString(payload.entryFee, "Entry fee"),
         prizePool: parseCurrencyString(payload.prizePool, "Prize pool"),
+        currency,
         prizeDistributionMethod,
         prizeDistribution: JSON.stringify(prizeDistributionValues.map((entry) => Number(entry.toFixed(4)))),
         startsAt,
@@ -799,33 +817,77 @@ export async function settleTournamentPrizes(tournamentId: string): Promise<Tour
                     continue;
                 }
 
-                const [user] = await tx.select({ balance: users.balance })
-                    .from(users)
-                    .where(eq(users.id, userId))
-                    .for("update");
+                const tournamentCurrency = normalizeTournamentCurrencyType(tournament.currency);
 
-                if (!user) {
-                    continue;
+                if (tournamentCurrency === "project") {
+                    await tx.insert(projectCurrencyWallets).values({ userId }).onConflictDoNothing();
+
+                    const [wallet] = await tx.select()
+                        .from(projectCurrencyWallets)
+                        .where(eq(projectCurrencyWallets.userId, userId))
+                        .for("update");
+
+                    if (!wallet) {
+                        continue;
+                    }
+
+                    const walletTotalBalance = Number.parseFloat(wallet.totalBalance || "0");
+                    const walletEarnedBalance = Number.parseFloat(wallet.earnedBalance || "0");
+                    const walletTotalEarned = Number.parseFloat(wallet.totalEarned || "0");
+                    const earnAmount = awardCents / 100;
+                    const newEarnedBalance = (walletEarnedBalance + earnAmount).toFixed(2);
+                    const newTotalBalance = (walletTotalBalance + earnAmount).toFixed(2);
+                    const newTotalEarned = (walletTotalEarned + earnAmount).toFixed(2);
+
+                    await tx.update(projectCurrencyWallets)
+                        .set({
+                            earnedBalance: newEarnedBalance,
+                            totalBalance: newTotalBalance,
+                            totalEarned: newTotalEarned,
+                            updatedAt: new Date(),
+                        })
+                        .where(eq(projectCurrencyWallets.id, wallet.id));
+
+                    await tx.insert(projectCurrencyLedger).values({
+                        userId,
+                        walletId: wallet.id,
+                        type: "game_win",
+                        amount: earnAmount.toFixed(2),
+                        balanceBefore: walletTotalBalance.toFixed(2),
+                        balanceAfter: newTotalBalance,
+                        referenceId: `tournament-prize:${tournamentId}:${userId}:${bucket.placement}`,
+                        referenceType: "tournament_prize",
+                        description: `Tournament prize payout (${bucket.placement} place)`,
+                    });
+                } else {
+                    const [user] = await tx.select({ balance: users.balance })
+                        .from(users)
+                        .where(eq(users.id, userId))
+                        .for("update");
+
+                    if (!user) {
+                        continue;
+                    }
+
+                    const balanceBefore = Number.parseFloat(user.balance || "0");
+                    const balanceAfter = (balanceBefore + (awardCents / 100)).toFixed(2);
+
+                    await tx.update(users)
+                        .set({ balance: balanceAfter })
+                        .where(eq(users.id, userId));
+
+                    await tx.insert(transactions).values({
+                        userId,
+                        type: "win",
+                        status: "completed",
+                        amount: awardAmount,
+                        balanceBefore: balanceBefore.toFixed(2),
+                        balanceAfter,
+                        description: `Tournament prize payout (${bucket.placement} place)`,
+                        referenceId: `tournament-prize:${tournamentId}:${userId}:${bucket.placement}`,
+                        processedAt: new Date(),
+                    });
                 }
-
-                const balanceBefore = Number.parseFloat(user.balance || "0");
-                const balanceAfter = (balanceBefore + (awardCents / 100)).toFixed(2);
-
-                await tx.update(users)
-                    .set({ balance: balanceAfter })
-                    .where(eq(users.id, userId));
-
-                await tx.insert(transactions).values({
-                    userId,
-                    type: "win",
-                    status: "completed",
-                    amount: awardAmount,
-                    balanceBefore: balanceBefore.toFixed(2),
-                    balanceAfter,
-                    description: `Tournament prize payout (${bucket.placement} place)`,
-                    referenceId: `tournament-prize:${tournamentId}:${userId}:${bucket.placement}`,
-                    processedAt: new Date(),
-                });
 
                 payoutCount += 1;
             }

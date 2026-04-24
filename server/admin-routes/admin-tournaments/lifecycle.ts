@@ -2,7 +2,10 @@ import type { Express, Response } from "express";
 import {
   tournaments, tournamentParticipants,
   transactions,
-  users, type TournamentStatus,
+  users,
+  projectCurrencyWallets,
+  projectCurrencyLedger,
+  type TournamentStatus,
 } from "@shared/schema";
 import { db } from "../../db";
 import { eq, sql } from "drizzle-orm";
@@ -11,6 +14,8 @@ import { sendNotification } from "../../websocket";
 import {
   isAllowedTournamentStatusTransition,
   startTournamentBracket,
+  normalizeTournamentCurrencyType,
+  formatTournamentAmountText,
 } from "../../lib/tournament-utils";
 
 export function registerTournamentLifecycleRoutes(app: Express) {
@@ -52,36 +57,77 @@ export function registerTournamentLifecycleRoutes(app: Express) {
 
         const refundedUserIds: string[] = [];
 
+        const tournamentCurrency = normalizeTournamentCurrencyType(lockedTournament.currency);
+
         if (shouldRefundOnCancel) {
           for (const participant of participants) {
-            const [user] = await tx.select({ balance: users.balance })
-              .from(users)
-              .where(eq(users.id, participant.userId))
-              .for('update');
-
-            if (!user) {
-              continue;
-            }
-
-            const balanceBeforeValue = Number.parseFloat(user.balance || "0");
-            const balanceAfterValue = Number((balanceBeforeValue + normalizedEntryFee).toFixed(2));
             const refundReferenceId = `tournament-cancel-refund:${id}:${participant.userId}`;
 
-            await tx.update(users)
-              .set({ balance: balanceAfterValue.toFixed(2) })
-              .where(eq(users.id, participant.userId));
+            if (tournamentCurrency === "project") {
+              await tx.insert(projectCurrencyWallets).values({ userId: participant.userId }).onConflictDoNothing();
 
-            await tx.insert(transactions).values({
-              userId: participant.userId,
-              type: "refund",
-              status: "completed",
-              amount: normalizedEntryFee.toFixed(2),
-              balanceBefore: balanceBeforeValue.toFixed(2),
-              balanceAfter: balanceAfterValue.toFixed(2),
-              description: `Tournament cancelled refund (${lockedTournament.name || "Tournament"})`,
-              referenceId: refundReferenceId,
-              processedAt: new Date(),
-            });
+              const [wallet] = await tx.select()
+                .from(projectCurrencyWallets)
+                .where(eq(projectCurrencyWallets.userId, participant.userId))
+                .for('update');
+
+              if (!wallet) {
+                continue;
+              }
+
+              const earnedBalance = Number.parseFloat(wallet.earnedBalance || "0");
+              const totalBalance = Number.parseFloat(wallet.totalBalance || "0");
+              const newEarned = (earnedBalance + normalizedEntryFee).toFixed(2);
+              const newTotal = (totalBalance + normalizedEntryFee).toFixed(2);
+
+              await tx.update(projectCurrencyWallets)
+                .set({
+                  earnedBalance: newEarned,
+                  totalBalance: newTotal,
+                  updatedAt: new Date(),
+                })
+                .where(eq(projectCurrencyWallets.id, wallet.id));
+
+              await tx.insert(projectCurrencyLedger).values({
+                userId: participant.userId,
+                walletId: wallet.id,
+                type: "refund",
+                amount: normalizedEntryFee.toFixed(2),
+                balanceBefore: totalBalance.toFixed(2),
+                balanceAfter: newTotal,
+                referenceId: refundReferenceId,
+                referenceType: "tournament_cancel_refund",
+                description: `Tournament cancelled refund (${lockedTournament.name || "Tournament"})`,
+              });
+            } else {
+              const [user] = await tx.select({ balance: users.balance })
+                .from(users)
+                .where(eq(users.id, participant.userId))
+                .for('update');
+
+              if (!user) {
+                continue;
+              }
+
+              const balanceBeforeValue = Number.parseFloat(user.balance || "0");
+              const balanceAfterValue = Number((balanceBeforeValue + normalizedEntryFee).toFixed(2));
+
+              await tx.update(users)
+                .set({ balance: balanceAfterValue.toFixed(2) })
+                .where(eq(users.id, participant.userId));
+
+              await tx.insert(transactions).values({
+                userId: participant.userId,
+                type: "refund",
+                status: "completed",
+                amount: normalizedEntryFee.toFixed(2),
+                balanceBefore: balanceBeforeValue.toFixed(2),
+                balanceAfter: balanceAfterValue.toFixed(2),
+                description: `Tournament cancelled refund (${lockedTournament.name || "Tournament"})`,
+                referenceId: refundReferenceId,
+                processedAt: new Date(),
+              });
+            }
 
             refundedUserIds.push(participant.userId);
           }
@@ -109,6 +155,7 @@ export function registerTournamentLifecycleRoutes(app: Express) {
           tournamentName: lockedTournament.name,
           tournamentNameAr: lockedTournament.nameAr,
           entryFee: lockedTournament.entryFee,
+          currency: tournamentCurrency,
         };
       });
 
@@ -124,8 +171,8 @@ export function registerTournamentLifecycleRoutes(app: Express) {
               priority: 'high',
               title: 'Tournament Cancelled — Refunded',
               titleAr: 'تم إلغاء البطولة — تم الاسترداد',
-              message: `"${tName}" has been cancelled. Your entry fee of $${statusUpdateResult.entryFee} has been refunded.`,
-              messageAr: `تم إلغاء "${tNameAr}". تم استرداد رسوم الدخول $${statusUpdateResult.entryFee}.`,
+              message: `"${tName}" has been cancelled. Your entry fee of ${formatTournamentAmountText(statusUpdateResult.entryFee, statusUpdateResult.currency)} has been refunded.`,
+              messageAr: `تم إلغاء "${tNameAr}". تم استرداد رسوم الدخول ${formatTournamentAmountText(statusUpdateResult.entryFee, statusUpdateResult.currency)}.`,
               link: '/tournaments',
               metadata: JSON.stringify({ tournamentId: id, action: 'tournament_cancelled_refund', refund: statusUpdateResult.entryFee }),
             }).catch(() => { });

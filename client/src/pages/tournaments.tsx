@@ -20,6 +20,18 @@ import {
   DollarSign, Calendar, ChevronRight,
   Timer, Filter, Share2, Copy, Image as ImageIcon, Video, XCircle
 } from "lucide-react";
+import { ProjectCurrencySymbol } from "@/components/ProjectCurrencySymbol";
+import {
+  formatTournamentAmountText,
+  normalizeTournamentCurrencyType,
+} from "@shared/tournament-currency";
+
+function TournamentCurrencyBadge({ currency, className }: { currency?: string | null; className?: string }) {
+  if (normalizeTournamentCurrencyType(currency) === 'project') {
+    return <ProjectCurrencySymbol className={className} />;
+  }
+  return <DollarSign className={className} />;
+}
 
 const STATUS_COLORS: Record<string, string> = {
   upcoming: 'bg-blue-500',
@@ -163,6 +175,7 @@ interface TournamentListItem {
   autoStartPlayerCount: number | null;
   entryFee: string;
   prizePool: string;
+  currency?: string | null;
   prizeDistributionMethod: string;
   prizeDistribution: string | null;
   registrationStartsAt: string | null;
@@ -218,6 +231,7 @@ interface TournamentDetail {
   autoStartPlayerCount: number | null;
   entryFee: string;
   prizePool: string;
+  currency?: string | null;
   prizeDistributionMethod: string;
   prizeDistribution: string | null;
   registrationStartsAt: string | null;
@@ -446,14 +460,14 @@ function TournamentListView() {
                             {t.participantCount}/{t.maxPlayers}
                           </span>
                           {parseFloat(t.entryFee) > 0 && (
-                            <span className="flex items-center gap-1">
-                              <DollarSign className="w-4 h-4" />
-                              {t.entryFee}
+                            <span className="flex items-center gap-1" data-testid={`tournament-entry-${t.id}`}>
+                              <TournamentCurrencyBadge currency={t.currency} className="w-4 h-4" />
+                              {formatTournamentAmountText(t.entryFee, t.currency)}
                             </span>
                           )}
-                          <span className="flex items-center gap-1 text-amber-500 font-semibold">
+                          <span className="flex items-center gap-1 text-amber-500 font-semibold" data-testid={`tournament-prize-${t.id}`}>
                             <Trophy className="w-4 h-4" />
-                            ${t.prizePool}
+                            {formatTournamentAmountText(t.prizePool, t.currency)}
                           </span>
                           {parsePrizeDistribution(t.prizeDistribution).slice(0, 3).map((percentage, index) => (
                             <Badge key={`${t.id}-distribution-${index}`} variant="outline" className="text-xs">
@@ -723,15 +737,19 @@ function TournamentDetailView({ id }: { id: string }) {
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
-            <DollarSign className="w-6 h-6 mx-auto text-green-500 mb-1" />
-            <div className="text-sm font-bold">${tournament.entryFee}</div>
+            <TournamentCurrencyBadge currency={tournament.currency} className="w-6 h-6 mx-auto text-green-500 mb-1" />
+            <div className="text-sm font-bold" data-testid="tournament-detail-entry-fee">
+              {formatTournamentAmountText(tournament.entryFee, tournament.currency)}
+            </div>
             <div className="text-xs text-muted-foreground">{en ? 'Entry Fee' : 'رسوم الدخول'}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
             <Trophy className="w-6 h-6 mx-auto text-amber-500 mb-1" />
-            <div className="text-sm font-bold">${tournament.prizePool}</div>
+            <div className="text-sm font-bold" data-testid="tournament-detail-prize-pool">
+              {formatTournamentAmountText(tournament.prizePool, tournament.currency)}
+            </div>
             <div className="text-xs text-muted-foreground">{en ? 'Prize Pool' : 'مجموع الجوائز'}</div>
           </CardContent>
         </Card>
@@ -800,7 +818,9 @@ function TournamentDetailView({ id }: { id: string }) {
               </h3>
               <p className="text-sm text-muted-foreground">
                 {parseFloat(tournament.entryFee) > 0
-                  ? (en ? `Entry fee: $${tournament.entryFee}` : `رسوم الدخول: $${tournament.entryFee}`)
+                  ? (en
+                    ? `Entry fee: ${formatTournamentAmountText(tournament.entryFee, tournament.currency)}`
+                    : `رسوم الدخول: ${formatTournamentAmountText(tournament.entryFee, tournament.currency)}`)
                   : (en ? 'Free entry' : 'دخول مجاني')
                 }
               </p>

@@ -3743,6 +3743,7 @@ export const tournaments = pgTable("tournaments", {
   autoStartPlayerCount: integer("auto_start_player_count"),
   entryFee: decimal("entry_fee", { precision: 15, scale: 2 }).notNull().default("0.00"),
   prizePool: decimal("prize_pool", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  currency: text("currency").notNull().default("usd"), // 'usd' (cash balance) | 'project' (VXC)
   prizeDistributionMethod: text("prize_distribution_method").notNull().default("top_3"),
   prizeDistribution: text("prize_distribution"), // JSON: [50, 30, 20] percentages
   prizesSettledAt: timestamp("prizes_settled_at"),

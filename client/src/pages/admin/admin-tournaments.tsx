@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import {
+  TOURNAMENT_CURRENCY_OPTIONS,
+  getTournamentCurrencySymbol,
+  formatTournamentAmountText as formatTournamentAmount,
+} from "@shared/tournament-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -180,6 +185,7 @@ interface TournamentItem {
   autoStartPlayerCount?: number | null;
   entryFee: string;
   prizePool: string;
+  currency?: string;
   prizeDistributionMethod?: string;
   prizeDistribution?: string | null;
   prizesSettledAt?: string | null;
@@ -238,6 +244,7 @@ interface TournamentForm {
   autoStartPlayerCount: number;
   entryFee: string;
   prizePool: string;
+  currency: string;
   prizeDistributionMethod: string;
   prizeDistributionCustom: string;
   startsAt: string;
@@ -263,6 +270,7 @@ const defaultForm: TournamentForm = {
   autoStartPlayerCount: 4,
   entryFee: "5.00",
   prizePool: "0",
+  currency: "usd",
   prizeDistributionMethod: "top_3",
   prizeDistributionCustom: "",
   startsAt: "",
@@ -458,6 +466,7 @@ export default function AdminTournamentsPage() {
           autoStartPlayerCount: data.autoStartOnFull ? Number(data.autoStartPlayerCount) : null,
           entryFee: data.entryFee || "0.00",
           prizePool: data.prizePool || "0.00",
+          currency: data.currency || "usd",
           prizeDistributionMethod: data.prizeDistributionMethod,
           prizeDistribution: data.prizeDistributionMethod === "custom" ? data.prizeDistributionCustom : null,
           startsAt: data.startsAt ? new Date(data.startsAt).toISOString() : null,
@@ -785,13 +794,13 @@ export default function AdminTournamentsPage() {
                         <Users className="h-3 w-3" />
                         {tournament.participantCount || 0}/{tournament.maxPlayers}
                       </span>
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1" data-testid={`tournament-entry-${tournament.id}`}>
                         <DollarSign className="h-3 w-3" />
-                        ${tournament.entryFee} entry
+                        {formatTournamentAmount(tournament.entryFee, tournament.currency)} entry
                       </span>
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1" data-testid={`tournament-prize-${tournament.id}`}>
                         <Trophy className="h-3 w-3" />
-                        ${tournament.prizePool} prize
+                        {formatTournamentAmount(tournament.prizePool, tournament.currency)} prize
                       </span>
                       {tournament.startsAt && (
                         <span className="flex items-center gap-1">
@@ -1061,28 +1070,53 @@ export default function AdminTournamentsPage() {
               )}
             </div>
 
-            {/* Entry Fee & Prize Pool */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Currency, Entry Fee & Prize Pool */}
+            <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label>Entry Fee ($)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={form.entryFee}
-                  onChange={(e) => setForm({ ...form, entryFee: e.target.value })}
-                  min={0}
-                />
+                <Label>Currency</Label>
+                <Select
+                  value={form.currency}
+                  onValueChange={(value) => setForm({ ...form, currency: value })}
+                >
+                  <SelectTrigger data-testid="select-tournament-currency">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TOURNAMENT_CURRENCY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} data-testid={`option-currency-${option.value}`}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  USD uses the player's cash balance. Project Currency uses VXC wallet.
+                </p>
               </div>
-              <div className="space-y-1.5">
-                <Label>Prize Pool ($)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={form.prizePool}
-                  onChange={(e) => setForm({ ...form, prizePool: e.target.value })}
-                  min={0}
-                />
-                <p className="text-xs text-muted-foreground">Base prize pool (entry fees added automatically)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Entry Fee ({getTournamentCurrencySymbol(form.currency)})</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={form.entryFee}
+                    onChange={(e) => setForm({ ...form, entryFee: e.target.value })}
+                    min={0}
+                    data-testid="input-tournament-entry-fee"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Prize Pool ({getTournamentCurrencySymbol(form.currency)})</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={form.prizePool}
+                    onChange={(e) => setForm({ ...form, prizePool: e.target.value })}
+                    min={0}
+                    data-testid="input-tournament-prize-pool"
+                  />
+                  <p className="text-xs text-muted-foreground">Base prize pool (entry fees added automatically)</p>
+                </div>
               </div>
             </div>
 
@@ -1362,14 +1396,18 @@ export default function AdminTournamentsPage() {
                 <Card>
                   <CardContent className="p-3 text-center">
                     <DollarSign className="h-4 w-4 mx-auto mb-1 text-primary" />
-                    <p className="text-lg font-bold">${tournamentDetail.entryFee}</p>
+                    <p className="text-lg font-bold" data-testid="tournament-detail-entry-fee">
+                      {formatTournamentAmount(tournamentDetail.entryFee, tournamentDetail.currency)}
+                    </p>
                     <p className="text-xs text-muted-foreground">Entry Fee</p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardContent className="p-3 text-center">
                     <Trophy className="h-4 w-4 mx-auto mb-1 text-amber-500" />
-                    <p className="text-lg font-bold">${tournamentDetail.prizePool}</p>
+                    <p className="text-lg font-bold" data-testid="tournament-detail-prize-pool">
+                      {formatTournamentAmount(tournamentDetail.prizePool, tournamentDetail.currency)}
+                    </p>
                     <p className="text-xs text-muted-foreground">Prize Pool</p>
                   </CardContent>
                 </Card>

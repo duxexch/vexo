@@ -37,6 +37,7 @@ export function registerTournamentListingRoutes(app: Express): void {
         autoStartPlayerCount: tournaments.autoStartPlayerCount,
         entryFee: tournaments.entryFee,
         prizePool: tournaments.prizePool,
+        currency: tournaments.currency,
         prizeDistributionMethod: tournaments.prizeDistributionMethod,
         prizeDistribution: tournaments.prizeDistribution,
         currentRound: tournaments.currentRound,

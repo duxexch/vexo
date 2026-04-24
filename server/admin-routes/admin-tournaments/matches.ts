@@ -3,6 +3,8 @@ import {
   tournaments, tournamentParticipants, tournamentMatches,
   transactions,
   users,
+  projectCurrencyWallets,
+  projectCurrencyLedger,
 } from "@shared/schema";
 import { db } from "../../db";
 import { eq, and, sql } from "drizzle-orm";
@@ -11,6 +13,7 @@ import {
   autoAdvanceTournamentByes,
   canDeleteTournament,
   settleTournamentPrizes,
+  normalizeTournamentCurrencyType,
 } from "../../lib/tournament-utils";
 
 export function registerTournamentMatchRoutes(app: Express) {
@@ -222,40 +225,81 @@ export function registerTournamentMatchRoutes(app: Express) {
           && (lockedTournament.status === 'upcoming' || lockedTournament.status === 'registration');
 
         let refundedCount = 0;
+        const tournamentCurrency = normalizeTournamentCurrencyType(lockedTournament.currency);
+
         if (shouldRefundOnDelete) {
           const participants = await tx.select({ userId: tournamentParticipants.userId })
             .from(tournamentParticipants)
             .where(eq(tournamentParticipants.tournamentId, id));
 
           for (const participant of participants) {
-            const [user] = await tx.select({ balance: users.balance })
-              .from(users)
-              .where(eq(users.id, participant.userId))
-              .for('update');
-
-            if (!user) {
-              continue;
-            }
-
-            const balanceBeforeValue = Number.parseFloat(user.balance || "0");
-            const balanceAfterValue = Number((balanceBeforeValue + normalizedEntryFee).toFixed(2));
             const refundReferenceId = `tournament-delete-refund:${id}:${participant.userId}`;
 
-            await tx.update(users)
-              .set({ balance: balanceAfterValue.toFixed(2) })
-              .where(eq(users.id, participant.userId));
+            if (tournamentCurrency === "project") {
+              await tx.insert(projectCurrencyWallets).values({ userId: participant.userId }).onConflictDoNothing();
 
-            await tx.insert(transactions).values({
-              userId: participant.userId,
-              type: "refund",
-              status: "completed",
-              amount: normalizedEntryFee.toFixed(2),
-              balanceBefore: balanceBeforeValue.toFixed(2),
-              balanceAfter: balanceAfterValue.toFixed(2),
-              description: `Tournament deleted refund (${lockedTournament.name || "Tournament"})`,
-              referenceId: refundReferenceId,
-              processedAt: new Date(),
-            });
+              const [wallet] = await tx.select()
+                .from(projectCurrencyWallets)
+                .where(eq(projectCurrencyWallets.userId, participant.userId))
+                .for('update');
+
+              if (!wallet) {
+                continue;
+              }
+
+              const earnedBalance = Number.parseFloat(wallet.earnedBalance || "0");
+              const totalBalance = Number.parseFloat(wallet.totalBalance || "0");
+              const newEarned = (earnedBalance + normalizedEntryFee).toFixed(2);
+              const newTotal = (totalBalance + normalizedEntryFee).toFixed(2);
+
+              await tx.update(projectCurrencyWallets)
+                .set({
+                  earnedBalance: newEarned,
+                  totalBalance: newTotal,
+                  updatedAt: new Date(),
+                })
+                .where(eq(projectCurrencyWallets.id, wallet.id));
+
+              await tx.insert(projectCurrencyLedger).values({
+                userId: participant.userId,
+                walletId: wallet.id,
+                type: "refund",
+                amount: normalizedEntryFee.toFixed(2),
+                balanceBefore: totalBalance.toFixed(2),
+                balanceAfter: newTotal,
+                referenceId: refundReferenceId,
+                referenceType: "tournament_delete_refund",
+                description: `Tournament deleted refund (${lockedTournament.name || "Tournament"})`,
+              });
+            } else {
+              const [user] = await tx.select({ balance: users.balance })
+                .from(users)
+                .where(eq(users.id, participant.userId))
+                .for('update');
+
+              if (!user) {
+                continue;
+              }
+
+              const balanceBeforeValue = Number.parseFloat(user.balance || "0");
+              const balanceAfterValue = Number((balanceBeforeValue + normalizedEntryFee).toFixed(2));
+
+              await tx.update(users)
+                .set({ balance: balanceAfterValue.toFixed(2) })
+                .where(eq(users.id, participant.userId));
+
+              await tx.insert(transactions).values({
+                userId: participant.userId,
+                type: "refund",
+                status: "completed",
+                amount: normalizedEntryFee.toFixed(2),
+                balanceBefore: balanceBeforeValue.toFixed(2),
+                balanceAfter: balanceAfterValue.toFixed(2),
+                description: `Tournament deleted refund (${lockedTournament.name || "Tournament"})`,
+                referenceId: refundReferenceId,
+                processedAt: new Date(),
+              });
+            }
 
             refundedCount += 1;
           }
