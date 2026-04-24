@@ -23,6 +23,8 @@ import { storage } from "../storage";
 import { filterMessage } from "../lib/word-filter";
 import { sanitizePlainText } from "../lib/input-security";
 import { getCachedUserBlockLists } from "../lib/redis";
+import { sendNotification } from "../websocket/notifications";
+import { logger } from "../lib/logger";
 import type {
   ChatBroadcast,
   ChatClientToServerEvents,
@@ -171,5 +173,77 @@ export async function deliverRealtimeDirectMessage(
     s.emit("chat:message", broadcast);
   }
 
+  // ---- Task #21: parity with the HTTP DM path — fan out a "new
+  //      message" notification (push + bell + WS broadcast) so a
+  //      recipient whose inbox tab is closed still gets a heads-up.
+  //      Suppressed when the peer has blocked or muted the sender, so
+  //      a muted conversation stays silent. Failures are logged and
+  //      swallowed: the message is already persisted and delivered.
+  if (!peerBlocksSender) {
+    void notifyDirectMessageRecipient({
+      senderId,
+      senderRow,
+      senderUsernameFallback: senderUsername,
+      receiverId: peerId,
+      messageId: saved.id,
+      previewText: finalText,
+    }).catch((err) => {
+      logger.warn?.(
+        `[socket.io] DM notification failed: ${(err as Error).message}`,
+      );
+    });
+  }
+
   return { ok: true };
+}
+
+interface NotifyArgs {
+  senderId: string;
+  senderRow:
+    | {
+        username?: string | null;
+        firstName?: string | null;
+      }
+    | null
+    | undefined;
+  senderUsernameFallback: string;
+  receiverId: string;
+  messageId: string;
+  previewText: string;
+}
+
+/**
+ * Mirrors the notification payload produced by the legacy HTTP DM path
+ * (`server/routes/chat/chat-messaging.ts`) so a recipient sees the
+ * same bell entry / push title regardless of which transport the
+ * sender used. Realtime DMs are text-only, so the preview is just a
+ * truncated copy of the message body.
+ */
+async function notifyDirectMessageRecipient(args: NotifyArgs): Promise<void> {
+  const senderDisplayName =
+    args.senderRow?.firstName ||
+    args.senderRow?.username ||
+    args.senderUsernameFallback ||
+    "User";
+
+  const trimmed = args.previewText.trim();
+  const preview = trimmed.length > 0 ? trimmed.slice(0, 120) : "Sent a message";
+  const previewAr = trimmed.length > 0 ? trimmed.slice(0, 120) : "أرسل رسالة";
+
+  await sendNotification(args.receiverId, {
+    type: "system",
+    priority: "normal",
+    title: `${senderDisplayName} sent you a message`,
+    titleAr: `رسالة جديدة من ${senderDisplayName}`,
+    message: preview,
+    messageAr: previewAr,
+    link: `/chat?user=${encodeURIComponent(args.senderId)}`,
+    metadata: JSON.stringify({
+      event: "chat_message",
+      senderId: args.senderId,
+      messageType: "text",
+      messageId: args.messageId,
+      transport: "socketio",
+    }),
+  });
 }
