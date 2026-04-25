@@ -1,9 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { render, screen } from "@testing-library/react";
 import { TournamentRefundBanner } from "../client/src/pages/tournaments";
-
-afterEach(() => cleanup());
 
 describe("TournamentRefundBanner — deleted tournament copy", () => {
   it("renders the English deletion-specific headline + reason + amount (USD, list variant)", () => {
