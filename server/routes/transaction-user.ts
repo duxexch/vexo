@@ -451,6 +451,18 @@ export function registerTransactionUserRoutes(app: Express): void {
           return res.status(400).json({ error: "Valid withdrawal payment method is required" });
         }
 
+        // CRITICAL: Wallet-currency unit consistency.
+        // - Sub-wallets store balances in their own native currency, so the
+        //   debit must be in the requested native amount.
+        // - The PRIMARY balance (`users.balance`) is stored in USD by legacy
+        //   convention (deposits credit `creditedAmountUsd`). To keep deposits
+        //   and withdrawals in the same unit, primary withdrawals must debit
+        //   the USD-converted amount.
+        // The persisted `transactions.amount` follows the same rule so that
+        // admin-side refunds/approvals re-credit the wallet in matching units.
+        const isPrimaryWithdraw = withdrawCurrency === primaryCurrency;
+        const walletDebitAmount = isPrimaryWithdraw ? withdrawAmountUsd : withdrawAmountRequested;
+
         // SECURITY: Atomic withdrawal with FOR UPDATE lock to prevent concurrent
         // double-withdrawal. The deduction is applied to the chosen currency
         // wallet (primary -> users.balance; sub -> user_currency_wallets row).
@@ -467,7 +479,7 @@ export function registerTransactionUserRoutes(app: Express): void {
               tx,
               req.user!.id,
               withdrawCurrency,
-              -withdrawAmountRequested,
+              -walletDebitAmount,
               { allowCreate: false },
             );
           } catch (err: any) {
@@ -484,11 +496,11 @@ export function registerTransactionUserRoutes(app: Express): void {
           userId: result.user.id,
           type: "withdrawal",
           status: "pending",
-          amount: withdrawAmountRequested.toFixed(2),
+          amount: walletDebitAmount.toFixed(2),
           balanceBefore: result.adjusted.balanceBefore.toFixed(2),
           balanceAfter: result.adjusted.balanceAfter.toFixed(2),
           walletCurrencyCode: withdrawCurrency,
-          description: `Withdrawal request via ${selectedMethod.name} | Receiver: ${safeReceiverMethodNumber} | Requested: ${withdrawAmountRequested.toFixed(2)} ${withdrawCurrency} | Base: ${withdrawAmountUsd.toFixed(2)} USD`,
+          description: `Withdrawal request via ${selectedMethod.name} | Receiver: ${safeReceiverMethodNumber} | Requested: ${withdrawAmountRequested.toFixed(2)} ${withdrawCurrency} | Base: ${withdrawAmountUsd.toFixed(2)} USD${isPrimaryWithdraw ? ' (debited primary in USD)' : ''}`,
         });
 
         await storage.createAuditLog({
