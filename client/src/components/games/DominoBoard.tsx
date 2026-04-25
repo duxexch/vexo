@@ -599,7 +599,16 @@ function getAdaptiveDirectionPriority(
 ): DominoDirection[] {
   const primaryHorizontal: DominoDirection = side === "left" ? "left" : "right";
   const oppositeHorizontal: DominoDirection = side === "left" ? "right" : "left";
-  const oppositeVertical: DominoDirection = verticalStart === "up" ? "down" : "up";
+  // Per-side elbow: the shared `verticalStart` hint sets the RIGHT half's
+  // preferred vertical; the LEFT half mirrors it. Without this, both halves
+  // would elbow into the same vertical lane when they hit a horizontal edge
+  // and snake back toward each other, eventually colliding (#86). Mirroring
+  // by side guarantees the chain unfolds outward symmetrically: when the
+  // right end turns down, the left end turns up, and vice versa.
+  const effectiveVerticalStart: "up" | "down" = side === "left"
+    ? (verticalStart === "up" ? "down" : "up")
+    : verticalStart;
+  const oppositeVertical: DominoDirection = effectiveVerticalStart === "up" ? "down" : "up";
 
   const tileLong = Math.max(previousFootprint.halfWidth, previousFootprint.halfHeight) * 2;
   // Need ~1.5 tile-lengths of room to keep flowing in the same direction.
@@ -625,7 +634,7 @@ function getAdaptiveDirectionPriority(
   if (continueRoom >= turnThreshold) {
     const fallback: DominoDirection[] = [
       previousDirection,
-      verticalStart,
+      effectiveVerticalStart,
       oppositeVertical,
       previousDirection === primaryHorizontal ? oppositeHorizontal : primaryHorizontal,
     ];
@@ -638,9 +647,10 @@ function getAdaptiveDirectionPriority(
   let perpendicularPair: DominoDirection[];
   if (isPrevHorizontal) {
     perpendicularPair = roomMap.down >= roomMap.up ? ["down", "up"] : ["up", "down"];
-    // Tiebreaker: honor the deterministic verticalStart hint when both are similar.
+    // Tiebreaker: when both verticals have similar room, honor the side-aware
+    // elbow preference so the two halves snake outward, not into each other.
     if (Math.abs(roomMap.down - roomMap.up) < tileLong * 0.5) {
-      perpendicularPair = [verticalStart, oppositeVertical];
+      perpendicularPair = [effectiveVerticalStart, oppositeVertical];
     }
   } else {
     perpendicularPair = roomMap.right >= roomMap.left ? ["right", "left"] : ["left", "right"];

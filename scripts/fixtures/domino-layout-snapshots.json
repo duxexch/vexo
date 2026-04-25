@@ -178,31 +178,31 @@
       {
         "key": "tile-6-6-6",
         "x": -311.048,
-        "y": 39.54,
+        "y": -39.54,
         "renderRotation": 0,
-        "direction": "down",
+        "direction": "up",
         "layoutScale": 0.659
       },
       {
         "key": "tile-7-0-1",
         "x": -311.048,
-        "y": 93.578,
+        "y": -93.578,
         "renderRotation": 0,
-        "direction": "down",
+        "direction": "up",
         "layoutScale": 0.659
       },
       {
         "key": "tile-8-2-4",
         "x": -311.048,
-        "y": 147.616,
+        "y": -147.616,
         "renderRotation": 0,
-        "direction": "down",
+        "direction": "up",
         "layoutScale": 0.659
       },
       {
         "key": "tile-9-2-2",
         "x": -271.508,
-        "y": 187.156,
+        "y": -187.156,
         "renderRotation": 90,
         "direction": "right",
         "layoutScale": 0.659
@@ -210,7 +210,7 @@
       {
         "key": "tile-10-6-3",
         "x": -217.47,
-        "y": 187.156,
+        "y": -187.156,
         "renderRotation": 90,
         "direction": "right",
         "layoutScale": 0.659
@@ -218,7 +218,7 @@
       {
         "key": "tile-11-1-6",
         "x": -163.432,
-        "y": 187.156,
+        "y": -187.156,
         "renderRotation": 90,
         "direction": "right",
         "layoutScale": 0.659
@@ -226,7 +226,7 @@
       {
         "key": "tile-12-5-5",
         "x": -122.574,
-        "y": 187.156,
+        "y": -187.156,
         "renderRotation": 0,
         "direction": "right",
         "layoutScale": 0.659
@@ -234,7 +234,7 @@
       {
         "key": "tile-13-5-5",
         "x": -81.716,
-        "y": 187.156,
+        "y": -187.156,
         "renderRotation": 90,
         "direction": "right",
         "layoutScale": 0.659
@@ -242,47 +242,47 @@
       {
         "key": "tile-14-0-1",
         "x": -42.176,
-        "y": 147.616,
+        "y": -147.616,
         "renderRotation": 0,
-        "direction": "up",
+        "direction": "down",
         "layoutScale": 0.659
       },
       {
         "key": "tile-15-1-1",
         "x": -81.716,
-        "y": 108.076,
+        "y": -108.076,
         "renderRotation": 90,
-        "direction": "left",
+        "direction": "up",
         "layoutScale": 0.659
       },
       {
         "key": "tile-16-4-0",
-        "x": -135.754,
-        "y": 108.076,
+        "x": -134.436,
+        "y": -134.436,
         "renderRotation": 90,
         "direction": "left",
         "layoutScale": 0.659
       },
       {
         "key": "tile-17-6-3",
-        "x": -189.792,
-        "y": 108.076,
+        "x": -188.474,
+        "y": -134.436,
         "renderRotation": 90,
         "direction": "left",
         "layoutScale": 0.659
       },
       {
         "key": "tile-18-4-4",
-        "x": -230.65,
-        "y": 108.076,
+        "x": -229.332,
+        "y": -134.436,
         "renderRotation": 0,
         "direction": "left",
         "layoutScale": 0.659
       },
       {
         "key": "tile-19-3-2",
-        "x": -271.508,
-        "y": 108.076,
+        "x": -270.19,
+        "y": -134.436,
         "renderRotation": 90,
         "direction": "left",
         "layoutScale": 0.659
@@ -290,12 +290,12 @@
     ],
     "telemetry": {
       "tilesCount": 20,
-      "iterationsUsed": 484,
+      "iterationsUsed": 473,
       "shrinkSteps": 5,
-      "failedAttempts": 108,
+      "failedAttempts": 94,
       "overflowed": false
     },
-    "layoutHash": "8a26b4289748ddc16ef42926d59a19b88887c434ae2e963be762025048752752"
+    "layoutHash": "58413571c2f0a143a4e86e6df439a3ddd16d3e57db8049ddc404b62bc0366ed3"
   },
   "desktop-long-right": {
     "layoutScale": 0.606,
@@ -798,31 +798,31 @@
       {
         "key": "tile-6-6-2",
         "x": -334.512,
-        "y": -36.36,
+        "y": 36.36,
         "renderRotation": 0,
-        "direction": "up",
+        "direction": "down",
         "layoutScale": 0.606
       },
       {
         "key": "tile-7-4-1",
         "x": -334.512,
-        "y": -86.052,
+        "y": 86.052,
         "renderRotation": 0,
-        "direction": "up",
+        "direction": "down",
         "layoutScale": 0.606
       },
       {
         "key": "tile-8-1-4",
         "x": -334.512,
-        "y": -135.744,
+        "y": 135.744,
         "renderRotation": 0,
-        "direction": "up",
+        "direction": "down",
         "layoutScale": 0.606
       },
       {
         "key": "tile-9-6-3",
         "x": -298.152,
-        "y": -172.104,
+        "y": 172.104,
         "renderRotation": 90,
         "direction": "right",
         "layoutScale": 0.606
@@ -830,7 +830,7 @@
       {
         "key": "tile-10-3-6",
         "x": -248.46,
-        "y": -172.104,
+        "y": 172.104,
         "renderRotation": 90,
         "direction": "right",
         "layoutScale": 0.606
@@ -838,7 +838,7 @@
       {
         "key": "tile-11-1-5",
         "x": -198.768,
-        "y": -172.104,
+        "y": 172.104,
         "renderRotation": 90,
         "direction": "right",
         "layoutScale": 0.606
@@ -846,7 +846,7 @@
       {
         "key": "tile-12-5-1",
         "x": -149.076,
-        "y": -172.104,
+        "y": 172.104,
         "renderRotation": 90,
         "direction": "right",
         "layoutScale": 0.606
@@ -854,7 +854,7 @@
       {
         "key": "tile-13-3-0",
         "x": -99.384,
-        "y": -172.104,
+        "y": 172.104,
         "renderRotation": 90,
         "direction": "right",
         "layoutScale": 0.606
@@ -862,91 +862,59 @@
       {
         "key": "tile-14-0-3",
         "x": -63.024,
-        "y": -135.744,
+        "y": 135.744,
         "renderRotation": 0,
-        "direction": "down",
+        "direction": "up",
         "layoutScale": 0.606
       },
       {
         "key": "tile-15-5-2",
         "x": -63.024,
-        "y": -86.052,
+        "y": 86.052,
         "renderRotation": 0,
-        "direction": "down",
+        "direction": "up",
         "layoutScale": 0.606
       },
       {
         "key": "tile-16-2-5",
-        "x": -87.264,
-        "y": -37.572,
+        "x": -38.784,
+        "y": 37.572,
         "renderRotation": 0,
-        "direction": "up",
+        "direction": "down",
         "layoutScale": 0.606
       },
       {
         "key": "tile-17-0-4",
-        "x": -87.264,
-        "y": -87.264,
+        "x": -38.784,
+        "y": 87.264,
         "renderRotation": 0,
-        "direction": "up",
+        "direction": "down",
         "layoutScale": 0.606
       },
       {
         "key": "tile-18-4-0",
-        "x": -123.624,
-        "y": -123.624,
-        "renderRotation": 90,
-        "direction": "left",
+        "x": -38.784,
+        "y": 136.956,
+        "renderRotation": 0,
+        "direction": "down",
         "layoutScale": 0.606
       },
       {
         "key": "tile-19-2-6",
-        "x": -173.316,
-        "y": -123.624,
-        "renderRotation": 90,
-        "direction": "left",
-        "layoutScale": 0.606
-      },
-      {
-        "key": "tile-20-6-2",
-        "x": -223.008,
-        "y": -123.624,
-        "renderRotation": 90,
-        "direction": "left",
-        "layoutScale": 0.606
-      },
-      {
-        "key": "tile-21-4-1",
-        "x": -272.7,
-        "y": -123.624,
-        "renderRotation": 90,
-        "direction": "left",
-        "layoutScale": 0.606
-      },
-      {
-        "key": "tile-22-1-4",
-        "x": -309.06,
-        "y": -87.264,
+        "x": -63.024,
+        "y": 185.436,
         "renderRotation": 0,
-        "direction": "down",
-        "layoutScale": 0.606
-      },
-      {
-        "key": "tile-23-6-3",
-        "x": -309.06,
-        "y": -37.572,
-        "renderRotation": 0,
-        "direction": "down",
+        "direction": "up",
         "layoutScale": 0.606
       }
     ],
     "telemetry": {
       "tilesCount": 64,
-      "iterationsUsed": 639,
+      "iterationsUsed": 577,
       "shrinkSteps": 10,
-      "failedAttempts": 152,
+      "failedAttempts": 130,
       "overflowed": false
     },
-    "layoutHash": "998b3b604447054a7ecb0a0ff86748336bdb0fcadb167abb2a0a50d5a8889a3a"
+    "layoutHash": "5ba3131136ef78276614e719d52999c70bc0e0c13813bd2974e3c103001efdde"
   }
 }

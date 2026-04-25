@@ -101,20 +101,20 @@
         "key": "o-3-6-2",
         "canonicalLeft": 6,
         "canonicalRight": 2,
-        "displayLeft": 2,
-        "displayRight": 6,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 6,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
         "key": "o-4-1-6",
         "canonicalLeft": 1,
         "canonicalRight": 6,
-        "displayLeft": 6,
-        "displayRight": 1,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 1,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
@@ -211,10 +211,10 @@
         "key": "o-3-6-2",
         "canonicalLeft": 6,
         "canonicalRight": 2,
-        "displayLeft": 2,
-        "displayRight": 6,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 6,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       }
     ]
@@ -321,20 +321,20 @@
         "key": "o-3-6-1",
         "canonicalLeft": 6,
         "canonicalRight": 1,
-        "displayLeft": 1,
-        "displayRight": 6,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 6,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
         "key": "o-4-2-6",
         "canonicalLeft": 2,
         "canonicalRight": 6,
-        "displayLeft": 6,
-        "displayRight": 2,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 2,
+        "displayRight": 6,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
@@ -503,18 +503,18 @@
         "canonicalRight": 1,
         "displayLeft": 1,
         "displayRight": 1,
-        "flipped": true,
-        "direction": "down",
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
         "key": "o-5-5-1",
         "canonicalLeft": 5,
         "canonicalRight": 1,
-        "displayLeft": 1,
-        "displayRight": 5,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 5,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
@@ -543,18 +543,18 @@
         "canonicalRight": 2,
         "displayLeft": 2,
         "displayRight": 2,
-        "flipped": false,
-        "direction": "up",
+        "flipped": true,
+        "direction": "down",
         "renderRotation": 0
       },
       {
         "key": "o-9-4-2",
         "canonicalLeft": 4,
         "canonicalRight": 2,
-        "displayLeft": 4,
-        "displayRight": 2,
-        "flipped": false,
-        "direction": "up",
+        "displayLeft": 2,
+        "displayRight": 4,
+        "flipped": true,
+        "direction": "down",
         "renderRotation": 0
       }
     ]
@@ -754,17 +754,17 @@
         "displayLeft": 1,
         "displayRight": 2,
         "flipped": false,
-        "direction": "left",
-        "renderRotation": 90
+        "direction": "up",
+        "renderRotation": 0
       },
       {
         "key": "o-5-0-1",
         "canonicalLeft": 0,
         "canonicalRight": 1,
-        "displayLeft": 1,
-        "displayRight": 0,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 0,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
@@ -774,8 +774,8 @@
         "displayLeft": 0,
         "displayRight": 6,
         "flipped": true,
-        "direction": "down",
-        "renderRotation": 0
+        "direction": "right",
+        "renderRotation": 90
       },
       {
         "key": "o-7-5-6",
@@ -784,8 +784,8 @@
         "displayLeft": 6,
         "displayRight": 5,
         "flipped": true,
-        "direction": "down",
-        "renderRotation": 0
+        "direction": "right",
+        "renderRotation": 90
       },
       {
         "key": "o-8-4-5",
@@ -804,27 +804,27 @@
         "displayLeft": 4,
         "displayRight": 3,
         "flipped": true,
-        "direction": "right",
-        "renderRotation": 90
+        "direction": "down",
+        "renderRotation": 0
       },
       {
         "key": "o-10-2-3",
         "canonicalLeft": 2,
         "canonicalRight": 3,
-        "displayLeft": 3,
-        "displayRight": 2,
-        "flipped": true,
-        "direction": "right",
-        "renderRotation": 90
+        "displayLeft": 2,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
       },
       {
         "key": "o-11-1-2",
         "canonicalLeft": 1,
         "canonicalRight": 2,
-        "displayLeft": 2,
-        "displayRight": 1,
-        "flipped": true,
-        "direction": "right",
+        "displayLeft": 1,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "left",
         "renderRotation": 90
       },
       {
@@ -834,17 +834,17 @@
         "displayLeft": 0,
         "displayRight": 1,
         "flipped": false,
-        "direction": "up",
-        "renderRotation": 0
+        "direction": "left",
+        "renderRotation": 90
       },
       {
         "key": "o-13-6-0",
         "canonicalLeft": 6,
         "canonicalRight": 0,
-        "displayLeft": 6,
-        "displayRight": 0,
-        "flipped": false,
-        "direction": "up",
+        "displayLeft": 0,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "down",
         "renderRotation": 0
       }
     ]
@@ -931,50 +931,50 @@
         "key": "o-1-5-0",
         "canonicalLeft": 5,
         "canonicalRight": 0,
-        "displayLeft": 0,
-        "displayRight": 5,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 5,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
         "key": "o-2-6-5",
         "canonicalLeft": 6,
         "canonicalRight": 5,
-        "displayLeft": 5,
-        "displayRight": 6,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 6,
+        "displayRight": 5,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
         "key": "o-3-4-6",
         "canonicalLeft": 4,
         "canonicalRight": 6,
-        "displayLeft": 4,
-        "displayRight": 6,
-        "flipped": false,
-        "direction": "up",
+        "displayLeft": 6,
+        "displayRight": 4,
+        "flipped": true,
+        "direction": "down",
         "renderRotation": 0
       },
       {
         "key": "o-4-1-4",
         "canonicalLeft": 1,
         "canonicalRight": 4,
-        "displayLeft": 1,
-        "displayRight": 4,
-        "flipped": false,
-        "direction": "up",
+        "displayLeft": 4,
+        "displayRight": 1,
+        "flipped": true,
+        "direction": "down",
         "renderRotation": 0
       },
       {
         "key": "o-5-2-1",
         "canonicalLeft": 2,
         "canonicalRight": 1,
-        "displayLeft": 2,
-        "displayRight": 1,
-        "flipped": false,
-        "direction": "up",
+        "displayLeft": 1,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "down",
         "renderRotation": 0
       }
     ]
@@ -1101,20 +1101,20 @@
         "key": "o-3-3-4",
         "canonicalLeft": 3,
         "canonicalRight": 4,
-        "displayLeft": 4,
-        "displayRight": 3,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 3,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
         "key": "o-4-2-3",
         "canonicalLeft": 2,
         "canonicalRight": 3,
-        "displayLeft": 3,
-        "displayRight": 2,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 2,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
@@ -1141,10 +1141,10 @@
         "key": "o-7-6-0",
         "canonicalLeft": 6,
         "canonicalRight": 0,
-        "displayLeft": 6,
-        "displayRight": 0,
-        "flipped": false,
-        "direction": "up",
+        "displayLeft": 0,
+        "displayRight": 6,
+        "flipped": true,
+        "direction": "down",
         "renderRotation": 0
       }
     ]
@@ -1344,17 +1344,17 @@
         "displayLeft": 2,
         "displayRight": 3,
         "flipped": false,
-        "direction": "left",
-        "renderRotation": 90
+        "direction": "up",
+        "renderRotation": 0
       },
       {
         "key": "o-5-1-2",
         "canonicalLeft": 1,
         "canonicalRight": 2,
-        "displayLeft": 2,
-        "displayRight": 1,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 1,
+        "displayRight": 2,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
@@ -1364,8 +1364,8 @@
         "displayLeft": 1,
         "displayRight": 0,
         "flipped": true,
-        "direction": "down",
-        "renderRotation": 0
+        "direction": "right",
+        "renderRotation": 90
       },
       {
         "key": "o-7-6-0",
@@ -1374,8 +1374,8 @@
         "displayLeft": 0,
         "displayRight": 6,
         "flipped": true,
-        "direction": "down",
-        "renderRotation": 0
+        "direction": "right",
+        "renderRotation": 90
       },
       {
         "key": "o-8-5-6",
@@ -1394,27 +1394,27 @@
         "displayLeft": 5,
         "displayRight": 4,
         "flipped": true,
-        "direction": "right",
-        "renderRotation": 90
+        "direction": "down",
+        "renderRotation": 0
       },
       {
         "key": "o-10-3-4",
         "canonicalLeft": 3,
         "canonicalRight": 4,
-        "displayLeft": 4,
-        "displayRight": 3,
-        "flipped": true,
-        "direction": "right",
-        "renderRotation": 90
+        "displayLeft": 3,
+        "displayRight": 4,
+        "flipped": false,
+        "direction": "up",
+        "renderRotation": 0
       },
       {
         "key": "o-11-2-3",
         "canonicalLeft": 2,
         "canonicalRight": 3,
-        "displayLeft": 3,
-        "displayRight": 2,
-        "flipped": true,
-        "direction": "right",
+        "displayLeft": 2,
+        "displayRight": 3,
+        "flipped": false,
+        "direction": "left",
         "renderRotation": 90
       },
       {
@@ -1424,17 +1424,17 @@
         "displayLeft": 1,
         "displayRight": 2,
         "flipped": false,
-        "direction": "up",
-        "renderRotation": 0
+        "direction": "left",
+        "renderRotation": 90
       },
       {
         "key": "o-13-0-1",
         "canonicalLeft": 0,
         "canonicalRight": 1,
-        "displayLeft": 0,
-        "displayRight": 1,
-        "flipped": false,
-        "direction": "up",
+        "displayLeft": 1,
+        "displayRight": 0,
+        "flipped": true,
+        "direction": "down",
         "renderRotation": 0
       }
     ]
@@ -1561,20 +1561,20 @@
         "key": "o-3-1-0",
         "canonicalLeft": 1,
         "canonicalRight": 0,
-        "displayLeft": 0,
-        "displayRight": 1,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 1,
+        "displayRight": 0,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
         "key": "o-4-0-1",
         "canonicalLeft": 0,
         "canonicalRight": 1,
-        "displayLeft": 1,
-        "displayRight": 0,
-        "flipped": true,
-        "direction": "down",
+        "displayLeft": 0,
+        "displayRight": 1,
+        "flipped": false,
+        "direction": "up",
         "renderRotation": 0
       },
       {
@@ -1601,10 +1601,10 @@
         "key": "o-7-2-0",
         "canonicalLeft": 2,
         "canonicalRight": 0,
-        "displayLeft": 2,
-        "displayRight": 0,
-        "flipped": false,
-        "direction": "up",
+        "displayLeft": 0,
+        "displayRight": 2,
+        "flipped": true,
+        "direction": "down",
         "renderRotation": 0
       }
     ]
