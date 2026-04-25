@@ -78,48 +78,28 @@ async function loadUserRefundsByTournament(
       .orderBy(desc(projectCurrencyLedger.createdAt)),
   ]);
 
-  // Merge USD + project rows and re-sort by createdAt DESC so cross-source
-  // duplicates also resolve to the most recent row.
-  type RefundRow = {
-    referenceId: string | null;
-    amount: string;
-    currency: TournamentCurrencyType;
-    createdAt: Date;
-  };
-  const allRows: RefundRow[] = [
+  // Merge USD + project rows and let the shared picker apply the
+  // first-wins-by-createdAt rule. Sharing one implementation between the
+  // production path and the unit test prevents logic drift.
+  return pickLatestRefundPerTournament([
     ...usdRows.map((r) => ({ ...r, currency: "usd" as const })),
     ...projectRows.map((r) => ({ ...r, currency: "project" as const })),
-  ];
-  allRows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  ]);
+}
 
-  for (const row of allRows) {
-    if (!row.referenceId) continue;
-    const match = REFUND_REFERENCE_REGEX.exec(row.referenceId);
-    if (!match) continue;
-    const tournamentId = match[2];
-    // First-wins: rows are already DESC by createdAt, so the first row we
-    // see for a given tournament IS the latest refund. Skip later (older)
-    // rows for the same tournament.
-    if (map.has(tournamentId)) continue;
-    const reason: UserRefundSummary["reason"] = match[1] === "delete" ? "deleted" : "cancelled";
-    map.set(tournamentId, { amount: row.amount, currency: row.currency, reason });
-  }
-
-  return map;
+interface RefundRow {
+  referenceId: string | null;
+  amount: string;
+  currency: TournamentCurrencyType;
+  createdAt: Date;
 }
 
 /**
- * Test-only export of the in-memory dedup logic. Exposed so the unit test
- * can verify the "latest refund wins" rule without standing up a database.
+ * Pick the most recent refund row per tournament from a flat list. Sorting
+ * is done in-memory by `createdAt DESC`; the first row seen for a given
+ * tournament wins. Pure / no I/O so it can be unit-tested directly.
  */
-export function __pickLatestRefundPerTournamentForTest(
-  rows: Array<{
-    referenceId: string | null;
-    amount: string;
-    currency: TournamentCurrencyType;
-    createdAt: Date;
-  }>,
-): Map<string, UserRefundSummary> {
+function pickLatestRefundPerTournament(rows: RefundRow[]): Map<string, UserRefundSummary> {
   const map = new Map<string, UserRefundSummary>();
   const sorted = [...rows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   for (const row of sorted) {
@@ -133,6 +113,9 @@ export function __pickLatestRefundPerTournamentForTest(
   }
   return map;
 }
+
+/** Test-only re-export of the dedup picker. */
+export const __pickLatestRefundPerTournamentForTest = pickLatestRefundPerTournament;
 
 export function registerTournamentListingRoutes(app: Express): void {
 
