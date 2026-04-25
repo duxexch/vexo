@@ -37,11 +37,16 @@ async function loadUserRefundsByTournament(
     `tournament-delete-refund:${id}:${userId}`,
   ]);
 
+  // Order by createdAt DESC in SQL so the most recent refund row per
+  // tournament always wins, even if duplicates (e.g. cancel + delete, or a
+  // retry insert) ever exist. We then iterate and apply a first-wins rule
+  // per tournament id.
   const [usdRows, projectRows] = await Promise.all([
     db
       .select({
         amount: transactions.amount,
         referenceId: transactions.referenceId,
+        createdAt: transactions.createdAt,
       })
       .from(transactions)
       .where(
@@ -50,12 +55,14 @@ async function loadUserRefundsByTournament(
           eq(transactions.type, "refund"),
           inArray(transactions.referenceId, usdRefundIds),
         ),
-      ),
+      )
+      .orderBy(desc(transactions.createdAt)),
     db
       .select({
         amount: projectCurrencyLedger.amount,
         referenceId: projectCurrencyLedger.referenceId,
         referenceType: projectCurrencyLedger.referenceType,
+        createdAt: projectCurrencyLedger.createdAt,
       })
       .from(projectCurrencyLedger)
       .where(
@@ -67,36 +74,63 @@ async function loadUserRefundsByTournament(
           ]),
           inArray(projectCurrencyLedger.referenceId, usdRefundIds),
         ),
-      ),
+      )
+      .orderBy(desc(projectCurrencyLedger.createdAt)),
   ]);
 
-  const ingest = (
-    referenceId: string | null,
-    amount: string,
-    currency: TournamentCurrencyType,
-  ) => {
-    if (!referenceId) return;
-    const match = REFUND_REFERENCE_REGEX.exec(referenceId);
-    if (!match) return;
-    const reason: UserRefundSummary["reason"] = match[1] === "delete" ? "deleted" : "cancelled";
-    const tournamentId = match[2];
-    // Keep the latest refund only; cancel + delete shouldn't both fire for one
-    // tournament+user pair, but if a duplicate ever appears, prefer the
-    // last-inserted row (delete supersedes cancel by lifecycle order).
-    const existing = map.get(tournamentId);
-    if (existing && existing.reason === "deleted" && reason === "cancelled") {
-      return;
-    }
-    map.set(tournamentId, { amount, currency, reason });
+  // Merge USD + project rows and re-sort by createdAt DESC so cross-source
+  // duplicates also resolve to the most recent row.
+  type RefundRow = {
+    referenceId: string | null;
+    amount: string;
+    currency: TournamentCurrencyType;
+    createdAt: Date;
   };
+  const allRows: RefundRow[] = [
+    ...usdRows.map((r) => ({ ...r, currency: "usd" as const })),
+    ...projectRows.map((r) => ({ ...r, currency: "project" as const })),
+  ];
+  allRows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-  for (const row of usdRows) {
-    ingest(row.referenceId, row.amount, "usd");
-  }
-  for (const row of projectRows) {
-    ingest(row.referenceId, row.amount, "project");
+  for (const row of allRows) {
+    if (!row.referenceId) continue;
+    const match = REFUND_REFERENCE_REGEX.exec(row.referenceId);
+    if (!match) continue;
+    const tournamentId = match[2];
+    // First-wins: rows are already DESC by createdAt, so the first row we
+    // see for a given tournament IS the latest refund. Skip later (older)
+    // rows for the same tournament.
+    if (map.has(tournamentId)) continue;
+    const reason: UserRefundSummary["reason"] = match[1] === "delete" ? "deleted" : "cancelled";
+    map.set(tournamentId, { amount: row.amount, currency: row.currency, reason });
   }
 
+  return map;
+}
+
+/**
+ * Test-only export of the in-memory dedup logic. Exposed so the unit test
+ * can verify the "latest refund wins" rule without standing up a database.
+ */
+export function __pickLatestRefundPerTournamentForTest(
+  rows: Array<{
+    referenceId: string | null;
+    amount: string;
+    currency: TournamentCurrencyType;
+    createdAt: Date;
+  }>,
+): Map<string, UserRefundSummary> {
+  const map = new Map<string, UserRefundSummary>();
+  const sorted = [...rows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  for (const row of sorted) {
+    if (!row.referenceId) continue;
+    const match = REFUND_REFERENCE_REGEX.exec(row.referenceId);
+    if (!match) continue;
+    const tournamentId = match[2];
+    if (map.has(tournamentId)) continue;
+    const reason: UserRefundSummary["reason"] = match[1] === "delete" ? "deleted" : "cancelled";
+    map.set(tournamentId, { amount: row.amount, currency: row.currency, reason });
+  }
   return map;
 }
 
