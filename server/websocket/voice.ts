@@ -175,11 +175,38 @@ function incrementVoiceTelemetryCounter(counter: keyof VoiceTelemetryCounters, a
  * key is intentionally NOT purged on room-empty, otherwise a coordinated
  * leave/rejoin loop would let players get unlimited free voice within the
  * same match.
+ *
+ * Storage shape: Map<key, consumedAtMs>. We use a Map (instead of a plain
+ * Set) so an idle interval can prune entries older than
+ * CHALLENGE_FIRST_ATTEMPT_TTL_MS, keeping memory bounded on a long-lived
+ * server. The TTL is comfortably longer than any realistic challenge match
+ * duration.
  */
-const challengeVoiceFirstAttemptUsed = new Set<string>();
+const challengeVoiceFirstAttemptUsed = new Map<string, number>();
+const CHALLENGE_FIRST_ATTEMPT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 function challengeVoiceFirstAttemptKey(matchId: string, userId: string): string {
   return `${matchId}:${userId}`;
+}
+
+function pruneChallengeFirstAttemptUsed(now: number = Date.now()): number {
+  let pruned = 0;
+  for (const [key, ts] of challengeVoiceFirstAttemptUsed) {
+    if (now - ts > CHALLENGE_FIRST_ATTEMPT_TTL_MS) {
+      challengeVoiceFirstAttemptUsed.delete(key);
+      pruned += 1;
+    }
+  }
+  return pruned;
+}
+
+// Periodic prune so the map cannot grow unbounded on a long-lived server.
+const challengeFirstAttemptPruneTimer = setInterval(
+  () => pruneChallengeFirstAttemptUsed(),
+  60 * 60 * 1000, // hourly
+);
+if (typeof challengeFirstAttemptPruneTimer.unref === "function") {
+  challengeFirstAttemptPruneTimer.unref();
 }
 
 function incrementIceCandidateTypeCounter(candidateType: IceCandidateType): void {
@@ -634,7 +661,7 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
       // Mark the first attempt as consumed once we've decided to admit the
       // user. Any later join (e.g. after disconnect/reconnect) will require
       // sufficient VXC balance.
-      challengeVoiceFirstAttemptUsed.add(firstAttemptKey);
+      challengeVoiceFirstAttemptUsed.set(firstAttemptKey, Date.now());
     }
 
     const participantIds = access.participantIds;
