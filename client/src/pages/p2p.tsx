@@ -30,6 +30,12 @@ import { EmptyState } from "@/components/EmptyState";
 import { Link } from "wouter";
 import { WORLD_CURRENCIES } from "@/lib/currencies";
 import { cn } from "@/lib/utils";
+import {
+  StatusPill,
+  getOfferStatusBucket,
+  getTradeStatusBucket,
+} from "@/lib/p2p-status";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 interface P2POffer {
   id: string;
   userId: string;
@@ -1409,8 +1415,48 @@ function MarketplaceTab() {
     );
   }
 
+  const marketplaceVerificationBlocked =
+    !!offerEligibility && !offerEligibility.canCreateOffer && !offerEligibility.checks.verificationPassed;
+  const marketplaceP2PDisabled =
+    !!offerEligibility && !offerEligibility.canCreateOffer && !offerEligibility.checks.p2pEnabled;
+
   return (
     <div className="space-y-4">
+      {(marketplaceVerificationBlocked || marketplaceP2PDisabled) && (
+        <Alert
+          variant="destructive"
+          className="border-amber-500/40 bg-amber-500/10 text-amber-100"
+          data-testid="alert-marketplace-kyc-gate"
+        >
+          <Shield className="h-4 w-4 text-amber-300" />
+          <AlertTitle className="text-amber-100">
+            {marketplaceVerificationBlocked
+              ? t('p2p.kyc.bannerTitle')
+              : t('p2p.kyc.disabledTitle')}
+          </AlertTitle>
+          <AlertDescription className="text-amber-100/90">
+            <p>
+              {marketplaceVerificationBlocked
+                ? t('p2p.kyc.bannerDescription')
+                : t('p2p.kyc.disabledDescription')}
+            </p>
+            <div className="mt-3">
+              <Link href="/p2p/settings">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300/60 bg-amber-500/20 text-amber-50 hover:bg-amber-500/30"
+                  data-testid="button-marketplace-kyc-open-settings"
+                >
+                  <Settings className="me-1 h-4 w-4" />
+                  {t('p2p.kyc.openSettings')}
+                </Button>
+              </Link>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-slate-100 shadow-xl shadow-slate-900/40">
         <div className="flex items-center justify-between gap-3 bg-[#f0c73f] px-3 py-2 text-slate-900 sm:px-4 sm:py-3">
           <div className="flex items-center gap-2">
@@ -1605,7 +1651,12 @@ function MarketplaceTab() {
       {filteredOffers.length === 0 ? (
         <Card>
           <CardContent>
-            <EmptyState icon={Wallet} title={t('p2p.noOffers')} description={t('p2p.noOffersDesc')} />
+            <EmptyState
+              icon={Wallet}
+              title={t('p2p.noOffers')}
+              description={t('p2p.empty.marketplace.description')}
+              action={{ label: t('p2p.empty.marketplace.cta'), onClick: resetOfferFilters }}
+            />
           </CardContent>
         </Card>
       ) : (
@@ -3206,9 +3257,13 @@ function MyOffersTab() {
                         {offer.dealKind === "digital_product" && (
                           <Badge variant="outline" className="border-violet-500/60 text-violet-300">{getDealKindLabel(t, offer.dealKind)}</Badge>
                         )}
-                        <Badge className={cn("border", getStatusPillClass(offer.status))}>
-                          {getStatusBadge(offer.status).props.children}
-                        </Badge>
+                        <StatusPill
+                          bucket={getOfferStatusBucket(offer.status)}
+                          bucketLabel={t(`p2p.status.bucket.${getOfferStatusBucket(offer.status)}`)}
+                          preciseLabel={String(getStatusBadge(offer.status).props.children)}
+                          tooltipPrefix={t('p2p.status.tooltipPrefix')}
+                          testId={`badge-offer-status-${offer.id}`}
+                        />
                       </div>
                       <p className="mt-2 text-xs text-slate-400">{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale, offer.fiatCurrency)}</p>
                     </div>
@@ -3338,9 +3393,13 @@ function MyOffersTab() {
                     </TableCell>
                     <TableCell>
                       <div className="space-y-1">
-                        <Badge className={cn("border", getStatusPillClass(offer.status))}>
-                          {getStatusBadge(offer.status).props.children}
-                        </Badge>
+                        <StatusPill
+                          bucket={getOfferStatusBucket(offer.status)}
+                          bucketLabel={t(`p2p.status.bucket.${getOfferStatusBucket(offer.status)}`)}
+                          preciseLabel={String(getStatusBadge(offer.status).props.children)}
+                          tooltipPrefix={t('p2p.status.tooltipPrefix')}
+                          testId={`badge-offer-status-row-${offer.id}`}
+                        />
                         <p className="text-[11px] text-slate-400">{getVisibilityLabel(t, offer.visibility, offer.targetUsername)}</p>
                         {offer.dealKind === "digital_product" && (
                           <p className="text-[11px] text-violet-300">{offer.digitalProductType || getDealKindLabel(t, offer.dealKind)}</p>
@@ -3468,7 +3527,7 @@ function MyOffersTab() {
   );
 }
 
-function MyTradesTab() {
+function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = {}) {
   const { t, language } = useI18n();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -4145,7 +4204,15 @@ function MyTradesTab() {
       {filteredTrades.length === 0 ? (
         <Card>
           <CardContent>
-            <EmptyState icon={ArrowUpRight} title={t('p2p.noTrades')} description={t('p2p.noTradesDesc')} />
+            <EmptyState
+              icon={ArrowUpRight}
+              title={t('p2p.noTrades')}
+              description={t('p2p.empty.trades.description')}
+              action={{
+                label: t('p2p.empty.trades.cta'),
+                onClick: () => onSwitchTab?.("marketplace"),
+              }}
+            />
           </CardContent>
         </Card>
       ) : (
@@ -4163,9 +4230,13 @@ function MyTradesTab() {
                       <p className="truncate text-base font-semibold" data-testid={`text-counterparty-${trade.id}`}>{trade.counterpartyUsername}</p>
                       <p className="mt-1 text-xs text-slate-400">#{trade.id.slice(0, 8)}</p>
                     </div>
-                    <Badge className={cn("border", getStatusPillClass(trade.status))}>
-                      {getStatusBadge(trade.status).props.children}
-                    </Badge>
+                    <StatusPill
+                      bucket={getTradeStatusBucket(trade.status)}
+                      bucketLabel={t(`p2p.status.bucket.${getTradeStatusBucket(trade.status)}`)}
+                      preciseLabel={String(getStatusBadge(trade.status).props.children)}
+                      tooltipPrefix={t('p2p.status.tooltipPrefix')}
+                      testId={`badge-trade-status-${trade.id}`}
+                    />
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
@@ -4226,9 +4297,13 @@ function MyTradesTab() {
                       ${trade.totalPrice || trade.fiatAmount || "0"}
                     </TableCell>
                     <TableCell>
-                      <Badge className={cn("border", getStatusPillClass(trade.status))}>
-                        {getStatusBadge(trade.status).props.children}
-                      </Badge>
+                      <StatusPill
+                        bucket={getTradeStatusBucket(trade.status)}
+                        bucketLabel={t(`p2p.status.bucket.${getTradeStatusBucket(trade.status)}`)}
+                        preciseLabel={String(getStatusBadge(trade.status).props.children)}
+                        tooltipPrefix={t('p2p.status.tooltipPrefix')}
+                        testId={`badge-trade-status-row-${trade.id}`}
+                      />
                     </TableCell>
                     <TableCell className="text-slate-400">
                       {formatLocalizedDate(trade.createdAt, numberLocale)}
@@ -5759,6 +5834,7 @@ function DisputesTab() {
 
 export default function P2PPage() {
   const { t, dir } = useI18n();
+  const [activeTab, setActiveTab] = useState("marketplace");
 
   return (
     <div className="min-h-[100svh] overflow-x-hidden bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_45%)] p-2 md:p-3 pb-[max(1rem,env(safe-area-inset-bottom))]" dir={dir}>
@@ -5785,7 +5861,7 @@ export default function P2PPage() {
 
       <div>
         <div className="pt-2">
-          <Tabs defaultValue="marketplace">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="mb-4 h-auto w-full justify-start gap-1 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <TabsTrigger value="marketplace" data-testid="tab-marketplace">
                 {t('p2p.marketplace')}
@@ -5811,7 +5887,7 @@ export default function P2PPage() {
             </TabsContent>
 
             <TabsContent value="my-trades">
-              <MyTradesTab />
+              <MyTradesTab onSwitchTab={setActiveTab} />
             </TabsContent>
 
             <TabsContent value="disputes">
