@@ -41,6 +41,9 @@ interface VoiceTelemetryCounters {
   rejectedInvalidPayload: number;
   rejectedUnauthorized: number;
   rejectedNotInRoom: number;
+  rejectedNotParticipant: number;
+  rejectedPricingGate: number;
+  rejectedSignalingError: number;
   rejectedOther: number;
 }
 
@@ -75,6 +78,9 @@ const voiceTelemetryCounters: VoiceTelemetryCounters = {
   rejectedInvalidPayload: 0,
   rejectedUnauthorized: 0,
   rejectedNotInRoom: 0,
+  rejectedNotParticipant: 0,
+  rejectedPricingGate: 0,
+  rejectedSignalingError: 0,
   rejectedOther: 0,
 };
 
@@ -123,6 +129,9 @@ function getVoiceTelemetryBaseSnapshot(nowMs: number): VoiceTelemetrySnapshot {
     + counters.rejectedInvalidPayload
     + counters.rejectedUnauthorized
     + counters.rejectedNotInRoom
+    + counters.rejectedNotParticipant
+    + counters.rejectedPricingGate
+    + counters.rejectedSignalingError
     + counters.rejectedOther;
   const forwarded = counters.offerForwarded + counters.answerForwarded + counters.iceForwarded;
   const joinAcceptanceRate = counters.joinRequests > 0
@@ -161,9 +170,12 @@ function incrementIceCandidateTypeCounter(candidateType: IceCandidateType): void
 function classifyVoiceError(errorMessage: string): keyof VoiceTelemetryCounters {
   const normalized = errorMessage.toLowerCase();
   if (normalized.includes("rate limit")) return "rejectedRateLimit";
-  if (normalized.includes("invalid")) return "rejectedInvalidPayload";
+  if (normalized.includes("insufficient project currency balance")) return "rejectedPricingGate";
+  if (normalized.includes("not authorized for this match")) return "rejectedNotParticipant";
   if (normalized.includes("not authorized")) return "rejectedUnauthorized";
   if (normalized.includes("not in voice room")) return "rejectedNotInRoom";
+  if (normalized.includes("voice peer is not available")) return "rejectedSignalingError";
+  if (normalized.includes("invalid")) return "rejectedInvalidPayload";
   return "rejectedOther";
 }
 
@@ -490,7 +502,11 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
     ? `ws:voice:user:${ws.userId}`
     : `ws:voice:ip:${ws.clientIp || "unknown"}`;
 
-  const sendVoiceError = (errorMessage: string, context: Record<string, unknown>) => {
+  const sendVoiceError = (
+    errorMessage: string,
+    context: Record<string, unknown>,
+    options?: { code?: string; details?: Record<string, unknown> },
+  ) => {
     incrementVoiceTelemetryCounter(classifyVoiceError(errorMessage));
 
     logger.warn("[VoiceWS] Signaling rejected", {
@@ -498,8 +514,12 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
       userId: ws.userId,
       type: data?.type,
       error: errorMessage,
+      code: options?.code,
     });
-    ws.send(JSON.stringify({ type: "voice_error", error: errorMessage }));
+    const payload: Record<string, unknown> = { type: "voice_error", error: errorMessage };
+    if (options?.code) payload.code = options.code;
+    if (options?.details) payload.details = options.details;
+    ws.send(JSON.stringify(payload));
   };
 
   const enforceVoiceRateLimit = async (
@@ -546,20 +566,34 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
 
     const access = await resolveVoiceAccess(matchId, ws.userId);
     if (!access) {
-      sendVoiceError("Not authorized for this match", { matchId, participantCount: 0 });
+      sendVoiceError(
+        "Not authorized for this match",
+        { matchId, participantCount: 0 },
+        { code: "not_participant" },
+      );
       return;
     }
 
     if (access.roomKind === "challenge") {
       const pricingGate = await resolveChallengeVoicePricingGate(ws.userId);
       if (!pricingGate.allowed) {
-        sendVoiceError("Insufficient project currency balance for challenge voice", {
-          matchId,
-          requiredRate: pricingGate.requiredRate,
-          walletBalance: pricingGate.walletBalance,
-          roomKind: access.roomKind,
-          role: access.userRole,
-        });
+        sendVoiceError(
+          "Insufficient project currency balance for challenge voice",
+          {
+            matchId,
+            requiredRate: pricingGate.requiredRate,
+            walletBalance: pricingGate.walletBalance,
+            roomKind: access.roomKind,
+            role: access.userRole,
+          },
+          {
+            code: "pricing_gate",
+            details: {
+              requiredRate: pricingGate.requiredRate,
+              walletBalance: pricingGate.walletBalance,
+            },
+          },
+        );
         return;
       }
     }

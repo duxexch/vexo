@@ -9,6 +9,7 @@ import { buildRtcConfiguration } from "@/lib/rtc-config";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { openAppSettings, openMicrophoneSettings } from "@/lib/startup-permissions";
+import { ensureCallRationale } from "@/lib/call-permission-rationale";
 import { Capacitor } from "@capacitor/core";
 import { Mic, MicOff, Loader2 } from "lucide-react";
 
@@ -31,6 +32,12 @@ type VoicePeerRole = "player" | "spectator";
 type VoiceWsMessage = {
   type: string;
   error?: string;
+  code?: string;
+  details?: {
+    requiredRate?: number;
+    walletBalance?: number;
+    [key: string]: unknown;
+  };
   timestamp?: number;
   peers?: Array<{ userId: string; role?: VoicePeerRole }>;
   peerUserId?: string;
@@ -383,6 +390,16 @@ export function VoiceChat({
       return null;
     }
 
+    // Show the in-app rationale before triggering the OS / WebView mic prompt.
+    // On native Android the WebView occasionally drops getUserMedia silently
+    // when the rationale modal hasn't been acknowledged.
+    const rationaleDecision = await ensureCallRationale("voice");
+    if (rationaleDecision === "dismiss") {
+      showMicPermissionToast();
+      setConnectionState("error");
+      return null;
+    }
+
     let stream: MediaStream;
     try {
       stream = await acquireMicrophoneStream();
@@ -618,13 +635,34 @@ export function VoiceChat({
             }
 
             suppressReconnectOnCloseRef.current = isFatalVoiceError(data.type, data.error);
-            toast({
-              variant: "destructive",
-              title: t("challenge.voiceErrorRetry"),
-              description: typeof data.error === "string" && data.error.length > 0
-                ? data.error
-                : t("challenge.voiceRtcNetworkHint"),
-            });
+
+            if (data.type === "voice_error" && data.code === "pricing_gate") {
+              const requiredRate = typeof data.details?.requiredRate === "number"
+                ? data.details.requiredRate
+                : null;
+              toast({
+                variant: "destructive",
+                title: t("challenge.voicePricingGateTitle"),
+                description: requiredRate !== null
+                  ? t("challenge.voicePricingGateHint", { price: requiredRate })
+                  : t("challenge.voicePricingGateHintFallback"),
+              });
+            } else if (data.type === "voice_error" && data.code === "not_participant") {
+              toast({
+                variant: "destructive",
+                title: t("challenge.voiceNotParticipantTitle"),
+                description: t("challenge.voiceNotParticipantHint"),
+              });
+            } else {
+              toast({
+                variant: "destructive",
+                title: t("challenge.voiceErrorRetry"),
+                description: typeof data.error === "string" && data.error.length > 0
+                  ? data.error
+                  : t("challenge.voiceRtcNetworkHint"),
+              });
+            }
+
             setConnectionState("error");
             if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
               ws.close();
