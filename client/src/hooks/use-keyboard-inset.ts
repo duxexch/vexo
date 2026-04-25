@@ -29,23 +29,10 @@ function attachListeners(): void {
   if (listenersAttached || typeof window === "undefined") return;
   const vv = window.visualViewport;
   if (!vv) return;
-  // Track each successful attach so a partial-attach failure can be
-  // rolled back instead of leaving zombie listeners installed
-  // (Task #43 hardening, locked by Task #81's regression test).
-  let resizeAttached = false;
-  let scrollAttached = false;
-  try {
-    vv.addEventListener("resize", schedule);
-    resizeAttached = true;
-    vv.addEventListener("scroll", schedule);
-    scrollAttached = true;
-    window.addEventListener("orientationchange", schedule);
-    listenersAttached = true;
-  } catch (err) {
-    if (resizeAttached) vv.removeEventListener("resize", schedule);
-    if (scrollAttached) vv.removeEventListener("scroll", schedule);
-    throw err;
-  }
+  vv.addEventListener("resize", schedule);
+  vv.addEventListener("scroll", schedule);
+  window.addEventListener("orientationchange", schedule);
+  listenersAttached = true;
 }
 
 function detachListeners(): void {
@@ -85,17 +72,8 @@ export function useKeyboardInset(): void {
 
     consumerCount += 1;
     if (consumerCount === 1) {
-      try {
-        attachListeners();
-        update();
-      } catch (err) {
-        // Keep `consumerCount` consistent: a thrown effect never
-        // registers its cleanup function, so without this rollback
-        // the next mount would see `consumerCount === 1` and skip
-        // the (now-needed) attach call entirely. Locked by Task #81.
-        consumerCount -= 1;
-        throw err;
-      }
+      attachListeners();
+      update();
     }
 
     return () => {
