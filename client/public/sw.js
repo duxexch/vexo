@@ -249,17 +249,30 @@ self.addEventListener('push', (event) => {
 
   // Task #89: when a chat push arrives and the page is open in the
   // background, post a SHOW_CHAT_BUBBLE so the in-app bubble layer can
-  // render even though the WebSocket may have been throttled.
-  if (notifType === 'chat' && data.senderId) {
+  // render. Match the same payload contract as the in-app
+  // NotificationProvider: `metadata.event === 'chat_message'` with
+  // `metadata.senderId`. Also keep the legacy `notifType === 'chat'`
+  // shape for backwards compatibility with older server pushes.
+  let chatMeta = null;
+  if (data.metadata && typeof data.metadata === 'object') {
+    if (data.metadata.event === 'chat_message' && data.metadata.senderId) {
+      chatMeta = data.metadata;
+    }
+  }
+  if (!chatMeta && notifType === 'chat' && data.senderId) {
+    chatMeta = { senderId: data.senderId, messageId: data.messageId };
+  }
+  if (chatMeta) {
     event.waitUntil((async () => {
       try {
         const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         list.forEach((c) => c.postMessage({
           type: 'SHOW_CHAT_BUBBLE',
-          senderId: data.senderId,
+          senderId: String(chatMeta.senderId),
+          messageId: chatMeta.messageId ? String(chatMeta.messageId) : null,
           title: data.title || 'New message',
           body: data.body || '',
-          link: data.url || `/chat?user=${encodeURIComponent(data.senderId)}`,
+          link: data.url || `/chat?user=${encodeURIComponent(chatMeta.senderId)}`,
         }));
       } catch (_) { /* ignore */ }
       await self.registration.showNotification(data.title || 'VEX', opts);

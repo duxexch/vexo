@@ -13,17 +13,22 @@
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!--
-      Background DM → bubble path. The host app must register
-      `click.vixo.chatbubbles.ChatBubblesFcmService` (or a subclass
-      that delegates to it) in its OWN AndroidManifest.xml with the
-      `com.google.firebase.MESSAGING_EVENT` intent filter — this is
-      not auto-merged because Firebase only consults the host app's
-      manifest for the messaging service binding. See
-      docs/CHAT_BUBBLES_PLAYBOOK.md for the snippet.
-    -->
-
     <application>
+        <!-- Background DM → bubble path. AGP merges this <service>
+             into the host app's manifest at build time, so Firebase
+             can resolve it without the host having to declare it
+             manually. If the host already ships its own
+             FirebaseMessagingService with a higher priority, that one
+             wins and the host should call BubbleNotifier.showBubble
+             from its onMessageReceived (see playbook). -->
+        <service
+            android:name=".ChatBubblesFcmService"
+            android:exported="false">
+            <intent-filter android:priority="-100">
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <!-- The bubble's expanded surface. Renders a real native chat
              panel (header / messages / quick reply) inline so users can
              reply without leaving their current app. allowEmbedded +

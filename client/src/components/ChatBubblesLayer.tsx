@@ -136,11 +136,7 @@ export default function ChatBubblesLayer() {
   const userScopedId = user?.id ? String(user.id) : null;
   const [enabled, setEnabled] = useState<boolean>(() => getChatBubblesEnabled(userScopedId));
   const [nativeMode, setNativeMode] = useState<"bubble" | "overlay" | "none">("none");
-  // Foreground/visibility — drives the foreground vs background dispatch
-  // decision. When the app is in focus we render the in-app bubble
-  // counterpart and SKIP the OS-level chat head; once the app is
-  // backgrounded or hidden, we fall back to the native bubble surface
-  // (or to whatever the killed-app FCM service does on its own).
+  // Drives the foreground (in-app layer) vs background (native bubble) dispatch.
   const [isAppForeground, setIsAppForeground] = useState<boolean>(() =>
     typeof document !== "undefined" ? document.visibilityState === "visible" : true,
   );
@@ -158,7 +154,6 @@ export default function ChatBubblesLayer() {
   // total to the native bubble plugin without waiting for React state.
   const unreadByPeerRef = useRef<Map<string, number>>(new Map());
 
-  // ── visibility tracker ─────────────────────────────────────────────
   useEffect(() => {
     if (typeof document === "undefined") return;
     const onVis = () => setIsAppForeground(document.visibilityState === "visible");
@@ -176,9 +171,6 @@ export default function ChatBubblesLayer() {
   useEffect(() => {
     const onPrefChange = (ev: Event) => {
       const detail = (ev as CustomEvent<{ enabled?: boolean; userId?: string | null }>).detail;
-      // Only react to changes for the currently signed-in user (or the
-      // legacy global key when no user is set), so switching accounts
-      // mid-session doesn't flip the toggle for the old user.
       if (detail?.userId && detail.userId !== userScopedId) return;
       setEnabled(
         typeof detail?.enabled === "boolean" ? detail.enabled : getChatBubblesEnabled(userScopedId),
@@ -188,8 +180,6 @@ export default function ChatBubblesLayer() {
     return () => window.removeEventListener("vex-chat-bubbles-pref", onPrefChange);
   }, [userScopedId]);
 
-  // Resync the toggle whenever the auth user changes (login / logout /
-  // account switch on a shared device).
   useEffect(() => {
     setEnabled(getChatBubblesEnabled(userScopedId));
   }, [userScopedId]);
@@ -204,14 +194,9 @@ export default function ChatBubblesLayer() {
     };
   }, []);
 
-  // Push the API base URL + bearer token down to the native plugin so
-  // the in-bubble chat surface (which can launch cold from an FCM push
-  // after the WebView is gone) can fetch history and post quick
-  // replies. Also mirrors the chat-bubbles toggle and the user's
-  // muted-peer list so the FCM-killed bubble path applies the SAME
-  // suppression rules as the in-app web layer (no bubbles for muted
-  // peers, no bubbles when the toggle is off). Re-runs whenever any
-  // of those inputs change. Safe no-op on web/iOS.
+  // Mirror auth + suppression state to the native plugin. `authToken`
+  // is sent as `null` on logout so the native side wipes its cached
+  // copy. Safe no-op on web/iOS.
   useEffect(() => {
     if (nativeMode === "none") return;
     const apiBaseUrl =
@@ -227,10 +212,6 @@ export default function ChatBubblesLayer() {
     }
     void nativeConfigureBubbles({
       apiBaseUrl,
-      // Pass `null` (not `undefined`) on logout so the native side
-      // KNOWS to wipe the cached bearer token instead of keeping the
-      // last value around in SharedPreferences. `undefined` means "no
-      // change"; `null` means "clear it".
       authToken: token ?? null,
       bubblesEnabled: enabled,
       mutedPeerIds: Array.from(muted),
@@ -276,15 +257,8 @@ export default function ChatBubblesLayer() {
     [enabled, hasActiveCall, isPeerSuppressed, activeChatPeerId],
   );
 
-  // Foreground/background dispatch:
-  // • App in focus (foreground)  → render the in-app bubble counterpart
-  //   and DO NOT also pop the OS-level chat head, so Android users
-  //   never see a duplicate bubble layered over the WebView.
-  // • App hidden / backgrounded → suppress the in-app layer and let
-  //   the native plugin (or the killed-app FCM service) own the chat
-  //   head surface on its own.
-  // On platforms with no native support (web/iOS), we always render the
-  // in-app fallback regardless of focus state.
+  // Foreground → in-app layer; background → OS-level bubble. Web/iOS
+  // (no native support) always uses the in-app layer.
   const shouldRenderWebFallback = nativeMode === "none" || isAppForeground;
   const shouldRouteToNativeBubble = nativeMode !== "none" && !isAppForeground;
 

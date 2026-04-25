@@ -59,10 +59,7 @@ class ChatBubblesPlugin : Plugin() {
     @PluginMethod
     fun configure(call: PluginCall) {
         val apiBaseUrl = call.getString("apiBaseUrl")
-        // Tri-state token update:
-        //   • field absent      → Unchanged (leave previous value)
-        //   • field present null → Clear   (logout / account switch)
-        //   • field present str  → Set
+        // authToken: absent = unchanged, present null/blank = clear, string = set.
         val tokenUpdate: BubbleConfig.TokenUpdate = when {
             !call.data.has("authToken") -> BubbleConfig.TokenUpdate.Unchanged
             call.data.isNull("authToken") -> BubbleConfig.TokenUpdate.Clear
