@@ -28,6 +28,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Wallet, Plus, ArrowUpRight, ArrowDownRight, Star, Filter, RefreshCw, Trash2, Check, AlertTriangle, MessageSquare, Upload, FileCheck, Camera, Video, Ban, Clock, ChevronRight, Send, Paperclip, Eye, Shield, Scale, History, User, Settings } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { Link } from "wouter";
+import { WORLD_CURRENCIES } from "@/lib/currencies";
 import { cn } from "@/lib/utils";
 interface P2POffer {
   id: string;
@@ -417,16 +418,23 @@ function formatNumericValue(
   }).format(parsedValue);
 }
 
-function formatFixedFiat(rawValue: string | number, locale: string): string {
-  return `$${formatNumericValue(rawValue, locale, 2, 2)}`;
+function getFiatSymbol(fiatCurrency?: string | null): string {
+  const code = String(fiatCurrency || "").toUpperCase().trim();
+  if (!code) return "$";
+  const meta = WORLD_CURRENCIES.find((c) => c.code === code);
+  return meta?.symbol || code;
+}
+
+function formatFixedFiat(rawValue: string | number, locale: string, fiatCurrency?: string | null): string {
+  return `${getFiatSymbol(fiatCurrency)}${formatNumericValue(rawValue, locale, 2, 2)}`;
 }
 
 function formatAssetAmount(rawAmount: string | number, currencyCode: string, locale: string): string {
   return `${formatNumericValue(rawAmount, locale, 8, 0)} ${String(currencyCode || "").toUpperCase()}`;
 }
 
-function formatFiatRange(minValue: string | number, maxValue: string | number, locale: string): string {
-  return `${formatFixedFiat(minValue, locale)} - ${formatFixedFiat(maxValue, locale)}`;
+function formatFiatRange(minValue: string | number, maxValue: string | number, locale: string, fiatCurrency?: string | null): string {
+  return `${formatFixedFiat(minValue, locale, fiatCurrency)} - ${formatFixedFiat(maxValue, locale, fiatCurrency)}`;
 }
 
 type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
@@ -794,7 +802,7 @@ function TradeOfferDialog({
     if (parsedAmount < minLimit || parsedAmount > maxLimit) {
       toast({
         title: t('common.error'),
-        description: `${t('p2p.limit')}: ${formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}`,
+        description: `${t('p2p.limit')}: ${formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale, offer.fiatCurrency)}`,
         variant: "destructive",
       });
       return;
@@ -865,10 +873,10 @@ function TradeOfferDialog({
                 </div>
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                {formatAssetAmount(offer.amount, offer.currency, numberLocale)} @ {formatFixedFiat(offer.price, numberLocale)}
+                {formatAssetAmount(offer.amount, offer.currency, numberLocale)} @ {formatFixedFiat(offer.price, numberLocale, offer.fiatCurrency)}
               </p>
               <p className="text-sm text-muted-foreground">
-                {t('p2p.limit')}: {formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}
+                {t('p2p.limit')}: {formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale, offer.fiatCurrency)}
               </p>
 
               {isDigitalDeal && (
@@ -1064,18 +1072,18 @@ function TradeOfferDialog({
               </div>
               <div className="flex items-center justify-between gap-2 text-sm">
                 <span className="text-muted-foreground">{t('p2p.price')}</span>
-                <span className="font-medium tabular-nums">{formatFixedFiat(offer.price, numberLocale)}</span>
+                <span className="font-medium tabular-nums">{formatFixedFiat(offer.price, numberLocale, offer.fiatCurrency)}</span>
               </div>
               <div className="flex items-center justify-between gap-2 text-sm">
                 <span className="text-muted-foreground">{t('p2p.totalPrice')}</span>
                 <span className="font-semibold tabular-nums">
-                  {formatFixedFiat(previewTotalPrice, numberLocale)}
+                  {formatFixedFiat(previewTotalPrice, numberLocale, offer.fiatCurrency)}
                 </span>
               </div>
               <Separator />
               <div className="flex items-center justify-between gap-2 text-sm">
                 <span className="text-muted-foreground">{t('p2p.limit')}</span>
-                <span className="font-medium tabular-nums">{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}</span>
+                <span className="font-medium tabular-nums">{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale, offer.fiatCurrency)}</span>
               </div>
             </div>
 
@@ -1654,7 +1662,7 @@ function MarketplaceTab() {
                     <div className="rounded-md bg-slate-900 p-2">
                       <p className="text-xs text-slate-400">{t('p2p.price')}</p>
                       <p className="mt-1 text-lg font-bold tabular-nums text-slate-100" data-testid={`text-price-${offer.id}`}>
-                        {formatFixedFiat(offer.price, numberLocale)}
+                        {formatFixedFiat(offer.price, numberLocale, offer.fiatCurrency)}
                       </p>
                     </div>
 
@@ -1667,7 +1675,7 @@ function MarketplaceTab() {
                   </div>
 
                   <p className="mt-2 text-xs tabular-nums text-slate-400">
-                    {t('p2p.limit')}: {formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}
+                    {t('p2p.limit')}: {formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale, offer.fiatCurrency)}
                   </p>
 
                   <div className="mt-2 space-y-1 text-[11px] text-slate-400">
@@ -1744,10 +1752,10 @@ function MarketplaceTab() {
                       <span className="tabular-nums">{formatAssetAmount(offer.amount, offer.currency, numberLocale)}</span>
                     </TableCell>
                     <TableCell data-testid={`text-price-${offer.id}`} className="text-slate-100 font-semibold tabular-nums">
-                      {formatFixedFiat(offer.price, numberLocale)}
+                      {formatFixedFiat(offer.price, numberLocale, offer.fiatCurrency)}
                     </TableCell>
                     <TableCell className="text-slate-300 break-words">
-                      <span className="tabular-nums">{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}</span>
+                      <span className="tabular-nums">{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale, offer.fiatCurrency)}</span>
                     </TableCell>
                     <TableCell className="max-w-0">
                       <div className="flex flex-wrap gap-1">
@@ -2865,7 +2873,7 @@ function MyOffersTab() {
                       </div>
 
                       <p className="text-xs text-muted-foreground">
-                        {t('p2p.limit')}: {formatFiatRange(adminMinTradeAmount, adminMaxTradeAmount, numberLocale)}
+                        {t('p2p.limit')}: {formatFiatRange(adminMinTradeAmount, adminMaxTradeAmount, numberLocale, selectedFiatCurrency)}
                       </p>
 
                       <FormField
@@ -3202,7 +3210,7 @@ function MyOffersTab() {
                           {getStatusBadge(offer.status).props.children}
                         </Badge>
                       </div>
-                      <p className="mt-2 text-xs text-slate-400">{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}</p>
+                      <p className="mt-2 text-xs text-slate-400">{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale, offer.fiatCurrency)}</p>
                     </div>
 
                     <div className="flex gap-1">
@@ -3251,7 +3259,7 @@ function MyOffersTab() {
                     </div>
                     <div className="rounded-md bg-slate-900 p-2">
                       <p className="text-xs text-slate-400">{t('p2p.price')}</p>
-                      <p className="mt-1 font-semibold text-slate-100">{formatFixedFiat(offer.price, numberLocale)}</p>
+                      <p className="mt-1 font-semibold text-slate-100">{formatFixedFiat(offer.price, numberLocale, offer.fiatCurrency)}</p>
                     </div>
                   </div>
 
@@ -3312,8 +3320,8 @@ function MyOffersTab() {
                       </div>
                     </TableCell>
                     <TableCell className="text-slate-100"><span>{formatAssetAmount(offer.amount, offer.currency, numberLocale)}</span></TableCell>
-                    <TableCell className="text-slate-100 font-semibold">{formatFixedFiat(offer.price, numberLocale)}</TableCell>
-                    <TableCell className="text-slate-300"><span>{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale)}</span></TableCell>
+                    <TableCell className="text-slate-100 font-semibold">{formatFixedFiat(offer.price, numberLocale, offer.fiatCurrency)}</TableCell>
+                    <TableCell className="text-slate-300"><span>{formatFiatRange(offer.minLimit, offer.maxLimit, numberLocale, offer.fiatCurrency)}</span></TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {offer.paymentMethods.slice(0, 2).map((method) => (

@@ -136,6 +136,7 @@ export default function WalletPage() {
   const [depositPaymentMethod, setDepositPaymentMethod] = useState("");
   const [withdrawPaymentMethod, setWithdrawPaymentMethod] = useState("");
   const [withdrawReceiverNumber, setWithdrawReceiverNumber] = useState("");
+  const [withdrawCurrency, setWithdrawCurrency] = useState<string>("");
   const [paymentReference, setPaymentReference] = useState("");
   const [walletNumber, setWalletNumber] = useState("");
   const [depositCurrency, setDepositCurrency] = useState("USD");
@@ -370,6 +371,16 @@ export default function WalletPage() {
     ...financialQueryOptions,
   });
 
+  const effectiveWithdrawCurrency = withdrawCurrency || walletCurrencyCode;
+  const withdrawWalletEntry = useMemo(() => {
+    if (!currencyWalletsData) return null;
+    return currencyWalletsData.wallets.find((w) => w.currency === effectiveWithdrawCurrency) || null;
+  }, [currencyWalletsData, effectiveWithdrawCurrency]);
+  const withdrawAvailableBalance = withdrawWalletEntry
+    ? Number.parseFloat(withdrawWalletEntry.balance || "0")
+    : availableWalletBalance;
+  const withdrawCurrencySymbol = getCurrencySymbol(effectiveWithdrawCurrency, depositConfig?.currencySymbolByCode);
+
   const { data: currencyConversions } = useQuery<ProjectCurrencyConversion[]>({
     queryKey: ['/api/project-currency/conversions'],
     enabled: !!currencySettings?.isActive,
@@ -456,17 +467,19 @@ export default function WalletPage() {
   });
 
   const withdrawMutation = useMutation({
-    mutationFn: (data: { amount: number; paymentMethodId: string; receiverMethodNumber: string }) =>
+    mutationFn: (data: { amount: number; paymentMethodId: string; receiverMethodNumber: string; currency?: string }) =>
       apiRequestWithPaymentToken('POST', '/api/transactions/withdraw', data, 'withdraw'),
     onSuccess: () => {
       playSound('success');
       toast({ title: t('common.success'), description: t('wallet.withdrawSuccess') });
       queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/wallet/currency-wallets'] });
       refreshUser?.();
       setShowWithdraw(false);
       setWithdrawAmount("");
       setWithdrawPaymentMethod("");
       setWithdrawReceiverNumber("");
+      setWithdrawCurrency("");
     },
     onError: (err: Error) => {
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
@@ -511,7 +524,7 @@ export default function WalletPage() {
       return;
     }
 
-    if (parsedAmount > availableWalletBalance) {
+    if (parsedAmount > withdrawAvailableBalance) {
       focusAndScroll(withdrawAmountInputRef.current);
       return;
     }
@@ -531,6 +544,7 @@ export default function WalletPage() {
       amount: parsedAmount,
       paymentMethodId: withdrawPaymentMethod,
       receiverMethodNumber: sanitizedReceiverNumber,
+      currency: effectiveWithdrawCurrency,
     });
   };
 
@@ -1178,9 +1192,31 @@ export default function WalletPage() {
             <DialogDescription>{t('wallet.withdrawDesc')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pb-1">
+            {currencyWalletsData?.multiCurrencyEnabled && currencyWalletsData.wallets.length > 1 && (
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'العملة' : 'Currency'}</Label>
+                <Select
+                  value={effectiveWithdrawCurrency}
+                  onValueChange={(v) => { setWithdrawCurrency(v); setWithdrawAmount(""); }}
+                >
+                  <SelectTrigger data-testid="select-withdraw-currency">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currencyWalletsData.wallets.map((w) => (
+                      <SelectItem key={w.currency} value={w.currency}>
+                        {w.currency} {w.isPrimary ? (language === 'ar' ? '(أساسية)' : '(Primary)') : ''} — {Number.parseFloat(w.balance).toFixed(2)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="p-3 bg-muted rounded-lg text-sm">
               <span className="text-muted-foreground">{t('wallet.availableBalance')}: </span>
-              <span className="font-bold text-primary">{walletCurrencySymbol}{availableWalletBalance.toFixed(2)} {walletCurrencyCode}</span>
+              <span className="font-bold text-primary" data-testid="text-withdraw-available">
+                {withdrawCurrencySymbol}{withdrawAvailableBalance.toFixed(2)} {effectiveWithdrawCurrency}
+              </span>
             </div>
             <div>
               <Label>{t('wallet.amount')}</Label>
@@ -1209,14 +1245,14 @@ export default function WalletPage() {
                     className="text-xs"
                     onClick={() => setWithdrawAmount(String(amount))}
                   >
-                    {formatWalletNativeAmount(amount, walletCurrencyCode, depositConfig?.currencySymbolByCode, { withCode: true })}
+                    {formatWalletNativeAmount(amount, effectiveWithdrawCurrency, depositConfig?.currencySymbolByCode, { withCode: true })}
                   </Button>
                 ))}
                 <Button
-                  variant={withdrawAmount === String(availableWalletBalance.toFixed(2)) ? "default" : "outline"}
+                  variant={withdrawAmount === String(withdrawAvailableBalance.toFixed(2)) ? "default" : "outline"}
                   size="sm"
                   className="text-xs"
-                  onClick={() => setWithdrawAmount(String(availableWalletBalance.toFixed(2)))}
+                  onClick={() => setWithdrawAmount(String(withdrawAvailableBalance.toFixed(2)))}
                 >
                   {language === 'ar' ? 'الكل' : 'All'}
                 </Button>
@@ -1268,7 +1304,7 @@ export default function WalletPage() {
               ref={withdrawConfirmButtonRef}
               className="w-full sm:w-auto min-h-11"
               onClick={handleWithdrawSubmit}
-              disabled={!withdrawAmount || !withdrawPaymentMethod || !withdrawReceiverNumber.trim() || withdrawMutation.isPending || parseFloat(withdrawAmount) > availableWalletBalance}
+              disabled={!withdrawAmount || !withdrawPaymentMethod || !withdrawReceiverNumber.trim() || withdrawMutation.isPending || parseFloat(withdrawAmount) > withdrawAvailableBalance}
               data-testid="button-confirm-withdraw"
             >
               {withdrawMutation.isPending && <RefreshCw className="h-4 w-4 me-2 animate-spin" />}

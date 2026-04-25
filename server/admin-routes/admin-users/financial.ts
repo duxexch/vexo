@@ -6,7 +6,7 @@ import { db } from "../../db";
 import { and, eq, sql } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 import { toSafeUser } from "../../lib/safe-user";
-import { adjustUserCurrencyBalance, bumpPrimaryDepositWithdrawalTotals, getUserWalletSummary } from "../../lib/wallet-balances";
+import { adjustUserCurrencyBalance, bumpPrimaryDepositWithdrawalTotals, getUserWalletSummary, getEffectiveAllowedCurrencies } from "../../lib/wallet-balances";
 import { normalizeCurrencyCode } from "../../lib/p2p-currency-controls";
 
 export function registerUserFinancialRoutes(app: Express) {
@@ -111,7 +111,29 @@ export function registerUserFinancialRoutes(app: Express) {
       }
 
       const primaryCurrency = normalizeCurrencyCode(user.balanceCurrency) || "USD";
-      const targetCurrency = normalizeCurrencyCode(currencyCode) || primaryCurrency;
+
+      // If the caller provided a currencyCode, it MUST normalize to a valid
+      // currency. We refuse to silently fall back to primary on garbage input
+      // because that could misroute funds to the wrong wallet.
+      let targetCurrency = primaryCurrency;
+      if (currencyCode !== undefined && currencyCode !== null && String(currencyCode).trim() !== "") {
+        const normalized = normalizeCurrencyCode(currencyCode);
+        if (!normalized) {
+          return res.status(400).json({ error: `Invalid currency code: ${currencyCode}` });
+        }
+        targetCurrency = normalized;
+      }
+
+      // Sub-wallet adjustments must target a currency on the user's allow-list.
+      if (targetCurrency !== primaryCurrency) {
+        const allowed = getEffectiveAllowedCurrencies(user);
+        if (!allowed.includes(targetCurrency)) {
+          return res.status(400).json({
+            error: `Currency ${targetCurrency} is not on this user's allow-list`,
+          });
+        }
+      }
+
       const isPrimaryAdjustment = targetCurrency === primaryCurrency;
       const signedDelta = type === "add" ? adjustAmount : -adjustAmount;
 
