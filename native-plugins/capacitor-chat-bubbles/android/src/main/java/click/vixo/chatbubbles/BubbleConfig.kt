@@ -6,10 +6,11 @@ import android.content.Context
  * Tiny config store shared between the foreground plugin, the
  * background FCM service and `BubbleActivity`. Holds the API base URL
  * and bearer token used by the in-bubble chat surface, plus the
- * currently signed-in user's preferences (chat-bubbles toggle +
- * per-peer mute list) so that the killed-app FCM path enforces the
- * same suppression rules as the in-app web layer instead of rendering
- * a bubble for someone the user has muted.
+ * currently signed-in user's preferences (chat-bubbles toggle,
+ * per-peer mute list, active-call state) so that the killed-app FCM
+ * path enforces the same suppression rules as the in-app web layer
+ * instead of rendering a bubble for someone the user has muted, or
+ * during an ongoing voice/video call.
  *
  * The store is just `SharedPreferences` (private, app-scoped) — same
  * trust boundary as the WebView's localStorage that already holds the
@@ -23,23 +24,53 @@ object BubbleConfig {
     private const val KEY_AUTH_TOKEN = "auth_token"
     private const val KEY_BUBBLES_ENABLED = "bubbles_enabled"
     private const val KEY_MUTED_PEERS = "muted_peers"
+    private const val KEY_IN_ACTIVE_CALL = "in_active_call"
 
+    /**
+     * Three-state writes:
+     *   • `null`           → field is absent in the configure() call,
+     *                         leave the previously persisted value alone.
+     *   • `Optional.empty` → field was explicitly cleared (e.g. logout
+     *                         passes `authToken: null` from JS), wipe it.
+     *   • value present    → overwrite.
+     *
+     * For Java/Kotlin ergonomics we use a small sealed wrapper rather
+     * than an actual `Optional`.
+     */
     fun setConfig(
         ctx: Context,
         apiBaseUrl: String? = null,
-        authToken: String? = null,
+        authToken: TokenUpdate = TokenUpdate.Unchanged,
         bubblesEnabled: Boolean? = null,
         mutedPeerIds: Collection<String>? = null,
+        inActiveCall: Boolean? = null,
     ) {
         val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
         if (apiBaseUrl != null) prefs.putString(KEY_API_BASE_URL, apiBaseUrl.trimEnd('/'))
-        if (authToken != null) prefs.putString(KEY_AUTH_TOKEN, authToken)
+        when (authToken) {
+            is TokenUpdate.Unchanged -> { /* leave as-is */ }
+            is TokenUpdate.Clear -> prefs.remove(KEY_AUTH_TOKEN)
+            is TokenUpdate.Set -> {
+                if (authToken.value.isBlank()) {
+                    prefs.remove(KEY_AUTH_TOKEN)
+                } else {
+                    prefs.putString(KEY_AUTH_TOKEN, authToken.value)
+                }
+            }
+        }
         if (bubblesEnabled != null) prefs.putBoolean(KEY_BUBBLES_ENABLED, bubblesEnabled)
         if (mutedPeerIds != null) {
             // SharedPreferences mutates the stored Set in place, so copy.
             prefs.putStringSet(KEY_MUTED_PEERS, HashSet(mutedPeerIds))
         }
+        if (inActiveCall != null) prefs.putBoolean(KEY_IN_ACTIVE_CALL, inActiveCall)
         prefs.apply()
+    }
+
+    sealed class TokenUpdate {
+        object Unchanged : TokenUpdate()
+        object Clear : TokenUpdate()
+        data class Set(val value: String) : TokenUpdate()
     }
 
     fun apiBaseUrl(ctx: Context): String? =
@@ -68,11 +99,16 @@ object BubbleConfig {
         return set.contains(peerId)
     }
 
+    fun inActiveCall(ctx: Context): Boolean =
+        ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_IN_ACTIVE_CALL, false)
+
     fun clear(ctx: Context) {
         ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .remove(KEY_AUTH_TOKEN)
             .remove(KEY_MUTED_PEERS)
+            .remove(KEY_IN_ACTIVE_CALL)
             .apply()
     }
 }

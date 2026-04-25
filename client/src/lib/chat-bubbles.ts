@@ -40,8 +40,10 @@ export interface BubblesSupport {
 export interface ConfigureBubblesArgs {
   /** Absolute API base URL (no trailing slash). */
   apiBaseUrl?: string;
-  /** Bearer token used by the in-bubble native chat surface. */
-  authToken?: string;
+  /** Bearer token used by the in-bubble native chat surface. Pass
+   *  `null` on logout to wipe the cached token; `undefined` means
+   *  "leave the previous value alone". */
+  authToken?: string | null;
   /** Current value of the chat-bubbles toggle for this user. The
    *  killed-app FCM path uses this to drop bubbles when the user has
    *  switched bubbles off. */
@@ -49,6 +51,9 @@ export interface ConfigureBubblesArgs {
   /** Peer ids the current user has muted. The killed-app FCM path
    *  drops bubbles for these peers. */
   mutedPeerIds?: string[];
+  /** Whether the user is currently in a voice/video call. The killed-
+   *  app FCM path drops bubbles while a call is in progress. */
+  inActiveCall?: boolean;
 }
 
 interface PluginShape {

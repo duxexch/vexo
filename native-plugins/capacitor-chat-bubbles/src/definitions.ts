@@ -37,8 +37,12 @@ export interface ConfigureOptions {
    *  in-bubble chat surface to fetch history and post quick replies. */
   apiBaseUrl?: string;
   /** Bearer token for the chat API. Stored in private SharedPreferences
-   *  on Android — same trust boundary as the WebView's localStorage. */
-  authToken?: string;
+   *  on Android — same trust boundary as the WebView's localStorage.
+   *
+   *  Pass `null` (NOT `undefined`) on logout / account switch so the
+   *  native side wipes any cached token. `undefined` means "no
+   *  change", which intentionally leaves the previous value alone. */
+  authToken?: string | null;
   /** Mirror of the JS-side chat-bubbles toggle. The native FCM-killed
    *  path consults this so a disabled user never sees a bubble even
    *  when the WebView isn't around to gate the request. */
@@ -47,6 +51,10 @@ export interface ConfigureOptions {
    *  drops bubbles for any peer in this list, matching the in-app
    *  suppression rules. */
   mutedPeerIds?: string[];
+  /** Whether the user is currently in a voice/video call. The native
+   *  bubble surface stays hidden while a call is active, mirroring
+   *  the in-app suppression rule. */
+  inActiveCall?: boolean;
 }
 
 export interface ChatBubblesPlugin {

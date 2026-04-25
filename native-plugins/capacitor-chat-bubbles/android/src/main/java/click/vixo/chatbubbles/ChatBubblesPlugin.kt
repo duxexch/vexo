@@ -59,8 +59,21 @@ class ChatBubblesPlugin : Plugin() {
     @PluginMethod
     fun configure(call: PluginCall) {
         val apiBaseUrl = call.getString("apiBaseUrl")
-        val authToken = call.getString("authToken")
+        // Tri-state token update:
+        //   • field absent      → Unchanged (leave previous value)
+        //   • field present null → Clear   (logout / account switch)
+        //   • field present str  → Set
+        val tokenUpdate: BubbleConfig.TokenUpdate = when {
+            !call.data.has("authToken") -> BubbleConfig.TokenUpdate.Unchanged
+            call.data.isNull("authToken") -> BubbleConfig.TokenUpdate.Clear
+            else -> {
+                val v = call.getString("authToken").orEmpty()
+                if (v.isBlank()) BubbleConfig.TokenUpdate.Clear
+                else BubbleConfig.TokenUpdate.Set(v)
+            }
+        }
         val bubblesEnabled = if (call.data.has("bubblesEnabled")) call.getBoolean("bubblesEnabled") else null
+        val inActiveCall = if (call.data.has("inActiveCall")) call.getBoolean("inActiveCall") else null
         val mutedPeerIds: Collection<String>? = call.getArray("mutedPeerIds")?.let { arr ->
             val out = ArrayList<String>(arr.length())
             for (i in 0 until arr.length()) {
@@ -72,9 +85,10 @@ class ChatBubblesPlugin : Plugin() {
         BubbleConfig.setConfig(
             ctx = context,
             apiBaseUrl = apiBaseUrl,
-            authToken = authToken,
+            authToken = tokenUpdate,
             bubblesEnabled = bubblesEnabled,
             mutedPeerIds = mutedPeerIds,
+            inActiveCall = inActiveCall,
         )
         call.resolve()
     }

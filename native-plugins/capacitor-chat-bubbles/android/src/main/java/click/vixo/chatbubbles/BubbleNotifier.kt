@@ -59,12 +59,14 @@ object BubbleNotifier {
         avatarUrl: String? = null,
     ): Boolean {
         // Honor user-side suppression even on the FCM-killed path so a
-        // muted peer (or a user who turned the toggle off) never sees a
-        // bubble pop up just because the WebView wasn't around to gate
-        // the request itself. The web `ChatBubblesLayer` mirrors the
-        // current toggle + mute list down via `ChatBubbles.configure`.
+        // muted peer (or a user who turned the toggle off, or a user
+        // currently on a call) never sees a bubble pop up just because
+        // the WebView wasn't around to gate the request itself. The
+        // web `ChatBubblesLayer` mirrors the current toggle + mute
+        // list + active-call state down via `ChatBubbles.configure`.
         if (!BubbleConfig.bubblesEnabled(ctx)) return false
         if (BubbleConfig.isPeerMuted(ctx, peerId)) return false
+        if (BubbleConfig.inActiveCall(ctx)) return false
 
         ensureChannel(ctx)
         return when {

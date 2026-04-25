@@ -136,6 +136,14 @@ export default function ChatBubblesLayer() {
   const userScopedId = user?.id ? String(user.id) : null;
   const [enabled, setEnabled] = useState<boolean>(() => getChatBubblesEnabled(userScopedId));
   const [nativeMode, setNativeMode] = useState<"bubble" | "overlay" | "none">("none");
+  // Foreground/visibility — drives the foreground vs background dispatch
+  // decision. When the app is in focus we render the in-app bubble
+  // counterpart and SKIP the OS-level chat head; once the app is
+  // backgrounded or hidden, we fall back to the native bubble surface
+  // (or to whatever the killed-app FCM service does on its own).
+  const [isAppForeground, setIsAppForeground] = useState<boolean>(() =>
+    typeof document !== "undefined" ? document.visibilityState === "visible" : true,
+  );
   const [miniMessagesByPeer, setMiniMessagesByPeer] = useState<Record<string, MiniMessage[]>>({});
   const [draftByPeer, setDraftByPeer] = useState<Record<string, string>>({});
   const [sendingPeer, setSendingPeer] = useState<string | null>(null);
@@ -149,6 +157,20 @@ export default function ChatBubblesLayer() {
   // Synchronous unread counter so we can forward an accurate per-peer
   // total to the native bubble plugin without waiting for React state.
   const unreadByPeerRef = useRef<Map<string, number>>(new Map());
+
+  // ── visibility tracker ─────────────────────────────────────────────
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVis = () => setIsAppForeground(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onVis);
+    window.addEventListener("blur", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onVis);
+      window.removeEventListener("blur", onVis);
+    };
+  }, []);
 
   // ── preference + native capability detection ────────────────────────
   useEffect(() => {
@@ -205,11 +227,23 @@ export default function ChatBubblesLayer() {
     }
     void nativeConfigureBubbles({
       apiBaseUrl,
-      authToken: token ?? undefined,
+      // Pass `null` (not `undefined`) on logout so the native side
+      // KNOWS to wipe the cached bearer token instead of keeping the
+      // last value around in SharedPreferences. `undefined` means "no
+      // change"; `null` means "clear it".
+      authToken: token ?? null,
       bubblesEnabled: enabled,
       mutedPeerIds: Array.from(muted),
+      inActiveCall: hasActiveCall,
     });
-  }, [nativeMode, token, enabled, user?.notificationMutedUsers, user?.mutedUsers]);
+  }, [
+    nativeMode,
+    token,
+    enabled,
+    user?.notificationMutedUsers,
+    user?.mutedUsers,
+    hasActiveCall,
+  ]);
 
   // ── helpers ─────────────────────────────────────────────────────────
   const activeChatPeerId = useMemo(() => {
@@ -242,11 +276,17 @@ export default function ChatBubblesLayer() {
     [enabled, hasActiveCall, isPeerSuppressed, activeChatPeerId],
   );
 
-  // When the native plugin is rendering OS-level bubbles we still queue
-  // them via `nativeShowBubble` below, but we MUST NOT also paint the
-  // in-app web fallback over the WebView — otherwise Android users see
-  // two bubbles for every incoming DM (the system bubble + this one).
-  const shouldRenderWebFallback = nativeMode === "none";
+  // Foreground/background dispatch:
+  // • App in focus (foreground)  → render the in-app bubble counterpart
+  //   and DO NOT also pop the OS-level chat head, so Android users
+  //   never see a duplicate bubble layered over the WebView.
+  // • App hidden / backgrounded → suppress the in-app layer and let
+  //   the native plugin (or the killed-app FCM service) own the chat
+  //   head surface on its own.
+  // On platforms with no native support (web/iOS), we always render the
+  // in-app fallback regardless of focus state.
+  const shouldRenderWebFallback = nativeMode === "none" || isAppForeground;
+  const shouldRouteToNativeBubble = nativeMode !== "none" && !isAppForeground;
 
   // ── peer info lookup (cached + in-flight dedupe) ────────────────────
   const peerInfoCache = useRef<Map<string, { name: string; avatarUrl?: string }>>(new Map());
@@ -340,7 +380,7 @@ export default function ChatBubblesLayer() {
         return merged;
       });
 
-      if (nativeMode !== "none") {
+      if (shouldRouteToNativeBubble) {
         // Forward the accumulated per-peer unread count, not a literal 1.
         void nativeShowBubble({
           peerId: input.peerId,
@@ -351,7 +391,7 @@ export default function ChatBubblesLayer() {
         });
       }
     },
-    [fetchPeerInfo, nativeMode, shouldShowBubbleFor],
+    [fetchPeerInfo, shouldRouteToNativeBubble, shouldShowBubbleFor],
   );
 
   // ── event listeners ─────────────────────────────────────────────────
