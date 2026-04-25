@@ -374,12 +374,32 @@ export default function ChatBubblesLayer() {
   );
 
   // ── event listeners ─────────────────────────────────────────────────
+  // Dedupe set: a single DM can arrive twice (websocket-driven
+  // `vex-incoming-dm` AND a service-worker push routed through
+  // `SHOW_CHAT_BUBBLE`). Drop the second one when both carry the same
+  // messageId so unread counts and previews don't double-count.
+  const seenMessageIdsRef = useRef<Set<string>>(new Set());
+  const seenMessageIdsOrderRef = useRef<string[]>([]);
+  const markSeen = useCallback((messageId: string | null | undefined): boolean => {
+    if (!messageId) return false;
+    const id = String(messageId);
+    if (seenMessageIdsRef.current.has(id)) return true;
+    seenMessageIdsRef.current.add(id);
+    seenMessageIdsOrderRef.current.push(id);
+    if (seenMessageIdsOrderRef.current.length > 200) {
+      const drop = seenMessageIdsOrderRef.current.shift();
+      if (drop) seenMessageIdsRef.current.delete(drop);
+    }
+    return false;
+  }, []);
+
   useEffect(() => {
     const onIncoming = (ev: Event) => {
       const detail = (ev as CustomEvent).detail as
-        | { senderId?: string; title?: string; message?: string }
+        | { senderId?: string; title?: string; message?: string; messageId?: string | null }
         | undefined;
       if (!detail?.senderId) return;
+      if (markSeen(detail.messageId)) return;
       // Title format: "{display name} sent you a message"
       const fallbackName = (detail.title || "").split(" sent you")[0] || "Chat";
       void upsertBubble({
@@ -392,9 +412,10 @@ export default function ChatBubblesLayer() {
 
     const onSwMessage = (ev: MessageEvent) => {
       const data = ev.data as
-        | { type?: string; senderId?: string; title?: string; body?: string }
+        | { type?: string; senderId?: string; title?: string; body?: string; messageId?: string | null }
         | undefined;
       if (data?.type !== "SHOW_CHAT_BUBBLE" || !data.senderId) return;
+      if (markSeen(data.messageId)) return;
       const fallbackName = (data.title || "").split(" sent you")[0] || "Chat";
       void upsertBubble({
         peerId: data.senderId,
