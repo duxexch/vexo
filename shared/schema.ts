@@ -90,6 +90,13 @@ export const users = pgTable("users", {
   balance: decimal("balance", { precision: 15, scale: 2 }).notNull().default("0.00"),
   balanceCurrency: text("balance_currency").notNull().default("USD"),
   balanceCurrencyLockedAt: timestamp("balance_currency_locked_at"),
+  // Multi-currency wallet flags. When `multiCurrencyEnabled` is true, the
+  // user may deposit / hold balances in any code from `allowedCurrencies`
+  // (in addition to the primary `balanceCurrency`). Sub-wallet balances live
+  // in `user_currency_wallets`. When false, the legacy single-currency
+  // behaviour applies and the user can only operate in `balanceCurrency`.
+  multiCurrencyEnabled: boolean("multi_currency_enabled").notNull().default(false),
+  allowedCurrencies: text("allowed_currencies").array().notNull().default(sql`'{}'::text[]`),
   totalDeposited: decimal("total_deposited", { precision: 15, scale: 2 }).notNull().default("0.00"),
   totalWithdrawn: decimal("total_withdrawn", { precision: 15, scale: 2 }).notNull().default("0.00"),
   totalWagered: decimal("total_wagered", { precision: 15, scale: 2 }).notNull().default("0.00"),
@@ -724,6 +731,9 @@ export const transactions = pgTable("transactions", {
   balanceAfter: decimal("balance_after", { precision: 15, scale: 2 }).notNull(),
   description: text("description"),
   referenceId: text("reference_id"),
+  // For multi-currency wallet users: which currency wallet this transaction
+  // targets / originated from. NULL = legacy primary balance (USD-equivalent).
+  walletCurrencyCode: text("wallet_currency_code"),
   processedBy: varchar("processed_by").references(() => agents.id),
   processedAt: timestamp("processed_at"),
   adminNote: text("admin_note"),
@@ -3519,6 +3529,35 @@ export const projectCurrencySettings = pgTable("project_currency_settings", {
 export const insertProjectCurrencySettingsSchema = createInsertSchema(projectCurrencySettings).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertProjectCurrencySettings = z.infer<typeof insertProjectCurrencySettingsSchema>;
 export type ProjectCurrencySettings = typeof projectCurrencySettings.$inferSelect;
+
+// ==================== USER MULTI-CURRENCY WALLETS ====================
+// Holds per-currency sub-wallet balances for users with `multiCurrencyEnabled = true`.
+// The user's PRIMARY currency continues to live in `users.balance` /
+// `users.balanceCurrency` (legacy columns) — this table only stores the
+// additional sub-wallets (e.g. an account whose primary is USD but who is
+// also allowed to hold EGP and SAR). Rows are created lazily on first credit.
+export const userCurrencyWallets = pgTable("user_currency_wallets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  currencyCode: text("currency_code").notNull(),
+  balance: decimal("balance", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalDeposited: decimal("total_deposited", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  totalWithdrawn: decimal("total_withdrawn", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_user_currency_wallets_user_currency").on(table.userId, table.currencyCode),
+  index("idx_user_currency_wallets_user").on(table.userId),
+  check("chk_ucw_balance_non_negative", sql`${table.balance} >= 0`),
+]);
+
+export const userCurrencyWalletsRelations = relations(userCurrencyWallets, ({ one }) => ({
+  user: one(users, { fields: [userCurrencyWallets.userId], references: [users.id] }),
+}));
+
+export const insertUserCurrencyWalletSchema = createInsertSchema(userCurrencyWallets).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertUserCurrencyWallet = z.infer<typeof insertUserCurrencyWalletSchema>;
+export type UserCurrencyWallet = typeof userCurrencyWallets.$inferSelect;
 
 // Project Currency Wallets - User balances
 export const projectCurrencyWallets = pgTable("project_currency_wallets", {

@@ -5,6 +5,7 @@ import { sendNotification } from "../websocket";
 import {
   transactions,
   users,
+  userCurrencyWallets,
   type TransactionStatus,
 } from "@shared/schema";
 import { sanitizeNullablePlainText } from "../lib/input-security";
@@ -14,6 +15,8 @@ import {
   getErrorMessage,
   logAdminAction,
 } from "./helpers";
+import { adjustUserCurrencyBalance, bumpPrimaryDepositWithdrawalTotals } from "../lib/wallet-balances";
+import { normalizeCurrencyCode } from "../lib/p2p-currency-controls";
 
 type ProcessableStatus = "approved" | "completed" | "rejected";
 type ArchiveTypeFilter = "all" | "deposit" | "withdrawal";
@@ -334,56 +337,100 @@ export function registerAdminTransactionsRoutes(app: Express) {
           throw createHttpError(404, "User not found");
         }
 
-        let userBalance = Number.parseFloat(user.balance);
-        if (!Number.isFinite(userBalance)) {
-          throw createHttpError(500, "User balance is invalid");
-        }
+        const primaryCurrency = normalizeCurrencyCode(user.balanceCurrency) || "USD";
+        const txCurrency = normalizeCurrencyCode(transaction.walletCurrencyCode) || primaryCurrency;
+        const isPrimaryWallet = txCurrency === primaryCurrency;
 
         const shouldApprove = status === "approved" || status === "completed";
         const processedAmount = shouldApprove ? (approvedAmount ?? requestedAmount) : requestedAmount;
 
+        let finalBalanceAfter = "";
+
         if (shouldApprove) {
           if (transaction.type === "deposit") {
-            const totalDeposited = Number.parseFloat(user.totalDeposited || "0");
-            userBalance += processedAmount;
+            // Credit the matching wallet (primary or sub).
+            const adjusted = await adjustUserCurrencyBalance(
+              tx,
+              transaction.userId,
+              txCurrency,
+              processedAmount,
+              { allowCreate: true },
+            );
+            finalBalanceAfter = adjusted.balanceAfter.toFixed(2);
 
-            await tx
-              .update(users)
-              .set({
-                balance: userBalance.toFixed(2),
-                totalDeposited: (totalDeposited + processedAmount).toFixed(2),
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, transaction.userId));
+            // Maintain legacy lifetime aggregates only for primary-currency
+            // deposits to preserve backward compatibility of dashboards.
+            if (isPrimaryWallet) {
+              await bumpPrimaryDepositWithdrawalTotals(tx, transaction.userId, { deposited: processedAmount });
+            }
           } else {
-            const totalWithdrawn = Number.parseFloat(user.totalWithdrawn || "0");
+            // Withdrawal approval. Funds were already escrowed (deducted) on
+            // request creation. We only need to apply any positive delta if the
+            // admin approved a *higher* amount than requested.
             const delta = processedAmount - requestedAmount;
-
-            if (delta > 0 && userBalance < delta) {
-              throw createHttpError(400, "Insufficient user balance to increase withdrawal amount");
+            if (delta > 0) {
+              const adjusted = await adjustUserCurrencyBalance(
+                tx,
+                transaction.userId,
+                txCurrency,
+                -delta,
+                { allowCreate: false },
+              );
+              finalBalanceAfter = adjusted.balanceAfter.toFixed(2);
+            } else if (delta < 0) {
+              // Admin approved less than requested -> refund the difference.
+              const adjusted = await adjustUserCurrencyBalance(
+                tx,
+                transaction.userId,
+                txCurrency,
+                -delta,
+                { allowCreate: true },
+              );
+              finalBalanceAfter = adjusted.balanceAfter.toFixed(2);
+            } else {
+              // No-op delta: read current balance for record-keeping.
+              if (isPrimaryWallet) {
+                const [refreshed] = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, transaction.userId));
+                finalBalanceAfter = refreshed?.balance ?? "0.00";
+              } else {
+                const [sub] = await tx.select({ balance: userCurrencyWallets.balance })
+                  .from(userCurrencyWallets)
+                  .where(and(
+                    eq(userCurrencyWallets.userId, transaction.userId),
+                    eq(userCurrencyWallets.currencyCode, txCurrency),
+                  ));
+                finalBalanceAfter = sub?.balance ?? "0.00";
+              }
             }
 
-            userBalance -= delta;
-
-            await tx
-              .update(users)
-              .set({
-                balance: userBalance.toFixed(2),
-                totalWithdrawn: (totalWithdrawn + processedAmount).toFixed(2),
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, transaction.userId));
+            if (isPrimaryWallet) {
+              await bumpPrimaryDepositWithdrawalTotals(tx, transaction.userId, { withdrawn: processedAmount });
+            }
           }
         } else if (status === "rejected" && transaction.type === "withdrawal") {
-          userBalance += requestedAmount;
-
-          await tx
-            .update(users)
-            .set({
-              balance: userBalance.toFixed(2),
-              updatedAt: new Date(),
-            })
-            .where(eq(users.id, transaction.userId));
+          // Refund the escrow back to the originating wallet.
+          const adjusted = await adjustUserCurrencyBalance(
+            tx,
+            transaction.userId,
+            txCurrency,
+            requestedAmount,
+            { allowCreate: true },
+          );
+          finalBalanceAfter = adjusted.balanceAfter.toFixed(2);
+        } else {
+          // Rejected deposit: nothing was credited; just record current balance for the row.
+          if (isPrimaryWallet) {
+            const [refreshed] = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, transaction.userId));
+            finalBalanceAfter = refreshed?.balance ?? "0.00";
+          } else {
+            const [sub] = await tx.select({ balance: userCurrencyWallets.balance })
+              .from(userCurrencyWallets)
+              .where(and(
+                eq(userCurrencyWallets.userId, transaction.userId),
+                eq(userCurrencyWallets.currencyCode, txCurrency),
+              ));
+            finalBalanceAfter = sub?.balance ?? "0.00";
+          }
         }
 
         const [updated] = await tx
@@ -391,7 +438,7 @@ export function registerAdminTransactionsRoutes(app: Express) {
           .set({
             status: status as TransactionStatus,
             amount: shouldApprove ? processedAmount.toFixed(2) : transaction.amount,
-            balanceAfter: userBalance.toFixed(2),
+            balanceAfter: finalBalanceAfter || transaction.balanceAfter,
             adminNote: safeAdminNote,
             processedAt: new Date(),
             updatedAt: new Date(),
@@ -404,6 +451,8 @@ export function registerAdminTransactionsRoutes(app: Express) {
           type: transaction.type,
           userId: transaction.userId,
           processedAmount,
+          walletCurrencyCode: txCurrency,
+          isPrimaryWallet,
         };
       });
 

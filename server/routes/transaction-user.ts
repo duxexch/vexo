@@ -4,13 +4,18 @@ import { authMiddleware, sensitiveRateLimiter, type AuthRequest } from "./middle
 import { emitSystemAlert } from "../lib/admin-alerts";
 import { sendNotification } from "../websocket";
 import { db } from "../db";
-import { p2pSettings, users } from "@shared/schema";
+import { p2pSettings, users, userCurrencyWallets } from "@shared/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { getErrorMessage } from "./helpers";
 import { sanitizePlainText } from "../lib/input-security";
 import { paymentIpGuard, paymentOperationTokenGuard } from "../lib/payment-security";
 import { normalizeCurrencyCode, resolveP2PCurrencyControls } from "../lib/p2p-currency-controls";
 import { convertDepositAmountToUsd, convertUsdAmountToCurrency, getDepositFxSnapshot } from "../lib/deposit-fx";
+import {
+  adjustUserCurrencyBalance,
+  getEffectiveAllowedCurrencies,
+  getUserWalletSummary,
+} from "../lib/wallet-balances";
 
 export function registerTransactionUserRoutes(app: Express): void {
   app.get("/api/transactions/deposit-config", authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -22,6 +27,8 @@ export function registerTransactionUserRoutes(app: Express): void {
 
       const normalizedBalanceCurrency = normalizeCurrencyCode(user.balanceCurrency) || "USD";
       const isBalanceCurrencyLocked = Boolean(user.balanceCurrencyLockedAt);
+      const isMultiCurrency = Boolean(user.multiCurrencyEnabled);
+      const userAllowedCurrencies = getEffectiveAllowedCurrencies(user);
 
       const [settings] = await db
         .select({
@@ -33,20 +40,32 @@ export function registerTransactionUserRoutes(app: Express): void {
         .limit(1);
 
       const currencyControls = resolveP2PCurrencyControls(settings);
-      const policyCurrencies = isBalanceCurrencyLocked
-        ? [...currencyControls.depositEnabledCurrencies, normalizedBalanceCurrency]
-        : currencyControls.depositEnabledCurrencies;
+
+      // For multi-currency users we use their personal allow-list (primary +
+      // allowedCurrencies) instead of the global P2P deposit policy. We still
+      // rely on FX availability so we can convert each currency to the USD base.
+      const policyCurrencies = isMultiCurrency
+        ? userAllowedCurrencies
+        : isBalanceCurrencyLocked
+          ? [...currencyControls.depositEnabledCurrencies, normalizedBalanceCurrency]
+          : currencyControls.depositEnabledCurrencies;
       const fxSnapshot = await getDepositFxSnapshot(policyCurrencies);
 
-      const allowedDepositCurrencies = isBalanceCurrencyLocked
-        ? fxSnapshot.operationalCurrencies.includes(normalizedBalanceCurrency)
-          ? [normalizedBalanceCurrency]
-          : []
-        : fxSnapshot.operationalCurrencies;
+      const allowedDepositCurrencies = isMultiCurrency
+        ? userAllowedCurrencies.filter((code) => fxSnapshot.operationalCurrencies.includes(code))
+        : isBalanceCurrencyLocked
+          ? fxSnapshot.operationalCurrencies.includes(normalizedBalanceCurrency)
+            ? [normalizedBalanceCurrency]
+            : []
+          : fxSnapshot.operationalCurrencies;
 
-      const defaultDepositCurrency = isBalanceCurrencyLocked
-        ? normalizedBalanceCurrency
-        : allowedDepositCurrencies[0] || "USD";
+      const defaultDepositCurrency = isMultiCurrency
+        ? allowedDepositCurrencies.includes(normalizedBalanceCurrency)
+          ? normalizedBalanceCurrency
+          : allowedDepositCurrencies[0] || normalizedBalanceCurrency
+        : isBalanceCurrencyLocked
+          ? normalizedBalanceCurrency
+          : allowedDepositCurrencies[0] || "USD";
 
       res.json({
         allowedDepositCurrencies,
@@ -54,9 +73,24 @@ export function registerTransactionUserRoutes(app: Express): void {
         disabledDepositCurrencies: fxSnapshot.missingRateCurrencies,
         balanceCurrency: normalizedBalanceCurrency,
         isBalanceCurrencyLocked,
+        multiCurrencyEnabled: isMultiCurrency,
         usdRateByCurrency: fxSnapshot.usdRateByCurrency,
         currencySymbolByCode: fxSnapshot.currencySymbolByCode,
       });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  // List the user's per-currency wallets (primary + sub-wallets).
+  // Always returns the primary row even when balance is zero.
+  app.get("/api/wallet/currency-wallets", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const summary = await getUserWalletSummary(req.user!.id);
+      if (!summary) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(summary);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
@@ -95,6 +129,9 @@ export function registerTransactionUserRoutes(app: Express): void {
           return res.status(400).json({ error: "Invalid deposit currency" });
         }
 
+        const isMultiCurrency = Boolean(user.multiCurrencyEnabled);
+        const userAllowedCurrencies = getEffectiveAllowedCurrencies(user);
+
         const [settings] = await db
           .select({
             depositEnabledCurrencies: p2pSettings.depositEnabledCurrencies,
@@ -105,7 +142,10 @@ export function registerTransactionUserRoutes(app: Express): void {
           .limit(1);
 
         const currencyControls = resolveP2PCurrencyControls(settings);
-        const fxSnapshot = await getDepositFxSnapshot(currencyControls.depositEnabledCurrencies);
+        const policyCurrencies = isMultiCurrency
+          ? userAllowedCurrencies
+          : currencyControls.depositEnabledCurrencies;
+        const fxSnapshot = await getDepositFxSnapshot(policyCurrencies);
 
         if (fxSnapshot.operationalCurrencies.length === 0) {
           return res.status(403).json({ error: "Deposits are currently disabled for all currencies" });
@@ -113,7 +153,9 @@ export function registerTransactionUserRoutes(app: Express): void {
 
         if (!fxSnapshot.operationalCurrencies.includes(normalizedDepositCurrency)) {
           return res.status(400).json({
-            error: `Deposit currency must be one of: ${fxSnapshot.operationalCurrencies.join(", ")}`,
+            error: isMultiCurrency
+              ? `Deposit currency must be one of your allowed currencies: ${fxSnapshot.operationalCurrencies.join(", ")}`
+              : `Deposit currency must be one of: ${fxSnapshot.operationalCurrencies.join(", ")}`,
           });
         }
 
@@ -145,6 +187,9 @@ export function registerTransactionUserRoutes(app: Express): void {
           return res.status(400).json({ error: "Payment reference is required" });
         }
 
+        // For legacy single-currency users we still lock balanceCurrency on first
+        // deposit. Multi-currency users keep their primary fixed (set by admin)
+        // and may deposit in any currency from their allow-list.
         const lockedWalletState = await db.transaction(async (tx) => {
           const [lockedUser] = await tx.select({
             id: users.id,
@@ -159,6 +204,16 @@ export function registerTransactionUserRoutes(app: Express): void {
           }
 
           const currentWalletCurrency = normalizeCurrencyCode(lockedUser.balanceCurrency) || "USD";
+
+          if (isMultiCurrency) {
+            // Primary currency is admin-managed for multi-currency users. We
+            // never auto-lock based on a deposit choice.
+            return {
+              balanceCurrency: currentWalletCurrency,
+              isLocked: true,
+            };
+          }
+
           if (lockedUser.balanceCurrencyLockedAt) {
             return {
               balanceCurrency: currentWalletCurrency,
@@ -182,7 +237,9 @@ export function registerTransactionUserRoutes(app: Express): void {
           };
         });
 
-        if (lockedWalletState.balanceCurrency !== normalizedDepositCurrency) {
+        // Multi-currency users may deposit any allowed currency. Single-currency
+        // users must deposit in their locked currency.
+        if (!isMultiCurrency && lockedWalletState.balanceCurrency !== normalizedDepositCurrency) {
           return res.status(400).json({
             error: `Wallet currency is locked to ${lockedWalletState.balanceCurrency}. Deposits must use the same currency.`,
           });
@@ -192,14 +249,41 @@ export function registerTransactionUserRoutes(app: Express): void {
         const safePaymentMethod = sanitizePlainText(paymentMethod, { maxLength: 100 });
         const safeWalletNumber = sanitizePlainText(walletNumber, { maxLength: 100 });
 
+        // Determine the post-credit balance preview shown on the transaction row.
+        // For primary-currency deposits this is the primary balance + creditedAmountUsd
+        // (matching legacy behavior). For sub-wallet deposits it's the sub-wallet
+        // balance + the deposited amount in its own currency. Sub-wallet rows may
+        // not yet exist; default to 0.
+        const isPrimaryDeposit = normalizedDepositCurrency === lockedWalletState.balanceCurrency;
+        let balanceBefore: string;
+        let balanceAfter: string;
+        let storedAmount: string;
+        if (isPrimaryDeposit) {
+          balanceBefore = user.balance;
+          balanceAfter = (parseFloat(user.balance) + creditedAmountUsd).toFixed(2);
+          storedAmount = creditedAmountUsd.toFixed(2);
+        } else {
+          const [existingSub] = await db.select({ balance: userCurrencyWallets.balance })
+            .from(userCurrencyWallets)
+            .where(and(
+              eq(userCurrencyWallets.userId, user.id),
+              eq(userCurrencyWallets.currencyCode, normalizedDepositCurrency),
+            ));
+          const subBefore = existingSub ? parseFloat(existingSub.balance) : 0;
+          balanceBefore = subBefore.toFixed(2);
+          balanceAfter = (subBefore + walletCreditQuote.convertedAmount).toFixed(2);
+          storedAmount = walletCreditQuote.convertedAmount.toFixed(2);
+        }
+
         const transaction = await storage.createTransaction({
           userId: user.id,
           type: "deposit",
           status: "pending",
-          amount: creditedAmountUsd.toFixed(2),
-          balanceBefore: user.balance,
-          balanceAfter: (parseFloat(user.balance) + creditedAmountUsd).toFixed(2),
+          amount: storedAmount,
+          balanceBefore,
+          balanceAfter,
           referenceId: String(paymentReference).slice(0, 200),
+          walletCurrencyCode: normalizedDepositCurrency,
           description: `${safePaymentMethod}${safeWalletNumber ? ` | Sender: ${safeWalletNumber}` : ''} | Deposit: ${totalAmount.toFixed(2)} ${normalizedDepositCurrency} | FX: 1 USD = ${conversionQuote.usdToDepositRate.toFixed(6)} ${normalizedDepositCurrency} | Wallet Credit: ${walletCreditQuote.convertedAmount.toFixed(2)} ${normalizedDepositCurrency} | Base Credit: ${creditedAmountUsd.toFixed(2)} USD`,
         });
 
@@ -212,6 +296,9 @@ export function registerTransactionUserRoutes(app: Express): void {
             requestedAmount: totalAmount,
             requestedCurrency: normalizedDepositCurrency,
             walletCurrency: normalizedDepositCurrency,
+            primaryCurrency: lockedWalletState.balanceCurrency,
+            isMultiCurrency,
+            isPrimaryDeposit,
             creditedAmountUsd,
             creditedAmountWallet: walletCreditQuote.convertedAmount,
             usdToDepositRate: conversionQuote.usdToDepositRate,
@@ -267,7 +354,7 @@ export function registerTransactionUserRoutes(app: Express): void {
     sensitiveRateLimiter,
     async (req: AuthRequest, res: Response) => {
       try {
-        const { amount, paymentMethodId, paymentMethod, receiverMethodNumber } = req.body;
+        const { amount, paymentMethodId, paymentMethod, receiverMethodNumber, currency } = req.body;
 
         // CRITICAL: Validate amount is positive number
         if (!amount || (typeof amount !== 'string' && typeof amount !== 'number')) {
@@ -284,15 +371,36 @@ export function registerTransactionUserRoutes(app: Express): void {
           return res.status(404).json({ error: "User not found" });
         }
 
-        const walletCurrency = normalizeCurrencyCode(userForCurrency.balanceCurrency) || "USD";
-        const fxSnapshot = await getDepositFxSnapshot([walletCurrency]);
+        const isMultiCurrency = Boolean(userForCurrency.multiCurrencyEnabled);
+        const primaryCurrency = normalizeCurrencyCode(userForCurrency.balanceCurrency) || "USD";
+        const userAllowedCurrencies = getEffectiveAllowedCurrencies(userForCurrency);
+
+        // Resolve withdrawal currency. Default to primary; multi-currency users
+        // may pass `currency` to withdraw from a sub-wallet.
+        const requestedWithdrawCurrencyRaw = typeof currency === "string" && currency.trim().length > 0
+          ? currency
+          : primaryCurrency;
+        const withdrawCurrency = normalizeCurrencyCode(requestedWithdrawCurrencyRaw) || primaryCurrency;
+
+        if (withdrawCurrency !== primaryCurrency) {
+          if (!isMultiCurrency) {
+            return res.status(400).json({ error: "Multi-currency wallet not enabled for this account" });
+          }
+          if (!userAllowedCurrencies.includes(withdrawCurrency)) {
+            return res.status(400).json({
+              error: `Currency ${withdrawCurrency} is not on your allow-list`,
+            });
+          }
+        }
+
+        const fxSnapshot = await getDepositFxSnapshot([primaryCurrency, withdrawCurrency]);
         const withdrawConversion = convertDepositAmountToUsd(
           withdrawAmountRequested,
-          walletCurrency,
+          withdrawCurrency,
           fxSnapshot.usdRateByCurrency,
         );
         if (!withdrawConversion) {
-          return res.status(400).json({ error: `Exchange rate for ${walletCurrency} is unavailable` });
+          return res.status(400).json({ error: `Exchange rate for ${withdrawCurrency} is unavailable` });
         }
 
         const withdrawAmountUsd = withdrawConversion.creditedAmountUsd;
@@ -343,38 +451,44 @@ export function registerTransactionUserRoutes(app: Express): void {
           return res.status(400).json({ error: "Valid withdrawal payment method is required" });
         }
 
-        // SECURITY: Atomic withdrawal with FOR UPDATE lock to prevent concurrent double-withdrawal
+        // SECURITY: Atomic withdrawal with FOR UPDATE lock to prevent concurrent
+        // double-withdrawal. The deduction is applied to the chosen currency
+        // wallet (primary -> users.balance; sub -> user_currency_wallets row).
         const result = await db.transaction(async (tx) => {
-          // Lock user row to prevent concurrent withdrawals
+          // Lock user row first (required by adjustUserCurrencyBalance contract)
           const [user] = await tx.select().from(users)
             .where(eq(users.id, req.user!.id)).for('update');
 
           if (!user) throw Object.assign(new Error("User not found"), { statusCode: 404 });
 
-          const currentBalance = parseFloat(user.balance);
-          if (withdrawAmountUsd > currentBalance) {
-            throw Object.assign(new Error("Insufficient balance"), { statusCode: 400 });
+          let adjusted;
+          try {
+            adjusted = await adjustUserCurrencyBalance(
+              tx,
+              req.user!.id,
+              withdrawCurrency,
+              -withdrawAmountRequested,
+              { allowCreate: false },
+            );
+          } catch (err: any) {
+            const message = err instanceof Error ? err.message : "Withdrawal failed";
+            throw Object.assign(new Error(message), {
+              statusCode: message.startsWith("Insufficient") ? 400 : 400,
+            });
           }
 
-          const newBalance = (currentBalance - withdrawAmountUsd).toFixed(2);
-
-          // SECURITY: Atomically deduct balance (escrow) to prevent double-spend
-          await tx.update(users).set({
-            balance: newBalance,
-            updatedAt: new Date(),
-          }).where(eq(users.id, req.user!.id));
-
-          return { user, newBalance };
+          return { user, adjusted };
         });
 
         const transaction = await storage.createTransaction({
           userId: result.user.id,
           type: "withdrawal",
           status: "pending",
-          amount: withdrawAmountUsd.toFixed(2),
-          balanceBefore: result.user.balance,
-          balanceAfter: result.newBalance,
-          description: `Withdrawal request via ${selectedMethod.name} | Receiver: ${safeReceiverMethodNumber} | Requested: ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} | Base: ${withdrawAmountUsd.toFixed(2)} USD`,
+          amount: withdrawAmountRequested.toFixed(2),
+          balanceBefore: result.adjusted.balanceBefore.toFixed(2),
+          balanceAfter: result.adjusted.balanceAfter.toFixed(2),
+          walletCurrencyCode: withdrawCurrency,
+          description: `Withdrawal request via ${selectedMethod.name} | Receiver: ${safeReceiverMethodNumber} | Requested: ${withdrawAmountRequested.toFixed(2)} ${withdrawCurrency} | Base: ${withdrawAmountUsd.toFixed(2)} USD`,
         });
 
         await storage.createAuditLog({
@@ -384,7 +498,9 @@ export function registerTransactionUserRoutes(app: Express): void {
           entityId: transaction.id,
           details: JSON.stringify({
             amountRequested: withdrawAmountRequested,
-            amountRequestedCurrency: walletCurrency,
+            amountRequestedCurrency: withdrawCurrency,
+            primaryCurrency,
+            isPrimaryWithdrawal: withdrawCurrency === primaryCurrency,
             amountUsd: withdrawAmountUsd,
             paymentMethodId: selectedMethod.id,
             paymentMethod: selectedMethod.name,
@@ -397,8 +513,8 @@ export function registerTransactionUserRoutes(app: Express): void {
         emitSystemAlert({
           title: 'New Withdrawal Request',
           titleAr: 'طلب سحب جديد',
-          message: `User ${result.user.username} requested a withdrawal of ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} (~${withdrawAmountUsd.toFixed(2)} USD)`,
-          messageAr: `طلب المستخدم ${result.user.username} سحب بقيمة ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} (حوالي ${withdrawAmountUsd.toFixed(2)} USD)`,
+          message: `User ${result.user.username} requested a withdrawal of ${withdrawAmountRequested.toFixed(2)} ${withdrawCurrency} (~${withdrawAmountUsd.toFixed(2)} USD)`,
+          messageAr: `طلب المستخدم ${result.user.username} سحب بقيمة ${withdrawAmountRequested.toFixed(2)} ${withdrawCurrency} (حوالي ${withdrawAmountUsd.toFixed(2)} USD)`,
           severity: 'warning',
           deepLink: '/admin/transactions',
           entityType: 'transaction',
@@ -411,14 +527,14 @@ export function registerTransactionUserRoutes(app: Express): void {
           priority: 'normal',
           title: 'Withdrawal Request Submitted',
           titleAr: 'تم إرسال طلب السحب',
-          message: `Your withdrawal request of ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} has been submitted and is pending review. Amount has been held from your balance.`,
-          messageAr: `تم إرسال طلب السحب بقيمة ${withdrawAmountRequested.toFixed(2)} ${walletCurrency} وهو قيد المراجعة. تم حجز المبلغ من رصيدك.`,
+          message: `Your withdrawal request of ${withdrawAmountRequested.toFixed(2)} ${withdrawCurrency} has been submitted and is pending review. Amount has been held from your balance.`,
+          messageAr: `تم إرسال طلب السحب بقيمة ${withdrawAmountRequested.toFixed(2)} ${withdrawCurrency} وهو قيد المراجعة. تم حجز المبلغ من رصيدك.`,
           link: '/transactions',
           metadata: JSON.stringify({
             transactionId: transaction.id,
             type: 'withdrawal',
             amountRequested: withdrawAmountRequested,
-            amountRequestedCurrency: walletCurrency,
+            amountRequestedCurrency: withdrawCurrency,
             amountUsd: withdrawAmountUsd,
           }),
         }).catch(() => { });

@@ -1,11 +1,13 @@
 import type { Express, Response } from "express";
 import { storage } from "../../storage";
-import { users, transactions, projectCurrencyWallets, projectCurrencyLedger } from "@shared/schema";
+import { users, transactions, projectCurrencyWallets, projectCurrencyLedger, userCurrencyWallets } from "@shared/schema";
 import { sendNotification } from "../../websocket";
 import { db } from "../../db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 import { toSafeUser } from "../../lib/safe-user";
+import { adjustUserCurrencyBalance, bumpPrimaryDepositWithdrawalTotals, getUserWalletSummary } from "../../lib/wallet-balances";
+import { normalizeCurrencyCode } from "../../lib/p2p-currency-controls";
 
 export function registerUserFinancialRoutes(app: Express) {
 
@@ -18,11 +20,77 @@ export function registerUserFinancialRoutes(app: Express) {
     return 0;
   };
 
-  // Adjust user balance (add or subtract)
+  // ==================== MULTI-CURRENCY WALLETS ====================
+
+  // List all wallets (primary + sub) for a single user — admin financial view.
+  app.get("/api/admin/users/:id/currency-wallets", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const summary = await getUserWalletSummary(req.params.id);
+      if (!summary) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(summary);
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  // Toggle multi-currency mode + manage allow-list for a user.
+  app.patch("/api/admin/users/:id/multi-currency", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { enabled, allowedCurrencies } = req.body ?? {};
+
+      if (typeof enabled !== "boolean") {
+        return res.status(400).json({ error: "`enabled` (boolean) is required" });
+      }
+
+      const incomingList = Array.isArray(allowedCurrencies) ? allowedCurrencies : [];
+      const seen = new Set<string>();
+      const normalizedAllowed: string[] = [];
+      for (const code of incomingList) {
+        const normalized = normalizeCurrencyCode(code);
+        if (normalized && !seen.has(normalized)) {
+          seen.add(normalized);
+          normalizedAllowed.push(normalized);
+        }
+      }
+      if (normalizedAllowed.length > 32) {
+        return res.status(400).json({ error: "At most 32 allowed currencies per user" });
+      }
+
+      const user = await storage.getUser(id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const previousAllowed = Array.isArray(user.allowedCurrencies) ? [...user.allowedCurrencies] : [];
+
+      const [updated] = await db.update(users).set({
+        multiCurrencyEnabled: enabled,
+        allowedCurrencies: normalizedAllowed,
+        updatedAt: new Date(),
+      }).where(eq(users.id, id)).returning();
+
+      await logAdminAction(req.admin!.id, "user_balance_adjust", "user", id, {
+        previousValue: JSON.stringify({ multi: user.multiCurrencyEnabled, allowed: previousAllowed }),
+        newValue: JSON.stringify({ multi: enabled, allowed: normalizedAllowed }),
+        reason: "Multi-currency wallet settings updated",
+      }, req);
+
+      res.json(toSafeUser(updated));
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  // Adjust user balance (add or subtract). Now currency-aware: the optional
+  // `currencyCode` body field selects which sub-wallet to target. Defaults to
+  // the user's primary currency for backward compatibility.
   app.post("/api/admin/users/:id/balance-adjust", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
       const { id } = req.params;
-      const { amount, type, reason } = req.body;
+      const { amount, type, reason, currencyCode } = req.body;
 
       if (!type || !['add', 'subtract'].includes(type)) {
         return res.status(400).json({ error: "Type must be 'add' or 'subtract'" });
@@ -42,67 +110,58 @@ export function registerUserFinancialRoutes(app: Express) {
         return res.status(404).json({ error: "User not found" });
       }
 
+      const primaryCurrency = normalizeCurrencyCode(user.balanceCurrency) || "USD";
+      const targetCurrency = normalizeCurrencyCode(currencyCode) || primaryCurrency;
+      const isPrimaryAdjustment = targetCurrency === primaryCurrency;
+      const signedDelta = type === "add" ? adjustAmount : -adjustAmount;
+
       const adjustmentResult = await db.transaction(async (tx) => {
-        const signedDelta = type === "add" ? adjustAmount : -adjustAmount;
+        // Lock the user row (required by adjustUserCurrencyBalance contract)
+        await tx.select({ id: users.id }).from(users).where(eq(users.id, id)).for("update");
 
-        const updateQuery = type === "add"
-          ? sql`
-            UPDATE users
-            SET balance = balance + ${adjustAmount}, updated_at = NOW()
-            WHERE id = ${id}
-            RETURNING *
-          `
-          : sql`
-            UPDATE users
-            SET balance = balance - ${adjustAmount}, updated_at = NOW()
-            WHERE id = ${id} AND balance >= ${adjustAmount}
-            RETURNING *
-          `;
+        try {
+          const adjusted = await adjustUserCurrencyBalance(tx, id, targetCurrency, signedDelta, { allowCreate: type === "add" });
 
-        const updateRows = await tx.execute(updateQuery);
-        const updatedUser = (updateRows.rows as Record<string, unknown>[])[0];
-        if (!updatedUser) {
-          return { success: false as const, error: "Balance cannot be negative" };
+          // Mirror the legacy `transactions` row only for primary-currency
+          // adjustments. Sub-wallet adjustments are recorded in the audit log
+          // (admin actions) and via the `userCurrencyWallets` row updates.
+          let createdTransaction: typeof transactions.$inferSelect | undefined;
+          if (isPrimaryAdjustment) {
+            const internalReference = `admin_balance_adjust:${id}:${Date.now()}`;
+            const [tx0] = await tx.insert(transactions).values({
+              userId: id,
+              type: type === "add" ? "bonus" : "withdrawal",
+              status: "completed",
+              amount: adjustAmount.toFixed(2),
+              balanceBefore: adjusted.balanceBefore.toFixed(2),
+              balanceAfter: adjusted.balanceAfter.toFixed(2),
+              description: `Admin adjustment: ${reason}`,
+              adminNote: reason,
+              referenceId: internalReference,
+            }).returning();
+            createdTransaction = tx0;
+          }
+
+          return {
+            success: true as const,
+            adjusted,
+            createdTransaction,
+          };
+        } catch (err) {
+          return { success: false as const, error: err instanceof Error ? err.message : "Adjustment failed" };
         }
-
-        const balanceAfter = parseNumeric(updatedUser.balance);
-        const balanceBefore = balanceAfter - signedDelta;
-        const internalReference = `admin_balance_adjust:${id}:${Date.now()}`;
-
-        const [createdTransaction] = await tx.insert(transactions).values({
-          userId: id,
-          type: type === "add" ? "bonus" : "withdrawal",
-          status: "completed",
-          amount: adjustAmount.toFixed(2),
-          balanceBefore: balanceBefore.toFixed(2),
-          balanceAfter: balanceAfter.toFixed(2),
-          description: `Admin adjustment: ${reason}`,
-          adminNote: reason,
-          referenceId: internalReference,
-        }).returning();
-
-        return {
-          success: true as const,
-          updatedUser,
-          createdTransaction,
-          balanceBefore,
-          balanceAfter,
-        };
       });
 
       if (!adjustmentResult.success) {
         return res.status(400).json({ error: adjustmentResult.error });
       }
 
-      const updated = adjustmentResult.updatedUser;
-      const createdTransaction = adjustmentResult.createdTransaction;
-      const currentBalance = adjustmentResult.balanceBefore;
-      const newBalance = adjustmentResult.balanceAfter;
+      const { adjusted, createdTransaction } = adjustmentResult;
 
       await logAdminAction(req.admin!.id, "user_balance_adjust", "user", id, {
-        previousValue: String(currentBalance),
-        newValue: String(newBalance),
-        reason
+        previousValue: String(adjusted.balanceBefore),
+        newValue: String(adjusted.balanceAfter),
+        reason: `[${targetCurrency}] ${reason}`,
       }, req);
 
       const adjustLabel = type === 'add' ? { en: 'credited to', ar: 'أضيفت إلى' } : { en: 'deducted from', ar: 'خصمت من' };
@@ -111,20 +170,36 @@ export function registerUserFinancialRoutes(app: Express) {
         priority: 'high',
         title: 'Balance Updated',
         titleAr: 'تحديث الرصيد',
-        message: `$${adjustAmount.toFixed(2)} has been ${adjustLabel.en} your account. Reason: ${reason}`,
-        messageAr: `$${adjustAmount.toFixed(2)} ${adjustLabel.ar} حسابك. السبب: ${reason}`,
+        message: `${adjustAmount.toFixed(2)} ${targetCurrency} has been ${adjustLabel.en} your account. Reason: ${reason}`,
+        messageAr: `${adjustAmount.toFixed(2)} ${targetCurrency} ${adjustLabel.ar} حسابك. السبب: ${reason}`,
         link: '/wallet',
         metadata: JSON.stringify({
           type: 'balance_adjust',
           amount: adjustAmount,
-          balanceAfter: newBalance,
-          transactionId: createdTransaction.id,
-          referenceId: createdTransaction.publicReference,
-          internalReferenceId: createdTransaction.referenceId,
+          currency: targetCurrency,
+          balanceAfter: adjusted.balanceAfter,
+          transactionId: createdTransaction?.id,
+          referenceId: createdTransaction?.publicReference,
+          internalReferenceId: createdTransaction?.referenceId,
         }),
       }).catch(() => { });
 
-      res.json(toSafeUser(updated));
+      // For primary currency we keep returning the safe user shape (callers expect that).
+      // For sub-wallet we return a richer payload describing the affected wallet.
+      if (isPrimaryAdjustment) {
+        const refreshed = await storage.getUser(id);
+        return res.json(toSafeUser(refreshed!));
+      }
+
+      res.json({
+        success: true,
+        wallet: {
+          currency: adjusted.currency,
+          balanceBefore: adjusted.balanceBefore,
+          balanceAfter: adjusted.balanceAfter,
+          isPrimary: false,
+        },
+      });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

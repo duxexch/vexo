@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
+import { WORLD_CURRENCIES } from "@/lib/currencies";
 import {
   Dialog,
   DialogContent,
@@ -185,6 +187,10 @@ export default function AdminUsersPage() {
   const [actionAmount, setActionAmount] = useState("");
   const [adjustType, setAdjustType] = useState<"add" | "subtract">("add");
   const [adjustWallet, setAdjustWallet] = useState<"usd" | "vxc">("usd");
+  const [adjustCurrency, setAdjustCurrency] = useState<string>("");
+  const [multiCurrencyEnabled, setMultiCurrencyEnabled] = useState<boolean>(false);
+  const [multiCurrencyAllowList, setMultiCurrencyAllowList] = useState<string[]>([]);
+  const [multiCurrencySearch, setMultiCurrencySearch] = useState("");
   const [viewUserSheet, setViewUserSheet] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editFormData, setEditFormData] = useState<Partial<UserType>>({});
@@ -204,6 +210,46 @@ export default function AdminUsersPage() {
     queryKey: ["/api/admin/users", selectedUser?.id, "financial-overview", userDataSearch],
     queryFn: () => adminFetch(`/api/admin/users/${selectedUser!.id}/financial-overview?search=${encodeURIComponent(userDataSearch)}&limit=300`),
     enabled: viewUserSheet && !!selectedUser?.id,
+  });
+
+  const { data: currencyWalletsData, refetch: refetchCurrencyWallets } = useQuery<{
+    userId: string;
+    primaryCurrency: string;
+    multiCurrencyEnabled: boolean;
+    allowedCurrencies: string[];
+    wallets: Array<{ currency: string; balance: string; role: "primary" | "sub"; isPrimary: boolean; isAllowed: boolean }>;
+  }>({
+    queryKey: ["/api/admin/users", selectedUser?.id, "currency-wallets"],
+    queryFn: () => adminFetch(`/api/admin/users/${selectedUser!.id}/currency-wallets`),
+    enabled: viewUserSheet && !!selectedUser?.id,
+  });
+
+  // Sync the multi-currency dialog state with the latest server snapshot
+  // whenever the wallets payload arrives.
+  React.useEffect(() => {
+    if (currencyWalletsData) {
+      setMultiCurrencyEnabled(currencyWalletsData.multiCurrencyEnabled);
+      setMultiCurrencyAllowList(
+        (currencyWalletsData.allowedCurrencies || []).filter((code) => code !== currencyWalletsData.primaryCurrency),
+      );
+    }
+  }, [currencyWalletsData?.userId, currencyWalletsData?.multiCurrencyEnabled, currencyWalletsData?.allowedCurrencies?.join(",")]);
+
+  const multiCurrencyMutation = useMutation({
+    mutationFn: async ({ id, enabled, allowedCurrencies }: { id: string; enabled: boolean; allowedCurrencies: string[] }) => {
+      return adminFetch(`/api/admin/users/${id}/multi-currency`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled, allowedCurrencies }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      refetchCurrencyWallets();
+      toast({ title: "Multi-currency Updated", description: "User wallet settings have been updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to update multi-currency settings", variant: "destructive" });
+    },
   });
 
   const updateUserMutation = useMutation({
@@ -298,15 +344,20 @@ export default function AdminUsersPage() {
   });
 
   const balanceAdjustMutation = useMutation({
-    mutationFn: async ({ id, amount, type, reason, wallet }: { id: string; amount: string; type: string; reason: string; wallet: "usd" | "vxc" }) => {
+    mutationFn: async ({ id, amount, type, reason, wallet, currencyCode }: { id: string; amount: string; type: string; reason: string; wallet: "usd" | "vxc"; currencyCode?: string }) => {
       const endpoint = wallet === "vxc" ? "vxc-adjust" : "balance-adjust";
+      const body: Record<string, unknown> = { amount, type, reason };
+      if (wallet !== "vxc" && currencyCode) {
+        body.currencyCode = currencyCode;
+      }
       return adminFetch(`/api/admin/users/${id}/${endpoint}`, {
         method: "POST",
-        body: JSON.stringify({ amount, type, reason }),
+        body: JSON.stringify(body),
       });
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      refetchCurrencyWallets();
       toast({
         title: variables.wallet === "vxc" ? "VXC Balance Updated" : "Balance Updated",
         description: variables.wallet === "vxc" ? "User VXC wallet has been adjusted" : "User balance has been adjusted",
@@ -362,6 +413,7 @@ export default function AdminUsersPage() {
     setActionAmount("");
     setAdjustWallet("usd");
     setAdjustType("add");
+    setAdjustCurrency("");
   };
 
   const handleAction = () => {
@@ -384,6 +436,7 @@ export default function AdminUsersPage() {
           type: adjustType,
           reason: actionReason,
           wallet: adjustWallet,
+          currencyCode: adjustWallet === "usd" ? (adjustCurrency || currencyWalletsData?.primaryCurrency) : undefined,
         });
         break;
       case "reward":
@@ -1040,6 +1093,162 @@ export default function AdminUsersPage() {
                 )}
               </div>
 
+              {/* Multi-currency wallet management */}
+              <div className="space-y-4 border-t pt-6">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold flex items-center gap-2">
+                    <ArrowLeftRight className="h-4 w-4" />
+                    Multi-Currency Wallets
+                  </h4>
+                  <Badge variant={multiCurrencyEnabled ? "default" : "outline"}>
+                    {multiCurrencyEnabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                </div>
+
+                <div className="rounded-lg border p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-medium text-sm">Allow this user to hold multiple currencies</div>
+                      <div className="text-xs text-muted-foreground">
+                        Primary currency: <span className="font-mono">{currencyWalletsData?.primaryCurrency || selectedUser.balanceCurrency || "USD"}</span>. Sub-wallets are credited only when admin-approved.
+                      </div>
+                    </div>
+                    <Switch
+                      data-testid="switch-multi-currency"
+                      checked={multiCurrencyEnabled}
+                      onCheckedChange={(value) => setMultiCurrencyEnabled(value)}
+                    />
+                  </div>
+
+                  {multiCurrencyEnabled && (
+                    <div className="space-y-2">
+                      <Label className="text-xs">Allowed currencies (besides primary)</Label>
+                      <Input
+                        placeholder="Filter currencies (e.g. EGP, EUR)..."
+                        value={multiCurrencySearch}
+                        onChange={(e) => setMultiCurrencySearch(e.target.value)}
+                        className="h-9"
+                        data-testid="input-currency-filter"
+                      />
+                      <div className="max-h-40 overflow-y-auto rounded border bg-muted/40 p-2 grid grid-cols-2 sm:grid-cols-3 gap-1">
+                        {WORLD_CURRENCIES
+                          .filter((c) => c.code !== (currencyWalletsData?.primaryCurrency || "USD"))
+                          .filter((c) => {
+                            const q = multiCurrencySearch.trim().toUpperCase();
+                            if (!q) return true;
+                            return c.code.includes(q) || c.name.toUpperCase().includes(q);
+                          })
+                          .map((c) => {
+                            const checked = multiCurrencyAllowList.includes(c.code);
+                            return (
+                              <label
+                                key={c.code}
+                                className={`flex items-center gap-2 text-xs cursor-pointer p-1 rounded hover:bg-muted ${checked ? "bg-primary/10" : ""}`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  data-testid={`checkbox-currency-${c.code}`}
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    setMultiCurrencyAllowList((prev) =>
+                                      e.target.checked
+                                        ? [...prev, c.code]
+                                        : prev.filter((x) => x !== c.code),
+                                    );
+                                  }}
+                                />
+                                <span className="font-mono">{c.code}</span>
+                                <span className="text-muted-foreground truncate">{c.name}</span>
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (currencyWalletsData) {
+                          setMultiCurrencyEnabled(currencyWalletsData.multiCurrencyEnabled);
+                          setMultiCurrencyAllowList(
+                            (currencyWalletsData.allowedCurrencies || []).filter((c) => c !== currencyWalletsData.primaryCurrency),
+                          );
+                        }
+                      }}
+                      data-testid="button-reset-multi-currency"
+                    >
+                      Reset
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => multiCurrencyMutation.mutate({
+                        id: selectedUser.id,
+                        enabled: multiCurrencyEnabled,
+                        allowedCurrencies: multiCurrencyAllowList,
+                      })}
+                      disabled={multiCurrencyMutation.isPending}
+                      data-testid="button-save-multi-currency"
+                    >
+                      {multiCurrencyMutation.isPending ? "Saving..." : "Save Settings"}
+                    </Button>
+                  </div>
+                </div>
+
+                {currencyWalletsData?.wallets && currencyWalletsData.wallets.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">Per-currency balances</div>
+                    <div className="rounded-lg border overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-24">Currency</TableHead>
+                            <TableHead>Role</TableHead>
+                            <TableHead className="text-right">Balance</TableHead>
+                            <TableHead className="text-right w-44">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {currencyWalletsData.wallets.map((w) => {
+                            const meta = WORLD_CURRENCIES.find((c) => c.code === w.currency);
+                            const symbol = meta?.symbol || w.currency;
+                            return (
+                              <TableRow key={w.currency} data-testid={`row-wallet-${w.currency}`}>
+                                <TableCell className="font-mono">{w.currency}</TableCell>
+                                <TableCell>
+                                  <Badge variant={w.isPrimary ? "default" : "outline"}>
+                                    {w.isPrimary ? "Primary" : (w.isAllowed ? "Allowed" : "Legacy")}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right font-semibold" data-testid={`text-balance-${w.currency}`}>
+                                  {symbol} {Number.parseFloat(w.balance).toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setActionDialog("balance");
+                                      setAdjustWallet("usd");
+                                      setAdjustCurrency(w.currency);
+                                    }}
+                                    data-testid={`button-adjust-${w.currency}`}
+                                  >
+                                    Adjust
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
                 </TabsContent>
 
                 <TabsContent value="activity" className="mt-4 space-y-6">
@@ -1248,8 +1457,29 @@ export default function AdminUsersPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="usd">Primary Balance (USD)</SelectItem>
+                    <SelectItem value="usd">Real Currency Balance</SelectItem>
                     <SelectItem value="vxc">Project Currency (VXC)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {actionDialog === "balance" && adjustWallet === "usd" && currencyWalletsData && (
+              <div className="space-y-2">
+                <Label>Currency</Label>
+                <Select value={adjustCurrency || currencyWalletsData.primaryCurrency} onValueChange={(v: string) => setAdjustCurrency(v)}>
+                  <SelectTrigger data-testid="select-adjust-currency">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={currencyWalletsData.primaryCurrency}>
+                      {currencyWalletsData.primaryCurrency} (Primary)
+                    </SelectItem>
+                    {currencyWalletsData.allowedCurrencies
+                      .filter((c) => c !== currencyWalletsData.primaryCurrency)
+                      .map((code) => (
+                        <SelectItem key={code} value={code}>{code}</SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1257,7 +1487,13 @@ export default function AdminUsersPage() {
 
             {(actionDialog === "balance" || actionDialog === "reward") && (
               <div className="space-y-2">
-                <Label>Amount {actionDialog === "balance" && adjustWallet === "vxc" ? "(VXC)" : "($)"}</Label>
+                <Label>
+                  Amount {actionDialog === "balance"
+                    ? adjustWallet === "vxc"
+                      ? "(VXC)"
+                      : `(${adjustCurrency || currencyWalletsData?.primaryCurrency || "USD"})`
+                    : "($)"}
+                </Label>
                 <Input
                   type="number"
                   placeholder="Enter amount"

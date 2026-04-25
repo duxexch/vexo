@@ -102,6 +102,20 @@ interface P2PWalletBalanceEntry {
   freezeHours: number;
 }
 
+interface UserCurrencyWalletEntry {
+  currency: string;
+  balance: string;
+  isPrimary: boolean;
+  isAllowed: boolean;
+}
+
+interface UserCurrencyWalletsResponse {
+  multiCurrencyEnabled: boolean;
+  primaryCurrency: string;
+  allowedCurrencies: string[];
+  wallets: UserCurrencyWalletEntry[];
+}
+
 export default function WalletPage() {
   const { t, language } = useI18n();
   const { user, refreshUser } = useAuth();
@@ -348,6 +362,11 @@ export default function WalletPage() {
 
   const { data: p2pWalletBalances = [] } = useQuery<P2PWalletBalanceEntry[]>({
     queryKey: ['/api/p2p/wallet-balances'],
+    ...financialQueryOptions,
+  });
+
+  const { data: currencyWalletsData } = useQuery<UserCurrencyWalletsResponse>({
+    queryKey: ['/api/wallet/currency-wallets'],
     ...financialQueryOptions,
   });
 
@@ -644,6 +663,49 @@ export default function WalletPage() {
           </CardContent>
         </Card>
       </div>
+
+      {currencyWalletsData?.multiCurrencyEnabled && currencyWalletsData.wallets.length > 0 && (
+        <Card className="border border-primary/30 bg-gradient-to-b from-primary/5 to-transparent">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-primary" />
+              {language === 'ar' ? 'محافظ العملات الخاصة بك' : 'Your Currency Wallets'}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {language === 'ar'
+                ? 'الإيداعات والسحوبات تخصّص لكل عملة على حدة'
+                : 'Deposits and withdrawals are routed per-currency'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {currencyWalletsData.wallets.map((w) => {
+                const meta = depositConfig?.currencySymbolByCode?.[w.currency];
+                const symbol = meta || getCurrencySymbol(w.currency, depositConfig?.currencySymbolByCode);
+                return (
+                  <div
+                    key={w.currency}
+                    className={`flex items-center justify-between rounded-md border px-3 py-2 ${w.isPrimary ? 'bg-primary/10 border-primary/40' : 'bg-muted/40'}`}
+                    data-testid={`row-user-wallet-${w.currency}`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-mono text-sm font-semibold">{w.currency}</span>
+                      {w.isPrimary && (
+                        <span className="text-[10px] uppercase tracking-wide bg-primary text-primary-foreground rounded px-1.5 py-0.5">
+                          {language === 'ar' ? 'أساسية' : 'Primary'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right font-bold" data-testid={`text-user-balance-${w.currency}`}>
+                      {symbol}{Number.parseFloat(w.balance).toFixed(2)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {p2pWalletBalances.length > 0 && (
         <Card className="border border-slate-300/60 bg-gradient-to-b from-slate-50 to-white dark:border-slate-800 dark:from-slate-900/70 dark:to-slate-950">
