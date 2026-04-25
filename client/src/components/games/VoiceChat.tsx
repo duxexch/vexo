@@ -68,6 +68,11 @@ export function VoiceChat({
   const { toast } = useToast();
   const { settings } = useSettings();
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
+  // Tracks the most recent voice_error so the mic-icon tooltip can surface
+  // the actual reason (pricing gate vs. not a participant vs. generic) instead
+  // of a generic "tap to retry" hint.
+  const [lastVoiceErrorCode, setLastVoiceErrorCode] = useState<"pricing_gate" | "not_participant" | "other" | null>(null);
+  const [lastVoiceErrorRequiredRate, setLastVoiceErrorRequiredRate] = useState<number | null>(null);
   const [peerOrder, setPeerOrder] = useState<string[]>([]);
   const [peerRoles, setPeerRoles] = useState<Record<string, VoicePeerRole>>({});
   const [peerAudioMuted, setPeerAudioMuted] = useState<Record<string, boolean>>({});
@@ -640,6 +645,8 @@ export function VoiceChat({
               const requiredRate = typeof data.details?.requiredRate === "number"
                 ? data.details.requiredRate
                 : null;
+              setLastVoiceErrorCode("pricing_gate");
+              setLastVoiceErrorRequiredRate(requiredRate);
               toast({
                 variant: "destructive",
                 title: t("challenge.voicePricingGateTitle"),
@@ -648,12 +655,16 @@ export function VoiceChat({
                   : t("challenge.voicePricingGateHintFallback"),
               });
             } else if (data.type === "voice_error" && data.code === "not_participant") {
+              setLastVoiceErrorCode("not_participant");
+              setLastVoiceErrorRequiredRate(null);
               toast({
                 variant: "destructive",
                 title: t("challenge.voiceNotParticipantTitle"),
                 description: t("challenge.voiceNotParticipantHint"),
               });
             } else {
+              setLastVoiceErrorCode("other");
+              setLastVoiceErrorRequiredRate(null);
               toast({
                 variant: "destructive",
                 title: t("challenge.voiceErrorRetry"),
@@ -678,6 +689,8 @@ export function VoiceChat({
             lastVoiceRejoinAttemptAtRef.current = 0;
             reconnectAttemptsRef.current = 0;
             setConnectionState("connected");
+            setLastVoiceErrorCode(null);
+            setLastVoiceErrorRequiredRate(null);
 
             for (const peer of data.peers || []) {
               if (!peer?.userId) {
@@ -935,7 +948,13 @@ export function VoiceChat({
             {connectionState === "connecting" && t("challenge.voiceConnecting")}
             {connectionState === "connected" && t("challenge.voiceConnected")}
             {connectionState === "disconnected" && t("challenge.voiceConnecting")}
-            {connectionState === "error" && t("challenge.voiceErrorRetry")}
+            {connectionState === "error" && lastVoiceErrorCode === "pricing_gate" && (
+              lastVoiceErrorRequiredRate !== null
+                ? t("challenge.voicePricingGateHint", { price: lastVoiceErrorRequiredRate })
+                : t("challenge.voicePricingGateHintFallback")
+            )}
+            {connectionState === "error" && lastVoiceErrorCode === "not_participant" && t("challenge.voiceNotParticipantHint")}
+            {connectionState === "error" && (lastVoiceErrorCode === "other" || lastVoiceErrorCode === null) && t("challenge.voiceErrorRetry")}
           </TooltipContent>
         </Tooltip>
       )}
