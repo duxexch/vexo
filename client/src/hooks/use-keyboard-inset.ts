@@ -82,8 +82,16 @@ export function useKeyboardInset(): void {
 
     consumerCount += 1;
     if (consumerCount === 1) {
-      attachListeners();
-      update();
+      try {
+        attachListeners();
+        update();
+      } catch (err) {
+        // A thrown effect never registers its cleanup, so without
+        // this decrement the next mount would see consumerCount === 1
+        // and skip the (now-needed) attach call entirely.
+        consumerCount -= 1;
+        throw err;
+      }
     }
 
     return () => {
