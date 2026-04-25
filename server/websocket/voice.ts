@@ -45,6 +45,7 @@ interface VoiceTelemetryCounters {
   rejectedPricingGate: number;
   rejectedSignalingError: number;
   rejectedOther: number;
+  challengeFirstAttemptBypass: number;
 }
 
 export interface VoiceTelemetrySnapshot {
@@ -82,6 +83,7 @@ const voiceTelemetryCounters: VoiceTelemetryCounters = {
   rejectedPricingGate: 0,
   rejectedSignalingError: 0,
   rejectedOther: 0,
+  challengeFirstAttemptBypass: 0,
 };
 
 const voiceIceCandidateTypeCounters: VoiceIceCandidateTypeCounters = {
@@ -161,6 +163,23 @@ function getVoiceTelemetryBaseSnapshot(nowMs: number): VoiceTelemetrySnapshot {
 
 function incrementVoiceTelemetryCounter(counter: keyof VoiceTelemetryCounters, amount: number = 1): void {
   voiceTelemetryCounters[counter] += amount;
+}
+
+/**
+ * Tracks `${matchId}:${userId}` keys for users who have already used their
+ * first-attempt-free challenge voice join. The first time a user joins a
+ * given challenge's voice room (within the current server uptime) the
+ * pricing gate is bypassed so two players can confirm the call works
+ * without anyone needing to top up VXC. Every subsequent attempt — even
+ * after a leave/rejoin cycle — goes through the normal pricing gate. The
+ * key is intentionally NOT purged on room-empty, otherwise a coordinated
+ * leave/rejoin loop would let players get unlimited free voice within the
+ * same match.
+ */
+const challengeVoiceFirstAttemptUsed = new Set<string>();
+
+function challengeVoiceFirstAttemptKey(matchId: string, userId: string): string {
+  return `${matchId}:${userId}`;
 }
 
 function incrementIceCandidateTypeCounter(candidateType: IceCandidateType): void {
@@ -575,27 +594,47 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
     }
 
     if (access.roomKind === "challenge") {
-      const pricingGate = await resolveChallengeVoicePricingGate(ws.userId);
-      if (!pricingGate.allowed) {
-        sendVoiceError(
-          "Insufficient project currency balance for challenge voice",
-          {
-            matchId,
-            requiredRate: pricingGate.requiredRate,
-            walletBalance: pricingGate.walletBalance,
-            roomKind: access.roomKind,
-            role: access.userRole,
-          },
-          {
-            code: "pricing_gate",
-            details: {
+      // First-attempt-free policy: the very first time a player joins this
+      // challenge's voice room (within the current server uptime) we skip
+      // the pricing gate so two players can confirm voice works without
+      // anyone needing to top up VXC. Subsequent attempts pay normally.
+      const firstAttemptKey = challengeVoiceFirstAttemptKey(matchId, ws.userId);
+      const isFirstAttempt = !challengeVoiceFirstAttemptUsed.has(firstAttemptKey);
+
+      if (!isFirstAttempt) {
+        const pricingGate = await resolveChallengeVoicePricingGate(ws.userId);
+        if (!pricingGate.allowed) {
+          sendVoiceError(
+            "Insufficient project currency balance for challenge voice",
+            {
+              matchId,
               requiredRate: pricingGate.requiredRate,
               walletBalance: pricingGate.walletBalance,
+              roomKind: access.roomKind,
+              role: access.userRole,
             },
-          },
-        );
-        return;
+            {
+              code: "pricing_gate",
+              details: {
+                requiredRate: pricingGate.requiredRate,
+                walletBalance: pricingGate.walletBalance,
+              },
+            },
+          );
+          return;
+        }
+      } else {
+        logger.info("[VoiceWS] challenge voice first-attempt-free bypass", {
+          matchId,
+          userId: ws.userId,
+        });
+        incrementVoiceTelemetryCounter("challengeFirstAttemptBypass");
       }
+
+      // Mark the first attempt as consumed once we've decided to admit the
+      // user. Any later join (e.g. after disconnect/reconnect) will require
+      // sufficient VXC balance.
+      challengeVoiceFirstAttemptUsed.add(firstAttemptKey);
     }
 
     const participantIds = access.participantIds;
@@ -842,7 +881,10 @@ export async function handleVoice(ws: AuthenticatedSocket, data: any): Promise<v
         roomSizeAfterLeave: room.size,
       });
 
-      // Clean up empty room
+      // Clean up empty room. We intentionally do NOT clear
+      // challengeVoiceFirstAttemptUsed entries here — they persist for the
+      // lifetime of the server process so a leave/rejoin loop cannot give
+      // unlimited free voice within the same match.
       if (room.size === 0) {
         voiceRooms.delete(matchId);
       }
