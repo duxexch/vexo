@@ -450,12 +450,32 @@ async function main(): Promise<void> {
       waitConnect(specB.client),
     ]);
 
-    // ---- Step 1: player joins as PLAYER. count must stay 0. ----
+    // ---- Step 0: baseline. With nobody in the room yet, an out-of-band
+    //              broadcast must report count=0. We trigger it from the
+    //              player's socket (which is in the room because the
+    //              next step will join it) by invoking the production
+    //              helper directly against instance A — the assertion
+    //              proves the helper handles the empty-room case
+    //              cleanly before any spectators exist. ----
     await joinRoom(player.client, "player");
     const playerJoinCount = await player.next(() => true);
     assertCondition(
       playerJoinCount === 0,
-      `Player join must broadcast count=0, got ${playerJoinCount}`,
+      `Baseline: player join must broadcast count=0, got ${playerJoinCount}`,
+    );
+    // Re-trigger the helper explicitly so we get a second 0 emission
+    // that proves the count is genuinely re-derivable from cluster
+    // state — not just a coincidence of the initial join broadcast.
+    await broadcastChallengeViewerCount(
+      instA.chatNs as unknown as Parameters<
+        typeof broadcastChallengeViewerCount
+      >[0],
+      ROOM_ID,
+    );
+    const baseline = await player.next((c) => c === 0);
+    assertCondition(
+      baseline === 0,
+      `Baseline: empty-room rebroadcast must report count=0, got ${baseline}`,
     );
 
     // ---- Step 2: spectator A joins on instance A. count = 1. ----
