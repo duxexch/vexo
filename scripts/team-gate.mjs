@@ -147,6 +147,7 @@ async function run() {
     if (needFinance) {
         await assertDbReady();
         await runCommand("Settlement idempotency smoke", "npm", ["run", "security:smoke:settlement-idempotency"]);
+        await runCommand("Tournament currency lifecycle smoke", "npm", ["run", "quality:smoke:tournament-currency"]);
     }
 
     console.log("\n[gate] All selected gates passed.");
