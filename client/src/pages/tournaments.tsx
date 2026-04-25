@@ -256,7 +256,7 @@ interface TournamentDetail {
   userRefund?: UserRefundInfo | null;
 }
 
-function TournamentRefundBanner({
+export function TournamentRefundBanner({
   refund,
   variant,
   en,
