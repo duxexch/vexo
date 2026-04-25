@@ -745,6 +745,12 @@ export const transactions = pgTable("transactions", {
   index("idx_transactions_status").on(table.status),
   index("idx_transactions_created_at").on(table.createdAt),
   index("idx_transactions_user_date").on(table.userId, table.createdAt),
+  // Composite index for the tournament refund banner lookup
+  // (`server/routes/tournaments/listing.ts`: `loadUserRefundsByTournament`).
+  // The query filters by user + type='refund' + reference_id IN (...), so a
+  // (user_id, type, reference_id) index keeps it fast even for power users
+  // with very large transaction histories.
+  index("idx_transactions_user_type_reference").on(table.userId, table.type, table.referenceId),
   uniqueIndex("uq_transactions_public_reference").on(table.publicReference),
   check("chk_transactions_amount_positive", sql`${table.amount} > 0`),
 ]);
