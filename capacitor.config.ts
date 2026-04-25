@@ -80,6 +80,10 @@ const config: CapacitorConfig = {
         twitter: false,
       },
     },
+    // Task #89: Messenger-style floating chat bubbles. The plugin has
+    // no runtime configuration knobs; the empty block keeps it
+    // discoverable to the Capacitor CLI sync step.
+    ChatBubbles: {},
     NativeCallUI: {
       // Display name shown for the call provider in the OS UI (CallKit
       // settings / Android phone account picker). Localization is wired

@@ -247,6 +247,26 @@ self.addEventListener('push', (event) => {
     return;
   }
 
+  // Task #89: when a chat push arrives and the page is open in the
+  // background, post a SHOW_CHAT_BUBBLE so the in-app bubble layer can
+  // render even though the WebSocket may have been throttled.
+  if (notifType === 'chat' && data.senderId) {
+    event.waitUntil((async () => {
+      try {
+        const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        list.forEach((c) => c.postMessage({
+          type: 'SHOW_CHAT_BUBBLE',
+          senderId: data.senderId,
+          title: data.title || 'New message',
+          body: data.body || '',
+          link: data.url || `/chat?user=${encodeURIComponent(data.senderId)}`,
+        }));
+      } catch (_) { /* ignore */ }
+      await self.registration.showNotification(data.title || 'VEX', opts);
+    })());
+    return;
+  }
+
   event.waitUntil(self.registration.showNotification(data.title || 'VEX', opts));
 });
 

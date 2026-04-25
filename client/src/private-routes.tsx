@@ -138,6 +138,8 @@ const SupportChatHeaderTrigger = lazy(() =>
     import("@/components/support-chat-widget").then((m) => ({ default: m.SupportChatHeaderTrigger })),
 );
 
+const ChatBubblesLayer = lazy(() => import("@/components/ChatBubblesLayer"));
+
 const SupportChatWidget = lazy(() =>
     import("@/components/support-chat-widget").then((m) => ({ default: m.SupportChatWidget })),
 );
@@ -836,6 +838,12 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                     </div>
                     <Suspense fallback={null}>
                         <SupportChatWidget isLoggedIn={true} showFloatingTrigger={false} />
+                    </Suspense>
+                    {/* Task #89: Messenger-style floating chat bubbles. Mounted
+                        inside PrivateCallLayerProvider so it can suppress
+                        bubbles while the user is on a private call. */}
+                    <Suspense fallback={null}>
+                        <ChatBubblesLayer />
                     </Suspense>
                 </SidebarProvider>
               </CallSessionProvider>

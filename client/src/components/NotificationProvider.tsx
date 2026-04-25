@@ -204,6 +204,27 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       return;
     }
 
+    // Task #89: surface incoming DMs as Messenger-style floating
+    // bubbles. We dispatch unconditionally for chat events that survived
+    // the "same thread" suppression above; the bubble layer itself
+    // applies the muted-peer / active-call / preference checks so the
+    // notification toast and bubble logic stay decoupled.
+    if (metadataEvent === "chat_message" && chatSenderId) {
+      window.dispatchEvent(
+        new CustomEvent("vex-incoming-dm", {
+          detail: {
+            senderId: chatSenderId,
+            title: notification.title,
+            titleAr,
+            message: notification.message,
+            messageAr,
+            link: safeLink || `/chat?user=${encodeURIComponent(chatSenderId)}`,
+            messageId: typeof metadata?.messageId === "string" ? metadata.messageId : null,
+          },
+        }),
+      );
+    }
+
     // Show professional popup notification (VexNotificationPopup)
     window.dispatchEvent(new CustomEvent("vex-show-popup", {
       detail: {

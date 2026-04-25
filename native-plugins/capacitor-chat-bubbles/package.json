@@ -1,0 +1,34 @@
+{
+  "name": "capacitor-chat-bubbles",
+  "version": "1.0.0",
+  "description": "Capacitor plugin that renders Messenger-style floating chat bubbles on Android (Notification.BubbleMetadata for API 30+, WindowManager TYPE_APPLICATION_OVERLAY fallback for older). iOS / web are no-ops.",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "files": [
+    "android/src/main/",
+    "android/build.gradle",
+    "src/"
+  ],
+  "author": "VEX",
+  "license": "MIT",
+  "scripts": {
+    "verify:web": "echo \"no web build needed; pre-built\" && exit 0"
+  },
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "android",
+    "bubble",
+    "chat-heads",
+    "messenger"
+  ],
+  "capacitor": {
+    "android": {
+      "src": "android"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  }
+}

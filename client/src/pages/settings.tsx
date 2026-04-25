@@ -26,6 +26,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, Shield, Settings2, Loader2, Monitor, Smartphone, Globe, Trash2, LogOut, CheckCircle, KeyRound, Camera, Users, ImageIcon, Volume2, VolumeX, ShieldCheck, Mail, Copy, Mic, Bell, Layers, RefreshCcw, AlertTriangle } from "lucide-react";
 import { BlockedMutedSettings } from "@/components/BlockedMutedSettings";
+import { getChatBubblesEnabled, setChatBubblesEnabled } from "@/lib/chat-bubbles-pref";
 import { useSoundEffects } from "@/hooks/use-sound-effects";
 import {
   GAME_SPEED_MODES,
@@ -1317,6 +1318,28 @@ function GameSpeedSection() {
   );
 }
 
+function ChatBubblesToggleRow() {
+  const { t } = useI18n();
+  const [enabled, setEnabled] = useState<boolean>(() => getChatBubblesEnabled());
+
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="space-y-0.5">
+        <Label>{t("settings.chatBubbles.title")}</Label>
+        <p className="text-sm text-muted-foreground">{t("settings.chatBubbles.description")}</p>
+      </div>
+      <Switch
+        checked={enabled}
+        onCheckedChange={(checked) => {
+          setChatBubblesEnabled(checked);
+          setEnabled(checked);
+        }}
+        data-testid="switch-chat-bubbles"
+      />
+    </div>
+  );
+}
+
 function PreferencesSection() {
   const { t, language, setLanguage } = useI18n();
   const { toast } = useToast();
@@ -1603,6 +1626,11 @@ function PreferencesSection() {
                 data-testid="switch-notify-p2p"
               />
             </div>
+            {/* Task #89: Floating chat bubbles toggle. Local-only setting
+                — persisted to localStorage by chat-bubbles-pref so the
+                in-app ChatBubblesLayer (and the Android native plugin)
+                pick it up without a round-trip to the server. */}
+            <ChatBubblesToggleRow />
             {/* Task #17: per-user toggle to hide spectator chat in the
                 in-game chat panel. Default off — players see everything
                 with the spectator badge so context is preserved; turning
