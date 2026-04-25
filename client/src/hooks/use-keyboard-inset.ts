@@ -86,9 +86,13 @@ export function useKeyboardInset(): void {
         attachListeners();
         update();
       } catch (err) {
-        // A thrown effect never registers its cleanup, so without
-        // this decrement the next mount would see consumerCount === 1
-        // and skip the (now-needed) attach call entirely.
+        // A thrown effect never registers its cleanup, so roll back
+        // the count AND tear down whatever managed to attach before
+        // the throw — otherwise the next mount sees consumerCount
+        // === 1 and skips the (now-needed) attach call, or worse,
+        // leaves zombie listeners installed if `update()` was the
+        // thrower.
+        detachListeners();
         consumerCount -= 1;
         throw err;
       }
