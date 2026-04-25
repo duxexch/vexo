@@ -56,3 +56,7 @@ VEX is built on a modern, distributed architecture designed for scalability and 
 - **FCM (Firebase Cloud Messaging):** For sending VoIP push notifications to Android devices.
 - **CallKit (iOS):** Native framework for integrating with the iOS system's call UI.
 - **ConnectionService (Android):** Native framework for integrating with the Android system's call UI.
+
+## Mobile Verification
+
+- **Task #82 — Android Capacitor composer over keyboard:** Manual real-device verification of the Task #43 fix (`Keyboard.resize: 'none'` + `useKeyboardInset` driven by `visualViewport`/Capacitor Keyboard events) is captured as a step-by-step Arabic checklist at `docs/device-tests/android-keyboard-composer-2026-04.md`. Pass/fail outcome to be recorded inline in that file once executed on a physical Android (and ideally iOS) device.
