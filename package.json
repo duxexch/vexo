@@ -55,6 +55,8 @@
     "quality:smoke:call-experience": "tsx scripts/smoke-call-experience.ts",
     "quality:smoke:ringtone-asset": "tsx scripts/smoke-ringtone-asset.ts",
     "quality:smoke:voip-push": "tsx scripts/smoke-voip-push.ts",
+    "ops:voip-push-doctor": "node scripts/voip-push-doctor.mjs",
+    "ops:voip-push-doctor:online": "node scripts/voip-push-doctor.mjs --ping-gateways",
     "quality:smoke:call-actions": "tsx scripts/smoke-call-actions.ts",
     "quality:smoke:game-speed": "tsx scripts/smoke-game-speed.ts",
     "quality:smoke:room-notifications": "tsx scripts/smoke-room-notifications.ts",
