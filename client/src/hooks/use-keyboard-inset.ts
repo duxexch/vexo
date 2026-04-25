@@ -29,10 +29,20 @@ function attachListeners(): void {
   if (listenersAttached || typeof window === "undefined") return;
   const vv = window.visualViewport;
   if (!vv) return;
-  vv.addEventListener("resize", schedule);
-  vv.addEventListener("scroll", schedule);
-  window.addEventListener("orientationchange", schedule);
-  listenersAttached = true;
+  let resizeOk = false;
+  let scrollOk = false;
+  try {
+    vv.addEventListener("resize", schedule);
+    resizeOk = true;
+    vv.addEventListener("scroll", schedule);
+    scrollOk = true;
+    window.addEventListener("orientationchange", schedule);
+    listenersAttached = true;
+  } catch (err) {
+    if (resizeOk) vv.removeEventListener("resize", schedule);
+    if (scrollOk) vv.removeEventListener("scroll", schedule);
+    throw err;
+  }
 }
 
 function detachListeners(): void {
@@ -85,3 +95,25 @@ export function useKeyboardInset(): void {
     };
   }, []);
 }
+
+/**
+ * Test-only exports. Vitest uses these to drive the listener
+ * lifecycle directly so partial-attach failure paths can be exercised
+ * without going through React's commit phase (which rethrows on a
+ * microtask in dev and trips vitest's unhandled-error guard).
+ *
+ * Not part of the public API. Do not import outside `__tests__/`.
+ */
+export const __TEST_ONLY__ = {
+  attachListeners,
+  detachListeners,
+  isAttached: (): boolean => listenersAttached,
+  reset: (): void => {
+    listenersAttached = false;
+    consumerCount = 0;
+    if (frame) {
+      window.cancelAnimationFrame(frame);
+      frame = 0;
+    }
+  },
+};
