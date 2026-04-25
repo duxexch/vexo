@@ -18,7 +18,8 @@ import { buildGameConfig, FALLBACK_GAME_CONFIG, getGameIconSurfaceClass, getGame
 import {
   Trophy, Users, Clock, Swords,
   DollarSign, Calendar, ChevronRight,
-  Timer, Filter, Share2, Copy, Image as ImageIcon, Video, XCircle, ArrowDownToLine
+  Timer, Filter, Share2, Copy, Image as ImageIcon, Video, XCircle, ArrowDownToLine,
+  Wallet
 } from "lucide-react";
 import { ProjectCurrencySymbol } from "@/components/ProjectCurrencySymbol";
 import {
@@ -576,6 +577,28 @@ function TournamentDetailView({ id }: { id: string }) {
     queryKey: [`/api/tournaments/${id}`],
   });
 
+  const tournamentCurrency = normalizeTournamentCurrencyType(tournament?.currency);
+
+  const projectWalletEnabled = !!user && tournamentCurrency === 'project';
+  const {
+    data: projectWallet,
+    isLoading: isProjectWalletLoading,
+    isError: isProjectWalletError,
+  } = useQuery<{
+    totalBalance: string;
+    currencySymbol: string;
+  }>({
+    queryKey: ["/api/project-currency/wallet"],
+    enabled: projectWalletEnabled,
+    queryFn: async () => {
+      const res = await fetch("/api/project-currency/wallet", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to load project wallet");
+      return res.json();
+    },
+  });
+
   const registerMutation = useMutation({
     mutationFn: () => apiRequest('POST', `/api/tournaments/${id}/register`),
     onSuccess: async () => {
@@ -584,6 +607,7 @@ function TournamentDetailView({ id }: { id: string }) {
         queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${id}`] }),
         queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/user'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/project-currency/wallet'] }),
       ]);
     },
     onError: (err: Error) => {
@@ -599,6 +623,7 @@ function TournamentDetailView({ id }: { id: string }) {
         queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${id}`] }),
         queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/user'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/project-currency/wallet'] }),
       ]);
     },
     onError: (err: Error) => {
@@ -656,6 +681,30 @@ function TournamentDetailView({ id }: { id: string }) {
   const registrationOpen = isRegistrationWindowOpen(tournament);
   const canRegister = registrationOpen && !tournament.isRegistered;
   const canWithdraw = registrationOpen && tournament.isRegistered;
+
+  const entryFeeNumber = Number.parseFloat(tournament.entryFee || '0');
+  const safeEntryFee = Number.isFinite(entryFeeNumber) ? entryFeeNumber : 0;
+  const availableBalanceRaw = tournamentCurrency === 'project'
+    ? projectWallet?.totalBalance
+    : user?.balance;
+  const availableBalanceNumber = Number.parseFloat(String(availableBalanceRaw ?? '0'));
+  const safeAvailableBalance = Number.isFinite(availableBalanceNumber) ? availableBalanceNumber : 0;
+  const balanceLoaded = tournamentCurrency === 'project'
+    ? projectWallet !== undefined
+    : user !== null && user !== undefined;
+  const balanceLoading = tournamentCurrency === 'project'
+    ? projectWalletEnabled && isProjectWalletLoading && !projectWallet
+    : false;
+  const balanceErrored = tournamentCurrency === 'project'
+    ? isProjectWalletError && !projectWallet
+    : false;
+  const hasEnoughBalance = safeAvailableBalance + 1e-9 >= safeEntryFee;
+  const balanceText = balanceLoaded
+    ? formatTournamentAmountText(safeAvailableBalance.toFixed(2), tournament.currency)
+    : (en ? 'Loading…' : 'جاري التحميل…');
+  const entryFeeText = formatTournamentAmountText(tournament.entryFee, tournament.currency);
+  const insufficientBalance = canRegister && safeEntryFee > 0 && balanceLoaded && !hasEnoughBalance;
+  const blockRegister = canRegister && safeEntryFee > 0 && (!balanceLoaded || !hasEnoughBalance);
 
   // Build bracket data by round
   const rounds: Record<number, TournamentMatch[]> = {};
@@ -871,7 +920,7 @@ function TournamentDetailView({ id }: { id: string }) {
       {user && (canRegister || canWithdraw) && (
         <Card>
           <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
+            <div className="space-y-1">
               <h3 className="font-semibold">
                 {canRegister
                   ? (en ? 'Join this tournament' : 'انضم لهذه البطولة')
@@ -879,19 +928,53 @@ function TournamentDetailView({ id }: { id: string }) {
                 }
               </h3>
               <p className="text-sm text-muted-foreground">
-                {parseFloat(tournament.entryFee) > 0
+                {safeEntryFee > 0
                   ? (en
-                    ? `Entry fee: ${formatTournamentAmountText(tournament.entryFee, tournament.currency)}`
-                    : `رسوم الدخول: ${formatTournamentAmountText(tournament.entryFee, tournament.currency)}`)
+                    ? `Entry fee: ${entryFeeText}`
+                    : `رسوم الدخول: ${entryFeeText}`)
                   : (en ? 'Free entry' : 'دخول مجاني')
                 }
               </p>
+              {safeEntryFee > 0 && (
+                <p
+                  className={`flex items-center gap-1.5 text-sm font-medium ${insufficientBalance || balanceErrored ? 'text-destructive' : 'text-muted-foreground'}`}
+                  data-testid="tournament-detail-user-balance"
+                  data-currency={tournamentCurrency}
+                  data-balance-state={balanceErrored ? 'error' : balanceLoading ? 'loading' : 'ready'}
+                >
+                  <Wallet className="w-4 h-4" aria-hidden />
+                  <span>
+                    {en ? `Your balance: ${balanceText}` : `رصيدك: ${balanceText}`}
+                  </span>
+                </p>
+              )}
+              {insufficientBalance && (
+                <p
+                  className="text-xs text-destructive"
+                  data-testid="tournament-detail-insufficient-balance"
+                >
+                  {en
+                    ? `Not enough balance. You need ${entryFeeText} to register.`
+                    : `الرصيد غير كافٍ. تحتاج إلى ${entryFeeText} للتسجيل.`}
+                </p>
+              )}
+              {balanceErrored && (
+                <p
+                  className="text-xs text-destructive"
+                  data-testid="tournament-detail-balance-error"
+                >
+                  {en
+                    ? "Couldn't load your wallet balance. Try again."
+                    : 'تعذر تحميل رصيد محفظتك. حاول مرة أخرى.'}
+                </p>
+              )}
             </div>
             {canRegister ? (
               <Button
                 onClick={() => registerMutation.mutate()}
-                disabled={registerMutation.isPending}
+                disabled={registerMutation.isPending || blockRegister}
                 className="w-full sm:w-auto min-h-[44px] bg-gradient-to-r from-green-500 to-emerald-600"
+                data-testid="tournament-detail-register"
               >
                 <Swords className="w-4 h-4 me-2" />
                 {en ? 'Register' : 'تسجيل'}
