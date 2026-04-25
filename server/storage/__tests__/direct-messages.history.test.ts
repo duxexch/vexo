@@ -31,7 +31,7 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { db } from "../../db";
