@@ -482,11 +482,9 @@ export function registerTransactionUserRoutes(app: Express): void {
               -walletDebitAmount,
               { allowCreate: false },
             );
-          } catch (err: any) {
+          } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Withdrawal failed";
-            throw Object.assign(new Error(message), {
-              statusCode: message.startsWith("Insufficient") ? 400 : 400,
-            });
+            throw Object.assign(new Error(message), { statusCode: 400 });
           }
 
           return { user, adjusted };
