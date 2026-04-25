@@ -2358,6 +2358,23 @@ const ar: Record<string, string> = {
   'callPermission.allow': 'السماح',
   'callPermission.notNow': 'ليس الآن',
   'callPermission.openSettings': 'فتح الإعدادات',
+
+  'settings.permissions.tab': 'الأذونات',
+  'settings.permissions.title': 'أذونات التطبيق',
+  'settings.permissions.description': 'راجع وحدّث أذونات الجهاز التي يحتاجها VEX لمكالمات الأصدقاء والإشعارات.',
+  'settings.permissions.microphone.title': 'الميكروفون',
+  'settings.permissions.microphone.helper': 'يُستخدم فقط أثناء المكالمة الصوتية أو المرئية حتى يسمعك الطرف الآخر.',
+  'settings.permissions.camera.title': 'الكاميرا',
+  'settings.permissions.camera.helper': 'تُستخدم فقط أثناء مكالمة الفيديو حتى يراك الطرف الآخر.',
+  'settings.permissions.notifications.title': 'الإشعارات',
+  'settings.permissions.notifications.helper': 'تتيح لنا تنبيهك بالمكالمات الواردة والرسائل ودعوات اللعب.',
+  'settings.permissions.overlay.title': 'الظهور فوق التطبيقات',
+  'settings.permissions.overlay.helper': 'يتيح للمكالمات الواردة الظهور فوق أي تطبيق آخر تمامًا مثل واتساب.',
+  'settings.permissions.overlay.openSettings': 'فتح',
+  'settings.permissions.banner.title': 'بعض الأذونات غير مفعّلة',
+  'settings.permissions.banner.body': 'تعمل مكالمات الأصدقاء بأفضل شكل عند تفعيل الميكروفون والكاميرا وإذن الظهور فوق التطبيقات. افتح الإعدادات لإصلاح ذلك بضغطات قليلة.',
+  'settings.permissions.banner.action': 'مراجعة الأذونات',
+  'settings.permissions.banner.dismiss': 'ليس الآن',
 };
 
 export default ar;

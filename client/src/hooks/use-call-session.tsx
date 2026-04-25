@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getRtcSocket } from "@/lib/socket-io-client";
 import { ensureCallRationale } from "@/lib/call-permission-rationale";
+import { ensureCallPermissions } from "@/lib/native-call-permissions";
 import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
 import { registerCallActionHandler } from "@/lib/call-actions";
 import {
@@ -188,8 +189,20 @@ export function useCallSession(): UseCallSessionReturn {
   );
 
   const attachLocalMedia = useCallback(async (pc: RTCPeerConnection, type: CallType): Promise<MediaStream> => {
-    const decision = await ensureCallRationale(type === "video" ? "video" : "voice");
+    const kind = type === "video" ? "video" : "voice";
+    const decision = await ensureCallRationale(kind);
     if (decision !== "allow") {
+      throw new Error("permission_dismissed");
+    }
+
+    // On native Android the WebView only obtains camera/mic if the host
+    // app has been granted the matching runtime permissions via
+    // Activity#requestPermissions. We do that here, after the user has
+    // accepted the in-app rationale, so the OS dialog is never the
+    // first thing they see.
+    const native = await ensureCallPermissions(kind);
+    if (!native.granted) {
+      void ensureCallRationale(kind, { force: true });
       throw new Error("permission_dismissed");
     }
 
@@ -204,7 +217,7 @@ export function useCallSession(): UseCallSessionReturn {
       if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
         // Re-show the rationale in "forced" mode so the user can jump to
         // system settings.
-        void ensureCallRationale(type === "video" ? "video" : "voice", { force: true });
+        void ensureCallRationale(kind, { force: true });
       }
       throw err;
     }

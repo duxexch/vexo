@@ -84,6 +84,40 @@ export interface NativeCallAvailabilityResult {
   platform: "ios" | "android" | "web";
 }
 
+/**
+ * Per-permission state for the friend-call media permissions
+ * (microphone + camera). Mirrors Capacitor's `PermissionState`
+ * vocabulary so it slots into the existing rationale/gate UI.
+ */
+export type CallMediaPermissionState =
+  | "granted"
+  | "denied"
+  | "prompt"
+  | "prompt-with-rationale";
+
+export interface CallMediaPermissionStatus {
+  microphone: CallMediaPermissionState;
+  camera: CallMediaPermissionState;
+}
+
+export interface OverlayPermissionStatus {
+  /**
+   * Whether SYSTEM_ALERT_WINDOW (display-over-other-apps) is currently
+   * granted. On iOS and on the web this resolves to `true` because the
+   * concept doesn't apply — callers can treat it as "always available".
+   */
+  granted: boolean;
+  /** Whether the OS exposes the overlay-permission concept at all. */
+  supported: boolean;
+  platform: "ios" | "android" | "web";
+  /**
+   * Only set by `requestOverlayPermission()` when the plugin actually
+   * launched the system settings screen. Lets the JS layer know it
+   * should re-check the state after the app resumes.
+   */
+  opened?: boolean;
+}
+
 export interface NativeCallUIPlugin {
   /**
    * Resolves whether the runtime exposes the native call UI. The JS
@@ -114,6 +148,40 @@ export interface NativeCallUIPlugin {
 
   /** Tear down the native UI for this call (also stops the OS ringtone). */
   endCall(options: EndCallOptions): Promise<void>;
+
+  /**
+   * Returns the current grant state of the friend-call media
+   * permissions (microphone + camera). On the web this reads
+   * `navigator.permissions.query` when available and falls back to
+   * "prompt" otherwise. On Android it reads from the underlying
+   * runtime-permission system. iOS resolves to "granted" because the
+   * actual prompts are surfaced by AVAudioSession / AVCaptureDevice
+   * just-in-time when the WebRTC layer requests media.
+   */
+  checkCallMediaPermissions(): Promise<CallMediaPermissionStatus>;
+
+  /**
+   * Triggers the native runtime-permission dialog(s) for the
+   * friend-call media permissions and resolves with the resulting
+   * grant state. Already-granted permissions are skipped silently.
+   */
+  requestCallMediaPermissions(): Promise<CallMediaPermissionStatus>;
+
+  /**
+   * Returns whether the app currently has SYSTEM_ALERT_WINDOW
+   * (display-over-other-apps) permission. Always reports `granted:true`
+   * on platforms where the concept does not apply (iOS, web).
+   */
+  checkOverlayPermission(): Promise<OverlayPermissionStatus>;
+
+  /**
+   * Opens the system settings screen where the user can grant
+   * SYSTEM_ALERT_WINDOW. Resolves with the state read immediately
+   * before / after the screen was launched — JS callers should
+   * re-check on app resume because the user's decision happens
+   * outside of the app process.
+   */
+  requestOverlayPermission(): Promise<OverlayPermissionStatus>;
 
   /**
    * Emitted when the user taps "Accept" from CallKit / ConnectionService

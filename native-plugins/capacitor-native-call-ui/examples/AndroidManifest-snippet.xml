@@ -15,6 +15,16 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!--
+      Friend-call media permissions (added in task #88). The plugin's own
+      AndroidManifest.xml already declares these via Gradle manifest
+      merging, but they are listed here so host-app maintainers see the
+      complete picture in one place.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <application>
 
         <!-- Self-managed Telecom ConnectionService -->

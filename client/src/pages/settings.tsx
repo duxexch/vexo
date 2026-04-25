@@ -24,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Shield, Settings2, Loader2, Monitor, Smartphone, Globe, Trash2, LogOut, CheckCircle, KeyRound, Camera, Users, ImageIcon, Volume2, VolumeX, ShieldCheck, Mail, Copy } from "lucide-react";
+import { User, Shield, Settings2, Loader2, Monitor, Smartphone, Globe, Trash2, LogOut, CheckCircle, KeyRound, Camera, Users, ImageIcon, Volume2, VolumeX, ShieldCheck, Mail, Copy, Mic, Bell, Layers, RefreshCcw, AlertTriangle } from "lucide-react";
 import { BlockedMutedSettings } from "@/components/BlockedMutedSettings";
 import { useSoundEffects } from "@/hooks/use-sound-effects";
 import {
@@ -2639,6 +2639,215 @@ function SecuritySection() {
   );
 }
 
+function PermissionsSection() {
+  const { t, language } = useI18n();
+  const { toast } = useToast();
+  const [summary, setSummary] = useState<import("@/lib/startup-permissions").PermissionSummary | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [opening, setOpening] = useState<"app" | "overlay" | null>(null);
+
+  const dir = language === "ar" ? "rtl" : "ltr";
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      const { refreshPermissionSummary } = await import("@/lib/startup-permissions");
+      const next = await refreshPermissionSummary();
+      setSummary(next);
+    } catch {
+      toast({
+        title: t("permissions.gate.retryHint"),
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { getCachedPermissionSummary, refreshPermissionSummary } = await import(
+          "@/lib/startup-permissions"
+        );
+        const cached = getCachedPermissionSummary();
+        if (cached && !cancelled) setSummary(cached);
+        const fresh = await refreshPermissionSummary();
+        if (!cancelled) setSummary(fresh);
+      } catch {
+        // Probe failures should not crash the section.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const openAppSettings = async () => {
+    setOpening("app");
+    try {
+      const { openAppSettings: openSettings } = await import("@/lib/startup-permissions");
+      await openSettings();
+    } finally {
+      setOpening(null);
+    }
+  };
+
+  const openOverlaySettings = async () => {
+    setOpening("overlay");
+    try {
+      const { requestOverlayPermission } = await import("@/lib/native-call-permissions");
+      await requestOverlayPermission();
+      // Re-check on the next tick — the user must come back to the app
+      // for the new state to take effect.
+      setTimeout(() => {
+        void refresh();
+      }, 500);
+    } finally {
+      setOpening(null);
+    }
+  };
+
+  const renderStatus = (
+    state: "granted" | "denied" | "prompt" | "unavailable",
+  ) => {
+    const map: Record<string, { variant: "default" | "destructive" | "secondary" | "outline"; label: string }> = {
+      granted: { variant: "default", label: t("permissions.gate.status.granted") },
+      denied: { variant: "destructive", label: t("permissions.gate.status.denied") },
+      prompt: { variant: "secondary", label: t("permissions.gate.status.prompt") },
+      unavailable: { variant: "outline", label: t("permissions.gate.status.unavailable") },
+    };
+    const meta = map[state];
+    return (
+      <Badge variant={meta.variant} data-testid={`status-${state}`}>
+        {meta.label}
+      </Badge>
+    );
+  };
+
+  const Row = ({
+    icon: Icon,
+    title,
+    helper,
+    state,
+    extra,
+    testId,
+  }: {
+    icon: typeof Mic;
+    title: string;
+    helper: string;
+    state: "granted" | "denied" | "prompt" | "unavailable";
+    extra?: React.ReactNode;
+    testId: string;
+  }) => (
+    <div
+      className="flex flex-col gap-2 rounded-xl border border-border/60 p-4 sm:flex-row sm:items-center sm:justify-between"
+      data-testid={testId}
+    >
+      <div className="flex items-start gap-3">
+        <div className="rounded-full bg-muted p-2 text-muted-foreground">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="space-y-1">
+          <div className="text-sm font-medium leading-tight">{title}</div>
+          <div className="text-xs text-muted-foreground leading-snug">{helper}</div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 self-start sm:self-center">
+        {renderStatus(state)}
+        {extra}
+      </div>
+    </div>
+  );
+
+  return (
+    <Card data-testid="card-permissions" dir={dir}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5" />
+          {t("settings.permissions.title")}
+        </CardTitle>
+        <CardDescription>{t("settings.permissions.description")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Row
+          icon={Mic}
+          title={t("settings.permissions.microphone.title")}
+          helper={t("settings.permissions.microphone.helper")}
+          state={summary?.microphone ?? "unavailable"}
+          testId="row-perm-microphone"
+        />
+        <Row
+          icon={Camera}
+          title={t("settings.permissions.camera.title")}
+          helper={t("settings.permissions.camera.helper")}
+          state={summary?.camera ?? "unavailable"}
+          testId="row-perm-camera"
+        />
+        <Row
+          icon={Bell}
+          title={t("settings.permissions.notifications.title")}
+          helper={t("settings.permissions.notifications.helper")}
+          state={summary?.notifications ?? "unavailable"}
+          testId="row-perm-notifications"
+        />
+        <Row
+          icon={Layers}
+          title={t("settings.permissions.overlay.title")}
+          helper={t("settings.permissions.overlay.helper")}
+          state={summary?.overlay ?? "unavailable"}
+          extra={
+            summary?.overlay === "denied" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={openOverlaySettings}
+                disabled={opening === "overlay"}
+                data-testid="btn-perm-open-overlay"
+              >
+                {t("settings.permissions.overlay.openSettings")}
+              </Button>
+            ) : null
+          }
+          testId="row-perm-overlay"
+        />
+
+        <div className="flex flex-wrap items-center gap-2 pt-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={refresh}
+            disabled={refreshing}
+            data-testid="btn-perm-recheck"
+          >
+            <RefreshCcw className={`me-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            {t("permissions.gate.recheck")}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={openAppSettings}
+            disabled={opening === "app"}
+            data-testid="btn-perm-open-app"
+          >
+            {t("permissions.gate.openSettings")}
+          </Button>
+        </div>
+        {summary?.overlay === "denied" ? (
+          <div
+            className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300"
+            data-testid="hint-overlay-disabled"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{t("permissions.gate.overlayHint")}</span>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   const { t } = useI18n();
 
@@ -2664,6 +2873,10 @@ export default function SettingsPage() {
             <Shield className="h-4 w-4 sm:me-2" />
             <span className="text-xs sm:text-sm">{t("settings.security")}</span>
           </TabsTrigger>
+          <TabsTrigger value="permissions" className="min-h-[44px] min-w-[8rem]" data-testid="tab-permissions">
+            <ShieldCheck className="h-4 w-4 sm:me-2" />
+            <span className="text-xs sm:text-sm">{t("settings.permissions.tab")}</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
@@ -2686,6 +2899,10 @@ export default function SettingsPage() {
 
         <TabsContent value="security">
           <SecuritySection />
+        </TabsContent>
+
+        <TabsContent value="permissions">
+          <PermissionsSection />
         </TabsContent>
       </Tabs>
     </div>

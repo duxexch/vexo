@@ -1,11 +1,19 @@
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
+import {
+    checkCallPermissions,
+    type CallMediaPermissionState,
+    type OverlayPermissionStatus,
+} from "@/lib/native-call-permissions";
+
 export type PermissionResult = "granted" | "denied" | "prompt" | "unavailable";
 
 export type PermissionSummary = {
     notifications: PermissionResult;
     microphone: PermissionResult;
+    camera: PermissionResult;
+    overlay: PermissionResult;
     nativePush: PermissionResult;
     nativeLocalNotifications: PermissionResult;
     checkedAt: string;
@@ -307,11 +315,22 @@ type CollectOptions = {
     requestMicrophonePermission?: boolean;
 };
 
+function callMediaStateToResult(state: CallMediaPermissionState): PermissionResult {
+    if (state === "granted") return "granted";
+    if (state === "denied") return "denied";
+    return "prompt";
+}
+
+function overlayStatusToResult(status: OverlayPermissionStatus): PermissionResult {
+    if (!status.supported) return "unavailable";
+    return status.granted ? "granted" : "denied";
+}
+
 async function collectPermissionSummary(options: CollectOptions = {}): Promise<PermissionSummary> {
     const requestNotificationPermission = options.requestNotificationPermission === true;
     const requestMicrophonePermissionFlag = options.requestMicrophonePermission === true;
 
-    const [notifications, microphone, nativePush, nativeLocalNotifications] = await Promise.all([
+    const [notifications, microphone, nativePush, nativeLocalNotifications, callPerms] = await Promise.all([
         requestNotificationPermission
             ? requestWebNotificationPermission()
             : Promise.resolve(checkWebNotificationPermission()),
@@ -320,11 +339,28 @@ async function collectPermissionSummary(options: CollectOptions = {}): Promise<P
         requestNotificationPermission
             ? requestNativeLocalNotificationsPermission()
             : checkNativeLocalNotificationsPermission(),
+        checkCallPermissions().catch(() => null),
     ]);
+
+    // Trust the dedicated call-permissions probe for camera state, and
+    // prefer it for microphone too on native (where the runtime
+    // permission is more authoritative than the browser-style query).
+    let cameraResult: PermissionResult = "unavailable";
+    let overlayResult: PermissionResult = "unavailable";
+    let microphoneResult = microphone;
+    if (callPerms) {
+        cameraResult = callMediaStateToResult(callPerms.camera);
+        overlayResult = overlayStatusToResult(callPerms.overlay);
+        if (Capacitor.isNativePlatform()) {
+            microphoneResult = callMediaStateToResult(callPerms.microphone);
+        }
+    }
 
     const summary: PermissionSummary = {
         notifications,
-        microphone,
+        microphone: microphoneResult,
+        camera: cameraResult,
+        overlay: overlayResult,
         nativePush,
         nativeLocalNotifications,
         checkedAt: new Date().toISOString(),
@@ -332,6 +368,36 @@ async function collectPermissionSummary(options: CollectOptions = {}): Promise<P
 
     saveSummary(summary);
     return summary;
+}
+
+/**
+ * Read the cached permission summary written by the most recent probe.
+ * Returns `null` when nothing has been persisted yet — the caller can
+ * then trigger {@link refreshPermissionSummary} to fetch a fresh one.
+ */
+export function getCachedPermissionSummary(): PermissionSummary | null {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Partial<PermissionSummary> | null;
+        if (!parsed) return null;
+        return {
+            notifications: parsed.notifications ?? "unavailable",
+            microphone: parsed.microphone ?? "unavailable",
+            camera: parsed.camera ?? "unavailable",
+            overlay: parsed.overlay ?? "unavailable",
+            nativePush: parsed.nativePush ?? "unavailable",
+            nativeLocalNotifications: parsed.nativeLocalNotifications ?? "unavailable",
+            checkedAt: parsed.checkedAt ?? new Date(0).toISOString(),
+        };
+    } catch {
+        return null;
+    }
+}
+
+/** Re-run the read-only probe and return the freshly persisted summary. */
+export function refreshPermissionSummary(): Promise<PermissionSummary> {
+    return collectPermissionSummary();
 }
 
 export async function requestPostSignupNotificationPermissions(): Promise<PermissionSummary> {

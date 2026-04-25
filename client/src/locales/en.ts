@@ -2370,6 +2370,23 @@ const en: Record<string, string> = {
   'callPermission.allow': 'Allow',
   'callPermission.notNow': 'Not now',
   'callPermission.openSettings': 'Open settings',
+
+  'settings.permissions.tab': 'Permissions',
+  'settings.permissions.title': 'App permissions',
+  'settings.permissions.description': 'Review and update the device permissions VEX needs for friend calls and notifications.',
+  'settings.permissions.microphone.title': 'Microphone',
+  'settings.permissions.microphone.helper': 'Needed only during a live voice or video call so the other person can hear you.',
+  'settings.permissions.camera.title': 'Camera',
+  'settings.permissions.camera.helper': 'Needed only during a live video call so the other person can see you.',
+  'settings.permissions.notifications.title': 'Notifications',
+  'settings.permissions.notifications.helper': 'Lets us alert you about incoming calls, messages and game invites.',
+  'settings.permissions.overlay.title': 'Display over other apps',
+  'settings.permissions.overlay.helper': 'Lets incoming calls take over the screen even when another app is in front, just like WhatsApp.',
+  'settings.permissions.overlay.openSettings': 'Open',
+  'settings.permissions.banner.title': 'Some permissions are missing',
+  'settings.permissions.banner.body': 'Friend calls work best when the microphone, camera and call-overlay permissions are granted. Open settings to fix this in a few taps.',
+  'settings.permissions.banner.action': 'Review permissions',
+  'settings.permissions.banner.dismiss': 'Not now',
 };
 
 export default en;
