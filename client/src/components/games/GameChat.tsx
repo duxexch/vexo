@@ -220,33 +220,20 @@ export function GameChat({
               revealed; this is just a count from the realtime presence
               channel. The amber tone matches the spectator chat badge
               elsewhere in this component for visual consistency. */}
+          {/* Task #26 + Task #75: combined viewer-count pill that ALSO
+              acts as the "who's watching" trigger. Tapping/hovering the
+              pill opens a popover listing the visible spectators (with
+              avatars + profile links). When the server has emitted at
+              least one viewer summary the pill renders inline avatars +
+              "+N" overflow inside the SAME control, so the badge and
+              the identity affordance are one unified surface — exactly
+              the spec's "tap the pill" interaction. Identities are
+              still privacy-gated server-side; the count remains
+              authoritative even if the visible avatars are filtered. */}
           {spectatorCount > 0 && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-amber-300/60 bg-amber-100/70 px-2 py-0.5 text-[11px] font-semibold text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100"
-              data-testid="game-chat-viewer-count"
-              title={
-                language === "ar"
-                  ? `${spectatorCount} يشاهد المباراة الآن`
-                  : `${spectatorCount} watching this match`
-              }
-            >
-              <Eye className="h-3 w-3" aria-hidden="true" />
-              {language === "ar"
-                ? `${spectatorCount} يشاهد`
-                : `${spectatorCount} watching`}
-            </span>
-          )}
-          {/* Task #75: "who's watching" avatar stack — opens a popover
-              with the full visible viewer list. Shown only when the
-              server has actually emitted at least one viewer summary
-              (`spectatorViewers.length > 0`). The +N overflow chip
-              uses the authoritative `spectatorCount`, so it stays
-              correct even when block-list filtering or the payload
-              cap shortens the visible avatars. */}
-          {spectatorViewers && spectatorViewers.length > 0 && (
-            <ViewerAvatarStack
-              viewers={spectatorViewers}
-              totalCount={spectatorCount}
+            <ChatViewerCountPill
+              spectatorCount={spectatorCount}
+              spectatorViewers={spectatorViewers ?? []}
               language={language}
             />
           )}
@@ -497,68 +484,87 @@ export function GameChat({
 }
 
 /**
- * Task #75: header avatar stack + popover that shows WHO is currently
- * watching the match. Renders up to `MAX_VISIBLE_AVATARS` overlapping
- * avatars and a "+N" overflow chip when the room has more spectators
- * than fit in the stack. Tapping (or hovering / focusing) the stack
- * opens a popover with the full list — each row links to the user's
- * profile so players can follow each other into matches.
+ * Task #26 + Task #75: combined viewer-count pill that doubles as the
+ * "who's watching" trigger. The pill always shows the authoritative
+ * spectator count (Task #26 contract) and, when block-list-filtered
+ * viewer summaries are available, also renders up to
+ * `MAX_VISIBLE_AVATARS` inline avatars + a "+N" overflow chip in the
+ * SAME control. Tapping/hovering the pill opens a popover listing the
+ * visible viewers — each row links to /profile/:username so friends
+ * can follow each other into matches.
  *
- * `viewers` is already block-list filtered server-side, so the
- * popover never needs to apply additional privacy logic — it just
- * renders what came in. `totalCount` is the authoritative live
- * spectator count and drives the "+N" math so the chip reflects the
- * full audience even when some viewers are hidden by blocks or by
- * the server-side payload cap.
+ * `viewers` is already block-list filtered server-side; the popover
+ * just renders what came in. `spectatorCount` drives the "+N" math
+ * so the chip reflects the full audience even when some viewers are
+ * hidden by privacy filters or the payload cap.
  */
 export const MAX_VISIBLE_AVATARS = 3;
 
-interface ViewerAvatarStackProps {
-  viewers: ChatViewerSummary[];
-  totalCount: number;
+interface ChatViewerCountPillProps {
+  spectatorCount: number;
+  spectatorViewers: ChatViewerSummary[];
   language: string;
 }
 
-function ViewerAvatarStack({ viewers, totalCount, language }: ViewerAvatarStackProps) {
-  const visible = viewers.slice(0, MAX_VISIBLE_AVATARS);
-  // Overflow chip uses `totalCount - visible.length` so it always
-  // matches what the user perceives as "how many are NOT shown in
-  // these little circles" — both the cap and the block filter
-  // contribute. Negative values can never appear because the server
-  // bounds visible.length <= totalCount in normal flow.
-  const overflow = Math.max(0, totalCount - visible.length);
+function ChatViewerCountPill({
+  spectatorCount,
+  spectatorViewers,
+  language,
+}: ChatViewerCountPillProps) {
   const isAr = language === "ar";
-  const stackTitle = isAr ? "من يشاهد الآن" : "Who's watching";
-  const emptyLabel = isAr ? "لا يوجد مشاهدون مرئيون" : "No visible viewers";
+  const visible = spectatorViewers.slice(0, MAX_VISIBLE_AVATARS);
+  // Overflow always derives from the authoritative public count,
+  // never from `visible.length` alone, so the pill stays correct
+  // even when block-filtering trims the visible avatars to zero.
+  const overflow = Math.max(0, spectatorCount - visible.length);
+  const pillTitle = isAr
+    ? `${spectatorCount} يشاهد المباراة الآن`
+    : `${spectatorCount} watching this match`;
+  const popoverTitle = isAr ? "من يشاهد الآن" : "Who's watching";
+  const emptyLabel = isAr
+    ? "لا توجد قائمة مشاهدين مرئية"
+    : "No visible viewers";
+  const countLabel = isAr
+    ? `${spectatorCount} يشاهد`
+    : `${spectatorCount} watching`;
 
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center -space-x-1.5 rounded-full border border-border/60 bg-background/70 px-1 py-0.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={stackTitle}
-          title={stackTitle}
-          data-testid="game-chat-viewer-stack"
+          className="inline-flex items-center gap-1 rounded-full border border-amber-300/60 bg-amber-100/70 px-2 py-0.5 text-[11px] font-semibold text-amber-900 transition-colors hover:bg-amber-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100 dark:hover:bg-amber-500/25"
+          data-testid="game-chat-viewer-count"
+          title={pillTitle}
+          aria-label={pillTitle}
         >
-          {visible.map((v) => (
-            <Avatar
-              key={v.userId}
-              className="h-5 w-5 ring-1 ring-background"
-              data-testid={`game-chat-viewer-avatar-${v.userId}`}
-            >
-              <AvatarImage src={v.avatarUrl ?? undefined} alt={v.username} />
-              <AvatarFallback className="text-[9px]">
-                {v.username[0]?.toUpperCase() ?? "?"}
-              </AvatarFallback>
-            </Avatar>
-          ))}
-          {overflow > 0 && (
+          <Eye className="h-3 w-3" aria-hidden="true" />
+          <span>{countLabel}</span>
+          {visible.length > 0 && (
             <span
-              className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-1 ring-background"
-              data-testid="game-chat-viewer-stack-overflow"
+              className="ms-1 inline-flex items-center -space-x-1.5"
+              data-testid="game-chat-viewer-stack"
             >
-              +{overflow}
+              {visible.map((v) => (
+                <Avatar
+                  key={v.userId}
+                  className="h-4 w-4 ring-1 ring-amber-100 dark:ring-amber-500/15"
+                  data-testid={`game-chat-viewer-avatar-${v.userId}`}
+                >
+                  <AvatarImage src={v.avatarUrl ?? undefined} alt={v.username} />
+                  <AvatarFallback className="text-[8px]">
+                    {v.username[0]?.toUpperCase() ?? "?"}
+                  </AvatarFallback>
+                </Avatar>
+              ))}
+              {overflow > 0 && (
+                <span
+                  className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-200 px-1 text-[9px] font-semibold text-amber-900 ring-1 ring-amber-100 dark:bg-amber-400/30 dark:text-amber-100 dark:ring-amber-500/15"
+                  data-testid="game-chat-viewer-stack-overflow"
+                >
+                  +{overflow}
+                </span>
+              )}
             </span>
           )}
         </button>
@@ -570,19 +576,19 @@ function ViewerAvatarStack({ viewers, totalCount, language }: ViewerAvatarStackP
       >
         <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
           <Users className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-semibold">{stackTitle}</span>
+          <span className="text-xs font-semibold">{popoverTitle}</span>
           <span className="ms-auto rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-            {totalCount}
+            {spectatorCount}
           </span>
         </div>
-        {viewers.length === 0 ? (
+        {spectatorViewers.length === 0 ? (
           <p className="px-3 py-4 text-center text-xs text-muted-foreground">
             {emptyLabel}
           </p>
         ) : (
           <ScrollArea className="max-h-64">
             <ul className="py-1">
-              {viewers.map((v) => (
+              {spectatorViewers.map((v) => (
                 <li key={v.userId}>
                   <Link
                     href={`/profile/${encodeURIComponent(v.username)}`}

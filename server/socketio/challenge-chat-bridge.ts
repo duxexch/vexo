@@ -198,7 +198,15 @@ export async function broadcastChallengeViewerList(
         .from(users)
         .where(inArray(users.id, idsToFetch));
     } catch {
-      // DB lookup failure → degrade to count-only; do not block.
+      // DB lookup failure → degrade to count-only AND clear any stale
+      // identity list still cached on each connected client. Emitting
+      // an empty viewers array (with the authoritative totalCount)
+      // ensures the popover doesn't show people who already left.
+      chatNs.to(roomId).emit("chat:viewer_list", {
+        roomId,
+        viewers: [],
+        totalCount,
+      });
       return;
     }
 

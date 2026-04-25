@@ -1,31 +1,49 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { ChatViewerListPayload } from "../shared/socketio-events";
 
-// ---- Module mocks must be declared BEFORE importing the SUT ----
-const mockGetCachedUserBlockLists = vi.fn();
-const mockStorageGetUser = vi.fn();
-const mockDbWhere = vi.fn();
+// ---- Typed minimal fakes ----
+type BlockListsCacheLoader = (
+  userId: string,
+) => Promise<{ blockedUsers: string[]; mutedUsers: string[] } | null>;
+type GetCachedBlockLists = (
+  userId: string,
+  loader: BlockListsCacheLoader,
+) => Promise<{ blockedUsers: string[]; mutedUsers: string[] }>;
+type StorageGetUser = (id: string) => Promise<unknown>;
+type DbWhereStub = (...args: unknown[]) => Promise<
+  Array<{ id: string; username: string | null; profilePicture: string | null }>
+>;
+
+const mockGetCachedUserBlockLists =
+  vi.fn<Parameters<GetCachedBlockLists>, ReturnType<GetCachedBlockLists>>();
+const mockStorageGetUser =
+  vi.fn<Parameters<StorageGetUser>, ReturnType<StorageGetUser>>();
+const mockDbWhere = vi.fn<Parameters<DbWhereStub>, ReturnType<DbWhereStub>>();
 
 vi.mock("../server/lib/redis", () => ({
-  getCachedUserBlockLists: (...args: any[]) =>
-    mockGetCachedUserBlockLists(...args),
+  getCachedUserBlockLists: (
+    userId: string,
+    loader: BlockListsCacheLoader,
+  ) => mockGetCachedUserBlockLists(userId, loader),
 }));
 
 vi.mock("../server/storage", () => ({
-  storage: { getUser: (...args: any[]) => mockStorageGetUser(...args) },
+  storage: { getUser: (id: string) => mockStorageGetUser(id) },
 }));
 
 vi.mock("../server/db", () => ({
   db: {
     select: () => ({
       from: () => ({
-        where: (...args: any[]) => mockDbWhere(...args),
+        where: (...args: unknown[]) => mockDbWhere(...args),
       }),
     }),
   },
 }));
 
-// Stub the rest of the bridge's import surface so the SUT loads.
-vi.mock("../server/lib/word-filter", () => ({ filterMessage: (s: string) => s }));
+vi.mock("../server/lib/word-filter", () => ({
+  filterMessage: (s: string) => s,
+}));
 vi.mock("../server/lib/input-security", () => ({
   sanitizePlainText: (s: string) => s,
 }));
@@ -39,11 +57,31 @@ interface FakeSocket {
   emit: ReturnType<typeof vi.fn>;
 }
 
-function makeNamespace(sockets: FakeSocket[]) {
-  return {
-    in: (_room: string) => ({ fetchSockets: async () => sockets }),
-    to: (_room: string) => ({ emit: vi.fn() }),
-  } as any;
+interface FakeNamespace {
+  in(room: string): { fetchSockets(): Promise<FakeSocket[]> };
+  to(room: string): { emit: ReturnType<typeof vi.fn> };
+}
+
+function makeNamespace(sockets: FakeSocket[]): {
+  ns: FakeNamespace;
+  roomEmit: ReturnType<typeof vi.fn>;
+} {
+  const roomEmit = vi.fn();
+  const ns: FakeNamespace = {
+    in: () => ({ fetchSockets: async () => sockets }),
+    to: () => ({ emit: roomEmit }),
+  };
+  return { ns, roomEmit };
+}
+
+// The SUT signature requires the socket.io ChatNamespace type, which
+// our minimal fake intentionally does not implement. Cast through
+// `unknown` at call-site so the helper itself stays typed.
+function callBroadcast(ns: FakeNamespace, room: string): Promise<void> {
+  return broadcastChallengeViewerList(
+    ns as unknown as Parameters<typeof broadcastChallengeViewerList>[0],
+    room,
+  );
 }
 
 describe("broadcastChallengeViewerList — Task #75 fail-closed contract", () => {
@@ -63,24 +101,25 @@ describe("broadcastChallengeViewerList — Task #75 fail-closed contract", () =>
       },
       emit: vi.fn(),
     };
-    const ns = makeNamespace([recipient, spectator]);
+    const { ns } = makeNamespace([recipient, spectator]);
 
     mockDbWhere.mockResolvedValue([
       { id: "spec-user", username: "spec", profilePicture: null },
     ]);
-    // Recipient lookup OK; viewer lookup throws → flips fail-closed flag.
-    mockGetCachedUserBlockLists.mockImplementation(async (id: string) => {
+    mockGetCachedUserBlockLists.mockImplementation(async (id) => {
       if (id === "spec-user") throw new Error("redis down");
       return { blockedUsers: [], mutedUsers: [] };
     });
 
-    await broadcastChallengeViewerList(ns, "challenge:room-1");
+    await callBroadcast(ns, "challenge:room-1");
 
     expect(recipient.emit).toHaveBeenCalledTimes(1);
-    const [evt, payload] = recipient.emit.mock.calls[0];
+    const [evt, payload] = recipient.emit.mock.calls[0] as [
+      string,
+      ChatViewerListPayload,
+    ];
     expect(evt).toBe("chat:viewer_list");
     expect(payload.roomId).toBe("challenge:room-1");
-    // Privacy contract: identities suppressed, count still authoritative.
     expect(payload.viewers).toEqual([]);
     expect(payload.totalCount).toBe(1);
   });
@@ -97,7 +136,7 @@ describe("broadcastChallengeViewerList — Task #75 fail-closed contract", () =>
       },
       emit: vi.fn(),
     };
-    const ns = makeNamespace([recipient, spectator]);
+    const { ns } = makeNamespace([recipient, spectator]);
 
     mockDbWhere.mockResolvedValue([
       {
@@ -111,10 +150,13 @@ describe("broadcastChallengeViewerList — Task #75 fail-closed contract", () =>
       mutedUsers: [],
     });
 
-    await broadcastChallengeViewerList(ns, "challenge:room-1");
+    await callBroadcast(ns, "challenge:room-1");
 
     expect(recipient.emit).toHaveBeenCalledTimes(1);
-    const [evt, payload] = recipient.emit.mock.calls[0];
+    const [evt, payload] = recipient.emit.mock.calls[0] as [
+      string,
+      ChatViewerListPayload,
+    ];
     expect(evt).toBe("chat:viewer_list");
     expect(payload.viewers).toEqual([
       {
@@ -138,21 +180,24 @@ describe("broadcastChallengeViewerList — Task #75 fail-closed contract", () =>
       },
       emit: vi.fn(),
     };
-    const ns = makeNamespace([recipient, spectator]);
+    const { ns } = makeNamespace([recipient, spectator]);
 
     mockDbWhere.mockResolvedValue([
       { id: "spec-user", username: "spec", profilePicture: null },
     ]);
-    mockGetCachedUserBlockLists.mockImplementation(async (id: string) => {
+    mockGetCachedUserBlockLists.mockImplementation(async (id) => {
       if (id === "host-user") {
         return { blockedUsers: ["spec-user"], mutedUsers: [] };
       }
       return { blockedUsers: [], mutedUsers: [] };
     });
 
-    await broadcastChallengeViewerList(ns, "challenge:room-1");
+    await callBroadcast(ns, "challenge:room-1");
 
-    const [, payload] = recipient.emit.mock.calls[0];
+    const [, payload] = recipient.emit.mock.calls[0] as [
+      string,
+      ChatViewerListPayload,
+    ];
     expect(payload.viewers).toEqual([]);
     expect(payload.totalCount).toBe(1);
   });
@@ -169,21 +214,59 @@ describe("broadcastChallengeViewerList — Task #75 fail-closed contract", () =>
       },
       emit: vi.fn(),
     };
-    const ns = makeNamespace([recipient, spectator]);
+    const { ns } = makeNamespace([recipient, spectator]);
 
     mockDbWhere.mockResolvedValue([
       { id: "spec-user", username: "spec", profilePicture: null },
     ]);
-    mockGetCachedUserBlockLists.mockImplementation(async (id: string) => {
+    mockGetCachedUserBlockLists.mockImplementation(async (id) => {
       if (id === "spec-user") {
         return { blockedUsers: ["host-user"], mutedUsers: [] };
       }
       return { blockedUsers: [], mutedUsers: [] };
     });
 
-    await broadcastChallengeViewerList(ns, "challenge:room-1");
+    await callBroadcast(ns, "challenge:room-1");
 
-    const [, payload] = recipient.emit.mock.calls[0];
+    const [, payload] = recipient.emit.mock.calls[0] as [
+      string,
+      ChatViewerListPayload,
+    ];
+    expect(payload.viewers).toEqual([]);
+    expect(payload.totalCount).toBe(1);
+  });
+
+  it("emits an empty room-wide payload when the user-summary DB query fails (clears stale identities)", async () => {
+    const recipient: FakeSocket = {
+      data: { userId: "host-user", spectatorRoomIds: [] },
+      emit: vi.fn(),
+    };
+    const spectator: FakeSocket = {
+      data: {
+        userId: "spec-user",
+        spectatorRoomIds: ["challenge:room-1"],
+      },
+      emit: vi.fn(),
+    };
+    const { ns, roomEmit } = makeNamespace([recipient, spectator]);
+
+    mockDbWhere.mockRejectedValue(new Error("db down"));
+    mockGetCachedUserBlockLists.mockResolvedValue({
+      blockedUsers: [],
+      mutedUsers: [],
+    });
+
+    await callBroadcast(ns, "challenge:room-1");
+
+    // Per-recipient emits must NOT happen — instead the room-level
+    // namespace emit clears identities for everyone in one call.
+    expect(recipient.emit).not.toHaveBeenCalled();
+    expect(roomEmit).toHaveBeenCalledTimes(1);
+    const [evt, payload] = roomEmit.mock.calls[0] as [
+      string,
+      ChatViewerListPayload,
+    ];
+    expect(evt).toBe("chat:viewer_list");
     expect(payload.viewers).toEqual([]);
     expect(payload.totalCount).toBe(1);
   });
