@@ -51,7 +51,7 @@
     "quality:smoke:domino-playthrough-bounds": "tsx scripts/smoke-domino-playthrough-bounds.ts",
     "quality:smoke:domino-playthrough-pips": "tsx scripts/smoke-domino-playthrough-pips.ts",
     "quality:smoke:dm-notifications": "tsx scripts/smoke-dm-notifications.ts",
-    "quality:smoke:dm-scroll-anchor": "tsx scripts/smoke-dm-scroll-anchor.ts",
+    "quality:smoke:dm-scroll-anchor": "vitest run tests/dm-scroll-anchor-prepend.test.tsx",
     "quality:smoke:tournament-currency": "node scripts/smoke-tournament-currency-e2e.mjs",
     "quality:smoke:call-experience": "tsx scripts/smoke-call-experience.ts",
     "quality:smoke:ringtone-asset": "tsx scripts/smoke-ringtone-asset.ts",
