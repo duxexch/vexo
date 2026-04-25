@@ -68,20 +68,42 @@ export async function checkCallPermissions(): Promise<NativeCallPermissionsCheck
 
 /**
  * Ensure the runtime permissions required to actually start a call of
- * the requested kind are granted. Returns `granted: true` only when
- * both the mic (always) and the camera (for video) are granted
- * afterwards.
+ * the requested kind are granted.
  *
- * Safe to call on web — it short-circuits to the existing browser
- * grant logic via the plugin's web stub, which never throws.
+ * Platform semantics:
+ *  - **Native Android**: hard-gate. The WebView only gets mic/camera
+ *    access if the host app has been granted the matching runtime
+ *    permission, so we MUST confirm a "granted" state before letting
+ *    `getUserMedia` run. A "denied" or non-granted result returns
+ *    `granted: false` so the caller can re-show the rationale modal.
+ *  - **Web + iOS**: soft-pass. The browser / iOS WebView fires its
+ *    own permission prompt directly from `getUserMedia`, so blocking
+ *    here on a `prompt`/`unavailable` state would prevent that
+ *    dialog from ever appearing on first-time use. We only return
+ *    `granted: false` when the platform reports an explicit
+ *    `denied` for a permission the call actually needs — every
+ *    other state is allowed through.
+ *
+ * Safe to call on any platform — never throws.
  */
 export async function ensureCallPermissions(
   kind: CallMediaKind,
 ): Promise<{ granted: boolean; status: CallMediaPermissionStatus }> {
-  const status = await safeRequestMedia();
-  const micOk = status.microphone === "granted";
-  const camOk = kind === "voice" ? true : status.camera === "granted";
-  return { granted: micOk && camOk, status };
+  const isNativeAndroid =
+    Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+
+  if (isNativeAndroid) {
+    const status = await safeRequestMedia();
+    const micOk = status.microphone === "granted";
+    const camOk = kind === "voice" ? true : status.camera === "granted";
+    return { granted: micOk && camOk, status };
+  }
+
+  // Soft check on web + iOS: only block on a confirmed denial.
+  const status = await safeCheckMedia();
+  const micBlocked = status.microphone === "denied";
+  const camBlocked = kind === "video" && status.camera === "denied";
+  return { granted: !micBlocked && !camBlocked, status };
 }
 
 /** Open the system overlay-permission screen (Android only). */
