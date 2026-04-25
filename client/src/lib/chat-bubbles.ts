@@ -42,6 +42,13 @@ export interface ConfigureBubblesArgs {
   apiBaseUrl?: string;
   /** Bearer token used by the in-bubble native chat surface. */
   authToken?: string;
+  /** Current value of the chat-bubbles toggle for this user. The
+   *  killed-app FCM path uses this to drop bubbles when the user has
+   *  switched bubbles off. */
+  bubblesEnabled?: boolean;
+  /** Peer ids the current user has muted. The killed-app FCM path
+   *  drops bubbles for these peers. */
+  mutedPeerIds?: string[];
 }
 
 interface PluginShape {

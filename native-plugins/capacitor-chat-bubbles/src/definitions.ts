@@ -39,6 +39,14 @@ export interface ConfigureOptions {
   /** Bearer token for the chat API. Stored in private SharedPreferences
    *  on Android — same trust boundary as the WebView's localStorage. */
   authToken?: string;
+  /** Mirror of the JS-side chat-bubbles toggle. The native FCM-killed
+   *  path consults this so a disabled user never sees a bubble even
+   *  when the WebView isn't around to gate the request. */
+  bubblesEnabled?: boolean;
+  /** Peer ids the current user has muted. The native FCM-killed path
+   *  drops bubbles for any peer in this list, matching the in-app
+   *  suppression rules. */
+  mutedPeerIds?: string[];
 }
 
 export interface ChatBubblesPlugin {

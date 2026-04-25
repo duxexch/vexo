@@ -100,10 +100,20 @@ work without leaving the current app:
 ```
 
 * History fetch + send post both use the API base URL + bearer token
-  persisted by `ChatBubbles.configure({ apiBaseUrl, authToken })`.
-  `ChatBubblesLayer` invokes that bridge automatically whenever the
-  React auth token changes, so the values stay fresh even after
-  logout/login.
+  persisted by `ChatBubbles.configure({ apiBaseUrl, authToken,
+  bubblesEnabled, mutedPeerIds })`. `ChatBubblesLayer` invokes that
+  bridge automatically whenever the React auth token, the user-scoped
+  chat-bubbles toggle, or the muted-peer list changes — so the values
+  stay fresh even after logout/login or switching accounts on a
+  shared device.
+* `BubbleNotifier.showBubble(...)` (the single entry point used by
+  both the foreground plugin and the killed-app FCM service) consults
+  `BubbleConfig.bubblesEnabled(...)` and
+  `BubbleConfig.isPeerMuted(peerId)` *before* presenting either
+  surface. That means the killed-app bubble path applies the same
+  suppression rules as the in-app web layer: a muted peer never
+  produces a chat head and a user who turned the toggle off never
+  sees one either, even when the WebView is gone.
 * "Open" hands off to the host launcher activity via the existing
   `vexapp://chat?user=…` deep link — same behavior as the previous
   build, kept as an escape hatch.

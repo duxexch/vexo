@@ -185,17 +185,31 @@ export default function ChatBubblesLayer() {
   // Push the API base URL + bearer token down to the native plugin so
   // the in-bubble chat surface (which can launch cold from an FCM push
   // after the WebView is gone) can fetch history and post quick
-  // replies. Re-runs whenever the auth token changes. Safe no-op on
-  // web/iOS.
+  // replies. Also mirrors the chat-bubbles toggle and the user's
+  // muted-peer list so the FCM-killed bubble path applies the SAME
+  // suppression rules as the in-app web layer (no bubbles for muted
+  // peers, no bubbles when the toggle is off). Re-runs whenever any
+  // of those inputs change. Safe no-op on web/iOS.
   useEffect(() => {
     if (nativeMode === "none") return;
-    if (!token) return;
     const apiBaseUrl =
       typeof window !== "undefined" && window.location?.origin
         ? window.location.origin
         : undefined;
-    void nativeConfigureBubbles({ apiBaseUrl, authToken: token });
-  }, [nativeMode, token]);
+    const muted = new Set<string>();
+    if (Array.isArray(user?.notificationMutedUsers)) {
+      for (const id of user.notificationMutedUsers) muted.add(String(id));
+    }
+    if (Array.isArray(user?.mutedUsers)) {
+      for (const id of user.mutedUsers) muted.add(String(id));
+    }
+    void nativeConfigureBubbles({
+      apiBaseUrl,
+      authToken: token ?? undefined,
+      bubblesEnabled: enabled,
+      mutedPeerIds: Array.from(muted),
+    });
+  }, [nativeMode, token, enabled, user?.notificationMutedUsers, user?.mutedUsers]);
 
   // ── helpers ─────────────────────────────────────────────────────────
   const activeChatPeerId = useMemo(() => {
