@@ -257,6 +257,61 @@ describe("useKeyboardInset", () => {
     });
   });
 
+  describe("regression: partial-attach failure must not leave zombie listeners", () => {
+    // Adapts task scenario 4 in spirit. The original phrasing
+    // ("addListener rejects on the third call out of four") assumes
+    // the async `@capacitor/keyboard.addListener` Promise API the
+    // hook no longer uses. The synchronous web equivalent is an
+    // `addEventListener` call throwing mid-sequence (e.g. a hostile
+    // host shim, a CSP violation, or a future polyfill bug). The
+    // hook's `attachListeners` already wired the first two viewport
+    // listeners by the time the third call throws — those zombies
+    // must be rolled back so a remount starts from a clean slate.
+    it("rolls back the first two attaches when window.addEventListener throws on the orientationchange call", () => {
+      // React 18 rethrows useEffect errors on a microtask after our
+      // `expect(...).toThrow(...)` already caught the synchronous
+      // throw. Vitest treats that microtask rethrow as an
+      // "unhandled error" and fails the run unless we filter it.
+      // Scope the filter to ONLY our synthetic error so a real
+      // unhandled error in any other test still surfaces.
+      const swallowSynthetic = (err: unknown): void => {
+        if (
+          err instanceof Error &&
+          err.message === "synthetic addListener failure"
+        ) {
+          return;
+        }
+        throw err;
+      };
+      process.prependListener("uncaughtException", swallowSynthetic);
+
+      try {
+        // Scope the failure to "orientationchange" only — React,
+        // jsdom and the testing-library cleanup hook all attach
+        // unrelated window listeners during render and we don't
+        // want to break them.
+        winAddSpy.mockImplementation((type: string) => {
+          if (type === "orientationchange") {
+            throw new Error("synthetic addListener failure");
+          }
+        });
+
+        expect(() => renderHook(() => useKeyboardInset())).toThrow(
+          /synthetic addListener failure/,
+        );
+
+        // The hardening must have removed the two viewport
+        // listeners that were wired before the throw. Net count
+        // of 0 proves no zombies remain on
+        // `window.visualViewport`.
+        expect(netListenerCount(vvAddSpy, vvRemoveSpy, "resize")).toBe(0);
+        expect(netListenerCount(vvAddSpy, vvRemoveSpy, "scroll")).toBe(0);
+      } finally {
+        process.removeListener("uncaughtException", swallowSynthetic);
+      }
+    });
+  });
+
   describe("regression: graceful fallback when the viewport API is unavailable", () => {
     // Adapts task scenario 4. The original "addListener rejects on
     // the third call out of four" can't happen in the current

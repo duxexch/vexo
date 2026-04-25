@@ -29,10 +29,23 @@ function attachListeners(): void {
   if (listenersAttached || typeof window === "undefined") return;
   const vv = window.visualViewport;
   if (!vv) return;
-  vv.addEventListener("resize", schedule);
-  vv.addEventListener("scroll", schedule);
-  window.addEventListener("orientationchange", schedule);
-  listenersAttached = true;
+  // Track each successful attach so a partial-attach failure can be
+  // rolled back instead of leaving zombie listeners installed
+  // (Task #43 hardening, locked by Task #81's regression test).
+  let resizeAttached = false;
+  let scrollAttached = false;
+  try {
+    vv.addEventListener("resize", schedule);
+    resizeAttached = true;
+    vv.addEventListener("scroll", schedule);
+    scrollAttached = true;
+    window.addEventListener("orientationchange", schedule);
+    listenersAttached = true;
+  } catch (err) {
+    if (resizeAttached) vv.removeEventListener("resize", schedule);
+    if (scrollAttached) vv.removeEventListener("scroll", schedule);
+    throw err;
+  }
 }
 
 function detachListeners(): void {
