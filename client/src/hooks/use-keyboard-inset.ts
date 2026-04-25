@@ -117,6 +117,7 @@ export const __TEST_ONLY__ = {
   detachListeners,
   isAttached: (): boolean => listenersAttached,
   reset: (): void => {
+    detachListeners();
     listenersAttached = false;
     consumerCount = 0;
     if (frame) {

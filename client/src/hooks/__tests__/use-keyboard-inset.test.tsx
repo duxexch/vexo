@@ -200,6 +200,9 @@ describe("useKeyboardInset", () => {
     expect(
       netListenerCount(winAddSpy, winRemoveSpy, "orientationchange"),
     ).toBe(0);
+    expect(
+      document.documentElement.style.getPropertyValue(CSS_VAR_NAME),
+    ).toBe("0px");
   });
 
   it("writes 0px and attaches no listeners when window.visualViewport is unavailable", () => {
