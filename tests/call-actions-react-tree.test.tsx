@@ -270,10 +270,14 @@ function setupServiceWorker(): { dispatchSw: (msg: unknown) => Promise<void> } {
   });
   const dispatchSw = async (msg: unknown) => {
     const event = new MessageEvent("message", { data: msg });
-    target.dispatchEvent(event);
-    // Yield so async dispatchCallAction microtasks settle.
-    await Promise.resolve();
-    await Promise.resolve();
+    await act(async () => {
+      target.dispatchEvent(event);
+      // Yield so the fire-and-forget `void dispatchCallAction(...)` chain
+      // started by the SW listener gets a chance to run its first batch
+      // of microtasks before we hand control back to the caller.
+      await Promise.resolve();
+      await Promise.resolve();
+    });
   };
   return { dispatchSw };
 }
@@ -580,6 +584,209 @@ describe("call-action bridge — real production tree", () => {
         expect(screen.getByTestId("challenge-incoming").textContent).toBe("none");
         expect(screen.getByTestId("challenge-status").textContent).toBe("connecting");
       });
+    } finally {
+      tree.unmount();
+    }
+  });
+
+  /* ────────────────────────────────────────────────────────────────────
+   * Hangup specs.
+   *
+   * Note on the test surface: the production `CallSessionProvider` SW
+   * bridge intentionally only forwards `accept` / `decline` actions
+   * (lock-screen / push-notification action buttons). Hangup is not a
+   * notification action — it's invoked by other out-of-band triggers
+   * (e.g. the native CallKit / Telecom "End" UI in the wrapped mobile
+   * shell, or the system tray button) by calling `dispatchCallAction`
+   * directly. So these specs exercise the registry → handler contract
+   * by dispatching against `dispatchCallAction` itself, mounting the
+   * real production providers so the real `useCallSession` /
+   * `usePrivateCallLayer` handlers (with their full `incoming` / `invite`
+   * / `activeSessionId` guards) are the ones under test.
+   * ──────────────────────────────────────────────────────────────────── */
+
+  it("dispatchCallAction hangup → real useCallSession tears down the active challenge call (active → ended)", async () => {
+    const tree = renderRealTree();
+    try {
+      const { dispatchCallAction } = await import("../client/src/lib/call-actions");
+
+      // First go through accept to put the real hook into an active state.
+      // We wait until `incoming` clears AND status is "connecting" — that's
+      // the END of `acceptIncoming` in the real hook, by which point
+      // `ctxRef.current.sessionId` has been set. Waiting only for the
+      // "connecting" status would be premature (it's set before the
+      // `await buildPeerConnection` that precedes the ctxRef write).
+      await deliverChallengeIncoming("challenge-H");
+      await dispatchSw({
+        type: "NOTIFICATION_CLICK",
+        notificationType: "private_call_invite",
+        action: "accept",
+        callId: "challenge-H",
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("challenge-incoming").textContent).toBe("none");
+        expect(screen.getByTestId("challenge-status").textContent).toBe("connecting");
+      });
+
+      // Now trigger hangup via the registry contract directly.
+      let claimed = false;
+      await act(async () => {
+        claimed = await dispatchCallAction({
+          action: "hangup",
+          callId: "challenge-H",
+        });
+      });
+      expect(claimed).toBe(true);
+
+      // The real `hangup()` callback in `use-call-session.tsx` runs:
+      // it emits `rtc:end` and transitions status to "ended".
+      await waitFor(() => {
+        expect(screen.getByTestId("challenge-status").textContent).toBe("ended");
+      });
+
+      const endEmit = fakeSocket.emit.mock.calls.find(
+        (call) =>
+          call[0] === "rtc:end" &&
+          (call[1] as { sessionId?: string }).sessionId === "challenge-H" &&
+          (call[1] as { reason?: string }).reason === "native_ui_hangup",
+      );
+      expect(endEmit).toBeDefined();
+    } finally {
+      tree.unmount();
+    }
+  });
+
+  it("dispatchCallAction hangup → real PrivateCallLayer tears down the active DM call (active → idle)", async () => {
+    const tree = renderRealTree();
+    try {
+      const { dispatchCallAction } = await import("../client/src/lib/call-actions");
+
+      // Put the real DM provider into an active call via the accept path.
+      await deliverDmInvite("dm-H");
+      await dispatchSw({
+        type: "NOTIFICATION_CLICK",
+        notificationType: "private_call_invite",
+        action: "accept",
+        callId: "dm-H",
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("dm-has-active").textContent).toBe("true");
+        expect(screen.getByTestId("dm-active-id").textContent).toBe("dm-H");
+      });
+
+      const fetchMock = globalThis.fetch as unknown as Mock;
+      fetchMock.mockClear();
+
+      // Now hangup via the registry contract directly.
+      let claimed = false;
+      await act(async () => {
+        claimed = await dispatchCallAction({
+          action: "hangup",
+          callId: "dm-H",
+        });
+      });
+      expect(claimed).toBe(true);
+
+      // Real `endCurrentCall` clears `activeCall` and posts to
+      // /api/chat/calls/end on the server.
+      await waitFor(() => {
+        expect(screen.getByTestId("dm-has-active").textContent).toBe("false");
+        expect(screen.getByTestId("dm-active-id").textContent).toBe("none");
+      });
+
+      const endCallFetch = fetchMock.mock.calls.find(
+        (call) => typeof call[0] === "string" && call[0].includes("/api/chat/calls/end"),
+      );
+      expect(endCallFetch).toBeDefined();
+      // And the body must reference the right session.
+      const body = JSON.parse((endCallFetch![1] as { body: string }).body);
+      expect(body).toEqual({ sessionId: "dm-H" });
+    } finally {
+      tree.unmount();
+    }
+  });
+
+  it("dispatchCallAction hangup with mismatched callId → real useCallSession refuses to hang up the active challenge call", async () => {
+    // Direct parity replacement for the retired source-pattern guard #16
+    // in scripts/smoke-call-actions.ts: the challenge-active hangup branch
+    // must refuse a hangup whose `ctx.callId` doesn't match its
+    // `activeSessionId`. Without this guard, the challenge manager would
+    // tear down a DM call (or any other manager's session).
+    const tree = renderRealTree();
+    try {
+      const { dispatchCallAction } = await import("../client/src/lib/call-actions");
+
+      // Put the challenge call into an active state.
+      await deliverChallengeIncoming("challenge-Z");
+      await dispatchSw({
+        type: "NOTIFICATION_CLICK",
+        notificationType: "private_call_invite",
+        action: "accept",
+        callId: "challenge-Z",
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("challenge-incoming").textContent).toBe("none");
+        expect(screen.getByTestId("challenge-status").textContent).toBe("connecting");
+      });
+
+      fakeSocket.emit.mockClear();
+
+      // Hangup for a different sessionId — neither manager owns it.
+      let claimed = true;
+      await act(async () => {
+        claimed = await dispatchCallAction({
+          action: "hangup",
+          callId: "some-other-id",
+        });
+      });
+      expect(claimed).toBe(false);
+
+      // Challenge call is unchanged — still connecting, no rtc:end emitted.
+      expect(screen.getByTestId("challenge-status").textContent).toBe("connecting");
+      const endEmit = fakeSocket.emit.mock.calls.find((call) => call[0] === "rtc:end");
+      expect(endEmit).toBeUndefined();
+    } finally {
+      tree.unmount();
+    }
+  });
+
+  it("dispatchCallAction hangup with mismatched callId → neither manager tears down (no cross-manager false claim)", async () => {
+    const tree = renderRealTree();
+    try {
+      const { dispatchCallAction } = await import("../client/src/lib/call-actions");
+
+      // Put DM into active state with one id, leave challenge ringing
+      // with another. A hangup for a third "ghost" id must be refused
+      // by both — this is the production regression that previously
+      // caused lock-screen End to silently kill the wrong call.
+      await deliverDmInvite("dm-X");
+      await dispatchSw({
+        type: "NOTIFICATION_CLICK",
+        notificationType: "private_call_invite",
+        action: "accept",
+        callId: "dm-X",
+      });
+      await deliverChallengeIncoming("challenge-X");
+      await waitFor(() => {
+        expect(screen.getByTestId("dm-has-active").textContent).toBe("true");
+        expect(screen.getByTestId("challenge-status").textContent).toBe("ringing-in");
+      });
+
+      let claimed = true;
+      await act(async () => {
+        claimed = await dispatchCallAction({
+          action: "hangup",
+          callId: "ghost-id",
+        });
+      });
+      // No manager owns the ghost id — dispatch must report unclaimed.
+      expect(claimed).toBe(false);
+
+      // DM call still active, challenge still ringing.
+      expect(screen.getByTestId("dm-has-active").textContent).toBe("true");
+      expect(screen.getByTestId("dm-active-id").textContent).toBe("dm-X");
+      expect(screen.getByTestId("challenge-status").textContent).toBe("ringing-in");
+      expect(screen.getByTestId("challenge-incoming").textContent).toBe("challenge-X");
     } finally {
       tree.unmount();
     }

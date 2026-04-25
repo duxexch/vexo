@@ -20,10 +20,22 @@
  *    managers' state machines. Catches changes to dispatch order,
  *    error handling, and async-await semantics.
  *
- * 2) **Source-pattern guards** that re-read both handler files and
- *    assert their structural shape (sessionId guard + accept/decline
- *    + hangup branches). Catches refactors that drop a guard or stop
- *    returning false on mismatched IDs.
+ * 2) **Source-pattern guards** for the bridge plumbing only —
+ *    `dispatchCallAction` try/catch, `registerCallActionHandler`
+ *    cleanup closure, `CallSessionProvider` → `dispatchCallAction`
+ *    wiring, the SW accept/decline action mapping, and the
+ *    `native-call-ui.ts` CallKit/Telecom decline-first ordering.
+ *
+ * Behavioural coverage of the two managers' real handler bodies
+ * (sessionId guards, accept/decline/hangup branches, mismatched-id
+ * refusal) lives in `tests/call-actions-react-tree.test.tsx`, which
+ * mounts the real `CallSessionProvider` + `PrivateCallLayerProvider`
+ * with mocked browser APIs and dispatches real SW messages /
+ * `dispatchCallAction` calls. The previous static source-pattern
+ * guards on those handlers were retired once the React-tree spec
+ * was in place — string regex on TSX would block legitimate
+ * refactors (e.g. moving a guard into a helper, swapping `if`
+ * chains for early-return) without adding behavioural value.
  *
  * No DB, no server, no React render. Pure TS, ~50 ms wall time.
  */
@@ -435,104 +447,32 @@ async function main(): Promise<void> {
     }
   }
 
-  /* ──────────── 15) Source guard: use-call-session.tsx still has the sessionId guard ─ */
-  const useCallSessionSrc = await readText(path.join(REPO_ROOT, "client/src/hooks/use-call-session.tsx"));
-  if (
-    useCallSessionSrc
-    && /registerCallActionHandler\s*\(\s*async\s*\(\s*ctx\s*\)\s*=>/.test(useCallSessionSrc)
-    && /if\s*\(\s*incoming\s*\)\s*\{[\s\S]{0,400}ctx\.callId\s*&&\s*ctx\.callId\s*!==\s*incoming\.sessionId[\s\S]{0,40}return\s+false/.test(useCallSessionSrc)
-    && /ctx\.action\s*===\s*"accept"/.test(useCallSessionSrc)
-    && /ctx\.action\s*===\s*"decline"/.test(useCallSessionSrc)
-  ) {
-    pass("use-call-session.tsx handler still guards on incoming.sessionId before claiming accept/decline");
-  } else {
-    fail(
-      "use-call-session.tsx handler guards on incoming.sessionId",
-      "If this guard is dropped, the challenge-game manager will claim DM call invites and silently swallow the user's tap.",
-    );
-  }
-
-  /* ──────────── 16) Source guard: use-call-session hangup branch checks activeSessionId ─ */
-  if (
-    useCallSessionSrc
-    && /activeSessionId\s*&&\s*ctx\.action\s*===\s*"hangup"[\s\S]{0,120}ctx\.callId\s*&&\s*ctx\.callId\s*!==\s*activeSessionId[\s\S]{0,40}return\s+false/.test(useCallSessionSrc)
-  ) {
-    pass("use-call-session.tsx hangup branch only fires when ctx.callId matches activeSessionId");
-  } else {
-    fail(
-      "use-call-session.tsx hangup branch matches on activeSessionId",
-      "Without this guard the challenge call manager would hang up DM calls and vice-versa.",
-    );
-  }
-
-  /* ──────────── 16b) NEGATIVE guard: use-call-session incoming branch refuses hangup ─ */
-  // Without this, a manager that only has an INCOMING invite (no active call)
-  // could wrongly claim a "hangup" action — exactly the regression that caused
-  // lock-screen "decline" to be silently lost on iOS in production.
-  // We slice from `if (incoming) {` to the matching close brace at the same
-  // indentation and assert the slice never claims `action === "hangup"`.
-  {
-    const incomingBlock = extractBraceBlock(useCallSessionSrc, /if\s*\(\s*incoming\s*\)\s*\{/);
-    if (
-      incomingBlock
-      && !/ctx\.action\s*===\s*["']hangup["']/.test(incomingBlock)
-      && !/case\s+["']hangup["']/.test(incomingBlock)
-    ) {
-      pass("use-call-session.tsx incoming-only branch never claims hangup (no false-claim regression)");
-    } else {
-      fail(
-        "use-call-session.tsx incoming-only branch never claims hangup",
-        "If the `if (incoming) { ... }` block in use-call-session.tsx ever returns true for a hangup, the active-call manager (DM layer) loses the chance to actually tear down the WebRTC session — the user would still see/hear the call after tapping End on the lock screen.",
-      );
-    }
-  }
-
-  /* ──────────── 17) Source guard: private-call-layer.tsx invite branch ─ */
-  const privateCallLayerSrc = await readText(
-    path.join(REPO_ROOT, "client/src/components/chat/private-call-layer.tsx"),
-  );
-  if (
-    privateCallLayerSrc
-    && /registerCallActionHandler\s*\(\s*async\s*\(\s*ctx\s*\)\s*=>/.test(privateCallLayerSrc)
-    && /if\s*\(\s*invite\s*\)\s*\{[\s\S]{0,400}ctx\.callId\s*&&\s*ctx\.callId\s*!==\s*invite\.sessionId[\s\S]{0,40}return\s+false/.test(privateCallLayerSrc)
-    && /await\s+acceptInvite\(\)/.test(privateCallLayerSrc)
-    && /await\s+rejectInvite\(\)/.test(privateCallLayerSrc)
-  ) {
-    pass("private-call-layer.tsx handler guards on invite.sessionId before claiming accept/decline");
-  } else {
-    fail("private-call-layer.tsx handler guards on invite.sessionId before claiming accept/decline");
-  }
-
-  /* ──────────── 18) Source guard: private-call-layer.tsx hangup branch ─ */
-  if (
-    privateCallLayerSrc
-    && /active\s*&&\s*ctx\.action\s*===\s*"hangup"[\s\S]{0,160}ctx\.callId\s*&&\s*ctx\.callId\s*!==\s*active\.sessionId[\s\S]{0,40}return\s+false/.test(privateCallLayerSrc)
-    && /await\s+endCurrentCall\(\)/.test(privateCallLayerSrc)
-  ) {
-    pass("private-call-layer.tsx hangup branch only fires when ctx.callId matches active.sessionId");
-  } else {
-    fail("private-call-layer.tsx hangup branch matches on active.sessionId");
-  }
-
-  /* ──────────── 18b) NEGATIVE guard: private-call-layer.tsx invite-only branch refuses hangup ─ */
-  // Same regression class as 16b but on the DM call layer. Without this,
-  // tapping End on a CallKit screen for a still-ringing challenge would be
-  // wrongly absorbed by the DM manager and the challenge call would keep ringing.
-  {
-    const inviteBlock = extractBraceBlock(privateCallLayerSrc, /if\s*\(\s*invite\s*\)\s*\{/);
-    if (
-      inviteBlock
-      && !/ctx\.action\s*===\s*["']hangup["']/.test(inviteBlock)
-      && !/case\s+["']hangup["']/.test(inviteBlock)
-    ) {
-      pass("private-call-layer.tsx invite-only branch never claims hangup (no false-claim regression)");
-    } else {
-      fail(
-        "private-call-layer.tsx invite-only branch never claims hangup",
-        "If the `if (invite) { ... }` block in private-call-layer.tsx ever returns true for a hangup, the challenge-game call manager loses the chance to actually tear down the in-game call.",
-      );
-    }
-  }
+  /* ──────────── 15-18b) Manager handler shape & negative-claim guards ─
+   *
+   * RETIRED. The structural shape of the two real handlers (sessionId
+   * guards on the `incoming`/`invite` branches, hangup branches keyed on
+   * `activeSessionId`/`active.sessionId`, and the negative claim that
+   * neither incoming-only branch swallows a `hangup` action) is now
+   * covered behaviourally by `tests/call-actions-react-tree.test.tsx`,
+   * which mounts the real `CallSessionProvider` + `PrivateCallLayerProvider`
+   * with mocked browser APIs and exercises:
+   *
+   *   - SW-bridge accept / decline → real `acceptIncoming` / `acceptInvite`
+   *     / `declineIncoming` / `rejectInvite` paths in both managers.
+   *   - `dispatchCallAction({ action: "hangup", callId })` → real
+   *     `useCallSession.hangup` and real `usePrivateCallLayer.endCurrentCall`,
+   *     including assertions on the emitted `rtc:end` socket frame and
+   *     the `/api/chat/calls/end` HTTP request body.
+   *   - Mismatched-callId hangup → both managers refuse to claim and
+   *     state stays unchanged (the lock-screen-End-on-the-wrong-call
+   *     regression).
+   *
+   * Replacing the static regex guards with real React-tree behaviour
+   * means legitimate refactors of either handler (extracting helpers,
+   * swapping if-chains for early returns, switching to a switch
+   * statement) no longer break the smoke run, while the actual
+   * cross-manager safety property is now tested end-to-end.
+   * ────────────────────────────────────────────────────────────────────── */
 
   /* ──────────── 19) Source guard: dispatchCallAction wraps each handler in try/catch ─ */
   const callActionsSrc = await readText(path.join(REPO_ROOT, "client/src/lib/call-actions.ts"));
