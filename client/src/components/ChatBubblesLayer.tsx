@@ -240,8 +240,13 @@ export default function ChatBubblesLayer() {
   const isPeerSuppressed = useCallback((peerId: string): boolean => {
     const u = userRef.current;
     if (!u) return true;
-    if (Array.isArray(u.notificationMutedUsers) && u.notificationMutedUsers.includes(peerId)) return true;
-    if (Array.isArray(u.mutedUsers) && u.mutedUsers.includes(peerId)) return true;
+    // Normalize to string before comparing — mute lists may contain
+    // numeric ids in legacy data, and `peerId` is always a string here.
+    const target = String(peerId);
+    if (Array.isArray(u.notificationMutedUsers)
+      && u.notificationMutedUsers.some((id) => String(id) === target)) return true;
+    if (Array.isArray(u.mutedUsers)
+      && u.mutedUsers.some((id) => String(id) === target)) return true;
     return false;
   }, []);
 
