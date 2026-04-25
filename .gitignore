@@ -32,6 +32,20 @@ ios/App/Pods/
 android/
 ios/
 
+# But DO track the source code of our in-repo Capacitor plugins —
+# only the generated platform copy at the repo root (created by
+# `npx cap sync`) and per-plugin build output should be ignored.
+!native-plugins/*/android/
+!native-plugins/*/android/**
+!native-plugins/*/ios/
+!native-plugins/*/ios/**
+native-plugins/*/android/build/
+native-plugins/*/android/.gradle/
+native-plugins/*/android/.idea/
+native-plugins/*/android/local.properties
+native-plugins/*/ios/Pods/
+native-plugins/*/ios/build/
+
 # Build outputs
 android/app/build/
 .cache/

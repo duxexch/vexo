@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Permissions declared by the native call UI plugin.
+
+  Android Gradle's manifest merger lifts these declarations into the
+  host app's final AndroidManifest.xml automatically, so apps that
+  depend on this plugin do NOT need to repeat them in their own
+  manifest. The example snippet under examples/AndroidManifest-snippet.xml
+  documents the application-level <service> entries that DO still need
+  to be added by the host app.
+
+  Additions in task #88:
+   - CAMERA          : required for getUserMedia({ video: true }) in
+                        friend video calls. Without this declared in the
+                        manifest the Android WebView silently fails the
+                        camera grant even after the rationale modal is
+                        accepted.
+   - RECORD_AUDIO    : required for getUserMedia({ audio: true }) on
+                        Android 6+. Was previously expected to come from
+                        the host app; declaring it here guarantees it.
+   - SYSTEM_ALERT_WINDOW : required to surface incoming-call ringing on
+                        locked devices and as a prerequisite for the
+                        upcoming chat-heads (floating bubbles) feature.
+                        Must be granted by the user via system settings
+                        (cannot be requested as a runtime dialog) — the
+                        plugin exposes a helper that opens that screen.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Friend voice + video calls. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Lock-screen ringing overlay + future chat-heads bubbles. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- The CAMERA permission implies a camera feature requirement. We
+         mark it as not required so the app can still install on devices
+         without a camera (audio-only calls keep working). -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false" />
+
+</manifest>

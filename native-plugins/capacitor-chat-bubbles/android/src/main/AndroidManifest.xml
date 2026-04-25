@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Permissions + components contributed by the chat-bubbles plugin.
+
+  SYSTEM_ALERT_WINDOW is intentionally NOT declared here — the
+  capacitor-native-call-ui plugin (shipped in task #88) already declares
+  it, and Android merges manifests across modules so a single
+  declaration is enough. The user-facing grant flow ("Display over other
+  apps") is also handled centrally by the call-UI plugin's
+  PermissionsBanner integration.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      Background DM → bubble path. The host app must register
+      `click.vixo.chatbubbles.ChatBubblesFcmService` (or a subclass
+      that delegates to it) in its OWN AndroidManifest.xml with the
+      `com.google.firebase.MESSAGING_EVENT` intent filter — this is
+      not auto-merged because Firebase only consults the host app's
+      manifest for the messaging service binding. See
+      docs/CHAT_BUBBLES_PLAYBOOK.md for the snippet.
+    -->
+
+    <application>
+        <!-- The bubble's expanded surface. Renders a real native chat
+             panel (header / messages / quick reply) inline so users can
+             reply without leaving their current app. allowEmbedded +
+             documentLaunchMode + empty taskAffinity are required by
+             Notification.BubbleMetadata on Android 11+. -->
+        <activity
+            android:name=".BubbleActivity"
+            android:exported="false"
+            android:allowEmbedded="true"
+            android:resizeableActivity="true"
+            android:documentLaunchMode="always"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar" />
+
+        <!-- WindowManager fallback service for Android 10 and below
+             (Bubble API requires API 30). Uses TYPE_APPLICATION_OVERLAY
+             which depends on SYSTEM_ALERT_WINDOW being granted. -->
+        <service
+            android:name=".BubbleOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_chat_bubble" />
+        </service>
+    </application>
+</manifest>
