@@ -214,3 +214,16 @@ target is intentionally absent — the JS bridge resolves
    shade with conversation styling.
 7. **Android 10 (when device available)**: the WindowManager overlay
    should appear instead and snap to the nearest edge on drag-release.
+8. **Android killed-app + suppression matrix** (regression guard for
+   the suppression parity rules implemented in `BubbleNotifier`):
+   1. Force-stop the app from device settings.
+   2. Send a DM from another account → system bubble should appear.
+   3. Mute the sender, force-stop again, send another DM → no bubble.
+   4. Unmute, turn the chat-bubbles toggle off, force-stop, send DM →
+      no bubble.
+   5. Turn toggle back on, start a private call (the call UI keeps a
+      foreground service alive so `inActiveCall` stays `true` in
+      `BubbleConfig`), send a DM → no bubble.
+   6. End the call, send a DM → bubble reappears.
+   7. Sign out, force-stop, send a DM addressed to the previous user
+      → no bubble (token cleared).
