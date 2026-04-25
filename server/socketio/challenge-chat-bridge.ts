@@ -18,7 +18,10 @@ import type {
   ChatClientToServerEvents,
   ChatErrorCode,
   ChatServerToClientEvents,
+  ChatViewerSummary,
 } from "../../shared/socketio-events";
+import { MAX_VIEWER_LIST_PAYLOAD_SIZE } from "../../shared/socketio-events";
+import { inArray } from "drizzle-orm";
 
 interface AuthedSocketData {
   userId: string;
@@ -64,6 +67,230 @@ export async function broadcastChallengeViewerCount(
     chatNs.to(roomId).emit("chat:viewer_count", { roomId, count });
   } catch {
     // intentionally swallow — viewer count is non-critical
+  }
+}
+
+/**
+ * Task #75: pure dedup + cap helper used by `broadcastChallengeViewerList`.
+ * Filters out viewers blocked by the recipient (or who have blocked the
+ * recipient — we hide the relationship symmetrically) and caps the result
+ * at `MAX_VIEWER_LIST_PAYLOAD_SIZE`. The recipient is intentionally left in
+ * the list so a spectator sees themselves in their own popover, which
+ * matches the legacy "you are watching" affordance on the spectator panel.
+ *
+ * Exported for unit testing only — production callers should use
+ * `broadcastChallengeViewerList`.
+ */
+export function pickViewerListForRecipient(
+  viewers: ChatViewerSummary[],
+  opts: {
+    recipientBlockedUserIds: readonly string[];
+    /** Set of viewer IDs that have themselves blocked the recipient. */
+    blockingRecipientUserIds?: readonly string[];
+    max?: number;
+  },
+): ChatViewerSummary[] {
+  const recipientBlocks = new Set(opts.recipientBlockedUserIds);
+  const reverseBlocks = new Set(opts.blockingRecipientUserIds ?? []);
+  const cap = opts.max ?? MAX_VIEWER_LIST_PAYLOAD_SIZE;
+  const out: ChatViewerSummary[] = [];
+  const seen = new Set<string>();
+  for (const v of viewers) {
+    if (out.length >= cap) break;
+    if (!v.userId || !v.username) continue;
+    if (seen.has(v.userId)) continue;
+    if (recipientBlocks.has(v.userId)) continue;
+    if (reverseBlocks.has(v.userId)) continue;
+    seen.add(v.userId);
+    out.push(v);
+  }
+  return out;
+}
+
+interface SpectatorSocketSnapshot {
+  userId: string;
+  spectator: boolean;
+}
+
+/**
+ * Task #75: companion to `broadcastChallengeViewerCount` that emits a
+ * `chat:viewer_list` PER RECIPIENT so each socket only sees viewer
+ * identities it is allowed to see (bidirectional block-list filtered).
+ *
+ * Privacy contract — fail CLOSED: if any block-list resolution throws
+ * we cannot guarantee the visibility check, so the recipient receives
+ * an empty `viewers` array (the public `totalCount` is still emitted
+ * so the count badge stays correct). We never fall back to an
+ * unfiltered room-wide identity list, because the spectator panel
+ * already exposes those identities only with the same privacy gate.
+ *
+ * Performance: block lists for the union of recipients ∪ viewers are
+ * fetched once via `Promise.all`, so cost is O(R + V) cache hits per
+ * broadcast instead of O(R × V), and there is no per-recipient async
+ * fan-out window where later join/leave broadcasts can interleave.
+ *
+ * Idempotent and best-effort overall — viewer_list is a presence
+ * affordance, never a gating signal, so the outer try/catch swallows
+ * unexpected errors without disturbing the chat pipeline.
+ */
+export async function broadcastChallengeViewerList(
+  chatNs: ChatNamespace,
+  roomId: string,
+): Promise<void> {
+  if (!roomId.startsWith("challenge:")) return;
+  try {
+    const sockets = await chatNs.in(roomId).fetchSockets();
+
+    // Snapshot socket -> {userId, isSpectator} so we can compute spectator
+    // identities AND iterate recipients in a single pass.
+    const snapshots: SpectatorSocketSnapshot[] = [];
+    const spectatorIds = new Set<string>();
+    for (const s of sockets) {
+      const data = s.data as
+        | (AuthedSocketData & { spectatorRoomIds?: string[] })
+        | undefined;
+      const userId = data?.userId;
+      if (!userId) continue;
+      const isSpectator = !!data?.spectatorRoomIds?.includes(roomId);
+      snapshots.push({ userId, spectator: isSpectator });
+      if (isSpectator) spectatorIds.add(userId);
+    }
+
+    const totalCount = spectatorIds.size > 0
+      ? Array.from(spectatorIds).reduce((acc, id) => {
+          // Count by SOCKET, not by user — matches the chat:viewer_count
+          // semantics where each spectator socket consumes one slot.
+          let n = 0;
+          for (const snap of snapshots) {
+            if (snap.spectator && snap.userId === id) n++;
+          }
+          return acc + n;
+        }, 0)
+      : 0;
+
+    if (spectatorIds.size === 0) {
+      // No viewers — clear any stale lists on every recipient.
+      chatNs.to(roomId).emit("chat:viewer_list", {
+        roomId,
+        viewers: [],
+        totalCount: 0,
+      });
+      return;
+    }
+
+    // ---- Resolve viewer summaries (capped) ----
+    const idsToFetch = Array.from(spectatorIds).slice(
+      0,
+      MAX_VIEWER_LIST_PAYLOAD_SIZE * 2, // small over-fetch buffer for filtering
+    );
+    let userRows: Array<{
+      id: string;
+      username: string | null;
+      profilePicture: string | null;
+    }> = [];
+    try {
+      userRows = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          profilePicture: users.profilePicture,
+        })
+        .from(users)
+        .where(inArray(users.id, idsToFetch));
+    } catch {
+      // DB lookup failure → degrade to count-only; do not block.
+      return;
+    }
+
+    const summaries: ChatViewerSummary[] = userRows
+      .map((u) => ({
+        userId: u.id,
+        username: u.username || u.id.slice(0, 8),
+        avatarUrl: u.profilePicture,
+      }))
+      // Stable order (alphabetical by username) so the avatar stack
+      // doesn't shuffle on every join/leave broadcast.
+      .sort((a, b) => a.username.localeCompare(b.username));
+
+    // ---- Snapshot all relevant block lists ONCE per broadcast ----
+    // Without this we end up doing recipients × viewers cache lookups
+    // and the per-recipient async fan-out can interleave with later
+    // join/leave broadcasts, causing stale lists to land out of order.
+    // Precomputing fixes both the N×M cost and the race window.
+    const fetchBlockList = async (id: string): Promise<readonly string[]> => {
+      const lists = await getCachedUserBlockLists(id, async (uid) => {
+        const u = await storage.getUser(uid);
+        return u
+          ? {
+              blockedUsers: u.blockedUsers || [],
+              mutedUsers: u.mutedUsers || [],
+            }
+          : null;
+      });
+      return lists.blockedUsers || [];
+    };
+
+    const recipientIds = Array.from(
+      new Set(
+        sockets
+          .map((s) => (s.data as AuthedSocketData | undefined)?.userId)
+          .filter((x): x is string => !!x),
+      ),
+    );
+    const viewerIds = summaries.map((v) => v.userId);
+    const allIds = Array.from(new Set([...recipientIds, ...viewerIds]));
+
+    const blockListByUser = new Map<string, readonly string[]>();
+    let blockListsResolved = true;
+    await Promise.all(
+      allIds.map(async (id) => {
+        try {
+          blockListByUser.set(id, await fetchBlockList(id));
+        } catch {
+          // A single failure means we cannot guarantee the privacy
+          // contract for this user's relationships → flip the flag
+          // so we fail CLOSED instead of leaking unfiltered identities.
+          blockListsResolved = false;
+        }
+      }),
+    );
+
+    // ---- Per-recipient emit with precomputed block-list filtering ----
+    for (const s of sockets) {
+      const recipientId = (s.data as AuthedSocketData | undefined)?.userId;
+      if (!recipientId) continue;
+
+      // Fail-closed: when block-list resolution had ANY error, send an
+      // empty list rather than risk leaking a viewer that this recipient
+      // (or that viewer) has blocked. The count is still authoritative
+      // and matches what chat:viewer_count broadcasts publicly.
+      if (!blockListsResolved) {
+        s.emit("chat:viewer_list", {
+          roomId,
+          viewers: [],
+          totalCount,
+        });
+        continue;
+      }
+
+      const recipientBlocked = blockListByUser.get(recipientId) ?? [];
+      // Reverse direction: viewers who have blocked THIS recipient.
+      const blockingRecipient = viewerIds.filter((vid) =>
+        (blockListByUser.get(vid) ?? []).includes(recipientId),
+      );
+
+      const visibleViewers = pickViewerListForRecipient(summaries, {
+        recipientBlockedUserIds: recipientBlocked,
+        blockingRecipientUserIds: blockingRecipient,
+      });
+      s.emit("chat:viewer_list", {
+        roomId,
+        viewers: visibleViewers,
+        totalCount,
+      });
+    }
+  } catch {
+    // intentionally swallow — viewer list is non-critical
   }
 }
 

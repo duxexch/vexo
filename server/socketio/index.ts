@@ -23,6 +23,7 @@ import { eq } from "drizzle-orm";
 import {
   deliverRealtimeChallengeChat,
   broadcastChallengeViewerCount,
+  broadcastChallengeViewerList,
   type ChatNamespace,
 } from "./challenge-chat-bridge";
 import { deliverRealtimeDirectMessage } from "./direct-message-bridge";
@@ -315,6 +316,12 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       // they should see whatever spectator count is already present.
       // The helper short-circuits for non-challenge rooms.
       void broadcastChallengeViewerCount(chatNs, roomId);
+      // Task #75: companion broadcast — emits a per-recipient
+      // `chat:viewer_list` so every socket in the room (including the
+      // joiner) sees the current "who's watching" set with their own
+      // block-list filter applied. Failure is swallowed inside the
+      // helper; the count broadcast above is unaffected.
+      void broadcastChallengeViewerList(chatNs, roomId);
     });
 
     socket.on("chat:leave", async (payload) => {
@@ -333,6 +340,9 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
         // before we emit, so the count we compute will not include the
         // leaving socket.
         void broadcastChallengeViewerCount(chatNs, roomId);
+        // Task #75: same lifecycle for the viewer-list broadcast so the
+        // popover updates when a spectator leaves the room.
+        void broadcastChallengeViewerList(chatNs, roomId);
       }
     });
 
@@ -480,6 +490,9 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
       setImmediate(() => {
         for (const roomId of rooms) {
           void broadcastChallengeViewerCount(chatNs, roomId);
+          // Task #75: refresh the per-recipient viewer list too so the
+          // chat-header avatar stack drops the leaver instantly.
+          void broadcastChallengeViewerList(chatNs, roomId);
         }
       });
     });

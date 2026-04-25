@@ -4,6 +4,8 @@ import type {
   ChatBroadcast,
   ChatErrorCode,
   ChatSendAck,
+  ChatViewerListPayload,
+  ChatViewerSummary,
 } from "@shared/socketio-events";
 
 interface UseSocketChatOptions {
@@ -45,6 +47,14 @@ export interface UseSocketChatReturn {
    * Resets to `false` whenever the room changes.
    */
   viewerCountReceived: boolean;
+  /**
+   * Task #75: identities of the spectators currently in this room,
+   * filtered server-side against the viewer's blocked-users list. May
+   * be shorter than `viewerCount` when blocks hide some entries or the
+   * payload cap is hit; `viewerCount` remains the authoritative total.
+   * Resets to `[]` whenever the room changes.
+   */
+  viewers: ChatViewerSummary[];
   send: (
     text: string,
     opts?: { isQuickMessage?: boolean; quickMessageKey?: string },
@@ -61,6 +71,7 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
   const [members, setMembers] = useState(0);
   const [viewerCount, setViewerCount] = useState(0);
   const [viewerCountReceived, setViewerCountReceived] = useState(false);
+  const [viewers, setViewers] = useState<ChatViewerSummary[]>([]);
   const [messages, setMessages] = useState<ChatBroadcast[]>([]);
   const limitRef = useRef(historyLimit);
   limitRef.current = historyLimit;
@@ -102,6 +113,12 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
         setViewerCountReceived(true);
       }
     };
+    // Task #75: pick up the per-recipient viewer-list broadcast emitted
+    // alongside `chat:viewer_count`. The server has already block-list
+    // filtered the entries, so the hook just stores the array as-is.
+    const onViewerList = (p: ChatViewerListPayload) => {
+      if (p.roomId === roomId) setViewers(p.viewers || []);
+    };
 
     const onChatError = (info: {
       code?: ChatErrorCode;
@@ -122,6 +139,7 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
     sock.on("chat:message", onMessage);
     sock.on("chat:joined", onJoined);
     sock.on("chat:viewer_count", onViewerCount);
+    sock.on("chat:viewer_list", onViewerList);
     sock.on("chat:error", onChatError);
 
     if (sock.connected) onConnect();
@@ -132,6 +150,7 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
       sock.off("chat:message", onMessage);
       sock.off("chat:joined", onJoined);
       sock.off("chat:viewer_count", onViewerCount);
+      sock.off("chat:viewer_list", onViewerList);
       sock.off("chat:error", onChatError);
       if (sock.connected) sock.emit("chat:leave", { roomId });
       setJoined(false);
@@ -142,6 +161,9 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
       // broadcast.
       setViewerCount(0);
       setViewerCountReceived(false);
+      // Task #75: drop the viewer list too so the avatar stack doesn't
+      // momentarily show people from the previous room.
+      setViewers([]);
     };
   }, [roomId]);
 
@@ -187,6 +209,7 @@ export function useSocketChat({ roomId, historyLimit = 100, onError }: UseSocket
     messages,
     viewerCount,
     viewerCountReceived,
+    viewers,
     send,
   };
 }

@@ -9,8 +9,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Send, MessageCircle, Zap, MoreVertical, Ban, VolumeX, Eye } from "lucide-react";
+import { Send, MessageCircle, Zap, MoreVertical, Ban, VolumeX, Eye, Users } from "lucide-react";
+import type { ChatViewerSummary } from "@shared/socketio-events";
+import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -54,6 +62,15 @@ interface GameChatProps {
    * prop or pass 0 to hide the pill).
    */
   spectatorCount?: number;
+  /**
+   * Task #75: identities of the spectators currently watching this
+   * match (server-side filtered against the viewer's blocked-users
+   * list). When non-empty the header renders an avatar stack + popover
+   * next to the count pill so the local user can see WHO is watching.
+   * Optional — pass `undefined` or `[]` to hide the stack while still
+   * showing the count pill.
+   */
+  spectatorViewers?: ChatViewerSummary[];
 }
 
 export function GameChat({
@@ -65,6 +82,7 @@ export function GameChat({
   currentUserId,
   autoFocusInput = false,
   spectatorCount = 0,
+  spectatorViewers,
 }: GameChatProps) {
   const [messageInput, setMessageInput] = useState("");
   const [showQuickPanel, setShowQuickPanel] = useState(false);
@@ -217,6 +235,20 @@ export function GameChat({
                 ? `${spectatorCount} يشاهد`
                 : `${spectatorCount} watching`}
             </span>
+          )}
+          {/* Task #75: "who's watching" avatar stack — opens a popover
+              with the full visible viewer list. Shown only when the
+              server has actually emitted at least one viewer summary
+              (`spectatorViewers.length > 0`). The +N overflow chip
+              uses the authoritative `spectatorCount`, so it stays
+              correct even when block-list filtering or the payload
+              cap shortens the visible avatars. */}
+          {spectatorViewers && spectatorViewers.length > 0 && (
+            <ViewerAvatarStack
+              viewers={spectatorViewers}
+              totalCount={spectatorCount}
+              language={language}
+            />
           )}
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
             {messages.length}
@@ -461,5 +493,116 @@ export function GameChat({
         {messages.length}
       </div>
     </div>
+  );
+}
+
+/**
+ * Task #75: header avatar stack + popover that shows WHO is currently
+ * watching the match. Renders up to `MAX_VISIBLE_AVATARS` overlapping
+ * avatars and a "+N" overflow chip when the room has more spectators
+ * than fit in the stack. Tapping (or hovering / focusing) the stack
+ * opens a popover with the full list — each row links to the user's
+ * profile so players can follow each other into matches.
+ *
+ * `viewers` is already block-list filtered server-side, so the
+ * popover never needs to apply additional privacy logic — it just
+ * renders what came in. `totalCount` is the authoritative live
+ * spectator count and drives the "+N" math so the chip reflects the
+ * full audience even when some viewers are hidden by blocks or by
+ * the server-side payload cap.
+ */
+export const MAX_VISIBLE_AVATARS = 3;
+
+interface ViewerAvatarStackProps {
+  viewers: ChatViewerSummary[];
+  totalCount: number;
+  language: string;
+}
+
+function ViewerAvatarStack({ viewers, totalCount, language }: ViewerAvatarStackProps) {
+  const visible = viewers.slice(0, MAX_VISIBLE_AVATARS);
+  // Overflow chip uses `totalCount - visible.length` so it always
+  // matches what the user perceives as "how many are NOT shown in
+  // these little circles" — both the cap and the block filter
+  // contribute. Negative values can never appear because the server
+  // bounds visible.length <= totalCount in normal flow.
+  const overflow = Math.max(0, totalCount - visible.length);
+  const isAr = language === "ar";
+  const stackTitle = isAr ? "من يشاهد الآن" : "Who's watching";
+  const emptyLabel = isAr ? "لا يوجد مشاهدون مرئيون" : "No visible viewers";
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center -space-x-1.5 rounded-full border border-border/60 bg-background/70 px-1 py-0.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={stackTitle}
+          title={stackTitle}
+          data-testid="game-chat-viewer-stack"
+        >
+          {visible.map((v) => (
+            <Avatar
+              key={v.userId}
+              className="h-5 w-5 ring-1 ring-background"
+              data-testid={`game-chat-viewer-avatar-${v.userId}`}
+            >
+              <AvatarImage src={v.avatarUrl ?? undefined} alt={v.username} />
+              <AvatarFallback className="text-[9px]">
+                {v.username[0]?.toUpperCase() ?? "?"}
+              </AvatarFallback>
+            </Avatar>
+          ))}
+          {overflow > 0 && (
+            <span
+              className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground ring-1 ring-background"
+              data-testid="game-chat-viewer-stack-overflow"
+            >
+              +{overflow}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-64 p-0"
+        data-testid="game-chat-viewer-popover"
+      >
+        <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
+          <Users className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs font-semibold">{stackTitle}</span>
+          <span className="ms-auto rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+            {totalCount}
+          </span>
+        </div>
+        {viewers.length === 0 ? (
+          <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+            {emptyLabel}
+          </p>
+        ) : (
+          <ScrollArea className="max-h-64">
+            <ul className="py-1">
+              {viewers.map((v) => (
+                <li key={v.userId}>
+                  <Link
+                    href={`/profile/${encodeURIComponent(v.username)}`}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
+                    data-testid={`game-chat-viewer-row-${v.userId}`}
+                  >
+                    <Avatar className="h-6 w-6">
+                      <AvatarImage src={v.avatarUrl ?? undefined} alt={v.username} />
+                      <AvatarFallback className="text-[10px]">
+                        {v.username[0]?.toUpperCase() ?? "?"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate font-medium">{v.username}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </ScrollArea>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }

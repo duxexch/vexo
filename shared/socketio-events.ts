@@ -169,7 +169,54 @@ export interface ChatServerToClientEvents {
    * viewer identities.
    */
   "chat:viewer_count": (p: { roomId: string; count: number }) => void;
+  /**
+   * Task #75: companion to `chat:viewer_count` that exposes viewer
+   * IDENTITIES so the chat header can render a "who's watching" avatar
+   * stack + popover. Emitted per-recipient, not room-wide, so each
+   * recipient's blocked-users list can filter the visible entries
+   * before they leave the server. `totalCount` is the unfiltered live
+   * spectator count (same value as `chat:viewer_count`) so the UI's
+   * "+N" overflow chip reflects the true room population even when
+   * some viewers are hidden by the recipient's block list. `viewers`
+   * is also capped to a small ceiling (MAX_VIEWER_LIST_PAYLOAD_SIZE)
+   * to bound payload size for very crowded matches.
+   */
+  "chat:viewer_list": (p: ChatViewerListPayload) => void;
 }
+
+/**
+ * Task #75: minimal user summary for the "who's watching" UI. Includes
+ * just enough to render an avatar + name + profile link without leaking
+ * private fields. The server resolves these from the `users` table and
+ * filters them per-recipient against the recipient's blocked-users
+ * list before emitting `chat:viewer_list`.
+ */
+export interface ChatViewerSummary {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+}
+
+export interface ChatViewerListPayload {
+  roomId: string;
+  /** Up to `MAX_VIEWER_LIST_PAYLOAD_SIZE` viewers visible to THIS recipient
+   *  after blocked-user filtering. May be shorter than `totalCount`. */
+  viewers: ChatViewerSummary[];
+  /** Authoritative live spectator count for the room (matches
+   *  `chat:viewer_count`). May exceed `viewers.length` when the
+   *  recipient has blocked some viewers or the payload cap was hit. */
+  totalCount: number;
+}
+
+/**
+ * Hard ceiling on how many viewer summaries the server includes in a
+ * single `chat:viewer_list` payload. Prevents broadcasts from ballooning
+ * for matches with very large spectator audiences. The UI only ever
+ * renders the first ~3 in the avatar stack and a scrollable popover for
+ * the rest, so a low cap is acceptable. The `totalCount` field still
+ * carries the true population so the "+N" overflow chip is accurate.
+ */
+export const MAX_VIEWER_LIST_PAYLOAD_SIZE = 25;
 
 /* ============================================================================
  *  /rtc namespace — WebRTC signaling

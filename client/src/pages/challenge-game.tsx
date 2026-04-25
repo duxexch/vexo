@@ -3936,6 +3936,7 @@ export default function ChallengeGamePage() {
                   ? realtimeChat.viewerCount
                   : (gameSession?.spectatorCount ?? 0)
               }
+              spectatorViewers={realtimeChat.viewers}
             />
           </div>
         </DialogContent>
