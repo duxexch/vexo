@@ -5,6 +5,7 @@ import { getErrorMessage } from "../helpers";
 import { db } from "../../db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
 import { chatAutoDeletePermissions, chatMediaPermissions, chatMessages, projectCurrencyLedger, projectCurrencyWallets, systemConfig, users } from "@shared/schema";
+import { getLegacyChatHistoryPage } from "../../storage/legacy-chat-history";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import { sanitizePlainText } from "../../lib/input-security";
 import { isUserBlocked } from "../../lib/user-blocking";
@@ -42,25 +43,35 @@ export function registerChatMessagingRoutes(app: Express): void {
   };
 
 
-  // Get message history with a specific user
+  // Get message history with a specific user.
+  //
+  // Task #80 — the underlying query now uses the same over-fetch-by-one
+  // trick as `GET /api/dm/:peerId/history` to produce a definitive
+  // `hasMore` flag (instead of the broken "did we get fewer rows than
+  // we asked for?" heuristic). Stale clients that just call
+  // `await response.json()` and treat the body as an array still work
+  // unchanged: by default the response shape stays a plain JSON array
+  // of messages. New clients opt into the envelope by passing
+  // `?envelope=hasMore` and then receive `{ messages, hasMore }`.
   app.get("/api/chat/:userId/messages", authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
       const userId = req.user!.id;
       const otherUserId = req.params.userId;
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
+      const wantsEnvelope = String(req.query.envelope ?? "") === "hasMore";
 
-      const messages = await db.select()
-        .from(chatMessages)
-        .where(or(
-          and(eq(chatMessages.senderId, userId), eq(chatMessages.receiverId, otherUserId)),
-          and(eq(chatMessages.senderId, otherUserId), eq(chatMessages.receiverId, userId))
-        ))
-        .orderBy(desc(chatMessages.createdAt))
-        .limit(limit)
-        .offset(offset);
+      const page = await getLegacyChatHistoryPage({
+        userId,
+        peerId: otherUserId,
+        limit,
+        offset,
+        // Preserve historical behaviour for this endpoint — it never
+        // applied soft-delete filters. We only change the *envelope*.
+        applyDeletionFilters: false,
+      });
 
-      res.json(messages.reverse());
+      res.json(wantsEnvelope ? page : page.messages);
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }

@@ -626,6 +626,24 @@ export function useChat(): UseChatReturn {
           case "chat_history":
             setState((prev) => {
               const incoming = data.data.messages || [];
+              // Task #80: server now reports a definitive `hasMore`
+              // flag (over-fetch-by-one). Use it directly instead of
+              // the old `incoming.length >= limit` heuristic, which
+              // wrongly lit up "load older" when the last page was
+              // exactly `limit` rows but really was the start of the
+              // conversation.
+              //
+              // Mixed-version note: pre-Task-#80 servers ALSO sent a
+              // `hasMore` boolean (computed via the broken heuristic
+              // `rows.length === limit`). Until those servers are
+              // rolled out, the typeof-check below will trust their
+              // (still non-definitive) value. That is no worse than
+              // the pre-#80 client behaviour. Once the rollout
+              // completes, every value seen here will be definitive.
+              const serverHasMore =
+                typeof data.data.hasMore === "boolean"
+                  ? Boolean(data.data.hasMore)
+                  : incoming.length >= (data.data.limit || 50);
               if (data.data.append) {
                 // Prepend older messages for infinite scroll
                 const existingIds = new Set(prev.messages.map(m => m.id));
@@ -633,14 +651,14 @@ export function useChat(): UseChatReturn {
                 return {
                   ...prev,
                   messages: [...newMsgs, ...prev.messages],
-                  hasMoreMessages: incoming.length >= (data.data.limit || 50),
+                  hasMoreMessages: serverHasMore,
                   loadingMore: false,
                 };
               }
               return {
                 ...prev,
                 messages: incoming,
-                hasMoreMessages: incoming.length >= (data.data.limit || 50),
+                hasMoreMessages: serverHasMore,
                 loadingMore: false,
               };
             });
@@ -949,16 +967,34 @@ export function useChat(): UseChatReturn {
         );
       } else if (token) {
         try {
-          const response = await fetch(`/api/chat/${userId}/messages?limit=50&offset=0`, {
+          // Task #80: opt into the `{ messages, hasMore }` envelope
+          // so we can stop guessing end-of-history from row count.
+          // The server keeps returning a plain array for any caller
+          // that doesn't request the envelope, so older app builds
+          // and the other ChatBubblesLayer call sites are unaffected.
+          const response = await fetch(`/api/chat/${userId}/messages?limit=50&offset=0&envelope=hasMore`, {
             headers: { Authorization: `Bearer ${token}` },
           });
 
           if (response.ok) {
-            const fallbackMessages = await response.json();
+            const body = await response.json();
+            // Defensive: if a stale server returned the legacy array
+            // shape, coerce back to the envelope so the UI keeps
+            // working (and falls back to the row-count heuristic for
+            // hasMoreMessages, same as the WS path).
+            const fallbackMessages = Array.isArray(body)
+              ? body
+              : Array.isArray(body?.messages)
+                ? body.messages
+                : [];
+            const serverHasMore =
+              !Array.isArray(body) && typeof body?.hasMore === "boolean"
+                ? Boolean(body.hasMore)
+                : fallbackMessages.length >= 50;
             setState((prev) => ({
               ...prev,
               messages: fallbackMessages,
-              hasMoreMessages: fallbackMessages.length >= 50,
+              hasMoreMessages: serverHasMore,
               loadingMore: false,
             }));
           }

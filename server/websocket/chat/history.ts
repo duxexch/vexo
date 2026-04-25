@@ -4,9 +4,32 @@ import { chatMessages } from "@shared/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import type { AuthenticatedSocket } from "../shared";
 import { clients } from "../shared";
+import { getLegacyChatHistoryPage } from "../../storage/legacy-chat-history";
 
 /**
- * Handle paginated chat history retrieval.
+ * Handle paginated chat history retrieval over the legacy WebSocket
+ * `chat_history` event.
+ *
+ * Task #80 — switched to the shared `getLegacyChatHistoryPage` helper
+ * so this path now reports the same definitive `hasMore` flag as the
+ * realtime `GET /api/dm/:peerId/history` endpoint (Task #28). The
+ * old code computed `hasMore = allMessages.length === limit`, which
+ * lit up "load older" even when the page happened to be exactly full
+ * but really was the start of the conversation. The helper's
+ * over-fetch-by-one trick makes this exact case correct.
+ *
+ * The pre-Task-#80 implementation also did the per-user "delete for
+ * me" filtering in JavaScript *after* the SQL `limit/offset` fetch,
+ * which both (a) broke `hasMore` (a filtered row inside the
+ * over-fetch window could fool the math) and (b) yielded
+ * artificially short pages whenever the SQL window happened to
+ * include rows the viewer had hidden. The helper now pushes that
+ * filter into SQL. The visible-row union across all pages is
+ * unchanged — no row is newly visible or newly hidden — but each
+ * individual page now reaches its requested size when enough
+ * visible rows exist. The legacy storage tests
+ * (`server/storage/__tests__/legacy-chat-history.test.ts`) lock
+ * this corrected page-composition contract.
  */
 export async function handleGetChatHistory(ws: AuthenticatedSocket, data: any): Promise<void> {
   if (!ws.userId) return;
@@ -16,31 +39,26 @@ export async function handleGetChatHistory(ws: AuthenticatedSocket, data: any): 
   const limit = Math.min(Math.max(1, parseInt(data.limit) || 50), 100);
   const offset = Math.max(0, parseInt(data.offset) || 0);
 
-  const allMessages = await db.select()
-    .from(chatMessages)
-    .where(
-      and(
-        or(
-          and(eq(chatMessages.senderId, ws.userId), eq(chatMessages.receiverId, otherUserId)),
-          and(eq(chatMessages.senderId, otherUserId), eq(chatMessages.receiverId, ws.userId))
-        ),
-        sql`${chatMessages.deletedAt} IS NULL`
-      )
-    )
-    .orderBy(desc(chatMessages.createdAt))
-    .limit(limit)
-    .offset(offset);
-
-  // Filter out messages deleted for this user
-  const filtered = allMessages.filter(m => {
-    const dfu = m.deletedForUsers;
-    if (!dfu || !Array.isArray(dfu)) return true;
-    return !dfu.includes(ws.userId!);
+  const page = await getLegacyChatHistoryPage({
+    userId: ws.userId,
+    peerId: otherUserId,
+    limit,
+    offset,
+    applyDeletionFilters: true,
   });
 
   ws.send(JSON.stringify({
     type: "chat_history",
-    data: { otherUserId, messages: filtered.reverse(), append: !!append, hasMore: allMessages.length === limit }
+    data: {
+      otherUserId,
+      messages: page.messages,
+      append: !!append,
+      hasMore: page.hasMore,
+      // Echo the limit so the client can keep its existing logging /
+      // diagnostics shape; the value is no longer used to compute
+      // hasMore on the client side.
+      limit,
+    },
   }));
 }
 
