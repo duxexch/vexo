@@ -32,8 +32,21 @@ export interface ShowBubbleOptions {
   unreadCount: number;
 }
 
+export interface ConfigureOptions {
+  /** Absolute base URL of the API (no trailing slash). Used by the
+   *  in-bubble chat surface to fetch history and post quick replies. */
+  apiBaseUrl?: string;
+  /** Bearer token for the chat API. Stored in private SharedPreferences
+   *  on Android — same trust boundary as the WebView's localStorage. */
+  authToken?: string;
+}
+
 export interface ChatBubblesPlugin {
   isBubblesSupported(): Promise<BubblesSupport>;
+  /** Persist API base URL + auth token so the bubble's expanded surface
+   *  can talk to the backend even when the WebView is gone. Call this
+   *  whenever the auth token rotates. */
+  configure(options: ConfigureOptions): Promise<void>;
   showBubble(options: ShowBubbleOptions): Promise<{ shown: boolean }>;
   hideBubble(options: { peerId: string }): Promise<void>;
   hideAllBubbles(): Promise<void>;

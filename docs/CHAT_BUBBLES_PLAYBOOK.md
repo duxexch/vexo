@@ -56,6 +56,64 @@ chat-head interaction model:
   bubble inside it removes it (matches the Messenger UX).
 * Tap (no movement) toggles the inline mini chat panel.
 
+### Native chat-head interaction (Android)
+
+Both Android surfaces mirror the same interaction model so users get
+identical UX whether the OS is rendering a system bubble or the
+WindowManager overlay fallback:
+
+* **Avatars** — `BubbleNotifier` and `BubbleOverlayService` consume the
+  `avatarUrl` field passed via `ChatBubbles.showBubble({ avatarUrl })`
+  (or the `avatarUrl` data field on the FCM push). Bitmaps are
+  downloaded with a 3.5 s timeout, round-cropped, and cached in
+  `AvatarCache`. The overlay renders a per-name initial placeholder
+  while the avatar is in flight; the system bubble blocks briefly so
+  the `Person` icon is set at notify-time as Android requires. Both
+  surfaces fall back to the generic chat icon if the URL is missing or
+  the fetch fails.
+* **Drag-to-dismiss (overlay only)** — when the chat head starts
+  moving, `BubbleOverlayService` adds a centered bottom "✕" target via
+  `WindowManager`. The target highlights red when the bubble is over it
+  and is removed on `ACTION_UP` / `ACTION_CANCEL`. Releasing inside the
+  target calls `BubbleNotifier.hideBubble(peerId)` so both the overlay
+  and any matching system notification go away together.
+* **Snap-to-edge** remains the default behavior when the bubble is
+  released anywhere outside the dismiss target.
+* **Tap (no movement)** opens `BubbleActivity`, which is the bubble's
+  expanded surface (see below).
+
+### In-bubble expanded surface (`BubbleActivity`)
+
+`BubbleMetadata` requires a target activity that becomes the bubble's
+expanded UI. `BubbleActivity` renders a real native chat panel inline
+instead of redirecting the user back to the WebView, so quick replies
+work without leaving the current app:
+
+```
+┌─ avatar  Name              [ Open ] [ × ] ┐
+├───────────────────────────────────────────┤
+│  recent messages (last 20, fetched on     │
+│  open from /api/chat/{peerId}/messages)   │
+├───────────────────────────────────────────┤
+│  [ reply text input              ] [Send] │
+└───────────────────────────────────────────┘
+```
+
+* History fetch + send post both use the API base URL + bearer token
+  persisted by `ChatBubbles.configure({ apiBaseUrl, authToken })`.
+  `ChatBubblesLayer` invokes that bridge automatically whenever the
+  React auth token changes, so the values stay fresh even after
+  logout/login.
+* "Open" hands off to the host launcher activity via the existing
+  `vexapp://chat?user=…` deep link — same behavior as the previous
+  build, kept as an escape hatch.
+* If `apiBaseUrl` / `authToken` are missing (e.g. the app was killed
+  and never had a chance to call `configure`), tapping Send falls back
+  to opening the full app instead of silently failing.
+* The activity is declared with `allowEmbedded`, `documentLaunchMode`
+  and an empty `taskAffinity` in the plugin's `AndroidManifest.xml`,
+  per Android's bubble requirements.
+
 ## Suppression rules
 
 A bubble is **never** shown when any of these are true:

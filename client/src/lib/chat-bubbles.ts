@@ -37,8 +37,16 @@ export interface BubblesSupport {
   mode: "bubble" | "overlay" | "none";
 }
 
+export interface ConfigureBubblesArgs {
+  /** Absolute API base URL (no trailing slash). */
+  apiBaseUrl?: string;
+  /** Bearer token used by the in-bubble native chat surface. */
+  authToken?: string;
+}
+
 interface PluginShape {
   isBubblesSupported(): Promise<BubblesSupport>;
+  configure(args: ConfigureBubblesArgs): Promise<void>;
   showBubble(args: ShowBubbleArgs): Promise<{ shown: boolean }>;
   hideBubble(args: { peerId: string }): Promise<void>;
   hideAllBubbles(): Promise<void>;
@@ -60,6 +68,23 @@ export async function isBubblesSupported(): Promise<BubblesSupport> {
     return await ChatBubbles.isBubblesSupported();
   } catch {
     return { supported: false, mode: "none" };
+  }
+}
+
+/**
+ * Persist API base URL + bearer token in the native plugin's
+ * SharedPreferences so the in-bubble chat surface (which can launch
+ * cold from an FCM push, after the WebView has been killed) can
+ * fetch history and post quick replies. Call whenever the auth token
+ * changes; safe to call as a no-op on web/iOS.
+ */
+export async function configureBubbles(args: ConfigureBubblesArgs): Promise<void> {
+  if (!isAndroid()) return;
+  try {
+    await ChatBubbles.configure(args);
+  } catch {
+    // Ignore — bubbles will simply prompt the user to "Open in app"
+    // when no auth context is available.
   }
 }
 

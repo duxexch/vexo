@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePrivateCallLayer } from "@/components/chat/private-call-layer";
 import { getChatBubblesEnabled } from "@/lib/chat-bubbles-pref";
 import {
+  configureBubbles as nativeConfigureBubbles,
   hideAllBubbles as nativeHideAllBubbles,
   hideBubble as nativeHideBubble,
   isBubblesSupported,
@@ -167,6 +168,21 @@ export default function ChatBubblesLayer() {
       cancelled = true;
     };
   }, []);
+
+  // Push the API base URL + bearer token down to the native plugin so
+  // the in-bubble chat surface (which can launch cold from an FCM push
+  // after the WebView is gone) can fetch history and post quick
+  // replies. Re-runs whenever the auth token changes. Safe no-op on
+  // web/iOS.
+  useEffect(() => {
+    if (nativeMode === "none") return;
+    if (!token) return;
+    const apiBaseUrl =
+      typeof window !== "undefined" && window.location?.origin
+        ? window.location.origin
+        : undefined;
+    void nativeConfigureBubbles({ apiBaseUrl, authToken: token });
+  }, [nativeMode, token]);
 
   // ── helpers ─────────────────────────────────────────────────────────
   const activeChatPeerId = useMemo(() => {

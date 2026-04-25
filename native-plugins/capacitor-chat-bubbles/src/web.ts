@@ -3,6 +3,7 @@ import { WebPlugin } from "@capacitor/core";
 import type {
   BubblesSupport,
   ChatBubblesPlugin,
+  ConfigureOptions,
   ShowBubbleOptions,
 } from "./definitions";
 
@@ -14,6 +15,10 @@ import type {
 export class ChatBubblesWeb extends WebPlugin implements ChatBubblesPlugin {
   async isBubblesSupported(): Promise<BubblesSupport> {
     return { supported: false, mode: "none" };
+  }
+
+  async configure(_options: ConfigureOptions): Promise<void> {
+    /* no-op on web */
   }
 
   async showBubble(_options: ShowBubbleOptions): Promise<{ shown: boolean }> {
