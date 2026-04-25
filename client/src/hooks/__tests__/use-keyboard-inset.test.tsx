@@ -310,6 +310,75 @@ describe("useKeyboardInset", () => {
         process.removeListener("uncaughtException", swallowSynthetic);
       }
     });
+
+    // The hook keeps a module-level `consumerCount`. A thrown effect
+    // never registers its cleanup function, so without an explicit
+    // rollback `consumerCount` would stay incremented after a failed
+    // mount and the next consumer would be silently skipped over the
+    // attach branch (the `if (consumerCount === 1)` guard would be
+    // false). This test verifies the rollback by mounting a fresh
+    // consumer after the failure and asserting it actually attaches
+    // — a behaviour that fails against the un-rolled-back code.
+    it("rolls back consumerCount after a failed attach so the next consumer attaches cleanly", () => {
+      const swallowSynthetic = (err: unknown): void => {
+        if (
+          err instanceof Error &&
+          err.message === "synthetic addListener failure"
+        ) {
+          return;
+        }
+        throw err;
+      };
+      process.prependListener("uncaughtException", swallowSynthetic);
+
+      try {
+        // First mount — orientationchange registration throws.
+        winAddSpy.mockImplementation((type: string) => {
+          if (type === "orientationchange") {
+            throw new Error("synthetic addListener failure");
+          }
+        });
+        expect(() => renderHook(() => useKeyboardInset())).toThrow(
+          /synthetic addListener failure/,
+        );
+        // Sanity from the previous test: no zombie listeners.
+        expect(netListenerCount(vvAddSpy, vvRemoveSpy, "resize")).toBe(0);
+
+        // Capture the spy's count BEFORE the second mount so the
+        // assertion is independent of whatever React/jsdom did.
+        const resizeAddsBefore = vvAddSpy.mock.calls.filter(
+          (c) => c[0] === "resize",
+        ).length;
+        const scrollAddsBefore = vvAddSpy.mock.calls.filter(
+          (c) => c[0] === "scroll",
+        ).length;
+
+        // Second mount — orientationchange no longer throws (no-op).
+        // The vv listeners still go through the spy and the real
+        // EventTarget on `fakeVv`.
+        winAddSpy.mockImplementation(() => {});
+        renderHook(() => useKeyboardInset());
+
+        // If consumerCount was correctly rolled back to 0, this
+        // mount bumped it to 1 and ran attachListeners → exactly
+        // one new vv resize/scroll add. Without the rollback,
+        // consumerCount would have been 1 going in, this mount
+        // would push it to 2, attachListeners would be skipped,
+        // and the deltas below would both be 0.
+        const resizeAddsAfter = vvAddSpy.mock.calls.filter(
+          (c) => c[0] === "resize",
+        ).length;
+        const scrollAddsAfter = vvAddSpy.mock.calls.filter(
+          (c) => c[0] === "scroll",
+        ).length;
+        expect(resizeAddsAfter - resizeAddsBefore).toBe(1);
+        expect(scrollAddsAfter - scrollAddsBefore).toBe(1);
+        expect(netListenerCount(vvAddSpy, vvRemoveSpy, "resize")).toBe(1);
+        expect(netListenerCount(vvAddSpy, vvRemoveSpy, "scroll")).toBe(1);
+      } finally {
+        process.removeListener("uncaughtException", swallowSynthetic);
+      }
+    });
   });
 
   describe("regression: graceful fallback when the viewport API is unavailable", () => {

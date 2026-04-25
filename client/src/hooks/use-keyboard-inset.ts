@@ -85,8 +85,17 @@ export function useKeyboardInset(): void {
 
     consumerCount += 1;
     if (consumerCount === 1) {
-      attachListeners();
-      update();
+      try {
+        attachListeners();
+        update();
+      } catch (err) {
+        // Keep `consumerCount` consistent: a thrown effect never
+        // registers its cleanup function, so without this rollback
+        // the next mount would see `consumerCount === 1` and skip
+        // the (now-needed) attach call entirely. Locked by Task #81.
+        consumerCount -= 1;
+        throw err;
+      }
     }
 
     return () => {
