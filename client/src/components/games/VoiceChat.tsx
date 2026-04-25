@@ -8,7 +8,7 @@ import { useSettings } from "@/lib/settings";
 import { buildRtcConfiguration } from "@/lib/rtc-config";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { openAppSettings, openMicrophoneSettings } from "@/lib/startup-permissions";
+import { openMicrophoneSettings } from "@/lib/startup-permissions";
 import { ensureCallRationale } from "@/lib/call-permission-rationale";
 import { Capacitor } from "@capacitor/core";
 import { Mic, MicOff, Loader2 } from "lucide-react";
@@ -414,10 +414,12 @@ export function VoiceChat({
       if (isPermissionDeniedError(error)) {
         showMicPermissionToast();
 
-        if (Capacitor.isNativePlatform()) {
-          // Force-open app settings on native when microphone permission is denied.
-          void openAppSettings();
-        }
+        // After OS-level denial, force-render the in-app rationale modal so
+        // the user gets the explicit Open Settings action (matches the
+        // established pattern in use-call-session.tsx). The modal itself
+        // handles native-vs-web settings handoff; we no longer jump straight
+        // to openAppSettings() because that bypasses the modal explanation.
+        void ensureCallRationale("voice", { force: true });
       } else {
         toast({
           variant: "destructive",
@@ -436,7 +438,6 @@ export function VoiceChat({
     acquireMicrophoneStream,
     isPermissionDeniedError,
     isSpectatorRole,
-    openAppSettings,
     showMicPermissionToast,
     t,
     toast,
