@@ -133,7 +133,8 @@ export default function ChatBubblesLayer() {
   const hasActiveCall = callLayer?.hasActiveCall ?? false;
 
   const [bubbles, setBubbles] = useState<Record<string, BubblePeerState>>({});
-  const [enabled, setEnabled] = useState<boolean>(() => getChatBubblesEnabled());
+  const userScopedId = user?.id ? String(user.id) : null;
+  const [enabled, setEnabled] = useState<boolean>(() => getChatBubblesEnabled(userScopedId));
   const [nativeMode, setNativeMode] = useState<"bubble" | "overlay" | "none">("none");
   const [miniMessagesByPeer, setMiniMessagesByPeer] = useState<Record<string, MiniMessage[]>>({});
   const [draftByPeer, setDraftByPeer] = useState<Record<string, string>>({});
@@ -152,12 +153,24 @@ export default function ChatBubblesLayer() {
   // ── preference + native capability detection ────────────────────────
   useEffect(() => {
     const onPrefChange = (ev: Event) => {
-      const detail = (ev as CustomEvent<{ enabled?: boolean }>).detail;
-      setEnabled(typeof detail?.enabled === "boolean" ? detail.enabled : getChatBubblesEnabled());
+      const detail = (ev as CustomEvent<{ enabled?: boolean; userId?: string | null }>).detail;
+      // Only react to changes for the currently signed-in user (or the
+      // legacy global key when no user is set), so switching accounts
+      // mid-session doesn't flip the toggle for the old user.
+      if (detail?.userId && detail.userId !== userScopedId) return;
+      setEnabled(
+        typeof detail?.enabled === "boolean" ? detail.enabled : getChatBubblesEnabled(userScopedId),
+      );
     };
     window.addEventListener("vex-chat-bubbles-pref", onPrefChange);
     return () => window.removeEventListener("vex-chat-bubbles-pref", onPrefChange);
-  }, []);
+  }, [userScopedId]);
+
+  // Resync the toggle whenever the auth user changes (login / logout /
+  // account switch on a shared device).
+  useEffect(() => {
+    setEnabled(getChatBubblesEnabled(userScopedId));
+  }, [userScopedId]);
 
   useEffect(() => {
     let cancelled = false;

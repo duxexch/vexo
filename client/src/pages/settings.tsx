@@ -1320,7 +1320,15 @@ function GameSpeedSection() {
 
 function ChatBubblesToggleRow() {
   const { t } = useI18n();
-  const [enabled, setEnabled] = useState<boolean>(() => getChatBubblesEnabled());
+  const { user } = useAuth();
+  const userId = user?.id ? String(user.id) : null;
+  const [enabled, setEnabled] = useState<boolean>(() => getChatBubblesEnabled(userId));
+
+  // Refresh when the auth user changes — switching accounts on a shared
+  // device must surface the *new* user's saved preference, not the old.
+  useEffect(() => {
+    setEnabled(getChatBubblesEnabled(userId));
+  }, [userId]);
 
   return (
     <div className="flex items-center justify-between gap-4">
@@ -1331,7 +1339,7 @@ function ChatBubblesToggleRow() {
       <Switch
         checked={enabled}
         onCheckedChange={(checked) => {
-          setChatBubblesEnabled(checked);
+          setChatBubblesEnabled(checked, userId);
           setEnabled(checked);
         }}
         data-testid="switch-chat-bubbles"
