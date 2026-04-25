@@ -1475,6 +1475,7 @@ const ar: Record<string, string> = {
   'chat.setPin': 'تعيين رمز PIN',
   'chat.results': '{count} نتيجة',
   'chat.startOfConversation': 'بداية المحادثة',
+  'chat.loadingOlderMessages': 'جاري تحميل الرسائل الأقدم…',
   'chat.you': 'أنت',
   'chat.media': 'وسائط',
   'chat.messageDeleted': 'تم حذف هذه الرسالة',

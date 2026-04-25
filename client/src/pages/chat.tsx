@@ -1632,12 +1632,34 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
 
             {/* ======= Messages Area ======= */}
             <div className="flex-1 overflow-y-auto p-2 sm:p-4 relative" onScroll={handleScroll} ref={scrollAreaRef}>
-              {/* Load more indicator */}
-              {loadingMore && (
-                <div className="text-center py-2">
-                  <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+              {/*
+                Task #77 — "Loading older messages…" strip.
+                Sticky at the top of the scroll container so it is always
+                visible while a history page is in flight, even if the
+                user has scrolled down. Critically NOT a flow element
+                that pushes content down — that would break Task #27's
+                scroll-anchoring (the first visible message must stay
+                pinned exactly where it was when older messages land).
+                We achieve this with `sticky top-0 -mb-9 h-9` so the
+                strip occupies layout height equal to its negative
+                bottom margin → net zero contribution to the scroll
+                content height. Opacity transition keeps the entry/exit
+                from flickering on fast networks.
+              */}
+              <div
+                className={`pointer-events-none sticky top-0 z-20 -mb-9 flex h-9 items-center justify-center transition-opacity duration-200 ${
+                  loadingMore ? "opacity-100" : "opacity-0"
+                }`}
+                aria-hidden={!loadingMore}
+                role="status"
+                aria-live="polite"
+                data-testid="chat-loading-older-messages"
+              >
+                <div className="flex items-center gap-2 rounded-full bg-background/90 px-3 py-1 text-xs text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>{loadingMore ? t('chat.loadingOlderMessages') : ''}</span>
                 </div>
-              )}
+              </div>
               {!hasMoreMessages && messages.length > 0 && (
                 <div className="text-center py-2">
                   <p className="text-xs text-muted-foreground">{t('chat.startOfConversation')}</p>

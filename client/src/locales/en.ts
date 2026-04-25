@@ -1475,6 +1475,7 @@ const en: Record<string, string> = {
   'chat.setPin': 'Set PIN code',
   'chat.results': '{count} results',
   'chat.startOfConversation': 'Start of conversation',
+  'chat.loadingOlderMessages': 'Loading older messages…',
   'chat.you': 'You',
   'chat.media': 'Media',
   'chat.messageDeleted': 'This message was deleted',
