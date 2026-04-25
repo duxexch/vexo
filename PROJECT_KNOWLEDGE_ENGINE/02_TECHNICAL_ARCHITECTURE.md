@@ -67,6 +67,10 @@ Two websocket paths coexist:
 
 Cluster scaling uses sticky IP hash in `server/cluster.ts` to keep websocket affinity.
 
+Cluster-aware presence smokes (no real Redis required):
+
+- `npm run quality:smoke:chat-viewer-count` — boots two in-process Socket.IO servers backed by a shared in-memory Redis bus (ioredis-mock + a `send_command` / `messageBuffer` shim) and verifies the production `broadcastChallengeViewerCount` helper produces accurate `chat:viewer_count` numbers (0→1→2→1→0) when spectators connect to different instances. The smoke also asserts the player socket is never counted, which guards against a Map-only regression in `socket.data.spectatorRoomIds[]` (the array mirror that survives cross-node JSON serialization in `fetchSockets`).
+
 ## 5. Data and Storage Model
 
 - DB driver and pool: `server/db.ts`
