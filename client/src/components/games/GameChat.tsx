@@ -591,7 +591,7 @@ function ChatViewerCountPill({
               {spectatorViewers.map((v) => (
                 <li key={v.userId}>
                   <Link
-                    href={`/profile/${encodeURIComponent(v.username)}`}
+                    href={`/player/${encodeURIComponent(v.username)}`}
                     className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
                     data-testid={`game-chat-viewer-row-${v.userId}`}
                   >
