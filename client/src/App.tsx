@@ -11,6 +11,7 @@ import { VexLogo } from "@/components/vex-logo";
 import { ThemeProvider } from "@/lib/theme";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { PermissionsBanner } from "@/components/PermissionsBanner";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { lazy, Suspense, useEffect } from "react";
 
@@ -250,6 +251,7 @@ function App() {
                         <SettingsProvider>
                             <AuthProvider>
                                 <OfflineBanner />
+                                <PermissionsBanner />
                                 <Toaster />
                                 {TranslationDebugger && (
                                     <Suspense fallback={null}>

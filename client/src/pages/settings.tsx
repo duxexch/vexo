@@ -2709,6 +2709,32 @@ function PermissionsSection() {
     }
   };
 
+  const openMicrophone = async () => {
+    const { openMicrophoneSettings } = await import("@/lib/startup-permissions");
+    await openMicrophoneSettings();
+  };
+
+  const openCamera = async () => {
+    // Re-uses the app-settings deep link on native and falls back to
+    // the per-permission browser shortcut on web (microphone settings
+    // in Chromium-family browsers also expose the camera toggle right
+    // next to it, so we send the user there as the closest analogue).
+    const { openMicrophoneSettings, openAppSettings: openSettings } = await import(
+      "@/lib/startup-permissions"
+    );
+    const isNative = (await import("@capacitor/core")).Capacitor.isNativePlatform();
+    if (isNative) {
+      await openSettings();
+    } else {
+      await openMicrophoneSettings();
+    }
+  };
+
+  const openNotifications = async () => {
+    const { openNotificationSettings } = await import("@/lib/startup-permissions");
+    await openNotificationSettings();
+  };
+
   const renderStatus = (
     state: "granted" | "denied" | "prompt" | "unavailable",
   ) => {
@@ -2776,6 +2802,18 @@ function PermissionsSection() {
           title={t("settings.permissions.microphone.title")}
           helper={t("settings.permissions.microphone.helper")}
           state={summary?.microphone ?? "unavailable"}
+          extra={
+            summary?.microphone !== "granted" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={openMicrophone}
+                data-testid="btn-perm-open-microphone"
+              >
+                {t("permissions.gate.openSettings")}
+              </Button>
+            ) : null
+          }
           testId="row-perm-microphone"
         />
         <Row
@@ -2783,6 +2821,18 @@ function PermissionsSection() {
           title={t("settings.permissions.camera.title")}
           helper={t("settings.permissions.camera.helper")}
           state={summary?.camera ?? "unavailable"}
+          extra={
+            summary?.camera !== "granted" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={openCamera}
+                data-testid="btn-perm-open-camera"
+              >
+                {t("permissions.gate.openSettings")}
+              </Button>
+            ) : null
+          }
           testId="row-perm-camera"
         />
         <Row
@@ -2790,6 +2840,18 @@ function PermissionsSection() {
           title={t("settings.permissions.notifications.title")}
           helper={t("settings.permissions.notifications.helper")}
           state={summary?.notifications ?? "unavailable"}
+          extra={
+            summary?.notifications !== "granted" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={openNotifications}
+                data-testid="btn-perm-open-notifications"
+              >
+                {t("permissions.gate.openSettings")}
+              </Button>
+            ) : null
+          }
           testId="row-perm-notifications"
         />
         <Row
@@ -2848,14 +2910,34 @@ function PermissionsSection() {
   );
 }
 
+function readInitialTab(): string {
+  if (typeof window === "undefined") return "profile";
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    const allowed = new Set([
+      "profile",
+      "preferences",
+      "privacy",
+      "security",
+      "permissions",
+    ]);
+    if (tab && allowed.has(tab)) return tab;
+  } catch {
+    // ignore — fall through to default
+  }
+  return "profile";
+}
+
 export default function SettingsPage() {
   const { t } = useI18n();
+  const [activeTab, setActiveTab] = useState<string>(() => readInitialTab());
 
   return (
     <div className="container max-w-4xl mx-auto min-h-[100svh] bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] p-3 sm:p-6">
       <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6" data-testid="text-settings-title">{t("nav.settings")}</h1>
 
-      <Tabs defaultValue="profile" className="space-y-4 sm:space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
         <TabsList className="w-full justify-start gap-1 overflow-x-auto whitespace-nowrap rounded-xl p-1">
           <TabsTrigger value="profile" className="min-h-[44px] min-w-[8rem]" data-testid="tab-profile">
             <User className="h-4 w-4 sm:me-2" />

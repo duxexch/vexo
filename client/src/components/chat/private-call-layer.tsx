@@ -16,6 +16,7 @@ import {
 } from "@/lib/chat-call-ops-queue";
 import { useToast } from "@/hooks/use-toast";
 import { ensureCallRationale } from "@/lib/call-permission-rationale";
+import { ensureCallPermissions } from "@/lib/native-call-permissions";
 import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
 import { registerCallActionHandler } from "@/lib/call-actions";
 import {
@@ -442,8 +443,21 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
       return false;
     }
 
-    const decision = await ensureCallRationale(needsVideo ? "video" : "voice");
+    const kind = needsVideo ? "video" : "voice";
+    const decision = await ensureCallRationale(kind);
     if (decision !== "allow") {
+      setPhase("idle");
+      return false;
+    }
+
+    // On native Android the WebView only obtains camera/mic if the host
+    // app has been granted the matching runtime permissions via
+    // Activity#requestPermissions. Issue that prompt here, after the
+    // in-app rationale, so the OS dialog is never the first thing the
+    // user sees.
+    const native = await ensureCallPermissions(kind);
+    if (!native.granted) {
+      void ensureCallRationale(kind, { force: true });
       setPhase("idle");
       return false;
     }
