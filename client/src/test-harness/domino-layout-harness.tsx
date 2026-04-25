@@ -40,6 +40,13 @@ function parseExplicitChain(raw: string | null): HarnessTile[] | null {
   return tiles;
 }
 
+function parseAnchorIndex(raw: string | null, chainLength: number): number | null {
+  if (raw === null || raw === "") return null;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0 || value >= chainLength) return null;
+  return value;
+}
+
 function buildGameState(tiles: HarnessTile[]) {
   const boardTiles = tiles.map((tile) => ({
     tile,
@@ -68,20 +75,75 @@ function App() {
   const compact = params.get("compact") === "true";
   const explicitChain = parseExplicitChain(params.get("chain"));
 
-  const containerWidth = compact ? 380 : 900;
-  const containerHeight = compact ? 460 : 560;
-
   const tiles = React.useMemo(
     () => explicitChain ?? buildChain(length),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [length, params.get("chain")],
   );
 
-  const gameState = React.useMemo(() => buildGameState(tiles), [tiles]);
+  // The DominoBoard's anchor effect latches onto `state.boardTiles[0]` the
+  // first time it sees a non-empty board, then leaves the anchor alone for
+  // the rest of the round. To simulate a real game where the anchor sits in
+  // the middle of the chain (with tiles played on BOTH sides of it), we
+  // mount in two phases when `anchorIndex` is requested:
+  //
+  //   1. Render only `tiles[anchorIndex]` so the board's anchor effect
+  //      latches onto that tile's signature.
+  //   2. Expand to the full chain. The anchor effect's `stillExists` guard
+  //      keeps the latched anchor in place, so the chain visually splits
+  //      around the requested middle tile (leftEntries flow leftward, the
+  //      remaining tiles flow rightward) — matching real-game geometry on
+  //      the compact mobile lane.
+  //
+  // Without this, the harness mounts the entire chain on a single side of
+  // the anchor, which forces the layout solver into a tight C-shape on
+  // mobile and breaks the spatially-closest-half assertions used by
+  // `scripts/smoke-domino-playthrough-pips.ts`.
+  const anchorIndex = parseAnchorIndex(params.get("anchorIndex"), tiles.length);
+  const needsTwoPhase = anchorIndex !== null && tiles.length > 1;
+
+  const [phase, setPhase] = React.useState<"seed" | "full">(
+    needsTwoPhase ? "seed" : "full",
+  );
 
   React.useEffect(() => {
-    (window as Window & { __HARNESS_CHAIN__?: HarnessTile[] }).__HARNESS_CHAIN__ = tiles;
-  }, [tiles]);
+    if (phase !== "seed") {
+      return;
+    }
+    // Defer to a fresh macrotask so React fully commits the seed render —
+    // including the DominoBoard's anchor-latching `useEffect` — before the
+    // chain expands. Without the yield, React batches both state updates
+    // into the same commit and the anchor latches on `tiles[0]` instead of
+    // the requested tile.
+    const id = window.setTimeout(() => setPhase("full"), 0);
+    return () => window.clearTimeout(id);
+  }, [phase]);
+
+  const visibleTiles = React.useMemo(() => {
+    if (phase === "seed" && anchorIndex !== null) {
+      return [tiles[anchorIndex]];
+    }
+    return tiles;
+  }, [tiles, phase, anchorIndex]);
+
+  const containerWidth = compact ? 380 : 900;
+  const containerHeight = compact ? 460 : 560;
+
+  const gameState = React.useMemo(() => buildGameState(visibleTiles), [visibleTiles]);
+
+  React.useEffect(() => {
+    (window as Window & { __HARNESS_CHAIN__?: HarnessTile[] }).__HARNESS_CHAIN__ = visibleTiles;
+  }, [visibleTiles]);
+
+  // `__HARNESS_READY__` is the gate the smoke runner waits on before
+  // measuring. Hold it until we have rendered the FULL chain, so two-phase
+  // mounts don't race the smoke into measuring the seed (single-tile)
+  // state.
+  React.useEffect(() => {
+    if (phase === "full") {
+      (window as Window & { __HARNESS_READY__?: boolean }).__HARNESS_READY__ = true;
+    }
+  }, [phase]);
 
   return (
     <div
@@ -121,5 +183,3 @@ createRoot(rootElement).render(
     </I18nProvider>
   </React.StrictMode>,
 );
-
-(window as Window & { __HARNESS_READY__?: boolean }).__HARNESS_READY__ = true;

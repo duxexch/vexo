@@ -23,13 +23,23 @@
  *      matching pip's neighbour, so the trailing half count diverges
  *      from the leading half count of the next tile.
  *
- * The smoke runs on the desktop viewport only — see the VIEWPORTS
- * comment below for why the mobile compact lane is intentionally
- * skipped here. Mobile DOM rendering of the same chains is already
- * covered by smoke-domino-playthrough-bounds.ts (lane containment,
- * real DOM), and the flip rule is independently verified for both
- * viewports by smoke-domino-tile-orientation.ts (solver + flip rule,
- * headless).
+ * The smoke runs on BOTH the desktop viewport and the compact mobile
+ * lane. Originally mobile was skipped because the harness mounted the
+ * full chain on a single side of the anchor, which forced the layout
+ * solver to wrap into a tight C-shape on the narrow mobile lane and
+ * defeated the spatially-closest-half assumption. Task #61 fixed this
+ * by extending the harness with an `anchorIndex` URL param, which
+ * splits the chain around the requested anchor exactly like a real
+ * game (where the first played tile is anchored and subsequent tiles
+ * grow out on both sides). With balanced chain halves around the
+ * anchor, the compact lane no longer wraps and the same per-tile
+ * pip-value assertions used on desktop catch wrong-pip board renders
+ * on phone screens too.
+ *
+ * Mobile DOM lane containment (separate from pip values) is still
+ * covered independently by smoke-domino-playthrough-bounds.ts, and
+ * the flip rule is independently verified at the solver level by
+ * smoke-domino-tile-orientation.ts.
  */
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
@@ -49,26 +59,27 @@ interface ViewportConfig {
     height: number;
 }
 
-// Pip-orientation continuity is asserted on the desktop viewport only. The
-// mobile compact lane has limited horizontal space, and because the harness
-// presents the whole chain on a single side of the anchor (real games split
-// the chain around the anchor), the layout solver legitimately wraps the
-// chain into a tight C-shape on mobile — that wrap geometry breaks the
-// "spatially-closest half of consecutive tiles" assumption this test relies
-// on, even when the flip rule itself is correct.
-//
-// Mobile DOM rendering for the same chains is already covered by
-// smoke-domino-playthrough-bounds.ts (lane containment), and the flip rule
-// is independently verified end-to-end at the solver level by
-// smoke-domino-tile-orientation.ts (which understands the solver's
-// `direction` enum and so handles wraps correctly).
+// Mobile coverage requires the per-scenario `mobileAnchorIndex` (see
+// SCENARIOS) so the harness can split the chain around a middle anchor
+// like a real game and avoid forcing the layout solver to wrap into a
+// tight C-shape on the narrow compact lane.
 const VIEWPORTS: ViewportConfig[] = [
     { name: "desktop", compact: false, width: 1280, height: 720 },
+    { name: "mobile", compact: true, width: 414, height: 896 },
 ];
 
 interface ChainScenario {
     name: string;
     chain: Array<[number, number]>;
+    // Index in `chain` to use as the on-screen anchor when rendering the
+    // compact mobile lane. Splitting the chain around a middle anchor
+    // mirrors a real game (chain grows out from the first played tile on
+    // both sides) and stops the narrow mobile lane from being forced into
+    // a C-shape wrap that would defeat the spatially-closest-half
+    // assertion. The chosen index must keep at least one of [3,0] and
+    // [5,0] on each side (or as the anchor itself) so both blank-half
+    // tiles still get exercised end-to-end.
+    mobileAnchorIndex: number;
 }
 
 // Each chain satisfies the server's invariant `chain[i][1] === chain[i+1][0]`,
@@ -91,6 +102,10 @@ const SCENARIOS: ChainScenario[] = [
             [0, 4],
             [4, 1],
         ],
+        // Anchor on the [5,5] double — left side carries [3,0],
+        // right side carries [5,0], 3 tiles per side keeps the
+        // compact lane from wrapping.
+        mobileAnchorIndex: 3,
     },
     {
         // 8 tiles starting on a [6,6] double (immediate elbow) with two
@@ -106,6 +121,11 @@ const SCENARIOS: ChainScenario[] = [
             [2, 4],
             [4, 1],
         ],
+        // Anchor on [5,0] itself (the original blank-half regression
+        // case acting as the table center) so the assertion still
+        // covers it via the half-multiset check; left side carries
+        // [3,0] + the [6,6] double, right side carries the rest.
+        mobileAnchorIndex: 4,
     },
 ];
 
@@ -159,6 +179,7 @@ async function measureScene(
     baseUrl: string,
     viewport: ViewportConfig,
     chain: Array<[number, number]>,
+    anchorIndex: number | null,
 ): Promise<TileMeasurement[]> {
     const context = await browser.newContext({
         viewport: { width: viewport.width, height: viewport.height },
@@ -168,9 +189,14 @@ async function measureScene(
     try {
         const page = await context.newPage();
         const chainParam = encodeURIComponent(JSON.stringify(chain));
-        const url =
-            `${baseUrl}/test-harness.html?compact=${viewport.compact}` +
-            `&chain=${chainParam}`;
+        const queryParts = [
+            `compact=${viewport.compact}`,
+            `chain=${chainParam}`,
+        ];
+        if (anchorIndex !== null) {
+            queryParts.push(`anchorIndex=${anchorIndex}`);
+        }
+        const url = `${baseUrl}/test-harness.html?${queryParts.join("&")}`;
         await page.goto(url, { waitUntil: "load" });
         await page.waitForFunction(() => {
             return (
@@ -408,11 +434,19 @@ async function main() {
 
             for (const viewport of VIEWPORTS) {
                 const label = `${scenario.name}@${viewport.name}`;
+                // Only the compact (mobile) lane needs a real anchor split —
+                // the desktop lane has plenty of horizontal room to lay the
+                // whole chain out on a single side of `boardTiles[0]`
+                // without wrapping.
+                const anchorIndex = viewport.compact
+                    ? scenario.mobileAnchorIndex
+                    : null;
                 const measurements = await measureScene(
                     browser,
                     baseUrl,
                     viewport,
                     scenario.chain,
+                    anchorIndex,
                 );
 
                 assert.equal(
