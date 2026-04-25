@@ -506,7 +506,7 @@ interface ChatViewerCountPillProps {
   language: string;
 }
 
-function ChatViewerCountPill({
+export function ChatViewerCountPill({
   spectatorCount,
   spectatorViewers,
   language,
