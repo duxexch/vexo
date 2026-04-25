@@ -13,7 +13,15 @@
  * NotificationProvider plus `SHOW_CHAT_BUBBLE` postMessages from the
  * service worker. State is per-peer; tapping a bubble expands an
  * inline mini chat with the latest 20 messages and a quick-reply
- * input. Suppression rules live below in `shouldShowBubbleFor`.
+ * input.
+ *
+ * Interaction model (matches Messenger chat-heads):
+ *   • Each bubble is draggable via pointer events.
+ *   • On release the bubble snaps to the nearest left/right edge.
+ *   • While dragging, a centered bottom "X" target appears; dropping
+ *     inside it dismisses the bubble (same as the dismiss button).
+ *
+ * Suppression rules live in `shouldShowBubbleFor`.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -23,9 +31,7 @@ import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { usePrivateCallLayer } from "@/components/chat/private-call-layer";
-import {
-  getChatBubblesEnabled,
-} from "@/lib/chat-bubbles-pref";
+import { getChatBubblesEnabled } from "@/lib/chat-bubbles-pref";
 import {
   hideAllBubbles as nativeHideAllBubbles,
   hideBubble as nativeHideBubble,
@@ -35,6 +41,11 @@ import {
 
 const MAX_VISIBLE_BUBBLES = 4;
 const MAX_PREVIEW_LENGTH = 80;
+const BUBBLE_SIZE = 56;
+const EDGE_MARGIN = 16;
+const TOP_GUARD = 96;
+const DISMISS_ZONE_HEIGHT = 96;
+const DISMISS_HIT_RADIUS = 80;
 
 interface BubblePeerState {
   peerId: string;
@@ -53,18 +64,63 @@ interface MiniMessage {
   createdAt?: string;
 }
 
+interface RawMessage {
+  id?: unknown;
+  content?: unknown;
+  senderId?: unknown;
+  createdAt?: unknown;
+}
+
+interface SendMessageResponse {
+  message?: { id?: unknown };
+  id?: unknown;
+}
+
 function truncate(s: string, max: number): string {
   if (!s) return "";
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
-function nowPosition(index: number): { x: number; y: number } {
-  if (typeof window === "undefined") return { x: 16, y: 120 };
-  const margin = 16;
-  const size = 56;
-  const stride = size + 12;
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function snapPosition(
+  x: number,
+  y: number,
+  viewportWidth: number,
+  viewportHeight: number,
+): { x: number; y: number } {
+  const maxX = viewportWidth - BUBBLE_SIZE - EDGE_MARGIN;
+  const minX = EDGE_MARGIN;
+  const snappedX = x + BUBBLE_SIZE / 2 < viewportWidth / 2 ? minX : maxX;
+  const maxY = viewportHeight - BUBBLE_SIZE - EDGE_MARGIN;
+  const minY = TOP_GUARD;
+  return { x: snappedX, y: clamp(y, minY, maxY) };
+}
+
+function initialPosition(index: number): { x: number; y: number } {
+  if (typeof window === "undefined") return { x: EDGE_MARGIN, y: 120 };
+  const stride = BUBBLE_SIZE + 12;
   const top = Math.max(120, window.innerHeight / 2 - MAX_VISIBLE_BUBBLES * stride);
-  return { x: window.innerWidth - size - margin, y: top + index * stride };
+  return {
+    x: window.innerWidth - BUBBLE_SIZE - EDGE_MARGIN,
+    y: top + index * stride,
+  };
+}
+
+function normaliseRawMessages(payload: unknown): MiniMessage[] {
+  const list: RawMessage[] = Array.isArray(payload)
+    ? (payload as RawMessage[])
+    : Array.isArray((payload as { messages?: unknown })?.messages)
+      ? ((payload as { messages: RawMessage[] }).messages)
+      : [];
+  return list.map((m) => ({
+    id: m.id != null ? String(m.id) : `local-${Math.random().toString(36).slice(2, 10)}`,
+    content: typeof m.content === "string" ? m.content : "",
+    senderId: m.senderId != null ? String(m.senderId) : "",
+    createdAt: typeof m.createdAt === "string" ? m.createdAt : undefined,
+  }));
 }
 
 export default function ChatBubblesLayer() {
@@ -81,11 +137,16 @@ export default function ChatBubblesLayer() {
   const [miniMessagesByPeer, setMiniMessagesByPeer] = useState<Record<string, MiniMessage[]>>({});
   const [draftByPeer, setDraftByPeer] = useState<Record<string, string>>({});
   const [sendingPeer, setSendingPeer] = useState<string | null>(null);
+  const [draggingPeerId, setDraggingPeerId] = useState<string | null>(null);
+  const [pointerOverDismiss, setPointerOverDismiss] = useState<boolean>(false);
 
   const userRef = useRef(user);
   userRef.current = user;
   const tokenRef = useRef(token);
   tokenRef.current = token;
+  // Synchronous unread counter so we can forward an accurate per-peer
+  // total to the native bubble plugin without waiting for React state.
+  const unreadByPeerRef = useRef<Map<string, number>>(new Map());
 
   // ── preference + native capability detection ────────────────────────
   useEffect(() => {
@@ -102,7 +163,9 @@ export default function ChatBubblesLayer() {
     isBubblesSupported().then((res) => {
       if (!cancelled) setNativeMode(res.mode);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ── helpers ─────────────────────────────────────────────────────────
@@ -124,14 +187,17 @@ export default function ChatBubblesLayer() {
     return false;
   }, []);
 
-  const shouldShowBubbleFor = useCallback((peerId: string): boolean => {
-    if (!enabled) return false;
-    if (!userRef.current || !tokenRef.current) return false;
-    if (hasActiveCall) return false;
-    if (isPeerSuppressed(peerId)) return false;
-    if (peerId === activeChatPeerId && document.visibilityState === "visible") return false;
-    return true;
-  }, [enabled, hasActiveCall, isPeerSuppressed, activeChatPeerId]);
+  const shouldShowBubbleFor = useCallback(
+    (peerId: string): boolean => {
+      if (!enabled) return false;
+      if (!userRef.current || !tokenRef.current) return false;
+      if (hasActiveCall) return false;
+      if (isPeerSuppressed(peerId)) return false;
+      if (peerId === activeChatPeerId && document.visibilityState === "visible") return false;
+      return true;
+    },
+    [enabled, hasActiveCall, isPeerSuppressed, activeChatPeerId],
+  );
 
   // When the native plugin is rendering OS-level bubbles we still queue
   // them via `nativeShowBubble` below, but we MUST NOT also paint the
@@ -143,94 +209,107 @@ export default function ChatBubblesLayer() {
   const peerInfoCache = useRef<Map<string, { name: string; avatarUrl?: string }>>(new Map());
   const peerInfoInFlight = useRef<Map<string, Promise<{ name: string; avatarUrl?: string }>>>(new Map());
 
-  const fetchPeerInfo = useCallback((peerId: string, fallbackName: string): Promise<{ name: string; avatarUrl?: string }> => {
-    const cached = peerInfoCache.current.get(peerId);
-    if (cached) return Promise.resolve(cached);
-    const inFlight = peerInfoInFlight.current.get(peerId);
-    if (inFlight) return inFlight;
+  const fetchPeerInfo = useCallback(
+    (peerId: string, fallbackName: string): Promise<{ name: string; avatarUrl?: string }> => {
+      const cached = peerInfoCache.current.get(peerId);
+      if (cached) return Promise.resolve(cached);
+      const inFlight = peerInfoInFlight.current.get(peerId);
+      if (inFlight) return inFlight;
 
-    const promise = (async (): Promise<{ name: string; avatarUrl?: string }> => {
-      try {
-        const res = await fetch(`/api/users/${encodeURIComponent(peerId)}`, {
-          headers: { Authorization: `Bearer ${tokenRef.current}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const name = (data?.firstName as string | undefined) || (data?.username as string | undefined) || fallbackName;
-          const info: { name: string; avatarUrl?: string } = {
-            name,
-            avatarUrl: typeof data?.avatarUrl === "string" ? data.avatarUrl : undefined,
-          };
-          peerInfoCache.current.set(peerId, info);
-          return info;
+      const promise = (async (): Promise<{ name: string; avatarUrl?: string }> => {
+        try {
+          const res = await fetch(`/api/users/${encodeURIComponent(peerId)}`, {
+            headers: { Authorization: `Bearer ${tokenRef.current}` },
+          });
+          if (res.ok) {
+            const data = (await res.json()) as {
+              firstName?: string;
+              username?: string;
+              avatarUrl?: string;
+            };
+            const name = data.firstName || data.username || fallbackName;
+            const info: { name: string; avatarUrl?: string } = {
+              name,
+              avatarUrl: typeof data.avatarUrl === "string" ? data.avatarUrl : undefined,
+            };
+            peerInfoCache.current.set(peerId, info);
+            return info;
+          }
+        } catch {
+          /* fallback below */
         }
-      } catch {
-        /* fallback below */
-      }
-      const info: { name: string; avatarUrl?: string } = { name: fallbackName };
-      peerInfoCache.current.set(peerId, info);
-      return info;
-    })();
+        const info: { name: string; avatarUrl?: string } = { name: fallbackName };
+        peerInfoCache.current.set(peerId, info);
+        return info;
+      })();
 
-    peerInfoInFlight.current.set(peerId, promise);
-    promise.finally(() => peerInfoInFlight.current.delete(peerId));
-    return promise;
-  }, []);
+      peerInfoInFlight.current.set(peerId, promise);
+      promise.finally(() => peerInfoInFlight.current.delete(peerId));
+      return promise;
+    },
+    [],
+  );
 
   // ── add / update bubble ─────────────────────────────────────────────
-  const upsertBubble = useCallback(async (input: {
-    peerId: string;
-    fallbackName: string;
-    body: string;
-  }) => {
-    if (!shouldShowBubbleFor(input.peerId)) return;
+  const upsertBubble = useCallback(
+    async (input: { peerId: string; fallbackName: string; body: string }) => {
+      if (!shouldShowBubbleFor(input.peerId)) return;
 
-    const info = await fetchPeerInfo(input.peerId, input.fallbackName);
+      const info = await fetchPeerInfo(input.peerId, input.fallbackName);
 
-    setBubbles((prev) => {
-      const existing = prev[input.peerId];
-      const nextIndex = Object.keys(prev).length;
-      const next: BubblePeerState = existing
-        ? {
-            ...existing,
-            name: info.name,
-            avatarUrl: info.avatarUrl,
-            lastMessage: input.body,
-            unreadCount: existing.expanded ? 0 : existing.unreadCount + 1,
+      // Compute the new unread count synchronously so the native plugin
+      // gets the real per-peer accumulated total (Messenger requirement).
+      const previousUnread = unreadByPeerRef.current.get(input.peerId) ?? 0;
+      const nextUnread = previousUnread + 1;
+      unreadByPeerRef.current.set(input.peerId, nextUnread);
+
+      setBubbles((prev) => {
+        const existing = prev[input.peerId];
+        const nextIndex = Object.keys(prev).length;
+        const next: BubblePeerState = existing
+          ? {
+              ...existing,
+              name: info.name,
+              avatarUrl: info.avatarUrl,
+              lastMessage: input.body,
+              unreadCount: existing.expanded ? 0 : nextUnread,
+            }
+          : {
+              peerId: input.peerId,
+              name: info.name,
+              avatarUrl: info.avatarUrl,
+              lastMessage: input.body,
+              unreadCount: 1,
+              expanded: false,
+              position: initialPosition(nextIndex),
+            };
+        const merged = { ...prev, [input.peerId]: next };
+        // Cap visible bubbles — drop oldest non-expanded if over the cap.
+        const ids = Object.keys(merged);
+        if (ids.length > MAX_VISIBLE_BUBBLES) {
+          const drop = ids.find((id) => !merged[id].expanded && id !== input.peerId);
+          if (drop) {
+            unreadByPeerRef.current.delete(drop);
+            const { [drop]: _dropped, ...rest } = merged;
+            return rest;
           }
-        : {
-            peerId: input.peerId,
-            name: info.name,
-            avatarUrl: info.avatarUrl,
-            lastMessage: input.body,
-            unreadCount: 1,
-            expanded: false,
-            position: nowPosition(nextIndex),
-          };
-      const merged = { ...prev, [input.peerId]: next };
-      // Cap visible bubbles — drop oldest non-expanded if over the cap.
-      const ids = Object.keys(merged);
-      if (ids.length > MAX_VISIBLE_BUBBLES) {
-        const drop = ids.find((id) => !merged[id].expanded && id !== input.peerId);
-        if (drop) {
-          const { [drop]: _, ...rest } = merged;
-          return rest;
         }
-      }
-      return merged;
-    });
-
-    // Best-effort native bubble. The web fallback above renders regardless.
-    if (nativeMode !== "none") {
-      void nativeShowBubble({
-        peerId: input.peerId,
-        name: info.name,
-        avatarUrl: info.avatarUrl,
-        body: truncate(input.body, MAX_PREVIEW_LENGTH),
-        unreadCount: 1,
+        return merged;
       });
-    }
-  }, [fetchPeerInfo, nativeMode, shouldShowBubbleFor]);
+
+      if (nativeMode !== "none") {
+        // Forward the accumulated per-peer unread count, not a literal 1.
+        void nativeShowBubble({
+          peerId: input.peerId,
+          name: info.name,
+          avatarUrl: info.avatarUrl,
+          body: truncate(input.body, MAX_PREVIEW_LENGTH),
+          unreadCount: nextUnread,
+        });
+      }
+    },
+    [fetchPeerInfo, nativeMode, shouldShowBubbleFor],
+  );
 
   // ── event listeners ─────────────────────────────────────────────────
   useEffect(() => {
@@ -278,9 +357,10 @@ export default function ChatBubblesLayer() {
     if (!activeChatPeerId) return;
     setBubbles((prev) => {
       if (!prev[activeChatPeerId]) return prev;
-      const { [activeChatPeerId]: _, ...rest } = prev;
+      const { [activeChatPeerId]: _dropped, ...rest } = prev;
       return rest;
     });
+    unreadByPeerRef.current.delete(activeChatPeerId);
     void nativeHideBubble(activeChatPeerId);
   }, [activeChatPeerId]);
 
@@ -288,19 +368,21 @@ export default function ChatBubblesLayer() {
   useEffect(() => {
     if (enabled && user && !hasActiveCall) return;
     setBubbles({});
+    unreadByPeerRef.current.clear();
     void nativeHideAllBubbles();
   }, [enabled, user, hasActiveCall]);
 
   // ── per-bubble actions ──────────────────────────────────────────────
   const dismissPeer = useCallback((peerId: string) => {
     setBubbles((prev) => {
-      const { [peerId]: _, ...rest } = prev;
+      const { [peerId]: _dropped, ...rest } = prev;
       return rest;
     });
     setMiniMessagesByPeer((prev) => {
-      const { [peerId]: _, ...rest } = prev;
+      const { [peerId]: _dropped, ...rest } = prev;
       return rest;
     });
+    unreadByPeerRef.current.delete(peerId);
     void nativeHideBubble(peerId);
   }, []);
 
@@ -311,103 +393,196 @@ export default function ChatBubblesLayer() {
         headers: { Authorization: `Bearer ${tokenRef.current}` },
       });
       if (!res.ok) return;
-      const data = await res.json();
-      const list: MiniMessage[] = Array.isArray(data?.messages)
-        ? data.messages.map((m: any) => ({
-            id: String(m.id ?? Math.random()),
-            content: typeof m.content === "string" ? m.content : "",
-            senderId: String(m.senderId ?? ""),
-            createdAt: m.createdAt,
-          }))
-        : Array.isArray(data)
-          ? data.map((m: any) => ({
-              id: String(m.id ?? Math.random()),
-              content: typeof m.content === "string" ? m.content : "",
-              senderId: String(m.senderId ?? ""),
-              createdAt: m.createdAt,
-            }))
-          : [];
-      setMiniMessagesByPeer((prev) => ({ ...prev, [peerId]: list }));
+      const data = (await res.json()) as unknown;
+      setMiniMessagesByPeer((prev) => ({ ...prev, [peerId]: normaliseRawMessages(data) }));
     } catch {
       /* swallow — mini chat just won't show history */
     }
   }, []);
 
-  const togglePeerExpanded = useCallback((peerId: string) => {
-    setBubbles((prev) => {
-      const existing = prev[peerId];
-      if (!existing) return prev;
-      const expanded = !existing.expanded;
-      return {
-        ...prev,
-        [peerId]: { ...existing, expanded, unreadCount: expanded ? 0 : existing.unreadCount },
-      };
-    });
-    // Lazy-load history once.
-    setMiniMessagesByPeer((prev) => {
-      if (prev[peerId]) return prev;
-      void loadMiniMessages(peerId);
-      return prev;
-    });
-  }, [loadMiniMessages]);
-
-  const sendQuickReply = useCallback(async (peerId: string) => {
-    const draft = (draftByPeer[peerId] || "").trim();
-    if (!draft || !tokenRef.current) return;
-    setSendingPeer(peerId);
-    try {
-      const clientMessageId = `bubble-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const res = await fetch(`/api/chat/${encodeURIComponent(peerId)}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${tokenRef.current}`,
-        },
-        body: JSON.stringify({
-          clientMessageId,
-          content: draft,
-          messageType: "text",
-        }),
+  const togglePeerExpanded = useCallback(
+    (peerId: string) => {
+      setBubbles((prev) => {
+        const existing = prev[peerId];
+        if (!existing) return prev;
+        const expanded = !existing.expanded;
+        if (expanded) unreadByPeerRef.current.set(peerId, 0);
+        return {
+          ...prev,
+          [peerId]: { ...existing, expanded, unreadCount: expanded ? 0 : existing.unreadCount },
+        };
       });
-      if (res.ok) {
-        const sent = await res.json().catch(() => ({} as any));
-        const senderId = userRef.current?.id || "";
-        setMiniMessagesByPeer((prev) => {
-          const list = prev[peerId] || [];
-          return {
-            ...prev,
-            [peerId]: [
-              ...list,
-              {
-                id: String(sent?.message?.id ?? sent?.id ?? clientMessageId),
-                content: draft,
-                senderId,
-                createdAt: new Date().toISOString(),
-              },
-            ],
-          };
+      // Lazy-load history once.
+      setMiniMessagesByPeer((prev) => {
+        if (prev[peerId]) return prev;
+        void loadMiniMessages(peerId);
+        return prev;
+      });
+    },
+    [loadMiniMessages],
+  );
+
+  const sendQuickReply = useCallback(
+    async (peerId: string) => {
+      const draft = (draftByPeer[peerId] || "").trim();
+      if (!draft || !tokenRef.current) return;
+      setSendingPeer(peerId);
+      try {
+        const clientMessageId = `bubble-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const res = await fetch(`/api/chat/${encodeURIComponent(peerId)}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${tokenRef.current}`,
+          },
+          body: JSON.stringify({
+            clientMessageId,
+            content: draft,
+            messageType: "text",
+          }),
         });
-        setDraftByPeer((prev) => ({ ...prev, [peerId]: "" }));
-      } else {
-        // Surface the failure (e.g. 402 chat-unlock-required for stranger
-        // DMs, 429 rate-limit) instead of silently leaving the input
-        // hanging. We deliberately do NOT pop the heavier ChatUnlockDialog
-        // here — quick-reply is meant to stay lightweight; the user can
-        // tap "Open chat" to handle unlock flows.
+        if (res.ok) {
+          const sent = (await res.json().catch(() => ({}))) as SendMessageResponse;
+          const senderId = userRef.current?.id || "";
+          const messageId = sent.message?.id ?? sent.id ?? clientMessageId;
+          setMiniMessagesByPeer((prev) => {
+            const list = prev[peerId] || [];
+            return {
+              ...prev,
+              [peerId]: [
+                ...list,
+                {
+                  id: String(messageId),
+                  content: draft,
+                  senderId,
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+            };
+          });
+          setDraftByPeer((prev) => ({ ...prev, [peerId]: "" }));
+        } else {
+          // Surface the failure (e.g. 402 chat-unlock-required for stranger
+          // DMs, 429 rate-limit) instead of silently leaving the input
+          // hanging. We deliberately do NOT pop the heavier ChatUnlockDialog
+          // here — quick-reply is meant to stay lightweight; the user can
+          // tap "Open chat" to handle unlock flows.
+          toast({
+            variant: "destructive",
+            description: t("chatBubbles.sendFailed"),
+          });
+        }
+      } catch {
         toast({
           variant: "destructive",
           description: t("chatBubbles.sendFailed"),
         });
+      } finally {
+        setSendingPeer(null);
       }
-    } catch {
-      toast({
-        variant: "destructive",
-        description: t("chatBubbles.sendFailed"),
+    },
+    [draftByPeer, t, toast],
+  );
+
+  // ── drag / snap-to-edge / drag-to-dismiss ──────────────────────────
+  const dragStateRef = useRef<{
+    peerId: string;
+    pointerId: number;
+    offsetX: number;
+    offsetY: number;
+    moved: boolean;
+  } | null>(null);
+
+  const isOverDismissZone = useCallback((clientX: number, clientY: number): boolean => {
+    if (typeof window === "undefined") return false;
+    const targetX = window.innerWidth / 2;
+    const targetY = window.innerHeight - DISMISS_ZONE_HEIGHT / 2 - EDGE_MARGIN;
+    const dx = clientX - targetX;
+    const dy = clientY - targetY;
+    return Math.hypot(dx, dy) < DISMISS_HIT_RADIUS;
+  }, []);
+
+  const handlePointerDown = useCallback((peerId: string, ev: React.PointerEvent<HTMLDivElement>) => {
+    const target = ev.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    dragStateRef.current = {
+      peerId,
+      pointerId: ev.pointerId,
+      offsetX: ev.clientX - rect.left,
+      offsetY: ev.clientY - rect.top,
+      moved: false,
+    };
+    target.setPointerCapture(ev.pointerId);
+  }, []);
+
+  const handlePointerMove = useCallback(
+    (ev: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragStateRef.current;
+      if (!drag || drag.pointerId !== ev.pointerId) return;
+      const newX = ev.clientX - drag.offsetX;
+      const newY = ev.clientY - drag.offsetY;
+      if (!drag.moved) {
+        // Treat any noticeable movement as a drag (vs. a tap).
+        if (Math.abs(ev.movementX) + Math.abs(ev.movementY) > 2) {
+          drag.moved = true;
+          setDraggingPeerId(drag.peerId);
+        }
+      }
+      if (drag.moved) {
+        setPointerOverDismiss(isOverDismissZone(ev.clientX, ev.clientY));
+        setBubbles((prev) => {
+          const existing = prev[drag.peerId];
+          if (!existing) return prev;
+          return {
+            ...prev,
+            [drag.peerId]: { ...existing, position: { x: newX, y: newY } },
+          };
+        });
+      }
+    },
+    [isOverDismissZone],
+  );
+
+  const handlePointerUp = useCallback(
+    (ev: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragStateRef.current;
+      if (!drag || drag.pointerId !== ev.pointerId) return;
+      const target = ev.currentTarget as HTMLElement;
+      try {
+        target.releasePointerCapture(ev.pointerId);
+      } catch {
+        /* pointer may already be released */
+      }
+      const wasDragging = drag.moved;
+      const releasedOnDismiss = wasDragging && isOverDismissZone(ev.clientX, ev.clientY);
+      const peerId = drag.peerId;
+      dragStateRef.current = null;
+      setDraggingPeerId(null);
+      setPointerOverDismiss(false);
+
+      if (releasedOnDismiss) {
+        dismissPeer(peerId);
+        return;
+      }
+      if (!wasDragging) {
+        togglePeerExpanded(peerId);
+        return;
+      }
+      // Snap to nearest edge.
+      setBubbles((prev) => {
+        const existing = prev[peerId];
+        if (!existing || typeof window === "undefined") return prev;
+        const snapped = snapPosition(
+          existing.position.x,
+          existing.position.y,
+          window.innerWidth,
+          window.innerHeight,
+        );
+        return { ...prev, [peerId]: { ...existing, position: snapped } };
       });
-    } finally {
-      setSendingPeer(null);
-    }
-  }, [draftByPeer, t, toast]);
+    },
+    [dismissPeer, isOverDismissZone, togglePeerExpanded],
+  );
 
   // ── render ─────────────────────────────────────────────────────────
   if (!user || !enabled) return null;
@@ -420,24 +595,34 @@ export default function ChatBubblesLayer() {
       className="fixed inset-0 pointer-events-none z-[120]"
       data-testid="chat-bubbles-layer"
     >
-      {visible.map((bubble, idx) => {
+      {visible.map((bubble) => {
         const initials = (bubble.name || "?").trim().charAt(0).toUpperCase();
         const messages = miniMessagesByPeer[bubble.peerId] || [];
         const draft = draftByPeer[bubble.peerId] || "";
         const sending = sendingPeer === bubble.peerId;
-        const top = bubble.position.y || 120 + idx * 68;
+        const isDragging = draggingPeerId === bubble.peerId;
         return (
           <div
             key={bubble.peerId}
-            className="absolute pointer-events-auto"
-            style={{ top, right: 16 }}
+            className="absolute pointer-events-auto select-none touch-none"
+            style={{
+              top: bubble.position.y,
+              left: bubble.position.x,
+              transition: isDragging ? "none" : "top 200ms ease, left 200ms ease",
+            }}
             data-testid={`chat-bubble-${bubble.peerId}`}
+            onPointerDown={(e) => handlePointerDown(bubble.peerId, e)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
           >
             {/* Floating circle */}
-            <button
-              type="button"
-              onClick={() => togglePeerExpanded(bubble.peerId)}
-              className="relative h-14 w-14 rounded-full bg-primary shadow-xl ring-2 ring-background overflow-hidden flex items-center justify-center text-primary-foreground hover:scale-105 transition-transform"
+            <div
+              className={`relative h-14 w-14 rounded-full bg-primary shadow-xl ring-2 ring-background overflow-hidden flex items-center justify-center text-primary-foreground ${
+                isDragging ? "scale-110" : "hover:scale-105"
+              } transition-transform cursor-grab active:cursor-grabbing`}
+              role="button"
+              tabIndex={0}
               aria-label={t("chatBubbles.openChat")}
               data-testid={`chat-bubble-toggle-${bubble.peerId}`}
             >
@@ -445,27 +630,29 @@ export default function ChatBubblesLayer() {
                 <img
                   src={bubble.avatarUrl}
                   alt={bubble.name}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover pointer-events-none"
+                  draggable={false}
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = "none";
                   }}
                 />
               ) : (
-                <span className="text-lg font-semibold">{initials}</span>
+                <span className="text-lg font-semibold pointer-events-none">{initials}</span>
               )}
               {bubble.unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold flex items-center justify-center pointer-events-none">
                   {bubble.unreadCount > 9 ? "9+" : bubble.unreadCount}
                 </span>
               )}
-            </button>
+            </div>
 
             {/* Mini chat panel */}
-            {bubble.expanded && (
+            {bubble.expanded && !isDragging && (
               <div
                 className="absolute right-16 top-0 w-72 max-w-[calc(100vw-96px)] bg-background border rounded-lg shadow-2xl flex flex-col overflow-hidden"
                 style={{ maxHeight: "60vh" }}
                 data-testid={`chat-bubble-panel-${bubble.peerId}`}
+                onPointerDown={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/50">
                   <button
@@ -524,7 +711,9 @@ export default function ChatBubblesLayer() {
                   <input
                     type="text"
                     value={draft}
-                    onChange={(e) => setDraftByPeer((prev) => ({ ...prev, [bubble.peerId]: e.target.value }))}
+                    onChange={(e) =>
+                      setDraftByPeer((prev) => ({ ...prev, [bubble.peerId]: e.target.value }))
+                    }
                     placeholder={t("chatBubbles.placeholder")}
                     className="flex-1 bg-muted rounded-full px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary"
                     disabled={sending}
@@ -545,6 +734,34 @@ export default function ChatBubblesLayer() {
           </div>
         );
       })}
+
+      {/* Drag-to-dismiss target — appears only while a bubble is being
+          dragged. Centered at the bottom, mirrors the Messenger UX. */}
+      {draggingPeerId && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center justify-center pointer-events-none"
+          style={{
+            bottom: EDGE_MARGIN,
+            width: DISMISS_ZONE_HEIGHT,
+            height: DISMISS_ZONE_HEIGHT,
+          }}
+          data-testid="chat-bubble-dismiss-zone"
+        >
+          <div
+            className={`rounded-full flex items-center justify-center transition-all ${
+              pointerOverDismiss
+                ? "bg-destructive text-destructive-foreground scale-125 shadow-2xl"
+                : "bg-background/90 text-muted-foreground shadow-lg border"
+            }`}
+            style={{ width: 64, height: 64 }}
+          >
+            <X className="h-7 w-7" />
+          </div>
+          <span className="mt-2 text-[11px] font-medium text-muted-foreground bg-background/80 px-2 py-0.5 rounded">
+            {t("chatBubbles.dragToDismiss")}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

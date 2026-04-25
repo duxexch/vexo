@@ -150,6 +150,7 @@
     "@types/web-push": "^3.6.4",
     "adm-zip": "^0.5.16",
     "bcryptjs": "^3.0.3",
+    "capacitor-chat-bubbles": "file:./native-plugins/capacitor-chat-bubbles",
     "capacitor-native-call-ui": "file:./native-plugins/capacitor-native-call-ui",
     "chess.js": "^1.4.0",
     "class-variance-authority": "^0.7.1",

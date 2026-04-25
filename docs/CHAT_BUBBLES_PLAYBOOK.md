@@ -13,24 +13,48 @@ ship across the VEX stack.
 
 ## Data flow
 
+There are **three** independent triggers for an Android system bubble,
+matching the three states the app can be in:
+
 ```
-incoming DM
-   │
-   ├─ socket.io  ──► useChat hook updates the open conversation
-   │
-   └─ /ws        ──► NotificationProvider receives `new_notification`
-                       │
-                       ├─ shows the toast
-                       ├─ pings the SW for native push
-                       └─ dispatches `vex-incoming-dm` ──► ChatBubblesLayer
-                                                             │
-                                                             ├─ Android native: ChatBubbles.showBubble(...)
-                                                             └─ Web fallback: floating draggable bubble
+APP IN FOREGROUND (WebView active)
+   incoming DM
+       │
+       ├─ socket.io  ──► useChat hook updates the open conversation
+       │
+       └─ /ws        ──► NotificationProvider receives `new_notification`
+                           │
+                           ├─ shows the toast
+                           ├─ pings the SW for native push
+                           └─ dispatches `vex-incoming-dm` ──► ChatBubblesLayer
+                                                                 │
+                                                                 ├─ Android native: ChatBubbles.showBubble(...)
+                                                                 └─ Web fallback: floating draggable bubble
+
+APP IN BACKGROUND (WebView paused, page still alive)
+   FCM push  ──► browser SW (`SHOW_CHAT_BUBBLE` postMessage)
+                   └─ ChatBubblesLayer routes it identically to the foreground path
+
+APP KILLED (process not running)
+   FCM data push  ──► ChatBubblesFcmService (Android, runs without WebView)
+                       └─ BubbleNotifier.showBubble(...) — system bubble appears in the shade
 ```
 
-`ChatBubblesLayer` also listens to `serviceWorker.controller` messages of
-type `SHOW_CHAT_BUBBLE` so a push that arrives while the page is open in
-the background still produces a bubble.
+The third path is the critical one for Messenger parity: a bubble must
+appear even when the user has swiped the app away. It is implemented by
+`native-plugins/capacitor-chat-bubbles/.../ChatBubblesFcmService.kt`
+(see "FCM push contract" below).
+
+### Web fallback drag interaction
+
+The in-app fallback (`ChatBubblesLayer.tsx`) implements the full
+chat-head interaction model:
+
+* Each bubble is draggable via pointer events.
+* On release, the bubble snaps to the nearest left/right edge.
+* During drag, a centered bottom dismiss target appears; releasing the
+  bubble inside it removes it (matches the Messenger UX).
+* Tap (no movement) toggles the inline mini chat panel.
 
 ## Suppression rules
 
@@ -51,6 +75,42 @@ A bubble is **never** shown when any of these are true:
 
 The "Display over other apps" prompt is reused from the existing
 `PermissionsBanner` (task #88). No new prompt was added.
+
+## FCM push contract (background path)
+
+The server's DM push must be a **data-only** FCM message (a
+`notification` payload would bypass `FirebaseMessagingService` when the
+app is killed). Required shape:
+
+```json
+{
+  "type": "dm",
+  "senderId": "<peer user id>",
+  "senderName": "<display name>",
+  "body": "<message preview>",
+  "unreadCount": "<integer string, optional>"
+}
+```
+
+The host Android app must register the bubble FCM service in its own
+`AndroidManifest.xml` (Firebase only resolves messaging services from
+the host manifest, not from merged plugin manifests):
+
+```xml
+<service
+    android:name="click.vixo.chatbubbles.ChatBubblesFcmService"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="com.google.firebase.MESSAGING_EVENT" />
+    </intent-filter>
+</service>
+```
+
+If the host app already ships its own `FirebaseMessagingService`, it
+should either subclass `ChatBubblesFcmService` (and call
+`super.onMessageReceived(...)` for non-DM messages) or invoke
+`BubbleNotifier.showBubble(applicationContext, ...)` directly when it
+sees `data["type"] == "dm"`.
 
 ## Settings
 

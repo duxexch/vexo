@@ -1238,6 +1238,7 @@ const ar: Record<string, string> = {
   'chatBubbles.inCall': 'مخفي أثناء المكالمة',
   'chatBubbles.unread': '{count} جديد',
   'chatBubbles.sendFailed': 'تعذّر إرسال ردّك. افتح الدردشة لإعادة المحاولة.',
+  'chatBubbles.dragToDismiss': 'حرّر هنا للإغلاق',
   'settings.location': 'الموقع',
   'settings.locationDescription': 'يُستخدم لتحسين العثور على المستخدمين داخل بحث الأصدقاء.',
   'settings.locationCountry': 'الدولة',

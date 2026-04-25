@@ -1238,6 +1238,7 @@ const en: Record<string, string> = {
   'chatBubbles.inCall': 'Hidden during call',
   'chatBubbles.unread': '{count} new',
   'chatBubbles.sendFailed': 'Could not send your reply. Open the chat to retry.',
+  'chatBubbles.dragToDismiss': 'Release to dismiss',
   'settings.location': 'Location',
   'settings.locationDescription': 'Used to improve user discovery in friends search filters.',
   'settings.locationCountry': 'Country',
