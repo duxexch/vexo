@@ -89,7 +89,10 @@ export function GameLayout({
       data-testid="game-layout"
     >
       {/* Header */}
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border/60 bg-background/95 px-3 py-2 backdrop-blur">
+      <header
+        className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border/60 bg-background/95 px-3 py-2 backdrop-blur"
+        style={{ paddingTop: "calc(0.5rem + env(safe-area-inset-top, 0px))" }}
+      >
         <div className="flex min-w-0 items-center gap-2">
           {onExit && (
             <Button
@@ -271,6 +274,7 @@ export function GameLayout({
       {(actions || chat) && (
         <div
           className="sticky bottom-0 z-20 flex items-center gap-2 border-t border-border/60 bg-background/95 px-3 py-2 backdrop-blur"
+          style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}
           data-testid="container-game-actions"
         >
           {actions && <div className="flex flex-1 flex-wrap items-center gap-2">{actions}</div>}

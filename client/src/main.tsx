@@ -1,9 +1,21 @@
 import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
+import { SplashScreen } from "@capacitor/splash-screen";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+
+// Task #179: launch perf telemetry. Marked here as the very first thing the
+// JS bundle does so the gap between bundle-eval-start and app-first-paint is
+// observable in the Performance panel and via the runtime measure below.
+if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+  try {
+    performance.mark("app-bundle-eval-start");
+  } catch {
+    // mark() can throw on very old browsers; perf telemetry is best-effort.
+  }
+}
 
 const UPDATE_POLL_INTERVAL_MS = 60_000;
 const UPDATE_BANNER_ID = "app-update-banner";
@@ -160,7 +172,9 @@ function showUpdateBanner(onAction: () => void | Promise<void>) {
   banner.setAttribute('aria-live', 'polite');
   Object.assign(banner.style, {
     position: 'fixed',
-    bottom: '24px',
+    // Task #179: clear Android 15 edge-to-edge gesture inset and the iPhone
+    // home-indicator strip so the banner never sits behind a system handle.
+    bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
     left: '50%',
     transform: 'translateX(-50%)',
     zIndex: '10000',
@@ -220,7 +234,10 @@ function showForceUpdateGate(onAction: () => void | Promise<void>) {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '24px',
+    // Task #179: keep the modal card clear of the status bar / notch and the
+    // bottom gesture area on Android 15 edge-to-edge + iOS Dynamic Island.
+    padding:
+      'max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)) 24px',
   });
 
   const card = document.createElement('div');
@@ -451,7 +468,75 @@ if (!isRedirectingToCanonicalHost && Capacitor.isNativePlatform()) {
   });
 }
 
+// Task #179: idempotent splash-hide. Calling SplashScreen.hide() multiple
+// times is safe — the plugin no-ops after the first successful hide — but we
+// still gate locally to avoid stacking RAF callbacks and pointless awaits.
+let splashHideRequested = false;
+
+function hideSplashOnce(reason: "first-paint" | "watchdog" | "bootstrap-error"): void {
+  if (splashHideRequested) return;
+  splashHideRequested = true;
+
+  if (!Capacitor.isNativePlatform()) return;
+
+  void SplashScreen.hide({ fadeOutDuration: 250 }).catch(() => {
+    // Splash plugin not yet ready, already hidden, or native auto-hide
+    // already won the race. All three are benign — the native auto-hide
+    // configured in capacitor.config.ts (launchAutoHide:true, 2 s budget)
+    // remains as a guaranteed fail-safe.
+    void reason;
+  });
+}
+
+function markFirstPaintAndHideSplash(): void {
+  // Two RAFs: the first lands on the next vsync, the second guarantees the
+  // browser has actually painted the first React tree. Without the second
+  // RAF the splash can hide before the WebView commits any pixels, producing
+  // a brief flash of background color on Android.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        if (typeof performance !== "undefined" && typeof performance.mark === "function") {
+          performance.mark("app-first-paint");
+          if (typeof performance.measure === "function") {
+            try {
+              performance.measure(
+                "app-launch-to-first-paint",
+                "app-bundle-eval-start",
+                "app-first-paint",
+              );
+            } catch {
+              // measure() throws if the start mark is missing; ignore.
+            }
+          }
+        }
+      } catch {
+        // Perf telemetry must never block the splash hide.
+      }
+
+      hideSplashOnce("first-paint");
+    });
+  });
+}
+
 if (!isRedirectingToCanonicalHost) {
-  createRoot(document.getElementById("root")!).render(<App />);
-  scheduleReleaseMonitoring();
+  // Task #179: belt-and-braces splash watchdog. Native config already has
+  // launchAutoHide:true with a 2 s budget, but we mirror it in JS so that
+  // even pathological cases (RAF starvation, hung effects in the first
+  // render, etc.) still drop the splash promptly. setTimeout is registered
+  // BEFORE render() so a synchronous render throw cannot bypass it.
+  const splashWatchdog = setTimeout(() => hideSplashOnce("watchdog"), 1500);
+
+  try {
+    createRoot(document.getElementById("root")!).render(<App />);
+    markFirstPaintAndHideSplash();
+    scheduleReleaseMonitoring();
+  } catch (err) {
+    // Render threw synchronously: hide the splash immediately so the user
+    // sees whatever fallback the OS / WebView shows instead of a frozen
+    // splash, then re-throw so existing global error handlers still log it.
+    clearTimeout(splashWatchdog);
+    hideSplashOnce("bootstrap-error");
+    throw err;
+  }
 }

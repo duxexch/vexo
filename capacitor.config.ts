@@ -27,9 +27,18 @@ const config: CapacitorConfig = {
 
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2500,
+      // Task #179: the JS layer (client/src/main.tsx) calls SplashScreen.hide()
+      // after first React paint — typically ~600 ms on a mid-range Android,
+      // far below the 2 s budget below. We deliberately keep launchAutoHide
+      // ENABLED so the OS itself guarantees the splash drops if the JS bundle
+      // never loads, the WebView crashes during boot, or the splash plugin
+      // misses the manual hide() call due to an early-init race. The plugin
+      // is idempotent: calling hide() twice (once from JS, once from the
+      // native auto-hide timer) is safe and the visible animation only plays
+      // for whichever fires first.
+      launchShowDuration: 2000,
       launchAutoHide: true,
-      launchFadeOutDuration: 600,
+      launchFadeOutDuration: 250,
       backgroundColor: '#0f1419',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',

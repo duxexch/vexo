@@ -418,21 +418,34 @@ svg {
   }
 }
 
+/* Task #179: heavy gift-overlay animations — give the compositor explicit
+   hints so it can promote the layers up-front (avoids first-frame jank) and
+   contain layout/paint to the gift card so animations don't invalidate the
+   chat list / page background. The contain values are intentionally
+   conservative ("layout paint") rather than "strict" so accessibility
+   measurements and intersection observers still work. */
 .gift-pop-card {
   animation: gift-pop-in 420ms cubic-bezier(0.19, 1, 0.22, 1);
+  will-change: transform, opacity;
+  contain: layout paint;
 }
 
 .gift-aurora {
   animation: gift-aurora-pulse 1800ms ease-in-out infinite;
+  will-change: transform, opacity;
+  contain: layout paint;
 }
 
 .gift-shockwave {
   border: 1px solid rgba(255, 216, 111, 0.7);
   animation: gift-shockwave-expand 780ms ease-out 1;
+  will-change: transform, opacity;
+  contain: layout paint;
 }
 
 .gift-glare {
   overflow: hidden;
+  contain: layout paint;
 }
 
 .gift-glare::after {
@@ -442,11 +455,14 @@ svg {
   width: 46%;
   background: linear-gradient(110deg, transparent, rgba(255, 255, 255, 0.48), transparent);
   animation: gift-glare-pass 1300ms ease-out 1;
+  will-change: transform, opacity;
 }
 
 .gift-orb-3d {
   transform-style: preserve-3d;
   animation: gift-orb-float 1650ms ease-in-out infinite;
+  will-change: transform;
+  contain: layout paint;
 }
 
 .gift-card-3d {
@@ -709,7 +725,11 @@ svg {
 /* Utility classes for elevation effects */
 .hover-elevate {
   position: relative;
-  transition: all 0.2s ease;
+  /* Task #179: scope to the only properties that actually animate
+     (background-color via the ::before overlay's opacity, plus optional
+     transform on subclasses). `transition: all` forced the engine to
+     re-evaluate every animatable property on every state change. */
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .hover-elevate::before {
@@ -729,7 +749,8 @@ svg {
 
 .active-elevate-2 {
   position: relative;
-  transition: all 0.2s ease;
+  /* Task #179: same scoping as .hover-elevate above. */
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .active-elevate-2::after {
