@@ -243,7 +243,10 @@ export interface NormalizedTournamentPayload {
     totalRounds: number;
 }
 
-export function normalizeTournamentPayload(payload: Record<string, unknown>): NormalizedTournamentPayload {
+export function normalizeTournamentPayload(
+    payload: Record<string, unknown>,
+    now: Date = new Date(),
+): NormalizedTournamentPayload {
     const name = String(payload.name || "").trim();
     const nameAr = String(payload.nameAr || "").trim();
     const gameType = normalizeTournamentGameType(payload.gameType);
@@ -252,8 +255,8 @@ export function normalizeTournamentPayload(payload: Record<string, unknown>): No
     const minPlayers = parseInteger(payload.minPlayers, "minPlayers", 4);
     const startsAt = parseOptionalDate(payload.startsAt, "startsAt");
     const endsAt = parseOptionalDate(payload.endsAt, "endsAt");
-    const registrationStartsAt = parseOptionalDate(payload.registrationStartsAt, "registrationStartsAt");
-    const registrationEndsAt = parseOptionalDate(payload.registrationEndsAt, "registrationEndsAt");
+    const explicitRegistrationStartsAt = parseOptionalDate(payload.registrationStartsAt, "registrationStartsAt");
+    const explicitRegistrationEndsAt = parseOptionalDate(payload.registrationEndsAt, "registrationEndsAt");
     const isPublished = parseBoolean(payload.isPublished, "isPublished", true);
     const autoStartOnFull = parseBoolean(payload.autoStartOnFull, "autoStartOnFull", false);
     const requestedAutoStartPlayerCount = parseOptionalPositiveInteger(payload.autoStartPlayerCount, "autoStartPlayerCount");
@@ -306,7 +309,7 @@ export function normalizeTournamentPayload(payload: Record<string, unknown>): No
         throw new Error("Prize distribution percentages must total 100");
     }
 
-    if (registrationStartsAt && startsAt && registrationStartsAt > startsAt) {
+    if (explicitRegistrationStartsAt && startsAt && explicitRegistrationStartsAt > startsAt) {
         throw new Error("Registration cannot open after the tournament starts");
     }
 
@@ -314,13 +317,26 @@ export function normalizeTournamentPayload(payload: Record<string, unknown>): No
         throw new Error("Tournament end time must be after the start time");
     }
 
-    if (registrationStartsAt && registrationEndsAt && registrationEndsAt < registrationStartsAt) {
+    if (
+        explicitRegistrationStartsAt
+        && explicitRegistrationEndsAt
+        && explicitRegistrationEndsAt < explicitRegistrationStartsAt
+    ) {
         throw new Error("Registration close time must be after the registration open time");
     }
 
-    if (registrationEndsAt && startsAt && registrationEndsAt > startsAt) {
+    if (explicitRegistrationEndsAt && startsAt && explicitRegistrationEndsAt > startsAt) {
         throw new Error("Registration must close before the tournament starts");
     }
+
+    // Defaults: when the admin omits an explicit registration window, treat the
+    // tournament as accepting sign-ups immediately (registrationStartsAt = now)
+    // and remaining open until the tournament starts (registrationEndsAt = startsAt).
+    // This guarantees newly-created tournaments always render an actionable
+    // Register state instead of silently hiding the call-to-action because the
+    // omitted timestamps would otherwise read as "always closed" downstream.
+    const registrationStartsAt = explicitRegistrationStartsAt ?? now;
+    const registrationEndsAt = explicitRegistrationEndsAt ?? startsAt;
 
     let autoStartPlayerCount = requestedAutoStartPlayerCount;
     if (autoStartOnFull) {

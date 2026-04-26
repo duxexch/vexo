@@ -26,6 +26,10 @@ import {
   formatTournamentAmountText,
   normalizeTournamentCurrencyType,
 } from "@shared/tournament-currency";
+import {
+  getTournamentRegistrationState,
+  type TournamentRegistrationState,
+} from "@shared/tournament-registration-state";
 
 function TournamentCurrencyBadge({ currency, className }: { currency?: string | null; className?: string }) {
   if (normalizeTournamentCurrencyType(currency) === 'project') {
@@ -68,35 +72,10 @@ function isRegistrationWindowOpen(tournament: {
   registrationStartsAt?: string | null;
   registrationEndsAt?: string | null;
   startsAt?: string | null;
+  participantCount?: number | null;
+  maxPlayers?: number | null;
 }): boolean {
-  if (tournament.status !== 'registration' && tournament.status !== 'upcoming') {
-    return false;
-  }
-
-  const now = Date.now();
-
-  if (tournament.registrationStartsAt) {
-    const startsAt = new Date(tournament.registrationStartsAt).getTime();
-    if (!Number.isNaN(startsAt) && now < startsAt) {
-      return false;
-    }
-  }
-
-  if (tournament.registrationEndsAt) {
-    const endsAt = new Date(tournament.registrationEndsAt).getTime();
-    if (!Number.isNaN(endsAt) && now > endsAt) {
-      return false;
-    }
-  }
-
-  if (tournament.startsAt) {
-    const startsAt = new Date(tournament.startsAt).getTime();
-    if (!Number.isNaN(startsAt) && now >= startsAt) {
-      return false;
-    }
-  }
-
-  return true;
+  return getTournamentRegistrationState(tournament) === 'open';
 }
 
 function parsePrizeDistribution(rawDistribution: string | null | undefined): number[] {
@@ -735,9 +714,20 @@ function TournamentDetailView({ id }: { id: string }) {
   }
 
   const gameInfo = tournamentGameConfig[normalizeTournamentGameType(tournament.gameType)] || tournamentGameConfig.chess;
-  const registrationOpen = isRegistrationWindowOpen(tournament);
+  const registrationState: TournamentRegistrationState = getTournamentRegistrationState({
+    status: tournament.status,
+    registrationStartsAt: tournament.registrationStartsAt,
+    registrationEndsAt: tournament.registrationEndsAt,
+    startsAt: tournament.startsAt,
+    participantCount: tournament.participantCount,
+    maxPlayers: tournament.maxPlayers,
+  });
+  const registrationOpen = registrationState === 'open';
   const canRegister = registrationOpen && !tournament.isRegistered;
   const canWithdraw = registrationOpen && tournament.isRegistered;
+  const opensSoonCountdown = useCountdown(
+    registrationState === 'opens-soon' ? tournament.registrationStartsAt : null,
+  );
 
   const entryFeeNumber = Number.parseFloat(tournament.entryFee || '0');
   const safeEntryFee = Number.isFinite(entryFeeNumber) ? entryFeeNumber : 0;
@@ -986,81 +976,154 @@ function TournamentDetailView({ id }: { id: string }) {
       </Card>
 
       {/* Register/Withdraw */}
-      {user && (canRegister || canWithdraw) && (
-        <Card>
-          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="space-y-1">
-              <h3 className="font-semibold">
-                {canRegister
-                  ? (en ? 'Join this tournament' : 'انضم لهذه البطولة')
-                  : (en ? 'You are registered' : 'أنت مسجل')
-                }
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {safeEntryFee > 0
-                  ? (en
-                    ? `Entry fee: ${entryFeeText}`
-                    : `رسوم الدخول: ${entryFeeText}`)
-                  : (en ? 'Free entry' : 'دخول مجاني')
-                }
-              </p>
-              {safeEntryFee > 0 && (
-                <p
-                  className={`flex items-center gap-1.5 text-sm font-medium ${insufficientBalance || balanceErrored ? 'text-destructive' : 'text-muted-foreground'}`}
-                  data-testid="tournament-detail-user-balance"
-                  data-currency={tournamentCurrency}
-                  data-balance-state={balanceErrored ? 'error' : balanceLoading ? 'loading' : 'ready'}
+      {user && (() => {
+        const showCard =
+          canRegister ||
+          canWithdraw ||
+          registrationState === 'opens-soon' ||
+          registrationState === 'closed' ||
+          registrationState === 'full';
+        if (!showCard) return null;
+
+        let headline: string;
+        if (canRegister) {
+          headline = en ? 'Join this tournament' : 'انضم لهذه البطولة';
+        } else if (canWithdraw) {
+          headline = en ? 'You are registered' : 'أنت مسجل';
+        } else if (registrationState === 'opens-soon') {
+          headline = en ? 'Registration opens soon' : 'يفتح التسجيل قريباً';
+        } else if (registrationState === 'full') {
+          headline = en ? 'Tournament is full' : 'البطولة مكتملة';
+        } else {
+          headline = en ? 'Registration is closed' : 'التسجيل مغلق';
+        }
+
+        const opensAtText = tournament.registrationStartsAt
+          ? new Date(tournament.registrationStartsAt).toLocaleString(en ? 'en-US' : 'ar-SA', {
+              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            })
+          : null;
+
+        return (
+          <Card data-testid="tournament-detail-register-card" data-registration-state={registrationState}>
+            <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="space-y-1">
+                <h3 className="font-semibold">{headline}</h3>
+                {(canRegister || canWithdraw) && (
+                  <p className="text-sm text-muted-foreground">
+                    {safeEntryFee > 0
+                      ? (en
+                        ? `Entry fee: ${entryFeeText}`
+                        : `رسوم الدخول: ${entryFeeText}`)
+                      : (en ? 'Free entry' : 'دخول مجاني')
+                    }
+                  </p>
+                )}
+                {registrationState === 'opens-soon' && (
+                  <p
+                    className="text-sm text-muted-foreground"
+                    data-testid="tournament-detail-opens-soon"
+                  >
+                    {opensSoonCountdown
+                      ? (en
+                          ? `Opens in ${opensSoonCountdown}`
+                          : `يفتح خلال ${opensSoonCountdown}`)
+                      : opensAtText
+                        ? (en
+                            ? `Opens on ${opensAtText}`
+                            : `يفتح في ${opensAtText}`)
+                        : (en ? 'Registration window not yet open' : 'نافذة التسجيل لم تُفتح بعد')}
+                  </p>
+                )}
+                {registrationState === 'full' && (
+                  <p
+                    className="text-sm text-muted-foreground"
+                    data-testid="tournament-detail-full"
+                  >
+                    {en
+                      ? `All ${tournament.maxPlayers} seats are taken.`
+                      : `كل المقاعد محجوزة (${tournament.maxPlayers}).`}
+                  </p>
+                )}
+                {registrationState === 'closed' && !canWithdraw && (
+                  <p
+                    className="text-sm text-muted-foreground"
+                    data-testid="tournament-detail-closed"
+                  >
+                    {en
+                      ? 'Registration is no longer accepting new players.'
+                      : 'لم يعد التسجيل مفتوحاً للاعبين جدد.'}
+                  </p>
+                )}
+                {(canRegister || canWithdraw) && safeEntryFee > 0 && (
+                  <p
+                    className={`flex items-center gap-1.5 text-sm font-medium ${insufficientBalance || balanceErrored ? 'text-destructive' : 'text-muted-foreground'}`}
+                    data-testid="tournament-detail-user-balance"
+                    data-currency={tournamentCurrency}
+                    data-balance-state={balanceErrored ? 'error' : balanceLoading ? 'loading' : 'ready'}
+                  >
+                    <Wallet className="w-4 h-4" aria-hidden />
+                    <span>
+                      {en ? `Your balance: ${balanceText}` : `رصيدك: ${balanceText}`}
+                    </span>
+                  </p>
+                )}
+                {(canRegister || canWithdraw) && insufficientBalance && (
+                  <p
+                    className="text-xs text-destructive"
+                    data-testid="tournament-detail-insufficient-balance"
+                  >
+                    {en
+                      ? `Not enough balance. You need ${entryFeeText} to register.`
+                      : `الرصيد غير كافٍ. تحتاج إلى ${entryFeeText} للتسجيل.`}
+                  </p>
+                )}
+                {(canRegister || canWithdraw) && balanceErrored && (
+                  <p
+                    className="text-xs text-destructive"
+                    data-testid="tournament-detail-balance-error"
+                  >
+                    {en
+                      ? "Couldn't load your wallet balance. Try again."
+                      : 'تعذر تحميل رصيد محفظتك. حاول مرة أخرى.'}
+                  </p>
+                )}
+              </div>
+              {canRegister ? (
+                <Button
+                  onClick={() => registerMutation.mutate()}
+                  disabled={registerMutation.isPending || blockRegister}
+                  className="w-full sm:w-auto min-h-[44px] bg-gradient-to-r from-green-500 to-emerald-600"
+                  data-testid="tournament-detail-register"
                 >
-                  <Wallet className="w-4 h-4" aria-hidden />
-                  <span>
-                    {en ? `Your balance: ${balanceText}` : `رصيدك: ${balanceText}`}
-                  </span>
-                </p>
-              )}
-              {insufficientBalance && (
-                <p
-                  className="text-xs text-destructive"
-                  data-testid="tournament-detail-insufficient-balance"
+                  <Swords className="w-4 h-4 me-2" />
+                  {en ? 'Register' : 'تسجيل'}
+                </Button>
+              ) : canWithdraw ? (
+                <Button
+                  variant="destructive"
+                  onClick={() => withdrawMutation.mutate()}
+                  disabled={withdrawMutation.isPending}
+                  className="w-full sm:w-auto min-h-[44px]"
                 >
-                  {en
-                    ? `Not enough balance. You need ${entryFeeText} to register.`
-                    : `الرصيد غير كافٍ. تحتاج إلى ${entryFeeText} للتسجيل.`}
-                </p>
-              )}
-              {balanceErrored && (
-                <p
-                  className="text-xs text-destructive"
-                  data-testid="tournament-detail-balance-error"
+                  {en ? 'Withdraw' : 'انسحاب'}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  disabled
+                  className="w-full sm:w-auto min-h-[44px]"
+                  variant="outline"
+                  data-testid="tournament-detail-register-disabled"
                 >
-                  {en
-                    ? "Couldn't load your wallet balance. Try again."
-                    : 'تعذر تحميل رصيد محفظتك. حاول مرة أخرى.'}
-                </p>
+                  <Swords className="w-4 h-4 me-2" />
+                  {en ? 'Register' : 'تسجيل'}
+                </Button>
               )}
-            </div>
-            {canRegister ? (
-              <Button
-                onClick={() => registerMutation.mutate()}
-                disabled={registerMutation.isPending || blockRegister}
-                className="w-full sm:w-auto min-h-[44px] bg-gradient-to-r from-green-500 to-emerald-600"
-                data-testid="tournament-detail-register"
-              >
-                <Swords className="w-4 h-4 me-2" />
-                {en ? 'Register' : 'تسجيل'}
-              </Button>
-            ) : (
-              <Button
-                variant="destructive"
-                onClick={() => withdrawMutation.mutate()}
-                disabled={withdrawMutation.isPending}
-                className="w-full sm:w-auto min-h-[44px]"
-              >
-                {en ? 'Withdraw' : 'انسحاب'}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <Tabs defaultValue={tournament.matches.length > 0 ? "bracket" : "participants"} className="w-full">
         <TabsList className="grid h-auto w-full grid-cols-2 gap-1">

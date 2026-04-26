@@ -478,6 +478,9 @@ export default function AdminTournamentsPage() {
     onSuccess: () => {
       toast({ title: "Tournament Created", description: "Tournament has been created successfully." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/tournaments"] });
+      // Also invalidate the public listing so the new tournament appears
+      // immediately in the user-facing /tournaments page without a refresh.
+      queryClient.invalidateQueries({ queryKey: ["/api/tournaments"] });
       setShowCreate(false);
       setForm({ ...defaultForm });
     },
