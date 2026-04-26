@@ -2429,6 +2429,14 @@ const en: Record<string, string> = {
   'settings.permissions.cta.unavailable': 'Not supported on this device',
   'settings.permissions.iosPwa.title': 'Install to enable notifications',
   'settings.permissions.iosPwa.body': 'Tap the share icon in Safari, then "Add to Home Screen". Notifications and some advanced features only work after the app is installed.',
+  'settings.permissions.wakeLock.title': 'Keep screen awake',
+  'settings.permissions.wakeLock.helper': 'Stops the screen from dimming or locking while a game is in progress.',
+  'settings.permissions.clipboardWrite.title': 'Copy to clipboard',
+  'settings.permissions.clipboardWrite.helper': 'Lets the "Copy link", "Copy invite", and chat-share buttons place text on your clipboard.',
+  'settings.permissions.vibrate.title': 'Haptic feedback',
+  'settings.permissions.vibrate.helper': 'Short vibrations on incoming calls, gift drops, and turn alerts so you don\'t miss a beat.',
+  'settings.permissions.fullscreen.title': 'Fullscreen mode',
+  'settings.permissions.fullscreen.helper': 'Lets games and the spectator view expand to fill the whole screen for a focused experience.',
 };
 
 export default en;

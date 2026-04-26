@@ -2811,6 +2811,11 @@ function PermissionsSection() {
           const allowEnabled =
             entry.request !== undefined &&
             !(showIOSPwaHint && entry.id === "notifications");
+          // Some catalogue entries (Wake Lock, Vibrate, Fullscreen) are
+          // pure Web APIs with no per-site settings panel — for those we
+          // simply omit the "Open settings" CTA. PermissionRow already
+          // tolerates an undefined `onOpenSettings`.
+          const settingsHandler = entry.openSettings;
           return (
             <PermissionRow
               key={entry.id}
@@ -2825,7 +2830,11 @@ function PermissionsSection() {
                   ? () => void handleAllow(entry.id, entry.request)
                   : undefined
               }
-              onOpenSettings={() => void handleOpenSettings(entry.id, entry.openSettings)}
+              onOpenSettings={
+                settingsHandler
+                  ? () => void handleOpenSettings(entry.id, settingsHandler)
+                  : undefined
+              }
               extraHint={
                 isOverlay && state === "denied" ? (
                   <div

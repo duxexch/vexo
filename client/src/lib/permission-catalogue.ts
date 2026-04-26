@@ -181,7 +181,13 @@ async function probeOverlay(): Promise<PermissionResult> {
 
 async function probeWakeLock(): Promise<PermissionResult> {
   if (typeof navigator === "undefined") return "unavailable";
-  if (!("wakeLock" in navigator)) return "unavailable";
+  // We deliberately check the value (not just presence) — many runtime
+  // stubs declare `wakeLock` as `undefined` and the `in` operator
+  // alone would mistakenly report the API as supported.
+  const nav = navigator as { wakeLock?: { request?: unknown } };
+  if (nav.wakeLock == null || typeof nav.wakeLock.request !== "function") {
+    return "unavailable";
+  }
   // Wake Lock has no separate user prompt — if the API exists, calling
   // it succeeds silently (subject to user activation). Treat it as
   // "granted" so the row reflects "this device can keep the screen on

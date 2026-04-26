@@ -44,116 +44,12 @@ function saveSummary(summary: PermissionSummary): void {
     }
 }
 
-function requiresWebNotificationPermission(): boolean {
-    return typeof Notification !== "undefined";
-}
-
-function requiresMicrophonePermission(): boolean {
-    return Boolean(navigator.mediaDevices?.getUserMedia);
-}
-
 function requiresNativePushPermission(): boolean {
     return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("PushNotifications");
 }
 
 function requiresNativeLocalNotificationsPermission(): boolean {
     return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable("LocalNotifications");
-}
-
-function checkWebNotificationPermission(): PermissionResult {
-    if (!requiresWebNotificationPermission()) {
-        return "unavailable";
-    }
-
-    if (Notification.permission === "granted") {
-        return "granted";
-    }
-
-    if (Notification.permission === "denied") {
-        return "denied";
-    }
-
-    return "prompt";
-}
-
-async function requestWebNotificationPermission(): Promise<PermissionResult> {
-    if (!requiresWebNotificationPermission()) {
-        return "unavailable";
-    }
-
-    if (Notification.permission === "granted") {
-        return "granted";
-    }
-
-    if (Notification.permission === "denied") {
-        return "denied";
-    }
-
-    try {
-        const result = await Notification.requestPermission();
-        if (result === "granted") {
-            return "granted";
-        }
-
-        if (result === "denied") {
-            return "denied";
-        }
-
-        return "prompt";
-    } catch {
-        return "denied";
-    }
-}
-
-async function checkMicrophonePermission(): Promise<PermissionResult> {
-    if (!requiresMicrophonePermission()) {
-        return "unavailable";
-    }
-
-    try {
-        if (navigator.permissions?.query) {
-            const status = await navigator.permissions.query({ name: "microphone" as PermissionName });
-            if (status.state === "granted") {
-                return "granted";
-            }
-            if (status.state === "denied") {
-                return "denied";
-            }
-
-            return "prompt";
-        }
-    } catch {
-        // Continue with best-effort fallback.
-    }
-
-    return "unavailable";
-}
-
-async function requestMicrophonePermission(): Promise<PermissionResult> {
-    if (!requiresMicrophonePermission()) {
-        return "unavailable";
-    }
-
-    const current = await checkMicrophonePermission();
-    if (current === "granted" || current === "denied") {
-        return current;
-    }
-
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        stream.getTracks().forEach((track) => track.stop());
-        return "granted";
-    } catch (error) {
-        const errorName = typeof (error as { name?: string } | null)?.name === "string"
-            ? ((error as { name?: string }).name as string)
-            : "";
-
-        if (["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(errorName)) {
-            return "denied";
-        }
-
-        return "prompt";
-    }
 }
 
 function normalizeNativePermission(value: unknown): PermissionResult {
@@ -325,52 +221,66 @@ type CollectOptions = {
     requestMicrophonePermission?: boolean;
 };
 
-function callMediaStateToResult(state: CallMediaPermissionState): PermissionResult {
-    if (state === "granted") return "granted";
-    if (state === "denied") return "denied";
-    return "prompt";
-}
-
-function overlayStatusToResult(status: OverlayPermissionStatus): PermissionResult {
-    if (!status.supported) return "unavailable";
-    return status.granted ? "granted" : "denied";
-}
-
+/**
+ * Build a PermissionSummary by delegating every catalogue field to
+ * `probeAllPermissions()` (the single source of truth) and then
+ * layering the Capacitor-only `nativePush` / `nativeLocalNotifications`
+ * signals on top.
+ *
+ * `options.requestNotificationPermission` and
+ * `options.requestMicrophonePermission` cause the function to actively
+ * trigger the relevant prompts in addition to probing — used by
+ * `requestPostSignupNotificationPermissions` after sign-up so the user
+ * sees the OS dialogs once, in a coordinated batch, instead of one
+ * per surface they happen to navigate to.
+ */
 async function collectPermissionSummary(options: CollectOptions = {}): Promise<PermissionSummary> {
     const requestNotificationPermission = options.requestNotificationPermission === true;
     const requestMicrophonePermissionFlag = options.requestMicrophonePermission === true;
 
-    const [notifications, microphone, nativePush, nativeLocalNotifications, callPerms] = await Promise.all([
-        requestNotificationPermission
-            ? requestWebNotificationPermission()
-            : Promise.resolve(checkWebNotificationPermission()),
-        requestMicrophonePermissionFlag ? requestMicrophonePermission() : checkMicrophonePermission(),
+    const [catalogueResults, nativePush, nativeLocalNotifications] = await Promise.all([
+        probeAllPermissions(),
         requestNotificationPermission ? requestNativePushPermission() : checkNativePushPermission(),
         requestNotificationPermission
             ? requestNativeLocalNotificationsPermission()
             : checkNativeLocalNotificationsPermission(),
-        checkCallPermissions().catch(() => null),
     ]);
 
-    // Trust the dedicated call-permissions probe for camera state, and
-    // prefer it for microphone too on native (where the runtime
-    // permission is more authoritative than the browser-style query).
-    let cameraResult: PermissionResult = "unavailable";
-    let overlayResult: PermissionResult = "unavailable";
-    let microphoneResult = microphone;
-    if (callPerms) {
-        cameraResult = callMediaStateToResult(callPerms.camera);
-        overlayResult = overlayStatusToResult(callPerms.overlay);
-        if (Capacitor.isNativePlatform()) {
-            microphoneResult = callMediaStateToResult(callPerms.microphone);
+    let notifications = catalogueResults.notifications;
+    if (requestNotificationPermission && typeof Notification !== "undefined") {
+        if (Notification.permission === "default") {
+            try {
+                const result = await Notification.requestPermission();
+                notifications =
+                    result === "granted"
+                        ? "granted"
+                        : result === "denied"
+                            ? "denied"
+                            : "prompt";
+            } catch {
+                notifications = "denied";
+            }
+        }
+    }
+
+    let microphone = catalogueResults.microphone;
+    if (requestMicrophonePermissionFlag && navigator.mediaDevices?.getUserMedia) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            stream.getTracks().forEach((track) => track.stop());
+            microphone = "granted";
+        } catch (error) {
+            const errorName = (error as { name?: string } | null)?.name ?? "";
+            if (["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(errorName)) {
+                microphone = "denied";
+            }
         }
     }
 
     const summary: PermissionSummary = {
+        ...catalogueResults,
         notifications,
-        microphone: microphoneResult,
-        camera: cameraResult,
-        overlay: overlayResult,
+        microphone,
         nativePush,
         nativeLocalNotifications,
         checkedAt: new Date().toISOString(),
@@ -384,6 +294,11 @@ async function collectPermissionSummary(options: CollectOptions = {}): Promise<P
  * Read the cached permission summary written by the most recent probe.
  * Returns `null` when nothing has been persisted yet — the caller can
  * then trigger {@link refreshPermissionSummary} to fetch a fresh one.
+ *
+ * The catalogue-derived fields are populated from
+ * {@link PERMISSION_CATALOGUE} so adding a new entry there
+ * automatically extends the cached shape with a sensible
+ * `"unavailable"` default — no parallel maintenance.
  */
 export function getCachedPermissionSummary(): PermissionSummary | null {
     try {
@@ -391,15 +306,16 @@ export function getCachedPermissionSummary(): PermissionSummary | null {
         if (!raw) return null;
         const parsed = JSON.parse(raw) as Partial<PermissionSummary> | null;
         if (!parsed) return null;
-        return {
-            notifications: parsed.notifications ?? "unavailable",
-            microphone: parsed.microphone ?? "unavailable",
-            camera: parsed.camera ?? "unavailable",
-            overlay: parsed.overlay ?? "unavailable",
+        const summary = {
             nativePush: parsed.nativePush ?? "unavailable",
             nativeLocalNotifications: parsed.nativeLocalNotifications ?? "unavailable",
             checkedAt: parsed.checkedAt ?? new Date(0).toISOString(),
-        };
+        } as PermissionSummary;
+        for (const entry of PERMISSION_CATALOGUE) {
+            const stored = (parsed as Record<string, PermissionResult | undefined>)[entry.id];
+            (summary as Record<string, PermissionResult>)[entry.id] = stored ?? "unavailable";
+        }
+        return summary;
     } catch {
         return null;
     }
