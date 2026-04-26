@@ -1,376 +1,47 @@
 /**
- * End-to-end wallet-routing coverage (Task #127).
+ * End-to-end wallet-routing coverage (Task #127) — REAL Drizzle / Postgres.
  *
  * Tournament entry fees, P2P escrow, refunds, and prize payouts now route
  * through `adjustUserCurrencyBalance` with a stored `walletCurrency` per
- * participant / offer / trade. These tests lock in the routing decision
- * (which wallet currency is debited / credited) made by:
- *   - POST   /api/tournaments/:id/register
- *   - DELETE /api/tournaments/:id/register
- *   - createP2PTradeAtomic (escrow debit on the seller's chosen wallet)
- *   - completeP2PTradeAtomic (release credit on the buyer's matching wallet)
- *   - cancelP2PTradeAtomic (escrow refund back to the seller's wallet)
- *   - resolveP2PDisputedTradeAtomic (winner gets the right wallet)
+ * participant / offer / trade. These tests exercise the real production
+ * code against the project's Postgres (`DATABASE_URL`) so we can read back
+ * `users.balance` and `user_currency_wallets.balance` AFTER each operation
+ * and prove (a) the chosen sub-wallet was actually debited / credited and
+ * (b) the OTHER wallet (primary or sub) was NOT touched.
  *
- * The wallet-helper itself is exhaustively tested in
- * `tests/wallet-balances.test.ts` against a row-level mocked Drizzle
- * transaction. Here we spy on `adjustUserCurrencyBalance` so we can
- * assert WHICH (userId, currencyCode, signedDelta) the production
- * code passes through it — that is the routing decision the user
- * cares about. Combined with the wallet-balances suite, these two
- * files together cover every leg of the multi-currency money path.
+ * Why state-level assertions: a future regression that simultaneously
+ * called the helper correctly AND mutated `users.balance` directly would
+ * silently double-spend. Asserting persisted balances on both sides
+ * catches that.
+ *
+ * Test data is fully isolated: every row carries the per-run prefix
+ * `wrt127-<ts>-<rand>` and the `afterEach` hook deletes it in reverse-FK
+ * order. The pool is closed in `afterAll` so the test runner exits cleanly.
+ *
+ * The wallet helper itself is exhaustively unit-tested in
+ * `tests/wallet-balances.test.ts` against a row-level mocked Drizzle tx;
+ * this file does NOT duplicate those internals — it only verifies the
+ * routing decision (which wallet code is debited / credited) and the
+ * persisted state at every call site.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  afterAll,
+  afterEach,
+} from "vitest";
+import { and, eq, inArray } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 
 // ---------------------------------------------------------------------------
-// Shared mutable state for the fake Drizzle tx. Each test resets it via
-// `setTxState(...)` in beforeEach so spies + state are isolated per test.
+// Module mocks. Only mock collaborators that are irrelevant to wallet
+// routing (auth middleware, websocket notifications, post-tx auto-start).
+// `server/db` and `server/lib/wallet-balances` stay REAL.
 // ---------------------------------------------------------------------------
-
-interface TxState {
-  users: Record<string, any>;
-  tournaments: Record<string, any>;
-  participants: Record<string, any[]>; // tournamentId -> participant rows
-  offers: Record<string, any>;
-  trades: Record<string, any>;
-  traderProfiles: Record<string, any>;
-  projectWallets: Record<string, any>;
-  subWallets: Record<string, any>; // `${userId}:${code}` -> {balance}
-}
-
-let state: TxState;
-const inserts: Array<{ table: string; values: any }> = [];
-const updates: Array<{ table: string; set: any; whereParams: unknown[] }> = [];
-const deletes: Array<{ table: string; whereParams: unknown[]; returnedRows: any[] }> = [];
-
-function resetTx(initial: Partial<TxState> = {}) {
-  state = {
-    users: { ...(initial.users ?? {}) },
-    tournaments: { ...(initial.tournaments ?? {}) },
-    participants: { ...(initial.participants ?? {}) },
-    offers: { ...(initial.offers ?? {}) },
-    trades: { ...(initial.trades ?? {}) },
-    traderProfiles: { ...(initial.traderProfiles ?? {}) },
-    projectWallets: { ...(initial.projectWallets ?? {}) },
-    subWallets: { ...(initial.subWallets ?? {}) },
-  };
-  inserts.length = 0;
-  updates.length = 0;
-  deletes.length = 0;
-}
-
-function tableName(table: unknown): string {
-  if (!table || typeof table !== "object") return "unknown";
-  const sym = Object.getOwnPropertySymbols(table as object).find((s) =>
-    s.toString().includes("Symbol(drizzle:Name)"),
-  );
-  if (sym) return (table as Record<symbol, unknown>)[sym] as string;
-  return "unknown";
-}
-
-/**
- * Walks a Drizzle SQL predicate tree and pulls every Param literal out so
- * the fake select / update / delete chain can locate the targeted row by
- * primary key (or compound key) without re-implementing Drizzle's
- * predicate language.
- */
-function collectParamValues(node: unknown): unknown[] {
-  const out: unknown[] = [];
-  const seen = new WeakSet<object>();
-  const walk = (n: unknown) => {
-    if (!n || typeof n !== "object") return;
-    if (seen.has(n as object)) return;
-    seen.add(n as object);
-    const ctorName = (n as any).constructor?.name;
-    if (ctorName === "Param" && "value" in (n as any)) {
-      out.push((n as any).value);
-    }
-    for (const k of Object.keys(n as any)) {
-      const v = (n as any)[k];
-      if (Array.isArray(v)) v.forEach(walk);
-      else if (v && typeof v === "object") walk(v);
-    }
-  };
-  walk(node);
-  return out;
-}
-
-function makeTx() {
-  function makeSelect(columns?: any) {
-    let currentTable = "";
-    let currentWhereParams: unknown[] = [];
-    let currentLimit: number | null = null;
-
-    const resolveRows = (): unknown[] => {
-      switch (currentTable) {
-        case "users": {
-          const userId = currentWhereParams.find((p) => typeof p === "string") as string | undefined;
-          const u = userId ? state.users[userId] : null;
-          return u ? [u] : [];
-        }
-        case "tournaments": {
-          for (const p of currentWhereParams) {
-            if (typeof p === "string" && state.tournaments[p]) return [state.tournaments[p]];
-          }
-          return [];
-        }
-        case "tournament_participants": {
-          // Determine targeted tournament + (optional) user from where params
-          let tournamentId: string | null = null;
-          let userId: string | null = null;
-          for (const p of currentWhereParams) {
-            if (typeof p !== "string") continue;
-            if (state.tournaments[p]) tournamentId = p;
-            else if (state.users[p]) userId = p;
-          }
-          if (!tournamentId) return [];
-          const list = state.participants[tournamentId] ?? [];
-          if (columns && "count" in columns) {
-            return [{ count: list.length }];
-          }
-          if (userId) return list.filter((row) => row.userId === userId);
-          return list;
-        }
-        case "p2p_offers": {
-          for (const p of currentWhereParams) {
-            if (typeof p === "string" && state.offers[p]) return [state.offers[p]];
-          }
-          return [];
-        }
-        case "p2p_trades": {
-          for (const p of currentWhereParams) {
-            if (typeof p === "string" && state.trades[p]) return [state.trades[p]];
-          }
-          if (columns && "total" in columns) return [{ total: "0" }];
-          return [];
-        }
-        case "p2p_trader_profiles": {
-          for (const p of currentWhereParams) {
-            if (typeof p === "string" && state.traderProfiles[p]) {
-              return [state.traderProfiles[p]];
-            }
-          }
-          return [];
-        }
-        case "user_badges": {
-          // The query joins user_badges + badge_catalog and aggregates with
-          // bool_or / max — return one synthetic empty-aggregate row so the
-          // route's destructure (`const [badgeEntitlements] = ...`) succeeds.
-          return [{ grantsP2pPrivileges: false, maxP2PMonthlyLimit: null }];
-        }
-        case "project_currency_wallets": {
-          for (const p of currentWhereParams) {
-            if (typeof p === "string" && state.projectWallets[p]) {
-              return [state.projectWallets[p]];
-            }
-          }
-          return [];
-        }
-        case "user_currency_wallets": {
-          // Compound key: (userId, currencyCode). Try every pair.
-          for (const u of currentWhereParams) {
-            if (typeof u !== "string") continue;
-            for (const c of currentWhereParams) {
-              if (typeof c !== "string" || c === u) continue;
-              const key = `${u}:${c}`;
-              if (state.subWallets[key]) return [state.subWallets[key]];
-            }
-          }
-          return [];
-        }
-        default:
-          return [];
-      }
-    };
-
-    const chain: any = {
-      from(table: unknown) {
-        currentTable = tableName(table);
-        return chain;
-      },
-      where(predicate: unknown) {
-        currentWhereParams = collectParamValues(predicate);
-        return chain;
-      },
-      innerJoin(_table: unknown, _on: unknown) {
-        return chain;
-      },
-      for(_mode: string) {
-        return chain;
-      },
-      limit(n: number) {
-        currentLimit = n;
-        return chain;
-      },
-      then(resolve: (rows: unknown[]) => void, reject: (err: unknown) => void) {
-        try {
-          let rows = resolveRows();
-          if (currentLimit !== null) rows = rows.slice(0, currentLimit);
-          resolve(rows);
-        } catch (err) {
-          reject(err);
-        }
-      },
-    };
-    return chain;
-  }
-
-  function applyInsert(name: string, values: any): any {
-    const id = `id-ins-${inserts.length}`;
-    const row = { id, ...values };
-    if (name === "tournament_participants") {
-      const list = state.participants[values.tournamentId] ?? [];
-      list.push(row);
-      state.participants[values.tournamentId] = list;
-    } else if (name === "p2p_trades") {
-      state.trades[id] = row;
-    } else if (name === "project_currency_wallets") {
-      // upsert-style: only set if not already present
-      if (!state.projectWallets[values.userId]) {
-        state.projectWallets[values.userId] = row;
-      }
-    }
-    return row;
-  }
-
-  function applyDelete(name: string, whereParams: unknown[]): any[] {
-    if (name === "tournament_participants") {
-      let tournamentId: string | null = null;
-      let userId: string | null = null;
-      for (const p of whereParams) {
-        if (typeof p !== "string") continue;
-        if (state.tournaments[p]) tournamentId = p;
-        else if (state.users[p]) userId = p;
-      }
-      if (!tournamentId || !userId) return [];
-      const list = state.participants[tournamentId] ?? [];
-      const removed: any[] = [];
-      const remaining = list.filter((row) => {
-        if (row.userId === userId) {
-          removed.push(row);
-          return false;
-        }
-        return true;
-      });
-      state.participants[tournamentId] = remaining;
-      return removed;
-    }
-    return [];
-  }
-
-  return {
-    select(columns?: any) {
-      return makeSelect(columns);
-    },
-    update(table: unknown) {
-      const name = tableName(table);
-      return {
-        set(values: Record<string, unknown>) {
-          return {
-            where(predicate: unknown) {
-              const wp = collectParamValues(predicate);
-              updates.push({ table: name, set: values, whereParams: wp });
-              // Apply update to in-memory state so a subsequent `.returning()`
-              // can hand back the merged row (the trade-settle paths chain
-              // `.update(...).set(...).where(...).returning()` to read the
-              // updated trade back).
-              let updatedRow: any = { ...values };
-              if (name === "p2p_trades") {
-                for (const p of wp) {
-                  if (typeof p === "string" && state.trades[p]) {
-                    state.trades[p] = { ...state.trades[p], ...values };
-                    updatedRow = { ...state.trades[p] };
-                    break;
-                  }
-                }
-              }
-              const result: any = Promise.resolve(undefined);
-              result.returning = () => Promise.resolve([updatedRow]);
-              return result;
-            },
-          };
-        },
-      };
-    },
-    insert(table: unknown) {
-      const name = tableName(table);
-      return {
-        values(values: Record<string, unknown>) {
-          inserts.push({ table: name, values });
-          const row = applyInsert(name, values);
-          // Both `.returning()` and `.onConflictDoNothing()` (with or without
-          // a chained `.returning()`) need to be awaitable.
-          const conflict: any = Promise.resolve(undefined);
-          conflict.returning = () => Promise.resolve([row]);
-          return {
-            returning() {
-              return Promise.resolve([row]);
-            },
-            onConflictDoNothing() {
-              return conflict;
-            },
-          };
-        },
-      };
-    },
-    delete(table: unknown) {
-      const name = tableName(table);
-      return {
-        where(predicate: unknown) {
-          const wp = collectParamValues(predicate);
-          const removed = applyDelete(name, wp);
-          deletes.push({ table: name, whereParams: wp, returnedRows: removed });
-          return {
-            returning() {
-              return Promise.resolve(removed);
-            },
-          };
-        },
-      };
-    },
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Module mocks. Order matters: register them BEFORE importing the units
-// under test so the mocked exports are picked up by the real modules.
-// ---------------------------------------------------------------------------
-
-vi.mock("../server/db", () => ({
-  db: {
-    transaction: vi.fn(async (fn: (tx: any) => Promise<unknown>) => {
-      const tx = makeTx();
-      return await fn(tx);
-    }),
-    select: vi.fn(),
-    insert: vi.fn(),
-    update: vi.fn(),
-    delete: vi.fn(),
-  },
-}));
-
-vi.mock("../server/lib/wallet-balances", async () => {
-  const actual = await vi.importActual<typeof import("../server/lib/wallet-balances")>(
-    "../server/lib/wallet-balances",
-  );
-  return {
-    ...actual,
-    adjustUserCurrencyBalance: vi.fn(),
-  };
-});
-
-vi.mock("../server/lib/user-badge-entitlements", async () => {
-  const actual = await vi.importActual<
-    typeof import("../server/lib/user-badge-entitlements")
-  >("../server/lib/user-badge-entitlements");
-  return {
-    ...actual,
-    // Force null monthly limit so the trade-create path skips the
-    // monthly-usage SUM query (which we don't simulate).
-    resolveEffectiveP2PMonthlyLimit: vi.fn(() => null),
-  };
-});
 
 vi.mock("../server/websocket", () => ({
   sendNotification: vi.fn(() => Promise.resolve()),
@@ -381,18 +52,29 @@ vi.mock("../server/routes/middleware", () => ({
   sensitiveRateLimiter: (_req: any, _res: any, next: any) => next?.(),
 }));
 
-// Avoid kicking off the real auto-start work after a successful register.
 vi.mock("../server/lib/tournament-utils", async () => {
   const actual = await vi.importActual<typeof import("../server/lib/tournament-utils")>(
     "../server/lib/tournament-utils",
   );
   return {
     ...actual,
+    // Avoid kicking off real bracket / match work after the registration
+    // transaction commits; routing is verified before this hook fires.
     tryAutoStartTournament: vi.fn(async () => ({ success: false })),
   };
 });
 
-import * as walletBalancesModule from "../server/lib/wallet-balances";
+import { db, pool } from "../server/db";
+import {
+  users,
+  tournaments,
+  tournamentParticipants,
+  transactions,
+  userCurrencyWallets,
+  p2pOffers,
+  p2pTrades,
+  p2pTraderProfiles,
+} from "@shared/schema";
 import { registerTournamentRegistrationRoutes } from "../server/routes/tournaments/registration";
 import { createP2PTradeAtomic } from "../server/storage/p2p/trade-create-atomic";
 import {
@@ -401,48 +83,222 @@ import {
   resolveP2PDisputedTradeAtomic,
 } from "../server/storage/p2p/trade-settle-atomic";
 
-const mockAdjust = walletBalancesModule.adjustUserCurrencyBalance as unknown as ReturnType<typeof vi.fn>;
+// ---------------------------------------------------------------------------
+// Test-data tracking. Per-run prefix keeps rows scoped + cleanable even
+// when concurrent CI workers share the same database.
+// ---------------------------------------------------------------------------
 
-/**
- * Default impl for the wallet-balance spy: routes "is primary" off the
- * primary-currency stored on `state.users[userId]`. Each test can override
- * via mockImplementationOnce when it needs to simulate failure.
- */
-function defaultAdjustImpl() {
-  mockAdjust.mockImplementation(async (_tx, userId, currency, delta) => {
-    const u = state.users[userId];
-    const primary = (u?.balanceCurrency ?? "USD").toUpperCase();
-    const code = currency === null || currency === undefined
-      ? primary
-      : String(currency).toUpperCase();
-    const isPrimary = code === primary;
-    return {
-      currency: code,
-      isPrimary,
-      balanceBefore: 1000,
-      balanceAfter: 1000 + Number(delta),
-      walletId: isPrimary ? undefined : `wallet-${code}`,
-    };
+const TEST_PREFIX = `wrt127-${Date.now()}-${randomBytes(4).toString("hex")}`;
+
+const createdUserIds = new Set<string>();
+const createdTournamentIds = new Set<string>();
+const createdOfferIds = new Set<string>();
+const createdTradeIds = new Set<string>();
+
+function uid(label: string): string {
+  return `${TEST_PREFIX}-${label}-${randomBytes(4).toString("hex")}`;
+}
+
+interface SubWalletSeed {
+  code: string;
+  balance: string;
+}
+
+async function createUser(opts: {
+  primary?: string;
+  initialBalance?: string;
+  multiCurrency?: boolean;
+  allowed?: string[];
+  subWallets?: SubWalletSeed[];
+  withTraderProfile?: boolean;
+}): Promise<string> {
+  const id = uid("user");
+  await db.insert(users).values({
+    id,
+    // Username + password are NOT NULL on the users table; uniqueness is
+    // satisfied by the per-run prefix + random suffix.
+    username: id,
+    password: "x",
+    balance: opts.initialBalance ?? "0.00",
+    balanceCurrency: opts.primary ?? "USD",
+    multiCurrencyEnabled: opts.multiCurrency ?? false,
+    allowedCurrencies: opts.allowed ?? [],
   });
+  createdUserIds.add(id);
+
+  for (const sub of opts.subWallets ?? []) {
+    await db.insert(userCurrencyWallets).values({
+      userId: id,
+      currencyCode: sub.code,
+      balance: sub.balance,
+      totalDeposited: sub.balance,
+    });
+  }
+
+  if (opts.withTraderProfile) {
+    await db.insert(p2pTraderProfiles).values({
+      userId: id,
+      canTradeP2P: true,
+      // Null monthly limit + no badges → `resolveEffectiveP2PMonthlyLimit`
+      // returns null and the monthly-usage check inside trade-create is
+      // skipped (so we don't have to seed historical trades).
+      monthlyTradeLimit: null,
+    });
+  }
+
+  return id;
+}
+
+async function readBalances(userId: string): Promise<{
+  primary: string;
+  primaryCurrency: string;
+  subs: Record<string, string>;
+}> {
+  const [u] = await db
+    .select({ balance: users.balance, currency: users.balanceCurrency })
+    .from(users)
+    .where(eq(users.id, userId));
+  const subs = await db
+    .select()
+    .from(userCurrencyWallets)
+    .where(eq(userCurrencyWallets.userId, userId));
+  const subMap: Record<string, string> = {};
+  for (const s of subs) subMap[s.currencyCode] = s.balance;
+  return {
+    primary: u?.balance ?? "0.00",
+    primaryCurrency: u?.currency ?? "",
+    subs: subMap,
+  };
+}
+
+async function createTournament(opts: { entryFee: string }): Promise<string> {
+  const id = uid("tour");
+  await db.insert(tournaments).values({
+    id,
+    name: "T127",
+    nameAr: "ت127",
+    gameType: "chess",
+    status: "registration",
+    maxPlayers: 16,
+    entryFee: opts.entryFee,
+    currency: "usd",
+  });
+  createdTournamentIds.add(id);
+  return id;
+}
+
+async function createOffer(opts: {
+  sellerId: string;
+  walletCurrency: string | null;
+  available?: string;
+}): Promise<string> {
+  const id = uid("offer");
+  await db.insert(p2pOffers).values({
+    id,
+    userId: opts.sellerId,
+    type: "sell",
+    status: "active",
+    cryptoCurrency: opts.walletCurrency ?? "USDT",
+    fiatCurrency: "USD",
+    walletCurrency: opts.walletCurrency,
+    price: "1.00",
+    availableAmount: opts.available ?? "100.00000000",
+    minLimit: "1.00",
+    maxLimit: "1000.00",
+  });
+  createdOfferIds.add(id);
+  return id;
+}
+
+async function createTrade(opts: {
+  offerId: string;
+  buyerId: string;
+  sellerId: string;
+  status: "pending" | "paid" | "confirmed" | "disputed";
+  walletCurrency: string | null;
+  escrow?: string;
+  fee?: string;
+}): Promise<string> {
+  const id = uid("trade");
+  await db.insert(p2pTrades).values({
+    id,
+    offerId: opts.offerId,
+    buyerId: opts.buyerId,
+    sellerId: opts.sellerId,
+    status: opts.status,
+    amount: opts.escrow ?? "25.00",
+    fiatAmount: "25.00",
+    price: "1.00",
+    paymentMethod: "bank",
+    escrowAmount: opts.escrow ?? "25.00",
+    platformFee: opts.fee ?? "0.50",
+    walletCurrency: opts.walletCurrency,
+  });
+  createdTradeIds.add(id);
+  return id;
+}
+
+async function cleanup(): Promise<void> {
+  // Reverse-FK order: transactions → trades → offers → traderProfiles →
+  // tournament_participants → tournaments → users (userCurrencyWallets
+  // and tournamentParticipants cascade-delete on the user / tournament FK
+  // but we delete participants explicitly so tournament deletes succeed).
+  if (createdUserIds.size > 0) {
+    const userIdList = Array.from(createdUserIds);
+    await db.delete(transactions).where(inArray(transactions.userId, userIdList));
+  }
+  if (createdTradeIds.size > 0) {
+    await db
+      .delete(p2pTrades)
+      .where(inArray(p2pTrades.id, Array.from(createdTradeIds)));
+  }
+  if (createdOfferIds.size > 0) {
+    await db
+      .delete(p2pOffers)
+      .where(inArray(p2pOffers.id, Array.from(createdOfferIds)));
+  }
+  if (createdUserIds.size > 0) {
+    const userIdList = Array.from(createdUserIds);
+    await db
+      .delete(p2pTraderProfiles)
+      .where(inArray(p2pTraderProfiles.userId, userIdList));
+  }
+  if (createdTournamentIds.size > 0) {
+    const tIds = Array.from(createdTournamentIds);
+    await db
+      .delete(tournamentParticipants)
+      .where(inArray(tournamentParticipants.tournamentId, tIds));
+    await db.delete(tournaments).where(inArray(tournaments.id, tIds));
+  }
+  if (createdUserIds.size > 0) {
+    await db
+      .delete(users)
+      .where(inArray(users.id, Array.from(createdUserIds)));
+  }
+  createdTradeIds.clear();
+  createdOfferIds.clear();
+  createdTournamentIds.clear();
+  createdUserIds.clear();
 }
 
 // ---------------------------------------------------------------------------
-// Tournament route handlers — captured at import time via a fake Express app.
+// Capture the tournament Express handlers via a fake `app` recorder so we
+// can invoke them directly with a mock `req` / `res` (no supertest /
+// real network). Captured at module-load time after mocks are wired.
 // ---------------------------------------------------------------------------
 
 const tournamentHandlers: Record<string, Function> = {};
-function captureTournamentRoutes() {
+{
   const fakeApp: any = {
-    post(path: string, ..._handlers: any[]) {
-      tournamentHandlers[`POST ${path}`] = _handlers[_handlers.length - 1];
+    post(path: string, ...handlers: any[]) {
+      tournamentHandlers[`POST ${path}`] = handlers[handlers.length - 1];
     },
-    delete(path: string, ..._handlers: any[]) {
-      tournamentHandlers[`DELETE ${path}`] = _handlers[_handlers.length - 1];
+    delete(path: string, ...handlers: any[]) {
+      tournamentHandlers[`DELETE ${path}`] = handlers[handlers.length - 1];
     },
   };
   registerTournamentRegistrationRoutes(fakeApp);
 }
-captureTournamentRoutes();
 
 function makeRes() {
   const captured: { status: number; json?: unknown } = { status: 200 };
@@ -471,274 +327,190 @@ async function callRoute(
   return captured;
 }
 
-beforeEach(() => {
-  resetTx();
-  mockAdjust.mockReset();
-  defaultAdjustImpl();
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
+beforeAll(() => {
+  if (!process.env.DATABASE_URL) {
+    throw new Error(
+      "DATABASE_URL is required for wallet-routing-end-to-end tests (real DB).",
+    );
+  }
+});
+
+afterEach(async () => {
+  await cleanup();
+});
+
+afterAll(async () => {
+  // Final sweep in case a test threw before its `afterEach` registered a
+  // row, then close the pool so vitest can exit cleanly.
+  await cleanup();
+  await pool.end();
 });
 
 // ---------------------------------------------------------------------------
-// Tournament wallet-routing tests
+// Tournament register: wallet routing
 // ---------------------------------------------------------------------------
 
-describe("Tournament register: wallet routing", () => {
-  it("routes the entry-fee debit to the chosen EUR sub-wallet (primary USD untouched) and stamps walletCurrency on the participant", async () => {
-    const tournamentId = "t-1";
-    const userId = "u-multi";
-    resetTx({
-      users: {
-        [userId]: {
-          id: userId,
-          balance: "500.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-      },
-      tournaments: {
-        [tournamentId]: {
-          id: tournamentId,
-          name: "Cup",
-          nameAr: "كأس",
-          status: "registration",
-          maxPlayers: 16,
-          entryFee: "10.00",
-          currency: "usd",
-          registrationStartsAt: null,
-          registrationEndsAt: null,
-          startsAt: null,
-          shareSlug: null,
-          prizePool: "0.00",
-        },
-      },
-      subWallets: {
-        [`${userId}:EUR`]: {
-          id: "w-eur",
-          userId,
-          currencyCode: "EUR",
-          balance: "200.00",
-          totalDeposited: "200.00",
-          totalWithdrawn: "0.00",
-        },
-      },
+describe("Tournament register (real DB): wallet routing", () => {
+  it("debits the chosen EUR sub-wallet, leaves the primary USD untouched, and stamps walletCurrency on the participant", async () => {
+    const userId = await createUser({
+      primary: "USD",
+      initialBalance: "500.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      subWallets: [{ code: "EUR", balance: "200.00" }],
     });
-    defaultAdjustImpl();
+    const tournamentId = await createTournament({ entryFee: "10.00" });
 
     const result = await callRoute("POST", "/api/tournaments/:id/register", {
       params: { id: tournamentId },
       body: { walletCurrency: "EUR" },
       user: { id: userId },
     });
-
     expect(result.status).toBe(200);
-    // Wallet helper saw EUR as the chosen currency, not the primary USD.
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, callUserId, callCurrency, callDelta] = mockAdjust.mock.calls[0];
-    expect(callUserId).toBe(userId);
-    expect(callCurrency).toBe("EUR");
-    expect(callDelta).toBeCloseTo(-10, 2);
-    // No call ever targeted the primary USD wallet.
-    const usdCalls = mockAdjust.mock.calls.filter((c: any[]) => c[2] === "USD");
-    expect(usdCalls).toHaveLength(0);
-    // Participant row carries the chosen wallet so refunds/payouts stay symmetric.
-    const participantInsert = inserts.find((i) => i.table === "tournament_participants");
-    expect(participantInsert?.values.walletCurrency).toBe("EUR");
+
+    const after = await readBalances(userId);
+    // EUR sub-wallet was debited the full entry fee.
+    expect(after.subs.EUR).toBe("190.00");
+    // Primary USD balance was NOT touched — this catches a regression that
+    // would silently double-spend by mutating both wallets.
+    expect(after.primary).toBe("500.00");
+
+    const [participant] = await db
+      .select()
+      .from(tournamentParticipants)
+      .where(
+        and(
+          eq(tournamentParticipants.tournamentId, tournamentId),
+          eq(tournamentParticipants.userId, userId),
+        ),
+      );
+    expect(participant?.walletCurrency).toBe("EUR");
   });
 
-  it("regression: a single-currency user with no wallet picker still hits the primary balance and stores walletCurrency = null", async () => {
-    const tournamentId = "t-2";
-    const userId = "u-single";
-    resetTx({
-      users: {
-        [userId]: {
-          id: userId,
-          balance: "100.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: false,
-          allowedCurrencies: [],
-        },
-      },
-      tournaments: {
-        [tournamentId]: {
-          id: tournamentId,
-          name: "Cup",
-          nameAr: "كأس",
-          status: "registration",
-          maxPlayers: 16,
-          entryFee: "5.00",
-          currency: "usd",
-          registrationStartsAt: null,
-          registrationEndsAt: null,
-          startsAt: null,
-          shareSlug: null,
-          prizePool: "0.00",
-        },
-      },
+  it("regression: a single-currency user with no wallet picker still hits users.balance and stores walletCurrency = NULL", async () => {
+    const userId = await createUser({
+      primary: "USD",
+      initialBalance: "50.00",
+      multiCurrency: false,
+      allowed: [],
     });
-    defaultAdjustImpl();
+    const tournamentId = await createTournament({ entryFee: "5.00" });
 
     const result = await callRoute("POST", "/api/tournaments/:id/register", {
       params: { id: tournamentId },
-      body: {}, // no walletCurrency
+      body: {},
       user: { id: userId },
     });
-
     expect(result.status).toBe(200);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, , currency] = mockAdjust.mock.calls[0];
-    // Primary path: route resolves to the user's primary currency code.
-    expect(currency).toBe("USD");
-    // Participant row stays NULL so existing single-currency rows are unaffected.
-    const participantInsert = inserts.find((i) => i.table === "tournament_participants");
-    expect(participantInsert?.values.walletCurrency).toBeNull();
+
+    const after = await readBalances(userId);
+    // Legacy primary path: USD balance debited, no sub-wallet rows touched.
+    expect(after.primary).toBe("45.00");
+    expect(after.subs).toEqual({});
+
+    const [participant] = await db
+      .select()
+      .from(tournamentParticipants)
+      .where(
+        and(
+          eq(tournamentParticipants.tournamentId, tournamentId),
+          eq(tournamentParticipants.userId, userId),
+        ),
+      );
+    expect(participant?.walletCurrency).toBeNull();
   });
 });
 
-describe("Tournament unregister: wallet routing", () => {
-  it("refunds the entry fee back to the EUR sub-wallet recorded on the participant row (primary USD untouched)", async () => {
-    const tournamentId = "t-3";
-    const userId = "u-multi";
-    resetTx({
-      users: {
-        [userId]: {
-          id: userId,
-          balance: "500.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-      },
-      tournaments: {
-        [tournamentId]: {
-          id: tournamentId,
-          name: "Cup",
-          nameAr: "كأس",
-          status: "registration",
-          maxPlayers: 16,
-          entryFee: "10.00",
-          currency: "usd",
-          registrationStartsAt: null,
-          registrationEndsAt: null,
-          startsAt: null,
-          shareSlug: null,
-          prizePool: "10.00",
-        },
-      },
-      participants: {
-        [tournamentId]: [
-          { id: "p-1", tournamentId, userId, seed: 1, walletCurrency: "EUR" },
-        ],
-      },
-    });
-    defaultAdjustImpl();
+// ---------------------------------------------------------------------------
+// Tournament unregister: wallet routing
+// ---------------------------------------------------------------------------
 
-    const result = await callRoute("DELETE", "/api/tournaments/:id/register", {
+describe("Tournament unregister (real DB): wallet routing", () => {
+  it("refunds the entry fee back to the EUR sub-wallet recorded on the participant row (primary USD untouched)", async () => {
+    const userId = await createUser({
+      primary: "USD",
+      initialBalance: "500.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      subWallets: [{ code: "EUR", balance: "200.00" }],
+    });
+    const tournamentId = await createTournament({ entryFee: "10.00" });
+
+    // Register first so there's a participant row with walletCurrency="EUR"
+    // and the EUR balance is at the post-debit value.
+    await callRoute("POST", "/api/tournaments/:id/register", {
+      params: { id: tournamentId },
+      body: { walletCurrency: "EUR" },
+      user: { id: userId },
+    });
+    const afterRegister = await readBalances(userId);
+    expect(afterRegister.subs.EUR).toBe("190.00");
+    expect(afterRegister.primary).toBe("500.00");
+
+    const unregResult = await callRoute("DELETE", "/api/tournaments/:id/register", {
       params: { id: tournamentId },
       user: { id: userId },
     });
+    expect(unregResult.status).toBe(200);
 
-    expect(result.status).toBe(200);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, callUserId, callCurrency, callDelta] = mockAdjust.mock.calls[0];
-    expect(callUserId).toBe(userId);
-    expect(callCurrency).toBe("EUR");
-    expect(callDelta).toBeCloseTo(10, 2);
-    // No wallet-helper call ever debited or credited USD.
-    expect(mockAdjust.mock.calls.filter((c: any[]) => c[2] === "USD")).toHaveLength(0);
+    const afterUnregister = await readBalances(userId);
+    // EUR sub-wallet refunded back to the original 200.
+    expect(afterUnregister.subs.EUR).toBe("200.00");
+    // Primary USD never moved — proves the refund did not leak into it.
+    expect(afterUnregister.primary).toBe("500.00");
   });
 
-  it("regression: when a single-currency participant unregisters, the refund flows through the legacy primary-balance path (currency = null)", async () => {
-    const tournamentId = "t-4";
-    const userId = "u-single";
-    resetTx({
-      users: {
-        [userId]: {
-          id: userId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: false,
-          allowedCurrencies: [],
-        },
-      },
-      tournaments: {
-        [tournamentId]: {
-          id: tournamentId,
-          name: "Cup",
-          nameAr: "كأس",
-          status: "registration",
-          maxPlayers: 16,
-          entryFee: "5.00",
-          currency: "usd",
-          registrationStartsAt: null,
-          registrationEndsAt: null,
-          startsAt: null,
-          shareSlug: null,
-          prizePool: "5.00",
-        },
-      },
-      participants: {
-        [tournamentId]: [
-          { id: "p-2", tournamentId, userId, seed: 1, walletCurrency: null },
-        ],
-      },
+  it("regression: a single-currency participant with walletCurrency = NULL is refunded through the legacy primary balance", async () => {
+    const userId = await createUser({
+      primary: "USD",
+      initialBalance: "50.00",
+      multiCurrency: false,
+      allowed: [],
     });
-    defaultAdjustImpl();
+    const tournamentId = await createTournament({ entryFee: "5.00" });
+    await callRoute("POST", "/api/tournaments/:id/register", {
+      params: { id: tournamentId },
+      body: {},
+      user: { id: userId },
+    });
+    const afterRegister = await readBalances(userId);
+    expect(afterRegister.primary).toBe("45.00");
 
     await callRoute("DELETE", "/api/tournaments/:id/register", {
       params: { id: tournamentId },
       user: { id: userId },
     });
-
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, , currency, delta] = mockAdjust.mock.calls[0];
-    // Null routes the helper to the user's primary balance — exactly the
-    // legacy single-currency path, unchanged.
-    expect(currency).toBeNull();
-    expect(delta).toBeCloseTo(5, 2);
+    const afterUnregister = await readBalances(userId);
+    expect(afterUnregister.primary).toBe("50.00");
+    // No sub-wallet row should have been opportunistically created.
+    expect(afterUnregister.subs).toEqual({});
   });
 });
 
 // ---------------------------------------------------------------------------
-// P2P escrow / settlement wallet-routing tests
+// P2P trade create (escrow debit) — wallet routing
 // ---------------------------------------------------------------------------
 
-describe("createP2PTradeAtomic: escrow debit routing", () => {
-  it("debits the seller's EUR sub-wallet when the offer carries walletCurrency = 'EUR' and stamps walletCurrency on the trade", async () => {
-    const sellerId = "seller-eur";
-    const buyerId = "buyer-eur";
-    const offerId = "offer-eur";
-    resetTx({
-      users: {
-        [sellerId]: {
-          id: sellerId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-        [buyerId]: {
-          id: buyerId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-      },
-      offers: {
-        [offerId]: {
-          id: offerId,
-          userId: sellerId,
-          status: "active",
-          availableAmount: "100.00000000",
-          walletCurrency: "EUR",
-        },
-      },
-      traderProfiles: {
-        [sellerId]: { canTradeP2P: true, monthlyTradeLimit: null },
-        [buyerId]: { canTradeP2P: true, monthlyTradeLimit: null },
-      },
+describe("createP2PTradeAtomic (real DB): escrow debit routing", () => {
+  it("debits the seller's EUR sub-wallet (primary USD untouched) and stamps walletCurrency on the trade when the offer is in EUR", async () => {
+    const sellerId = await createUser({
+      primary: "USD",
+      initialBalance: "500.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      subWallets: [{ code: "EUR", balance: "200.00" }],
+      withTraderProfile: true,
     });
-    defaultAdjustImpl();
+    const buyerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      withTraderProfile: true,
+    });
+    const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
 
     const result = await createP2PTradeAtomic({
       offerId,
@@ -751,54 +523,33 @@ describe("createP2PTradeAtomic: escrow debit routing", () => {
       platformFee: "0.50",
       expiresAt: new Date(Date.now() + 60_000),
     });
-
     expect(result.success).toBe(true);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, callUserId, callCurrency, callDelta] = mockAdjust.mock.calls[0];
-    expect(callUserId).toBe(sellerId);
-    expect(callCurrency).toBe("EUR");
-    expect(callDelta).toBeCloseTo(-25, 2);
-    // Created trade row carries walletCurrency for the matching settle path.
-    const tradeInsert = inserts.find((i) => i.table === "p2p_trades");
-    expect(tradeInsert?.values.walletCurrency).toBe("EUR");
+    if (result.trade) createdTradeIds.add(result.trade.id);
+
+    const sellerAfter = await readBalances(sellerId);
+    // Escrow held in EUR sub-wallet, primary USD untouched.
+    expect(sellerAfter.subs.EUR).toBe("175.00");
+    expect(sellerAfter.primary).toBe("500.00");
+    // Buyer is unchanged at create time (escrow is on the seller side only).
+    const buyerAfter = await readBalances(buyerId);
+    expect(buyerAfter.primary).toBe("0.00");
+    expect(buyerAfter.subs).toEqual({});
+
+    expect(result.trade?.walletCurrency).toBe("EUR");
   });
 
-  it("regression: an offer with walletCurrency = null still flows through the legacy primary balance and stores walletCurrency = null on the trade", async () => {
-    const sellerId = "seller-legacy";
-    const buyerId = "buyer-legacy";
-    const offerId = "offer-legacy";
-    resetTx({
-      users: {
-        [sellerId]: {
-          id: sellerId,
-          balance: "100.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: false,
-          allowedCurrencies: [],
-        },
-        [buyerId]: {
-          id: buyerId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: false,
-          allowedCurrencies: [],
-        },
-      },
-      offers: {
-        [offerId]: {
-          id: offerId,
-          userId: sellerId,
-          status: "active",
-          availableAmount: "100.00000000",
-          walletCurrency: null,
-        },
-      },
-      traderProfiles: {
-        [sellerId]: { canTradeP2P: true, monthlyTradeLimit: null },
-        [buyerId]: { canTradeP2P: true, monthlyTradeLimit: null },
-      },
+  it("regression: an offer with walletCurrency = NULL still flows through the legacy primary balance and stores walletCurrency = NULL on the trade", async () => {
+    const sellerId = await createUser({
+      primary: "USD",
+      initialBalance: "100.00",
+      withTraderProfile: true,
     });
-    defaultAdjustImpl();
+    const buyerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      withTraderProfile: true,
+    });
+    const offerId = await createOffer({ sellerId, walletCurrency: null });
 
     const result = await createP2PTradeAtomic({
       offerId,
@@ -811,330 +562,217 @@ describe("createP2PTradeAtomic: escrow debit routing", () => {
       platformFee: "0.10",
       expiresAt: new Date(Date.now() + 60_000),
     });
-
     expect(result.success).toBe(true);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, , currency] = mockAdjust.mock.calls[0];
-    expect(currency).toBeNull();
-    const tradeInsert = inserts.find((i) => i.table === "p2p_trades");
-    expect(tradeInsert?.values.walletCurrency).toBeNull();
+    if (result.trade) createdTradeIds.add(result.trade.id);
+
+    const sellerAfter = await readBalances(sellerId);
+    expect(sellerAfter.primary).toBe("90.00");
+    // No sub-wallet was opportunistically created when the offer is legacy.
+    expect(sellerAfter.subs).toEqual({});
+    expect(result.trade?.walletCurrency).toBeNull();
   });
 });
 
-/**
- * Tiny helper to keep the settle-path tests readable: builds users + a
- * trade row in the requested status / wallet currency.
- */
-function seedSettleState(opts: {
-  sellerId: string;
-  buyerId: string;
-  tradeId: string;
-  status: string;
-  walletCurrency: string | null;
-  multiCurrencyEnabled?: boolean;
-}) {
-  const allowed = opts.multiCurrencyEnabled ? ["USD", "EUR"] : [];
-  resetTx({
-    users: {
-      [opts.sellerId]: {
-        id: opts.sellerId,
-        balance: "0.00",
-        balanceCurrency: "USD",
-        multiCurrencyEnabled: !!opts.multiCurrencyEnabled,
-        allowedCurrencies: allowed,
-      },
-      [opts.buyerId]: {
-        id: opts.buyerId,
-        balance: "0.00",
-        balanceCurrency: "USD",
-        multiCurrencyEnabled: !!opts.multiCurrencyEnabled,
-        allowedCurrencies: allowed,
-      },
-    },
-    trades: {
-      [opts.tradeId]: {
-        id: opts.tradeId,
-        buyerId: opts.buyerId,
-        sellerId: opts.sellerId,
-        status: opts.status,
-        escrowAmount: "25.00",
-        platformFee: "0.50",
-        amount: "25.00",
-        offerId: null,
-        walletCurrency: opts.walletCurrency,
-      },
-    },
-  });
-  defaultAdjustImpl();
-}
+// ---------------------------------------------------------------------------
+// P2P trade complete (release credit) — wallet routing
+// ---------------------------------------------------------------------------
 
-describe("completeP2PTradeAtomic: release credit routing", () => {
+describe("completeP2PTradeAtomic (real DB): release credit routing", () => {
   it("releases escrow (minus platform fee) into the buyer's EUR sub-wallet when the trade was held in EUR", async () => {
-    const sellerId = "seller-eur";
-    const buyerId = "buyer-eur";
-    const tradeId = "trade-eur";
-    resetTx({
-      users: {
-        [sellerId]: {
-          id: sellerId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-        [buyerId]: {
-          id: buyerId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-      },
-      trades: {
-        [tradeId]: {
-          id: tradeId,
-          buyerId,
-          sellerId,
-          status: "confirmed",
-          escrowAmount: "25.00",
-          platformFee: "0.50",
-          amount: "25.00",
-          walletCurrency: "EUR",
-        },
-      },
+    const sellerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      withTraderProfile: true,
     });
-    defaultAdjustImpl();
+    const buyerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      withTraderProfile: true,
+    });
+    const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
+    const tradeId = await createTrade({
+      offerId,
+      buyerId,
+      sellerId,
+      status: "confirmed",
+      walletCurrency: "EUR",
+      escrow: "25.00",
+      fee: "0.50",
+    });
 
     const result = await completeP2PTradeAtomic(tradeId, sellerId);
     expect(result.success).toBe(true);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, callUserId, callCurrency, callDelta] = mockAdjust.mock.calls[0];
-    expect(callUserId).toBe(buyerId);
-    expect(callCurrency).toBe("EUR");
-    expect(callDelta).toBeCloseTo(24.5, 2);
+
+    const buyerAfter = await readBalances(buyerId);
+    // Escrow (25) - fee (0.50) = 24.50 credited to the buyer's EUR wallet.
+    expect(buyerAfter.subs.EUR).toBe("24.50");
+    // Buyer's primary USD was NOT touched.
+    expect(buyerAfter.primary).toBe("0.00");
+    // Seller's balances unchanged on completion (escrow already debited at create).
+    const sellerAfter = await readBalances(sellerId);
+    expect(sellerAfter.primary).toBe("0.00");
+    expect(sellerAfter.subs).toEqual({});
   });
 });
 
-describe("cancelP2PTradeAtomic: escrow refund routing", () => {
-  it("refunds escrow back to the seller's EUR sub-wallet (NOT the primary USD) when the trade was held in EUR", async () => {
-    const sellerId = "seller-eur";
-    const buyerId = "buyer-eur";
-    const tradeId = "trade-eur-cancel";
-    resetTx({
-      users: {
-        [sellerId]: {
-          id: sellerId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-        [buyerId]: {
-          id: buyerId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-      },
-      trades: {
-        [tradeId]: {
-          id: tradeId,
-          buyerId,
-          sellerId,
-          status: "pending",
-          escrowAmount: "25.00",
-          platformFee: "0.50",
-          amount: "25.00",
-          offerId: null,
-          walletCurrency: "EUR",
-        },
-      },
+// ---------------------------------------------------------------------------
+// P2P trade cancel (escrow refund) — wallet routing
+// ---------------------------------------------------------------------------
+
+describe("cancelP2PTradeAtomic (real DB): escrow refund routing", () => {
+  it("refunds the full escrow back to the seller's EUR sub-wallet (NOT primary USD) when the trade was held in EUR", async () => {
+    const sellerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      subWallets: [{ code: "EUR", balance: "175.00" }],
+      withTraderProfile: true,
     });
-    defaultAdjustImpl();
+    const buyerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      withTraderProfile: true,
+    });
+    const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
+    const tradeId = await createTrade({
+      offerId,
+      buyerId,
+      sellerId,
+      status: "pending",
+      walletCurrency: "EUR",
+      escrow: "25.00",
+      fee: "0.50",
+    });
 
     const result = await cancelP2PTradeAtomic(tradeId, sellerId, "test cancel");
     expect(result.success).toBe(true);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, callUserId, callCurrency, callDelta] = mockAdjust.mock.calls[0];
-    expect(callUserId).toBe(sellerId);
-    expect(callCurrency).toBe("EUR");
-    expect(callDelta).toBeCloseTo(25, 2);
-    // No wallet-helper call ever touched USD on this path.
-    expect(mockAdjust.mock.calls.filter((c: any[]) => c[2] === "USD")).toHaveLength(0);
-  });
-});
 
-describe("resolveP2PDisputedTradeAtomic: dispute payout routing", () => {
-  it("returns full escrow to the seller's EUR sub-wallet when the dispute is resolved in the seller's favor", async () => {
-    const sellerId = "seller-eur";
-    const buyerId = "buyer-eur";
-    const tradeId = "trade-eur-dispute-seller";
-    resetTx({
-      users: {
-        [sellerId]: {
-          id: sellerId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-        [buyerId]: {
-          id: buyerId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-      },
-      trades: {
-        [tradeId]: {
-          id: tradeId,
-          buyerId,
-          sellerId,
-          status: "disputed",
-          escrowAmount: "25.00",
-          platformFee: "0.50",
-          amount: "25.00",
-          offerId: null,
-          walletCurrency: "EUR",
-        },
-      },
+    const sellerAfter = await readBalances(sellerId);
+    // EUR refunded 175 + 25 = 200; primary USD untouched.
+    expect(sellerAfter.subs.EUR).toBe("200.00");
+    expect(sellerAfter.primary).toBe("0.00");
+  });
+
+  it("regression: a legacy null-wallet trade refunds escrow through the seller's primary balance", async () => {
+    const sellerId = await createUser({
+      primary: "USD",
+      initialBalance: "75.00",
+      withTraderProfile: true,
     });
-    defaultAdjustImpl();
-
-    const result = await resolveP2PDisputedTradeAtomic(tradeId, sellerId, "seller wins");
-    expect(result.success).toBe(true);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, callUserId, callCurrency, callDelta] = mockAdjust.mock.calls[0];
-    expect(callUserId).toBe(sellerId);
-    expect(callCurrency).toBe("EUR");
-    expect(callDelta).toBeCloseTo(25, 2);
-  });
-
-  it("releases escrow (minus platform fee) into the buyer's EUR sub-wallet when the dispute is resolved in the buyer's favor", async () => {
-    const sellerId = "seller-eur";
-    const buyerId = "buyer-eur";
-    const tradeId = "trade-eur-dispute-buyer";
-    resetTx({
-      users: {
-        [sellerId]: {
-          id: sellerId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-        [buyerId]: {
-          id: buyerId,
-          balance: "0.00",
-          balanceCurrency: "USD",
-          multiCurrencyEnabled: true,
-          allowedCurrencies: ["USD", "EUR"],
-        },
-      },
-      trades: {
-        [tradeId]: {
-          id: tradeId,
-          buyerId,
-          sellerId,
-          status: "disputed",
-          escrowAmount: "25.00",
-          platformFee: "0.50",
-          amount: "25.00",
-          offerId: null,
-          walletCurrency: "EUR",
-        },
-      },
+    const buyerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      withTraderProfile: true,
     });
-    defaultAdjustImpl();
-
-    const result = await resolveP2PDisputedTradeAtomic(tradeId, buyerId, "buyer wins");
-    expect(result.success).toBe(true);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, callUserId, callCurrency, callDelta] = mockAdjust.mock.calls[0];
-    expect(callUserId).toBe(buyerId);
-    expect(callCurrency).toBe("EUR");
-    expect(callDelta).toBeCloseTo(24.5, 2);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Legacy / primary-balance regression tests for the settle paths. These guard
-// against accidentally routing legacy single-currency trades (walletCurrency
-// = null) into the sub-wallet branch — which would silently move money into
-// a row that doesn't exist.
-// ---------------------------------------------------------------------------
-
-describe("settle paths: legacy primary-balance regression", () => {
-  it("completeP2PTradeAtomic with trade.walletCurrency = null routes the buyer credit through the legacy primary balance", async () => {
-    seedSettleState({
-      sellerId: "s-legacy-1",
-      buyerId: "b-legacy-1",
-      tradeId: "t-legacy-complete",
-      status: "confirmed",
-      walletCurrency: null,
-    });
-    const result = await completeP2PTradeAtomic("t-legacy-complete", "s-legacy-1");
-    expect(result.success).toBe(true);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, callUserId, callCurrency] = mockAdjust.mock.calls[0];
-    expect(callUserId).toBe("b-legacy-1");
-    expect(callCurrency).toBeNull();
-  });
-
-  it("cancelP2PTradeAtomic with trade.walletCurrency = null refunds escrow through the seller's primary balance", async () => {
-    seedSettleState({
-      sellerId: "s-legacy-2",
-      buyerId: "b-legacy-2",
-      tradeId: "t-legacy-cancel",
+    const offerId = await createOffer({ sellerId, walletCurrency: null });
+    const tradeId = await createTrade({
+      offerId,
+      buyerId,
+      sellerId,
       status: "pending",
       walletCurrency: null,
+      escrow: "25.00",
+      fee: "0.50",
     });
-    const result = await cancelP2PTradeAtomic("t-legacy-cancel", "s-legacy-2", "test");
-    expect(result.success).toBe(true);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    const [, callUserId, callCurrency, callDelta] = mockAdjust.mock.calls[0];
-    expect(callUserId).toBe("s-legacy-2");
-    expect(callCurrency).toBeNull();
-    expect(callDelta).toBeCloseTo(25, 2);
-  });
 
-  it("resolveP2PDisputedTradeAtomic with trade.walletCurrency = null and seller wins routes the refund through the seller's primary balance", async () => {
-    seedSettleState({
-      sellerId: "s-legacy-3",
-      buyerId: "b-legacy-3",
-      tradeId: "t-legacy-dispute-seller",
-      status: "disputed",
-      walletCurrency: null,
+    const result = await cancelP2PTradeAtomic(tradeId, sellerId, "regression");
+    expect(result.success).toBe(true);
+
+    const sellerAfter = await readBalances(sellerId);
+    // 75 + 25 = 100 refunded to primary; no sub-wallet created.
+    expect(sellerAfter.primary).toBe("100.00");
+    expect(sellerAfter.subs).toEqual({});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P2P trade dispute resolution — wallet routing
+// ---------------------------------------------------------------------------
+
+describe("resolveP2PDisputedTradeAtomic (real DB): dispute payout routing", () => {
+  it("returns full escrow to the seller's EUR sub-wallet (primary USD untouched) when the dispute is resolved in the seller's favor", async () => {
+    const sellerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      subWallets: [{ code: "EUR", balance: "175.00" }],
+      withTraderProfile: true,
     });
+    const buyerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      withTraderProfile: true,
+    });
+    const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
+    const tradeId = await createTrade({
+      offerId,
+      buyerId,
+      sellerId,
+      status: "disputed",
+      walletCurrency: "EUR",
+      escrow: "25.00",
+      fee: "0.50",
+    });
+
     const result = await resolveP2PDisputedTradeAtomic(
-      "t-legacy-dispute-seller",
-      "s-legacy-3",
+      tradeId,
+      sellerId,
       "seller wins",
     );
     expect(result.success).toBe(true);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    expect(mockAdjust.mock.calls[0][1]).toBe("s-legacy-3");
-    expect(mockAdjust.mock.calls[0][2]).toBeNull();
+
+    const sellerAfter = await readBalances(sellerId);
+    expect(sellerAfter.subs.EUR).toBe("200.00"); // 175 + full escrow 25
+    expect(sellerAfter.primary).toBe("0.00");
+    const buyerAfter = await readBalances(buyerId);
+    expect(buyerAfter.primary).toBe("0.00");
+    expect(buyerAfter.subs).toEqual({});
   });
 
-  it("resolveP2PDisputedTradeAtomic with trade.walletCurrency = null and buyer wins routes the release through the buyer's primary balance", async () => {
-    seedSettleState({
-      sellerId: "s-legacy-4",
-      buyerId: "b-legacy-4",
-      tradeId: "t-legacy-dispute-buyer",
-      status: "disputed",
-      walletCurrency: null,
+  it("releases escrow (minus platform fee) into the buyer's EUR sub-wallet when the dispute is resolved in the buyer's favor", async () => {
+    const sellerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      withTraderProfile: true,
     });
+    const buyerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      withTraderProfile: true,
+    });
+    const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
+    const tradeId = await createTrade({
+      offerId,
+      buyerId,
+      sellerId,
+      status: "disputed",
+      walletCurrency: "EUR",
+      escrow: "25.00",
+      fee: "0.50",
+    });
+
     const result = await resolveP2PDisputedTradeAtomic(
-      "t-legacy-dispute-buyer",
-      "b-legacy-4",
+      tradeId,
+      buyerId,
       "buyer wins",
     );
     expect(result.success).toBe(true);
-    expect(mockAdjust).toHaveBeenCalledTimes(1);
-    expect(mockAdjust.mock.calls[0][1]).toBe("b-legacy-4");
-    expect(mockAdjust.mock.calls[0][2]).toBeNull();
+
+    const buyerAfter = await readBalances(buyerId);
+    expect(buyerAfter.subs.EUR).toBe("24.50");
+    expect(buyerAfter.primary).toBe("0.00");
+    const sellerAfter = await readBalances(sellerId);
+    expect(sellerAfter.primary).toBe("0.00");
+    expect(sellerAfter.subs).toEqual({});
   });
 });
