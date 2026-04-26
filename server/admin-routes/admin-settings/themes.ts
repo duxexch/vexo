@@ -148,11 +148,16 @@ export function registerThemesRoutes(app: Express) {
     try {
       const { id } = req.params;
 
-      await db.update(themes).set({ isDefault: false });
-      const [updated] = await db.update(themes)
-        .set({ isDefault: true })
-        .where(eq(themes.id, id))
-        .returning();
+      const updated = await db.transaction(async (tx) => {
+        const [target] = await tx.select().from(themes).where(eq(themes.id, id)).limit(1);
+        if (!target) return null;
+        await tx.update(themes).set({ isDefault: false });
+        const [row] = await tx.update(themes)
+          .set({ isDefault: true })
+          .where(eq(themes.id, id))
+          .returning();
+        return row;
+      });
 
       if (!updated) {
         return res.status(404).json({ error: "Theme not found" });
