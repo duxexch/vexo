@@ -14,10 +14,13 @@ a follow-up to reconcile them.
 
 ## 1. Cross-Surface Rule (PERMANENT, Task #177)
 
-> **Every feature, fix, redesign, or polish item in VEX must work — and look
-> right — on the desktop browser, on Android (Capacitor WebView), on iOS
-> (when present), AND across every supported screen size, before it can be
-> considered done.**
+> **TL;DR (canonical, exact wording from Task #177):** every feature/change/fix
+> must work on browser + mobile + every screen size.
+
+> **Expanded form:** Every feature, fix, redesign, or polish item in VEX must
+> work — and look right — on the desktop browser, on Android (Capacitor
+> WebView), on iOS (when present), AND across every supported screen size,
+> before it can be considered done.
 
 This rule applies to:
 
