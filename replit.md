@@ -89,7 +89,11 @@ relevant smokes in series. Use these instead of remembering individual scripts.
   `client/src/components/games/DominoBoard.tsx`: layout snapshots,
   tile-orientation snapshots, playthrough bounds, playthrough pips, and
   elbow-mirror parity (`scripts/smoke-domino-elbow-mirror.ts`, added in Task
-  #95). Run it on any PR that touches the board or its solver before merging.
+  #95) plus the 28-tile fit smoke (Task #214). Wired to CI in Task #163 via
+  `.github/workflows/domino-quality-gate.yml`, which runs the gate on every
+  PR (and push to `main`) that touches the board, the layout solver, the
+  challenge container, the table-style picker, the smokes themselves, or
+  their fixtures — failures block merge.
 - **`quality:gate:chat`** — DM/room realtime notifications, call-action
   smokes (incl. the React-tree call-actions test), and the mobile-web
   keyboard-inset Playwright smoke (Task #117 — see "Mobile Verification"

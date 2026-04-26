@@ -1,0 +1,104 @@
+name: Domino Quality Gate
+
+# Wires `npm run quality:gate:domino` (Task #121) into PR checks so the
+# five functional domino smokes — layout snapshots, tile-orientation,
+# playthrough-bounds, playthrough-pips, elbow-mirror, and the 28-tile
+# table-fit — run automatically whenever a PR touches the board, the
+# layout solver, the smokes themselves, or their fixtures. Falling back
+# to a "remember to run it locally" workflow lost us regressions before
+# Task #163, so this gate now blocks merge.
+
+on:
+  pull_request:
+    paths:
+      - "client/src/components/games/DominoBoard.tsx"
+      - "client/src/components/games/DominoChallengeContainer.tsx"
+      - "client/src/components/games/DominoSpectatorInsights.tsx"
+      - "client/src/lib/domino-table-styles.ts"
+      - "client/src/lib/domino-challenge-adapter.ts"
+      - "client/src/pages/games/DominoGame.tsx"
+      - "scripts/smoke-domino-layout-snapshots.ts"
+      - "scripts/smoke-domino-tile-orientation.ts"
+      - "scripts/smoke-domino-playthrough-bounds.ts"
+      - "scripts/smoke-domino-playthrough-pips.ts"
+      - "scripts/smoke-domino-elbow-mirror.ts"
+      - "scripts/smoke-domino-table-fit-28.ts"
+      - "scripts/fixtures/domino-layout-snapshots.json"
+      - "scripts/fixtures/domino-tile-orientation.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/domino-quality-gate.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "client/src/components/games/DominoBoard.tsx"
+      - "client/src/components/games/DominoChallengeContainer.tsx"
+      - "client/src/components/games/DominoSpectatorInsights.tsx"
+      - "client/src/lib/domino-table-styles.ts"
+      - "client/src/lib/domino-challenge-adapter.ts"
+      - "client/src/pages/games/DominoGame.tsx"
+      - "scripts/smoke-domino-layout-snapshots.ts"
+      - "scripts/smoke-domino-tile-orientation.ts"
+      - "scripts/smoke-domino-playthrough-bounds.ts"
+      - "scripts/smoke-domino-playthrough-pips.ts"
+      - "scripts/smoke-domino-elbow-mirror.ts"
+      - "scripts/smoke-domino-table-fit-28.ts"
+      - "scripts/fixtures/domino-layout-snapshots.json"
+      - "scripts/fixtures/domino-tile-orientation.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/domino-quality-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: domino-quality-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  domino-quality-gate:
+    name: quality:gate:domino
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Three of the six smokes (playthrough-bounds, playthrough-pips,
+      # elbow-mirror, table-fit-28) drive a real Chromium via Playwright
+      # against a Vite-served harness. Cache the browser binaries between
+      # runs to keep the gate well under five minutes on a warm cache.
+      - name: Cache Playwright browsers
+        id: cache-playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright Chromium (cache miss)
+        if: steps.cache-playwright.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit)
+        if: steps.cache-playwright.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run domino quality gate
+        # Bundles check:types + the six functional domino smokes — see
+        # package.json `quality:gate:domino` (Task #121, extended in #214).
+        run: npm run quality:gate:domino
