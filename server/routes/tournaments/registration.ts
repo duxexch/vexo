@@ -12,6 +12,34 @@ import {
   formatTournamentAmountText,
 } from "../../lib/tournament-utils";
 
+type InsufficientBalanceWalletKind = "cash" | "project";
+type InsufficientBalanceCurrency = "usd" | "project";
+
+class InsufficientBalanceError extends Error {
+  readonly walletKind: InsufficientBalanceWalletKind;
+  readonly currency: InsufficientBalanceCurrency;
+  readonly required: number;
+  readonly available: number;
+
+  constructor(args: {
+    walletKind: InsufficientBalanceWalletKind;
+    currency: InsufficientBalanceCurrency;
+    required: number;
+    available: number;
+  }) {
+    super(
+      args.walletKind === "project"
+        ? "Insufficient project balance"
+        : "Insufficient cash balance",
+    );
+    this.name = "InsufficientBalanceError";
+    this.walletKind = args.walletKind;
+    this.currency = args.currency;
+    this.required = Number.isFinite(args.required) ? args.required : 0;
+    this.available = Number.isFinite(args.available) ? args.available : 0;
+  }
+}
+
 export function registerTournamentRegistrationRoutes(app: Express): void {
 
   // Register for tournament
@@ -81,7 +109,12 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
               .for('update');
 
             if (!wallet) {
-              throw new Error("Insufficient balance");
+              throw new InsufficientBalanceError({
+                walletKind: "project",
+                currency: "project",
+                required: normalizedEntryFee,
+                available: 0,
+              });
             }
 
             let earnedBalance = Number.parseFloat(wallet.earnedBalance || "0");
@@ -89,7 +122,12 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
             const totalBefore = earnedBalance + purchasedBalance;
 
             if (!Number.isFinite(totalBefore) || totalBefore < normalizedEntryFee) {
-              throw new Error("Insufficient balance");
+              throw new InsufficientBalanceError({
+                walletKind: "project",
+                currency: "project",
+                required: normalizedEntryFee,
+                available: Number.isFinite(totalBefore) ? totalBefore : 0,
+              });
             }
 
             let remaining = normalizedEntryFee;
@@ -129,7 +167,12 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
             const [user] = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).for('update');
             const balanceBeforeValue = Number.parseFloat(user?.balance || "0");
             if (!user || !Number.isFinite(balanceBeforeValue) || balanceBeforeValue < normalizedEntryFee) {
-              throw new Error("Insufficient balance");
+              throw new InsufficientBalanceError({
+                walletKind: "cash",
+                currency: "usd",
+                required: normalizedEntryFee,
+                available: Number.isFinite(balanceBeforeValue) ? balanceBeforeValue : 0,
+              });
             }
 
             const balanceAfterValue = Number((balanceBeforeValue - normalizedEntryFee).toFixed(2));
@@ -208,11 +251,22 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         metadata: JSON.stringify({ tournamentId: tournament.id, action: 'tournament_registered' }),
       }).catch(() => { });
     } catch (error: unknown) {
+      if (error instanceof InsufficientBalanceError) {
+        return res.status(400).json({
+          error: error.message,
+          walletKind: error.walletKind,
+          currency: error.currency,
+          required: error.required.toFixed(2),
+          available: error.available.toFixed(2),
+        });
+      }
       const msg = getErrorMessage(error);
       if (
         msg === "Tournament is full"
         || msg === "Already registered"
         || msg === "Insufficient balance"
+        || msg === "Insufficient cash balance"
+        || msg === "Insufficient project balance"
         || msg === "Registration is closed"
       ) {
         return res.status(400).json({ error: msg });

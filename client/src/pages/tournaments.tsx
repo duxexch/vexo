@@ -121,6 +121,36 @@ function buildTournamentPublicUrl(slugOrId: string): string {
   return `${window.location.origin}/tournaments/${slugOrId}`;
 }
 
+interface TournamentInsufficientBalancePayload {
+  walletKind: 'cash' | 'project';
+  currency: 'usd' | 'project';
+  required: string;
+  available: string;
+}
+
+function parseTournamentInsufficientBalance(
+  errorMessage: string,
+): TournamentInsufficientBalancePayload | null {
+  const match = /^\s*\d{3}\s*:\s*(\{[\s\S]*\})\s*$/.exec(errorMessage);
+  if (!match) return null;
+  let body: unknown;
+  try {
+    body = JSON.parse(match[1]);
+  } catch {
+    return null;
+  }
+  if (!body || typeof body !== 'object') return null;
+  const obj = body as Record<string, unknown>;
+  if (obj.walletKind !== 'cash' && obj.walletKind !== 'project') return null;
+  if (obj.currency !== 'usd' && obj.currency !== 'project') return null;
+  return {
+    walletKind: obj.walletKind,
+    currency: obj.currency,
+    required: typeof obj.required === 'string' ? obj.required : String(obj.required ?? '0'),
+    available: typeof obj.available === 'string' ? obj.available : String(obj.available ?? '0'),
+  };
+}
+
 function useCountdown(targetDate: string | null) {
   const [timeLeft, setTimeLeft] = useState('');
 
@@ -611,7 +641,22 @@ function TournamentDetailView({ id }: { id: string }) {
       ]);
     },
     onError: (err: Error) => {
-      toast({ title: en ? 'Error' : 'خطأ', description: err.message, variant: 'destructive' });
+      const insufficient = parseTournamentInsufficientBalance(err.message);
+      let description = err.message;
+      if (insufficient) {
+        const requiredText = formatTournamentAmountText(insufficient.required, insufficient.currency);
+        const availableText = formatTournamentAmountText(insufficient.available, insufficient.currency);
+        if (insufficient.walletKind === 'project') {
+          description = en
+            ? `Not enough VXC balance. Need ${requiredText}, you have ${availableText}.`
+            : `رصيد VXC غير كافٍ. تحتاج ${requiredText}، لديك ${availableText}.`;
+        } else {
+          description = en
+            ? `Not enough cash balance. Need ${requiredText}, you have ${availableText}.`
+            : `رصيد النقود غير كافٍ. تحتاج ${requiredText}، لديك ${availableText}.`;
+        }
+      }
+      toast({ title: en ? 'Error' : 'خطأ', description, variant: 'destructive' });
     },
   });
 
