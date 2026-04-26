@@ -96,3 +96,41 @@ npx cap open ios
 ---
 
 ملاحظة: المهمة المتابعة #117 ("Add Playwright smoke that verifies the chat composer stays above the on-screen keyboard on mobile web") تعالج التغطية الآلية على متصفحات الجوال — لا تتداخل مع هذا الفحص اليدوي على Capacitor الذي يختبر مسار الـ native plugin تحديدًا.
+
+---
+
+## سجل التحقق — المهمة #180 (2026-04-26)
+
+هذا القسم يدوَّن فيه نتيجة كل تشغيل بحيث لا يُعاد العمل من الصفر في المرّة القادمة.
+
+### ✅ التغطية التي شغّلها الـ agent مباشرةً (أُضيف هنا حرفيًا، أرقام حقيقية)
+
+1. **Vitest — حارس الانحراف:** `npx vitest run client/src/hooks/__tests__/keyboard-config-contract.test.ts` → 3/3 نجح (مدّة 3.36s).
+2. **Vitest — كل اختبارات الـ inset:** `npx vitest run client/src/hooks/__tests__/` → 9/9 نجح (موجود من قبل 6 + جديد 3).
+3. **TypeScript:** `npm run check` → نظيف، لا أخطاء.
+4. **Playwright smoke (mobile-web cross-surface):** `npm run quality:smoke:chat-keyboard-inset` → 18/18 نجح، باستخدام **قاعدة البيانات الحيّة** ومستخدمَين مزروعَين:
+   - **iPhone 14 Portrait — 390×844 (سطل `xs` الأدنى):**
+     - baseline: composerBottom=644, vvHeight=844, cssVar=`0px` ✓
+     - keyboard-open simulation: vv shrunk 844→460, cssVar=`384px`, composer arose 312px → composerBottom=332 داخل 460 ✓
+   - **Pixel 7 Portrait — 412×915 (الأقرب إلى ممثّل سطل `xs` 414px في replit.md):**
+     - baseline: composerBottom=715, vvHeight=915, cssVar=`0px` ✓
+     - keyboard-open simulation: vv shrunk 915→520, cssVar=`395px`, composer arose 323px → composerBottom=392 داخل 520 ✓
+   - الاختبار يؤكّد أن: قيمة الـ CSS variable = `innerHeight - vvHeight` بدقّة 0px في الحالتين، وأن مربع الكتابة لا يبقى خلف لوحة المفاتيح.
+
+### ⏳ ما تبقى — لا يستطيع الـ agent تنفيذه (يحتاج Mr. Owner)
+
+أ) **سطل `xxs` ≤360px على متصفح الجوال:**
+- شغّل: `npm run quality:smoke:chat-keyboard-inset` بعد تعديل الـ spec بإضافة سياق Galaxy S8 Mini (360×640) — أو افتح يدويًا `/chat` على Chrome DevTools mobile emulation بعرض 360 وارفع لوحة المفاتيح.
+- توقَّع: `--keyboard-inset-bottom` يساوي `innerHeight - visualViewport.height` (±2px)، ومربع الكتابة يظل ضمن `visualViewport`.
+- سجّل النتيجة هنا (التاريخ + الجهاز + الأرقام).
+
+ب) **Capacitor Android على جهاز فعلي (APK مُوقَّع):**
+- خطوات الـ Owner: `npm run build && npx cap sync android` ثم Android Studio → Build Signed APK باستخدام مفاتيح الـ ANDROID_KEYSTORE_* المحفوظة → ثبّت على هاتفك → افتح الدردشة → افتح اللوحة → راقب: لا "double-shift"، لا فجوة، لا ارتجاج.
+- إن وُجد ارتجاج: راجع `logcat` بحثًا عن `Capacitor/Keyboard` ولاحظ ما إذا كان WebView يُعيد تنسيق الـ body (سيكون انحرافًا جديدًا في الإعداد).
+- سجّل النتيجة هنا (التاريخ + موديل الهاتف + إصدار Android + الناتج).
+
+ج) **iOS (اختياري الآن):** تطبيق نفس خطوات الـ Capacitor لكن على Xcode، إن توفّر جهاز.
+
+### 🛡️ ضمانة لا-انحراف-بعد-اليوم
+
+اختبار `keyboard-config-contract.test.ts` يفشل في الـ CI فورًا لو غيّر أحد لاحقًا `Keyboard.resize` إلى `'body'` أو `'native'` أو حذفها. يعني: حتى لو تغافلنا عن إعادة الفحص اليدوي، الـ regression لن تمرّ بصمت إلى الإنتاج.
