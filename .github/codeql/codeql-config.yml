@@ -1,0 +1,25 @@
+name: "VEX CodeQL config"
+
+# (a) Skip generated / build artefacts and vendored code so CodeQL
+#     spends its time on the source we actually own.
+paths-ignore:
+  - "node_modules/**"
+  - "**/node_modules/**"
+  - "dist/**"
+  - "build/**"
+  - "out/**"
+  - "coverage/**"
+  - ".local/**"
+  - "**/*.min.js"
+  - "**/*.bundle.js"
+
+# (b) Suppress a small number of alerts at protocol-mandated sites.
+#     The HMAC-SHA1 call in `server/lib/turn-credentials.ts` is required
+#     by coturn's `static-auth-secret` REST API (see the inline comment
+#     in that file). The alert is acknowledged and pinned to that file
+#     so any new occurrence elsewhere is still flagged.
+query-filters:
+  - exclude:
+      id: js/weak-cryptographic-algorithm
+      paths:
+        - "server/lib/turn-credentials.ts"

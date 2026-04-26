@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import type { Control } from "react-hook-form";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -388,7 +389,7 @@ const createOfferSchema = z.object({
   autoReply: z.string().trim().min(1).max(500),
 });
 
-type CreateOfferForm = z.infer<typeof createOfferSchema>;
+export type CreateOfferForm = z.infer<typeof createOfferSchema>;
 
 const SAFE_PREVIEW_IMAGE_TYPES = new Set([
   "image/png",
@@ -529,6 +530,91 @@ function formatLocalizedDateTime(dateValue: string | Date, locale: string): stri
     return "-";
   }
   return parsedDate.toLocaleString(locale);
+}
+
+/**
+ * Currency picker for the create-sell-offer flow (step 1).
+ *
+ * Owns the wallet-aware copy added in Task #126:
+ *   - per-currency dropdown hint pulled from `p2p.balanceHint`
+ *     ("USD — 100 USD available"), shown only when the user actually
+ *     holds a wallet for that currency. Currencies without a wallet
+ *     entry render as the bare code so we never show a misleading
+ *     "0 available" hint.
+ *   - helper line under the picker pulled from `p2p.escrowFromWallet`
+ *     ("Escrow will be held from your USD wallet."), shown only for
+ *     sell offers once a currency is selected.
+ *
+ * Exported so that `tests/p2p-create-offer-currency.test.tsx` can lock
+ * the wording and the conditionals without spinning up the full P2P
+ * page (Task #137).
+ */
+export function CreateOfferCurrencyField({
+  control,
+  selectedOfferType,
+  availableOfferCurrencies,
+  walletBalanceByCurrency,
+  numberLocale,
+  serverWalletErrorMessage,
+}: {
+  control: Control<CreateOfferForm>;
+  selectedOfferType: string;
+  availableOfferCurrencies: string[];
+  walletBalanceByCurrency: Map<string, number>;
+  numberLocale: string;
+  serverWalletErrorMessage?: string | null;
+}) {
+  const { t } = useI18n();
+  return (
+    <FormField
+      control={control}
+      name="currency"
+      render={({ field }) => {
+        const normalizedSelected = normalizeCurrencyCodeValue(field.value);
+        return (
+          <FormItem>
+            <FormLabel>{t('p2p.currency')}</FormLabel>
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger data-testid="select-offer-currency">
+                  <SelectValue />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {availableOfferCurrencies.map((supportedCurrency) => {
+                  const normalizedSupported = normalizeCurrencyCodeValue(supportedCurrency) || supportedCurrency;
+                  const showHint = selectedOfferType === "sell"
+                    && walletBalanceByCurrency.has(normalizedSupported);
+                  const hintAmount = walletBalanceByCurrency.get(normalizedSupported) ?? 0;
+                  return (
+                    <SelectItem key={supportedCurrency} value={supportedCurrency} data-testid={`select-offer-currency-option-${supportedCurrency}`}>
+                      {showHint
+                        ? t('p2p.balanceHint', {
+                            currency: supportedCurrency,
+                            amount: formatAssetAmount(hintAmount, supportedCurrency, numberLocale),
+                          })
+                        : supportedCurrency}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            {selectedOfferType === "sell" && normalizedSelected && (
+              <p className="text-xs text-muted-foreground" data-testid="sell-currency-helper">
+                {t('p2p.escrowFromWallet', { currency: normalizedSelected })}
+              </p>
+            )}
+            {serverWalletErrorMessage && (
+              <p className="text-xs text-destructive" data-testid="sell-currency-server-error">
+                {serverWalletErrorMessage}
+              </p>
+            )}
+            <FormMessage />
+          </FormItem>
+        );
+      }}
+    />
+  );
 }
 
 function TradeOfferDialog({
@@ -2851,56 +2937,18 @@ function MyOffersTab() {
                       )}
 
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <FormField
+                        <CreateOfferCurrencyField
                           control={form.control}
-                          name="currency"
-                          render={({ field }) => {
-                            const serverWalletErrorMatch = createOfferMutation.error
+                          selectedOfferType={selectedOfferType}
+                          availableOfferCurrencies={availableOfferCurrencies}
+                          walletBalanceByCurrency={walletBalanceByCurrency}
+                          numberLocale={numberLocale}
+                          serverWalletErrorMessage={
+                            createOfferMutation.error
                               && /wallet currencies/i.test(createOfferMutation.error.message)
                               ? createOfferMutation.error.message
-                              : null;
-                            return (
-                              <FormItem>
-                                <FormLabel>{t('p2p.currency')}</FormLabel>
-                                <Select value={field.value} onValueChange={field.onChange}>
-                                  <FormControl>
-                                    <SelectTrigger data-testid="select-offer-currency">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {availableOfferCurrencies.map((supportedCurrency) => {
-                                      const normalizedSupported = normalizeCurrencyCodeValue(supportedCurrency) || supportedCurrency;
-                                      const showHint = selectedOfferType === "sell"
-                                        && walletBalanceByCurrency.has(normalizedSupported);
-                                      const hintAmount = walletBalanceByCurrency.get(normalizedSupported) ?? 0;
-                                      return (
-                                        <SelectItem key={supportedCurrency} value={supportedCurrency} data-testid={`select-offer-currency-option-${supportedCurrency}`}>
-                                          {showHint
-                                            ? t('p2p.balanceHint', {
-                                                currency: supportedCurrency,
-                                                amount: formatAssetAmount(hintAmount, supportedCurrency, numberLocale),
-                                              })
-                                            : supportedCurrency}
-                                        </SelectItem>
-                                      );
-                                    })}
-                                  </SelectContent>
-                                </Select>
-                                {selectedOfferType === "sell" && selectedOfferCurrency && (
-                                  <p className="text-xs text-muted-foreground" data-testid="sell-currency-helper">
-                                    {t('p2p.escrowFromWallet', { currency: selectedOfferCurrency })}
-                                  </p>
-                                )}
-                                {serverWalletErrorMatch && (
-                                  <p className="text-xs text-destructive" data-testid="sell-currency-server-error">
-                                    {serverWalletErrorMatch}
-                                  </p>
-                                )}
-                                <FormMessage />
-                              </FormItem>
-                            );
-                          }}
+                              : null
+                          }
                         />
 
                         <FormField
