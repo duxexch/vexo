@@ -94,6 +94,7 @@
     "security:smoke:settlement-idempotency": "tsx scripts/smoke-settlement-idempotency.ts",
     "security:smoke:google-auth-runtime": "node scripts/smoke-google-auth-runtime.mjs",
     "security:csp": "node scripts/validate-csp-prod.mjs",
+    "security:smoke:permissions-policy-header": "node scripts/smoke-permissions-policy-header.mjs",
     "security:check": "npm run security:audit && npm run security:smoke",
     "security:gate": "npm run check:types && npm run security:audit",
     "smoke:ai-admin": "node scripts/smoke-ai-admin.mjs",

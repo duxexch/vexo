@@ -1225,7 +1225,30 @@ verify_post_deploy_stack() {
     fi
   fi
 
-  log_ok "Deep post-deploy verification passed (containers + API + DB + Redis)"
+  # Task #157 — pin the live Permissions-Policy header. The source-level
+  # guard at tests/permissions-policy-header.test.ts catches code-side
+  # regressions; this on-the-wire check catches proxy-layer regressions
+  # (Cloudflare, Hostinger panel, an extra nginx include, etc.) that
+  # could silently strip `camera=(self)` and re-disable the camera
+  # inside the WebView, reproducing the Task #143 outage.
+  local verify_domain verify_url
+  verify_domain="$(extract_domain_from_env)"
+  # Strip any trailing :port — extract_domain_from_env preserves it, but a
+  # public verify URL must hit the TLS edge on 443 (or whatever the proxy
+  # publishes), not the internal app port. Without this strip, an APP_URL
+  # like https://host:3001 would build https://host:3001/ and fail for a
+  # non-regression reason.
+  verify_domain="${verify_domain%%:*}"
+  verify_url="https://${verify_domain}/"
+  if ! DEPLOY_VERIFY_URL="$verify_url" \
+       DEPLOY_VERIFY_RETRY="6" \
+       DEPLOY_VERIFY_DELAY="5" \
+       docker exec vex-app node scripts/smoke-permissions-policy-header.mjs; then
+    log_error "Permissions-Policy header check failed against $verify_url — rollout blocked. Inspect deploy/nginx.conf, server/index.ts, and any upstream proxy for a header rewrite."
+    return 1
+  fi
+
+  log_ok "Deep post-deploy verification passed (containers + API + DB + Redis + Permissions-Policy)"
 }
 
 while [[ $# -gt 0 ]]; do
