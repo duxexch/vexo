@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getRtcSocket } from "@/lib/socket-io-client";
 import { ensureCallRationale } from "@/lib/call-permission-rationale";
-import { ensureCallPermissions } from "@/lib/native-call-permissions";
+import {
+  ensureCallPermissions,
+  isPermanentlyDeniedForCall,
+} from "@/lib/native-call-permissions";
 import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
 import { registerCallActionHandler } from "@/lib/call-actions";
 import {
@@ -202,7 +205,15 @@ export function useCallSession(): UseCallSessionReturn {
     // first thing they see.
     const native = await ensureCallPermissions(kind);
     if (!native.granted) {
-      void ensureCallRationale(kind, { force: true });
+      // Surface the permanently-denied state so the modal hides "Allow"
+      // and steers the user straight to system Settings — re-tapping
+      // Allow when the OS has stopped showing its dialog is a silent
+      // no-op and confused users in production.
+      const blocked = isPermanentlyDeniedForCall(kind, native.status);
+      void ensureCallRationale(kind, {
+        force: true,
+        permanentlyDenied: blocked,
+      });
       throw new Error("permission_dismissed");
     }
 
@@ -215,9 +226,15 @@ export function useCallSession(): UseCallSessionReturn {
     } catch (err) {
       const errorName = (err as { name?: string } | null)?.name;
       if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
-        // Re-show the rationale in "forced" mode so the user can jump to
-        // system settings.
-        void ensureCallRationale(kind, { force: true });
+        // Re-check the native status — the user may have ticked "Don't
+        // ask again" in the OS dialog we just showed, in which case the
+        // forced modal must skip the no-op "Allow" CTA.
+        const denial = await ensureCallPermissions(kind);
+        const blocked = isPermanentlyDeniedForCall(kind, denial.status);
+        void ensureCallRationale(kind, {
+          force: true,
+          permanentlyDenied: blocked,
+        });
       }
       throw err;
     }

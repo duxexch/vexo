@@ -16,7 +16,10 @@ import {
 } from "@/lib/chat-call-ops-queue";
 import { useToast } from "@/hooks/use-toast";
 import { ensureCallRationale } from "@/lib/call-permission-rationale";
-import { ensureCallPermissions } from "@/lib/native-call-permissions";
+import {
+  ensureCallPermissions,
+  isPermanentlyDeniedForCall,
+} from "@/lib/native-call-permissions";
 import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
 import { registerCallActionHandler } from "@/lib/call-actions";
 import {
@@ -457,7 +460,13 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
     // user sees.
     const native = await ensureCallPermissions(kind);
     if (!native.granted) {
-      void ensureCallRationale(kind, { force: true });
+      // Hide the no-op "Allow" button and surface "Open settings" as
+      // primary when the OS has stopped showing its runtime dialog.
+      const blocked = isPermanentlyDeniedForCall(kind, native.status);
+      void ensureCallRationale(kind, {
+        force: true,
+        permanentlyDenied: blocked,
+      });
       setPhase("idle");
       return false;
     }
@@ -484,7 +493,15 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
         // "Open settings" CTA. We deliberately do NOT auto-jump to the
         // OS settings screen here — popping the user out of VEX without
         // an explicit tap is jarring and was flagged in code review.
-        void ensureCallRationale(needsVideo ? "video" : "voice", { force: true });
+        // Re-check the native status so a "Don't ask again" tick during
+        // the just-shown OS dialog flips the modal into permanently-
+        // denied mode (Allow hidden, Open Settings primary).
+        const denial = await ensureCallPermissions(kind);
+        const blocked = isPermanentlyDeniedForCall(kind, denial.status);
+        void ensureCallRationale(needsVideo ? "video" : "voice", {
+          force: true,
+          permanentlyDenied: blocked,
+        });
       }
       setPhase("error");
       return false;

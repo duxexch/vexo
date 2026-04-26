@@ -51,13 +51,19 @@ export function CallPermissionPrompt() {
         await openMicrophoneSettings();
     };
 
-    const title = request.forced
+    // Permanent denial implies the modal is forced — even if the user
+    // previously acknowledged the rationale we still want to surface
+    // the "Open Settings" path because re-tapping Allow would silently
+    // do nothing.
+    const isBlocked = request.permanentlyDenied || request.forced;
+
+    const title = isBlocked
         ? t("callPermission.deniedTitle")
         : isVideo
             ? t("callPermission.videoTitle")
             : t("callPermission.voiceTitle");
 
-    const description = request.forced
+    const description = isBlocked
         ? t("callPermission.deniedDescription")
         : isVideo
             ? t("callPermission.videoDescription")
@@ -100,23 +106,36 @@ export function CallPermissionPrompt() {
                     >
                         {t("callPermission.notNow")}
                     </Button>
-                    {request.forced && (
+                    {/*
+                      When the OS will no longer surface the runtime
+                      dialog (Android "Don't ask again"), re-tapping
+                      Allow is a silent no-op. Promote Open Settings to
+                      the primary action and hide Allow entirely so the
+                      user is steered onto the only path that actually
+                      unblocks the call. In the soft "forced" state
+                      (we just got a one-off NotAllowedError but the OS
+                      is still re-promptable) we keep both options
+                      available.
+                    */}
+                    {isBlocked && (
                         <Button
                             type="button"
-                            variant="outline"
+                            variant={request.permanentlyDenied ? "default" : "outline"}
                             onClick={() => void handleOpenSettings()}
                             data-testid="button-call-permission-open-settings"
                         >
                             {t("callPermission.openSettings")}
                         </Button>
                     )}
-                    <Button
-                        type="button"
-                        onClick={handleAllow}
-                        data-testid="button-call-permission-allow"
-                    >
-                        {t("callPermission.allow")}
-                    </Button>
+                    {!request.permanentlyDenied && (
+                        <Button
+                            type="button"
+                            onClick={handleAllow}
+                            data-testid="button-call-permission-allow"
+                        >
+                            {t("callPermission.allow")}
+                        </Button>
+                    )}
                 </DialogFooter>
             </DialogContent>
         </Dialog>

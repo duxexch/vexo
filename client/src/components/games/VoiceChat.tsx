@@ -10,6 +10,10 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { openMicrophoneSettings } from "@/lib/startup-permissions";
 import { ensureCallRationale } from "@/lib/call-permission-rationale";
+import {
+  ensureCallPermissions,
+  isPermanentlyDeniedForCall,
+} from "@/lib/native-call-permissions";
 import { Capacitor } from "@capacitor/core";
 import { Mic, MicOff, Loader2 } from "lucide-react";
 
@@ -405,6 +409,25 @@ export function VoiceChat({
       return null;
     }
 
+    // Native Android: pre-grant the runtime permission via the plugin
+    // BEFORE invoking getUserMedia. Without this step Capacitor 8's
+    // BridgeWebChromeClient auto-resolves the WebView's mic request as
+    // soon as the app's host permission is missing, which is exactly
+    // why the OS popup never appeared in production. Calling
+    // ensureCallPermissions here mirrors the proven path in
+    // use-call-session.tsx and is the actual root-cause fix.
+    const native = await ensureCallPermissions("voice");
+    if (!native.granted) {
+      showMicPermissionToast();
+      const blocked = isPermanentlyDeniedForCall("voice", native.status);
+      void ensureCallRationale("voice", {
+        force: true,
+        permanentlyDenied: blocked,
+      });
+      setConnectionState("error");
+      return null;
+    }
+
     let stream: MediaStream;
     try {
       stream = await acquireMicrophoneStream();
@@ -419,7 +442,11 @@ export function VoiceChat({
         // established pattern in use-call-session.tsx). The modal itself
         // handles native-vs-web settings handoff; we no longer jump straight
         // to openAppSettings() because that bypasses the modal explanation.
-        void ensureCallRationale("voice", { force: true });
+        // Re-check permanent-denial state here — the user may have ticked
+        // "Don't ask again" in the dialog we just surfaced.
+        const denialStatus = await ensureCallPermissions("voice");
+        const blocked = isPermanentlyDeniedForCall("voice", denialStatus.status);
+        void ensureCallRationale("voice", { force: true, permanentlyDenied: blocked });
       } else {
         toast({
           variant: "destructive",

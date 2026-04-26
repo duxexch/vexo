@@ -149,3 +149,98 @@ notifications and overlay permission. The UI:
 The same probe drives the optional one-time startup banner that
 prompts users to review their permissions when one of the call-related
 ones is missing.
+
+---
+
+## 6. Native build & ship (Android AAB + APK)
+
+The Replit container intentionally does **not** carry the JDK 21 +
+Android SDK + signing keystore needed to produce a signed release.
+Builds happen on a developer workstation, then the artifacts are
+committed under `client/public/downloads/` so the in-app installer and
+the public download links stay in sync.
+
+### 6.1. Workstation prerequisites
+
+- JDK 21 on `JAVA_HOME` (Android Gradle Plugin 8.x requires it).
+- Android command-line tools + platform-tools 35.
+- The release keystore at `android/keystore/vex-release-official.jks`.
+  This file is git-ignored — keep it in 1Password / a hardware token,
+  never inside the repo.
+- The two passwords (store + key) in environment variables, never in
+  shell history:
+
+  ```bash
+  export VEX_KEYSTORE_PASSWORD='...'
+  export VEX_KEY_PASSWORD='...'
+  ```
+
+  `capacitor.config.ts` reads these via the Gradle `signingConfigs`
+  block; if they are unset the build deliberately fails fast instead of
+  producing an unsigned binary.
+
+### 6.2. Build steps
+
+```bash
+# 1. Sync the latest web bundle into the native project.
+npm run build
+npx cap sync android
+
+# 2. Produce a signed AAB (for Play Store) and APK (for sideload).
+cd android
+./gradlew bundleRelease assembleRelease
+cd ..
+
+# 3. Copy the artifacts back into the served downloads directory using
+#    the canonical filenames — install-app.tsx, admin-app-settings.tsx
+#    and server/health.ts all hard-code these names.
+cp android/app/build/outputs/bundle/release/app-release.aab \
+   client/public/downloads/VEX-official-release.aab
+cp android/app/build/outputs/apk/release/app-release.apk \
+   client/public/downloads/VEX-official-release.apk
+```
+
+### 6.3. Verify the signature
+
+Before committing, confirm the APK was signed with the official key —
+the SHA-1 fingerprint must match the value registered with Google Play
+and any social login OAuth clients:
+
+```bash
+keytool -printcert -jarfile client/public/downloads/VEX-official-release.apk \
+  | grep 'SHA1:'
+# expect: SHA1: 7F:8D:A0:CB:12:42:1A:7F:90:6D:43:2E:6C:C2:96:1A:DD:AE:C8:B8
+```
+
+If the fingerprint differs, **stop** — installing a mismatched APK over
+an existing install will fail with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`
+on every user's device.
+
+### 6.4. Ship to production
+
+```bash
+git add client/public/downloads/VEX-official-release.aab \
+        client/public/downloads/VEX-official-release.apk
+git commit -m "chore(android): rebuild signed AAB+APK"
+git push origin main
+
+# On the VPS (/docker/vex):
+ssh vex 'cd /docker/vex && ./prod-update.sh'
+```
+
+`prod-update.sh` pulls main, rebuilds the web container, and reloads
+Traefik so the new download links go live without dropping in-flight
+requests.
+
+### 6.5. Manual smoke after install
+
+1. Sideload the new APK on a fresh test device (or wipe app data).
+2. Open the app, navigate to a friend chat, tap **Voice call**.
+3. The native rationale modal must appear, followed by the **Android OS
+   microphone permission dialog**. If the OS dialog does not appear,
+   the regression that motivated Task #124 has returned — re-check
+   that `VoiceChat.tsx` still calls `ensureCallPermissions("voice")`
+   before invoking `getUserMedia`.
+4. On the same device, deny the prompt with **Don't ask again** and
+   retry. The modal should now hide **Allow** entirely and show only
+   **Open settings** (this is the new permanently-denied UX).

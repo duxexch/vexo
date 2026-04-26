@@ -52,6 +52,13 @@ export class NativeCallUIWeb extends WebPlugin implements NativeCallUIPlugin {
     return {
       microphone: await queryBrowserPermission("microphone"),
       camera: await queryBrowserPermission("camera"),
+      // The "permanently denied with Don't ask again" concept does not
+      // exist on the web — the browser never shows a runtime dialog
+      // when the host code did not call `getUserMedia`. We leave both
+      // flags undefined so the JS callers fall back to their default
+      // (re-promptable) behaviour.
+      microphonePermanentlyDenied: false,
+      cameraPermanentlyDenied: false,
     };
   }
 

@@ -29,6 +29,14 @@ export type CallMediaPermissionState =
 export interface CallMediaPermissionStatus {
   microphone: CallMediaPermissionState;
   camera: CallMediaPermissionState;
+  /**
+   * Android-only signal — true when the OS will no longer surface the
+   * runtime dialog because the user previously selected "Don't ask
+   * again" (or device policy hard-blocked the permission). Undefined
+   * on web and iOS, where the platform never reaches this state.
+   */
+  microphonePermanentlyDenied?: boolean;
+  cameraPermanentlyDenied?: boolean;
 }
 
 export interface OverlayPermissionStatus {
@@ -104,6 +112,22 @@ export async function ensureCallPermissions(
   const micBlocked = status.microphone === "denied";
   const camBlocked = kind === "video" && status.camera === "denied";
   return { granted: !micBlocked && !camBlocked, status };
+}
+
+/**
+ * Convenience flag — true when one of the permissions the call kind
+ * needs is in "permanently denied" state (the OS will no longer surface
+ * the runtime dialog). Callers should route the user to system Settings
+ * instead of re-issuing the permission request, which is a silent no-op
+ * in this state. Always returns false on web and iOS.
+ */
+export function isPermanentlyDeniedForCall(
+  kind: CallMediaKind,
+  status: CallMediaPermissionStatus,
+): boolean {
+  if (status.microphonePermanentlyDenied === true) return true;
+  if (kind === "video" && status.cameraPermanentlyDenied === true) return true;
+  return false;
 }
 
 /** Open the system overlay-permission screen (Android only). */

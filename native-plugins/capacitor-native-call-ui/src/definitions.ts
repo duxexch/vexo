@@ -98,6 +98,18 @@ export type CallMediaPermissionState =
 export interface CallMediaPermissionStatus {
   microphone: CallMediaPermissionState;
   camera: CallMediaPermissionState;
+  /**
+   * Optional Android-only signal. `true` when the OS will no longer
+   * surface the runtime dialog for this permission because the user
+   * ticked "Don't ask again" (or device policy hard-blocked it). The
+   * JS layer should respond by routing the user to the system Settings
+   * page rather than re-issuing the runtime request, which would be a
+   * silent no-op.
+   *
+   * Only set on Android. Web and iOS leave these fields undefined.
+   */
+  microphonePermanentlyDenied?: boolean;
+  cameraPermanentlyDenied?: boolean;
 }
 
 export interface OverlayPermissionStatus {

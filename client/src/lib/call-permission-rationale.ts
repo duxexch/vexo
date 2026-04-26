@@ -77,6 +77,15 @@ export interface RationaleRequest {
      * user a clear path to the system settings.
      */
     forced?: boolean;
+    /**
+     * `permanentlyDenied` is set when the OS will no longer surface the
+     * runtime dialog (Android: user ticked "Don't ask again", or device
+     * policy hard-blocked the permission). The modal uses this to swap
+     * its primary CTA from "Allow" — which would be a silent no-op —
+     * to "Open Settings", and to hide the Allow button entirely so the
+     * user is steered onto the path that can actually unblock them.
+     */
+    permanentlyDenied?: boolean;
     resolve: (decision: RationaleResolution) => void;
 }
 
@@ -102,12 +111,16 @@ export function registerRationaleListener(next: Listener): () => void {
  * Ensure the rationale has been acknowledged for the given media kind. If a
  * UI listener is registered the modal will be shown; otherwise the call is
  * allowed through (so headless callers do not deadlock).
+ *
+ * `permanentlyDenied: true` forces the modal open regardless of prior
+ * acknowledgement, because the only path forward is the system Settings
+ * deep-link the modal exposes when this flag is set.
  */
 export function ensureCallRationale(
     kind: CallMediaKind,
-    options: { force?: boolean } = {},
+    options: { force?: boolean; permanentlyDenied?: boolean } = {},
 ): Promise<RationaleResolution> {
-    const force = options.force === true;
+    const force = options.force === true || options.permanentlyDenied === true;
     if (!force && hasSeenCallRationale(kind)) {
         return Promise.resolve("allow");
     }
@@ -123,6 +136,7 @@ export function ensureCallRationale(
         const request: RationaleRequest = {
             kind,
             forced: force,
+            permanentlyDenied: options.permanentlyDenied === true,
             resolve: (decision) => {
                 if (decision === "allow") {
                     markCallRationaleSeen(kind);

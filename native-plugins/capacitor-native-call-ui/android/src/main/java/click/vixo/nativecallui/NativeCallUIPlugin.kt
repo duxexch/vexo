@@ -1,11 +1,14 @@
 package click.vixo.nativecallui
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.getcapacitor.JSObject
 import com.getcapacitor.PermissionState
@@ -55,11 +58,35 @@ class NativeCallUIPlugin : Plugin() {
 
         /** Single alias that bundles the runtime permissions a friend call needs. */
         const val PERMISSION_ALIAS_CALL_MEDIA = "callMedia"
+
+        /**
+         * Persists the "have we ever issued a runtime request for this
+         * permission name?" bit. We need it to disambiguate the two
+         * cases that `shouldShowRequestPermissionRationale` returns
+         * `false` for:
+         *  - first launch, never asked  → still re-promptable
+         *  - asked, denied, "Don't ask again" ticked → permanently denied
+         * Without this tracker we would mark every freshly-installed
+         * device as "permanently denied" and skip straight to Settings,
+         * which would be the worst possible first-run UX.
+         */
+        private const val PREFS_NAME = "vex_native_call_ui_permission_history"
+        private const val PREFS_KEY_REQUESTED_PREFIX = "requested:"
     }
 
     override fun load() {
         instance = this
     }
+
+    private fun historyPrefs(): SharedPreferences =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    private fun markPermissionRequested(name: String) {
+        historyPrefs().edit().putBoolean("$PREFS_KEY_REQUESTED_PREFIX$name", true).apply()
+    }
+
+    private fun hasRequestedPermissionBefore(name: String): Boolean =
+        historyPrefs().getBoolean("$PREFS_KEY_REQUESTED_PREFIX$name", false)
 
     override fun handleOnDestroy() {
         super.handleOnDestroy()
@@ -162,6 +189,13 @@ class NativeCallUIPlugin : Plugin() {
             call.resolve(buildCallMediaState())
             return
         }
+        // Record that we are about to ask the OS for these permissions.
+        // The result of `shouldShowRequestPermissionRationale` is only
+        // meaningful AFTER a request has actually been issued, so the
+        // history flag is what disambiguates "fresh install" from
+        // "user permanently denied".
+        if (needsMic) markPermissionRequested(Manifest.permission.RECORD_AUDIO)
+        if (needsCam) markPermissionRequested(Manifest.permission.CAMERA)
         requestPermissionForAlias(PERMISSION_ALIAS_CALL_MEDIA, call, "callMediaPermissionsCallback")
     }
 
@@ -174,6 +208,12 @@ class NativeCallUIPlugin : Plugin() {
         val ret = JSObject()
         ret.put("microphone", permissionStateString(Manifest.permission.RECORD_AUDIO))
         ret.put("camera", permissionStateString(Manifest.permission.CAMERA))
+        // Permanent-denial flags drive the rationale modal's CTA: when
+        // `microphonePermanentlyDenied` is true the JS layer should swap
+        // its primary action from "Allow" (which the OS will silently
+        // ignore) to "Open Settings".
+        ret.put("microphonePermanentlyDenied", isPermanentlyDenied(Manifest.permission.RECORD_AUDIO))
+        ret.put("cameraPermanentlyDenied", isPermanentlyDenied(Manifest.permission.CAMERA))
         return ret
     }
 
@@ -183,6 +223,25 @@ class NativeCallUIPlugin : Plugin() {
     private fun permissionStateString(name: String): String =
         if (hasPermission(name)) PermissionState.GRANTED.toString()
         else PermissionState.DENIED.toString()
+
+    /**
+     * "Permanently denied" means: we have asked the user before, the
+     * permission is still not granted, and the OS will no longer show
+     * the runtime dialog (`shouldShowRequestPermissionRationale` is
+     * false because the user ticked "Don't ask again", or because the
+     * device policy has hard-blocked the permission). The only way out
+     * is for the user to flip the switch in the system Settings page.
+     *
+     * If `bridge.activity` is unavailable we conservatively return
+     * `false` — better to re-prompt and have the OS no-op than to
+     * mislead the user into Settings on first launch.
+     */
+    private fun isPermanentlyDenied(name: String): Boolean {
+        if (hasPermission(name)) return false
+        if (!hasRequestedPermissionBefore(name)) return false
+        val activity = bridge?.activity ?: return false
+        return !ActivityCompat.shouldShowRequestPermissionRationale(activity, name)
+    }
 
     // -----------------------------------------------------------------
     // SYSTEM_ALERT_WINDOW (display over other apps).
