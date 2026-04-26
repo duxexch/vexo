@@ -29,6 +29,45 @@ const PATCHABLE_THEME_FIELDS = [
 
 type PatchableThemeField = (typeof PATCHABLE_THEME_FIELDS)[number];
 
+const COLOR_FIELDS: ReadonlySet<PatchableThemeField> = new Set([
+  "primaryColor",
+  "secondaryColor",
+  "accentColor",
+  "backgroundColor",
+  "foregroundColor",
+  "cardColor",
+  "mutedColor",
+  "borderColor",
+  "destructiveColor",
+]);
+
+const VALID_MODES = new Set(["dark", "light"]);
+const VALID_SHADOW = new Set(["soft", "medium", "strong"]);
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+// Validate one patch payload. Returns the first error message, or null if OK.
+// Keeps invalid `mode` / `shadowIntensity` / malformed colors out of the DB so
+// the client-side ThemeProvider always receives sane values to inject.
+function validateThemePatch(updates: Partial<Record<PatchableThemeField, unknown>>): string | null {
+  for (const [field, value] of Object.entries(updates)) {
+    const key = field as PatchableThemeField;
+    if (value === null || value === undefined) continue; // null is allowed for optional fields
+    if (typeof value !== "string" && typeof value !== "boolean") {
+      return `Field '${field}' must be a string`;
+    }
+    if (COLOR_FIELDS.has(key) && typeof value === "string" && value !== "" && !HEX_COLOR_RE.test(value)) {
+      return `Field '${field}' must be a #RGB or #RRGGBB hex color`;
+    }
+    if (key === "mode" && typeof value === "string" && value !== "" && !VALID_MODES.has(value)) {
+      return `Field 'mode' must be 'dark' or 'light'`;
+    }
+    if (key === "shadowIntensity" && typeof value === "string" && value !== "" && !VALID_SHADOW.has(value)) {
+      return `Field 'shadowIntensity' must be 'soft', 'medium' or 'strong'`;
+    }
+  }
+  return null;
+}
+
 export function registerThemesRoutes(app: Express) {
 
   app.get("/api/admin/themes", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
@@ -83,6 +122,10 @@ export function registerThemesRoutes(app: Express) {
       }
       if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: "No editable fields supplied" });
+      }
+      const validationError = validateThemePatch(updates);
+      if (validationError) {
+        return res.status(400).json({ error: validationError });
       }
       const [updated] = await db.update(themes)
         .set(updates as Record<string, unknown>)
