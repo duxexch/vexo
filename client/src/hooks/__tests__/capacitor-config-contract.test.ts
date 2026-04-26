@@ -133,6 +133,59 @@ describe("Task #200: capacitor.config.ts server.url contract", () => {
   });
 });
 
+describe("Task #212: capacitor.config.ts server.allowNavigation OAuth domains", () => {
+  // Each entry pairs a domain that MUST stay in `server.allowNavigation`
+  // with the OAuth provider that depends on it. If you remove a domain
+  // here you are also removing the only path the WebView has to that
+  // provider's authorization page on real phones — every login button
+  // for that provider then hangs on a blocked navigation with no
+  // build-time warning. The button on `client/src/pages/login.tsx` is
+  // the user-facing consumer in every case.
+  const OAUTH_DOMAINS: Array<{ domain: string; provider: string }> = [
+    { domain: "accounts.google.com", provider: "Google" },
+    { domain: "www.facebook.com", provider: "Facebook" },
+    { domain: "appleid.apple.com", provider: "Apple" },
+    { domain: "discord.com", provider: "Discord" },
+    { domain: "github.com", provider: "GitHub" },
+    { domain: "api.twitter.com", provider: "Twitter / X" },
+    { domain: "telegram.org", provider: "Telegram" },
+  ];
+
+  function readAllowNavigation(): string {
+    const source = readCapacitorConfigSource();
+    const block = pluginBlock(source, "server");
+    const match = block.match(/allowNavigation:\s*\[([\s\S]*?)\]/);
+    expect(
+      match,
+      "capacitor.config.ts `server` block is missing an `allowNavigation: [ … ]` array. " +
+        "That array is the only path the WebView has to OAuth provider domains on real phones; " +
+        "removing it breaks every social login.",
+    ).not.toBeNull();
+    return match![1];
+  }
+
+  for (const { domain, provider } of OAUTH_DOMAINS) {
+    it(`keeps ${domain} in server.allowNavigation so ${provider} OAuth works on mobile`, () => {
+      const allowList = readAllowNavigation();
+      // Match the domain as a quoted string entry to avoid false
+      // positives from substrings (e.g. a comment that happens to
+      // mention the domain). The entry must be present verbatim.
+      const entryRe = new RegExp(`['"]${domain.replace(/\./g, "\\.")}['"]`);
+      expect(
+        allowList,
+        `server.allowNavigation MUST include '${domain}'. ` +
+          `That domain is the OAuth authorization host for ${provider}; ` +
+          "removing it makes the corresponding login button on " +
+          "client/src/pages/login.tsx hang on a blocked navigation in the " +
+          "Capacitor WebView with no error surfaced to the user. " +
+          "If you are intentionally dropping support for this provider, " +
+          "delete the provider button on the login page in the same change " +
+          "and update this contract test.",
+      ).toMatch(entryRe);
+    });
+  }
+});
+
 describe("Task #200: capacitor.config.ts ios.scheme contract", () => {
   it("pins ios.scheme to 'vexapp' — every OAuth provider calls back into vexapp:// on iOS", () => {
     const source = readCapacitorConfigSource();
