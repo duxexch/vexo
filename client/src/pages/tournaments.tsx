@@ -723,12 +723,14 @@ function TournamentDetailView({ id }: { id: string }) {
   }, [user, userPrimaryCurrency]);
 
   // Picker only applies when:
-  //   - Tournament is a USD/cash tournament (not VXC project currency)
+  //   - Tournament is a USD/cash tournament (explicit, not just
+  //     "anything that isn't project") so future tournament-currency
+  //     types don't accidentally inherit picker behaviour
   //   - The user is multi-currency enabled
   //   - The user has more than one allowed currency to pick from
   // The pre-tournament check `canRegister && safeEntryFee > 0` is applied
   // at the call site below.
-  const isCashTournament = tournamentCurrency !== 'project';
+  const isCashTournament = tournamentCurrency === 'usd';
   const eligibleForPicker = isCashTournament
     && Boolean(user?.multiCurrencyEnabled)
     && userAllowedCurrencies.length > 1;
@@ -934,7 +936,16 @@ function TournamentDetailView({ id }: { id: string }) {
   // sufficiency itself.
   const showWalletPicker = eligibleForPicker && canRegister && safeEntryFee > 0;
   const renderInsufficientBalance = !showWalletPicker && insufficientBalance;
-  const pickerCurrencies = showWalletPicker ? userAllowedCurrencies : [];
+  // When the wallet summary has loaded, intersect with the server's
+  // canonical `allowedCurrencies` so a stale cached `user.allowedCurrencies`
+  // can't surface a wallet the server would reject. We still use the
+  // (primary-first) order from `userAllowedCurrencies` for the UI list.
+  const serverAllowedSet = walletSummary
+    ? new Set(walletSummary.allowedCurrencies.map((c) => normalizeCurrencyCode(c)).filter(Boolean) as string[])
+    : null;
+  const pickerCurrencies = showWalletPicker
+    ? userAllowedCurrencies.filter((code) => !serverAllowedSet || serverAllowedSet.has(code))
+    : [];
   const effectiveSelectedCurrency = selectedWalletCurrency
     ?? userPrimaryCurrency;
   const selectedWalletBalance = walletBalanceMap[effectiveSelectedCurrency] ?? 0;
