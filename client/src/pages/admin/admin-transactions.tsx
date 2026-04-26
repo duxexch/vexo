@@ -6,6 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { useI18n } from "@/lib/i18n";
@@ -17,12 +25,14 @@ import {
   Clock3,
   Copy,
   Loader2,
+  Repeat,
+  RotateCcw,
   Search,
   Wallet,
   XCircle,
 } from "lucide-react";
 
-type TransactionTypeFilter = "all" | "deposit" | "withdrawal";
+type TransactionTypeFilter = "all" | "deposit" | "withdrawal" | "conversion";
 type TransactionStatusFilter = "all" | "pending" | "completed" | "rejected";
 type ProcessStatus = "completed" | "rejected";
 
@@ -193,10 +203,46 @@ export default function AdminTransactionsPage() {
     },
   });
 
+  const [reverseTarget, setReverseTarget] = useState<AdminTransaction | null>(null);
+  const [reverseReason, setReverseReason] = useState("");
+
+  const reverseMutation = useMutation({
+    mutationFn: async ({ transactionId, reason }: { transactionId: string; reason: string }) => {
+      return adminFetch(
+        `/api/admin/wallet-conversion/transactions/${transactionId}/reverse`,
+        {
+          method: "POST",
+          body: JSON.stringify({ reason }),
+        },
+      );
+    },
+    onSuccess: () => {
+      toast({
+        title: isArabic ? "تم عكس التحويل" : "Conversion reversed",
+        description: isArabic
+          ? "تم عكس طرفي التحويل بنجاح"
+          : "Both legs of the conversion have been reversed",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      setReverseTarget(null);
+      setReverseReason("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: isArabic ? "تعذر عكس التحويل" : "Could not reverse conversion",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const statsByType = useMemo(() => {
     const deposits = transactionRows.filter((tx) => tx.type === "deposit").length;
     const withdrawals = transactionRows.filter((tx) => tx.type === "withdrawal").length;
-    return { deposits, withdrawals };
+    const conversions = transactionRows.filter(
+      (tx) => tx.type === "currency_conversion",
+    ).length;
+    return { deposits, withdrawals, conversions };
   }, [transactionRows]);
 
   const activeTransactionId = processMutation.variables?.id;
@@ -367,6 +413,9 @@ export default function AdminTransactionsPage() {
               <TabsTrigger value="all">{isArabic ? "الكل" : "All"}</TabsTrigger>
               <TabsTrigger value="deposit">{isArabic ? "إيداع" : "Deposits"}</TabsTrigger>
               <TabsTrigger value="withdrawal">{isArabic ? "سحب" : "Withdrawals"}</TabsTrigger>
+              <TabsTrigger value="conversion" data-testid="filter-type-conversion">
+                {isArabic ? "تحويلات المحفظة" : "Conversions"}
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -417,11 +466,28 @@ export default function AdminTransactionsPage() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={transaction.type === "deposit" ? "default" : "secondary"} className="gap-1">
-                          {transaction.type === "deposit" ? <ArrowDownToLine className="h-3.5 w-3.5" /> : <ArrowUpFromLine className="h-3.5 w-3.5" />}
+                        <Badge
+                          variant={
+                            transaction.type === "deposit"
+                              ? "default"
+                              : transaction.type === "currency_conversion"
+                                ? "outline"
+                                : "secondary"
+                          }
+                          className="gap-1"
+                        >
+                          {transaction.type === "deposit" ? (
+                            <ArrowDownToLine className="h-3.5 w-3.5" />
+                          ) : transaction.type === "currency_conversion" ? (
+                            <Repeat className="h-3.5 w-3.5" />
+                          ) : (
+                            <ArrowUpFromLine className="h-3.5 w-3.5" />
+                          )}
                           {transaction.type === "deposit"
                             ? (isArabic ? "إيداع" : "Deposit")
-                            : (isArabic ? "سحب" : "Withdrawal")}
+                            : transaction.type === "currency_conversion"
+                              ? (isArabic ? "تحويل عملة" : "Conversion")
+                              : (isArabic ? "سحب" : "Withdrawal")}
                         </Badge>
                         {getStatusBadge(transaction.status)}
                         <Badge variant="outline">
@@ -455,7 +521,44 @@ export default function AdminTransactionsPage() {
                       </p>
                     )}
 
-                    {isPendingTransaction ? (
+                    {transaction.type === "currency_conversion" ? (
+                      (() => {
+                        const isReversalRow = (transaction.description || "")
+                          .trim()
+                          .toLowerCase()
+                          .startsWith("reversal:");
+                        const isReversingThis =
+                          reverseMutation.isPending &&
+                          reverseMutation.variables?.transactionId === transaction.id;
+                        return (
+                          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                            {isReversalRow ? (
+                              <Badge variant="secondary" data-testid={`conversion-reversal-${transaction.id}`}>
+                                {isArabic ? "صف عكسي" : "Reversal entry"}
+                              </Badge>
+                            ) : (
+                              <Button
+                                variant="destructive"
+                                className="min-h-[44px] w-full sm:w-auto"
+                                onClick={() => {
+                                  setReverseTarget(transaction);
+                                  setReverseReason("");
+                                }}
+                                disabled={reverseMutation.isPending}
+                                data-testid={`reverse-conversion-${transaction.id}`}
+                              >
+                                {isReversingThis ? (
+                                  <Loader2 className="h-4 w-4 animate-spin me-1" />
+                                ) : (
+                                  <RotateCcw className="h-4 w-4 me-1" />
+                                )}
+                                {isArabic ? "عكس التحويل" : "Reverse"}
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })()
+                    ) : isPendingTransaction ? (
                       <>
                         <div className="grid gap-3 lg:grid-cols-2">
                           <div className="space-y-1">
@@ -534,6 +637,107 @@ export default function AdminTransactionsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={reverseTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !reverseMutation.isPending) {
+            setReverseTarget(null);
+            setReverseReason("");
+          }
+        }}
+      >
+        <DialogContent data-testid="reverse-conversion-dialog">
+          <DialogHeader>
+            <DialogTitle>
+              {isArabic ? "عكس تحويل المحفظة" : "Reverse Wallet Conversion"}
+            </DialogTitle>
+            <DialogDescription>
+              {isArabic
+                ? "سيتم إعادة الأموال إلى عملة المصدر وخصمها من عملة الوجهة. إذا لم يكن لدى المستخدم رصيد كافٍ في الوجهة، سيتم رفض العملية."
+                : "Funds will be returned to the source currency and debited from the destination. The reversal is rejected if the user no longer has sufficient destination balance."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {reverseTarget ? (
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">
+                  {isArabic ? "المرجع" : "Reference"}:
+                </span>{" "}
+                {getDisplayReference(reverseTarget)}
+              </p>
+              {reverseTarget.description ? (
+                <p className="break-words">{reverseTarget.description}</p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground" htmlFor="reverse-reason">
+              {isArabic ? "السبب (إلزامي)" : "Reason (required)"}
+            </label>
+            <Textarea
+              id="reverse-reason"
+              rows={3}
+              value={reverseReason}
+              onChange={(e) => setReverseReason(e.target.value)}
+              placeholder={
+                isArabic
+                  ? "اشرح سبب عكس هذا التحويل..."
+                  : "Explain why this conversion is being reversed..."
+              }
+              data-testid="reverse-conversion-reason"
+            />
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!reverseMutation.isPending) {
+                  setReverseTarget(null);
+                  setReverseReason("");
+                }
+              }}
+              disabled={reverseMutation.isPending}
+              data-testid="reverse-conversion-cancel"
+            >
+              {isArabic ? "إلغاء" : "Cancel"}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!reverseTarget) return;
+                const trimmed = reverseReason.trim();
+                if (!trimmed) {
+                  toast({
+                    title: isArabic ? "مطلوب سبب" : "Reason required",
+                    description: isArabic
+                      ? "الرجاء إدخال سبب لعكس التحويل"
+                      : "Please provide a reason for the reversal",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                reverseMutation.mutate({
+                  transactionId: reverseTarget.id,
+                  reason: trimmed,
+                });
+              }}
+              disabled={reverseMutation.isPending || reverseReason.trim().length === 0}
+              data-testid="reverse-conversion-confirm"
+            >
+              {reverseMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin me-1" />
+              ) : (
+                <RotateCcw className="h-4 w-4 me-1" />
+              )}
+              {isArabic ? "تأكيد العكس" : "Confirm Reversal"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

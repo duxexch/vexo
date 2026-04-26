@@ -19,7 +19,7 @@ import { adjustUserCurrencyBalance, bumpPrimaryDepositWithdrawalTotals } from ".
 import { normalizeCurrencyCode } from "../lib/p2p-currency-controls";
 
 type ProcessableStatus = "approved" | "completed" | "rejected";
-type ArchiveTypeFilter = "all" | "deposit" | "withdrawal";
+type ArchiveTypeFilter = "all" | "deposit" | "withdrawal" | "conversion";
 type ArchiveStatusFilter = "all" | "pending" | "completed" | "rejected";
 
 type HttpError = Error & { statusCode?: number };
@@ -45,7 +45,7 @@ function parseApprovedAmount(rawAmount: unknown): number | undefined {
 
 function normalizeTypeFilter(rawValue: unknown): ArchiveTypeFilter {
   const normalized = typeof rawValue === "string" ? rawValue.trim().toLowerCase() : "";
-  if (normalized === "deposit" || normalized === "withdrawal") {
+  if (normalized === "deposit" || normalized === "withdrawal" || normalized === "conversion") {
     return normalized;
   }
   return "all";
@@ -64,6 +64,7 @@ function inferTypeFromSearch(searchLower: string): Exclude<ArchiveTypeFilter, "a
 
   const depositKeywords = ["deposit", "dep", "ايداع", "إيداع"];
   const withdrawalKeywords = ["withdraw", "withdrawal", "سحب"];
+  const conversionKeywords = ["convert", "conversion", "تحويل"];
 
   if (depositKeywords.some((keyword) => searchLower.includes(keyword.toLowerCase()))) {
     return "deposit";
@@ -71,6 +72,10 @@ function inferTypeFromSearch(searchLower: string): Exclude<ArchiveTypeFilter, "a
 
   if (withdrawalKeywords.some((keyword) => searchLower.includes(keyword.toLowerCase()))) {
     return "withdrawal";
+  }
+
+  if (conversionKeywords.some((keyword) => searchLower.includes(keyword.toLowerCase()))) {
+    return "conversion";
   }
 
   return undefined;
@@ -149,12 +154,19 @@ export function registerAdminTransactionsRoutes(app: Express) {
       const effectiveTypeFilter: ArchiveTypeFilter = typeFilter === "all" ? (inferredType || "all") : typeFilter;
       const effectiveStatusFilter: ArchiveStatusFilter = statusFilter === "all" ? (inferredStatus || "all") : statusFilter;
 
-      const scopedConditions: SQL[] = [
-        inArray(transactions.type, ["deposit", "withdrawal"] as const),
-      ];
-
-      if (effectiveTypeFilter !== "all") {
+      // Default "all" view stays scoped to deposit/withdrawal so the
+      // existing admin transactions screen doesn't change behavior.
+      // Currency conversions are surfaced ONLY when the new
+      // `?type=conversion` filter is requested explicitly (Task #131).
+      const scopedConditions: SQL[] = [];
+      if (effectiveTypeFilter === "conversion") {
+        scopedConditions.push(eq(transactions.type, "currency_conversion"));
+      } else if (effectiveTypeFilter === "deposit" || effectiveTypeFilter === "withdrawal") {
         scopedConditions.push(eq(transactions.type, effectiveTypeFilter));
+      } else {
+        scopedConditions.push(
+          inArray(transactions.type, ["deposit", "withdrawal"] as const),
+        );
       }
 
       const searchCondition = buildSmartSearchCondition(safeSearch);

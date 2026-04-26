@@ -35,9 +35,12 @@ import { getDepositFxSnapshot } from "../../lib/deposit-fx";
 import {
   WALLET_CONVERSION_ENABLED_KEY,
   WALLET_CONVERSION_FEE_PCT_KEY,
+  WalletConversionReversalError,
   executeWalletConversion,
   quoteWalletConversion,
+  reverseWalletConversion,
 } from "../../lib/currency-conversion";
+import { sanitizeNullablePlainText } from "../../lib/input-security";
 
 const APP_SETTING_CATEGORY = "wallet";
 
@@ -360,6 +363,83 @@ export function registerWalletConversionRoutes(app: Express): void {
       res.status(500).json({ error: getErrorMessage(error) });
     }
   });
+
+  // Admin reversal of a completed wallet conversion (Task #131).
+  // The transaction id can be either of the two paired conversion legs;
+  // the helper resolves the partner via referenceId.
+  app.post(
+    "/api/admin/wallet-conversion/transactions/:transactionId/reverse",
+    adminAuthMiddleware,
+    async (req: AdminRequest, res: Response) => {
+      try {
+        const adminId = req.admin?.id;
+        if (!adminId) {
+          return res.status(401).json({ error: "Admin authentication required" });
+        }
+
+        const { transactionId } = req.params;
+        if (!transactionId) {
+          return res.status(400).json({ error: "transactionId is required" });
+        }
+
+        const reason = sanitizeNullablePlainText(req.body?.reason, 500)?.trim() || "";
+        if (!reason) {
+          return res.status(400).json({
+            error: "A non-empty `reason` is required to reverse a conversion",
+          });
+        }
+
+        const result = await reverseWalletConversion({
+          transactionId,
+          adminId,
+          reason,
+        });
+
+        await logAdminAction(
+          adminId,
+          "wallet_conversion_reverse",
+          "transaction",
+          result.reversedSourceLegId,
+          {
+            previousValue: JSON.stringify({
+              sourceLegId: result.reversedSourceLegId,
+              destinationLegId: result.reversedDestinationLegId,
+              sourceAmount: result.sourceAmount.toFixed(2),
+              destinationAmount: result.destinationAmount.toFixed(2),
+              sourceCurrency: result.sourceCurrency,
+              destinationCurrency: result.destinationCurrency,
+            }),
+            newValue: JSON.stringify({
+              newSourceCreditLegId: result.newSourceCreditLegId,
+              newDestinationDebitLegId: result.newDestinationDebitLegId,
+              sourceBalanceAfter: result.sourceBalanceAfter.toFixed(2),
+              destinationBalanceAfter: result.destinationBalanceAfter.toFixed(2),
+            }),
+            reason,
+          },
+          req,
+        );
+
+        res.json({
+          message: "Conversion reversed successfully",
+          ...result,
+          sourceAmount: result.sourceAmount.toFixed(2),
+          destinationAmount: result.destinationAmount.toFixed(2),
+          sourceBalanceAfter: result.sourceBalanceAfter.toFixed(2),
+          destinationBalanceAfter: result.destinationBalanceAfter.toFixed(2),
+        });
+      } catch (error: unknown) {
+        if (error instanceof WalletConversionReversalError) {
+          return res.status(error.statusCode).json({
+            error: error.message,
+            code: error.code,
+          });
+        }
+        const message = getErrorMessage(error);
+        res.status(500).json({ error: message });
+      }
+    },
+  );
 
   app.patch(
     "/api/admin/users/:id/currency-conversion-disabled",

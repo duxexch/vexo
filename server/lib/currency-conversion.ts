@@ -13,9 +13,9 @@
  * row is locked FOR UPDATE before any balance touch.
  */
 
-import { transactions, users } from "@shared/schema";
+import { transactions, users, type Transaction } from "@shared/schema";
 import { db } from "../db";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import { adjustUserCurrencyBalance } from "./wallet-balances";
 import {
   convertDepositAmountToUsd,
@@ -210,6 +210,306 @@ export async function executeWalletConversion(input: ExecuteConversionInput): Pr
       quote,
       fromBalanceAfter: debit.balanceAfter,
       toBalanceAfter: credit.balanceAfter,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Reversal — admin-initiated undo of a completed conversion (Task #131).
+// ---------------------------------------------------------------------------
+
+/**
+ * Marker that the description on a reversal-leg row starts with so we can
+ * (a) detect "this conversion has already been reversed" and (b) hide /
+ * disable the Reverse button on the UI for rows that ARE reversal legs.
+ */
+export const CONVERSION_REVERSAL_DESCRIPTION_PREFIX = "Reversal:";
+
+export interface ReverseConversionInput {
+  /** Either of the two paired conversion legs is acceptable. */
+  transactionId: string;
+  /** Admin id for the audit log; the helper itself does not write the log. */
+  adminId: string;
+  /** Mandatory free-text reason; surfaces in admin audit + the new rows. */
+  reason: string;
+}
+
+export interface ReverseConversionResult {
+  /** The two original legs we just reversed. */
+  reversedSourceLegId: string;
+  reversedDestinationLegId: string;
+  /** The two NEW rows inserted as the reversal. */
+  newSourceCreditLegId: string;
+  newDestinationDebitLegId: string;
+  sourceCurrency: string;
+  destinationCurrency: string;
+  sourceAmount: number;
+  destinationAmount: number;
+  sourceBalanceAfter: number;
+  destinationBalanceAfter: number;
+}
+
+export class WalletConversionReversalError extends Error {
+  readonly code:
+    | "TRANSACTION_NOT_FOUND"
+    | "NOT_A_CONVERSION"
+    | "PAIR_NOT_FOUND"
+    | "ALREADY_REVERSED"
+    | "INSUFFICIENT_DESTINATION_BALANCE";
+  readonly statusCode: number;
+  constructor(
+    code: WalletConversionReversalError["code"],
+    message: string,
+    statusCode: number,
+  ) {
+    super(message);
+    this.code = code;
+    this.statusCode = statusCode;
+    this.name = "WalletConversionReversalError";
+  }
+}
+
+/**
+ * Determines which of two paired conversion legs was the debit (source) and
+ * which was the credit (destination). The debit leg's wallet balance went
+ * down so `balanceAfter < balanceBefore`; the credit leg's went up. This is
+ * used instead of relying on description string parsing because descriptions
+ * are admin-customisable and i18n'd.
+ */
+function classifyLegs(
+  legA: Transaction,
+  legB: Transaction,
+): { debit: Transaction; credit: Transaction } {
+  const aBefore = Number.parseFloat(legA.balanceBefore ?? "0");
+  const aAfter = Number.parseFloat(legA.balanceAfter ?? "0");
+  const aDelta = aAfter - aBefore;
+  if (aDelta < 0) {
+    return { debit: legA, credit: legB };
+  }
+  return { debit: legB, credit: legA };
+}
+
+/**
+ * Atomic two-leg balance reversal of an existing completed conversion.
+ *
+ * Looks up the transaction by id, finds its paired leg via `referenceId`,
+ * locks the user row FOR UPDATE, refunds the source wallet, debits the
+ * destination wallet (will throw `INSUFFICIENT_DESTINATION_BALANCE` if the
+ * user has spent the credited amount), and inserts two NEW
+ * `currency_conversion` rows whose description starts with the marker
+ * `Reversal:` and whose `referenceId` points at the original legs they
+ * undo. The original legs are intentionally left as `status = "completed"`
+ * for audit-trail accuracy — the reversal is recorded as new entries, not
+ * by re-writing history.
+ *
+ * Idempotency: if a row with `referenceId` matching either of the original
+ * legs and a "Reversal:"-prefixed description already exists, the helper
+ * throws `ALREADY_REVERSED` so admins cannot double-reverse.
+ */
+export async function reverseWalletConversion(
+  input: ReverseConversionInput,
+): Promise<ReverseConversionResult> {
+  return await db.transaction(async (tx) => {
+    const [seed] = await tx
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, input.transactionId));
+
+    if (!seed) {
+      throw new WalletConversionReversalError(
+        "TRANSACTION_NOT_FOUND",
+        "Transaction not found",
+        404,
+      );
+    }
+
+    if (seed.type !== "currency_conversion") {
+      throw new WalletConversionReversalError(
+        "NOT_A_CONVERSION",
+        "Only currency_conversion transactions can be reversed",
+        400,
+      );
+    }
+
+    if (seed.description?.startsWith(CONVERSION_REVERSAL_DESCRIPTION_PREFIX)) {
+      throw new WalletConversionReversalError(
+        "NOT_A_CONVERSION",
+        "Cannot reverse a reversal-leg row — locate the original conversion instead",
+        400,
+      );
+    }
+
+    // Only completed conversions are reversible. Anything else (pending,
+    // rejected, cancelled) was never applied to balances and must not be
+    // double-undone.
+    if (seed.status !== "completed") {
+      throw new WalletConversionReversalError(
+        "NOT_A_CONVERSION",
+        `Only completed conversions can be reversed (status was '${seed.status}')`,
+        400,
+      );
+    }
+
+    if (!seed.referenceId) {
+      throw new WalletConversionReversalError(
+        "PAIR_NOT_FOUND",
+        "Conversion is missing its paired leg reference",
+        400,
+      );
+    }
+
+    // CRITICAL: acquire FOR UPDATE on the user row BEFORE the duplicate
+    // check, so two concurrent reverse calls serialize on this lock.
+    // Without this, both could read "no existing reversal" and proceed
+    // to insert two reversal pairs (and double-move balances). With the
+    // lock, the second caller waits, then re-runs the duplicate check
+    // and sees the rows committed by the first caller.
+    const [locked] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, seed.userId))
+      .for("update");
+    if (!locked) {
+      throw new WalletConversionReversalError(
+        "TRANSACTION_NOT_FOUND",
+        "User no longer exists",
+        404,
+      );
+    }
+
+    const [pair] = await tx
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, seed.referenceId));
+
+    if (!pair || pair.type !== "currency_conversion" || pair.userId !== seed.userId) {
+      throw new WalletConversionReversalError(
+        "PAIR_NOT_FOUND",
+        "Paired conversion leg not found or belongs to a different user",
+        400,
+      );
+    }
+
+    if (pair.status !== "completed") {
+      throw new WalletConversionReversalError(
+        "NOT_A_CONVERSION",
+        `Paired leg is not in a reversible state (status was '${pair.status}')`,
+        400,
+      );
+    }
+
+    // Idempotency check (now under user FOR UPDATE — see lock comment
+    // above). If either original leg already has a "Reversal:"-prefixed
+    // row pointing at it, refuse to reverse again.
+    const existingReversal = await tx
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(
+        and(
+          inArray(transactions.referenceId, [seed.id, pair.id]),
+          eq(transactions.type, "currency_conversion"),
+          like(transactions.description, `${CONVERSION_REVERSAL_DESCRIPTION_PREFIX}%`),
+        ),
+      )
+      .limit(1);
+
+    if (existingReversal.length > 0) {
+      throw new WalletConversionReversalError(
+        "ALREADY_REVERSED",
+        "This conversion has already been reversed",
+        409,
+      );
+    }
+
+    const { debit: sourceLeg, credit: destinationLeg } = classifyLegs(seed, pair);
+    const sourceCurrency = normalizeCurrencyCode(sourceLeg.walletCurrencyCode) ||
+      sourceLeg.walletCurrencyCode || "USD";
+    const destinationCurrency = normalizeCurrencyCode(destinationLeg.walletCurrencyCode) ||
+      destinationLeg.walletCurrencyCode || "USD";
+    const sourceAmount = Number.parseFloat(sourceLeg.amount);
+    const destinationAmount = Number.parseFloat(destinationLeg.amount);
+
+    if (!Number.isFinite(sourceAmount) || sourceAmount <= 0 ||
+        !Number.isFinite(destinationAmount) || destinationAmount <= 0) {
+      throw new WalletConversionReversalError(
+        "PAIR_NOT_FOUND",
+        "Conversion legs have invalid amounts",
+        400,
+      );
+    }
+
+    // Refund source wallet first (always succeeds — adding funds), then
+    // debit destination wallet (may fail if user has spent the credit).
+    const sourceCredit = await adjustUserCurrencyBalance(
+      tx,
+      sourceLeg.userId,
+      sourceCurrency,
+      sourceAmount,
+      { allowCreate: true },
+    );
+
+    let destinationDebit;
+    try {
+      destinationDebit = await adjustUserCurrencyBalance(
+        tx,
+        destinationLeg.userId,
+        destinationCurrency,
+        -destinationAmount,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (/^Insufficient/.test(message)) {
+        throw new WalletConversionReversalError(
+          "INSUFFICIENT_DESTINATION_BALANCE",
+          `Cannot reverse: user no longer has ${destinationAmount.toFixed(2)} ${destinationCurrency} in their wallet (${message})`,
+          409,
+        );
+      }
+      throw err;
+    }
+
+    const safeReason = (input.reason || "").trim().slice(0, 500) || "(no reason given)";
+    const reversalDescription = `${CONVERSION_REVERSAL_DESCRIPTION_PREFIX} reversal of conversion ${sourceLeg.publicReference || sourceLeg.id} ↔ ${destinationLeg.publicReference || destinationLeg.id}. Reason: ${safeReason}`;
+
+    const [newSourceCredit] = await tx.insert(transactions).values({
+      userId: sourceLeg.userId,
+      type: "currency_conversion",
+      status: "completed",
+      amount: sourceAmount.toFixed(2),
+      balanceBefore: sourceCredit.balanceBefore.toFixed(2),
+      balanceAfter: sourceCredit.balanceAfter.toFixed(2),
+      description: reversalDescription,
+      walletCurrencyCode: sourceCurrency,
+      referenceId: sourceLeg.id,
+      processedBy: input.adminId || null,
+      processedAt: new Date(),
+    }).returning();
+
+    const [newDestinationDebit] = await tx.insert(transactions).values({
+      userId: destinationLeg.userId,
+      type: "currency_conversion",
+      status: "completed",
+      amount: destinationAmount.toFixed(2),
+      balanceBefore: destinationDebit.balanceBefore.toFixed(2),
+      balanceAfter: destinationDebit.balanceAfter.toFixed(2),
+      description: reversalDescription,
+      walletCurrencyCode: destinationCurrency,
+      referenceId: destinationLeg.id,
+      processedBy: input.adminId || null,
+      processedAt: new Date(),
+    }).returning();
+
+    return {
+      reversedSourceLegId: sourceLeg.id,
+      reversedDestinationLegId: destinationLeg.id,
+      newSourceCreditLegId: newSourceCredit!.id,
+      newDestinationDebitLegId: newDestinationDebit!.id,
+      sourceCurrency,
+      destinationCurrency,
+      sourceAmount,
+      destinationAmount,
+      sourceBalanceAfter: sourceCredit.balanceAfter,
+      destinationBalanceAfter: destinationDebit.balanceAfter,
     };
   });
 }
