@@ -333,15 +333,20 @@ async function callRoute(
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-beforeAll(() => {
-  if (!process.env.DATABASE_URL) {
-    throw new Error(
-      "DATABASE_URL is required for wallet-routing-end-to-end tests (real DB).",
-    );
-  }
-});
+const HAS_DB = Boolean(process.env.DATABASE_URL);
+
+if (!HAS_DB) {
+  // Surface the skip reason once per file run so a developer running
+  // unit-only locally without a Postgres provisioned isn't left wondering
+  // why the suite is empty.
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[wallet-routing-end-to-end] DATABASE_URL is not set — skipping real-DB suite.",
+  );
+}
 
 afterEach(async () => {
+  if (!HAS_DB) return;
   await cleanup();
 });
 
@@ -357,7 +362,7 @@ afterAll(async () => {
 // Tournament register: wallet routing
 // ---------------------------------------------------------------------------
 
-describe("Tournament register (real DB): wallet routing", () => {
+describe.skipIf(!HAS_DB)("Tournament register (real DB): wallet routing", () => {
   it("debits the chosen EUR sub-wallet, leaves the primary USD untouched, and stamps walletCurrency on the participant", async () => {
     const userId = await createUser({
       primary: "USD",
@@ -432,7 +437,7 @@ describe("Tournament register (real DB): wallet routing", () => {
 // Tournament unregister: wallet routing
 // ---------------------------------------------------------------------------
 
-describe("Tournament unregister (real DB): wallet routing", () => {
+describe.skipIf(!HAS_DB)("Tournament unregister (real DB): wallet routing", () => {
   it("refunds the entry fee back to the EUR sub-wallet recorded on the participant row (primary USD untouched)", async () => {
     const userId = await createUser({
       primary: "USD",
@@ -498,7 +503,7 @@ describe("Tournament unregister (real DB): wallet routing", () => {
 // P2P trade create (escrow debit) — wallet routing
 // ---------------------------------------------------------------------------
 
-describe("createP2PTradeAtomic (real DB): escrow debit routing", () => {
+describe.skipIf(!HAS_DB)("createP2PTradeAtomic (real DB): escrow debit routing", () => {
   it("debits the seller's EUR sub-wallet (primary USD untouched) and stamps walletCurrency on the trade when the offer is in EUR", async () => {
     const sellerId = await createUser({
       primary: "USD",
@@ -594,7 +599,7 @@ describe("createP2PTradeAtomic (real DB): escrow debit routing", () => {
 // UPDATE between the create call and the settle call.
 // ---------------------------------------------------------------------------
 
-describe("P2P lifecycle (real DB): create → settle wallet routing end-to-end", () => {
+describe.skipIf(!HAS_DB)("P2P lifecycle (real DB): create → settle wallet routing end-to-end", () => {
   it("EUR offer → create → complete: seller EUR debited, buyer EUR credited (escrow − fee), neither primary balance touched", async () => {
     const sellerId = await createUser({
       primary: "USD",
