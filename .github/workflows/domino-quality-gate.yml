@@ -77,7 +77,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Three of the six smokes (playthrough-bounds, playthrough-pips,
+      # Four of the six smokes (playthrough-bounds, playthrough-pips,
       # elbow-mirror, table-fit-28) drive a real Chromium via Playwright
       # against a Vite-served harness. Cache the browser binaries between
       # runs to keep the gate well under five minutes on a warm cache.
