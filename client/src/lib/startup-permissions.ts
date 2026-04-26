@@ -2,18 +2,28 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
 import {
-    checkCallPermissions,
-    type CallMediaPermissionState,
-    type OverlayPermissionStatus,
-} from "@/lib/native-call-permissions";
+    PERMISSION_CATALOGUE,
+    probeAllPermissions,
+    type PermissionId,
+    type PermissionResult,
+} from "@/lib/permission-catalogue";
 
-export type PermissionResult = "granted" | "denied" | "prompt" | "unavailable";
+// Re-export `PermissionResult` so existing imports from this module
+// continue to compile after the refactor.
+export type { PermissionResult } from "@/lib/permission-catalogue";
 
-export type PermissionSummary = {
-    notifications: PermissionResult;
-    microphone: PermissionResult;
-    camera: PermissionResult;
-    overlay: PermissionResult;
+/**
+ * Snapshot of every device permission VEX cares about. The first eight
+ * fields are derived from {@link PERMISSION_CATALOGUE}; the trailing
+ * `nativePush` and `nativeLocalNotifications` fields are kept as
+ * separate signals because they only apply on Capacitor builds and
+ * existing call sites already read them by name.
+ *
+ * Adding a new permission means adding ONE entry to the catalogue and
+ * letting TypeScript flag every place that needs to handle the new
+ * field — no parallel switch to maintain.
+ */
+export type PermissionSummary = Record<PermissionId, PermissionResult> & {
     nativePush: PermissionResult;
     nativeLocalNotifications: PermissionResult;
     checkedAt: string;
