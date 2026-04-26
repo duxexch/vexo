@@ -13,6 +13,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { useI18n } from '@/lib/i18n';
+import { useAuth } from '@/lib/auth';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import {
   Gamepad2, Dices, Target, CircleDot, Trophy, Coins,
@@ -457,6 +458,7 @@ function InGameChat({
 }) {
   const { language, t } = useI18n();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [message, setMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -465,16 +467,29 @@ function InGameChat({
     queryKey: ['/api/gameplay/emojis'],
   });
 
-  // Task #139: chat history is fetched ONCE on mount (no more 2s polling).
-  // After hydration, new text messages arrive via the realtime socket
-  // (`realtimeChat.messages`) and emoji sends append the REST response
-  // locally. Reloads / re-mounts re-fetch via this query so persisted
-  // history survives a navigation away.
-  const { data: historyMessages } = useQuery<HistoryGameplayMessage[]>({
+  // Task #139: chat history is fetched on mount and again whenever the
+  // browser reconnects to the network (no more 2s polling). After the
+  // initial hydration, new text messages arrive over the realtime
+  // socket (`realtimeChat.messages`) and emoji sends append the REST
+  // response locally. The reconnect refetch is the safety net for two
+  // separate failure modes the architect review flagged:
+  //   1. Brief client-side socket disconnect → any text or emoji sent
+  //      while we were offline is replayed via the persisted
+  //      `gameplay_messages` history list (the renderer's de-dup keys
+  //      collapse it against bubbles we already showed).
+  //   2. Best-effort emoji fan-out from the REST handler fails for the
+  //      peer (e.g. transient Redis adapter hiccup) → the peer's next
+  //      socket reconnect triggers this refetch and the missed emoji
+  //      bubble appears without a manual reload.
+  // We additionally fire a manual refetch whenever the socket layer
+  // itself reports a fresh `connected` transition (see effect below),
+  // because tab-foregrounding on mobile can re-establish the socket
+  // without firing a window-level `online` event.
+  const { data: historyMessages, refetch: refetchHistory } = useQuery<HistoryGameplayMessage[]>({
     queryKey: ['/api/gameplay/messages', matchId],
     refetchInterval: false,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: true,
     staleTime: Infinity,
   });
 
@@ -532,6 +547,25 @@ function InGameChat({
   const headerViewerCount = realtimeChat.viewerCountReceived
     ? realtimeChat.viewerCount
     : 0;
+
+  // Task #139 (architect follow-up): catch-up refetch on socket reconnect.
+  // We only refetch on the false→true transition so we don't slam the
+  // history endpoint while the socket churns during slow networks.
+  // Initial mount is already covered by useQuery's first fetch, so we
+  // skip the very first `connected = true` to avoid a duplicate request.
+  const wasConnectedRef = useRef(false);
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      wasConnectedRef.current = realtimeChat.connected;
+      return;
+    }
+    if (realtimeChat.connected && !wasConnectedRef.current) {
+      void refetchHistory();
+    }
+    wasConnectedRef.current = realtimeChat.connected;
+  }, [realtimeChat.connected, refetchHistory]);
 
   // Task #139: optimistically-added emoji sends from this client. The
   // REST `/api/gameplay/messages` endpoint still owns the balance debit
@@ -631,6 +665,7 @@ function InGameChat({
     history: historyMessages || [],
     realtime: realtimeChat.messages,
     localEmojiSends,
+    ownUserId: user?.id,
   });
 
   useEffect(() => {
