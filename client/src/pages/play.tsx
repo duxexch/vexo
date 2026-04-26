@@ -922,7 +922,7 @@ function FullScreenGameplay({
         {/* Chat Panel - only show for multiplayer matches */}
         {matchId && showChat && (
           <div className="hidden md:block w-80 border-s">
-            <InGameChat matchId={matchId} userBalance={userBalance} />
+            <InGameChat key={matchId} matchId={matchId} userBalance={userBalance} />
           </div>
         )}
       </div>
@@ -930,7 +930,7 @@ function FullScreenGameplay({
       {/* Mobile Chat (slide up) */}
       {matchId && showChat && (
         <div className="md:hidden fixed bottom-0 inset-x-0 h-64 border-t bg-background z-50">
-          <InGameChat matchId={matchId} userBalance={userBalance} />
+          <InGameChat key={matchId} matchId={matchId} userBalance={userBalance} />
         </div>
       )}
     </div>
