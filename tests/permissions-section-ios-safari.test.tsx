@@ -89,18 +89,11 @@ const baseSummary = {
   checkedAt: new Date(0).toISOString(),
 };
 
-vi.mock("@/lib/startup-permissions", async () => {
-  const actual =
-    await vi.importActual<typeof import("@/lib/startup-permissions")>(
-      "@/lib/startup-permissions",
-    );
-  return {
-    ...actual,
-    getCachedPermissionSummary: () => baseSummary,
-    refreshPermissionSummary: async () => baseSummary,
-    openAppSettings: vi.fn(async () => {}),
-  };
-});
+vi.mock("@/lib/startup-permissions", () => ({
+  getCachedPermissionSummary: () => baseSummary,
+  refreshPermissionSummary: async () => baseSummary,
+  openAppSettings: vi.fn(async () => {}),
+}));
 
 // ---------------------------------------------------------------------
 // Imports below the mocks.
@@ -161,8 +154,13 @@ describe("Task #221: PermissionsSection — iOS Safari tab fallback", () => {
 
     render(<PermissionsSection />);
 
+    // The summary is loaded inside a useEffect that does a dynamic
+    // import + awaited cache read, so the first paint has summary=null
+    // (every row temporarily shows "unavailable"). Wait for the
+    // notifications row to settle into its real cached state before
+    // asserting — otherwise we'd be racing the loader.
     await waitFor(() => {
-      expect(screen.getByTestId("card-permissions")).toBeTruthy();
+      expect(screen.getByTestId("status-perm-notifications-prompt")).toBeTruthy();
     });
 
     // 1. No install hint on non-iOS-Safari runtimes.
@@ -176,13 +174,8 @@ describe("Task #221: PermissionsSection — iOS Safari tab fallback", () => {
 
     // 2. The notifications row resolves to its rawState ("prompt"
     //    from baseSummary) — proving the override only fires when
-    //    isIOSSafariTab() is true.
-    expect(
-      screen.getByTestId("status-perm-notifications-prompt"),
-      "Off iOS Safari tab the notifications row MUST reflect its cached " +
-        "rawState ('prompt' here) — if it always rendered 'unavailable' " +
-        "the iOS override would be hiding a real bug.",
-    ).toBeTruthy();
+    //    isIOSSafariTab() is true. (Already asserted in waitFor above
+    //    so the summary load completes before the next assertions.)
 
     // 3. Allow CTA is back — the user has a working path to grant
     //    notifications without leaving the page.
