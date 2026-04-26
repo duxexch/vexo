@@ -247,38 +247,47 @@ requests.
 
 ### 6.6. WebView permission delegation — defence in depth
 
-The Task #124 fix lives at three layers, in priority order:
+The Task #124 fix lives at two layers, in priority order:
 
-1. **JS preflight** in `client/src/components/games/VoiceChat.tsx`,
+1. **JS preflight (primary fix)** in
+   `client/src/components/games/VoiceChat.tsx`,
    `client/src/hooks/use-call-session.tsx` and
-   `client/src/components/chat/private-call-layer.tsx` — these call
-   `ensureCallPermissions(kind)` (the native plugin's runtime
-   request) BEFORE invoking `navigator.mediaDevices.getUserMedia`.
-   This is the primary fix.
-2. **Native plugin guard** in
-   `native-plugins/capacitor-native-call-ui/android/.../NativeCallUIPlugin.kt`
-   — `installPermissionDelegationGuard()` (called from
-   `Plugin.load()`) wraps the WebView's current `WebChromeClient`
-   with one that grants mic/camera requests as soon as the host
-   permission is held, and denies cleanly otherwise so the JS error
-   path can show the rationale modal.
-3. **Host integration** documented in
-   `native-plugins/capacitor-native-call-ui/examples/AndroidManifest-snippet.xml`
-   — if `MainActivity` swaps in a custom `WebChromeClient` after the
-   plugin loads, call
-   `NativeCallUIPlugin.current()?.reinstallPermissionGuard()` from
-   `onCreate` so the wrapper survives.
+   `client/src/components/chat/private-call-layer.tsx` — each call
+   site invokes `ensureCallPermissions(kind)` (the native plugin's
+   runtime permission request) BEFORE
+   `navigator.mediaDevices.getUserMedia`. This guarantees the host
+   already holds `RECORD_AUDIO` (and `CAMERA` for video) by the time
+   the WebView issues its permission request, so the bridge's
+   `onPermissionRequest` resolves to "grant" instead of silently
+   auto-denying.
+2. **Permanently-denied UX** — the plugin emits
+   `microphonePermanentlyDenied` / `cameraPermanentlyDenied` whenever
+   `shouldShowRequestPermissionRationale` reports the user has ticked
+   "Don't ask again" (combined with a SharedPreferences "asked-before"
+   tracker so first-launch is not mis-classified). The rationale
+   modal hides "Allow" in that state and promotes "Open Settings" to
+   the primary CTA.
+
+We deliberately do NOT swap `WebView.webChromeClient` at runtime.
+Capacitor's `BridgeWebChromeClient` already implements
+`onPermissionRequest` correctly, and replacing it through reflection
+would risk breaking other Bridge callbacks (file chooser, JS dialogs,
+custom tabs). The host-app contract documented in
+`native-plugins/capacitor-native-call-ui/examples/AndroidManifest-snippet.xml`
+requires that `MainActivity` either keep `BridgeWebChromeClient` as-is,
+or extend it (so `onPermissionRequest` reaches `super`).
 
 Verify with logcat (Replit container does not have `adb`; run on the
 workstation):
 
 ```bash
-adb logcat -s NativeCallUI:* chromium:I AndroidRuntime:E
+adb logcat -s Capacitor:I chromium:I AndroidRuntime:E
 ```
 
-Tap **Voice call** and confirm:
+Tap **Voice call** on a fresh install and confirm:
 
-- No `Failed to install WebChromeClient permission guard` warning.
-- The OS runtime permission dialog appears within ~250 ms of the tap.
+- The in-app rationale modal appears.
+- The OS runtime mic permission dialog appears within ~250 ms of
+  tapping **Allow**.
 - `getUserMedia` resolves with a real `MediaStream` (no
-  `NotAllowedError`).
+  `NotAllowedError` in logcat).

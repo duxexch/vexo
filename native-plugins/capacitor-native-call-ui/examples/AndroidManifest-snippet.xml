@@ -9,30 +9,49 @@
   ===========================================================
   IMPORTANT — WebView permission delegation (Task #124 fix)
   ===========================================================
-  The friend-call mic/camera flow requires that the WebView's
-  `WebChromeClient.onPermissionRequest` is wired to the Android
-  runtime permission system. Capacitor's default
-  `BridgeWebChromeClient` already does this, AND the plugin's
-  `installPermissionDelegationGuard()` (called from `Plugin.load()`)
-  re-installs a wrapper as a safety net — but if your `MainActivity`
-  swaps in a custom `WebChromeClient` AFTER plugin load you MUST
-  preserve the wrapper. Recommended pattern in MainActivity.kt:
+  The friend-call mic/camera flow depends on the WebView's
+  `WebChromeClient.onPermissionRequest` mapping
+  `RESOURCE_AUDIO_CAPTURE` / `RESOURCE_VIDEO_CAPTURE` to Android
+  runtime permission requests. Capacitor's default
+  `BridgeWebChromeClient` does this correctly out of the box. The
+  bug we fixed in Task #124 was on the JS side — the call code
+  invoked `getUserMedia` BEFORE asking the host plugin to request
+  the runtime permission, so the WebView saw an unprivileged host
+  and the bridge auto-denied without surfacing the OS dialog.
 
-      override fun onCreate(savedInstanceState: Bundle?) {
-          super.onCreate(savedInstanceState)
-          // ... your custom WebChromeClient setup if any ...
-          // Re-arm the call plugin's permission guard last, so it
-          // wraps whatever client you just installed:
-          NativeCallUIPlugin.current()?.reinstallPermissionGuard()
+  Required host-app contract:
+
+   1. DO NOT replace `BridgeWebChromeClient` in your `MainActivity`.
+      If you must override it (e.g. to add custom file-chooser
+      behaviour), your subclass MUST extend `BridgeWebChromeClient`
+      and forward `onPermissionRequest` / `onPermissionRequestCanceled`
+      to `super`. A minimal wrapper that only handles file uploads
+      will silently break the friend-call mic/camera flow.
+
+      // MainActivity.kt — correct pattern
+      class CustomChromeClient(bridge: Bridge)
+          : BridgeWebChromeClient(bridge) {
+          override fun onShowFileChooser(/* ... */): Boolean { /* ... */ }
+          // onPermissionRequest is inherited from BridgeWebChromeClient
+          // and MUST NOT be overridden without calling super.
       }
 
+   2. The JS layer (`client/src/components/games/VoiceChat.tsx`,
+      `client/src/hooks/use-call-session.tsx`,
+      `client/src/components/chat/private-call-layer.tsx`) calls
+      `requestCallMediaPermissions` on this plugin BEFORE invoking
+      `getUserMedia`. This is the primary fix and the path you should
+      preserve when adding new call entrypoints.
+
   Verify with logcat:
-      adb logcat -s NativeCallUI:* chromium:I
-  Tap "Voice call" — you should see the OS runtime permission dialog
-  before any WebView-side prompt. If you see "Failed to install
-  WebChromeClient permission guard" the guard could not attach and
-  the JS-side preflight in `VoiceChat.tsx` /
-  `use-call-session.tsx` is the last line of defence.
+      adb logcat -s Capacitor:I chromium:I AndroidRuntime:E
+  Tap "Voice call" on a fresh install — you should see:
+   - the in-app rationale modal,
+   - the OS runtime mic permission dialog within ~250 ms of "Allow",
+   - `getUserMedia` resolving with a real `MediaStream`.
+  If the OS dialog never appears the plugin's
+  `requestCallMediaPermissions` is not being called before
+  `getUserMedia` — re-check the JS preflight order.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
