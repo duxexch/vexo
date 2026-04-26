@@ -80,3 +80,71 @@ relevant smokes in series. Use these instead of remembering individual scripts.
 ## Mobile Verification
 
 - **Task #82 — Android Capacitor composer over keyboard:** Manual real-device verification of the Task #43 fix (`Keyboard.resize: 'none'` + `useKeyboardInset` driven by `visualViewport`/Capacitor Keyboard events) is captured as a step-by-step Arabic checklist at `docs/device-tests/android-keyboard-composer-2026-04.md`. Pass/fail outcome to be recorded inline in that file once executed on a physical Android (and ideally iOS) device.
+
+## Cross-Surface Rule (PERMANENT, Task #177)
+
+> **Every feature, fix, redesign, or polish item in VEX must work — and look right — on the desktop browser, on Android (Capacitor WebView), on iOS (when present), AND across every supported screen size, before it can be considered done.**
+
+This is a hard rule for ALL agents (main agent, planning agents, design agents, task agents, code-review agents). It applies to:
+
+- New features and refactors.
+- Bug fixes (both regression-fix and bug-fix tasks must be verified on every surface).
+- Design changes (animations, gestures, transitions, spacing, colour, typography).
+- Permission flows and any native plugin work.
+
+**Supported screen-size buckets** (use these breakpoints when planning, designing, and testing):
+
+| Bucket | Width range | Representative devices |
+|---|---|---|
+| `xxs` | ≤ 360 px | Old/budget Android phones (Galaxy S8 mini, etc) |
+| `xs`  | 361 – 414 px | Modern phones in portrait (iPhone 12-15, Pixel 6-8, S22-24) |
+| `sm`  | 415 – 599 px | Phablets / phones in large-text mode |
+| `md`  | 600 – 767 px | Small tablets, foldables half-open |
+| `lg`+ | ≥ 768 px | Tablets, foldables open, desktop browser |
+
+**Required surfaces for "done":**
+
+1. **Desktop browser** — Chrome/Edge/Firefox at ≥ 1280 px, plus a 360 px responsive-mode pass.
+2. **Mobile web (Safari iOS + Chrome Android)** — at least one phone-bucket width.
+3. **Capacitor Android (WebView)** — verified through the existing release-build pipeline (see § "Android Release Signing"). At minimum the touched screens are loaded once on a real Android device or emulator.
+4. **iOS (Capacitor)** — verified when the change touches iOS-specific code paths (CallKit, push, deep links, status-bar/safe-area, haptics).
+
+A Playwright smoke at one viewport does **not** satisfy the rule on its own. Add a desktop check + a mobile check at minimum, and document any surface that is intentionally out of scope (with reason) inside the task plan.
+
+This rule is mirrored verbatim in `AGENTS.md` so non-Replit agents see it too.
+
+## Android Release Signing (Task #177)
+
+The VEX Android release build is signed with **the user's official VEX release keystore**. Treat the keystore file and its passwords as the single most sensitive material in the project — losing them means losing the ability to ship updates to existing installs and to publish new builds on Google Play.
+
+**Storage policy:**
+
+- The `.jks` keystore file lives **only** at `android/keystore/vex-release-official.jks` on the user's local build machine. The whole `android/` tree is gitignored (and `*.jks`, `*.keystore`, `android/app/signing.properties` are gitignored as belt-and-braces). The file is **never** copied into the Replit container, the dist bundle, or any committed asset.
+- The two passwords (`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`) live in **Replit Secrets** in this workspace (so the build script can validate they exist) and in the user's local shell environment on the actual build machine. They are never written to any tracked file.
+- `android/app/signing.properties` is generated **on demand** by `scripts/mobile-android-build.mjs` from those env vars, right before invoking gradle, then sits in the gitignored `android/` tree. No hand-edited copy is required.
+
+**Required environment variables** (all four):
+
+| Key | Where it lives | Notes |
+|---|---|---|
+| `ANDROID_KEYSTORE_PATH` | Replit Secrets + local shell | Path to the `.jks`. Default is `android/keystore/vex-release-official.jks`. Non-secret. |
+| `ANDROID_KEY_ALIAS` | Replit Secrets + local shell | `vex_release_official`. Non-secret. |
+| `ANDROID_KEYSTORE_PASSWORD` | Replit Secrets + local shell | **Secret.** Never commit. |
+| `ANDROID_KEY_PASSWORD` | Replit Secrets + local shell | **Secret.** Never commit. |
+
+`scripts/mobile-android-build.mjs` refuses to run `assembleRelease` / `bundleRelease` if any of the four are missing.
+
+**Keystore metadata (non-secret — safe to share for fingerprint pinning, Play App Signing uploads, OAuth provider configuration, etc):**
+
+| Field | Value |
+|---|---|
+| Path (gitignored) | `android/keystore/vex-release-official.jks` |
+| Alias | `vex_release_official` |
+| SHA-1 fingerprint | `7F:8D:A0:CB:12:42:1A:7F:90:6D:43:2E:6C:C2:96:1A:DD:AE:C8:B8` |
+| SHA-256 fingerprint | `46:67:5A:1E:EA:17:A4:76:B9:1F:B3:11:3F:13:6F:85:3E:8B:65:BC:48:24:6C:91:BB:0E:BD:25:E7:EA:A5:CB` |
+| Owner / Issuer DN | `CN=VEX Platform, OU=Mobile, O=VEX, L=Riyadh, ST=Riyadh, C=SA` |
+| Algorithm | SHA384withRSA, 4096-bit RSA |
+| Valid from | 2026-04-07 |
+| Valid until | 2053-08-23 |
+
+**If you suspect either password has leaked** (e.g. it was pasted into chat, a tracked file, or shared screen): stop, do not roll a release with the same keystore, and open a follow-up task to (a) rotate the passwords on the existing keystore via `keytool -storepasswd` / `keytool -keypasswd`, and (b) scrub the leaked values from git history with explicit user approval (destructive git ops are never run autonomously).

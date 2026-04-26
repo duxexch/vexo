@@ -113,10 +113,23 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: false,
     // Themed splash & navigation bars
     useLegacyBridge: false,
-    // Keep this aligned with android/app/signing.properties so update builds always use the same certificate.
+    // Release-signing inputs. The path + alias are non-secret and stay
+    // committed; the two passwords MUST come from the environment
+    // (Replit Secrets locally → real shell env in CI / on the user's
+    // build machine). `scripts/mobile-android-build.mjs` regenerates
+    // `android/app/signing.properties` from these env vars right
+    // before invoking gradle, so update builds always use the same
+    // certificate (alias `vex_release_official`, SHA-1 documented in
+    // replit.md § "Android Release Signing").
     buildOptions: {
-      keystorePath: 'android/keystore/vex-release-official.jks',
-      keystoreAlias: 'vex_release_official',
+      keystorePath: process.env.ANDROID_KEYSTORE_PATH ?? 'android/keystore/vex-release-official.jks',
+      keystoreAlias: process.env.ANDROID_KEY_ALIAS ?? 'vex_release_official',
+      ...(process.env.ANDROID_KEYSTORE_PASSWORD
+        ? { keystorePassword: process.env.ANDROID_KEYSTORE_PASSWORD }
+        : {}),
+      ...(process.env.ANDROID_KEY_PASSWORD
+        ? { keystoreAliasPassword: process.env.ANDROID_KEY_PASSWORD }
+        : {}),
     },
   },
 };
