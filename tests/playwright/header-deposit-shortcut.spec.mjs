@@ -1,37 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Task #194 — Playwright smoke that proves the polished top-right header
- * row stays usable on desktop + the two responsive widths called out by
- * the cross-surface verification rule (1280, 414, 360), and that the
- * new one-tap "Deposit" shortcut deep-links into the wallet page's
- * deposit modal.
+ * Smoke for the polished top-right header (Task #194).
+ * Verifies the deposit shortcut deep-links to /wallet?modal=deposit and
+ * that the cluster stays single-row + accessible at 1280/414/360.
  *
- * The smoke seeds a single throw-away viewer in the live database,
- * mints a JWT through `POST /api/auth/login`, hydrates the JWT into the
- * vex_token cookie + pwm_token localStorage + pwm_token_backup
- * sessionStorage slots (the same auth-rehydration contract used by the
- * existing chat-keyboard-inset and tournament-register-disabled smokes),
- * then for each viewport profile:
- *
- *   1. Navigates to `/` and waits for the authenticated layout's header
- *      to mount (the sidebar trigger testid is the cheapest signal).
- *   2. Asserts the new `[data-testid="button-header-deposit"]` is
- *      visible and accessibly named.
- *   3. Asserts the icon row sits on a single line — its bounding box
- *      height must stay <= 56px so the cluster never wraps onto a
- *      second row no matter how narrow the viewport is.
- *   4. Asserts the existing `[data-testid="button-header-wallet"]`,
- *      sidebar trigger, and theme toggle all coexist without overflow
- *      (right edge of the row must sit inside the viewport width).
- *   5. Clicks the deposit shortcut and asserts the URL acquires
- *      `?modal=deposit` so the wallet page opens directly into deposit
- *      mode (the deep-link contract was added in wallet.tsx:173-201).
- *
- * Usage:
- *
- *   DATABASE_URL=... BASE_URL=http://localhost:3001 \
- *     node tests/playwright/header-deposit-shortcut.spec.mjs
+ * Usage: DATABASE_URL=... BASE_URL=http://localhost:3001 \
+ *   node tests/playwright/header-deposit-shortcut.spec.mjs
  */
 
 import crypto from "node:crypto";
@@ -182,9 +157,6 @@ async function runProfile(browser, profile, viewerToken) {
     try {
         await page.goto(`${baseUrl}/`, { waitUntil: "domcontentloaded", timeout: 30000 });
 
-        // Authenticated layout mounts only after JWT rehydration finishes.
-        // The sidebar trigger is the cheapest signal that the polished
-        // header is on screen.
         const sidebarTrigger = page.locator('[data-testid="button-sidebar-toggle"]');
         await sidebarTrigger.waitFor({ state: "visible", timeout: 30000 });
         assert(await sidebarTrigger.isVisible(), `${profile.name}: sidebar trigger renders`);
@@ -201,9 +173,6 @@ async function runProfile(browser, profile, viewerToken) {
         const wallet = page.locator('[data-testid="button-header-wallet"]');
         assert(await wallet.isVisible(), `${profile.name}: legacy wallet icon still visible`);
 
-        // The full icon cluster shares the same tooltip/aria treatment.
-        // We assert each control exists and exposes an accessible name
-        // so the row speaks consistently in both Arabic and English.
         const tooledControls = [
             { testid: "button-theme-toggle",       name: "theme toggle" },
             { testid: "button-notification-bell",  name: "notification bell" },
@@ -223,10 +192,6 @@ async function runProfile(browser, profile, viewerToken) {
             );
         }
 
-        // Hover the theme toggle and prove that a Radix tooltip with the
-        // localized label materializes (sanity check for the shared
-        // Tooltip wrapper added in private-routes.tsx). We pick the
-        // theme toggle because it's stable and unconditional.
         const themeToggle = page.locator('[data-testid="button-theme-toggle"]');
         await themeToggle.hover();
         const tooltip = page.locator('[role="tooltip"]', { hasText: /Theme|السمة/ });
@@ -237,17 +202,10 @@ async function runProfile(browser, profile, viewerToken) {
             `${profile.name}: theme toggle shows localized tooltip on hover`,
             { tooltipText },
         );
-        // Move pointer away so the tooltip doesn't intercept the next click.
         await page.mouse.move(0, 0);
         await page.waitForTimeout(150);
 
-        // The whole right-hand cluster sits in the same flex row as the
-        // deposit button and must stay on a single line. We measure the
-        // container that owns the cluster via the deposit button's
-        // parent chain — the closest ancestor with the flex utilities is
-        // the row wrapper the polished header introduced.
         const rowMetrics = await deposit.evaluate((el) => {
-            // climb to the closest flex row that holds the icon cluster
             let node = el.parentElement;
             while (node && !(node.classList.contains("flex") && node.classList.contains("items-center"))) {
                 node = node.parentElement;
@@ -274,13 +232,6 @@ async function runProfile(browser, profile, viewerToken) {
             rowMetrics,
         );
 
-        // Click the deposit shortcut and prove the deep-link fired by
-        // waiting for the URL to acquire `modal=deposit` at any point.
-        // We do NOT re-check `page.url()` afterwards because the wallet
-        // page intentionally strips the `modal` param via
-        // `history.replaceState` once the deposit dialog is opened, so
-        // the final URL races between `/wallet?modal=deposit` and
-        // `/wallet`. `waitForURL` resolving is itself the assertion.
         await Promise.all([
             page.waitForURL((url) => {
                 try {
@@ -292,9 +243,6 @@ async function runProfile(browser, profile, viewerToken) {
         ]);
         pass(`${profile.name}: deposit shortcut deep-links to /wallet?modal=deposit`);
 
-        // After the wallet page strips the modal param, the user is on
-        // /wallet. That's what we land on if the navigation fully
-        // settled — assert the pathname only.
         const landedPathname = await page.evaluate(() => window.location.pathname);
         assert(
             landedPathname === "/wallet",

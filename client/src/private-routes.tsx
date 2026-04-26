@@ -839,9 +839,6 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                                         </TooltipTrigger>
                                         <TooltipContent side="bottom">{t("nav.wallet") || "Wallet"}</TooltipContent>
                                     </Tooltip>
-                                    {/* Remaining icon-only controls — each owns its own Tooltip
-                                        bound directly to the focusable Button so keyboard focus
-                                        triggers the tooltip with full screen-reader parity. */}
                                     {isHomeRoute && (
                                         <Suspense fallback={null}>
                                             <SupportChatHeaderTrigger isLoggedIn={true} />

@@ -90,7 +90,6 @@ export function LanguageSwitcher() {
                         >
                             <Globe className="w-4 h-4" />
                             <span className="hidden sm:inline">{currentLang?.nativeName || "English"}</span>
-                            <span className="sm:hidden">{currentLang?.code.toUpperCase() || "EN"}</span>
                         </Button>
                     </TooltipTrigger>
                 </PopoverTrigger>
