@@ -756,6 +756,8 @@ function TournamentDetailView({ id }: { id: string }) {
     data: walletSummary,
     isLoading: isWalletSummaryLoading,
     isError: isWalletSummaryError,
+    isFetching: isWalletSummaryFetching,
+    refetch: refetchWalletSummary,
   } = useQuery<WalletSummary>({
     queryKey: ['/api/wallet/currency-wallets'],
     enabled: eligibleForPicker,
@@ -1375,14 +1377,47 @@ function TournamentDetailView({ id }: { id: string }) {
             >
               {en ? 'Loading wallets…' : 'جاري تحميل المحافظ…'}
             </div>
-          ) : isWalletSummaryError ? (
+          ) : isWalletSummaryError && !walletSummary ? (
             <div
-              className="py-6 text-center text-sm text-destructive"
+              className="py-6 space-y-3 text-center"
               data-testid="tournament-detail-wallet-picker-error"
             >
-              {en
-                ? "Couldn't load your wallets. Try again."
-                : 'تعذر تحميل محافظك. حاول مرة أخرى.'}
+              <p className="text-sm text-destructive">
+                {en
+                  ? "Couldn't load your wallets."
+                  : 'تعذر تحميل محافظك.'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {en
+                  ? 'You can retry, or register using your primary wallet.'
+                  : 'يمكنك إعادة المحاولة أو التسجيل باستخدام محفظتك الأساسية.'}
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { void refetchWalletSummary(); }}
+                  disabled={isWalletSummaryFetching}
+                  data-testid="tournament-detail-wallet-picker-retry"
+                >
+                  {isWalletSummaryFetching
+                    ? (en ? 'Retrying…' : 'جارٍ المحاولة…')
+                    : (en ? 'Retry' : 'إعادة المحاولة')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => registerMutation.mutate(undefined)}
+                  disabled={registerMutation.isPending}
+                  data-testid="tournament-detail-wallet-picker-fallback-primary"
+                >
+                  {en
+                    ? `Use primary wallet (${userPrimaryCurrency})`
+                    : `استخدم المحفظة الأساسية (${userPrimaryCurrency})`}
+                </Button>
+              </div>
             </div>
           ) : (
             <RadioGroup
@@ -1461,8 +1496,8 @@ function TournamentDetailView({ id }: { id: string }) {
               }
               disabled={
                 registerMutation.isPending
-                || isWalletSummaryLoading
-                || isWalletSummaryError
+                || (isWalletSummaryLoading && !walletSummary)
+                || (isWalletSummaryError && !walletSummary)
                 || !selectedHasEnough
               }
               className="bg-gradient-to-r from-green-500 to-emerald-600"
