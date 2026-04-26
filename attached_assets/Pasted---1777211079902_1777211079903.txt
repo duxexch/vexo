@@ -1,0 +1,71 @@
+المشروع فيه نسخه للتطبيق هاتف عاوز احسنها بالكامل وعاوزها نسخة احترافيه وعاوزك تحفظ البيانات دي كامر ثابت ان اي ميزة او تعديل لازم يكون لمتصفح وللهاتف ولكل مقاسات الشاشات واحفظ بيانات التطبيق التوقيع
+
+KESTORE_PATH=android/keystore/vex-release-official.jks
+KEY_ALIAS=vex_release_official
+STORE_PASSWORD=8wBEdp3QF019uOYAzXvfKjneWULaGZhl
+KEY_PASSWORD=Rx4c6rfsAZu3kFOm0MSdWCeHzKoa2GB7
+SHA1: 7F:8D:A0:CB:12:42:1A:7F:90:6D:43:2E:6C:C2:96:1A:DD:AE:C8:B8
+SHA256: 46:67:5A:1E:EA:17:A4:76:B9:1F:B3:11:3F:13:6F:85:3E:8B:65:BC:48:24:6C:91:BB:0E:BD:25:E7:EA:A5:CB
+
+Alias name: vex_release_official
+Creation date: Apr 7, 2026
+Entry type: PrivateKeyEntry
+Certificate chain length: 1
+Certificate[1]:
+Owner: CN=VEX Platform, OU=Mobile, O=VEX, L=Riyadh, ST=Riyadh, C=SA
+Issuer: CN=VEX Platform, OU=Mobile, O=VEX, L=Riyadh, ST=Riyadh, C=SA
+Serial number: 500c339fb596c321
+Valid from: Tue Apr 07 14:54:13 EET 2026 until: Sat Aug 23 15:54:13 EEST 2053
+Certificate fingerprints:
+SHA1: 7F:8D:A0:CB:12:42:1A:7F:90:6D:43:2E:6C:C2:96:1A:DD:AE:C8:B8
+SHA256: 46:67:5A:1E:EA:17:A4:76:B9:1F:B3:11:3F:13:6F:85:3E:8B:65:BC:48:24:6C:91:BB:0E:BD:25:E7:EA:A5:CB
+Signature algorithm name: SHA384withRSA
+Subject Public Key Algorithm: 4096-bit RSA key
+Version: 3
+
+Extensions:
+
+#1: ObjectId: 2.5.29.14 Criticality=false
+SubjectKeyIdentifier [
+KeyIdentifier [
+0000: 95 4A 4D 62 E8 4F 8E 14 82 15 21 3C 71 5F EF F7 .JMb.O....!<q_..
+0010: 9F E2 FA 81 ....
+]
+]
+
+عاوز تطوير كبير جدا للتطبيق بحيث يكون احترافي جدا وتاكد من ان التطبيق بيطلب الاذونات بطريقة احترافيه وان يكون فيه nativ كثير
+
+
+Show more
+7 minutes ago
+
+1 message & 4 actions
+بيانات التوقيع (keystore + كلمات السر) فيها كلمات سر حساسة جداً. إزاي تحب نخزنها؟
+
+تخزينها في الأسرار (Secrets) المحمية بتاعت Replit + توثيق المسار والـ alias والـ fingerprints بس في replit.md (الأكثر أماناً)
+بالنسبة لتطوير التطبيق الاحترافي، إزاي تحب نقسّم الشغل؟
+
+نبدأ بمهمة تشخيص ومراجعة شاملة أول، وبعدها نقسّم المهام بناءً على نتيجة المراجعة
+بالنسبة للميزات النيتف الإضافية، أي منها أولوية بالنسبالك؟ (ممكن تختار رأيك العام، وأنا هخطط على أساسه)
+
+ركّز على الأداء والسلاسة (animations, gestures, transitions) بدل ما نضيف ميزات جديدة
+القاعدة الثابتة 'أي ميزة لازم تشتغل على متصفح + موبايل + كل المقاسات' — تحب أوثقها فين؟
+
+في replit.md + AGENTS.md عشان تكون مرئية لكل أنواع الوكلاء
+6 minutes ago
+
+Worked for 1 minute
+
+1 message & 9 actions
+
+Worked for 2 minutes
+Time worked
+2 minutes
+Work done
+5 actions
+Code changed
++68
+-0
+Agent Usage
+$0.58
+$0.29
