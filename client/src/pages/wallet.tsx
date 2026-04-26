@@ -49,10 +49,12 @@ import {
   convertWalletToUsdAmount,
   formatWalletAmountFromUsd,
   formatWalletNativeAmount,
+  formatLimitInLocalCurrency,
   getCurrencySymbol,
   normalizeCurrencyCode,
   type WalletCurrencyConfig,
 } from "@/lib/wallet-currency";
+import { PaymentMethodIcon } from "@/components/wallet/PaymentMethodIcon";
 import type { Transaction, ProjectCurrencyConversion, CountryPaymentMethod } from "@shared/schema";
 import {
   groupConversionPairs,
@@ -626,6 +628,43 @@ export default function WalletPage() {
       return;
     }
 
+    const minLimit = formatLimitInLocalCurrency(
+      selectedDepositMethod.minAmount,
+      depositCurrency,
+      depositConfig?.usdRateByCurrency,
+      depositConfig?.currencySymbolByCode,
+    );
+    const maxLimit = formatLimitInLocalCurrency(
+      selectedDepositMethod.maxAmount,
+      depositCurrency,
+      depositConfig?.usdRateByCurrency,
+      depositConfig?.currencySymbolByCode,
+    );
+    if (minLimit && parsedAmount < minLimit.localAmount) {
+      toast({
+        title: t('common.error'),
+        description: t('wallet.belowMin')
+          .replace('{{local}}', minLimit.local)
+          .replace('{{usd}}', minLimit.usd)
+          .replace('{{currency}}', depositCurrency),
+        variant: 'destructive',
+      });
+      focusAndScroll(depositAmountInputRef.current);
+      return;
+    }
+    if (maxLimit && parsedAmount > maxLimit.localAmount) {
+      toast({
+        title: t('common.error'),
+        description: t('wallet.aboveMax')
+          .replace('{{local}}', maxLimit.local)
+          .replace('{{usd}}', maxLimit.usd)
+          .replace('{{currency}}', depositCurrency),
+        variant: 'destructive',
+      });
+      focusAndScroll(depositAmountInputRef.current);
+      return;
+    }
+
     if (!paymentReference.trim()) {
       focusAndScroll(paymentReferenceInputRef.current);
       return;
@@ -1170,7 +1209,7 @@ export default function WalletPage() {
           </DialogHeader>
           <div className="space-y-4 pb-1">
             <div>
-              <Label>{t('wallet.amount')}</Label>
+              <Label>{t('wallet.amountInCurrency').replace('{{currency}}', depositCurrency || 'USD')}</Label>
               <Input
                 ref={depositAmountInputRef}
                 type="number"
@@ -1181,12 +1220,46 @@ export default function WalletPage() {
                   e.preventDefault();
                   queueFocus(depositCurrencyTriggerRef.current);
                 }}
-                placeholder="0.00"
+                placeholder={`100.00 ${depositCurrency || 'USD'}`}
                 inputMode="decimal"
                 enterKeyHint="next"
                 className="mt-2"
                 data-testid="input-deposit-amount"
               />
+              {selectedDepositMethod && (() => {
+                const minLimit = formatLimitInLocalCurrency(
+                  selectedDepositMethod.minAmount,
+                  depositCurrency,
+                  depositConfig?.usdRateByCurrency,
+                  depositConfig?.currencySymbolByCode,
+                );
+                const maxLimit = formatLimitInLocalCurrency(
+                  selectedDepositMethod.maxAmount,
+                  depositCurrency,
+                  depositConfig?.usdRateByCurrency,
+                  depositConfig?.currencySymbolByCode,
+                );
+                if (!minLimit && !maxLimit) return null;
+                return (
+                  <p className="mt-1 text-xs text-muted-foreground" data-testid="text-deposit-limits">
+                    {minLimit && (
+                      <span title={minLimit.usd}>
+                        {t('wallet.minLimit')
+                          .replace('{{local}}', minLimit.local)
+                          .replace('{{usd}}', minLimit.usd)}
+                      </span>
+                    )}
+                    {minLimit && maxLimit && <span className="mx-2">·</span>}
+                    {maxLimit && (
+                      <span title={maxLimit.usd}>
+                        {t('wallet.maxLimit')
+                          .replace('{{local}}', maxLimit.local)
+                          .replace('{{usd}}', maxLimit.usd)}
+                      </span>
+                    )}
+                  </p>
+                );
+              })()}
               <div className="flex gap-2 mt-2 flex-wrap">
                 {[10, 25, 50, 100, 250, 500].map(amount => (
                   <Button
@@ -1236,29 +1309,42 @@ export default function WalletPage() {
             <div>
               <Label>{t('wallet.paymentMethod')}</Label>
               <div ref={depositPaymentSectionRef} className="grid grid-cols-2 gap-2 mt-2">
-                {depositPaymentMethods.map(method => {
-                  const Icon = getMethodIcon(method.type);
-                  return (
-                    <Button
-                      key={method.id}
-                      variant={depositPaymentMethod === method.id ? "default" : "outline"}
-                      className="h-auto py-3 flex-col"
-                      onClick={() => {
-                        setDepositPaymentMethod(method.id);
-                        queueFocus(paymentReferenceInputRef.current);
-                      }}
-                      data-testid={`button-method-${method.id}`}
-                    >
-                      <Icon className="h-5 w-5 mb-1" />
-                      <span className="text-xs font-medium max-w-full truncate" title={method.name}>{method.name}</span>
-                      <span className="text-[10px] opacity-90 max-w-full truncate" title={method.methodNumber || ""}>{method.methodNumber || "-"}</span>
-                    </Button>
-                  );
-                })}
+                {depositPaymentMethods.map(method => (
+                  <Button
+                    key={method.id}
+                    variant={depositPaymentMethod === method.id ? "default" : "outline"}
+                    className="h-auto py-3 flex-col"
+                    onClick={() => {
+                      setDepositPaymentMethod(method.id);
+                      queueFocus(paymentReferenceInputRef.current);
+                    }}
+                    data-testid={`button-method-${method.id}`}
+                  >
+                    <PaymentMethodIcon
+                      iconUrl={method.iconUrl}
+                      type={method.type}
+                      alt={method.name}
+                      className="h-7 w-7 mb-1"
+                    />
+                    <span className="text-xs font-medium max-w-full truncate" title={method.name}>{method.name}</span>
+                    <span className="text-[10px] opacity-90 max-w-full truncate" title={method.methodNumber || ""}>{method.methodNumber || "-"}</span>
+                  </Button>
+                ))}
               </div>
 
               {selectedDepositMethod && (
                 <div className="mt-3 rounded-lg border bg-muted/35 p-3 space-y-2" data-testid="deposit-method-details">
+                  <div className="flex items-center gap-2 pb-1">
+                    <PaymentMethodIcon
+                      iconUrl={selectedDepositMethod.iconUrl}
+                      type={selectedDepositMethod.type}
+                      alt={selectedDepositMethod.name}
+                      className="h-7 w-7"
+                    />
+                    <span className="text-sm font-semibold truncate" title={selectedDepositMethod.name}>
+                      {selectedDepositMethod.name}
+                    </span>
+                  </div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs text-muted-foreground">
                       {language === 'ar' ? 'اسم الوسيلة' : 'Method Name'}
@@ -1405,6 +1491,7 @@ export default function WalletPage() {
         defaultCurrency={walletCurrencyCode}
         fallbackBalance={availableWalletBalance}
         currencySymbolByCode={depositConfig?.currencySymbolByCode}
+        usdRateByCurrency={depositConfig?.usdRateByCurrency}
         paymentMethods={withdrawalPaymentMethods}
         onSubmit={(payload) => withdrawMutation.mutate(payload)}
         isSubmitting={withdrawMutation.isPending}

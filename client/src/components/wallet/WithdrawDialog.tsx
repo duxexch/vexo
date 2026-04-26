@@ -17,20 +17,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  ArrowUpFromLine,
-  Bitcoin,
-  Building2,
-  CreditCard,
-  RefreshCw,
-  Smartphone,
-} from "lucide-react";
+import { ArrowUpFromLine, RefreshCw } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useGuidedFocus } from "@/hooks/use-guided-focus";
+import { useToast } from "@/hooks/use-toast";
 import {
+  formatLimitInLocalCurrency,
   formatWalletNativeAmount,
   getCurrencySymbol,
 } from "@/lib/wallet-currency";
+import { PaymentMethodIcon } from "@/components/wallet/PaymentMethodIcon";
 import type { CountryPaymentMethod } from "@shared/schema";
 
 export interface WithdrawDialogWalletEntry {
@@ -54,24 +50,10 @@ export interface WithdrawDialogProps {
   defaultCurrency: string;
   fallbackBalance: number;
   currencySymbolByCode?: Record<string, string>;
+  usdRateByCurrency?: Record<string, number>;
   paymentMethods: CountryPaymentMethod[];
   onSubmit: (payload: WithdrawDialogSubmitPayload) => void;
   isSubmitting: boolean;
-}
-
-function getMethodIcon(type: string) {
-  switch (type) {
-    case "bank_transfer":
-      return Building2;
-    case "card":
-      return CreditCard;
-    case "e_wallet":
-      return Smartphone;
-    case "crypto":
-      return Bitcoin;
-    default:
-      return CreditCard;
-  }
 }
 
 export function WithdrawDialog({
@@ -82,11 +64,13 @@ export function WithdrawDialog({
   defaultCurrency,
   fallbackBalance,
   currencySymbolByCode,
+  usdRateByCurrency,
   paymentMethods,
   onSubmit,
   isSubmitting,
 }: WithdrawDialogProps) {
   const { t, language } = useI18n();
+  const { toast } = useToast();
   const { focusAndScroll, queueFocus, focusFirstInteractiveIn } = useGuidedFocus();
 
   const [withdrawCurrency, setWithdrawCurrency] = useState<string>("");
@@ -100,9 +84,7 @@ export function WithdrawDialog({
   const confirmButtonRef = useRef<HTMLButtonElement | null>(null);
 
   // Reset all fields whenever the dialog opens so a previous, abandoned
-  // attempt cannot leak into the next one (this used to be done by the
-  // parent's mutation onSuccess; we move it here so the component is
-  // self-contained and matches Radix Dialog's mount/unmount lifecycle).
+  // attempt cannot leak into the next one.
   useEffect(() => {
     if (open) {
       setWithdrawCurrency("");
@@ -128,6 +110,11 @@ export function WithdrawDialog({
     currencySymbolByCode,
   );
 
+  const selectedMethod = useMemo(
+    () => paymentMethods.find((m) => m.id === withdrawPaymentMethod) || null,
+    [paymentMethods, withdrawPaymentMethod],
+  );
+
   const handleSubmit = () => {
     const parsedAmount = parseFloat(withdrawAmount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
@@ -143,6 +130,45 @@ export function WithdrawDialog({
     if (!withdrawPaymentMethod) {
       focusFirstInteractiveIn(paymentSectionRef.current);
       return;
+    }
+
+    if (selectedMethod) {
+      const minLimit = formatLimitInLocalCurrency(
+        selectedMethod.minAmount,
+        effectiveWithdrawCurrency,
+        usdRateByCurrency,
+        currencySymbolByCode,
+      );
+      const maxLimit = formatLimitInLocalCurrency(
+        selectedMethod.maxAmount,
+        effectiveWithdrawCurrency,
+        usdRateByCurrency,
+        currencySymbolByCode,
+      );
+      if (minLimit && parsedAmount < minLimit.localAmount) {
+        toast({
+          title: t("common.error"),
+          description: t("wallet.belowMin")
+            .replace("{{local}}", minLimit.local)
+            .replace("{{usd}}", minLimit.usd)
+            .replace("{{currency}}", effectiveWithdrawCurrency),
+          variant: "destructive",
+        });
+        focusAndScroll(amountInputRef.current);
+        return;
+      }
+      if (maxLimit && parsedAmount > maxLimit.localAmount) {
+        toast({
+          title: t("common.error"),
+          description: t("wallet.aboveMax")
+            .replace("{{local}}", maxLimit.local)
+            .replace("{{usd}}", maxLimit.usd)
+            .replace("{{currency}}", effectiveWithdrawCurrency),
+          variant: "destructive",
+        });
+        focusAndScroll(amountInputRef.current);
+        return;
+      }
     }
 
     const sanitizedReceiverNumber = withdrawReceiverNumber.trim();
@@ -161,6 +187,23 @@ export function WithdrawDialog({
 
   const exceedsBalance =
     !!withdrawAmount && parseFloat(withdrawAmount) > withdrawAvailableBalance;
+
+  const minLimit = selectedMethod
+    ? formatLimitInLocalCurrency(
+        selectedMethod.minAmount,
+        effectiveWithdrawCurrency,
+        usdRateByCurrency,
+        currencySymbolByCode,
+      )
+    : null;
+  const maxLimit = selectedMethod
+    ? formatLimitInLocalCurrency(
+        selectedMethod.maxAmount,
+        effectiveWithdrawCurrency,
+        usdRateByCurrency,
+        currencySymbolByCode,
+      )
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -215,7 +258,12 @@ export function WithdrawDialog({
             </span>
           </div>
           <div>
-            <Label>{t("wallet.amount")}</Label>
+            <Label>
+              {t("wallet.amountInCurrency").replace(
+                "{{currency}}",
+                effectiveWithdrawCurrency,
+              )}
+            </Label>
             <Input
               ref={amountInputRef}
               type="number"
@@ -226,12 +274,34 @@ export function WithdrawDialog({
                 e.preventDefault();
                 focusFirstInteractiveIn(paymentSectionRef.current);
               }}
-              placeholder="0.00"
+              placeholder={`100.00 ${effectiveWithdrawCurrency}`}
               inputMode="decimal"
               enterKeyHint="next"
               className="mt-2"
               data-testid="input-withdraw-amount"
             />
+            {(minLimit || maxLimit) && (
+              <p
+                className="mt-1 text-xs text-muted-foreground"
+                data-testid="text-withdraw-limits"
+              >
+                {minLimit && (
+                  <span title={minLimit.usd}>
+                    {t("wallet.minLimit")
+                      .replace("{{local}}", minLimit.local)
+                      .replace("{{usd}}", minLimit.usd)}
+                  </span>
+                )}
+                {minLimit && maxLimit && <span className="mx-2">·</span>}
+                {maxLimit && (
+                  <span title={maxLimit.usd}>
+                    {t("wallet.maxLimit")
+                      .replace("{{local}}", maxLimit.local)
+                      .replace("{{usd}}", maxLimit.usd)}
+                  </span>
+                )}
+              </p>
+            )}
             {exceedsBalance && (
               <p
                 className="mt-1 text-xs text-red-500"
@@ -283,30 +353,51 @@ export function WithdrawDialog({
               ref={paymentSectionRef}
               className="grid grid-cols-2 gap-2 mt-2"
             >
-              {paymentMethods.map((method) => {
-                const Icon = getMethodIcon(method.type);
-                return (
-                  <Button
-                    key={method.id}
-                    variant={
-                      withdrawPaymentMethod === method.id ? "default" : "outline"
-                    }
-                    className="h-auto py-3 flex-col"
-                    onClick={() => {
-                      setWithdrawPaymentMethod(method.id);
-                      queueFocus(receiverInputRef.current);
-                    }}
-                    data-testid={`button-withdraw-payment-${method.id}`}
-                  >
-                    <Icon className="h-5 w-5 mb-1" />
-                    <span className="text-xs font-medium">{method.name}</span>
-                    <span className="text-[10px] opacity-90">
-                      {method.methodNumber || "-"}
-                    </span>
-                  </Button>
-                );
-              })}
+              {paymentMethods.map((method) => (
+                <Button
+                  key={method.id}
+                  variant={
+                    withdrawPaymentMethod === method.id ? "default" : "outline"
+                  }
+                  className="h-auto py-3 flex-col"
+                  onClick={() => {
+                    setWithdrawPaymentMethod(method.id);
+                    queueFocus(receiverInputRef.current);
+                  }}
+                  data-testid={`button-withdraw-payment-${method.id}`}
+                >
+                  <PaymentMethodIcon
+                    iconUrl={method.iconUrl}
+                    type={method.type}
+                    alt={method.name}
+                    className="h-7 w-7 mb-1"
+                  />
+                  <span className="text-xs font-medium">{method.name}</span>
+                  <span className="text-[10px] opacity-90">
+                    {method.methodNumber || "-"}
+                  </span>
+                </Button>
+              ))}
             </div>
+            {selectedMethod && (
+              <div
+                className="mt-3 rounded-lg border bg-muted/35 p-3 flex items-center gap-2"
+                data-testid="withdraw-method-details"
+              >
+                <PaymentMethodIcon
+                  iconUrl={selectedMethod.iconUrl}
+                  type={selectedMethod.type}
+                  alt={selectedMethod.name}
+                  className="h-7 w-7"
+                />
+                <span
+                  className="text-sm font-semibold truncate"
+                  title={selectedMethod.name}
+                >
+                  {selectedMethod.name}
+                </span>
+              </div>
+            )}
           </div>
           <div>
             <Label>

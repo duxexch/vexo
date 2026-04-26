@@ -82,6 +82,41 @@ export function formatWalletAmountFromUsd(
     return `${baseText} ${converted.currency}`;
 }
 
+export function convertUsdToCurrencyAmount(
+    usdAmount: number,
+    currencyCode: string,
+    usdRateByCurrency?: Record<string, number>,
+): number {
+    const safeUsd = Number.isFinite(usdAmount) ? usdAmount : 0;
+    const currency = normalizeCurrencyCode(currencyCode);
+    const rate = Number(usdRateByCurrency?.[currency]);
+    if (!Number.isFinite(rate) || rate <= 0) {
+        return Math.round((safeUsd + Number.EPSILON) * 100) / 100;
+    }
+    return Math.round(((safeUsd * rate) + Number.EPSILON) * 100) / 100;
+}
+
+export function formatLimitInLocalCurrency(
+    usdLimit: string | number | null | undefined,
+    currencyCode: string,
+    usdRateByCurrency?: Record<string, number>,
+    symbolByCode?: Record<string, string>,
+): { local: string; usd: string; localAmount: number; usdAmount: number } | null {
+    if (usdLimit === null || usdLimit === undefined || usdLimit === "") return null;
+    const usdAmount = typeof usdLimit === "number" ? usdLimit : Number(usdLimit);
+    if (!Number.isFinite(usdAmount)) return null;
+
+    const currency = normalizeCurrencyCode(currencyCode);
+    const localAmount = convertUsdToCurrencyAmount(usdAmount, currency, usdRateByCurrency);
+    const symbol = getCurrencySymbol(currency, symbolByCode);
+    const local = symbol === currency
+        ? `${symbol}${localAmount.toFixed(2)}`
+        : `${symbol}${localAmount.toFixed(2)} ${currency}`;
+    const usd = `$${usdAmount.toFixed(2)}`;
+
+    return { local, usd, localAmount, usdAmount };
+}
+
 export function formatWalletNativeAmount(
     rawAmount: string | number,
     currencyCode: string,
