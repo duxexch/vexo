@@ -17,6 +17,7 @@ import {
   normalizeTournamentCurrencyType,
   formatTournamentAmountText,
 } from "../../lib/tournament-utils";
+import { adjustUserCurrencyBalance } from "../../lib/wallet-balances";
 
 export function registerTournamentLifecycleRoutes(app: Express) {
 
@@ -42,7 +43,10 @@ export function registerTournamentLifecycleRoutes(app: Express) {
           throw new Error(`Invalid tournament status transition from ${oldStatus} to ${nextStatus}`);
         }
 
-        const participants = await tx.select({ userId: tournamentParticipants.userId })
+        const participants = await tx.select({
+          userId: tournamentParticipants.userId,
+          walletCurrency: tournamentParticipants.walletCurrency,
+        })
           .from(tournamentParticipants)
           .where(eq(tournamentParticipants.tournamentId, id));
 
@@ -100,29 +104,31 @@ export function registerTournamentLifecycleRoutes(app: Express) {
                 description: `Tournament cancelled refund (${lockedTournament.name || "Tournament"})`,
               });
             } else {
-              const [user] = await tx.select({ balance: users.balance })
+              // Cash refund: route to participant.walletCurrency (NULL→primary).
+              // adjustUserCurrencyBalance handles row locking + sub-wallet routing.
+              const [userExists] = await tx.select({ id: users.id })
                 .from(users)
                 .where(eq(users.id, participant.userId))
                 .for('update');
-
-              if (!user) {
+              if (!userExists) {
                 continue;
               }
 
-              const balanceBeforeValue = Number.parseFloat(user.balance || "0");
-              const balanceAfterValue = Number((balanceBeforeValue + normalizedEntryFee).toFixed(2));
-
-              await tx.update(users)
-                .set({ balance: balanceAfterValue.toFixed(2) })
-                .where(eq(users.id, participant.userId));
+              const adjusted = await adjustUserCurrencyBalance(
+                tx,
+                participant.userId,
+                participant.walletCurrency ?? null,
+                normalizedEntryFee,
+                { allowCreate: true, allowOutsideAllowList: true },
+              );
 
               await tx.insert(transactions).values({
                 userId: participant.userId,
                 type: "refund",
                 status: "completed",
                 amount: normalizedEntryFee.toFixed(2),
-                balanceBefore: balanceBeforeValue.toFixed(2),
-                balanceAfter: balanceAfterValue.toFixed(2),
+                balanceBefore: adjusted.balanceBefore.toFixed(2),
+                balanceAfter: adjusted.balanceAfter.toFixed(2),
                 description: `Tournament cancelled refund (${lockedTournament.name || "Tournament"})`,
                 referenceId: refundReferenceId,
                 processedAt: new Date(),

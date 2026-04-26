@@ -6,6 +6,7 @@ import { authMiddleware, AuthRequest } from "../middleware";
 import { sanitizePlainText } from "../../lib/input-security";
 import { ensureP2PUsername, getP2PUsernameMap } from "../../lib/p2p-username";
 import { isCurrencyAllowedForOfferType, normalizeCurrencyCode, resolveP2PCurrencyControls } from "../../lib/p2p-currency-controls";
+import { getEffectiveAllowedCurrencies, getWalletBalance } from "../../lib/wallet-balances";
 import { and, eq, inArray } from "drizzle-orm";
 import { getBadgeEntitlementForUser, resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
 import { isEitherUserBlocked, getBlockedUserIds } from "../../lib/user-blocking";
@@ -721,14 +722,18 @@ export function registerOfferRoutes(app: Express) {
       }
 
       if (type === "sell") {
-        const walletCurrency = normalizeCurrencyCode(user.balanceCurrency);
-        if (!walletCurrency || walletCurrency !== normalizedCurrency) {
+        // Sell offers may use ANY currency on the seller's allow-list. The
+        // matching wallet (primary or sub) supplies escrow when a trade opens.
+        const allowedForUser = getEffectiveAllowedCurrencies(user);
+        if (!allowedForUser.includes(normalizedCurrency)) {
           return res.status(400).json({
-            error: `Sell offers must use your wallet currency: ${walletCurrency || "USD"}`,
+            error: `Sell offers must use one of your wallet currencies: ${allowedForUser.join(", ")}`,
           });
         }
 
-        const rawWalletBalance = Number(user.balance || 0);
+        // Read the actual matching wallet balance (primary → users.balance,
+        // sub → user_currency_wallets row, 0 if no row yet).
+        const rawWalletBalance = (await getWalletBalance(req.user!.id, normalizedCurrency)) ?? 0;
         const frozenIncoming = await getFrozenIncomingSellBalance(req.user!.id, normalizedCurrency);
         const availableToSell = Math.max(0, rawWalletBalance - frozenIncoming);
 
@@ -892,6 +897,9 @@ export function registerOfferRoutes(app: Express) {
         targetUserId: normalizedTargetUserId,
         cryptoCurrency: normalizedCurrency,
         fiatCurrency: normalizedFiatCurrency,
+        // Persist wallet routing for sell-side escrow & buy-side settlement.
+        // Always set to the offer's crypto currency so trades inherit it.
+        walletCurrency: normalizedCurrency,
         price: parsedPrice.toFixed(2),
         availableAmount: parsedAmount.toFixed(8),
         minLimit: parsedMinLimit.toFixed(2),

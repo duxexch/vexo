@@ -11,6 +11,7 @@ import {
 } from "@shared/schema";
 import { db } from "../db";
 import { sendNotification } from "../websocket";
+import { adjustUserCurrencyBalance } from "./wallet-balances";
 import {
     TOURNAMENT_CURRENCY_TYPES,
     type TournamentCurrencyType,
@@ -744,6 +745,10 @@ export async function settleTournamentPrizes(tournamentId: string): Promise<Tour
             .from(tournamentParticipants)
             .where(eq(tournamentParticipants.tournamentId, tournamentId));
 
+        // Index by userId for O(1) wallet-currency lookup inside the payout
+        // loop instead of repeated O(n) Array.find calls.
+        const participantsByUserId = new Map(participants.map((row) => [row.userId, row]));
+
         if (participants.length === 0) {
             await tx.update(tournaments)
                 .set({ prizesSettledAt: new Date(), updatedAt: new Date() })
@@ -860,29 +865,35 @@ export async function settleTournamentPrizes(tournamentId: string): Promise<Tour
                         description: `Tournament prize payout (${bucket.placement} place)`,
                     });
                 } else {
-                    const [user] = await tx.select({ balance: users.balance })
+                    // Cash prize: pay back into the same wallet the participant
+                    // entered with. participantsById is built above; NULL ⇒ primary.
+                    const [userExists] = await tx.select({ id: users.id })
                         .from(users)
                         .where(eq(users.id, userId))
                         .for("update");
 
-                    if (!user) {
+                    if (!userExists) {
                         continue;
                     }
 
-                    const balanceBefore = Number.parseFloat(user.balance || "0");
-                    const balanceAfter = (balanceBefore + (awardCents / 100)).toFixed(2);
+                    const participantRow = participantsByUserId.get(userId);
+                    const payoutCurrency = participantRow?.walletCurrency ?? null;
 
-                    await tx.update(users)
-                        .set({ balance: balanceAfter })
-                        .where(eq(users.id, userId));
+                    const adjusted = await adjustUserCurrencyBalance(
+                        tx,
+                        userId,
+                        payoutCurrency,
+                        awardCents / 100,
+                        { allowCreate: true, allowOutsideAllowList: true },
+                    );
 
                     await tx.insert(transactions).values({
                         userId,
                         type: "win",
                         status: "completed",
                         amount: awardAmount,
-                        balanceBefore: balanceBefore.toFixed(2),
-                        balanceAfter,
+                        balanceBefore: adjusted.balanceBefore.toFixed(2),
+                        balanceAfter: adjusted.balanceAfter.toFixed(2),
                         description: `Tournament prize payout (${bucket.placement} place)`,
                         referenceId: `tournament-prize:${tournamentId}:${userId}:${bucket.placement}`,
                         processedAt: new Date(),

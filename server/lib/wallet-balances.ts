@@ -154,6 +154,15 @@ export interface AdjustWalletOptions {
    * sub-currency. Defaults to `false` for safety on debit paths.
    */
   allowCreate?: boolean;
+  /**
+   * Allow operating on a sub-wallet currency that is no longer on the user's
+   * `allowedCurrencies` list. Required for refunds/payouts of historical rows
+   * (tournament cancellation refunds, P2P trade settlement, prize distribution)
+   * because admins may have removed a currency from the allow-list AFTER the
+   * user paid into it. Without this flag, a policy change would strand funds.
+   * Should NEVER be set on debit paths — only on credits/refunds.
+   */
+  allowOutsideAllowList?: boolean;
 }
 
 export interface AdjustWalletResult {
@@ -180,15 +189,10 @@ export interface AdjustWalletResult {
 export async function adjustUserCurrencyBalance(
   tx: Tx,
   userId: string,
-  currencyCode: string,
+  currencyCode: string | null,
   signedDelta: number,
   options: AdjustWalletOptions = {},
 ): Promise<AdjustWalletResult> {
-  const normalizedCurrency = normalizeCurrencyCode(currencyCode);
-  if (!normalizedCurrency) {
-    throw new Error("Invalid currency code");
-  }
-
   if (!Number.isFinite(signedDelta) || signedDelta === 0) {
     throw new Error("signedDelta must be a non-zero finite number");
   }
@@ -209,6 +213,16 @@ export async function adjustUserCurrencyBalance(
 
   const primaryCurrency = normalizeCurrencyCode(user.balanceCurrency) || "USD";
 
+  // NULL currencyCode = caller wants the legacy primary-balance path. Used by
+  // tournament refunds / P2P escrow paths whose stored walletCurrency is NULL
+  // for legacy single-currency rows.
+  const normalizedCurrency = currencyCode === null
+    ? primaryCurrency
+    : normalizeCurrencyCode(currencyCode);
+  if (!normalizedCurrency) {
+    throw new Error("Invalid currency code");
+  }
+
   if (normalizedCurrency === primaryCurrency) {
     const balanceBefore = safeParseDecimal(user.balance);
     const balanceAfter = balanceBefore + signedDelta;
@@ -228,12 +242,17 @@ export async function adjustUserCurrencyBalance(
   }
 
   // Non-primary path. Multi-currency must be enabled and the currency must
-  // be on the user's allow-list.
-  if (!user.multiCurrencyEnabled) {
+  // be on the user's allow-list — UNLESS this is a refund/payout for a
+  // historical row whose wallet currency was removed from the allow-list
+  // after the fact (allowOutsideAllowList).
+  const isCredit = signedDelta > 0;
+  const bypassAllowList = options.allowOutsideAllowList === true && isCredit;
+
+  if (!user.multiCurrencyEnabled && !bypassAllowList) {
     throw new Error(`User is not enabled for multi-currency wallets (requested ${normalizedCurrency})`);
   }
   const allowed = Array.isArray(user.allowedCurrencies) ? user.allowedCurrencies.map((code) => normalizeCurrencyCode(code)) : [];
-  if (!allowed.includes(normalizedCurrency)) {
+  if (!allowed.includes(normalizedCurrency) && !bypassAllowList) {
     throw new Error(`Currency ${normalizedCurrency} is not on this user's allow-list`);
   }
 

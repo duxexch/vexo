@@ -6,6 +6,7 @@ import {
 import { db } from "../../db";
 import { and, eq, gte, lt, ne, or, sql } from "drizzle-orm";
 import { resolveEffectiveP2PMonthlyLimit } from "../../lib/user-badge-entitlements";
+import { adjustUserCurrencyBalance } from "../../lib/wallet-balances";
 
 // ==================== ATOMIC P2P TRADE CREATION (BASE CURRENCY) ====================
 
@@ -123,7 +124,10 @@ export async function createP2PTradeAtomic(params: {
       }
     }
 
-    // 3. Lock seller's balance and debit escrow
+    // 3. Lock seller row, then route the escrow debit through the wallet
+    //    helper. Offers carry walletCurrency (primary OR sub) so multi-currency
+    //    sellers can post in any of their allowed currencies. NULL = legacy
+    //    primary path (`users.balance`).
     const [seller] = await tx
       .select()
       .from(users)
@@ -134,18 +138,25 @@ export async function createP2PTradeAtomic(params: {
       return { success: false, error: 'Seller not found' };
     }
 
-    const sellerBalance = parseFloat(seller.balance);
-    if (sellerBalance < tradeAmount) {
-      return { success: false, error: 'Seller has insufficient balance for escrow' };
+    const escrowCurrency = offer.walletCurrency ?? null;
+
+    let escrowAdjustment;
+    try {
+      escrowAdjustment = await adjustUserCurrencyBalance(
+        tx,
+        params.sellerId,
+        escrowCurrency,
+        -tradeAmount,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.startsWith("Insufficient")) {
+        return { success: false, error: 'Seller has insufficient balance for escrow' };
+      }
+      return { success: false, error: msg };
     }
 
-    // 4. Debit seller's balance (escrow hold)
-    const newSellerBalance = (sellerBalance - tradeAmount).toFixed(2);
-    await tx.update(users)
-      .set({ balance: newSellerBalance, updatedAt: new Date() })
-      .where(eq(users.id, params.sellerId));
-
-    // 5. Update offer availability
+    // 4. Update offer availability
     const newAvailable = (availableAmount - tradeAmount).toFixed(8);
     await tx.update(p2pOffers)
       .set({
@@ -155,7 +166,7 @@ export async function createP2PTradeAtomic(params: {
       })
       .where(eq(p2pOffers.id, params.offerId));
 
-    // 6. Create the trade record
+    // 5. Create the trade record (carry walletCurrency for the settle path)
     const [trade] = await tx.insert(p2pTrades).values({
       offerId: params.offerId,
       buyerId: params.buyerId,
@@ -175,16 +186,17 @@ export async function createP2PTradeAtomic(params: {
       paymentMethod: params.paymentMethod,
       escrowAmount: params.amount,
       platformFee: params.platformFee,
+      walletCurrency: escrowAdjustment.isPrimary ? null : escrowAdjustment.currency,
       expiresAt: params.expiresAt,
     }).returning();
 
-    // 7. Create escrow transaction record for audit
+    // 6. Create escrow transaction record for audit
     await tx.insert(transactions).values({
       userId: params.sellerId,
       type: 'withdrawal',
       amount: params.amount,
-      balanceBefore: sellerBalance.toFixed(2),
-      balanceAfter: newSellerBalance,
+      balanceBefore: escrowAdjustment.balanceBefore.toFixed(2),
+      balanceAfter: escrowAdjustment.balanceAfter.toFixed(2),
       status: 'completed',
       description: `P2P trade ${trade.id} - escrow hold`,
       processedAt: new Date()

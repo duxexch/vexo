@@ -11,6 +11,8 @@ import {
   normalizeTournamentCurrencyType,
   formatTournamentAmountText,
 } from "../../lib/tournament-utils";
+import { adjustUserCurrencyBalance, getEffectiveAllowedCurrencies } from "../../lib/wallet-balances";
+import { normalizeCurrencyCode } from "../../lib/p2p-currency-controls";
 
 type InsufficientBalanceWalletKind = "cash" | "project";
 type InsufficientBalanceCurrency = "usd" | "project";
@@ -47,6 +49,29 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
+
+      // Optional: client may pick which sub-wallet to debit (cash/USD path only).
+      // When omitted, server auto-picks the user's primary balance currency.
+      // Malformed strings (non-currency values, unknown codes) are rejected
+      // with a 400 instead of silently falling back to primary.
+      const rawWalletCurrency = req.body?.walletCurrency;
+      let requestedWalletCurrency: string | null = null;
+      if (rawWalletCurrency !== undefined && rawWalletCurrency !== null) {
+        if (typeof rawWalletCurrency !== "string") {
+          return res.status(400).json({
+            error: "walletCurrency must be a string ISO currency code",
+            code: "INVALID_WALLET_CURRENCY",
+          });
+        }
+        const normalized = normalizeCurrencyCode(rawWalletCurrency);
+        if (!normalized) {
+          return res.status(400).json({
+            error: `Unknown wallet currency: ${rawWalletCurrency}`,
+            code: "INVALID_WALLET_CURRENCY",
+          });
+        }
+        requestedWalletCurrency = normalized;
+      }
 
       // SECURITY: Atomic registration with transaction to prevent race conditions
       const registrationResult = await db.transaction(async (tx) => {
@@ -95,6 +120,11 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
           : 0;
 
         const tournamentCurrency = normalizeTournamentCurrencyType(lockedTournament.currency);
+
+        // Wallet currency stored on the participant row when paid from a sub-wallet.
+        // Defaults to NULL for the legacy primary-balance path so existing rows
+        // (and single-currency users) are unaffected.
+        let participantWalletCurrency: string | null = null;
 
         // Deduct entry fee if any (with row lock)
         if (normalizedEntryFee > 0) {
@@ -164,9 +194,54 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
               description: `Tournament entry fee (${lockedTournament.name || "Tournament"})`,
             });
           } else {
-            const [user] = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).for('update');
-            const balanceBeforeValue = Number.parseFloat(user?.balance || "0");
-            if (!user || !Number.isFinite(balanceBeforeValue) || balanceBeforeValue < normalizedEntryFee) {
+            // Cash path: lock the user row, then route the debit through
+            // adjustUserCurrencyBalance so multi-currency users may pay from
+            // any of their allowed wallets (primary or sub).
+            const [userRow] = await tx.select({
+              balance: users.balance,
+              balanceCurrency: users.balanceCurrency,
+              multiCurrencyEnabled: users.multiCurrencyEnabled,
+              allowedCurrencies: users.allowedCurrencies,
+            }).from(users).where(eq(users.id, userId)).for('update');
+            if (!userRow) {
+              throw new InsufficientBalanceError({
+                walletKind: "cash",
+                currency: "usd",
+                required: normalizedEntryFee,
+                available: 0,
+              });
+            }
+
+            const primaryCurrency = normalizeCurrencyCode(userRow.balanceCurrency) || "USD";
+            const allowedForUser = getEffectiveAllowedCurrencies(userRow);
+
+            // Pick wallet: explicit request from client (if allowed) else primary.
+            let chosenCurrency = primaryCurrency;
+            if (requestedWalletCurrency && requestedWalletCurrency !== primaryCurrency) {
+              if (!allowedForUser.includes(requestedWalletCurrency)) {
+                throw new Error(`WALLET_NOT_ALLOWED:${requestedWalletCurrency}`);
+              }
+              chosenCurrency = requestedWalletCurrency;
+            }
+
+            // Read balance-before for both the transactions row and the
+            // InsufficientBalanceError payload (so the UI can render need/have).
+            let balanceBeforeValue = 0;
+            if (chosenCurrency === primaryCurrency) {
+              balanceBeforeValue = Number.parseFloat(userRow.balance || "0");
+            } else {
+              const { userCurrencyWallets } = await import("@shared/schema");
+              const [sub] = await tx.select({ balance: userCurrencyWallets.balance })
+                .from(userCurrencyWallets)
+                .where(and(
+                  eq(userCurrencyWallets.userId, userId),
+                  eq(userCurrencyWallets.currencyCode, chosenCurrency),
+                ))
+                .for('update');
+              balanceBeforeValue = sub ? Number.parseFloat(sub.balance || "0") : 0;
+            }
+
+            if (!Number.isFinite(balanceBeforeValue) || balanceBeforeValue < normalizedEntryFee) {
               throw new InsufficientBalanceError({
                 walletKind: "cash",
                 currency: "usd",
@@ -175,19 +250,33 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
               });
             }
 
-            const balanceAfterValue = Number((balanceBeforeValue - normalizedEntryFee).toFixed(2));
+            let adjusted;
+            try {
+              adjusted = await adjustUserCurrencyBalance(tx, userId, chosenCurrency, -normalizedEntryFee);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              if (msg.startsWith("Insufficient")) {
+                throw new InsufficientBalanceError({
+                  walletKind: "cash",
+                  currency: "usd",
+                  required: normalizedEntryFee,
+                  available: balanceBeforeValue,
+                });
+              }
+              throw err;
+            }
 
-            await tx.update(users)
-              .set({ balance: balanceAfterValue.toFixed(2) })
-              .where(eq(users.id, userId));
+            // Record the participant's chosen wallet for refund/payout symmetry.
+            // NULL when the user paid from their primary balance (legacy behaviour).
+            participantWalletCurrency = adjusted.isPrimary ? null : chosenCurrency;
 
             await tx.insert(transactions).values({
               userId,
               type: "stake",
               status: "completed",
               amount: normalizedEntryFee.toFixed(2),
-              balanceBefore: balanceBeforeValue.toFixed(2),
-              balanceAfter: balanceAfterValue.toFixed(2),
+              balanceBefore: adjusted.balanceBefore.toFixed(2),
+              balanceAfter: adjusted.balanceAfter.toFixed(2),
               description: `Tournament entry fee (${lockedTournament.name || "Tournament"})`,
               referenceId: entryReferenceId,
               processedAt: new Date(),
@@ -199,6 +288,7 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
           tournamentId,
           userId,
           seed: Number(currentCount) + 1,
+          walletCurrency: participantWalletCurrency,
         }).returning();
 
         // Update prize pool
@@ -261,6 +351,14 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
         });
       }
       const msg = getErrorMessage(error);
+      if (msg.startsWith("WALLET_NOT_ALLOWED:")) {
+        const currency = msg.split(":")[1] || "";
+        return res.status(400).json({
+          error: `Wallet currency ${currency} is not on your allow-list`,
+          code: "WALLET_NOT_ALLOWED",
+          currency,
+        });
+      }
       if (
         msg === "Tournament is full"
         || msg === "Already registered"
@@ -316,6 +414,8 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
           throw new Error("Not registered");
         }
 
+        const removedParticipant = result[0];
+
         // Refund entry fee
         const entryFeeValue = Number.parseFloat(lockedTournament.entryFee || "0");
         const normalizedEntryFee = Number.isFinite(entryFeeValue)
@@ -363,25 +463,27 @@ export function registerTournamentRegistrationRoutes(app: Express): void {
               description: `Tournament withdrawal refund (${lockedTournament.name || "Tournament"})`,
             });
           } else {
-            const [user] = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).for('update');
-            if (!user) {
-              throw new Error("User not found");
-            }
-
-            const balanceBeforeValue = Number.parseFloat(user.balance || "0");
-            const balanceAfterValue = Number((balanceBeforeValue + normalizedEntryFee).toFixed(2));
-
-            await tx.update(users)
-              .set({ balance: balanceAfterValue.toFixed(2) })
-              .where(eq(users.id, userId));
+            // Cash refund: send back to whichever wallet the user paid from.
+            // walletCurrency on the participant row is NULL for the legacy
+            // primary-balance path, so adjustUserCurrencyBalance(..., null) →
+            // primary debit/credit. {allowCreate} so the sub-wallet exists if
+            // the admin has since narrowed the user's allow-list.
+            const refundCurrency = removedParticipant?.walletCurrency ?? null;
+            const adjusted = await adjustUserCurrencyBalance(
+              tx,
+              userId,
+              refundCurrency,
+              normalizedEntryFee,
+              { allowCreate: true, allowOutsideAllowList: true },
+            );
 
             await tx.insert(transactions).values({
               userId,
               type: "refund",
               status: "completed",
               amount: normalizedEntryFee.toFixed(2),
-              balanceBefore: balanceBeforeValue.toFixed(2),
-              balanceAfter: balanceAfterValue.toFixed(2),
+              balanceBefore: adjusted.balanceBefore.toFixed(2),
+              balanceAfter: adjusted.balanceAfter.toFixed(2),
               description: `Tournament withdrawal refund (${lockedTournament.name || "Tournament"})`,
               referenceId: refundReferenceId,
               processedAt: new Date(),

@@ -5,6 +5,7 @@ import {
 } from "@shared/schema";
 import { db } from "../../db";
 import { eq } from "drizzle-orm";
+import { adjustUserCurrencyBalance } from "../../lib/wallet-balances";
 
 type TradeSettlementResult = {
   success: boolean;
@@ -53,9 +54,11 @@ export async function completeP2PTradeAtomic(tradeId: string, completedByUserId:
       return { success: false, error: 'Invalid escrow/fee configuration' };
     }
 
-    // 2. Lock buyer's balance and credit
+    // 2. Lock buyer row, then credit through wallet helper. The buyer is paid
+    //    in the same currency the seller's escrow was held in (trade.walletCurrency
+    //    NULL = legacy primary path).
     const [buyer] = await tx
-      .select()
+      .select({ id: users.id })
       .from(users)
       .where(eq(users.id, trade.buyerId))
       .for('update');
@@ -64,12 +67,13 @@ export async function completeP2PTradeAtomic(tradeId: string, completedByUserId:
       return { success: false, error: 'Buyer not found' };
     }
 
-    const buyerBalance = parseFloat(buyer.balance);
-    const newBuyerBalance = (buyerBalance + releaseAmount).toFixed(2);
-
-    await tx.update(users)
-      .set({ balance: newBuyerBalance, updatedAt: new Date() })
-      .where(eq(users.id, trade.buyerId));
+    const adjusted = await adjustUserCurrencyBalance(
+      tx,
+      trade.buyerId,
+      trade.walletCurrency ?? null,
+      releaseAmount,
+      { allowCreate: true, allowOutsideAllowList: true },
+    );
 
     // 3. Update trade status
     const [updatedTrade] = await tx.update(p2pTrades)
@@ -82,8 +86,8 @@ export async function completeP2PTradeAtomic(tradeId: string, completedByUserId:
       userId: trade.buyerId,
       type: 'deposit',
       amount: releaseAmount.toFixed(2),
-      balanceBefore: buyerBalance.toFixed(2),
-      balanceAfter: newBuyerBalance,
+      balanceBefore: adjusted.balanceBefore.toFixed(2),
+      balanceAfter: adjusted.balanceAfter.toFixed(2),
       status: 'completed',
       description: `P2P trade ${tradeId} - funds received`,
       processedAt: new Date()
@@ -135,29 +139,30 @@ export async function cancelP2PTradeAtomic(tradeId: string, cancelledByUserId: s
     const escrowAmount = parseFloat(trade.escrowAmount);
     const tradeAmount = parseFloat(trade.amount);
 
-    // 2. Refund escrow to seller if funds were held
+    // 2. Refund escrow to seller (in the wallet it was held in) if funds were held.
     if (escrowAmount > 0) {
       const [seller] = await tx
-        .select()
+        .select({ id: users.id })
         .from(users)
         .where(eq(users.id, trade.sellerId))
         .for('update');
 
       if (seller) {
-        const sellerBalance = parseFloat(seller.balance);
-        const newSellerBalance = (sellerBalance + escrowAmount).toFixed(2);
-
-        await tx.update(users)
-          .set({ balance: newSellerBalance, updatedAt: new Date() })
-          .where(eq(users.id, trade.sellerId));
+        const adjusted = await adjustUserCurrencyBalance(
+          tx,
+          trade.sellerId,
+          trade.walletCurrency ?? null,
+          escrowAmount,
+          { allowCreate: true, allowOutsideAllowList: true },
+        );
 
         // Create refund transaction record
         await tx.insert(transactions).values({
           userId: trade.sellerId,
           type: 'deposit',
           amount: trade.escrowAmount,
-          balanceBefore: sellerBalance.toFixed(2),
-          balanceAfter: newSellerBalance,
+          balanceBefore: adjusted.balanceBefore.toFixed(2),
+          balanceAfter: adjusted.balanceAfter.toFixed(2),
           status: 'completed',
           description: `P2P trade ${tradeId} - escrow refund`,
           processedAt: new Date()
@@ -234,7 +239,7 @@ export async function resolveP2PDisputedTradeAtomic(
     const escrowAmount = parseFloat(trade.escrowAmount);
     const tradeAmount = parseFloat(trade.amount);
 
-    // Buyer wins: release escrow minus fee to buyer.
+    // Buyer wins: release escrow minus fee to buyer (in escrow's wallet currency).
     if (winnerUserId === trade.buyerId) {
       const platformFee = parseFloat(trade.platformFee || '0');
       const releaseAmount = escrowAmount - platformFee;
@@ -244,7 +249,7 @@ export async function resolveP2PDisputedTradeAtomic(
       }
 
       const [buyer] = await tx
-        .select()
+        .select({ id: users.id })
         .from(users)
         .where(eq(users.id, trade.buyerId))
         .for('update');
@@ -253,12 +258,13 @@ export async function resolveP2PDisputedTradeAtomic(
         return { success: false, error: 'Buyer not found' };
       }
 
-      const buyerBalance = parseFloat(buyer.balance);
-      const newBuyerBalance = (buyerBalance + releaseAmount).toFixed(2);
-
-      await tx.update(users)
-        .set({ balance: newBuyerBalance, updatedAt: new Date() })
-        .where(eq(users.id, trade.buyerId));
+      const adjusted = await adjustUserCurrencyBalance(
+        tx,
+        trade.buyerId,
+        trade.walletCurrency ?? null,
+        releaseAmount,
+        { allowCreate: true, allowOutsideAllowList: true },
+      );
 
       const [updatedTrade] = await tx.update(p2pTrades)
         .set({
@@ -274,8 +280,8 @@ export async function resolveP2PDisputedTradeAtomic(
         userId: trade.buyerId,
         type: 'deposit',
         amount: releaseAmount.toFixed(2),
-        balanceBefore: buyerBalance.toFixed(2),
-        balanceAfter: newBuyerBalance,
+        balanceBefore: adjusted.balanceBefore.toFixed(2),
+        balanceAfter: adjusted.balanceAfter.toFixed(2),
         status: 'completed',
         description: `P2P dispute resolution ${tradeId} - buyer awarded`,
         processedAt: new Date(),
@@ -284,9 +290,10 @@ export async function resolveP2PDisputedTradeAtomic(
       return { success: true, trade: updatedTrade };
     }
 
-    // Seller wins: refund full escrow back to seller and cancel trade.
+    // Seller wins: refund full escrow back to seller (in the wallet it was held in)
+    // and cancel trade.
     const [seller] = await tx
-      .select()
+      .select({ id: users.id })
       .from(users)
       .where(eq(users.id, trade.sellerId))
       .for('update');
@@ -295,12 +302,13 @@ export async function resolveP2PDisputedTradeAtomic(
       return { success: false, error: 'Seller not found' };
     }
 
-    const sellerBalance = parseFloat(seller.balance);
-    const newSellerBalance = (sellerBalance + escrowAmount).toFixed(2);
-
-    await tx.update(users)
-      .set({ balance: newSellerBalance, updatedAt: new Date() })
-      .where(eq(users.id, trade.sellerId));
+    const adjusted = await adjustUserCurrencyBalance(
+      tx,
+      trade.sellerId,
+      trade.walletCurrency ?? null,
+      escrowAmount,
+      { allowCreate: true, allowOutsideAllowList: true },
+    );
 
     if (trade.offerId && tradeAmount > 0) {
       const [offer] = await tx
@@ -337,8 +345,8 @@ export async function resolveP2PDisputedTradeAtomic(
       userId: trade.sellerId,
       type: 'deposit',
       amount: trade.escrowAmount,
-      balanceBefore: sellerBalance.toFixed(2),
-      balanceAfter: newSellerBalance,
+      balanceBefore: adjusted.balanceBefore.toFixed(2),
+      balanceAfter: adjusted.balanceAfter.toFixed(2),
       status: 'completed',
       description: `P2P dispute resolution ${tradeId} - seller refund`,
       processedAt: new Date(),

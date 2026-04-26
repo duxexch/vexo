@@ -1250,6 +1250,11 @@ export const p2pOffers = pgTable("p2p_offers", {
   targetUserId: varchar("target_user_id").references(() => users.id),
   cryptoCurrency: text("crypto_currency").notNull(),
   fiatCurrency: text("fiat_currency").notNull(),
+  // Wallet (sub-wallet) currency the seller's escrow is debited from / buyer is
+  // credited to. NULL = legacy primary-balance path (`users.balance`). When set
+  // the value matches `cryptoCurrency` and the seller's matching sub-wallet in
+  // `user_currency_wallets` is used via `adjustUserCurrencyBalance`.
+  walletCurrency: text("wallet_currency"),
   price: decimal("price", { precision: 15, scale: 2 }).notNull(),
   availableAmount: decimal("available_amount", { precision: 15, scale: 8 }).notNull(),
   minLimit: decimal("min_limit", { precision: 15, scale: 2 }).notNull(),
@@ -1332,6 +1337,11 @@ export const p2pTrades = pgTable("p2p_trades", {
   escrowPurchasedAmount: decimal("escrow_purchased_amount", { precision: 15, scale: 8 }).default("0"), // For project currency: purchased portion
   platformFee: decimal("platform_fee", { precision: 15, scale: 8 }).notNull().default("0"),
   currencyType: text("currency_type").notNull().default("usd"), // 'usd' or 'project' (VEX Coin)
+  // Sub-wallet currency for the seller's escrow / buyer credit. NULL = legacy
+  // primary `users.balance` path. When set, the matching `user_currency_wallets`
+  // row is debited/credited through `adjustUserCurrencyBalance` so multi-currency
+  // sellers can offer in any of their allowed currencies.
+  walletCurrency: text("wallet_currency"),
   expiresAt: timestamp("expires_at"),
   paidAt: timestamp("paid_at"),
   confirmedAt: timestamp("confirmed_at"),
@@ -3849,6 +3859,12 @@ export const tournamentParticipants = pgTable("tournament_participants", {
   losses: integer("losses").notNull().default(0),
   placement: integer("placement"),
   prizeWon: decimal("prize_won", { precision: 15, scale: 2 }).default("0.00"),
+  // Sub-wallet currency the participant paid the entry fee from. NULL = legacy
+  // primary balance path (`users.balance`). When set, refunds and prize payouts
+  // for this participant target the matching `user_currency_wallets` row via
+  // `adjustUserCurrencyBalance`. Only meaningful when tournament.currency='usd'
+  // (cash path); ignored for project (VXC) tournaments.
+  walletCurrency: text("wallet_currency"),
   joinedAt: timestamp("joined_at").notNull().defaultNow(),
 }, (table) => [
   index("idx_tp_tournament").on(table.tournamentId),
