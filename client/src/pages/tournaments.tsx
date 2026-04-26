@@ -1306,9 +1306,16 @@ function TournamentDetailView({ id }: { id: string }) {
                 <Button
                   onClick={() => {
                     if (showWalletPicker) {
-                      // Default selection: primary currency. Picker
-                      // confirm sends the selected wallet code through.
-                      setSelectedWalletCurrency((current) => current ?? userPrimaryCurrency);
+                      // Always normalize selection on open so a stale
+                      // value (e.g. from a previously larger
+                      // allowed-currency set, or before the user's wallet
+                      // config changed) can't survive into the new
+                      // dialog. Prefer primary if it's still allowed,
+                      // otherwise the first available picker option.
+                      const fallback = pickerCurrencies.includes(userPrimaryCurrency)
+                        ? userPrimaryCurrency
+                        : (pickerCurrencies[0] ?? userPrimaryCurrency);
+                      setSelectedWalletCurrency(fallback);
                       setWalletPickerOpen(true);
                       return;
                     }
