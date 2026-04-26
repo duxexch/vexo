@@ -150,10 +150,40 @@ export function registerWalletConversionRoutes(app: Express): void {
         return res.status(400).json({ error: "amount must be a positive number" });
       }
 
-      const [global, fxSnapshot] = await Promise.all([
+      const [global, fxSnapshot, user] = await Promise.all([
         loadGlobalSettings(),
         getDepositFxSnapshot([fromCurrency, toCurrency]),
+        storage.getUser(req.user!.id),
       ]);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      if (!global.enabled) {
+        return res.status(403).json({
+          error: "Wallet conversion is currently disabled",
+          code: "CONVERSION_GLOBALLY_DISABLED",
+        });
+      }
+      if (user.currencyConversionDisabled) {
+        return res.status(403).json({
+          error: "Wallet conversion is disabled for your account",
+          code: "CONVERSION_USER_DISABLED",
+        });
+      }
+      if (!user.multiCurrencyEnabled) {
+        return res.status(403).json({
+          error: "Multi-currency wallets are not enabled for your account",
+          code: "MULTI_CURRENCY_DISABLED",
+        });
+      }
+      const allowed = new Set(getEffectiveAllowedCurrencies(user));
+      if (!allowed.has(fromCurrency) || !allowed.has(toCurrency)) {
+        return res.status(400).json({
+          error: `Both currencies must be on your allow-list (have: ${[...allowed].join(", ")})`,
+          code: "WALLET_NOT_ALLOWED",
+        });
+      }
 
       const quote = quoteWalletConversion(
         fromCurrency,
