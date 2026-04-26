@@ -71,8 +71,10 @@ relevant smokes in series. Use these instead of remembering individual scripts.
   tile-orientation snapshots, playthrough bounds, playthrough pips, and
   elbow-mirror parity (`scripts/smoke-domino-elbow-mirror.ts`, added in Task
   #95). Run it on any PR that touches the board or its solver before merging.
-- **`quality:gate:chat`** — DM/room realtime notifications and call-action
-  smokes (incl. the React-tree call-actions test).
+- **`quality:gate:chat`** — DM/room realtime notifications, call-action
+  smokes (incl. the React-tree call-actions test), and the mobile-web
+  keyboard-inset Playwright smoke (Task #117 — see "Mobile Verification"
+  below).
 - **`quality:gate:game-visuals`** — game-icon purity and game-config
   resolution.
 - **`quality:gate:i18n-global`** — types + i18n string-key gate.
@@ -80,6 +82,7 @@ relevant smokes in series. Use these instead of remembering individual scripts.
 ## Mobile Verification
 
 - **Task #82 — Android Capacitor composer over keyboard:** Manual real-device verification of the Task #43 fix (`Keyboard.resize: 'none'` + `useKeyboardInset` driven by `visualViewport`/Capacitor Keyboard events) is captured as a step-by-step Arabic checklist at `docs/device-tests/android-keyboard-composer-2026-04.md`. Pass/fail outcome to be recorded inline in that file once executed on a physical Android (and ideally iOS) device.
+- **Task #117 — Mobile-web keyboard-inset Playwright smoke:** `tests/playwright/chat-keyboard-inset.spec.mjs` (npm script `quality:smoke:chat-keyboard-inset`, wired into `quality:gate:chat`) opens the chat page on iPhone 14 + Pixel 7 emulated viewports, programmatically shrinks `window.visualViewport.height` to simulate the on-screen keyboard, and asserts the composer's bounding-box bottom now sits inside the visible viewport. It locks the user-visible outcome of the Task #43 fix (`useKeyboardInset` + the chat wrapper's `pb-[max(..., var(--keyboard-inset-bottom,0px))]`) on every CI build, complementing the Task #81 unit tests (which lock the hook's listener attach/detach mechanics) and leaving Task #82 to cover only the genuinely native Capacitor bits.
 
 ## Cross-Surface Rule (PERMANENT, Task #177)
 
