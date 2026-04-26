@@ -622,12 +622,11 @@ export function ChatViewerCountPill({
                   </Link>
                   {/* Task #110: per-row quick action menu so power users
                       can act on a spectator without leaving the match. The
-                      menu reuses existing friend/mute/block APIs already
-                      wired into the codebase — no new backend endpoints
-                      are introduced. The "Report" item maps to the same
-                      block primitive (mirroring the Twitter / Instagram
-                      "Report and Block" pattern) since the codebase
-                      doesn't expose a separate report endpoint. */}
+                      menu reuses existing friend/mute APIs already wired
+                      into the codebase. Task #148 split "Report" out from
+                      "Block" — Report now POSTs to the dedicated
+                      /api/users/:userId/report moderation queue instead of
+                      silently re-using the block primitive. */}
                   <ViewerActionMenu viewer={v} />
                 </li>
               ))}
@@ -651,14 +650,16 @@ export function ChatViewerCountPill({
  *                          friend-match page where the inviter picks
  *                          game type + stake)
  *   - Mute              → POST /api/users/:userId/mute
- *   - Report            → POST /api/users/:userId/block (the existing
- *                          moderation primitive). Because the codebase
- *                          has no dedicated report endpoint, "Report"
- *                          and the implicit block are surfaced as one
- *                          action, matching how mainstream social apps
- *                          combine the two. Hidden once the viewer is
- *                          already on the local user's blocked list to
- *                          avoid a redundant call.
+ *   - Report            → POST /api/users/:userId/report (Task #148:
+ *                          dedicated moderation queue — drops a row in
+ *                          `user_reports` for admins to review). Used
+ *                          to silently re-use /block, which meant
+ *                          moderators never saw the report. Reporting
+ *                          no longer hides the spectator from the local
+ *                          user; that's what the separate Mute action
+ *                          is for. Hidden once the viewer is already on
+ *                          the local user's blocked list since blocking
+ *                          implies they don't want to interact further.
  *
  * Mute/report items are hidden when the local user has already muted /
  * blocked the spectator so we don't duplicate state. Self-rows hide the
@@ -710,12 +711,15 @@ export function ViewerActionMenu({ viewer }: ViewerActionMenuProps) {
     },
   });
 
+  // Task #148: send the report to moderators via the dedicated /report
+  // endpoint instead of silently re-using /block. Reporting no longer hides
+  // the spectator from the local user — that's what the separate Mute action
+  // is for — so we don't need to refresh the auth user here.
   const reportMutation = useMutation({
     mutationFn: (userId: string) =>
-      apiRequest("POST", `/api/users/${userId}/block`),
+      apiRequest("POST", `/api/users/${userId}/report`, { context: "spectator" }),
     onSuccess: () => {
       toast({ title: t("chat.reportSuccess") });
-      refreshUser();
     },
     onError: (err: Error) => {
       toast({

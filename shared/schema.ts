@@ -2502,6 +2502,56 @@ export const userRelationshipsRelations = relations(userRelationships, ({ one })
   targetUser: one(users, { fields: [userRelationships.targetUserId], references: [users.id] }),
 }));
 
+// ==================== USER REPORTS ====================
+//
+// Task #148: spectator "Report" used to silently re-use the block endpoint, so
+// moderators never saw the report. Each row here is one report dropped onto a
+// queue admins can review. Kept intentionally small: reporter, reported user,
+// where it came from (e.g. "spectator"), an optional reason / details, and a
+// review-status that admins flip from "pending" to one of the terminal states.
+export const userReportContextEnum = pgEnum("user_report_context", [
+  "spectator", "chat", "profile", "other",
+]);
+
+export const userReportReasonEnum = pgEnum("user_report_reason", [
+  "spam", "harassment", "cheating", "other",
+]);
+
+export const userReportStatusEnum = pgEnum("user_report_status", [
+  "pending", "reviewed", "actioned", "dismissed",
+]);
+
+export const userReports = pgTable("user_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reporterId: varchar("reporter_id").notNull().references(() => users.id),
+  reportedUserId: varchar("reported_user_id").notNull().references(() => users.id),
+  context: userReportContextEnum("context").notNull().default("other"),
+  reason: userReportReasonEnum("reason"),
+  details: text("details"),
+  status: userReportStatusEnum("status").notNull().default("pending"),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("idx_user_reports_reported_user_id").on(table.reportedUserId),
+  index("idx_user_reports_reporter_id").on(table.reporterId),
+  index("idx_user_reports_status").on(table.status),
+  index("idx_user_reports_created_at").on(table.createdAt),
+  // DB-level guard against duplicate pending reports from the same reporter
+  // against the same target — closes the race window the app-level
+  // check-then-insert dedupe can't cover.
+  uniqueIndex("idx_user_reports_unique_pending")
+    .on(table.reporterId, table.reportedUserId)
+    .where(sql`status = 'pending'`),
+]);
+
+export const userReportsRelations = relations(userReports, ({ one }) => ({
+  reporter: one(users, { fields: [userReports.reporterId], references: [users.id], relationName: "userReportReporter" }),
+  reportedUser: one(users, { fields: [userReports.reportedUserId], references: [users.id], relationName: "userReportReported" }),
+  reviewer: one(users, { fields: [userReports.reviewedBy], references: [users.id], relationName: "userReportReviewer" }),
+}));
+
 // ==================== CHAT MESSAGES ====================
 
 export const chatMessages = pgTable("chat_messages", {
@@ -2722,6 +2772,7 @@ export const insertManagedLanguageSchema = createInsertSchema(managedLanguages).
 export const insertBadgeCatalogSchema = createInsertSchema(badgeCatalog).omit({ id: true, createdAt: true });
 export const insertUserBadgeSchema = createInsertSchema(userBadges).omit({ id: true, earnedAt: true });
 export const insertUserRelationshipSchema = createInsertSchema(userRelationships).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertUserReportSchema = createInsertSchema(userReports).omit({ id: true, createdAt: true, reviewedAt: true, reviewedBy: true, reviewNotes: true, status: true });
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
 export const insertBroadcastNotificationSchema = createInsertSchema(broadcastNotifications).omit({ id: true, sentAt: true });
 export const insertChatSettingSchema = createInsertSchema(chatSettings).omit({ id: true, updatedAt: true });
@@ -2912,6 +2963,9 @@ export type UserBadge = typeof userBadges.$inferSelect;
 
 export type InsertUserRelationship = z.infer<typeof insertUserRelationshipSchema>;
 export type UserRelationship = typeof userRelationships.$inferSelect;
+
+export type InsertUserReport = z.infer<typeof insertUserReportSchema>;
+export type UserReport = typeof userReports.$inferSelect;
 
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;

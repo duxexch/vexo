@@ -4,6 +4,21 @@ import { getErrorMessage } from "../helpers";
 import { storage } from "../../storage";
 import { sendNotification } from "../../websocket";
 import { blockUser, isEitherUserBlocked, unblockUser } from "../../lib/user-blocking";
+import { db } from "../../db";
+import { and, eq } from "drizzle-orm";
+import { userReports, userReportContextEnum, userReportReasonEnum } from "@shared/schema";
+import { z } from "zod";
+
+// Task #148: spectator "Report" used to silently re-use the block endpoint, so
+// moderators never saw the report. The body is intentionally permissive — the
+// only required input is the path param (target user); reason / context /
+// details are all optional so the existing one-click "Report" button keeps
+// working without a picker UI.
+const reportBodySchema = z.object({
+  context: z.enum(userReportContextEnum.enumValues).optional(),
+  reason: z.enum(userReportReasonEnum.enumValues).optional(),
+  details: z.string().trim().max(1000).optional(),
+});
 
 export function registerSocialActionRoutes(app: Express): void {
 
@@ -261,6 +276,70 @@ export function registerSocialActionRoutes(app: Express): void {
       }
 
       res.json({ success: true, message: "User blocked" });
+    } catch (error: unknown) {
+      res.status(500).json({ error: getErrorMessage(error) });
+    }
+  });
+
+  // Task #148: report a user. Drops a row onto the moderation queue
+  // (`user_reports`) for admins to review. Unlike `/block`, this does NOT add
+  // the target to the reporter's personal block list — reporting and blocking
+  // are intentionally separate now so moderators see the signal even if the
+  // reporter doesn't also want to hide the user. Duplicate pending reports
+  // from the same reporter against the same target are coalesced (we silently
+  // succeed without inserting another row) so a fat-finger second click can't
+  // be used to spam the queue.
+  app.post("/api/users/:userId/report", authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+      const reporterId = req.user!.id;
+      const reportedUserId = req.params.userId;
+
+      if (reporterId === reportedUserId) {
+        return res.status(400).json({ error: "Cannot report yourself" });
+      }
+
+      const targetUser = await storage.getUser(reportedUserId);
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const parsed = reportBodySchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid report payload" });
+      }
+      const { context, reason, details } = parsed.data;
+
+      const [existingPending] = await db
+        .select({ id: userReports.id })
+        .from(userReports)
+        .where(and(
+          eq(userReports.reporterId, reporterId),
+          eq(userReports.reportedUserId, reportedUserId),
+          eq(userReports.status, "pending"),
+        ))
+        .limit(1);
+
+      if (existingPending) {
+        return res.json({
+          success: true,
+          message: "User reported",
+          reportId: existingPending.id,
+          deduplicated: true,
+        });
+      }
+
+      const [inserted] = await db
+        .insert(userReports)
+        .values({
+          reporterId,
+          reportedUserId,
+          context: context ?? "spectator",
+          reason: reason ?? null,
+          details: details ?? null,
+        })
+        .returning({ id: userReports.id });
+
+      res.json({ success: true, message: "User reported", reportId: inserted.id });
     } catch (error: unknown) {
       res.status(500).json({ error: getErrorMessage(error) });
     }
