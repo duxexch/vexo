@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { __pickLatestRefundPerTournamentForTest } from "../server/routes/tournaments/listing";
+import { __pickRefundsPerTournamentForTest } from "../server/routes/tournaments/listing";
 
-describe("loadUserRefundsByTournament — latest-wins dedup", () => {
+describe("loadUserRefundsByTournament — per-(tournament,reason) picker", () => {
   const tournamentId = "abc-123";
   const userId = "user-1";
 
-  it("returns the row with the most recent createdAt when duplicates exist", () => {
+  it("keeps only the latest row when duplicates of the SAME reason exist", () => {
     const older = new Date("2026-04-01T10:00:00Z");
     const newer = new Date("2026-04-20T15:30:00Z");
 
-    const map = __pickLatestRefundPerTournamentForTest([
+    const map = __pickRefundsPerTournamentForTest([
       {
         referenceId: `tournament-cancel-refund:${tournamentId}:${userId}`,
         amount: "10.00",
@@ -17,88 +17,104 @@ describe("loadUserRefundsByTournament — latest-wins dedup", () => {
         createdAt: older,
       },
       {
-        referenceId: `tournament-delete-refund:${tournamentId}:${userId}`,
+        referenceId: `tournament-cancel-refund:${tournamentId}:${userId}`,
         amount: "12.50",
         currency: "usd",
         createdAt: newer,
       },
     ]);
 
-    const picked = map.get(tournamentId);
-    expect(picked).toBeDefined();
-    expect(picked?.amount).toBe("12.50");
-    expect(picked?.reason).toBe("deleted");
+    const list = map.get(tournamentId);
+    expect(list).toBeDefined();
+    expect(list).toHaveLength(1);
+    expect(list?.[0].amount).toBe("12.50");
+    expect(list?.[0].reason).toBe("cancelled");
   });
 
-  it("prefers the newer row even when input order is reversed", () => {
-    const older = new Date("2026-04-01T10:00:00Z");
-    const newer = new Date("2026-04-20T15:30:00Z");
+  it("returns BOTH a cancel-refund and a delete-refund when both exist (chronological)", () => {
+    const cancelAt = new Date("2026-04-01T10:00:00Z");
+    const deleteAt = new Date("2026-04-20T15:30:00Z");
 
-    const map = __pickLatestRefundPerTournamentForTest([
+    const map = __pickRefundsPerTournamentForTest([
       {
         referenceId: `tournament-delete-refund:${tournamentId}:${userId}`,
-        amount: "12.50",
+        amount: "2.00",
         currency: "usd",
-        createdAt: newer,
+        createdAt: deleteAt,
       },
       {
         referenceId: `tournament-cancel-refund:${tournamentId}:${userId}`,
         amount: "10.00",
         currency: "usd",
-        createdAt: older,
+        createdAt: cancelAt,
       },
     ]);
 
-    expect(map.get(tournamentId)?.amount).toBe("12.50");
-    expect(map.get(tournamentId)?.reason).toBe("deleted");
+    const list = map.get(tournamentId);
+    expect(list).toBeDefined();
+    expect(list).toHaveLength(2);
+    // Sorted chronologically — cancel happened first, then delete.
+    expect(list?.[0].reason).toBe("cancelled");
+    expect(list?.[0].amount).toBe("10.00");
+    expect(list?.[1].reason).toBe("deleted");
+    expect(list?.[1].amount).toBe("2.00");
   });
 
-  it("prefers cancel-refund when it is the most recent record", () => {
-    const older = new Date("2026-04-01T10:00:00Z");
-    const newer = new Date("2026-04-20T15:30:00Z");
-
-    const map = __pickLatestRefundPerTournamentForTest([
-      {
-        referenceId: `tournament-delete-refund:${tournamentId}:${userId}`,
-        amount: "5.00",
-        currency: "usd",
-        createdAt: older,
-      },
+  it("returns just the cancel-refund when no delete-refund exists", () => {
+    const map = __pickRefundsPerTournamentForTest([
       {
         referenceId: `tournament-cancel-refund:${tournamentId}:${userId}`,
         amount: "15.00",
         currency: "usd",
-        createdAt: newer,
+        createdAt: new Date("2026-04-20T15:30:00Z"),
       },
     ]);
 
-    expect(map.get(tournamentId)?.amount).toBe("15.00");
-    expect(map.get(tournamentId)?.reason).toBe("cancelled");
+    const list = map.get(tournamentId);
+    expect(list).toHaveLength(1);
+    expect(list?.[0].reason).toBe("cancelled");
+    expect(list?.[0].amount).toBe("15.00");
   });
 
-  it("resolves cross-currency duplicates by createdAt as well", () => {
-    const older = new Date("2026-04-01T10:00:00Z");
-    const newer = new Date("2026-04-20T15:30:00Z");
+  it("returns just the delete-refund when no cancel-refund exists", () => {
+    const map = __pickRefundsPerTournamentForTest([
+      {
+        referenceId: `tournament-delete-refund:${tournamentId}:${userId}`,
+        amount: "5.00",
+        currency: "usd",
+        createdAt: new Date("2026-04-20T15:30:00Z"),
+      },
+    ]);
 
-    const map = __pickLatestRefundPerTournamentForTest([
+    const list = map.get(tournamentId);
+    expect(list).toHaveLength(1);
+    expect(list?.[0].reason).toBe("deleted");
+    expect(list?.[0].amount).toBe("5.00");
+  });
+
+  it("preserves both currencies when cancel is in project and delete is in USD", () => {
+    const cancelAt = new Date("2026-04-01T10:00:00Z");
+    const deleteAt = new Date("2026-04-20T15:30:00Z");
+
+    const map = __pickRefundsPerTournamentForTest([
       {
         referenceId: `tournament-cancel-refund:${tournamentId}:${userId}`,
         amount: "100.00",
         currency: "project",
-        createdAt: newer,
+        createdAt: cancelAt,
       },
       {
         referenceId: `tournament-delete-refund:${tournamentId}:${userId}`,
         amount: "8.00",
         currency: "usd",
-        createdAt: older,
+        createdAt: deleteAt,
       },
     ]);
 
-    const picked = map.get(tournamentId);
-    expect(picked?.currency).toBe("project");
-    expect(picked?.amount).toBe("100.00");
-    expect(picked?.reason).toBe("cancelled");
+    const list = map.get(tournamentId);
+    expect(list).toHaveLength(2);
+    expect(list?.[0]).toEqual({ amount: "100.00", currency: "project", reason: "cancelled" });
+    expect(list?.[1]).toEqual({ amount: "8.00", currency: "usd", reason: "deleted" });
   });
 
   it("keeps independent tournaments separate", () => {
@@ -106,7 +122,7 @@ describe("loadUserRefundsByTournament — latest-wins dedup", () => {
     const t2 = "tournament-bbb";
     const date = new Date("2026-04-15T00:00:00Z");
 
-    const map = __pickLatestRefundPerTournamentForTest([
+    const map = __pickRefundsPerTournamentForTest([
       {
         referenceId: `tournament-cancel-refund:${t1}:${userId}`,
         amount: "5.00",
@@ -121,15 +137,20 @@ describe("loadUserRefundsByTournament — latest-wins dedup", () => {
       },
     ]);
 
-    expect(map.get(t1)?.amount).toBe("5.00");
-    expect(map.get(t1)?.reason).toBe("cancelled");
-    expect(map.get(t2)?.amount).toBe("9.00");
-    expect(map.get(t2)?.reason).toBe("deleted");
+    const list1 = map.get(t1);
+    expect(list1).toHaveLength(1);
+    expect(list1?.[0].amount).toBe("5.00");
+    expect(list1?.[0].reason).toBe("cancelled");
+
+    const list2 = map.get(t2);
+    expect(list2).toHaveLength(1);
+    expect(list2?.[0].amount).toBe("9.00");
+    expect(list2?.[0].reason).toBe("deleted");
   });
 
   it("ignores rows with malformed or missing reference ids", () => {
     const date = new Date("2026-04-15T00:00:00Z");
-    const map = __pickLatestRefundPerTournamentForTest([
+    const map = __pickRefundsPerTournamentForTest([
       { referenceId: null, amount: "1", currency: "usd", createdAt: date },
       { referenceId: "garbage-no-prefix", amount: "1", currency: "usd", createdAt: date },
       {
@@ -141,6 +162,13 @@ describe("loadUserRefundsByTournament — latest-wins dedup", () => {
     ]);
 
     expect(map.size).toBe(1);
-    expect(map.get(tournamentId)?.amount).toBe("7.00");
+    const list = map.get(tournamentId);
+    expect(list).toHaveLength(1);
+    expect(list?.[0].amount).toBe("7.00");
+  });
+
+  it("returns an empty map when given no rows", () => {
+    const map = __pickRefundsPerTournamentForTest([]);
+    expect(map.size).toBe(0);
   });
 });

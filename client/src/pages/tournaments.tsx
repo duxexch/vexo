@@ -220,7 +220,7 @@ interface TournamentListItem {
   startsAt: string | null;
   participantCount: number;
   isRegistered?: boolean;
-  userRefund?: UserRefundInfo | null;
+  userRefunds?: UserRefundInfo[];
 }
 
 interface TournamentMatch {
@@ -283,7 +283,7 @@ interface TournamentDetail {
   matches: TournamentMatch[];
   isRegistered: boolean;
   participantCount: number;
-  userRefund?: UserRefundInfo | null;
+  userRefunds?: UserRefundInfo[];
 }
 
 export function TournamentRefundBanner({
@@ -577,14 +577,26 @@ function TournamentListView() {
                         <ChevronRight className="hidden sm:block w-5 h-5 text-muted-foreground" />
                       </div>
                     </div>
-                    {t.userRefund && (t.status === 'cancelled' || t.userRefund.reason === 'deleted') && (
-                      <TournamentRefundBanner
-                        refund={t.userRefund}
-                        variant="list"
-                        en={en}
-                        testId={`tournament-refund-${t.id}`}
-                      />
-                    )}
+                    {(() => {
+                      const refunds = t.userRefunds ?? [];
+                      const shouldShow =
+                        refunds.length > 0 &&
+                        (t.status === 'cancelled' || refunds.some((r) => r.reason === 'deleted'));
+                      if (!shouldShow) return null;
+                      return (
+                        <div className="mt-3 space-y-2">
+                          {refunds.map((refund) => (
+                            <TournamentRefundBanner
+                              key={`${refund.reason}-${refund.currency}`}
+                              refund={refund}
+                              variant="list"
+                              en={en}
+                              testId={`tournament-refund-${t.id}-${refund.reason}`}
+                            />
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </CardContent>
               </Card>
@@ -864,14 +876,26 @@ function TournamentDetailView({ id }: { id: string }) {
         </Card>
       )}
 
-      {tournament.userRefund && (tournament.status === 'cancelled' || tournament.userRefund.reason === 'deleted') && (
-        <TournamentRefundBanner
-          refund={tournament.userRefund}
-          variant="detail"
-          en={en}
-          testId={`tournament-detail-refund-${tournament.id}`}
-        />
-      )}
+      {(() => {
+        const refunds = tournament.userRefunds ?? [];
+        const shouldShow =
+          refunds.length > 0 &&
+          (tournament.status === 'cancelled' || refunds.some((r) => r.reason === 'deleted'));
+        if (!shouldShow) return null;
+        return (
+          <div className="space-y-2">
+            {refunds.map((refund) => (
+              <TournamentRefundBanner
+                key={`${refund.reason}-${refund.currency}`}
+                refund={refund}
+                variant="detail"
+                en={en}
+                testId={`tournament-detail-refund-${tournament.id}-${refund.reason}`}
+              />
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
