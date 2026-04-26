@@ -16,9 +16,22 @@ import {
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Send, MessageCircle, Zap, MoreVertical, Ban, VolumeX, Eye, Users } from "lucide-react";
+import {
+  Send,
+  MessageCircle,
+  Zap,
+  MoreVertical,
+  Ban,
+  VolumeX,
+  Eye,
+  Users,
+  UserPlus,
+  Swords,
+  Flag,
+  User,
+} from "lucide-react";
 import type { ChatViewerSummary } from "@shared/socketio-events";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -589,11 +602,15 @@ export function ChatViewerCountPill({
           <ScrollArea className="max-h-64">
             <ul className="py-1">
               {spectatorViewers.map((v) => (
-                <li key={v.userId}>
+                <li
+                  key={v.userId}
+                  className="flex items-center gap-1 px-1.5 hover:bg-muted"
+                  data-testid={`game-chat-viewer-row-${v.userId}`}
+                >
                   <Link
                     href={`/player/${encodeURIComponent(v.username)}`}
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted"
-                    data-testid={`game-chat-viewer-row-${v.userId}`}
+                    className="flex min-w-0 flex-1 items-center gap-2 px-1.5 py-1.5 text-xs"
+                    data-testid={`game-chat-viewer-row-link-${v.userId}`}
                   >
                     <Avatar className="h-6 w-6">
                       <AvatarImage src={v.avatarUrl ?? undefined} alt={v.username} />
@@ -603,6 +620,15 @@ export function ChatViewerCountPill({
                     </Avatar>
                     <span className="truncate font-medium">{v.username}</span>
                   </Link>
+                  {/* Task #110: per-row quick action menu so power users
+                      can act on a spectator without leaving the match. The
+                      menu reuses existing friend/mute/block APIs already
+                      wired into the codebase — no new backend endpoints
+                      are introduced. The "Report" item maps to the same
+                      block primitive (mirroring the Twitter / Instagram
+                      "Report and Block" pattern) since the codebase
+                      doesn't expose a separate report endpoint. */}
+                  <ViewerActionMenu viewer={v} />
                 </li>
               ))}
             </ul>
@@ -610,5 +636,168 @@ export function ChatViewerCountPill({
         )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/**
+ * Task #110: kebab menu rendered on each spectator row inside the
+ * "who's watching" popover. Exposes the social actions the spec calls
+ * out — View profile, Add friend, Invite to next match, Mute, Report —
+ * while strictly reusing API endpoints that already exist:
+ *
+ *   - View profile      → wouter navigation to /player/:username
+ *   - Add friend        → POST /api/users/friend-request/:userId
+ *   - Invite to match   → wouter navigation to /multiplayer (the
+ *                          friend-match page where the inviter picks
+ *                          game type + stake)
+ *   - Mute              → POST /api/users/:userId/mute
+ *   - Report            → POST /api/users/:userId/block (the existing
+ *                          moderation primitive). Because the codebase
+ *                          has no dedicated report endpoint, "Report"
+ *                          and the implicit block are surfaced as one
+ *                          action, matching how mainstream social apps
+ *                          combine the two. Hidden once the viewer is
+ *                          already on the local user's blocked list to
+ *                          avoid a redundant call.
+ *
+ * Mute/report items are hidden when the local user has already muted /
+ * blocked the spectator so we don't duplicate state. Self-rows hide the
+ * social actions entirely (you cannot friend / report yourself) and
+ * fall back to just View profile.
+ */
+interface ViewerActionMenuProps {
+  viewer: ChatViewerSummary;
+}
+
+export function ViewerActionMenu({ viewer }: ViewerActionMenuProps) {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  const { user, refreshUser } = useAuth();
+  const [, navigate] = useLocation();
+
+  const isSelf = !!user && user.id === viewer.userId;
+  const isAlreadyMuted = !!user?.mutedUsers?.includes(viewer.userId);
+  const isAlreadyBlocked = !!user?.blockedUsers?.includes(viewer.userId);
+
+  const friendRequestMutation = useMutation({
+    mutationFn: (userId: string) =>
+      apiRequest("POST", `/api/users/friend-request/${userId}`),
+    onSuccess: () => {
+      toast({ title: t("chat.friendRequestSent") });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: t("common.error"),
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const muteMutation = useMutation({
+    mutationFn: (userId: string) =>
+      apiRequest("POST", `/api/users/${userId}/mute`),
+    onSuccess: () => {
+      toast({ title: t("chat.muteSuccess") });
+      refreshUser();
+    },
+    onError: (err: Error) => {
+      toast({
+        title: t("common.error"),
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const reportMutation = useMutation({
+    mutationFn: (userId: string) =>
+      apiRequest("POST", `/api/users/${userId}/block`),
+    onSuccess: () => {
+      toast({ title: t("chat.reportSuccess") });
+      refreshUser();
+    },
+    onError: (err: Error) => {
+      toast({
+        title: t("common.error"),
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const profileHref = `/player/${encodeURIComponent(viewer.username)}`;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={t("chat.viewerActions")}
+          title={t("chat.viewerActions")}
+          data-testid={`game-chat-viewer-actions-${viewer.userId}`}
+          onClick={(e) => {
+            // Stop the click from bubbling up to the row's <Link> so the
+            // popover stays put when opening the menu.
+            e.stopPropagation();
+          }}
+        >
+          <MoreVertical className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="min-w-[180px]"
+        data-testid={`game-chat-viewer-action-menu-${viewer.userId}`}
+      >
+        <DropdownMenuItem
+          onClick={() => navigate(profileHref)}
+          data-testid={`game-chat-viewer-action-view-${viewer.userId}`}
+        >
+          <User className="me-1.5 h-3.5 w-3.5" />
+          {t("chat.viewProfile")}
+        </DropdownMenuItem>
+        {!isSelf && (
+          <DropdownMenuItem
+            onClick={() => friendRequestMutation.mutate(viewer.userId)}
+            disabled={friendRequestMutation.isPending}
+            data-testid={`game-chat-viewer-action-friend-${viewer.userId}`}
+          >
+            <UserPlus className="me-1.5 h-3.5 w-3.5" />
+            {t("chat.addFriend")}
+          </DropdownMenuItem>
+        )}
+        {!isSelf && (
+          <DropdownMenuItem
+            onClick={() => navigate("/multiplayer")}
+            data-testid={`game-chat-viewer-action-invite-${viewer.userId}`}
+          >
+            <Swords className="me-1.5 h-3.5 w-3.5" />
+            {t("chat.inviteToNextMatch")}
+          </DropdownMenuItem>
+        )}
+        {!isSelf && !isAlreadyMuted && (
+          <DropdownMenuItem
+            onClick={() => muteMutation.mutate(viewer.userId)}
+            disabled={muteMutation.isPending}
+            data-testid={`game-chat-viewer-action-mute-${viewer.userId}`}
+          >
+            <VolumeX className="me-1.5 h-3.5 w-3.5" />
+            {t("chat.muteUser")}
+          </DropdownMenuItem>
+        )}
+        {!isSelf && !isAlreadyBlocked && (
+          <DropdownMenuItem
+            onClick={() => reportMutation.mutate(viewer.userId)}
+            disabled={reportMutation.isPending}
+            data-testid={`game-chat-viewer-action-report-${viewer.userId}`}
+          >
+            <Flag className="me-1.5 h-3.5 w-3.5" />
+            {t("chat.reportUser")}
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
