@@ -472,9 +472,17 @@ export default function ChatBubblesLayer() {
   const loadMiniMessages = useCallback(async (peerId: string) => {
     if (!tokenRef.current) return;
     try {
-      const res = await fetch(`/api/chat/${encodeURIComponent(peerId)}/messages?limit=20&offset=0`, {
-        headers: { Authorization: `Bearer ${tokenRef.current}` },
-      });
+      // Task #115 — backfill mini-chat history from the realtime DM
+      // endpoint instead of the legacy `/api/chat/:peerId/messages`
+      // route. The realtime endpoint is the canonical timeline reader
+      // and returns `{ messages, hasMore }`; `normaliseRawMessages`
+      // already handles both shapes for back-compat.
+      const res = await fetch(
+        `/api/dm/${encodeURIComponent(peerId)}/history?limit=20`,
+        {
+          headers: { Authorization: `Bearer ${tokenRef.current}` },
+        },
+      );
       if (!res.ok) return;
       const data = (await res.json()) as unknown;
       setMiniMessagesByPeer((prev) => ({ ...prev, [peerId]: normaliseRawMessages(data) }));

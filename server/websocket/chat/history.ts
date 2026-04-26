@@ -5,34 +5,49 @@ import { eq, desc, and, or, sql } from "drizzle-orm";
 import type { AuthenticatedSocket } from "../shared";
 import { clients } from "../shared";
 import { getLegacyChatHistoryPage } from "../../storage/legacy-chat-history";
+import { isLegacyChatHistoryEnabled } from "../../lib/legacy-chat-flags";
 
 /**
  * Handle paginated chat history retrieval over the legacy WebSocket
  * `chat_history` event.
  *
- * Task #80 — switched to the shared `getLegacyChatHistoryPage` helper
- * so this path now reports the same definitive `hasMore` flag as the
- * realtime `GET /api/dm/:peerId/history` endpoint (Task #28). The
- * old code computed `hasMore = allMessages.length === limit`, which
- * lit up "load older" even when the page happened to be exactly full
- * but really was the start of the conversation. The helper's
- * over-fetch-by-one trick makes this exact case correct.
+ * Task #115 — every in-app surface now backfills from
+ * `GET /api/dm/:peerId/history` (the realtime DM transport, Tasks
+ * #16 / #20 / #28). The handler is therefore gated behind
+ * `LEGACY_CHAT_HISTORY_ENABLED`: when the flag is on, behaviour is
+ * unchanged from Task #80 (definitive `hasMore` via the shared
+ * over-fetch-by-one helper, soft-delete filters in SQL); when the
+ * flag is off, the request is rejected with a `chat_error` envelope
+ * carrying the `legacy_chat_history_disabled` code so a stale client
+ * knows to switch to the realtime DM endpoint instead of silently
+ * timing out.
  *
- * The pre-Task-#80 implementation also did the per-user "delete for
- * me" filtering in JavaScript *after* the SQL `limit/offset` fetch,
- * which both (a) broke `hasMore` (a filtered row inside the
- * over-fetch window could fool the math) and (b) yielded
- * artificially short pages whenever the SQL window happened to
- * include rows the viewer had hidden. The helper now pushes that
- * filter into SQL. The visible-row union across all pages is
- * unchanged — no row is newly visible or newly hidden — but each
- * individual page now reaches its requested size when enough
- * visible rows exist. The legacy storage tests
- * (`server/storage/__tests__/legacy-chat-history.test.ts`) lock
- * this corrected page-composition contract.
+ * Background on the helper-driven path that runs while the flag is
+ * on (kept here for the deprecation window): the pre-Task-#80
+ * implementation computed `hasMore = allMessages.length === limit`
+ * and also did the per-user "delete for me" filtering in JavaScript
+ * *after* the SQL `limit/offset` fetch, which both (a) broke
+ * `hasMore` (a filtered row inside the over-fetch window could fool
+ * the math) and (b) yielded artificially short pages whenever the
+ * SQL window happened to include rows the viewer had hidden. The
+ * helper pushes that filter into SQL and over-fetches by one row.
  */
 export async function handleGetChatHistory(ws: AuthenticatedSocket, data: any): Promise<void> {
   if (!ws.userId) return;
+
+  if (!isLegacyChatHistoryEnabled()) {
+    ws.send(JSON.stringify({
+      type: "chat_error",
+      code: "legacy_chat_history_disabled",
+      message:
+        "The legacy chat_history WebSocket event has been retired. " +
+        "Use GET /api/dm/:peerId/history instead.",
+      // Echo the request peer id so a buggy client can correlate the
+      // failure to the conversation it tried to load.
+      otherUserId: typeof data?.otherUserId === "string" ? data.otherUserId : undefined,
+    }));
+    return;
+  }
 
   const { otherUserId, append } = data;
   // SECURITY: Bound limit and offset to prevent excessive queries

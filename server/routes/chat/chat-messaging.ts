@@ -6,6 +6,7 @@ import { db } from "../../db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
 import { chatAutoDeletePermissions, chatMediaPermissions, chatMessages, projectCurrencyLedger, projectCurrencyWallets, systemConfig, users } from "@shared/schema";
 import { getLegacyChatHistoryPage } from "../../storage/legacy-chat-history";
+import { isLegacyChatHistoryEnabled } from "../../lib/legacy-chat-flags";
 import { chatRateLimiter } from "../../lib/rate-limiter";
 import { sanitizePlainText } from "../../lib/input-security";
 import { isUserBlocked } from "../../lib/user-blocking";
@@ -43,39 +44,43 @@ export function registerChatMessagingRoutes(app: Express): void {
   };
 
 
-  // Get message history with a specific user.
+  // Legacy message-history reader. Task #115 — every in-app surface now
+  // backfills from `GET /api/dm/:peerId/history` (the realtime DM
+  // transport, Tasks #16 / #20 / #28). This route is kept behind the
+  // `LEGACY_CHAT_HISTORY_ENABLED` env flag so a stale client (mobile
+  // cache, dev-build) can still talk to a fresh server during the
+  // deprecation window. When the flag is unset/false the route is not
+  // mounted at all and clients receive the express 404.
   //
-  // Task #80 — the underlying query now uses the same over-fetch-by-one
-  // trick as `GET /api/dm/:peerId/history` to produce a definitive
-  // `hasMore` flag (instead of the broken "did we get fewer rows than
-  // we asked for?" heuristic). Stale clients that just call
-  // `await response.json()` and treat the body as an array still work
-  // unchanged: by default the response shape stays a plain JSON array
-  // of messages. New clients opt into the envelope by passing
-  // `?envelope=hasMore` and then receive `{ messages, hasMore }`.
-  app.get("/api/chat/:userId/messages", authMiddleware, async (req: AuthRequest, res: Response) => {
-    try {
-      const userId = req.user!.id;
-      const otherUserId = req.params.userId;
-      const limit = parseInt(req.query.limit as string) || 50;
-      const offset = parseInt(req.query.offset as string) || 0;
-      const wantsEnvelope = String(req.query.envelope ?? "") === "hasMore";
+  // The Task #80 `?envelope=hasMore` opt-in is dropped here too — the
+  // canonical reader (`/api/dm/:peerId/history`) always returns the
+  // `{ messages, hasMore }` envelope, so the dual-shape compromise
+  // this route used to support is no longer necessary.
+  if (isLegacyChatHistoryEnabled()) {
+    app.get("/api/chat/:userId/messages", authMiddleware, async (req: AuthRequest, res: Response) => {
+      try {
+        const userId = req.user!.id;
+        const otherUserId = req.params.userId;
+        const limit = parseInt(req.query.limit as string) || 50;
+        const offset = parseInt(req.query.offset as string) || 0;
 
-      const page = await getLegacyChatHistoryPage({
-        userId,
-        peerId: otherUserId,
-        limit,
-        offset,
-        // Preserve historical behaviour for this endpoint — it never
-        // applied soft-delete filters. We only change the *envelope*.
-        applyDeletionFilters: false,
-      });
+        const page = await getLegacyChatHistoryPage({
+          userId,
+          peerId: otherUserId,
+          limit,
+          offset,
+          // Preserve historical behaviour for this endpoint — it never
+          // applied soft-delete filters. The realtime DM endpoint always
+          // does, which is the other reason callers should migrate.
+          applyDeletionFilters: false,
+        });
 
-      res.json(wantsEnvelope ? page : page.messages);
-    } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
-    }
-  });
+        res.json(page.messages);
+      } catch (error: unknown) {
+        res.status(500).json({ error: getErrorMessage(error) });
+      }
+    });
+  }
 
   // Send a message (fallback if WebSocket not available)
   app.post("/api/chat/:userId/messages", authMiddleware, async (req: AuthRequest, res: Response) => {

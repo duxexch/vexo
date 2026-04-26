@@ -279,7 +279,11 @@ class BubbleActivity : Activity() {
         val baseUrl = BubbleConfig.apiBaseUrl(applicationContext) ?: return
         val token = BubbleConfig.authToken(applicationContext) ?: return
         executor.submit {
-            val url = "$baseUrl/api/chat/$peerId/messages?limit=20&offset=0"
+            // Task #115 — backfill from the realtime DM history endpoint
+            // instead of the deprecated `/api/chat/$peerId/messages` route.
+            // The realtime endpoint returns the same `{ messages, hasMore }`
+            // envelope shape that `httpGetMessages` already handles.
+            val url = "$baseUrl/api/dm/$peerId/history?limit=20"
             val items = httpGetMessages(url, token)
             if (items.isNotEmpty()) {
                 mainHandler.post {

@@ -163,6 +163,10 @@ export function useChat(): UseChatReturn {
   const activeConversationRef = useRef<string | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const pendingOutboundRef = useRef<Map<string, PendingOutboundChatMessage>>(new Map());
+  // Forward declaration so `connectWebSocket` (defined first) can call
+  // the DM-history backfill on (re)connect. Populated below when the
+  // `fetchInitialDmHistory` callback is created. Task #115.
+  const fetchInitialDmHistoryRef = useRef<((peerId: string) => Promise<void>) | null>(null);
   const maxReconnectDelay = 30000;
 
   const [searchResults, setSearchResults] = useState<ChatMessage[]>([]);
@@ -412,14 +416,12 @@ export function useChat(): UseChatReturn {
       ws.send(JSON.stringify({ type: "auth", token }));
       const activeConversationId = activeConversationRef.current;
       if (activeConversationId) {
-        ws.send(
-          JSON.stringify({
-            type: "get_chat_history",
-            otherUserId: activeConversationId,
-            limit: 50,
-            offset: 0,
-          })
-        );
+        // Task #115: re-fill the active conversation from the realtime
+        // DM history endpoint on (re)connect, instead of the retired
+        // `get_chat_history` WS event. The realtime endpoint is the
+        // canonical timeline reader and always returns the same
+        // `{ messages, hasMore }` envelope used by `loadMoreMessages`.
+        void fetchInitialDmHistoryRef.current?.(activeConversationId);
       }
       setState((prev) => ({ ...prev, isConnected: true }));
       reconnectAttemptsRef.current = 0;
@@ -623,46 +625,13 @@ export function useChat(): UseChatReturn {
             }
             break;
 
-          case "chat_history":
-            setState((prev) => {
-              const incoming = data.data.messages || [];
-              // Task #80: server now reports a definitive `hasMore`
-              // flag (over-fetch-by-one). Use it directly instead of
-              // the old `incoming.length >= limit` heuristic, which
-              // wrongly lit up "load older" when the last page was
-              // exactly `limit` rows but really was the start of the
-              // conversation.
-              //
-              // Mixed-version note: pre-Task-#80 servers ALSO sent a
-              // `hasMore` boolean (computed via the broken heuristic
-              // `rows.length === limit`). Until those servers are
-              // rolled out, the typeof-check below will trust their
-              // (still non-definitive) value. That is no worse than
-              // the pre-#80 client behaviour. Once the rollout
-              // completes, every value seen here will be definitive.
-              const serverHasMore =
-                typeof data.data.hasMore === "boolean"
-                  ? Boolean(data.data.hasMore)
-                  : incoming.length >= (data.data.limit || 50);
-              if (data.data.append) {
-                // Prepend older messages for infinite scroll
-                const existingIds = new Set(prev.messages.map(m => m.id));
-                const newMsgs = incoming.filter((m: Record<string, unknown>) => !existingIds.has(m.id as string));
-                return {
-                  ...prev,
-                  messages: [...newMsgs, ...prev.messages],
-                  hasMoreMessages: serverHasMore,
-                  loadingMore: false,
-                };
-              }
-              return {
-                ...prev,
-                messages: incoming,
-                hasMoreMessages: serverHasMore,
-                loadingMore: false,
-              };
-            });
-            break;
+          // Task #115 — the legacy `chat_history` event is no longer
+          // requested by this client (initial backfill and scroll-back
+          // both go through `GET /api/dm/:peerId/history`). The case
+          // is intentionally left out so any stale frame from an old
+          // server build is treated as "unknown event" and ignored
+          // rather than mutating the message list with the narrower
+          // legacy projection.
 
           case "message_read_receipt":
             setState((prev) => ({
@@ -952,56 +921,76 @@ export function useChat(): UseChatReturn {
     }
   }, []);
 
+  // Task #115: backfill the active conversation from the realtime DM
+  // history endpoint. Replaces both the legacy `get_chat_history` WS
+  // event and the legacy `GET /api/chat/:userId/messages` HTTP route
+  // — they shared a JS-side history projection that drifted from the
+  // realtime canonical reader. Returns a `{ messages, hasMore }`
+  // envelope; we tolerate the older array shape as a defensive fallback
+  // in case a deploy window leaves the client talking to a pre-Task #28
+  // server.
+  const fetchInitialDmHistory = useCallback(
+    async (peerId: string) => {
+      if (!token) return;
+      const PAGE_SIZE = 50;
+      try {
+        const response = await fetch(
+          `/api/dm/${encodeURIComponent(peerId)}/history?limit=${PAGE_SIZE}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        if (!response.ok) return;
+        const body = (await response.json()) as
+          | Array<Record<string, unknown>>
+          | { messages?: Array<Record<string, unknown>>; hasMore?: boolean };
+        const isWrapped =
+          body !== null && typeof body === "object" && !Array.isArray(body);
+        const incoming = (isWrapped
+          ? (body as { messages?: Array<Record<string, unknown>> }).messages ?? []
+          : (body as Array<Record<string, unknown>>)) as unknown as ChatMessage[];
+        const serverHasMore = isWrapped
+          ? Boolean((body as { hasMore?: boolean }).hasMore)
+          : incoming.length >= PAGE_SIZE;
+        setState((prev) => {
+          // Drop a stale page if the user already switched conversations
+          // before the request landed.
+          if (activeConversationRef.current !== peerId) return prev;
+          return {
+            ...prev,
+            messages: incoming,
+            hasMoreMessages: serverHasMore,
+            loadingMore: false,
+          };
+        });
+      } catch (error) {
+        console.error("Failed to fetch DM history backfill:", error);
+      }
+    },
+    [token],
+  );
+
+  // Expose to `connectWebSocket` (declared earlier) so the WS open
+  // handler can re-fill on reconnect without taking a hard dep on the
+  // memoised callback identity.
+  useEffect(() => {
+    fetchInitialDmHistoryRef.current = fetchInitialDmHistory;
+    return () => {
+      if (fetchInitialDmHistoryRef.current === fetchInitialDmHistory) {
+        fetchInitialDmHistoryRef.current = null;
+      }
+    };
+  }, [fetchInitialDmHistory]);
+
   const selectConversation = useCallback(
     async (userId: string) => {
       setState((prev) => ({ ...prev, activeConversation: userId, messages: [], hasMoreMessages: true }));
 
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: "get_chat_history",
-            otherUserId: userId,
-            limit: 50,
-            offset: 0,
-          })
-        );
-      } else if (token) {
-        try {
-          // Task #80: opt into the `{ messages, hasMore }` envelope
-          // so we can stop guessing end-of-history from row count.
-          // The server keeps returning a plain array for any caller
-          // that doesn't request the envelope, so older app builds
-          // and the other ChatBubblesLayer call sites are unaffected.
-          const response = await fetch(`/api/chat/${userId}/messages?limit=50&offset=0&envelope=hasMore`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-
-          if (response.ok) {
-            const body = await response.json();
-            // Defensive: if a stale server returned the legacy array
-            // shape, coerce back to the envelope so the UI keeps
-            // working (and falls back to the row-count heuristic for
-            // hasMoreMessages, same as the WS path).
-            const fallbackMessages = Array.isArray(body)
-              ? body
-              : Array.isArray(body?.messages)
-                ? body.messages
-                : [];
-            const serverHasMore =
-              !Array.isArray(body) && typeof body?.hasMore === "boolean"
-                ? Boolean(body.hasMore)
-                : fallbackMessages.length >= 50;
-            setState((prev) => ({
-              ...prev,
-              messages: fallbackMessages,
-              hasMoreMessages: serverHasMore,
-              loadingMore: false,
-            }));
-          }
-        } catch (error) {
-          console.error("Failed to fetch conversation history fallback:", error);
-        }
-      }
+      // Task #115: always backfill from the realtime DM history
+      // endpoint, regardless of WebSocket state. The realtime reader
+      // is the single source of truth for the conversation timeline;
+      // new messages still arrive on the WS via `new_chat_message`.
+      await fetchInitialDmHistory(userId);
 
       if (token) {
         try {
@@ -1020,7 +1009,7 @@ export function useChat(): UseChatReturn {
         }
       }
     },
-    [token]
+    [token, fetchInitialDmHistory]
   );
 
   const loadMoreMessages = useCallback(() => {
