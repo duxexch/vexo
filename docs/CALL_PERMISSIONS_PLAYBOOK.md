@@ -244,3 +244,41 @@ requests.
 4. On the same device, deny the prompt with **Don't ask again** and
    retry. The modal should now hide **Allow** entirely and show only
    **Open settings** (this is the new permanently-denied UX).
+
+### 6.6. WebView permission delegation — defence in depth
+
+The Task #124 fix lives at three layers, in priority order:
+
+1. **JS preflight** in `client/src/components/games/VoiceChat.tsx`,
+   `client/src/hooks/use-call-session.tsx` and
+   `client/src/components/chat/private-call-layer.tsx` — these call
+   `ensureCallPermissions(kind)` (the native plugin's runtime
+   request) BEFORE invoking `navigator.mediaDevices.getUserMedia`.
+   This is the primary fix.
+2. **Native plugin guard** in
+   `native-plugins/capacitor-native-call-ui/android/.../NativeCallUIPlugin.kt`
+   — `installPermissionDelegationGuard()` (called from
+   `Plugin.load()`) wraps the WebView's current `WebChromeClient`
+   with one that grants mic/camera requests as soon as the host
+   permission is held, and denies cleanly otherwise so the JS error
+   path can show the rationale modal.
+3. **Host integration** documented in
+   `native-plugins/capacitor-native-call-ui/examples/AndroidManifest-snippet.xml`
+   — if `MainActivity` swaps in a custom `WebChromeClient` after the
+   plugin loads, call
+   `NativeCallUIPlugin.current()?.reinstallPermissionGuard()` from
+   `onCreate` so the wrapper survives.
+
+Verify with logcat (Replit container does not have `adb`; run on the
+workstation):
+
+```bash
+adb logcat -s NativeCallUI:* chromium:I AndroidRuntime:E
+```
+
+Tap **Voice call** and confirm:
+
+- No `Failed to install WebChromeClient permission guard` warning.
+- The OS runtime permission dialog appears within ~250 ms of the tap.
+- `getUserMedia` resolves with a real `MediaStream` (no
+  `NotAllowedError`).

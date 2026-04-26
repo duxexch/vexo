@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.getcapacitor.JSObject
@@ -76,6 +78,130 @@ class NativeCallUIPlugin : Plugin() {
 
     override fun load() {
         instance = this
+        installPermissionDelegationGuard()
+    }
+
+    /**
+     * Defensive WebView permission delegation. Capacitor's default
+     * `BridgeWebChromeClient` already maps WebView permission requests
+     * (`android.webkit.resource.AUDIO_CAPTURE` /
+     * `VIDEO_CAPTURE`) to Android runtime permissions, but a host
+     * `MainActivity` that swaps in its own `WebChromeClient` would
+     * silently break that path — and the symptom in production was
+     * exactly that: the OS dialog never appeared and the WebView
+     * auto-resolved as denied.
+     *
+     * To make the plugin self-sufficient we wrap whatever WebChrome
+     * client the bridge currently has with a delegating one that:
+     *
+     *  1. Forwards every other callback unchanged to the wrapped
+     *     client (so the Bridge / dev tools / file chooser keep
+     *     working).
+     *  2. For mic/camera requests, grants immediately when the host
+     *     already holds the matching Android runtime permission, and
+     *     denies (after a synchronous re-check) when it does not — the
+     *     JS layer is responsible for issuing
+     *     `requestCallMediaPermissions` _before_ touching
+     *     `getUserMedia`, so by the time we get here the host
+     *     permission should always already be granted.
+     *
+     * The wrapper is installed once per plugin load. If installation
+     * fails we log and continue — the JS-side preflight is still in
+     * effect and is the primary fix.
+     *
+     * Host `MainActivity` implementations that swap in their own
+     * `WebChromeClient` AFTER plugin load should call
+     * [reinstallPermissionGuard] from `onCreate` to re-wrap it.
+     */
+    fun reinstallPermissionGuard() {
+        installPermissionDelegationGuard()
+    }
+
+    private fun installPermissionDelegationGuard() {
+        try {
+            val webView = bridge?.webView ?: return
+            val existing = readCurrentWebChromeClient(webView)
+            webView.webChromeClient = CallMediaPermissionWebChromeClient(
+                delegate = existing,
+                isHostPermissionGranted = { name -> hasPermission(name) },
+            )
+        } catch (t: Throwable) {
+            android.util.Log.w(
+                "NativeCallUI",
+                "Failed to install WebChromeClient permission guard",
+                t,
+            )
+        }
+    }
+
+    /**
+     * Best-effort access to the WebView's current `WebChromeClient` so
+     * we can chain to it. Android does not expose a public getter; we
+     * read the field reflectively when possible and fall back to a
+     * pass-through default. Reflection failure is non-fatal because
+     * the wrapper still implements every callback we care about.
+     */
+    private fun readCurrentWebChromeClient(
+        webView: android.webkit.WebView,
+    ): WebChromeClient? {
+        return try {
+            val provider = android.webkit.WebView::class.java
+                .getDeclaredMethod("getWebChromeClient")
+            provider.isAccessible = true
+            provider.invoke(webView) as? WebChromeClient
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /**
+     * Wrapper that handles the call-media permission gate while
+     * delegating every other callback to the bridge's existing
+     * `WebChromeClient`. Kept as an inner class so it can use
+     * `isHostPermissionGranted` from the surrounding plugin without
+     * pulling Capacitor internals.
+     */
+    private class CallMediaPermissionWebChromeClient(
+        private val delegate: WebChromeClient?,
+        private val isHostPermissionGranted: (String) -> Boolean,
+    ) : WebChromeClient() {
+        override fun onPermissionRequest(request: PermissionRequest?) {
+            if (request == null) {
+                delegate?.onPermissionRequest(request)
+                return
+            }
+            val resources = request.resources ?: emptyArray()
+            val needsMic = resources.contains(
+                PermissionRequest.RESOURCE_AUDIO_CAPTURE,
+            )
+            val needsCam = resources.contains(
+                PermissionRequest.RESOURCE_VIDEO_CAPTURE,
+            )
+            if (!needsMic && !needsCam) {
+                delegate?.onPermissionRequest(request)
+                return
+            }
+            val micOk = !needsMic ||
+                isHostPermissionGranted(Manifest.permission.RECORD_AUDIO)
+            val camOk = !needsCam ||
+                isHostPermissionGranted(Manifest.permission.CAMERA)
+            if (micOk && camOk) {
+                request.grant(resources)
+            } else {
+                // Deny rather than silently dropping the request: the
+                // JS layer's preflight should already have requested
+                // the runtime permission, so reaching this branch
+                // means the user denied the OS dialog. Denying the
+                // WebView request lets `getUserMedia` reject with
+                // `NotAllowedError`, which the JS error handler turns
+                // into the forced rationale modal.
+                request.deny()
+            }
+        }
+
+        override fun onPermissionRequestCanceled(request: PermissionRequest?) {
+            delegate?.onPermissionRequestCanceled(request)
+        }
     }
 
     private fun historyPrefs(): SharedPreferences =

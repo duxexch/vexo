@@ -5,6 +5,34 @@
   service starts on Android 12+; the service entries register the FCM
   receiver and the foreground wake service used to surface incoming
   calls within the 5-second OS budget.
+
+  ===========================================================
+  IMPORTANT — WebView permission delegation (Task #124 fix)
+  ===========================================================
+  The friend-call mic/camera flow requires that the WebView's
+  `WebChromeClient.onPermissionRequest` is wired to the Android
+  runtime permission system. Capacitor's default
+  `BridgeWebChromeClient` already does this, AND the plugin's
+  `installPermissionDelegationGuard()` (called from `Plugin.load()`)
+  re-installs a wrapper as a safety net — but if your `MainActivity`
+  swaps in a custom `WebChromeClient` AFTER plugin load you MUST
+  preserve the wrapper. Recommended pattern in MainActivity.kt:
+
+      override fun onCreate(savedInstanceState: Bundle?) {
+          super.onCreate(savedInstanceState)
+          // ... your custom WebChromeClient setup if any ...
+          // Re-arm the call plugin's permission guard last, so it
+          // wraps whatever client you just installed:
+          NativeCallUIPlugin.current()?.reinstallPermissionGuard()
+      }
+
+  Verify with logcat:
+      adb logcat -s NativeCallUI:* chromium:I
+  Tap "Voice call" — you should see the OS runtime permission dialog
+  before any WebView-side prompt. If you see "Failed to install
+  WebChromeClient permission guard" the guard could not attach and
+  the JS-side preflight in `VoiceChat.tsx` /
+  `use-call-session.tsx` is the last line of defence.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
