@@ -567,6 +567,21 @@ describe("POST /api/wallet/convert", () => {
     expect(r.body.error).toMatch(/Insufficient/);
   });
 
+  it("maps an oversized amount (above the user's balance) to 400 INSUFFICIENT_BALANCE", async () => {
+    // The route has no hard upper cap; oversize is detected inside
+    // `executeWalletConversion` → `adjustUserCurrencyBalance`, which throws
+    // "Insufficient X balance". The route catches /^Insufficient/ and
+    // surfaces it as 400 INSUFFICIENT_BALANCE for the client.
+    state.executeOutcome = { kind: "throw", message: "Insufficient EGP balance" };
+    const r = await postJson("/api/wallet/convert", {
+      fromCurrency: "EGP",
+      toCurrency: "SAR",
+      amount: 9_999_999_999, // far above the seeded 1000 USD balance
+    });
+    expect(r.status).toBe(400);
+    expect(r.body.code).toBe("INSUFFICIENT_BALANCE");
+  });
+
   it("returns 401 when the payment-operation-token guard rejects a missing token", async () => {
     state.paymentTokenGuardResponse = {
       statusCode: 401,
