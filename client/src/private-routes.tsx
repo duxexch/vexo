@@ -806,7 +806,7 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                                                     data-testid="button-header-deposit"
                                                 >
                                                     <ArrowDownToLine className="h-4 w-4" aria-hidden="true" />
-                                                    <span className="hidden md:inline">{t("wallet.deposit") || "Deposit"}</span>
+                                                    <span className="hidden sm:inline">{t("wallet.deposit") || "Deposit"}</span>
                                                 </Link>
                                             </Button>
                                         </TooltipTrigger>
@@ -839,47 +839,19 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                                         </TooltipTrigger>
                                         <TooltipContent side="bottom">{t("nav.wallet") || "Wallet"}</TooltipContent>
                                     </Tooltip>
-                                    {/* Remaining icon-only controls — each wrapped in a Tooltip
-                                        with a localized accessible name so the whole top-right
-                                        cluster speaks consistently in both Arabic and English. */}
+                                    {/* Remaining icon-only controls — each owns its own Tooltip
+                                        bound directly to the focusable Button so keyboard focus
+                                        triggers the tooltip with full screen-reader parity. */}
                                     {isHomeRoute && (
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <span className="inline-flex">
-                                                    <Suspense fallback={null}>
-                                                        <SupportChatHeaderTrigger isLoggedIn={true} />
-                                                    </Suspense>
-                                                </span>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="bottom">{t("nav.support") || "Support"}</TooltipContent>
-                                        </Tooltip>
+                                        <Suspense fallback={null}>
+                                            <SupportChatHeaderTrigger isLoggedIn={true} />
+                                        </Suspense>
                                     )}
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <span className="inline-flex">
-                                                <ThemeToggle />
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="bottom">{t("nav.theme") || "Theme"}</TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <span className="inline-flex">
-                                                <NotificationBell />
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="bottom">{t("nav.notifications") || "Notifications"}</TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <span className="inline-flex">
-                                                <Suspense fallback={null}>
-                                                    <LanguageSwitcher />
-                                                </Suspense>
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="bottom">{t("nav.language") || "Language"}</TooltipContent>
-                                    </Tooltip>
+                                    <ThemeToggle />
+                                    <NotificationBell />
+                                    <Suspense fallback={null}>
+                                        <LanguageSwitcher />
+                                    </Suspense>
                                 </div>
                             </header>
                             <main

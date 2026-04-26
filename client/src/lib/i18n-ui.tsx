@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
     getMissingTranslations,
     languages,
@@ -74,20 +75,27 @@ export function LanguageSwitcher() {
             lang.code.toLowerCase().includes(search.toLowerCase()),
     );
 
+    const languageLabel = t("nav.language") || "Language";
     return (
         <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-2"
-                    data-testid="button-language-switch"
-                >
-                    <Globe className="w-4 h-4" />
-                    <span className="hidden sm:inline">{currentLang?.nativeName || "English"}</span>
-                    <span className="sm:hidden">{currentLang?.code.toUpperCase() || "EN"}</span>
-                </Button>
-            </PopoverTrigger>
+            <Tooltip>
+                <PopoverTrigger asChild>
+                    <TooltipTrigger asChild>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center gap-2"
+                            aria-label={languageLabel}
+                            data-testid="button-language-switch"
+                        >
+                            <Globe className="w-4 h-4" />
+                            <span className="hidden sm:inline">{currentLang?.nativeName || "English"}</span>
+                            <span className="sm:hidden">{currentLang?.code.toUpperCase() || "EN"}</span>
+                        </Button>
+                    </TooltipTrigger>
+                </PopoverTrigger>
+                <TooltipContent side="bottom">{languageLabel}</TooltipContent>
+            </Tooltip>
             <PopoverContent className="w-72 p-0" align="end">
                 <div className="p-3 border-b">
                     <div className="relative">

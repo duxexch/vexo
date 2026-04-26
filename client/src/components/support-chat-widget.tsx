@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { useMessageTranslation } from "@/hooks/use-message-translation";
@@ -572,31 +573,36 @@ export function SupportChatHeaderTrigger({ isLoggedIn = false, className }: { is
   }
 
   const unreadCount = unreadData?.unread || 0;
+  const supportLabel = t('nav.support') || t('support.title') || 'Support';
 
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="icon"
-      onClick={() => window.dispatchEvent(new Event(SUPPORT_CHAT_OPEN_EVENT))}
-      aria-label={t('support.title')}
-      title={t('support.title')}
-      className={cn(
-        "relative h-9 w-9",
-        unreadCount > 0
-          ? "animate-pulse border-green-500/60 text-green-600 shadow-[0_0_0_2px_rgba(34,197,94,0.18)]"
-          : "",
-        className,
-      )}
-      data-testid="button-header-support-chat"
-    >
-      <Headphones className="h-4 w-4" />
-      {unreadCount > 0 && (
-        <span className="absolute -top-1 -end-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white shadow-md">
-          {unreadCount > 9 ? "9+" : unreadCount}
-        </span>
-      )}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => window.dispatchEvent(new Event(SUPPORT_CHAT_OPEN_EVENT))}
+          aria-label={supportLabel}
+          className={cn(
+            "relative h-9 w-9",
+            unreadCount > 0
+              ? "animate-pulse border-green-500/60 text-green-600 shadow-[0_0_0_2px_rgba(34,197,94,0.18)]"
+              : "",
+            className,
+          )}
+          data-testid="button-header-support-chat"
+        >
+          <Headphones className="h-4 w-4" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -end-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white shadow-md">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{supportLabel}</TooltipContent>
+    </Tooltip>
   );
 }
 
