@@ -302,11 +302,13 @@ describe("Task #213: capacitor.config.ts SocialLogin.providers contract", () => 
     // config. Force an explicit decision: every key in the providers
     // map must appear in PROVIDER_EXPECTATIONS above.
     const block = readSocialLoginProvidersBlock();
-    const knownKeys = new Set(PROVIDER_EXPECTATIONS.map((p) => p.provider));
-    const allKeys = Array.from(block.matchAll(/\b([a-zA-Z]+)\s*:\s*(?:true|false)\b/g)).map(
-      (m) => m[1],
+    const knownKeys: Set<string> = new Set(
+      PROVIDER_EXPECTATIONS.map((p) => p.provider),
     );
-    const unknown = allKeys.filter((k) => !knownKeys.has(k as never));
+    const allKeys = Array.from(
+      block.matchAll(/\b([a-zA-Z]+)\s*:\s*(?:true|false)\b/g),
+    ).map((m) => m[1]);
+    const unknown = allKeys.filter((k) => !knownKeys.has(k));
     expect(
       unknown,
       `SocialLogin.providers contains unknown keys: ${unknown.join(", ")}. ` +
@@ -316,6 +318,41 @@ describe("Task #213: capacitor.config.ts SocialLogin.providers contract", () => 
         "switch case in isSocialPlatformEnabledInAuthSettings) and the native " +
         "config it depends on (Info.plist on iOS, build.gradle on Android).",
     ).toEqual([]);
+  });
+
+  it("login.tsx wires every native-enabled provider through AuthSettings", () => {
+    // Machine-checked half of the bidirectional contract: for every
+    // provider whose native plugin is initialised (expected = true),
+    // client/src/pages/login.tsx MUST expose a corresponding
+    // `<provider>LoginEnabled` flag in its AuthSettings interface — that
+    // is the gate the page reads to decide whether to render the button
+    // at all. If the flag goes away but the native init stays on, the
+    // button silently disappears for users while the plugin keeps
+    // initialising the SDK at boot for nothing.
+    //
+    // Note: we only check the `expected: true` direction because the
+    // `expected: false` providers (Facebook, Twitter) intentionally
+    // still have AuthSettings flags wired so admins can enable them
+    // server-side ahead of the native rollout — that's the documented
+    // drift the per-provider failure messages above guide developers
+    // through.
+    const loginSource = readFileSync(
+      resolve(REPO_ROOT, "client/src/pages/login.tsx"),
+      "utf8",
+    );
+    const enabledProviders = PROVIDER_EXPECTATIONS.filter((p) => p.expected);
+    for (const { provider } of enabledProviders) {
+      const flagRe = new RegExp(`\\b${provider}LoginEnabled\\b`);
+      expect(
+        loginSource,
+        `client/src/pages/login.tsx is missing a \`${provider}LoginEnabled\` flag in its ` +
+          `AuthSettings interface. capacitor.config.ts has \`SocialLogin.providers.${provider} = true\`, ` +
+          "which means the native plugin will initialise the SDK at boot, but with no AuthSettings " +
+          "flag the login page can never render the button — the SDK init is wasted and users " +
+          "have no way to actually sign in with it. If you intentionally removed the button, also " +
+          `flip \`${provider}: false\` in capacitor.config.ts and update PROVIDER_EXPECTATIONS above.`,
+      ).toMatch(flagRe);
+    }
   });
 
   for (const { provider, expected, why } of PROVIDER_EXPECTATIONS) {
