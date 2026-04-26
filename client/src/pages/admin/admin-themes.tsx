@@ -677,8 +677,17 @@ export default function AdminThemesPage() {
           {sortedThemes.map((theme) => (
             <Card
               key={theme.id}
-              className="overflow-hidden transition hover:shadow-lg"
+              className="overflow-hidden transition hover:shadow-lg cursor-pointer"
               data-testid={`card-theme-${theme.name}`}
+              onClick={() => setEditing(theme)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setEditing(theme);
+                }
+              }}
             >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
@@ -733,7 +742,7 @@ export default function AdminThemesPage() {
                     variant="outline"
                     size="sm"
                     className="w-full"
-                    onClick={() => setEditing(theme)}
+                    onClick={(e) => { e.stopPropagation(); setEditing(theme); }}
                     data-testid={`button-edit-${theme.name}`}
                   >
                     <Palette className="h-4 w-4 me-2" />
@@ -744,7 +753,7 @@ export default function AdminThemesPage() {
                     size="sm"
                     className="w-full"
                     disabled={theme.isDefault || activateMutation.isPending}
-                    onClick={() => activateMutation.mutate(theme.id)}
+                    onClick={(e) => { e.stopPropagation(); activateMutation.mutate(theme.id); }}
                     data-testid={`button-activate-${theme.name}`}
                   >
                     {theme.isDefault ? (
