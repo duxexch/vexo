@@ -313,6 +313,12 @@ export function registerMarketerProgramRoutes(app: Express) {
 
             if (action === "grant") {
                 const badgeId = await getOrCreateMarketerBadgeId();
+                // Atomicity convention (Task #193 audit): this callback
+                // performs three sequential mutations with NO early-return
+                // guards. Any failure from Drizzle propagates as a thrown
+                // rejection, which rolls back the whole transaction. No
+                // `{ success: false }` envelope is returned from inside the
+                // callback, so partial commits are not possible.
                 await db.transaction(async (tx) => {
                     await tx.update(affiliates)
                         .set({
@@ -339,6 +345,14 @@ export function registerMarketerProgramRoutes(app: Express) {
                     .where(and(eq(badgeCatalog.category, "marketer"), eq(badgeCatalog.name, "Marketer")))
                     .limit(1);
 
+                // Atomicity convention (Task #193 audit): one update plus a
+                // conditional DELETE — no early-return guards inside the
+                // callback. The `if (marketerBadge)` check uses a value
+                // computed BEFORE `db.transaction` opened, so it is purely
+                // a build-time decision about which statements to issue,
+                // not a runtime escape from the transaction. No
+                // `{ success: false }` envelope is returned, so partial
+                // commits are not possible.
                 await db.transaction(async (tx) => {
                     await tx.update(affiliates)
                         .set({ marketerStatus: "revoked", updatedAt: new Date() })

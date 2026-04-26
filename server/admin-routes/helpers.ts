@@ -15,6 +15,25 @@ export function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
+// Lightweight error envelope used by transaction callbacks to surface a
+// specific HTTP status code without losing rollback semantics. The whole
+// reason these helpers exist: a Drizzle transaction callback that *returns*
+// instead of *throwing* lets the partial work commit. To keep money-moving
+// and admin-write routes atomic we always throw inside the callback and let
+// the outer catch translate `statusCode` into a 4xx/5xx response.
+export type HttpError = Error & { statusCode?: number };
+
+export function createHttpError(statusCode: number, message: string): HttpError {
+  const error = new Error(message) as HttpError;
+  error.statusCode = statusCode;
+  return error;
+}
+
+export function resolveErrorStatus(error: unknown, fallback = 500): number {
+  const code = (error as HttpError | null)?.statusCode;
+  return typeof code === "number" && code >= 400 && code < 600 ? code : fallback;
+}
+
 // In-memory one-time admin 2FA challenges (5 min TTL)
 const adminTwoFactorChallenges = new Map<string, { adminId: string; expiresAt: number }>();
 

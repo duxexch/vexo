@@ -95,6 +95,12 @@ export function registerTournamentMatchRoutes(app: Express) {
 
       const loserId = winnerId === match.player1Id ? match.player2Id : match.player1Id;
 
+      // Atomicity convention (Task #193 audit): every failure path inside
+      // this `db.transaction` callback throws — the only early exit is
+      // `throw new Error("Match already completed")` after the WHERE-guarded
+      // update returns no row. The outer catch translates that message back
+      // to a 400. No `{ success: false }` envelope returns from inside the
+      // transaction, so partial commits are not possible.
       await db.transaction(async (tx) => {
         const [updatedMatch] = await tx.update(tournamentMatches)
           .set({
@@ -207,6 +213,14 @@ export function registerTournamentMatchRoutes(app: Express) {
   app.delete("/api/admin/tournaments/:id", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
       const { id } = req.params;
+      // Atomicity convention (Task #193 audit): every failure path inside
+      // this `db.transaction` callback throws (see "Tournament not found",
+      // "Cannot delete tournament in status …"); the outer catch converts
+      // those known messages back to 4xx responses. The two `continue`
+      // statements inside the participant-refund loop only skip a single
+      // participant after a SELECT-only check, so they never leave a partial
+      // mutation behind. No `{ success: false }` envelope returns from
+      // inside the transaction, so partial commits are not possible.
       const deleteResult = await db.transaction(async (tx) => {
         const [lockedTournament] = await tx.select().from(tournaments).where(eq(tournaments.id, id)).for('update');
         if (!lockedTournament) {

@@ -11,7 +11,14 @@ import { sendNotification } from "../../websocket";
 import { emitDisputeAlert } from "../../lib/admin-alerts";
 import { db } from "../../db";
 import { and, desc, eq, or } from "drizzle-orm";
-import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
+import {
+  type AdminRequest,
+  adminAuthMiddleware,
+  createHttpError,
+  getErrorMessage,
+  logAdminAction,
+  resolveErrorStatus,
+} from "../helpers";
 import { sanitizeNullablePlainText } from "../../lib/input-security";
 
 export function registerDisputeActionRoutes(app: Express) {
@@ -38,6 +45,14 @@ export function registerDisputeActionRoutes(app: Express) {
         ? resolution
         : 'Resolved by admin';
 
+      // CRITICAL: every check below MUST throw on failure, not return a
+      // `{ success: false }` envelope. A Drizzle transaction callback that
+      // returns normally commits whatever ran before the return; only a
+      // throw triggers rollback. Today most pre-mutation guards are safe in
+      // isolation, but the storage settlement call mutates external state
+      // and the WHERE-guarded dispute update could be followed by additional
+      // mutations in future edits — throwing keeps the route atomic by
+      // construction.
       const outcome = await db.transaction(async (tx) => {
         const [dispute] = await tx
           .select()
@@ -47,15 +62,15 @@ export function registerDisputeActionRoutes(app: Express) {
           .for("update");
 
         if (!dispute) {
-          return { success: false as const, statusCode: 404, error: "Dispute not found" };
+          throw createHttpError(404, "Dispute not found");
         }
 
         if (dispute.status === 'resolved' || dispute.status === 'closed') {
-          return { success: false as const, statusCode: 400, error: "Dispute is already resolved" };
+          throw createHttpError(400, "Dispute is already resolved");
         }
 
         if (!winnerId || (winnerId !== dispute.initiatorId && winnerId !== dispute.respondentId)) {
-          return { success: false as const, statusCode: 400, error: "winnerId must be dispute initiator or respondent" };
+          throw createHttpError(400, "winnerId must be dispute initiator or respondent");
         }
 
         const [trade] = await tx
@@ -65,7 +80,7 @@ export function registerDisputeActionRoutes(app: Express) {
           .limit(1);
 
         if (!trade) {
-          return { success: false as const, statusCode: 404, error: "Related trade not found" };
+          throw createHttpError(404, "Related trade not found");
         }
 
         const settlementResult = trade.currencyType === 'project'
@@ -73,7 +88,7 @@ export function registerDisputeActionRoutes(app: Express) {
           : await storage.resolveP2PDisputedTradeAtomic(dispute.tradeId, winnerId, resolutionMessage);
 
         if (!settlementResult.success) {
-          return { success: false as const, statusCode: 400, error: settlementResult.error || "Failed to settle disputed trade" };
+          throw createHttpError(400, settlementResult.error || "Failed to settle disputed trade");
         }
 
         const [updated] = await tx.update(p2pDisputes)
@@ -92,7 +107,7 @@ export function registerDisputeActionRoutes(app: Express) {
           .returning();
 
         if (!updated) {
-          return { success: false as const, statusCode: 409, error: "Dispute was updated by another moderator. Please refresh." };
+          throw createHttpError(409, "Dispute was updated by another moderator. Please refresh.");
         }
 
         // Log the action to transaction logs
@@ -106,16 +121,11 @@ export function registerDisputeActionRoutes(app: Express) {
         });
 
         return {
-          success: true as const,
           dispute,
           updated,
           resolutionMessage,
         };
       });
-
-      if (!outcome.success) {
-        return res.status(outcome.statusCode).json({ error: outcome.error });
-      }
 
       const dispute = outcome.dispute;
       const updated = outcome.updated;
@@ -159,7 +169,10 @@ export function registerDisputeActionRoutes(app: Express) {
 
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
+      // Errors thrown from inside `db.transaction` propagate here AFTER the
+      // transaction has rolled back; `resolveErrorStatus` translates the
+      // attached `statusCode` into the right 4xx/5xx response.
+      res.status(resolveErrorStatus(error)).json({ error: getErrorMessage(error) });
     }
   });
 
@@ -331,6 +344,12 @@ export function registerDisputeActionRoutes(app: Express) {
       const isVerified = typeof requestedVerification === 'boolean' ? requestedVerification : true;
       const note = sanitizeNullablePlainText(req.body?.note, 1000);
 
+      // CRITICAL: throw on failure inside the callback — see the matching
+      // comment on the /resolve route. Even though every guard below runs
+      // before any mutation today, the no-op early-success path
+      // (`alreadyInRequestedState`) and the verify+log pair share the same
+      // transaction, so future edits adding mutations before a guard would
+      // silently commit them if we returned an envelope instead of throwing.
       const outcome = await db.transaction(async (tx) => {
         const [dispute] = await tx
           .select({
@@ -346,11 +365,11 @@ export function registerDisputeActionRoutes(app: Express) {
           .for("update");
 
         if (!dispute) {
-          return { success: false as const, statusCode: 404, error: "Dispute not found" };
+          throw createHttpError(404, "Dispute not found");
         }
 
         if (dispute.status === "resolved" || dispute.status === "closed") {
-          return { success: false as const, statusCode: 400, error: "Cannot verify evidence for a resolved dispute" };
+          throw createHttpError(400, "Cannot verify evidence for a resolved dispute");
         }
 
         const [evidence] = await tx
@@ -364,13 +383,14 @@ export function registerDisputeActionRoutes(app: Express) {
           .for("update");
 
         if (!evidence) {
-          return { success: false as const, statusCode: 404, error: "Evidence not found for this dispute" };
+          throw createHttpError(404, "Evidence not found for this dispute");
         }
 
         const alreadyInRequestedState = Boolean(evidence.isVerified) === isVerified;
         if (alreadyInRequestedState) {
+          // Idempotent no-op: nothing has been mutated, returning is safe.
+          // Committing an empty transaction is fine.
           return {
-            success: true as const,
             dispute,
             evidence,
             changed: false,
@@ -406,16 +426,11 @@ export function registerDisputeActionRoutes(app: Express) {
         });
 
         return {
-          success: true as const,
           dispute,
           evidence: updatedEvidence,
           changed: true,
         };
       });
-
-      if (!outcome.success) {
-        return res.status(outcome.statusCode).json({ error: outcome.error });
-      }
 
       const dispute = outcome.dispute;
       const evidence = outcome.evidence;
@@ -465,7 +480,10 @@ export function registerDisputeActionRoutes(app: Express) {
         evidence,
       });
     } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
+      // Errors thrown from inside `db.transaction` propagate here AFTER the
+      // transaction has rolled back; `resolveErrorStatus` translates the
+      // attached `statusCode` into the right 4xx/5xx response.
+      res.status(resolveErrorStatus(error)).json({ error: getErrorMessage(error) });
     }
   });
 

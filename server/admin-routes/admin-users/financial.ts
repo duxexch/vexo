@@ -4,29 +4,17 @@ import { users, transactions, projectCurrencyWallets, projectCurrencyLedger, use
 import { sendNotification } from "../../websocket";
 import { db } from "../../db";
 import { and, eq, sql } from "drizzle-orm";
-import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
+import {
+  type AdminRequest,
+  adminAuthMiddleware,
+  createHttpError,
+  getErrorMessage,
+  logAdminAction,
+  resolveErrorStatus,
+} from "../helpers";
 import { toSafeUser } from "../../lib/safe-user";
 import { adjustUserCurrencyBalance, bumpPrimaryDepositWithdrawalTotals, getUserWalletSummary, getEffectiveAllowedCurrencies } from "../../lib/wallet-balances";
 import { normalizeCurrencyCode } from "../../lib/p2p-currency-controls";
-
-// Lightweight error envelope used by transaction callbacks to surface a
-// specific HTTP status code without losing rollback semantics. The whole
-// reason this file uses it: a Drizzle transaction callback that *returns*
-// instead of *throwing* lets the partial work commit. To keep money-moving
-// routes atomic we always throw inside the callback and let the outer
-// catch translate `statusCode` into a 4xx/5xx response.
-type HttpError = Error & { statusCode?: number };
-
-function createHttpError(statusCode: number, message: string): HttpError {
-  const error = new Error(message) as HttpError;
-  error.statusCode = statusCode;
-  return error;
-}
-
-function resolveErrorStatus(error: unknown, fallback = 500): number {
-  const code = (error as HttpError | null)?.statusCode;
-  return typeof code === "number" && code >= 400 && code < 600 ? code : fallback;
-}
 
 export function registerUserFinancialRoutes(app: Express) {
 
