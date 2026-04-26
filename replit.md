@@ -57,6 +57,26 @@ VEX is built on a modern, distributed architecture designed for scalability and 
 - **CallKit (iOS):** Native framework for integrating with the iOS system's call UI.
 - **ConnectionService (Android):** Native framework for integrating with the Android system's call UI.
 
+## Quality Gates
+
+Aggregate `npm run` scripts that bundle the smokes a future agent must run when
+touching a particular subsystem. Each gate runs `check:types` first, then the
+relevant smokes in series. Use these instead of remembering individual scripts.
+
+- **`quality:gate:tournaments`** — tournament wallet display, insufficient-balance
+  text, and the real-browser register-disabled e2e (Task #119).
+- **`quality:gate:domino`** (Task #121) — every functional domino smoke that
+  guards the layout solver and board renderer in
+  `client/src/components/games/DominoBoard.tsx`: layout snapshots,
+  tile-orientation snapshots, playthrough bounds, playthrough pips, and
+  elbow-mirror parity (`scripts/smoke-domino-elbow-mirror.ts`, added in Task
+  #95). Run it on any PR that touches the board or its solver before merging.
+- **`quality:gate:chat`** — DM/room realtime notifications and call-action
+  smokes (incl. the React-tree call-actions test).
+- **`quality:gate:game-visuals`** — game-icon purity and game-config
+  resolution.
+- **`quality:gate:i18n-global`** — types + i18n string-key gate.
+
 ## Mobile Verification
 
 - **Task #82 — Android Capacitor composer over keyboard:** Manual real-device verification of the Task #43 fix (`Keyboard.resize: 'none'` + `useKeyboardInset` driven by `visualViewport`/Capacitor Keyboard events) is captured as a step-by-step Arabic checklist at `docs/device-tests/android-keyboard-composer-2026-04.md`. Pass/fail outcome to be recorded inline in that file once executed on a physical Android (and ideally iOS) device.

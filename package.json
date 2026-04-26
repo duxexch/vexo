@@ -82,6 +82,7 @@
     "quality:gate:chat": "npm run check:types && npm run quality:smoke:dm-notifications && npm run quality:smoke:room-notifications && npm run quality:smoke:call-actions && npm run quality:smoke:call-actions:react-tree",
     "quality:gate:game-visuals": "npm run check:types && npm run quality:smoke:game-icon-purity && npm run quality:smoke:game-config-resolution",
     "quality:gate:tournaments": "npm run check:types && npm run quality:smoke:tournament-wallet-display && npm run quality:smoke:tournament-insufficient-error && npm run quality:smoke:tournament-register-disabled-e2e",
+    "quality:gate:domino": "npm run check:types && npm run quality:smoke:domino-layout-snapshots && npm run quality:smoke:domino-tile-orientation && npm run quality:smoke:domino-playthrough-bounds && npm run quality:smoke:domino-playthrough-pips && npm run quality:smoke:domino-elbow-mirror",
     "security:smoke:domino-adapter-contract": "tsx scripts/smoke-domino-challenge-adapter-contract.ts",
     "security:smoke:ws-heartbeat": "node scripts/smoke-ws-heartbeat.mjs",
     "security:smoke:domino-contract": "tsx scripts/smoke-domino-contract.ts",
