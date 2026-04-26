@@ -66,6 +66,7 @@
     "quality:smoke:game-speed": "tsx scripts/smoke-game-speed.ts",
     "quality:smoke:room-notifications": "tsx scripts/smoke-room-notifications.ts",
     "quality:smoke:chat-viewer-count": "tsx scripts/smoke-chat-viewer-count.ts",
+    "quality:smoke:chat-viewer-count-real-redis": "tsx scripts/smoke-chat-viewer-count-real-redis.ts",
     "quality:smoke:sam9-solo-e2e": "tsx scripts/smoke-sam9-solo-e2e.ts",
     "quality:smoke:game-icon-purity": "tsx scripts/smoke-game-icon-purity.ts",
     "quality:smoke:game-config-resolution": "tsx scripts/smoke-game-config-resolution.ts",

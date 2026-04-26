@@ -160,3 +160,61 @@ If the site is unreachable:
 4. **Network** — `docker network inspect vex-traefik` should show both `vex-traefik` and `vex-app` as members.
 5. **DB connectivity** — `docker exec vex-app curl -fsS http://localhost:3001/api/health` from inside the container.
 6. **Re-deploy** — when in doubt, re-run the standard update command in §3.2.
+
+## 11. Chat presence — staging Redis dry run (one-time, before chat rollout)
+
+The fast `quality:smoke:chat-viewer-count` runs against `ioredis-mock`
+plus a small `send_command` / `messageBuffer` adapter shim. That covers
+the cluster broadcast logic and the `spectatorRoomIds[]` mirror, but
+it cannot catch incompatibilities between the production `ioredis`
+driver and `@socket.io/redis-adapter` (cluster-mode quirks, AUTH
+failures, response timeouts under real network latency, TLS / sentinel
+oddities). Run the real-Redis variant once before any production
+rollout that touches the chat namespace:
+
+```bash
+# From a workstation with network access to the staging Redis:
+REDIS_URL=rediss://<user>:<pass>@<staging-redis-host>:6380 \
+  npm run quality:smoke:chat-viewer-count-real-redis
+
+# Optional: extend per-step timeout for slow links (default 5000ms).
+SMOKE_STEP_TIMEOUT_MS=10000 \
+  REDIS_URL=rediss://... \
+  npm run quality:smoke:chat-viewer-count-real-redis
+```
+
+A passing run prints exactly two lines:
+
+```
+[real-redis] Targeting redis at <REDIS_URL> (step timeout: 5000ms)
+✓ chat:viewer_count smoke passed (cluster cross-instance)
+```
+
+The smoke spins up two local Socket.IO server instances both wired to
+the staging Redis via `@socket.io/redis-adapter`, joins one player and
+two spectators (one per "node"), and asserts the cluster-wide
+`chat:viewer_count` value at every transition (0 → 1 → 2 → 1 → 0). It
+deliberately does NOT touch any application data — it operates only
+on adapter pub/sub channels — so it is safe to run against staging
+without a maintenance window.
+
+If the script exits non-zero:
+
+- `[real-redis:A:pub] redis client never reached 'ready' …` — the
+  `REDIS_URL` is wrong, the host is unreachable, or AUTH/TLS is
+  rejecting the connection. Fix the URL and re-run.
+- `Cross-instance count broke: expected count=2 everywhere …` — the
+  adapter is reachable but cross-node broadcasts are not propagating.
+  Check `PUBSUB NUMSUB socket.io#/chat#` against staging Redis; both
+  smoke instances should appear as subscribers.
+- `Timed out waiting for chat:viewer_count …` — typically network
+  latency exceeds the step timeout. Re-run with
+  `SMOKE_STEP_TIMEOUT_MS=10000` (or higher) before assuming a real
+  failure.
+
+Do NOT add this script to the standard CI gate — it requires a real
+Redis URL that CI does not have. Treat a passing run as a
+prerequisite that should be re-verified whenever the chat namespace's
+adapter wiring (`server/socketio/index.ts`,
+`server/socketio/challenge-chat-bridge.ts`, `server/lib/redis.ts`)
+changes meaningfully.
