@@ -86,3 +86,90 @@ describe("TournamentRefundBanner — deleted tournament copy", () => {
     expect(banner.textContent).not.toContain("tournament was deleted");
   });
 });
+
+describe("TournamentRefundBanner — cancelled tournament copy", () => {
+  it("renders the English cancellation-specific headline + reason + amount (USD, list variant)", () => {
+    render(
+      <TournamentRefundBanner
+        refund={{ amount: "10.00", currency: "usd", reason: "cancelled" }}
+        variant="list"
+        en={true}
+        testId="cancel-refund-banner-en-list"
+      />,
+    );
+
+    const banner = screen.getByTestId("cancel-refund-banner-en-list");
+    expect(banner.textContent).toContain("Refunded");
+    expect(banner.textContent).toContain("10.00");
+    expect(banner.textContent).toContain("cash balance");
+    expect(banner.textContent).toContain("tournament was cancelled");
+    expect(banner.textContent).not.toContain("tournament was deleted");
+  });
+
+  it("renders the Arabic cancellation-specific headline + reason + amount (USD, detail variant)", () => {
+    render(
+      <TournamentRefundBanner
+        refund={{ amount: "6.50", currency: "usd", reason: "cancelled" }}
+        variant="detail"
+        en={false}
+        testId="cancel-refund-banner-ar-detail"
+      />,
+    );
+
+    const banner = screen.getByTestId("cancel-refund-banner-ar-detail");
+    expect(banner.textContent).toContain("تم استرداد");
+    expect(banner.textContent).toContain("6.50");
+    expect(banner.textContent).toContain("رصيدك النقدي");
+    expect(banner.textContent).toContain("تم إلغاء البطولة");
+    expect(banner.textContent).not.toContain("تم حذف البطولة");
+  });
+
+  it("uses the project-wallet wording when refund is in the project currency (EN)", () => {
+    render(
+      <TournamentRefundBanner
+        refund={{ amount: "75.00", currency: "project", reason: "cancelled" }}
+        variant="detail"
+        en={true}
+        testId="cancel-refund-banner-en-project"
+      />,
+    );
+
+    const banner = screen.getByTestId("cancel-refund-banner-en-project");
+    expect(banner.textContent).toContain("project wallet");
+    expect(banner.textContent).not.toContain("cash balance");
+    expect(banner.textContent).toContain("tournament was cancelled");
+    expect(banner.textContent).not.toContain("tournament was deleted");
+  });
+
+  it("uses the project-wallet wording when refund is in the project currency (AR)", () => {
+    render(
+      <TournamentRefundBanner
+        refund={{ amount: "150.00", currency: "project", reason: "cancelled" }}
+        variant="list"
+        en={false}
+        testId="cancel-refund-banner-ar-project"
+      />,
+    );
+
+    const banner = screen.getByTestId("cancel-refund-banner-ar-project");
+    expect(banner.textContent).toContain("محفظتك");
+    expect(banner.textContent).not.toContain("رصيدك النقدي");
+    expect(banner.textContent).toContain("تم إلغاء البطولة");
+    expect(banner.textContent).not.toContain("تم حذف البطولة");
+  });
+
+  it("does NOT use the cancellation copy when reason is 'deleted' (regression guard)", () => {
+    render(
+      <TournamentRefundBanner
+        refund={{ amount: "3.00", currency: "usd", reason: "deleted" }}
+        variant="list"
+        en={true}
+        testId="deleted-not-cancelled-banner"
+      />,
+    );
+
+    const banner = screen.getByTestId("deleted-not-cancelled-banner");
+    expect(banner.textContent).toContain("tournament was deleted");
+    expect(banner.textContent).not.toContain("tournament was cancelled");
+  });
+});
