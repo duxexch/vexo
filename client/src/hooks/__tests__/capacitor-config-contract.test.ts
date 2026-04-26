@@ -8,11 +8,18 @@
  * tests cannot catch.
  *
  * Contracts pinned here:
- *   - SplashScreen.launchAutoHide = true        (consumer: client/src/main.tsx — splash hand-off)
- *   - SplashScreen.launchShowDuration <= 2000   (consumer: client/src/main.tsx — JS-side budget)
- *   - StatusBar.overlaysWebView    = false      (consumer: client/src/components/games/GameLayout.tsx,
- *                                                client/src/components/PermissionsBanner.tsx)
- *   - Keyboard.style               = 'dark'     (consumer: light/dark theme parity for keyboard chrome)
+ *   - SplashScreen.launchAutoHide = true            (consumer: client/src/main.tsx — splash hand-off)
+ *   - SplashScreen.launchShowDuration <= 2000       (consumer: client/src/main.tsx — JS-side budget)
+ *   - StatusBar.overlaysWebView    = false          (consumer: client/src/components/games/GameLayout.tsx,
+ *                                                    client/src/components/PermissionsBanner.tsx)
+ *   - Keyboard.style               = 'dark'         (consumer: light/dark theme parity for keyboard chrome)
+ *   - server.url                   = 'https://vixo.click'  (Task #200 — production backend the
+ *                                                    mobile app loads. Drift here ships the
+ *                                                    store build pointing at the wrong host.)
+ *   - ios.scheme                   = 'vexapp'       (Task #200 — custom URL scheme every OAuth
+ *                                                    provider calls back into. Consumer:
+ *                                                    `appUrlOpen` listener in client/src/main.tsx
+ *                                                    which trusts `parsed.protocol === 'vexapp:'`.)
  */
 
 import { describe, expect, it } from "vitest";
@@ -100,5 +107,53 @@ describe("Task #189: capacitor.config.ts Keyboard.style contract", () => {
     expect(block, "Keyboard.style must NOT be set to 'light'").not.toMatch(
       /style:\s*['"]light['"]/,
     );
+  });
+});
+
+describe("Task #200: capacitor.config.ts server.url contract", () => {
+  it("pins server.url to https://vixo.click so the mobile build never silently ships against staging", () => {
+    const source = readCapacitorConfigSource();
+    const block = pluginBlock(source, "server");
+    expect(
+      block,
+      "server.url MUST be 'https://vixo.click'. This is the production backend " +
+        "the mobile app loads at startup. If this value drifts (e.g. accidentally " +
+        "swapped for a staging or preview URL during a refactor), the App Store / " +
+        "Play Store build silently ships pointing at the wrong host and every login, " +
+        "every wallet call, every socket connection from real phones hits the wrong " +
+        "backend with no warning at build time.",
+    ).toMatch(/url:\s*['"]https:\/\/vixo\.click['"]/);
+    // Also guard against accidentally enabling cleartext, which would
+    // make a future drift to an http:// URL silently work in dev.
+    expect(
+      block,
+      "server.cleartext must remain false so an accidental http:// URL " +
+        "is rejected by the platform instead of silently shipping.",
+    ).toMatch(/cleartext:\s*false/);
+  });
+});
+
+describe("Task #200: capacitor.config.ts ios.scheme contract", () => {
+  it("pins ios.scheme to 'vexapp' — every OAuth provider calls back into vexapp:// on iOS", () => {
+    const source = readCapacitorConfigSource();
+    // ios is a top-level config key, not a plugin block, so we pull the
+    // ios: { … } object directly.
+    const iosMatch = source.match(/\n\s*ios:\s*{([\s\S]*?)\n\s*},/);
+    expect(
+      iosMatch,
+      "capacitor.config.ts is missing the top-level `ios: { … }` block",
+    ).not.toBeNull();
+    const iosBlock = iosMatch![1];
+    expect(
+      iosBlock,
+      "ios.scheme MUST be 'vexapp'. The OAuth providers (Google, Facebook, Apple, " +
+        "Discord, GitHub, Twitter, Telegram) are each registered in their developer " +
+        "consoles to redirect to vexapp://auth/callback on iOS. The `appUrlOpen` " +
+        "listener in client/src/main.tsx (around line 448) trusts the deep-link only " +
+        "when `parsed.protocol === 'vexapp:'`. If this scheme drifts, iOS opens the " +
+        "callback URL in Safari instead of the app, every OAuth login on iOS fails " +
+        "silently, and there is no build-time warning — the regression only surfaces " +
+        "in store review or in production.",
+    ).toMatch(/scheme:\s*['"]vexapp['"]/);
   });
 });
