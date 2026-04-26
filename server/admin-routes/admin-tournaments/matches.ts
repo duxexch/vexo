@@ -213,14 +213,20 @@ export function registerTournamentMatchRoutes(app: Express) {
   app.delete("/api/admin/tournaments/:id", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
       const { id } = req.params;
-      // Atomicity convention (Task #193 audit): every failure path inside
-      // this `db.transaction` callback throws (see "Tournament not found",
-      // "Cannot delete tournament in status …"); the outer catch converts
-      // those known messages back to 4xx responses. The two `continue`
-      // statements inside the participant-refund loop only skip a single
-      // participant after a SELECT-only check, so they never leave a partial
-      // mutation behind. No `{ success: false }` envelope returns from
-      // inside the transaction, so partial commits are not possible.
+      // Atomicity convention (Task #193 audit): every failure path throws —
+      // see "Tournament not found" and "Cannot delete tournament in
+      // status …". The outer catch maps those known messages back to 4xx
+      // responses; everything else surfaces as 500. The two `continue`
+      // statements inside the participant-refund loop are practically
+      // unreachable (the project-currency branch first runs
+      // `insert ... onConflictDoNothing` then `SELECT FOR UPDATE` against
+      // the same row, which always finds it; the cash branch only does
+      // `SELECT FOR UPDATE` of an existing user). Even if a `continue`
+      // ever fired, the worst case is an empty-wallet row left behind for
+      // a single participant, not money moved without a matching ledger
+      // entry. No `{ success: false }` envelope returns from inside the
+      // transaction, so the swallow-and-return partial-commit class of bugs
+      // is not possible here.
       const deleteResult = await db.transaction(async (tx) => {
         const [lockedTournament] = await tx.select().from(tournaments).where(eq(tournaments.id, id)).for('update');
         if (!lockedTournament) {
