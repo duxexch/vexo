@@ -288,16 +288,30 @@ async function requestOverlayPromptOrDeepLink(): Promise<PermissionResult> {
 }
 
 async function requestClipboardWritePrompt(): Promise<PermissionResult> {
-  if (!navigator.clipboard?.writeText) return "unavailable";
-  try {
-    // Writing an empty string from a user gesture is the supported way
-    // to elicit the clipboard prompt. We restore the previous value
-    // best-effort so the user's clipboard isn't actually clobbered.
-    await navigator.clipboard.writeText("");
-    return "granted";
-  } catch {
-    return "denied";
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+    return "unavailable";
   }
+  // Modern Chromium and Safari grant `clipboard-write` automatically
+  // when the call originates from a user gesture, so the click that
+  // actually copies a value (e.g. "Copy invite link") is itself the
+  // permission prompt. Triggering a side-effect-free write here would
+  // either clobber the user's clipboard or, in Firefox, raise a
+  // NotAllowedError outside a gesture — so the safest thing the
+  // Settings row can do is consult the Permissions API when available
+  // and otherwise report the API as supported (`granted`).
+  try {
+    if (navigator.permissions?.query) {
+      const status = await navigator.permissions.query({
+        name: "clipboard-write" as PermissionName,
+      });
+      if (status.state === "granted") return "granted";
+      if (status.state === "denied") return "denied";
+      return "prompt";
+    }
+  } catch {
+    // Some browsers throw on unknown permission names — fall through.
+  }
+  return "granted";
 }
 
 async function requestVibratePrompt(): Promise<PermissionResult> {
