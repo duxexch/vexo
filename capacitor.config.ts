@@ -113,24 +113,20 @@ const config: CapacitorConfig = {
     webContentsDebuggingEnabled: false,
     // Themed splash & navigation bars
     useLegacyBridge: false,
-    // Release-signing inputs. The path + alias are non-secret and stay
-    // committed; the two passwords MUST come from the environment
-    // (Replit Secrets locally → real shell env in CI / on the user's
-    // build machine). `scripts/mobile-android-build.mjs` regenerates
-    // `android/app/signing.properties` from these env vars right
-    // before invoking gradle, so update builds always use the same
-    // certificate (alias `vex_release_official`, SHA-1 documented in
-    // replit.md § "Android Release Signing").
-    buildOptions: {
-      keystorePath: process.env.ANDROID_KEYSTORE_PATH ?? 'android/keystore/vex-release-official.jks',
-      keystoreAlias: process.env.ANDROID_KEY_ALIAS ?? 'vex_release_official',
-      ...(process.env.ANDROID_KEYSTORE_PASSWORD
-        ? { keystorePassword: process.env.ANDROID_KEYSTORE_PASSWORD }
-        : {}),
-      ...(process.env.ANDROID_KEY_PASSWORD
-        ? { keystoreAliasPassword: process.env.ANDROID_KEY_PASSWORD }
-        : {}),
-    },
+    // Release-signing is owned by gradle, NOT by `cap build`.
+    // `android/app/build.gradle` reads
+    //   System.getenv("ANDROID_KEYSTORE_PATH")
+    //   System.getenv("ANDROID_KEY_ALIAS")
+    //   System.getenv("ANDROID_KEYSTORE_PASSWORD")
+    //   System.getenv("ANDROID_KEY_PASSWORD")
+    // directly from the process environment when assembling release.
+    // Passwords are never written to capacitor.config.ts, never written
+    // to a properties file, never put on a command line. The canonical
+    // gradle snippet to paste into `android/app/build.gradle` after
+    // `npx cap add android` lives at
+    //   docs/mobile/android-signing-gradle-snippet.md
+    // and the keystore metadata (alias, fingerprints) is in
+    //   replit.md § "Android Release Signing".
   },
 };
 

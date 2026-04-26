@@ -88,9 +88,14 @@ version every agent must know:
 
 - Required env vars: `ANDROID_KEYSTORE_PATH`, `ANDROID_KEY_ALIAS`,
   `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`.
-- The build script `scripts/mobile-android-build.mjs` regenerates
-  `android/app/signing.properties` from those env vars on every release
-  build. Do not hand-create or commit `signing.properties`.
+- **Gradle is the source of truth.** `android/app/build.gradle` reads the
+  four env vars directly via `System.getenv("ANDROID_…")` inside its
+  `signingConfigs.release` block. The canonical snippet to paste lives at
+  `docs/mobile/android-signing-gradle-snippet.md`.
+- Passwords are **never** written to any file — not `signing.properties`,
+  not `gradle.properties`, not `capacitor.config.ts`, not a gradle command
+  line. The build script (`scripts/mobile-android-build.mjs`) only
+  validates env + the snippet's presence, then forwards env to gradle.
 - Keystore alias is `vex_release_official`. SHA-1 fingerprint is
   `7F:8D:A0:CB:12:42:1A:7F:90:6D:43:2E:6C:C2:96:1A:DD:AE:C8:B8`. If a build
   is signed with anything else, the resulting APK/AAB will be rejected by

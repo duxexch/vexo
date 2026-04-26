@@ -122,9 +122,11 @@ The VEX Android release build is signed with **the user's official VEX release k
 
 **Storage policy:**
 
-- The `.jks` keystore file lives **only** at `android/keystore/vex-release-official.jks` on the user's local build machine. The whole `android/` tree is gitignored (and `*.jks`, `*.keystore`, `android/app/signing.properties` are gitignored as belt-and-braces). The file is **never** copied into the Replit container, the dist bundle, or any committed asset.
-- The two passwords (`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`) live in **Replit Secrets** in this workspace (so the build script can validate they exist) and in the user's local shell environment on the actual build machine. They are never written to any tracked file.
-- `android/app/signing.properties` is generated **on demand** by `scripts/mobile-android-build.mjs` from those env vars, right before invoking gradle, then sits in the gitignored `android/` tree. No hand-edited copy is required.
+- The `.jks` keystore file lives **only** at `android/keystore/vex-release-official.jks` on the user's local build machine. The whole `android/` tree is gitignored (and `*.jks`, `*.keystore` are gitignored as belt-and-braces). The file is **never** copied into the Replit container, the dist bundle, or any committed asset.
+- The two passwords (`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`) live in **Replit Secrets** in this workspace (so the build script can validate they exist) and in the user's local shell environment on the actual build machine. They are **never** written to any file — not to `signing.properties`, not to `gradle.properties`, not to `capacitor.config.ts`, not to a gradle command line.
+- **Gradle is the source of truth.** `android/app/build.gradle` reads the four `ANDROID_*` env vars directly via `System.getenv("ANDROID_…")` inside its `signingConfigs.release` block, and fails the release `buildType` loudly if any are missing. The canonical gradle snippet (the one to paste into `build.gradle` after `npx cap add android`) lives at [`docs/mobile/android-signing-gradle-snippet.md`](docs/mobile/android-signing-gradle-snippet.md).
+- `scripts/mobile-android-build.mjs` is a thin wrapper that (a) refuses to run if any of the four env vars are missing, (b) verifies the keystore file exists, (c) greps `android/app/build.gradle` for `ANDROID_KEYSTORE_PASSWORD` to confirm the snippet has been applied, then (d) spawns `./gradlew` with the env passed through. **No password value ever touches disk.**
+- Capacitor's own `android.buildOptions.keystorePassword` field is intentionally NOT used (it would materialise the password into a properties file). The corresponding fields are absent from `capacitor.config.ts` and must stay absent.
 
 **Required environment variables** (all four):
 
