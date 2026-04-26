@@ -118,8 +118,6 @@ export function runDatabaseSeeds(): void {
         ]);
         logger.info("Default themes seeded");
       } else {
-        // Backfill: if previous installs only had 2 themes, top up to 4 without
-        // touching whichever theme is currently set as default.
         const existingNames = new Set(
           (await db.select({ name: themes.name }).from(themes)).map((row) => row.name),
         );
@@ -175,8 +173,6 @@ export function runDatabaseSeeds(): void {
           logger.info(`Topped up themes table with ${additions.length} additional preset(s)`);
         }
 
-        // One-time backfill of the new editable fields onto legacy themes so
-        // the admin page shows coherent defaults (admin can override anytime).
         await db.execute(sql`
           UPDATE themes
           SET mode = COALESCE(mode, 'dark'),

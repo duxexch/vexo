@@ -1,23 +1,4 @@
-/**
- * Unit test for the admin-themes runtime hook (Task #195).
- *
- * The admin themes page lets the operator change colours / fonts / radii /
- * shadow intensity for one of four DB-stored presets, then click "Apply to
- * page now" to preview the result on the live document. The same path runs at
- * boot inside ThemeProvider when /api/themes/active returns the active theme.
- *
- * What we lock down here:
- *   1. applyAdminTheme() injects every variable in ADMIN_THEME_VAR_NAMES into
- *      documentElement.style — i.e. the cascade actually receives the new
- *      palette so consumers like `bg-primary` / `text-foreground` reflect it.
- *   2. clearAdminTheme() removes exactly the same variables, so toggling back
- *      to the static :root defaults from index.css works without leaving
- *      stale inline overrides behind.
- *   3. hexToHslString() converts admin-stored hex into the "H S% L%" tuple
- *      the existing CSS variables expect, with case-insensitive parsing and
- *      a safe `null` for invalid input.
- */
-
+// Task #195 — apply/clear/parse contract for the admin-theme runtime helpers.
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ADMIN_THEME_VAR_NAMES,
@@ -77,7 +58,6 @@ describe("hexToHslString", () => {
 describe("applyAdminTheme + clearAdminTheme", () => {
   it("injects every ADMIN_THEME_VAR_NAMES var onto documentElement", () => {
     const root = document.documentElement;
-    // Start from a clean slate — no inline overrides.
     clearAdminTheme(root);
     for (const name of ADMIN_THEME_VAR_NAMES) {
       expect(root.style.getPropertyValue(name)).toBe("");
@@ -85,23 +65,17 @@ describe("applyAdminTheme + clearAdminTheme", () => {
 
     applyAdminTheme(SAMPLE_THEME, root);
 
-    // Spot-check the key colour variables actually receive the converted HSL.
     expect(root.style.getPropertyValue("--primary")).toBe(hexToHslString(SAMPLE_THEME.primaryColor));
     expect(root.style.getPropertyValue("--background")).toBe(
       hexToHslString(SAMPLE_THEME.backgroundColor),
     );
     expect(root.style.getPropertyValue("--card")).toBe(hexToHslString(SAMPLE_THEME.cardColor));
-
-    // Fonts get wrapped in quotes for the CSS font stack.
     expect(root.style.getPropertyValue("--font-sans")).toContain("Cairo");
     expect(root.style.getPropertyValue("--font-serif")).toContain("Inter");
-
-    // Radii pass through verbatim.
     expect(root.style.getPropertyValue("--radius")).toBe(SAMPLE_THEME.radiusMd);
     expect(root.style.getPropertyValue("--radius-sm")).toBe(SAMPLE_THEME.radiusSm);
     expect(root.style.getPropertyValue("--radius-lg")).toBe(SAMPLE_THEME.radiusLg);
 
-    // Every variable in the symmetrical list should now have *some* value.
     for (const name of ADMIN_THEME_VAR_NAMES) {
       expect(root.style.getPropertyValue(name)).not.toBe("");
     }
@@ -116,11 +90,10 @@ describe("applyAdminTheme + clearAdminTheme", () => {
     }
   });
 
-  it("skips bad colour values rather than writing 'null' into the cascade", () => {
+  it("skips malformed colour values instead of writing them", () => {
     const root = document.documentElement;
     const broken: AdminTheme = { ...SAMPLE_THEME, primaryColor: "not-a-hex" };
     applyAdminTheme(broken, root);
-    // The bad primary is dropped (left blank) while everything else still fills in.
     expect(root.style.getPropertyValue("--primary")).toBe("");
     expect(root.style.getPropertyValue("--background")).toBe(
       hexToHslString(SAMPLE_THEME.backgroundColor),

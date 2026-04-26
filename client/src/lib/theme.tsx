@@ -34,9 +34,7 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-// All admin-managed CSS variables that we inject onto :root. Kept in one place
-// so applyAdminTheme + clearAdminTheme stay symmetrical and the unit test in
-// tests/admin-theme-apply.test.ts can iterate exactly the same set.
+// CSS vars injected by applyAdminTheme / removed by clearAdminTheme.
 export const ADMIN_THEME_VAR_NAMES = [
   "--primary",
   "--primary-foreground",
@@ -72,10 +70,7 @@ export const ADMIN_THEME_VAR_NAMES = [
   "--shadow-lg",
 ] as const;
 
-// Convert a hex color (#rgb or #rrggbb) to "H S% L%" — the format the existing
-// CSS variables in client/src/index.css expect (e.g. `45 93% 58%`). Returns
-// null for unrecognised input so we can skip a bad value instead of corrupting
-// the cascade.
+// Convert "#rgb" / "#rrggbb" to the "H S% L%" tuple used in index.css.
 export function hexToHslString(hex: string): string | null {
   if (!hex) return null;
   let normalized = hex.trim().replace(/^#/, "");
@@ -112,8 +107,6 @@ export function hexToHslString(hex: string): string | null {
   return `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
-// Pick a readable foreground HSL ("H S% L%") for a given background hex by
-// checking perceptual luminance.
 function pickContrastForeground(hex: string): string {
   const fallback = "0 0% 100%";
   const normalized = hex.trim().replace(/^#/, "");
@@ -221,13 +214,8 @@ async function fetchActiveTheme(): Promise<AdminTheme | null> {
   }
 }
 
-// Dedicated key set ONLY when the user explicitly toggles light/dark via
-// setTheme()/toggleTheme(). Presence of the older "theme" key alone does NOT
-// imply pinning — that key is written automatically on every render to keep
-// the dark/light class stable across reloads, so it cannot be used as the
-// "user has chosen" signal. Without this dedicated flag, the admin theme's
-// mode would only ever apply on the very first visit and never propagate to
-// returning users on subsequent reloads.
+// Set only when the user explicitly toggles. The "theme" key is auto-written
+// every render so it can't be used as the pin signal.
 const THEME_PINNED_KEY = "themeUserPinned";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -247,18 +235,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  // Hydrate active admin theme once on boot. We deliberately do this *after*
-  // the light/dark class is applied so the inline CSS variables override the
-  // base palette from index.css. Failures are silent — the app falls back to
-  // the static :root / .dark rules.
   useEffect(() => {
     let cancelled = false;
     fetchActiveTheme().then((active) => {
       if (cancelled || !active) return;
       applyAdminTheme(active);
-      // Always honour the admin theme's mode *unless* the user explicitly
-      // pinned their own preference via setTheme/toggleTheme — that pin is
-      // tracked via THEME_PINNED_KEY (not the auto-written "theme" key).
       const userPinned =
         typeof window !== "undefined" &&
         localStorage.getItem(THEME_PINNED_KEY) === "1";
@@ -271,9 +252,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Wrapping setTheme so any call coming from outside the provider (settings
-  // page, toggle button, dev tools) is treated as an explicit user pin and
-  // stops admin mode from overriding it on the next reload.
   const setThemePinned = (next: Theme) => {
     if (typeof window !== "undefined") {
       localStorage.setItem(THEME_PINNED_KEY, "1");

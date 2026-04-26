@@ -4,8 +4,7 @@ import { db } from "../../db";
 import { eq } from "drizzle-orm";
 import { type AdminRequest, adminAuthMiddleware, logAdminAction, getErrorMessage } from "../helpers";
 
-// Whitelist of fields that the admin can patch on a theme. Keeps id/createdAt
-// and `isDefault` (managed exclusively by /activate) out of the update path.
+// Editable on PATCH. id/createdAt/isDefault are excluded.
 const PATCHABLE_THEME_FIELDS = [
   "displayName",
   "primaryColor",
@@ -45,14 +44,10 @@ const VALID_MODES = new Set(["dark", "light"]);
 const VALID_SHADOW = new Set(["soft", "medium", "strong"]);
 const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
-// Validate one patch payload. Returns the first error message, or null if OK.
-// Keeps invalid `mode` / `shadowIntensity` / malformed colors out of the DB so
-// the client-side ThemeProvider always receives sane values to inject.
 function validateThemePatch(updates: Partial<Record<PatchableThemeField, unknown>>): string | null {
   for (const [field, value] of Object.entries(updates)) {
     const key = field as PatchableThemeField;
-    if (value === null || value === undefined) continue; // null is allowed for optional fields
-    // isActive is the *only* boolean column. Everything else is text.
+    if (value === null || value === undefined) continue;
     if (key === "isActive") {
       if (typeof value !== "boolean") {
         return `Field 'isActive' must be a boolean`;
@@ -117,7 +112,6 @@ export function registerThemesRoutes(app: Express) {
     }
   });
 
-  // Task #195 — full-edit endpoint. Accepts any subset of PATCHABLE_THEME_FIELDS.
   app.patch("/api/admin/themes/:id", adminAuthMiddleware, async (req: AdminRequest, res: Response) => {
     try {
       const { id } = req.params;
@@ -183,8 +177,6 @@ export function registerThemesRoutes(app: Express) {
     }
   });
 
-  // Task #195 — public endpoint that returns the currently-default theme so the
-  // ThemeProvider on the client can hydrate CSS variables on boot.
   app.get("/api/themes/active", async (req: Request, res: Response) => {
     try {
       const [active] = await db.select().from(themes).where(eq(themes.isDefault, true)).limit(1);
