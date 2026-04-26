@@ -31,6 +31,18 @@ vi.mock("../server/storage", () => ({
   },
 }));
 
+// Module-level test knobs the rollback test below mutates. They live next
+// to the `db` mock so tests can:
+//   - force the in-transaction `tx.insert(transactions).values()` call to
+//     reject (simulating an audit-row write that fails AFTER the wallet has
+//     already been mutated), and
+//   - observe whether the transaction callback actually rejected (which is
+//     what Drizzle relies on to roll back).
+const txState = {
+  nextInsertTransactionsThrows: false as boolean,
+  lastTransactionCommitted: null as boolean | null,
+};
+
 // The handler runs `await db.transaction(async (tx) => { ... })` then
 // `tx.select(...)...for("update")`, then calls adjustUserCurrencyBalance,
 // which itself runs `tx.select`/`tx.update`. The mock below returns a tx
@@ -52,7 +64,20 @@ vi.mock("../server/db", () => {
     const tx = {
       select,
       insert: () => ({
-        values: () => ({ returning: () => Promise.resolve([{ id: "tx-1" }]) }),
+        values: () => ({
+          returning: () => {
+            if (txState.nextInsertTransactionsThrows) {
+              // One-shot: the next `insert(...).values(...).returning()`
+              // call rejects to simulate the audit-row insert failing
+              // AFTER the wallet update has already run inside the same
+              // transaction. Reset the flag so subsequent tests start
+              // with default behavior.
+              txState.nextInsertTransactionsThrows = false;
+              return Promise.reject(new Error("simulated audit-row insert failure"));
+            }
+            return Promise.resolve([{ id: "tx-1" }]);
+          },
+        }),
       }),
       update: () => ({
         set: () => ({ where: () => Promise.resolve(undefined) }),
@@ -62,7 +87,21 @@ vi.mock("../server/db", () => {
   }
   return {
     db: {
-      transaction: async (fn: (tx: any) => any) => fn(buildTx()),
+      transaction: async (fn: (tx: any) => any) => {
+        // Mirror Drizzle's contract: the transaction commits only if the
+        // callback resolves; if it rejects, the work is rolled back. We
+        // expose `lastTransactionCommitted` so the rollback test can
+        // assert the route DID NOT silently swallow the inner failure.
+        txState.lastTransactionCommitted = null;
+        try {
+          const result = await fn(buildTx());
+          txState.lastTransactionCommitted = true;
+          return result;
+        } catch (err) {
+          txState.lastTransactionCommitted = false;
+          throw err;
+        }
+      },
     },
   };
 });
@@ -263,5 +302,49 @@ describe("POST /api/admin/users/:id/balance-adjust — currency gating", () => {
     });
     expect(r.status).toBe(200);
     expect(adjustCalls[0].currency).toBe("EGP");
+  });
+});
+
+describe("POST /api/admin/users/:id/balance-adjust — atomicity (Task #133)", () => {
+  it("rolls back the wallet adjustment when the audit-row insert fails (no partial commit)", async () => {
+    // Reproduce the exact scenario from the bug report:
+    //   1. The wallet helper succeeds and "credits" the user's balance.
+    //   2. The very next step inside the same transaction — the
+    //      `INSERT INTO transactions ...` audit row — fails for some
+    //      reason (constraint violation, network blip, etc.).
+    //   3. The route MUST reject the request AND must NOT swallow the
+    //      inner error into a `{ success: false }` envelope, otherwise
+    //      Drizzle would commit the wallet credit while the audit row
+    //      goes missing.
+    adjustCalls.length = 0;
+    fakeUsers.set(userId("rb1"), {
+      id: userId("rb1"), balance: "100", balanceCurrency: "USD",
+      multiCurrencyEnabled: false, allowedCurrencies: [],
+    });
+
+    txState.lastTransactionCommitted = null;
+    txState.nextInsertTransactionsThrows = true;
+
+    const r = await postAdjust(userId("rb1"), {
+      type: "add", amount: 50, reason: "valid reason",
+    });
+
+    // Confirm we actually entered the mutation phase — the wallet helper
+    // ran (this is what would have left the user "credited" if the
+    // outer code had silently swallowed the failure).
+    expect(adjustCalls).toHaveLength(1);
+    expect(adjustCalls[0].userId).toBe(userId("rb1"));
+    expect(adjustCalls[0].delta).toBeCloseTo(50, 6);
+
+    // The route must surface a non-2xx response (the bug shipped a 400
+    // with `success: false` semantics; the fix may surface 4xx or 5xx,
+    // but never 2xx, because the audit row failed to write).
+    expect(r.status).toBeGreaterThanOrEqual(400);
+
+    // The decisive assertion: the transaction callback rejected, which
+    // is the ONLY way Drizzle rolls back the wallet credit. If a future
+    // refactor reintroduces the swallow-and-return pattern, this flips
+    // to `true` and the test fails.
+    expect(txState.lastTransactionCommitted).toBe(false);
   });
 });

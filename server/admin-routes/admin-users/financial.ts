@@ -9,6 +9,25 @@ import { toSafeUser } from "../../lib/safe-user";
 import { adjustUserCurrencyBalance, bumpPrimaryDepositWithdrawalTotals, getUserWalletSummary, getEffectiveAllowedCurrencies } from "../../lib/wallet-balances";
 import { normalizeCurrencyCode } from "../../lib/p2p-currency-controls";
 
+// Lightweight error envelope used by transaction callbacks to surface a
+// specific HTTP status code without losing rollback semantics. The whole
+// reason this file uses it: a Drizzle transaction callback that *returns*
+// instead of *throwing* lets the partial work commit. To keep money-moving
+// routes atomic we always throw inside the callback and let the outer
+// catch translate `statusCode` into a 4xx/5xx response.
+type HttpError = Error & { statusCode?: number };
+
+function createHttpError(statusCode: number, message: string): HttpError {
+  const error = new Error(message) as HttpError;
+  error.statusCode = statusCode;
+  return error;
+}
+
+function resolveErrorStatus(error: unknown, fallback = 500): number {
+  const code = (error as HttpError | null)?.statusCode;
+  return typeof code === "number" && code >= 400 && code < 600 ? code : fallback;
+}
+
 export function registerUserFinancialRoutes(app: Express) {
 
   const parseNumeric = (value: unknown): number => {
@@ -137,46 +156,49 @@ export function registerUserFinancialRoutes(app: Express) {
       const isPrimaryAdjustment = targetCurrency === primaryCurrency;
       const signedDelta = type === "add" ? adjustAmount : -adjustAmount;
 
+      // CRITICAL: every operation that mutates money below MUST stay inside
+      // this transaction callback, and any failure MUST throw (not return a
+      // failure envelope). Drizzle only rolls back when the callback rejects;
+      // returning `{ success: false }` after a partial mutation would commit
+      // the work that already ran (e.g. wallet credited but the audit row
+      // insert failed) and leave the ledger out of sync with the wallet.
       const adjustmentResult = await db.transaction(async (tx) => {
         // Lock the user row (required by adjustUserCurrencyBalance contract)
         await tx.select({ id: users.id }).from(users).where(eq(users.id, id)).for("update");
 
+        let adjusted;
         try {
-          const adjusted = await adjustUserCurrencyBalance(tx, id, targetCurrency, signedDelta, { allowCreate: type === "add" });
-
-          // Mirror the legacy `transactions` row only for primary-currency
-          // adjustments. Sub-wallet adjustments are recorded in the audit log
-          // (admin actions) and via the `userCurrencyWallets` row updates.
-          let createdTransaction: typeof transactions.$inferSelect | undefined;
-          if (isPrimaryAdjustment) {
-            const internalReference = `admin_balance_adjust:${id}:${Date.now()}`;
-            const [tx0] = await tx.insert(transactions).values({
-              userId: id,
-              type: type === "add" ? "bonus" : "withdrawal",
-              status: "completed",
-              amount: adjustAmount.toFixed(2),
-              balanceBefore: adjusted.balanceBefore.toFixed(2),
-              balanceAfter: adjusted.balanceAfter.toFixed(2),
-              description: `Admin adjustment: ${reason}`,
-              adminNote: reason,
-              referenceId: internalReference,
-            }).returning();
-            createdTransaction = tx0;
-          }
-
-          return {
-            success: true as const,
-            adjusted,
-            createdTransaction,
-          };
+          adjusted = await adjustUserCurrencyBalance(tx, id, targetCurrency, signedDelta, { allowCreate: type === "add" });
         } catch (err) {
-          return { success: false as const, error: err instanceof Error ? err.message : "Adjustment failed" };
+          // adjustUserCurrencyBalance throws plain Errors for caller-fixable
+          // problems (insufficient balance, currency not on allow-list, no
+          // sub-wallet on a debit, etc.). Surface them as 400s without losing
+          // the rollback — re-throwing aborts the whole transaction.
+          throw createHttpError(400, err instanceof Error ? err.message : "Adjustment failed");
         }
-      });
 
-      if (!adjustmentResult.success) {
-        return res.status(400).json({ error: adjustmentResult.error });
-      }
+        // Mirror the legacy `transactions` row only for primary-currency
+        // adjustments. Sub-wallet adjustments are recorded in the audit log
+        // (admin actions) and via the `userCurrencyWallets` row updates.
+        let createdTransaction: typeof transactions.$inferSelect | undefined;
+        if (isPrimaryAdjustment) {
+          const internalReference = `admin_balance_adjust:${id}:${Date.now()}`;
+          const [tx0] = await tx.insert(transactions).values({
+            userId: id,
+            type: type === "add" ? "bonus" : "withdrawal",
+            status: "completed",
+            amount: adjustAmount.toFixed(2),
+            balanceBefore: adjusted.balanceBefore.toFixed(2),
+            balanceAfter: adjusted.balanceAfter.toFixed(2),
+            description: `Admin adjustment: ${reason}`,
+            adminNote: reason,
+            referenceId: internalReference,
+          }).returning();
+          createdTransaction = tx0;
+        }
+
+        return { adjusted, createdTransaction };
+      });
 
       const { adjusted, createdTransaction } = adjustmentResult;
 
@@ -223,7 +245,10 @@ export function registerUserFinancialRoutes(app: Express) {
         },
       });
     } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
+      // Errors thrown from inside `db.transaction` propagate here AFTER the
+      // transaction has rolled back, so it is safe to translate them into a
+      // user-visible response without worrying about partial commits.
+      res.status(resolveErrorStatus(error)).json({ error: getErrorMessage(error) });
     }
   });
 
@@ -349,6 +374,14 @@ export function registerUserFinancialRoutes(app: Express) {
         return res.status(404).json({ error: "User not found" });
       }
 
+      const internalReference = `admin_vxc_adjust:${id}:${Date.now()}`;
+
+      // CRITICAL: the wallet update AND the matching ledger insert are part
+      // of the same atomic operation. They must run on `tx` (not `db`) and
+      // any failure must throw so Drizzle rolls the whole thing back. The
+      // previous version inserted the ledger row OUTSIDE the transaction,
+      // which meant a ledger-insert failure left the user's VXC balance
+      // adjusted with no audit trail (or vice versa).
       const result = await db.transaction(async (tx) => {
         // Lock or lazily create the wallet row.
         let [wallet] = await tx.select()
@@ -364,11 +397,14 @@ export function registerUserFinancialRoutes(app: Express) {
         const purchasedBefore = parseNumeric(wallet.purchasedBalance);
         const totalBefore = parseNumeric(wallet.totalBalance);
 
+        let updated: typeof projectCurrencyWallets.$inferSelect;
+        let balanceAfter: number;
+
         if (type === "add") {
           // Credit goes into earnedBalance (admin grant treated as earned).
           const newEarned = earnedBefore + adjustAmount;
           const newTotal = totalBefore + adjustAmount;
-          const [updated] = await tx.update(projectCurrencyWallets)
+          [updated] = await tx.update(projectCurrencyWallets)
             .set({
               earnedBalance: newEarned.toFixed(2),
               totalBalance: newTotal.toFixed(2),
@@ -377,47 +413,45 @@ export function registerUserFinancialRoutes(app: Express) {
             })
             .where(eq(projectCurrencyWallets.id, wallet.id))
             .returning();
-          return { success: true as const, wallet: updated, balanceBefore: totalBefore, balanceAfter: newTotal };
+          balanceAfter = newTotal;
+        } else {
+          // Debit: take from earned first, then purchased. Throwing here
+          // (rather than returning a failure envelope) ensures the wallet
+          // row we may have just inserted above gets rolled back too.
+          if (totalBefore < adjustAmount) {
+            throw createHttpError(400, "Insufficient VXC balance");
+          }
+          const fromEarned = Math.min(earnedBefore, adjustAmount);
+          const fromPurchased = adjustAmount - fromEarned;
+          const newEarned = earnedBefore - fromEarned;
+          const newPurchased = purchasedBefore - fromPurchased;
+          const newTotal = totalBefore - adjustAmount;
+
+          [updated] = await tx.update(projectCurrencyWallets)
+            .set({
+              earnedBalance: newEarned.toFixed(2),
+              purchasedBalance: newPurchased.toFixed(2),
+              totalBalance: newTotal.toFixed(2),
+              updatedAt: new Date(),
+            })
+            .where(eq(projectCurrencyWallets.id, wallet.id))
+            .returning();
+          balanceAfter = newTotal;
         }
 
-        // Debit: take from earned first, then purchased.
-        if (totalBefore < adjustAmount) {
-          return { success: false as const, error: "Insufficient VXC balance" };
-        }
-        const fromEarned = Math.min(earnedBefore, adjustAmount);
-        const fromPurchased = adjustAmount - fromEarned;
-        const newEarned = earnedBefore - fromEarned;
-        const newPurchased = purchasedBefore - fromPurchased;
-        const newTotal = totalBefore - adjustAmount;
+        await tx.insert(projectCurrencyLedger).values({
+          userId: id,
+          walletId: updated.id,
+          type: "admin_adjustment",
+          amount: (type === "add" ? adjustAmount : -adjustAmount).toFixed(2),
+          balanceBefore: totalBefore.toFixed(2),
+          balanceAfter: balanceAfter.toFixed(2),
+          referenceId: internalReference,
+          referenceType: "admin_adjustment",
+          description: `Admin VXC adjustment: ${reason}`,
+        });
 
-        const [updated] = await tx.update(projectCurrencyWallets)
-          .set({
-            earnedBalance: newEarned.toFixed(2),
-            purchasedBalance: newPurchased.toFixed(2),
-            totalBalance: newTotal.toFixed(2),
-            updatedAt: new Date(),
-          })
-          .where(eq(projectCurrencyWallets.id, wallet.id))
-          .returning();
-
-        return { success: true as const, wallet: updated, balanceBefore: totalBefore, balanceAfter: newTotal };
-      });
-
-      if (!result.success) {
-        return res.status(400).json({ error: result.error });
-      }
-
-      const internalReference = `admin_vxc_adjust:${id}:${Date.now()}`;
-      await db.insert(projectCurrencyLedger).values({
-        userId: id,
-        walletId: result.wallet.id,
-        type: "admin_adjustment",
-        amount: (type === "add" ? adjustAmount : -adjustAmount).toFixed(2),
-        balanceBefore: result.balanceBefore.toFixed(2),
-        balanceAfter: result.balanceAfter.toFixed(2),
-        referenceId: internalReference,
-        referenceType: "admin_adjustment",
-        description: `Admin VXC adjustment: ${reason}`,
+        return { wallet: updated, balanceBefore: totalBefore, balanceAfter };
       });
 
       await logAdminAction(req.admin!.id, "user_balance_adjust", "user", id, {
@@ -447,7 +481,7 @@ export function registerUserFinancialRoutes(app: Express) {
 
       res.json({ wallet: result.wallet, balanceBefore: result.balanceBefore, balanceAfter: result.balanceAfter });
     } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
+      res.status(resolveErrorStatus(error)).json({ error: getErrorMessage(error) });
     }
   });
 
