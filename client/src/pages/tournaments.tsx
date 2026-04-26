@@ -78,6 +78,63 @@ function isRegistrationWindowOpen(tournament: {
   return getTournamentRegistrationState(tournament) === 'open';
 }
 
+export function TournamentRegistrationStateBadge({
+  state,
+  opensAt,
+  en,
+  testIdPrefix,
+}: {
+  state: TournamentRegistrationState;
+  opensAt: string | null;
+  en: boolean;
+  testIdPrefix: string;
+}) {
+  const opensSoonCountdown = useCountdown(state === 'opens-soon' ? opensAt : null);
+  if (state === 'open') return null;
+
+  const baseClass = 'gap-1 text-xs';
+  if (state === 'opens-soon') {
+    const label = opensSoonCountdown
+      ? (en ? `Opens in ${opensSoonCountdown}` : `يفتح خلال ${opensSoonCountdown}`)
+      : (en ? 'Opens soon' : 'يفتح قريباً');
+    return (
+      <Badge
+        variant="outline"
+        className={`${baseClass} border-blue-500/30 text-blue-500`}
+        data-testid={`${testIdPrefix}-state-opens-soon`}
+        data-registration-state={state}
+      >
+        <Timer className="w-3 h-3" />
+        {label}
+      </Badge>
+    );
+  }
+  if (state === 'full') {
+    return (
+      <Badge
+        variant="outline"
+        className={`${baseClass} border-amber-500/30 text-amber-500`}
+        data-testid={`${testIdPrefix}-state-full`}
+        data-registration-state={state}
+      >
+        <Users className="w-3 h-3" />
+        {en ? 'Full' : 'مكتمل'}
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant="outline"
+      className={`${baseClass} border-muted-foreground/30 text-muted-foreground`}
+      data-testid={`${testIdPrefix}-state-closed`}
+      data-registration-state={state}
+    >
+      <XCircle className="w-3 h-3" />
+      {en ? 'Closed' : 'مغلق'}
+    </Badge>
+  );
+}
+
 function parsePrizeDistribution(rawDistribution: string | null | undefined): number[] {
   if (!rawDistribution) return [];
 
@@ -457,6 +514,14 @@ function TournamentListView() {
           {displayList.map(t => {
             const gameInfo = tournamentGameConfig[normalizeTournamentGameType(t.gameType)] || tournamentGameConfig.chess;
             const isUpcoming = t.status === 'upcoming' || t.status === 'registration';
+            const cardRegistrationState = getTournamentRegistrationState({
+              status: t.status,
+              registrationStartsAt: t.registrationStartsAt,
+              registrationEndsAt: t.registrationEndsAt,
+              startsAt: t.startsAt,
+              participantCount: t.participantCount,
+              maxPlayers: t.maxPlayers,
+            });
             return (
               <Card
                 key={t.id}
@@ -485,6 +550,12 @@ function TournamentListView() {
                           <Badge className={`${STATUS_COLORS[t.status] || 'bg-gray-500'} text-white`}>
                             {getStatusLabel(t.status, en)}
                           </Badge>
+                          <TournamentRegistrationStateBadge
+                            state={cardRegistrationState}
+                            opensAt={t.registrationStartsAt}
+                            en={en}
+                            testIdPrefix={`tournament-card-${t.id}`}
+                          />
                           {t.autoStartOnFull && (
                             <Badge variant="outline" className="border-cyan-500/30 text-cyan-500">
                               {en ? `Quick Start @ ${t.autoStartPlayerCount || t.minPlayers}` : `بدء سريع عند ${t.autoStartPlayerCount || t.minPlayers}`}
