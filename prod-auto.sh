@@ -1240,10 +1240,15 @@ verify_post_deploy_stack() {
   # non-regression reason.
   verify_domain="${verify_domain%%:*}"
   verify_url="https://${verify_domain}/"
-  if ! DEPLOY_VERIFY_URL="$verify_url" \
-       DEPLOY_VERIFY_RETRY="6" \
-       DEPLOY_VERIFY_DELAY="5" \
-       docker exec vex-app node scripts/smoke-permissions-policy-header.mjs; then
+  # `docker exec -e KEY=VALUE` is required to push env vars INTO the
+  # container — setting them on the host side of the pipe would only
+  # affect the docker CLI process, and the script inside vex-app would
+  # silently fall back to its own defaults.
+  if ! docker exec \
+       -e "DEPLOY_VERIFY_URL=$verify_url" \
+       -e "DEPLOY_VERIFY_RETRY=6" \
+       -e "DEPLOY_VERIFY_DELAY=5" \
+       vex-app node scripts/smoke-permissions-policy-header.mjs; then
     log_error "Permissions-Policy header check failed against $verify_url — rollout blocked. Inspect deploy/nginx.conf, server/index.ts, and any upstream proxy for a header rewrite."
     return 1
   fi

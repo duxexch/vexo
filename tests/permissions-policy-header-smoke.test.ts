@@ -25,14 +25,11 @@ describe("validatePermissionsPolicy — accepts the contract value", () => {
     expect(verdict.ok).toBe(true);
   });
 
-  it("tolerates extra whitespace a proxy might add", () => {
-    const padded = GOOD_HEADER.replace(/, /g, ",   ").replace(/=/g, " =  ");
-    // The whitespace-tolerant validator only normalises run-of-spaces,
-    // not the directive shape itself, so we only pad list separators
-    // here — directive shape (no internal whitespace) is part of the
-    // contract. Spaces around commas only:
+  it("tolerates extra whitespace a proxy might add around commas", () => {
+    // The validator normalises runs of whitespace, so a proxy that
+    // pads commas in the list doesn't flake the check. Directive
+    // shape itself (no internal whitespace) is part of the contract.
     const proxyish = GOOD_HEADER.replace(/, /g, ",   ");
-    void padded;
     expect(validatePermissionsPolicy(proxyish).ok).toBe(true);
   });
 });
