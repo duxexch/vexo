@@ -210,17 +210,19 @@ function i18nText(t: (key: string) => string, key: string, fallback: string): st
  *
  * The caller is trusted to supply a path under `/api/admin/*`, but some
  * call sites interpolate user-controlled IDs into the path. To stop a
- * crafted ID from steering the request away from `/api/admin/`
- * (CodeQL alert #133) we:
- *   1. reject any input that looks like an absolute URL or
- *      protocol-relative URL,
- *   2. reject backslashes and `..` segments (no traversal),
- *   3. normalize so the result always begins with `/api/admin/`,
- *   4. return a pathname-only string — never a fully-qualified URL —
- *      so the resulting `fetch` is unconditionally same-origin.
+ * crafted ID from steering the request to a different origin
+ * (CodeQL alert #133 — server-side-request-forgery) the result is:
  *
- * No `new URL(...)` call is involved, so there is no path that can
- * resolve to a different origin.
+ *   1. parsed via `new URL(input, window.location.origin)` so any
+ *      attempt to escape via an absolute or protocol-relative URL
+ *      gets re-anchored to the current origin and is then rejected
+ *      by the explicit origin equality check below,
+ *   2. forced to a pathname under `/api/admin/`,
+ *   3. returned as a same-origin pathname+search+hash string — never a
+ *      fully-qualified URL — so the resulting `fetch` is provably
+ *      same-origin to static analysis (CodeQL recognises the
+ *      `parsed.origin === safeOrigin` comparison as an SSRF
+ *      sanitizer).
  */
 function buildSafeAdminEndpoint(path: string): string {
   const rawPath = String(path || "").trim();
@@ -228,14 +230,25 @@ function buildSafeAdminEndpoint(path: string): string {
     throw new Error("Invalid admin endpoint");
   }
 
-  // Reject absolute URLs (`http://...`, `https://...`, `javascript:`,
-  // etc.) and protocol-relative URLs (`//evil.example/...`).
+  // Reject early any input that looks like an absolute URL or a
+  // protocol-relative URL — these would resolve to a different
+  // origin even before URL parsing.
   if (rawPath.startsWith("//") || /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(rawPath)) {
     throw new Error("Absolute URLs are not allowed");
   }
 
+  // No traversal, no Windows-style separators, no embedded NULs.
+  if (
+    rawPath.includes("\\") ||
+    rawPath.includes("..") ||
+    rawPath.includes("\0")
+  ) {
+    throw new Error("Invalid admin endpoint path");
+  }
+
   // Strip an optional leading `/api/admin` so callers can use either
-  // `"/api/admin/foo"` or `"/foo"`.
+  // `"/api/admin/foo"` or `"/foo"`, then ensure the relative part
+  // begins with a single `/`.
   const withoutPrefix = rawPath.startsWith(ADMIN_API_BASE_PATH)
     ? rawPath.slice(ADMIN_API_BASE_PATH.length)
     : rawPath;
@@ -243,40 +256,41 @@ function buildSafeAdminEndpoint(path: string): string {
     ? withoutPrefix
     : `/${withoutPrefix}`;
 
-  // No traversal, no Windows-style separators, no embedded NULs.
+  // Anchor against the current page origin via the URL constructor.
+  // SSR-safe fallback: a deterministic placeholder origin used only
+  // for the parse. The resulting URL is never returned — only its
+  // `pathname` / `search` / `hash` are.
+  const safeOrigin =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "https://admin.local.invalid";
+
+  let parsed: URL;
+  try {
+    parsed = new URL(`${ADMIN_API_BASE_PATH}${relative}`, safeOrigin);
+  } catch {
+    throw new Error("Invalid admin endpoint URL");
+  }
+
+  // SSRF gate: the parsed URL's origin MUST equal the base origin we
+  // anchored against. If anything in the input steered the parser to
+  // a different origin (impossible after the rejections above, but we
+  // gate explicitly so static analysis can see the guarantee), bail.
+  if (parsed.origin !== safeOrigin) {
+    throw new Error("Cross-origin admin endpoint blocked");
+  }
+
+  // Pathname must live under /api/admin/.
   if (
-    relative.includes("\\") ||
-    relative.includes("..") ||
-    relative.includes("\0")
+    !parsed.pathname.startsWith(`${ADMIN_API_BASE_PATH}/`) &&
+    parsed.pathname !== ADMIN_API_BASE_PATH
   ) {
     throw new Error("Invalid admin endpoint path");
   }
 
-  // Split off any query/fragment so we can guarantee the path part
-  // starts with `/api/admin/`. Splitting by hand (instead of using
-  // `new URL`) keeps the value pathname-only and same-origin.
-  let pathname = relative;
-  let suffix = "";
-  const hashIndex = pathname.indexOf("#");
-  if (hashIndex !== -1) {
-    suffix = pathname.slice(hashIndex) + suffix;
-    pathname = pathname.slice(0, hashIndex);
-  }
-  const queryIndex = pathname.indexOf("?");
-  if (queryIndex !== -1) {
-    suffix = pathname.slice(queryIndex) + suffix;
-    pathname = pathname.slice(0, queryIndex);
-  }
-
-  const endpointPath = `${ADMIN_API_BASE_PATH}${pathname}`;
-  if (
-    !endpointPath.startsWith(`${ADMIN_API_BASE_PATH}/`) &&
-    endpointPath !== ADMIN_API_BASE_PATH
-  ) {
-    throw new Error("Invalid admin endpoint path");
-  }
-
-  return `${endpointPath}${suffix}`;
+  // Return only the pathname-relative form so `fetch` is
+  // unconditionally same-origin to the page.
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
 async function adminFetch(path: string, options: RequestInit = {}) {

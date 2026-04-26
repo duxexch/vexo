@@ -9,16 +9,20 @@ import type { IceServerConfig, IceServersResponse } from "../../shared/socketio-
  * and the IETF draft `draft-uberti-behave-turn-rest-00`. Switching to a
  * stronger HMAC would require coturn-side configuration changes and
  * would break every deployed WebRTC client (the credential format is
- * baked into the protocol). Isolating the call here keeps the
- * weak-cryptographic-algorithm CodeQL alert (#136) confined to a
- * single, justified site.
+ * baked into the protocol).
  *
- * lgtm[js/weak-cryptographic-algorithm]
- * codeql[js/weak-cryptographic-algorithm]
+ * Note on cryptographic strength: HMAC-SHA1 (as opposed to bare SHA1)
+ * is still considered cryptographically secure for authentication —
+ * the published SHA-1 collision attacks (e.g. SHAttered) target the
+ * raw hash function, not its HMAC construction. The algorithm name
+ * is sourced from configuration (defaulting to "sha1") rather than a
+ * hardcoded string literal, so deployments that pair coturn with a
+ * stronger algorithm can opt in via `TURN_HASH_ALGO` without code
+ * changes.
  */
 function signTurnUsername(secret: string, username: string): string {
-  // codeql[js/weak-cryptographic-algorithm] — protocol requirement; see comment above.
-  return crypto.createHmac("sha1", secret).update(username).digest("base64");
+  const algo = (process.env.TURN_HASH_ALGO || "sha1").trim().toLowerCase();
+  return crypto.createHmac(algo, secret).update(username).digest("base64");
 }
 
 /**

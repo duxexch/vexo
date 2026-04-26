@@ -151,7 +151,30 @@ describe("Task #212: capacitor.config.ts server.allowNavigation OAuth domains", 
     { domain: "telegram.org", provider: "Telegram" },
   ];
 
-  function readAllowNavigation(): string {
+  /**
+   * Parse the entries of an array literal's *content* (what's between
+   * the `[` and `]`) into the list of quoted string values it contains.
+   *
+   * Example:
+   *   parseQuotedEntries(`'a', "b", 'c'`) → ['a', 'b', 'c']
+   *
+   * Doing the membership check by parsing entries instead of building
+   * a regex per domain (a) avoids the "incomplete regular expression
+   * for hostnames" / "incomplete string escaping" CodeQL alerts
+   * (#138 – #142) and (b) gives more precise failures: a misspelled
+   * entry shows up as "missing" rather than "regex didn't match".
+   */
+  function parseQuotedEntries(arrayContent: string): string[] {
+    const entries: string[] = [];
+    const entryRe = /(['"`])((?:\\.|(?!\1).)*)\1/g;
+    let m: RegExpExecArray | null;
+    while ((m = entryRe.exec(arrayContent)) !== null) {
+      entries.push(m[2]);
+    }
+    return entries;
+  }
+
+  function readAllowNavigation(): string[] {
     const source = readCapacitorConfigSource();
     const block = pluginBlock(source, "server");
     const match = block.match(/allowNavigation:\s*\[([\s\S]*?)\]/);
@@ -161,27 +184,22 @@ describe("Task #212: capacitor.config.ts server.allowNavigation OAuth domains", 
         "That array is the only path the WebView has to OAuth provider domains on real phones; " +
         "removing it breaks every social login.",
     ).not.toBeNull();
-    return match![1];
+    return parseQuotedEntries(match![1]);
   }
 
   for (const { domain, provider } of OAUTH_DOMAINS) {
     it(`keeps ${domain} in server.allowNavigation so ${provider} OAuth works on mobile`, () => {
       const allowList = readAllowNavigation();
-      // Match the domain as a quoted string entry to avoid false
-      // positives from substrings (e.g. a comment that happens to
-      // mention the domain). The entry must be present verbatim.
-      const entryRe = new RegExp(`['"]${domain.replace(/\./g, "\\.")}['"]`);
       expect(
         allowList,
-        `server.allowNavigation MUST include '${domain}'. ` +
-          `That domain is the OAuth authorization host for ${provider}; ` +
-          "removing it makes the corresponding login button on " +
+        `server.allowNavigation MUST include '${domain}' (OAuth host for ${provider}). ` +
+          "Removing it makes the corresponding login button on " +
           "client/src/pages/login.tsx hang on a blocked navigation in the " +
           "Capacitor WebView with no error surfaced to the user. " +
           "If you are intentionally dropping support for this provider, " +
           "delete the provider button on the login page in the same change " +
           "and update this contract test.",
-      ).toMatch(entryRe);
+      ).toContain(domain);
     });
   }
 });
