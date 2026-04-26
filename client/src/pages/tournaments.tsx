@@ -740,6 +740,14 @@ function TournamentDetailView({ id }: { id: string }) {
 
   const statusLabel = (s: string) => getStatusLabel(s, en);
 
+  // Compute the opens-soon countdown BEFORE any early-return so React's
+  // hooks-rule invariant holds across loading / error / loaded renders.
+  // useCountdown safely no-ops when given null, so passing the raw
+  // tournament timestamp here (regardless of registration state) is
+  // correct — the state check below is what decides whether the value
+  // is actually surfaced in the UI.
+  const opensSoonCountdown = useCountdown(tournament?.registrationStartsAt ?? null);
+
   if (isLoading) {
     return (
       <div className="container max-w-4xl mx-auto min-h-[100svh] p-3 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-5 sm:space-y-6" dir={dir}>
@@ -795,10 +803,16 @@ function TournamentDetailView({ id }: { id: string }) {
   });
   const registrationOpen = registrationState === 'open';
   const canRegister = registrationOpen && !tournament.isRegistered;
-  const canWithdraw = registrationOpen && tournament.isRegistered;
-  const opensSoonCountdown = useCountdown(
-    registrationState === 'opens-soon' ? tournament.registrationStartsAt : null,
-  );
+  // Withdrawal stays available whenever the registration window is
+  // still open, even if the roster is full. Tying canWithdraw to
+  // `registrationState === 'open'` would lock already-registered
+  // players out of unregistering as soon as the tournament filled up,
+  // which the server-side unregister endpoint still allows. The two
+  // states that mean "window is currently open" are 'open' and 'full'
+  // (full just signals capacity is reached, not that the window
+  // closed).
+  const withdrawalWindowOpen = registrationState === 'open' || registrationState === 'full';
+  const canWithdraw = withdrawalWindowOpen && tournament.isRegistered;
 
   const entryFeeNumber = Number.parseFloat(tournament.entryFee || '0');
   const safeEntryFee = Number.isFinite(entryFeeNumber) ? entryFeeNumber : 0;
