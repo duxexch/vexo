@@ -5,6 +5,12 @@ import { db } from "../../db";
 import { eq, sql } from "drizzle-orm";
 import { users, gameMatches, gameplayEmojis, gameplayMessages } from "@shared/schema";
 import { logger } from "../../lib/logger";
+import { getSocketIO } from "../../socketio";
+import { SOCKETIO_NS_CHAT } from "@shared/socketio-events";
+import {
+  broadcastMatchEmoji,
+  type MatchChatNamespace,
+} from "../../socketio/match-chat-bridge";
 
 export function registerEmojisRoutes(app: Express): void {
 
@@ -134,6 +140,37 @@ export function registerEmojisRoutes(app: Express): void {
       if (isEmoji && emojiId) {
         const [emoji] = await db.select().from(gameplayEmojis).where(eq(gameplayEmojis.id, emojiId));
         responseMessage.emoji = emoji;
+
+        // Task #139: fan out the emoji as a `chat:message` socket
+        // broadcast so the peer sees it instantly now that the 2s
+        // polling has been removed from `InGameChat`. The REST
+        // endpoint still owns the balance debit + persistence (kept
+        // here for the row-locked transaction); this is purely the
+        // realtime delivery path. Best-effort — swallow errors so a
+        // socket hiccup never fails the user-facing send.
+        try {
+          const io = getSocketIO();
+          if (io) {
+            const chatNs = io.of(SOCKETIO_NS_CHAT) as unknown as MatchChatNamespace;
+            const ts = newMessage.createdAt
+              ? new Date(newMessage.createdAt).getTime()
+              : Date.now();
+            await broadcastMatchEmoji(
+              {
+                matchId,
+                senderId: userId,
+                emojiId,
+                messageId: newMessage.id,
+                ts,
+              },
+              chatNs,
+            );
+          }
+        } catch (err) {
+          logger.warn?.(
+            `[gameplay/messages] emoji socket fan-out failed: ${(err as Error).message}`,
+          );
+        }
       }
 
       res.json(responseMessage);

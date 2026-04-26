@@ -27,6 +27,7 @@ import {
   type ChatNamespace,
 } from "./challenge-chat-bridge";
 import { deliverRealtimeDirectMessage } from "./direct-message-bridge";
+import { deliverRealtimeMatchChat } from "./match-chat-bridge";
 import { challengeGameRooms } from "../websocket/shared";
 import { getRedisClient } from "../lib/redis";
 import { insertMissedCallChatMessage } from "../lib/chat-call-event";
@@ -468,6 +469,55 @@ export function setupSocketIO(httpServer: HttpServer): IOServer {
           }
         } catch (err) {
           logger.warn?.(`[socket.io] chat:send delivery failed: ${(err as Error).message}`);
+          socket.emit("chat:error", { code: "server", message: "Failed to send" });
+          ack?.({ ok: false, error: "server" });
+        }
+        return;
+      }
+
+      // Casual `match:` rooms — Task #139. Same realtime semantics as the
+      // challenge branch (sanitize → word filter → persist → fan out with
+      // per-recipient block/mute filtering), but the persistence target
+      // is `gameplay_messages` so the existing GET /api/gameplay/messages
+      // history endpoint keeps working unchanged. Casual matches have no
+      // spectator concept on this transport (chat:join authz only allows
+      // player1 / player2), so the spectator-readonly gate above doesn't
+      // apply here.
+      if (roomId.startsWith("match:")) {
+        const matchId = roomId.slice("match:".length);
+        try {
+          const result = await deliverRealtimeMatchChat({
+            matchId,
+            roomId,
+            senderId: userId,
+            senderUsernameFallback: socket.data.username,
+            text,
+            clientMsgId,
+            isQuickMessage,
+            quickMessageKey,
+            chatNs,
+          });
+          if (result.ok) {
+            ack?.({ ok: true });
+          } else if (result.reason === "empty") {
+            ack?.({ ok: false, error: "empty" });
+          } else if (result.reason === "no_match") {
+            socket.emit("chat:error", {
+              code: "no_session",
+              message: "Match no longer exists",
+              roomId,
+            });
+            ack?.({ ok: false, error: "no_session" });
+          } else {
+            socket.emit("chat:error", {
+              code: "server",
+              message: "Failed to send",
+              roomId,
+            });
+            ack?.({ ok: false, error: "server" });
+          }
+        } catch (err) {
+          logger.warn?.(`[socket.io] match chat:send delivery failed: ${(err as Error).message}`);
           socket.emit("chat:error", { code: "server", message: "Failed to send" });
           ack?.({ ok: false, error: "server" });
         }

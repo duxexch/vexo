@@ -71,6 +71,24 @@ export interface ChatBroadcast {
   quickMessageKey?: string;
   /** True when the server's word filter scrubbed the original text. */
   wasFiltered?: boolean;
+  /**
+   * Task #139: optional gameplay-emoji metadata, set ONLY on broadcasts
+   * fanned out from the `/api/gameplay/messages` REST endpoint after a
+   * successful balance-deducted emoji send. `text` is empty in that
+   * case and clients render the emoji bubble using these fields.
+   * Undefined for normal text broadcasts (challenge / DM / match text).
+   * Optional + additive so existing consumers keep working unchanged.
+   */
+  gameplayEmoji?: {
+    /** Persisted `gameplay_messages.id` — used as the dedup key. */
+    messageId: string;
+    /** Reference id for the emoji catalog row. */
+    emojiId: string;
+    /** Display glyph (e.g. "🔥"). */
+    emoji: string;
+    /** Decimal-as-string price the sender paid (mirrors REST shape). */
+    price: string;
+  };
 }
 
 /**

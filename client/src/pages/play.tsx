@@ -25,6 +25,7 @@ import {
 import { VoiceChat as SharedVoiceChat } from '@/components/games/VoiceChat';
 import { ChatViewerCountPill } from '@/components/games/GameChat';
 import { useSocketChat } from '@/hooks/use-socket-chat';
+import type { ChatBroadcast, ChatErrorCode } from '@shared/socketio-events';
 import { BalanceDisplay } from '@/components/BalanceDisplay';
 import type { Game, Transaction, User, Announcement, GameplayEmoji, Advertisement, GameSection as GameSectionType } from '@shared/schema';
 import Autoplay from 'embla-carousel-autoplay';
@@ -315,6 +316,137 @@ function VoiceChat({
   );
 }
 
+// Task #139: shape returned by GET /api/gameplay/messages/:matchId.
+// Mirrors the server response (drizzle row + relations: sender + emoji),
+// loosely typed to optional fields because text messages have no emoji
+// payload and vice-versa. Used by `buildRenderableChatStream` below.
+interface HistoryGameplayMessage {
+  id: string;
+  matchId: string;
+  senderId: string;
+  message: string | null;
+  emojiId: string | null;
+  isEmoji: boolean;
+  emojiCost: string | null;
+  createdAt: string | Date | null;
+  sender?: { id: string; username: string; profilePicture?: string | null } | null;
+  emoji?: { id: string; emoji: string; price: string } | null;
+}
+
+// Shape returned by POST /api/gameplay/messages — same as a history row
+// but the `emoji` relation is always inlined when isEmoji is true.
+interface EmojiSendResponse extends HistoryGameplayMessage {}
+
+interface EmojiBubble {
+  messageId: string;
+  emojiId: string;
+  emoji: string;
+  price: string;
+  ts: number;
+  /** "me" so the renderer can right-align the sender's own bubble. */
+  fromUserId: string;
+}
+
+interface RenderableChatMessage {
+  /** Stable React key + de-dup identity. */
+  key: string;
+  ts: number;
+  isOwn: boolean;
+  kind: 'text' | 'emoji';
+  text?: string;
+  emoji?: string;
+  emojiCost?: string;
+}
+
+// Task #139: merge the three message sources (history / realtime /
+// local emoji sends) into a single ordered, de-duplicated stream the
+// renderer iterates. Stable ordering by ts; ties resolved by source
+// priority (history first → realtime second → local last) so a reload
+// doesn't reorder existing bubbles. De-dup keys:
+//   - History: `gameplay_messages.id`
+//   - Realtime emoji: `gameplayEmoji.messageId` (same id as history)
+//   - Realtime text: `clientMsgId` if present, else
+//     `${fromUserId}-${ts}-${text}` as a session-stable fallback
+//   - Local emoji: `messageId` (same id as history once persisted)
+function buildRenderableChatStream(args: {
+  history: HistoryGameplayMessage[];
+  realtime: ChatBroadcast[];
+  localEmojiSends: EmojiBubble[];
+  ownUserId?: string;
+}): RenderableChatMessage[] {
+  const seen = new Set<string>();
+  const out: RenderableChatMessage[] = [];
+
+  const pushUnique = (key: string, msg: RenderableChatMessage) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(msg);
+  };
+
+  for (const h of args.history) {
+    const key = h.id;
+    const ts = h.createdAt ? new Date(h.createdAt).getTime() : 0;
+    const isOwn = args.ownUserId ? h.senderId === args.ownUserId : false;
+    if (h.isEmoji) {
+      pushUnique(key, {
+        key,
+        ts,
+        isOwn,
+        kind: 'emoji',
+        emoji: h.emoji?.emoji ?? '😊',
+        emojiCost: h.emojiCost ?? undefined,
+      });
+    } else {
+      pushUnique(key, {
+        key,
+        ts,
+        isOwn,
+        kind: 'text',
+        text: h.message ?? '',
+      });
+    }
+  }
+
+  for (const r of args.realtime) {
+    if (r.gameplayEmoji) {
+      const key = r.gameplayEmoji.messageId;
+      pushUnique(key, {
+        key,
+        ts: r.ts,
+        isOwn: args.ownUserId ? r.fromUserId === args.ownUserId : false,
+        kind: 'emoji',
+        emoji: r.gameplayEmoji.emoji,
+        emojiCost: r.gameplayEmoji.price,
+      });
+    } else {
+      const key = r.clientMsgId
+        ? `c:${r.clientMsgId}`
+        : `t:${r.fromUserId}:${r.ts}:${r.text}`;
+      pushUnique(key, {
+        key,
+        ts: r.ts,
+        isOwn: args.ownUserId ? r.fromUserId === args.ownUserId : false,
+        kind: 'text',
+        text: r.text,
+      });
+    }
+  }
+
+  for (const e of args.localEmojiSends) {
+    pushUnique(e.messageId, {
+      key: e.messageId,
+      ts: e.ts,
+      isOwn: true,
+      kind: 'emoji',
+      emoji: e.emoji,
+      emojiCost: e.price,
+    });
+  }
+
+  out.sort((a, b) => a.ts - b.ts);
+  return out;
+}
+
 // In-game Chat with Emoji Picker
 function InGameChat({
   matchId,
@@ -333,41 +465,108 @@ function InGameChat({
     queryKey: ['/api/gameplay/emojis'],
   });
 
-  const { data: messages, refetch: refetchMessages } = useQuery({
+  // Task #139: chat history is fetched ONCE on mount (no more 2s polling).
+  // After hydration, new text messages arrive via the realtime socket
+  // (`realtimeChat.messages`) and emoji sends append the REST response
+  // locally. Reloads / re-mounts re-fetch via this query so persisted
+  // history survives a navigation away.
+  const { data: historyMessages } = useQuery<HistoryGameplayMessage[]>({
     queryKey: ['/api/gameplay/messages', matchId],
-    refetchInterval: 2000, // Poll every 2 seconds
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    staleTime: Infinity,
   });
 
-  // Task #109: subscribe to the realtime chat room for this match purely
-  // to surface "who's watching" presence in the chat header. Casual
-  // matches still send/receive messages over the legacy /api/gameplay
-  // polling path above — we deliberately do NOT touch that transport
-  // here. The hook only contributes `viewerCount` + block-list-filtered
-  // `viewers`, which feed the same avatar-stack pill used in the
-  // challenge in-game chat (Task #75) so social presence looks the same
-  // everywhere chat appears.
+  // Task #139: realtime chat — now the SOLE delivery path for casual-match
+  // text messages (replacing the 2s `useQuery` polling). Same hook the
+  // challenge in-game chat uses (Task #9), and the same `match:` room
+  // namespace introduced in Task #109. Server authz still routes
+  // `match:<gameMatchId>` through `gameMatches.player1Id/player2Id`
+  // (server/socketio/index.ts `isUserAllowedInRoom`).
   //
-  // Casual matches live in `game_matches` (NOT `challenges`) so the
-  // room id MUST use the dedicated `match:` namespace — server authz
-  // (server/socketio/index.ts `isUserAllowedInRoom`) routes
-  // `match:<gameMatchId>` through `gameMatches.player1Id/player2Id`.
-  // Using `challenge:<matchId>` here would silently fail authorization
-  // (the id is not a challenges.id), which is the bug Task #109 review
-  // flagged.
+  // The hook continues to surface `viewerCount` + block-list-filtered
+  // `viewers` (Task #75 / Task #109) for the chat header pill.
+  const onRealtimeError = useCallback(
+    (info: { code: ChatErrorCode; reason?: string }) => {
+      // Same code → toast map the challenge in-game chat uses, so
+      // server-side semantic failures (rate_limit, no_session, ...)
+      // surface the same way regardless of which page sent the message.
+      const fallback = language === 'ar' ? 'تعذّر إرسال الرسالة' : 'Could not send message';
+      const map: Record<ChatErrorCode, string | null> = {
+        rate_limit: language === 'ar'
+          ? 'أبطئ قليلًا — رسائل كثيرة جدًا'
+          : 'Slow down — too many messages',
+        spectator_not_seated: null, // not reachable on `match:` rooms
+        spectator_readonly: null,   // not reachable on `match:` rooms
+        spectator_full: null,       // not reachable on `match:` rooms
+        no_session: language === 'ar'
+          ? 'هذه المباراة لم تعد متاحة'
+          : 'This match is no longer available',
+        empty: '',
+        disconnected: language === 'ar'
+          ? 'الاتصال غير جاهز الآن'
+          : 'Connection is not ready right now',
+        invalid: null,
+        not_in_room: null,
+        no_room: null,
+        failed: null,
+        server: null,
+        auth: null,
+        forbidden: null,
+      };
+      const msg = map[info.code] ?? fallback;
+      if (!msg) return;
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: msg,
+        variant: 'destructive',
+      });
+    },
+    [language, toast],
+  );
   const realtimeChat = useSocketChat({
     roomId: matchId ? `match:${matchId}` : null,
+    onError: onRealtimeError,
   });
   const headerViewerCount = realtimeChat.viewerCountReceived
     ? realtimeChat.viewerCount
     : 0;
 
-  const sendMessageMutation = useMutation({
-    mutationFn: async (data: { matchId: string; message?: string; emojiId?: string; isEmoji: boolean }) => {
-      return apiRequest('POST', '/api/gameplay/messages', data);
+  // Task #139: optimistically-added emoji sends from this client. The
+  // REST `/api/gameplay/messages` endpoint still owns the balance debit
+  // (it runs in a row-locked transaction), so emojis aren't sent over
+  // the socket. We insert the REST response into this buffer so the
+  // sender's bubble appears instantly without re-fetching the whole
+  // history list. Peers receive the same emoji via the new
+  // `chat:message` fan-out from the REST handler (broadcast carries
+  // `gameplayEmoji` metadata) so they don't need a refetch either.
+  const [localEmojiSends, setLocalEmojiSends] = useState<EmojiBubble[]>([]);
+
+  const sendEmojiMutation = useMutation({
+    mutationFn: async (data: { matchId: string; emojiId: string }) => {
+      const res = await apiRequest('POST', '/api/gameplay/messages', {
+        ...data,
+        isEmoji: true,
+      });
+      return (await res.json()) as EmojiSendResponse;
     },
-    onSuccess: () => {
-      setMessage('');
-      refetchMessages();
+    onSuccess: (saved) => {
+      // Append the saved emoji to our local buffer so it renders
+      // immediately. The peer will see the same emoji via the
+      // server-side socket broadcast, also keyed by message id, so
+      // both sides converge without polling.
+      setLocalEmojiSends((prev) => [
+        ...prev,
+        {
+          messageId: saved.id,
+          emojiId: saved.emoji?.id ?? '',
+          emoji: saved.emoji?.emoji ?? '😊',
+          price: saved.emoji?.price ?? saved.emojiCost ?? '0',
+          ts: saved.createdAt ? new Date(saved.createdAt).getTime() : Date.now(),
+          fromUserId: 'me',
+        },
+      ]);
       queryClient.invalidateQueries({ queryKey: ['/api/user'] });
     },
     onError: (error: Error) => {
@@ -379,13 +578,18 @@ function InGameChat({
     },
   });
 
-  const handleSendMessage = () => {
-    if (!message.trim()) return;
-    sendMessageMutation.mutate({
-      matchId,
-      message: message.trim(),
-      isEmoji: false,
-    });
+  const handleSendMessage = async () => {
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    // Optimistically clear the input so the user can keep typing —
+    // server-side errors will toast through `onRealtimeError`.
+    setMessage('');
+    const ack = await realtimeChat.send(trimmed);
+    if (!ack.ok && ack.error !== 'empty') {
+      // Restore the unsent text so the user can retry without
+      // re-typing. Toasts are emitted by `onRealtimeError`.
+      setMessage((prev) => (prev ? prev : trimmed));
+    }
   };
 
   const handleSendEmoji = (emoji: GameplayEmoji) => {
@@ -401,17 +605,37 @@ function InGameChat({
       return;
     }
 
-    sendMessageMutation.mutate({
+    sendEmojiMutation.mutate({
       matchId,
       emojiId: emoji.id,
-      isEmoji: true,
     });
     setShowEmojiPicker(false);
   };
 
+  // Task #139: build the unified message stream the renderer iterates.
+  // Three sources, sorted by ts so insertion order matches arrival
+  // order regardless of which transport delivered the bubble:
+  //   1. Persisted history (one-shot REST fetch on mount)
+  //   2. Realtime socket broadcasts (text + peer emojis)
+  //   3. Local emoji sends (REST response — ours; instant echo)
+  // De-duplication keys:
+  //   - History rows: `gameplay_messages.id`
+  //   - Realtime emoji broadcasts: `gameplayEmoji.messageId` (same id
+  //     as the persisted row, so reload doesn't double-show)
+  //   - Realtime text broadcasts: `clientMsgId` if present (skips our
+  //     own ack echo); otherwise `${fromUserId}-${ts}-${text}` is
+  //     stable enough across the session.
+  //   - Local emoji sends: `messageId` (same as history id once a
+  //     reload happens — dedupe just in case the same id is in both).
+  const renderMessages = buildRenderableChatStream({
+    history: historyMessages || [],
+    realtime: realtimeChat.messages,
+    localEmojiSends,
+  });
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [renderMessages.length]);
 
   return (
     <div className="flex flex-col h-full bg-background/95 backdrop-blur-sm rounded-lg border">
@@ -437,16 +661,20 @@ function InGameChat({
 
       <ScrollArea className="flex-1 p-3">
         <div className="space-y-2">
-          {(messages as Array<Record<string, unknown>> | undefined)?.map((msg, i: number) => (
-            <div key={(msg.id as string) || i} className={`flex ${(msg.sender as Record<string, unknown>)?.id === 'current' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] rounded-lg p-2 ${msg.isEmoji ? 'bg-transparent text-4xl' : 'bg-muted'}`}>
-                {msg.isEmoji ? (
-                  <span className="text-3xl">{((msg.emoji as Record<string, unknown>)?.emoji as string) || '😊'}</span>
+          {renderMessages.map((msg) => (
+            <div
+              key={msg.key}
+              className={`flex ${msg.isOwn ? 'justify-end' : 'justify-start'}`}
+              data-testid={`chat-message-${msg.key}`}
+            >
+              <div className={`max-w-[80%] rounded-lg p-2 ${msg.kind === 'emoji' ? 'bg-transparent text-4xl' : 'bg-muted'}`}>
+                {msg.kind === 'emoji' ? (
+                  <span className="text-3xl">{msg.emoji || '😊'}</span>
                 ) : (
-                  <p className="text-sm">{msg.message as string}</p>
+                  <p className="text-sm">{msg.text}</p>
                 )}
-                {Boolean(msg.isEmoji) && Boolean(msg.emojiCost) && (
-                  <span className="text-xs text-muted-foreground">-${parseFloat(msg.emojiCost as string).toFixed(2)}</span>
+                {msg.kind === 'emoji' && msg.emojiCost && (
+                  <span className="text-xs text-muted-foreground">-${parseFloat(msg.emojiCost).toFixed(2)}</span>
                 )}
               </div>
             </div>
@@ -465,7 +693,7 @@ function InGameChat({
                 size="sm"
                 className="flex flex-col items-center p-2 h-auto"
                 onClick={() => handleSendEmoji(emoji)}
-                disabled={sendMessageMutation.isPending}
+                disabled={sendEmojiMutation.isPending}
                 data-testid={`button-emoji-${emoji.id}`}
               >
                 <span className="text-2xl">{emoji.emoji}</span>
@@ -496,7 +724,7 @@ function InGameChat({
         <Button
           size="icon"
           onClick={handleSendMessage}
-          disabled={!message.trim() || sendMessageMutation.isPending}
+          disabled={!message.trim() || !realtimeChat.connected}
           data-testid="button-send-message"
         >
           <Send className="h-4 w-4" />
