@@ -463,9 +463,9 @@
     ],
     "telemetry": {
       "tilesCount": 28,
-      "iterationsUsed": 577,
-      "shrinkSteps": 10,
-      "failedAttempts": 130,
+      "iterationsUsed": 609,
+      "shrinkSteps": 18,
+      "failedAttempts": 162,
       "overflowed": false
     },
     "layoutHash": "4c3a4d3bda6bb77f8d08b9e623e31336ba621e5f5b88c8443bfbefe025ec877b"
@@ -737,9 +737,9 @@
     ],
     "telemetry": {
       "tilesCount": 52,
-      "iterationsUsed": 597,
-      "shrinkSteps": 10,
-      "failedAttempts": 135,
+      "iterationsUsed": 629,
+      "shrinkSteps": 18,
+      "failedAttempts": 167,
       "overflowed": false
     },
     "layoutHash": "bb1d527bdc4b5eb0e775fcc05a7f1deee1e53561eddba25fc6d5807f1d9990ad"
@@ -910,9 +910,9 @@
     ],
     "telemetry": {
       "tilesCount": 64,
-      "iterationsUsed": 577,
-      "shrinkSteps": 10,
-      "failedAttempts": 130,
+      "iterationsUsed": 609,
+      "shrinkSteps": 18,
+      "failedAttempts": 162,
       "overflowed": false
     },
     "layoutHash": "5ba3131136ef78276614e719d52999c70bc0e0c13813bd2974e3c103001efdde"

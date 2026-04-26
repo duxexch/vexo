@@ -1821,6 +1821,40 @@ body[data-vex-game-fullscreen="on"] {
   pointer-events: none;
 }
 
+/* ───────────── Domino table-style surface ─────────────
+ * The board container reads its background, grain overlay, frame shadow,
+ * border colour, and per-tile shadow from CSS custom properties supplied by
+ * `client/src/lib/domino-table-styles.ts`. Defaults preserve the legacy
+ * green-felt look so unstyled boards keep working.
+ */
+.domino-table-surface {
+  background: var(--domino-board-bg, hsl(var(--game-felt)));
+  border: 1px solid var(--domino-board-border, rgba(29, 79, 59, 0.7));
+  box-shadow: var(--domino-board-frame,
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 18px 28px rgba(8, 26, 19, 0.4));
+}
+
+.domino-table-surface::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 0.9rem;
+  background: var(--domino-board-grain, transparent);
+  background-size: auto, auto, auto, 160px 160px;
+  mix-blend-mode: overlay;
+  opacity: 0.95;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Per-tile shadow on the table surface — placed tiles look set on the
+ * board instead of stamped into it. The shadow value is provided by the
+ * active table style (wood styles use deeper shadows than felt). */
+.domino-tile-on-table {
+  filter: drop-shadow(var(--domino-tile-shadow, 0 3px 6px rgba(8, 26, 19, 0.32)));
+}
+
 .domino-board-turn-live {
   animation: domino-board-ambient 3.1s ease-in-out infinite;
 }

@@ -69,6 +69,13 @@ function buildGameState(tiles: HarnessTile[]) {
   };
 }
 
+function parsePositiveInt(raw: string | null, fallback: number): number {
+  if (raw === null || raw === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return Math.floor(value);
+}
+
 function App() {
   const params = new URLSearchParams(window.location.search);
   const length = Math.max(0, Number(params.get("length") ?? "14"));
@@ -126,8 +133,19 @@ function App() {
     return tiles;
   }, [tiles, phase, anchorIndex]);
 
-  const containerWidth = compact ? 380 : 900;
-  const containerHeight = compact ? 460 : 560;
+  // Harness container size — `?harnessWidth=` and `?harnessHeight=` URL
+  // overrides let the new 28-tile fit smoke probe realistic phone/desktop
+  // surfaces (the legacy 380×460 mobile box is tighter than a real phone
+  // viewport). Defaults are unchanged so existing snapshot smokes stay
+  // byte-for-byte identical.
+  const containerWidth = parsePositiveInt(
+    params.get("harnessWidth"),
+    compact ? 380 : 900,
+  );
+  const containerHeight = parsePositiveInt(
+    params.get("harnessHeight"),
+    compact ? 460 : 560,
+  );
 
   const gameState = React.useMemo(() => buildGameState(visibleTiles), [visibleTiles]);
 

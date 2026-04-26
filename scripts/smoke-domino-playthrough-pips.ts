@@ -80,6 +80,17 @@ interface ChainScenario {
     // [5,0] on each side (or as the anchor itself) so both blank-half
     // tiles still get exercised end-to-end.
     mobileAnchorIndex: number;
+    /**
+     * Optional explicit anchor index for the desktop viewport. Originally
+     * the desktop case relied on the harness defaulting the anchor to
+     * `boardTiles[0]` so the entire chain unrolled on a single side, but
+     * the viewport-aware tile footprint fix (tablet/desktop tiles render
+     * at 48×96 above the `sm:` breakpoint, not 40×80) means the snake now
+     * folds at desktop widths too. Splitting the chain around a real
+     * mid-chain anchor mirrors how a real game looks and keeps every
+     * non-anchor tile inside the spatially-closest-half assertion.
+     */
+    desktopAnchorIndex?: number;
 }
 
 // Each chain satisfies the server's invariant `chain[i][1] === chain[i+1][0]`,
@@ -106,6 +117,7 @@ const SCENARIOS: ChainScenario[] = [
         // right side carries [5,0], 3 tiles per side keeps the
         // compact lane from wrapping.
         mobileAnchorIndex: 3,
+        desktopAnchorIndex: 3,
     },
     {
         // 8 tiles starting on a [6,6] double (immediate elbow) with two
@@ -126,6 +138,7 @@ const SCENARIOS: ChainScenario[] = [
         // covers it via the half-multiset check; left side carries
         // [3,0] + the [6,6] double, right side carries the rest.
         mobileAnchorIndex: 4,
+        desktopAnchorIndex: 4,
     },
 ];
 
@@ -434,13 +447,13 @@ async function main() {
 
             for (const viewport of VIEWPORTS) {
                 const label = `${scenario.name}@${viewport.name}`;
-                // Only the compact (mobile) lane needs a real anchor split —
-                // the desktop lane has plenty of horizontal room to lay the
-                // whole chain out on a single side of `boardTiles[0]`
-                // without wrapping.
+                // Both viewports now use a real mid-chain anchor split.
+                // After the viewport-aware tile footprint fix, even the
+                // desktop lane folds the snake — so the anchor must split
+                // the chain to mirror how real games render the table.
                 const anchorIndex = viewport.compact
                     ? scenario.mobileAnchorIndex
-                    : null;
+                    : (scenario.desktopAnchorIndex ?? scenario.mobileAnchorIndex);
                 const measurements = await measureScene(
                     browser,
                     baseUrl,

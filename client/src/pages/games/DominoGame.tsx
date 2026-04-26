@@ -15,7 +15,21 @@ import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Wifi, WifiOff, Users, ArrowLeft, Share2, AlertCircle, RefreshCw, Maximize2 } from 'lucide-react';
+import { Loader2, Wifi, WifiOff, Users, ArrowLeft, Share2, AlertCircle, RefreshCw, Maximize2, Settings, Check } from 'lucide-react';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import {
+  DOMINO_TABLE_STYLES,
+  loadSavedTableStyle,
+  saveTableStyle,
+  getTableStyleCssVars,
+  type DominoTableStyle,
+} from '@/lib/domino-table-styles';
 import { useToast } from '@/hooks/use-toast';
 import { dominoSounds } from '@/lib/game-sounds';
 
@@ -52,6 +66,16 @@ export default function DominoGame() {
   const dominoState = gameState as DominoGameState | null;
   const [showCinematic, setShowCinematic] = useState(true);
   const gameOverSoundPlayedRef = useRef(false);
+
+  // Player-pickable table style. Persisted in localStorage; default green felt
+  // preserves the legacy look for first-time players.
+  const [tableStyle, setTableStyle] = useState<DominoTableStyle>(() => loadSavedTableStyle());
+  const [isTableStyleSheetOpen, setIsTableStyleSheetOpen] = useState(false);
+
+  const handleSelectTableStyle = (style: DominoTableStyle) => {
+    setTableStyle(style);
+    saveTableStyle(style.id);
+  };
 
   const {
     containerRef: fullscreenContainerRef,
@@ -467,6 +491,16 @@ export default function DominoGame() {
             >
               <Maximize2 className="w-4 h-4" />
             </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setIsTableStyleSheetOpen(true)}
+              aria-label={t('domino.tableStyle')}
+              data-testid="button-table-style"
+              className="vex-arcade-btn vex-arcade-btn--icon min-h-[44px] min-w-[44px]"
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
             <Button variant="outline" size="icon" onClick={handleShare} aria-label={t('domino.shareGame')} data-testid="button-share" className="vex-arcade-btn vex-arcade-btn--icon min-h-[44px] min-w-[44px]">
               <Share2 className="w-4 h-4" />
             </Button>
@@ -485,7 +519,66 @@ export default function DominoGame() {
           timeline={dominoTimeline}
           scoreRows={dominoScoreRows}
           endgameSummary={dominoEndgameSummary}
+          tableStyleId={tableStyle.id}
         />
+
+        {/* Table-style picker — gear-icon entry point in the header. */}
+        <Sheet open={isTableStyleSheetOpen} onOpenChange={setIsTableStyleSheetOpen}>
+          <SheetContent
+            side={language === 'ar' ? 'left' : 'right'}
+            className="w-full sm:max-w-md overflow-y-auto"
+            data-testid="sheet-table-style"
+          >
+            <SheetHeader>
+              <SheetTitle>{t('domino.tableStyle')}</SheetTitle>
+              <SheetDescription>{t('domino.tableStyleDesc')}</SheetDescription>
+            </SheetHeader>
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {DOMINO_TABLE_STYLES.map((style) => {
+                const isActive = tableStyle.id === style.id;
+                const localizedName = language === 'ar' ? style.nameAr : style.nameEn;
+                return (
+                  <button
+                    key={style.id}
+                    type="button"
+                    onClick={() => handleSelectTableStyle(style)}
+                    data-testid={`domino-table-style-${style.id}`}
+                    aria-pressed={isActive}
+                    className={`group relative flex flex-col gap-2 rounded-xl border p-2 text-start transition-all ${
+                      isActive
+                        ? 'border-primary ring-2 ring-primary/40 bg-primary/5'
+                        : 'border-border/60 hover:border-primary/50 hover:bg-muted/40'
+                    }`}
+                  >
+                    {/* Live preview swatch using the same CSS vars the board consumes. */}
+                    <div
+                      className="domino-table-surface relative h-20 w-full overflow-hidden rounded-lg"
+                      style={getTableStyleCssVars(style)}
+                    >
+                      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_20%,rgba(255,255,255,0.10),transparent_50%),radial-gradient(circle_at_78%_74%,rgba(0,0,0,0.18),transparent_46%)]" />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold truncate">{localizedName}</span>
+                      {isActive && (
+                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                          <Check className="h-3 w-3" />
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <Button
+                onClick={() => setIsTableStyleSheetOpen(false)}
+                data-testid="button-table-style-close"
+              >
+                {t('domino.useThisTable')}
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
 
         {dominoMoveError && (
           <div className="flex justify-center">

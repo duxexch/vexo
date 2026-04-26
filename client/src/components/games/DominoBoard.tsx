@@ -5,6 +5,10 @@ import { useI18n } from "@/lib/i18n";
 import { useGameSpeedMultiplier } from "@/lib/game-speed";
 import { motion } from "framer-motion";
 import { Clock3 } from "lucide-react";
+import {
+  getTableStyleById,
+  getTableStyleCssVars,
+} from "@/lib/domino-table-styles";
 
 type DominoTileSize = "xs" | "sm" | "md" | "lg";
 
@@ -17,6 +21,12 @@ interface DominoBoardProps {
   status?: string;
   turnTimeLimit?: number; // seconds per turn (0 = no limit)
   turnStartedAtMs?: number;
+  /**
+   * Player-pickable table surface ID (walnut, mahogany, green-felt, etc).
+   * Defaults to the classic green felt to preserve the legacy look for
+   * boards that don't pass this prop. See `domino-table-styles.ts`.
+   */
+  tableStyleId?: string;
 }
 
 interface DominoMove {
@@ -491,9 +501,38 @@ function getDirectionSign(direction: DominoDirection): number {
   return direction === "left" || direction === "up" ? -1 : 1;
 }
 
-function getTileFootprint(renderRotation: number, compact: boolean, layoutScale = 1) {
-  const long = compact ? 56 : 80;
-  const short = compact ? 28 : 40;
+/**
+ * Returns the rendered footprint of a single tile in solver-coordinate
+ * pixels. The numbers must match the actual CSS dimensions of `TILE_SIZES`
+ * because the layout solver places tiles by reasoning about their rendered
+ * rectangles. Concretely:
+ *   - compact mode renders the `sm` tile = `w-7 h-14 sm:w-8 sm:h-16` (28×56
+ *     under 640px viewports, 32×64 at and above 640px).
+ *   - non-compact mode renders the `md` tile = `w-10 h-20 sm:w-12 sm:h-24`
+ *     (40×80 under 640px, 48×96 at and above 640px).
+ *
+ * The Tailwind `sm:` breakpoint kicks in at 640px. Before fixing this,
+ * the solver always reasoned about the smaller (under-640px) numbers, so
+ * tiles overlapped on tablet/desktop where the actual rendered tile is
+ * 20% larger. The `viewportWidth` argument is read once per layout pass
+ * — solver re-runs whenever the viewport resizes (via the
+ * `boardLaneSize` resize observer chain) so the footprint stays in sync.
+ */
+function getTileFootprint(
+  renderRotation: number,
+  compact: boolean,
+  layoutScale = 1,
+  viewportWidth: number = typeof window !== "undefined"
+    ? window.innerWidth
+    : 0,
+) {
+  const isAboveSmBreakpoint = viewportWidth >= 640;
+  const long = compact
+    ? (isAboveSmBreakpoint ? 64 : 56)
+    : (isAboveSmBreakpoint ? 96 : 80);
+  const short = compact
+    ? (isAboveSmBreakpoint ? 32 : 28)
+    : (isAboveSmBreakpoint ? 48 : 40);
   const normalizedRotation = ((renderRotation % 360) + 360) % 360;
   const isSideways = normalizedRotation === 90 || normalizedRotation === 270;
   return {
@@ -918,8 +957,15 @@ function buildDominoPlacements(
   }
 
   const maxLayoutEntries = 300;
-  const maxShrinkSteps = 10;
-  const minLayoutScale = 0.55;
+  // Shrink ladder stretched: max 18 steps and floor lowered from 0.55 → 0.30.
+  // At 0.55, a 28-tile round on a 360-wide phone bottoms out and the
+  // partial-best fallback silently drops 15+ trailing tiles. At 0.30 the
+  // snake fits a full domino round end-to-end on every viewport down to a
+  // 360-wide phone — tiles read as ~9px tall on the smallest device, still
+  // legible because the high-contrast carved-bone face keeps the pip dots
+  // visible. The smoke `quality:smoke:domino-table-fit-28` enforces 28/28.
+  const maxShrinkSteps = 18;
+  const minLayoutScale = 0.30;
   const shrinkFactor = 0.92;
 
   if (entries.length > maxLayoutEntries) {
@@ -1355,8 +1401,11 @@ export function DominoBoard({
   status,
   turnTimeLimit = 30,
   turnStartedAtMs,
+  tableStyleId,
 }: DominoBoardProps) {
   const { t } = useI18n();
+  const tableStyle = useMemo(() => getTableStyleById(tableStyleId), [tableStyleId]);
+  const tableStyleVars = useMemo(() => getTableStyleCssVars(tableStyle), [tableStyle]);
   const [selectedTile, setSelectedTile] = useState<number | null>(null);
   const selectedTileRef = useRef(selectedTile); // C11-F4: ref for stable Escape handler
   selectedTileRef.current = selectedTile;
@@ -1746,8 +1795,11 @@ export function DominoBoard({
 
     const isAnchorDouble = anchorEntry.item.tile.left === anchorEntry.item.tile.right;
     if (isAnchorDouble) {
-      const laneWidth = boardLaneSize.width > 0 ? boardLaneSize.width : (isCompactMobile ? 320 : 760);
-      const laneHeight = boardLaneSize.height > 0 ? boardLaneSize.height : (isCompactMobile ? 360 : 520);
+      // Lane fallback: bumped from 320×360 → 380×500 so the solver gets
+      // honest room for a full 28-tile round when ResizeObserver hasn't
+      // measured the lane yet (first paint, or in headless harness).
+      const laneWidth = boardLaneSize.width > 0 ? boardLaneSize.width : (isCompactMobile ? 380 : 760);
+      const laneHeight = boardLaneSize.height > 0 ? boardLaneSize.height : (isCompactMobile ? 500 : 520);
       // Center double follows board aspect to stay natural after screen rotation.
       return laneWidth >= laneHeight ? 90 : 0;
     }
@@ -1756,19 +1808,31 @@ export function DominoBoard({
   }, [anchorEntry, boardLaneSize.width, boardLaneSize.height, isCompactMobile]);
 
   const laneMetrics = useMemo(() => {
+    // Lane fallback: see `anchorRenderRotation` above. 380×500 mobile gives
+    // the layout solver enough room to fit a full 28-tile round before
+    // ResizeObserver settles.
     const laneWidth = boardLaneSize.width > 0
       ? boardLaneSize.width
-      : (isCompactMobile ? 320 : 760);
+      : (isCompactMobile ? 380 : 760);
     const laneHeight = boardLaneSize.height > 0
       ? boardLaneSize.height
-      : (isCompactMobile ? 360 : 520);
+      : (isCompactMobile ? 500 : 520);
     return { laneWidth, laneHeight };
   }, [boardLaneSize.width, boardLaneSize.height, isCompactMobile]);
 
   const sideSafeBounds = useMemo<{ left: DominoRect; right: DominoRect }>(() => {
-    const horizontalInset = isCompactMobile ? 20 : 28;
-    const verticalInset = isCompactMobile ? 22 : 30;
-    const centerGap = isCompactMobile ? 18 : 24;
+    // Insets tightened across the board so the snake-fit solver reclaims
+    // every safe pixel of the lane. Mobile was 20/22/18, tablet/desktop
+    // was 28/30/24. The previous values were defensive padding from when
+    // the solver couldn't shrink past 0.55; now that the floor is 0.35 we
+    // lean into the available room so a full 28-tile round fits cleanly.
+    const horizontalInset = isCompactMobile ? 8 : 12;
+    const verticalInset = isCompactMobile ? 10 : 14;
+    // Center gap was 18/24; we shrink the *outer* insets to reclaim lane
+    // pixels but keep a healthy gap between the left-side and right-side
+    // sub-chains so a fold near the anchor never lets opposite-side tiles
+    // visually intersect.
+    const centerGap = isCompactMobile ? 6 : 22;
     const halfWidth = Math.max(120, laneMetrics.laneWidth / 2 - horizontalInset);
     const halfHeight = Math.max(140, laneMetrics.laneHeight / 2 - verticalInset);
 
@@ -1900,6 +1964,16 @@ export function DominoBoard({
   ]);
 
   useEffect(() => {
+    // Always pin the latest telemetry on `window` so the layout-fit smoke
+    // can inspect it without flipping the global debug flag. The verbose
+    // console log below is still gated behind `__VEX_DEBUG_DOMINO_LAYOUT__`
+    // so production users don't see it.
+    if (typeof window !== "undefined") {
+      (window as Window & {
+        __DOMINO_BOARD_TELEMETRY__?: DominoLayoutTelemetry;
+      }).__DOMINO_BOARD_TELEMETRY__ = boardLayoutTelemetry;
+    }
+
     if (!shouldLogDominoLayoutTelemetry) {
       return;
     }
@@ -1929,7 +2003,7 @@ export function DominoBoard({
 
   const boardZoom = useMemo(() => {
     const safePadding = isCompactMobile ? 48 : 64;
-    const fallbackWidth = Math.max(boardBounds.width + safePadding * 2, isCompactMobile ? 320 : 760);
+    const fallbackWidth = Math.max(boardBounds.width + safePadding * 2, isCompactMobile ? 380 : 760);
     const fallbackHeight = Math.max(boardBounds.height + safePadding * 2, boardHeight);
     const laneWidth = boardLaneSize.width > 0 ? boardLaneSize.width : fallbackWidth;
     const laneHeight = boardLaneSize.height > 0 ? boardLaneSize.height : fallbackHeight;
@@ -1949,7 +2023,11 @@ export function DominoBoard({
 
   const boardHeightCssValue = useMemo(() => {
     if (isCompactMobile) {
-      return `min(${boardHeight}px, 64svh)`;
+      // Lifted from 64svh → 78svh: at the previous cap a full 28-tile round
+      // could not fit on a 360–414 wide phone without the solver hitting its
+      // 0.55 shrink floor and dropping trailing tiles. The extra room lets
+      // the snake fold into more rows instead of being clipped.
+      return `min(${boardHeight}px, 78svh)`;
     }
 
     return `min(${boardHeight}px, 76svh)`;
@@ -2005,7 +2083,7 @@ export function DominoBoard({
     const safePadding = isCompactMobile ? 48 : 64;
     const laneWidth = boardLaneSize.width > 0
       ? boardLaneSize.width
-      : Math.max(boardBounds.width + safePadding * 2, isCompactMobile ? 320 : 760);
+      : Math.max(boardBounds.width + safePadding * 2, isCompactMobile ? 380 : 760);
     const availableWidth = Math.max(140, laneWidth - safePadding * 2);
     const logicalVisibleWidth = availableWidth / Math.max(boardZoom, 0.001);
     const slackX = Math.max(0, (logicalVisibleWidth - boardBounds.width) / 2);
@@ -2325,18 +2403,26 @@ export function DominoBoard({
 
         <div
           className={cn(
-            "domino-board-depth relative overflow-hidden rounded-2xl border border-[#1d4f3b]/70 bg-game-felt flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_18px_28px_rgba(8,26,19,0.4)]",
+            // `.domino-table-surface` reads `--domino-board-bg`,
+            // `--domino-board-grain`, `--domino-board-frame`,
+            // `--domino-board-border`, and `--domino-tile-shadow` from the
+            // inline `style` bag below. Defaults preserve the legacy
+            // green-felt look so missing CSS variables still render
+            // identically to the pre-skin board.
+            "domino-table-surface relative overflow-hidden rounded-2xl flex items-center justify-center",
             isCompactMobile ? "p-1" : "p-2 sm:p-3",
             isTurnLive ? "domino-board-turn-live" : ""
           )}
-          style={{ height: boardHeightCssValue }}
+          style={{ height: boardHeightCssValue, ...tableStyleVars }}
           role="region"
+          data-testid="domino-board-surface"
+          data-table-style={tableStyle.id}
           aria-label={state.boardTiles.length === 0
             ? (isSpectator ? t('domino.board') : t('domino.placeFirst'))
             : `${t('domino.board')}: ${state.boardTiles.length} ${t('domino.tiles')}, ${t('domino.leftEnd')}: ${state.leftEnd}, ${t('domino.rightEnd')}: ${state.rightEnd}`}
         >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_20%,rgba(255,255,255,0.18),transparent_50%),radial-gradient(circle_at_78%_74%,rgba(0,0,0,0.3),transparent_46%)]" />
-          <div className="pointer-events-none absolute inset-x-4 top-3 h-px bg-white/25" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_24%_20%,rgba(255,255,255,0.10),transparent_50%),radial-gradient(circle_at_78%_74%,rgba(0,0,0,0.18),transparent_46%)]" />
+          <div className="pointer-events-none absolute inset-x-4 top-3 h-px bg-white/15" />
 
           {selectedTileData && (leftGhostTile || rightGhostTile) && (
             <>
@@ -2411,7 +2497,7 @@ export function DominoBoard({
                   {leftPlacements.map((placement) => (
                     <div
                       key={`left-${tileSignature(placement.item.tile)}`}
-                      className="absolute left-1/2 top-1/2"
+                      className="domino-tile-on-table absolute left-1/2 top-1/2"
                       style={{
                         transform: `translate(calc(-50% + ${(placement.x + effectiveOffsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardRenderScale})`,
                         transformOrigin: "center center",
@@ -2422,7 +2508,7 @@ export function DominoBoard({
                   ))}
 
                   <div
-                    className="absolute left-1/2 top-1/2"
+                    className="domino-tile-on-table absolute left-1/2 top-1/2"
                     style={{
                       transform: `translate(calc(-50% + ${effectiveOffsetX * boardZoom}px), calc(-50% + ${boardOffset.offsetY * boardZoom}px)) scale(${boardRenderScale})`,
                       transformOrigin: "center center",
@@ -2434,7 +2520,7 @@ export function DominoBoard({
                   {rightPlacements.map((placement) => (
                     <div
                       key={`right-${tileSignature(placement.item.tile)}`}
-                      className="absolute left-1/2 top-1/2"
+                      className="domino-tile-on-table absolute left-1/2 top-1/2"
                       style={{
                         transform: `translate(calc(-50% + ${(placement.x + effectiveOffsetX) * boardZoom}px), calc(-50% + ${(placement.y + boardOffset.offsetY) * boardZoom}px)) scale(${boardRenderScale})`,
                         transformOrigin: "center center",

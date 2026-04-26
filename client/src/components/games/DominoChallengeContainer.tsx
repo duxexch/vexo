@@ -47,6 +47,8 @@ interface DominoChallengeContainerProps {
     timeline: DominoTimelineEntry[];
     scoreRows: DominoScoreRow[];
     endgameSummary: DominoEndgameSummary;
+    /** Forwarded to <DominoBoard />; controls the table surface skin. */
+    tableStyleId?: string;
 }
 
 export function DominoChallengeContainer({
@@ -60,6 +62,7 @@ export function DominoChallengeContainer({
     onMove,
     dominoResyncing,
     dominoMoveError,
+    tableStyleId,
 }: DominoChallengeContainerProps) {
     const { t } = useI18n();
     const [isCompactViewport, setIsCompactViewport] = useState(false);
@@ -103,6 +106,7 @@ export function DominoChallengeContainer({
                         status={status}
                         turnTimeLimit={turnTimeLimitSeconds}
                         turnStartedAtMs={turnStartedAtMs}
+                        tableStyleId={tableStyleId}
                     />
                 </motion.div>
 
