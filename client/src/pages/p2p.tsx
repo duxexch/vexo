@@ -5,6 +5,7 @@ import { useI18n } from "@/lib/i18n";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { apiRequestWithPaymentToken } from "@/lib/payment-operation";
 import { useToast } from "@/hooks/use-toast";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -19,13 +20,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Wallet, Plus, ArrowUpRight, ArrowDownRight, Star, Filter, RefreshCw, Trash2, Check, AlertTriangle, MessageSquare, Upload, FileCheck, Camera, Video, Ban, Clock, ChevronRight, Send, Paperclip, Eye, Shield, Scale, History, User, Settings } from "lucide-react";
+import { Wallet, Plus, ArrowUpRight, ArrowDownRight, Star, Filter, RefreshCw, Trash2, Check, AlertTriangle, MessageSquare, Upload, FileCheck, Camera, Video, Ban, Clock, ChevronRight, Send, Paperclip, Eye, Shield, Scale, History, User, Settings, Info, CreditCard, ListChecks } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { Link } from "wouter";
 import { WORLD_CURRENCIES } from "@/lib/currencies";
@@ -3627,6 +3629,18 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const tradeImageInputRef = useRef<HTMLInputElement | null>(null);
   const tradeCameraInputRef = useRef<HTMLInputElement | null>(null);
+  // Task #118: Mobile bottom-sheet style tabs for the trade room. Defaults
+  // are seeded from the trade status whenever the room opens (see effect
+  // below) so a buyer in a "pending" trade lands directly on Pay, while a
+  // seller waiting on a paid trade lands on Pay to confirm receipt, and
+  // anyone in completed/cancelled lands on Status. Manual selection
+  // overrides the default for the rest of the session.
+  const [mobileTradeTab, setMobileTradeTab] = useState<"chat" | "pay" | "status">("chat");
+  const isDesktopTradeRoom = useMediaQuery("(min-width: 1024px)");
+  // Inline "payment details" sheet — eliminates the previous flow that
+  // forced the user to scroll to the workflow panel or jump to settings
+  // to see the seller's payment instructions and account details.
+  const [paymentDetailsSheetOpen, setPaymentDetailsSheetOpen] = useState(false);
   const numberLocale = resolveLanguageLocale(language);
 
   const { data: trades, isLoading } = useQuery<P2PTrade[]>({
@@ -3643,6 +3657,12 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
     queryKey: ["/api/p2p/trades", activeTradeId],
     enabled: !!activeTradeId,
     refetchInterval: activeTradeId ? 5000 : false,
+    // Task #118: when the user backgrounds the tab and comes back (e.g.
+    // after switching apps to complete a bank transfer), refetch
+    // immediately instead of waiting for the next 5s poll. Same logic
+    // for messages and logs so partner actions surface within ms of
+    // returning to the trade room.
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/p2p/trades/${activeTradeId!}`);
       return res.json();
@@ -3653,6 +3673,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
     queryKey: ["/api/p2p/trades", activeTradeId, "messages"],
     enabled: !!activeTradeId,
     refetchInterval: activeTradeId ? 4000 : false,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/p2p/trades/${activeTradeId!}/messages`);
       return res.json();
@@ -3663,6 +3684,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
     queryKey: ["/api/p2p/trades", activeTradeId, "logs"],
     enabled: !!activeTradeId,
     refetchInterval: activeTradeId ? 5000 : false,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/p2p/trades/${activeTradeId!}/logs`);
       return res.json();
@@ -3997,7 +4019,42 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
     setBuyerInstructionAcknowledged(false);
     setSelectedImageDraft(undefined);
     setIsUploadingImage(false);
+    setPaymentDetailsSheetOpen(false);
+    // Default mobile tab is "chat"; the effect below will switch to
+    // "pay" or "status" once the trade detail loads if the status calls
+    // for it. Resetting here means a freshly-opened room never inherits
+    // the previous trade's tab choice.
+    setMobileTradeTab("chat");
   };
+
+  // Task #118: pick a sensible default mobile tab whenever the active
+  // trade or its status changes so the user lands on the section they
+  // actually need to interact with — without scrolling. We only set the
+  // tab on the first detail load per trade; manual selections by the
+  // user after that win, since once they intentionally moved to "Chat"
+  // we don't want a status change to bounce them back to "Pay" mid-chat.
+  const tradeDefaultTabAppliedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeTrade || !activeTradeId) {
+      tradeDefaultTabAppliedRef.current = null;
+      return;
+    }
+    if (tradeDefaultTabAppliedRef.current === activeTradeId) {
+      return;
+    }
+    tradeDefaultTabAppliedRef.current = activeTradeId;
+    const status = activeTrade.status;
+    if (status === "completed" || status === "cancelled" || status === "disputed") {
+      setMobileTradeTab("status");
+    } else if (
+      (activeTrade.isBuyer && status === "pending")
+      || (activeTrade.isSeller && (status === "paid" || status === "confirmed"))
+    ) {
+      setMobileTradeTab("pay");
+    } else {
+      setMobileTradeTab("chat");
+    }
+  }, [activeTrade, activeTradeId]);
 
   const closeTradeRoom = () => {
     setActiveTradeId(null);
@@ -4010,6 +4067,7 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
     setBuyerInstructionAcknowledged(false);
     setSelectedImageDraft(undefined);
     setIsUploadingImage(false);
+    setPaymentDetailsSheetOpen(false);
   };
 
   const sortedTrades = useMemo(() => {
@@ -4416,12 +4474,39 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
           onPointerDownOutside={(event) => event.preventDefault()}
         >
           <DialogHeader className="border-b border-slate-800 pb-3">
-            <DialogTitle className="flex items-center gap-2">
-              {t('p2p.trade')} {activeTradeId ? `#${activeTradeId.slice(0, 8)}` : ""}
+            <DialogTitle className="flex flex-wrap items-center gap-2">
+              <span>{t('p2p.trade')} {activeTradeId ? `#${activeTradeId.slice(0, 8)}` : ""}</span>
+              {/*
+                Task #118: replaced the legacy raw Badge with the shared
+                StatusPill (already shipped with Task #91) so the trade
+                room header speaks the same status language as the
+                marketplace listing the user just came from. The
+                preciseLabel is the existing localised status word from
+                getStatusBadge so existing translations are reused.
+              */}
               {activeTrade && (
-                <Badge className={cn("border", getStatusPillClass(activeTrade.status))}>
-                  {getStatusBadge(activeTrade.status).props.children}
-                </Badge>
+                <StatusPill
+                  bucket={getTradeStatusBucket(activeTrade.status)}
+                  bucketLabel={String(getStatusBadge(activeTrade.status).props.children)}
+                  preciseLabel={String(getStatusBadge(activeTrade.status).props.children)}
+                  testId="trade-room-status-pill"
+                />
+              )}
+              {/*
+                Task #118: tiny "live updates" indicator so the user can
+                see the room is actively syncing without having to hit
+                refresh. Pure presentation — react-query already polls
+                the trade detail / messages / logs every 4-6s and now
+                also refetches on window focus (see useQuery options).
+              */}
+              {activeTrade && (
+                <span
+                  className="ms-auto inline-flex items-center gap-1 rounded-full border border-emerald-700/40 bg-emerald-900/20 px-2 py-0.5 text-[10px] font-medium text-emerald-200"
+                  data-testid="trade-room-live-indicator"
+                >
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                  {t('p2p.tradeRoom.liveUpdates')}
+                </span>
               )}
             </DialogTitle>
             <DialogDescription>{t('p2p.tradeInitiatedDesc')}</DialogDescription>
@@ -4430,8 +4515,27 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
           {activeTradeLoading ? (
             <Skeleton className="h-64 w-full" />
           ) : activeTrade ? (
-            <div className="grid max-h-[72vh] grid-cols-1 gap-4 overflow-y-auto py-1 lg:grid-cols-3">
-              <div className="space-y-3 lg:col-span-2">
+            (() => {
+              /*
+                Task #118: the trade room used to render every section
+                stacked top-to-bottom on mobile, forcing the user to
+                scroll past the chat history just to find the "Pay" or
+                "Confirm" button. We extract each section into a JSX
+                constant and then render TWO layouts:
+
+                  - Mobile (lg:hidden): a 3-tab bottom-sheet style flow
+                    (Chat / Pay / Status) so the user lands on the section
+                    they need with a single tap.
+                  - Desktop (hidden lg:grid): the original two-column
+                    grid is preserved unchanged so power users on a
+                    laptop still see everything at once.
+
+                The hidden file <input>s for the composer's image/camera
+                pickers are rendered ONCE at the top of the body so the
+                refs (tradeImageInputRef, tradeCameraInputRef) are not
+                duplicated when both layouts mount their button copies.
+              */
+              const chatPanel = (
                 <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -4506,34 +4610,42 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                     )}
                   </ScrollArea>
                 </div>
+              );
 
-                {canShowTradeWorkflowPanel && (
-                  <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {(["pending", "paid", "confirmed", "completed"] as const).map((step) => {
-                          const state = getTimelineStepState(activeTrade.status, step);
-                          return (
-                            <span
-                              key={step}
-                              className={cn(
-                                "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs",
-                                state === "done" && "border-emerald-600/40 bg-emerald-600/10 text-emerald-300",
-                                state === "current" && "border-[#f0c73f]/50 bg-[#f0c73f]/10 text-[#f6d97a]",
-                                state === "idle" && "border-slate-700 bg-slate-950 text-slate-400",
-                              )}
-                            >
-                              <span className={cn(
-                                "h-2 w-2 rounded-full",
-                                state === "done" && "bg-emerald-400",
-                                state === "current" && "bg-[#f0c73f]",
-                                state === "idle" && "bg-slate-600",
-                              )} />
-                              {getStatusBadge(step).props.children}
-                            </span>
-                          );
-                        })}
-                      </div>
+              /*
+                Task #118: workflow panel = the action area (instructions
+                ack, payment-reference + proof, confirm/complete buttons,
+                cancellation flow, dispute escalation). Now the *primary*
+                content of the mobile "Pay" tab so the user lands on the
+                button they need.
+              */
+              const workflowPanel = canShowTradeWorkflowPanel ? (
+                <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {(["pending", "paid", "confirmed", "completed"] as const).map((step) => {
+                        const state = getTimelineStepState(activeTrade.status, step);
+                        return (
+                          <span
+                            key={step}
+                            className={cn(
+                              "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs",
+                              state === "done" && "border-emerald-600/40 bg-emerald-600/10 text-emerald-300",
+                              state === "current" && "border-[#f0c73f]/50 bg-[#f0c73f]/10 text-[#f6d97a]",
+                              state === "idle" && "border-slate-700 bg-slate-950 text-slate-400",
+                            )}
+                          >
+                            <span className={cn(
+                              "h-2 w-2 rounded-full",
+                              state === "done" && "bg-emerald-400",
+                              state === "current" && "bg-[#f0c73f]",
+                              state === "idle" && "bg-slate-600",
+                            )} />
+                            {getStatusBadge(step).props.children}
+                          </span>
+                        );
+                      })}
+                    </div>
 
                       <div className="space-y-3">
                         {showBuyerGuidedPendingFlow && (
@@ -4584,6 +4696,57 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                               data-testid="input-payment-reference"
                             />
                             <p className="text-xs text-slate-400">{t('transactions.referenceNote')}</p>
+                            {selectedImageDraft ? (
+                              <div className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900 p-2">
+                                <img
+                                  src={selectedImageDraft.fileData}
+                                  alt={t('support.image')}
+                                  className="h-14 w-14 rounded object-cover"
+                                  data-testid="img-pay-proof-preview"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-xs text-slate-100">{selectedImageDraft.fileName}</p>
+                                  <p className="text-[10px] text-slate-400">{selectedImageDraft.fileType}</p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-rose-300 hover:text-rose-200"
+                                  onClick={() => setSelectedImageDraft(undefined)}
+                                  data-testid="button-pay-proof-remove"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+                                  onClick={() => tradeImageInputRef.current?.click()}
+                                  disabled={isUploadingImage}
+                                  data-testid="button-pay-upload-proof"
+                                >
+                                  <Upload className="me-1 h-4 w-4" />
+                                  {t('support.uploadImage')}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+                                  onClick={() => tradeCameraInputRef.current?.click()}
+                                  disabled={isUploadingImage}
+                                  data-testid="button-pay-capture-proof"
+                                >
+                                  <Camera className="me-1 h-4 w-4" />
+                                  {t('support.takePhoto')}
+                                </Button>
+                              </div>
+                            )}
                             <Button
                               className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
                               onClick={() => tradeActionMutation.mutate("pay")}
@@ -4745,96 +4908,108 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                       </div>
                     </div>
                   </div>
-                )}
+              ) : null;
 
-                {canComposeTradeMessages && (
-                  <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2">
-                    {activeTrade.status === "cancelled" && (
-                      <p className="px-1 text-xs text-slate-400">{t('p2p.tradeCancelled')}</p>
-                    )}
+              /*
+                Task #118: composer keeps the chat-message + image-proof
+                input. The hidden file <input>s for the upload/camera
+                pickers are NOT defined here — they live at the IIFE
+                return so they mount exactly once and the refs stay
+                stable across both the mobile-tab and desktop-grid copies
+                of the composer JSX.
+              */
+              const composer = canComposeTradeMessages ? (
+                <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2">
+                  {activeTrade.status === "cancelled" && (
+                    <p className="px-1 text-xs text-slate-400">{t('p2p.tradeCancelled')}</p>
+                  )}
 
-                    {selectedImageDraft && (
-                      <div className="relative flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 p-2">
-                        <img src={selectedImageDraft.fileData} alt={t('support.image')} className="h-14 w-14 rounded object-cover" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs text-slate-100">{selectedImageDraft.fileName}</p>
-                          <p className="text-[10px] text-slate-400">{t('support.image')}</p>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-slate-300 hover:bg-slate-800"
-                          onClick={() => setSelectedImageDraft(undefined)}
-                        >
-                          {t('common.remove')}
-                        </Button>
+                  {selectedImageDraft && (
+                    <div className="relative flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 p-2">
+                      <img src={selectedImageDraft.fileData} alt={t('support.image')} className="h-14 w-14 rounded object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs text-slate-100">{selectedImageDraft.fileName}</p>
+                        <p className="text-[10px] text-slate-400">{t('support.image')}</p>
                       </div>
-                    )}
-
-                    <div className="flex gap-2">
-                      <input
-                        ref={tradeImageInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleTradeImageSelect}
-                      />
-                      <input
-                        ref={tradeCameraInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="hidden"
-                        onChange={handleTradeImageSelect}
-                      />
                       <Button
                         type="button"
-                        variant="outline"
-                        className="border-slate-700 bg-slate-950 text-slate-100 hover:bg-slate-800"
-                        onClick={() => tradeImageInputRef.current?.click()}
-                        data-testid="button-trade-room-attach-image"
+                        variant="ghost"
+                        size="sm"
+                        className="text-slate-300 hover:bg-slate-800"
+                        onClick={() => setSelectedImageDraft(undefined)}
                       >
-                        <Paperclip className="me-1 h-4 w-4" />
-                        {t('common.upload')}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="border-slate-700 bg-slate-950 text-slate-100 hover:bg-slate-800"
-                        onClick={() => tradeCameraInputRef.current?.click()}
-                        data-testid="button-trade-room-camera"
-                      >
-                        <Camera className="h-4 w-4" />
-                      </Button>
-                      <Input
-                        value={outgoingMessage}
-                        onChange={(e) => setOutgoingMessage(e.target.value)}
-                        placeholder={t('common.send')}
-                        className="border-slate-700 bg-slate-950 text-slate-100"
-                        data-testid="input-trade-room-message"
-                      />
-                      <Button
-                        onClick={submitTradeMessage}
-                        className="bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                        disabled={
-                          sendMessageMutation.isPending
-                          || isUploadingImage
-                          || (outgoingMessage.trim().length === 0 && !selectedImageDraft)
-                        }
-                        data-testid="button-send-trade-room-message"
-                      >
-                        <Send className="h-4 w-4" />
+                        {t('common.remove')}
                       </Button>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
 
-              <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-slate-700 bg-slate-950 text-slate-100 hover:bg-slate-800"
+                      onClick={() => tradeImageInputRef.current?.click()}
+                      data-testid="button-trade-room-attach-image"
+                    >
+                      <Paperclip className="me-1 h-4 w-4" />
+                      {t('common.upload')}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-slate-700 bg-slate-950 text-slate-100 hover:bg-slate-800"
+                      onClick={() => tradeCameraInputRef.current?.click()}
+                      data-testid="button-trade-room-camera"
+                    >
+                      <Camera className="h-4 w-4" />
+                    </Button>
+                    <Input
+                      value={outgoingMessage}
+                      onChange={(e) => setOutgoingMessage(e.target.value)}
+                      placeholder={t('common.send')}
+                      className="border-slate-700 bg-slate-950 text-slate-100"
+                      data-testid="input-trade-room-message"
+                    />
+                    <Button
+                      onClick={submitTradeMessage}
+                      className="bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                      disabled={
+                        sendMessageMutation.isPending
+                        || isUploadingImage
+                        || (outgoingMessage.trim().length === 0 && !selectedImageDraft)
+                      }
+                      data-testid="button-send-trade-room-message"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : null;
+
+              const tradeInfoCard = (
                 <Card className="border-slate-800 bg-slate-900/70 text-slate-100">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base">{t('p2p.trade')}</CardTitle>
+                    <CardTitle className="flex items-center justify-between gap-2 text-base">
+                      <span>{t('p2p.trade')}</span>
+                      {/*
+                        Task #118: inline shortcut into the payment-details
+                        Sheet. Surfaces from the trade-info card so the
+                        buyer can pull up the seller's instructions
+                        without scrolling, switching tabs, or hunting in
+                        the workflow panel for the same info.
+                      */}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="border-slate-700 bg-slate-950 text-xs text-slate-100 hover:bg-slate-800"
+                        onClick={() => setPaymentDetailsSheetOpen(true)}
+                        data-testid="button-open-payment-details"
+                      >
+                        <Info className="me-1 h-3.5 w-3.5" />
+                        {t('p2p.tradeRoom.viewPaymentDetails')}
+                      </Button>
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm">
                     <div className="flex justify-between gap-2">
@@ -4864,7 +5039,9 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                     )}
                   </CardContent>
                 </Card>
+              );
 
+              const walletCard = (
                 <Card className="border-slate-800 bg-slate-900/70 text-slate-100">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">{t('wallet.currentBalance')}</CardTitle>
@@ -4910,7 +5087,9 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                     )}
                   </CardContent>
                 </Card>
+              );
 
+              const statusCard = (
                 <Card className="border-slate-800 bg-slate-900/70 text-slate-100">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">{t('common.status')}</CardTitle>
@@ -4944,7 +5123,9 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                     )}
                   </CardContent>
                 </Card>
+              );
 
+              const historyCard = (
                 <Card className="border-slate-800 bg-slate-900/70 text-slate-100">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">{t('p2p.tradeHistory')}</CardTitle>
@@ -4973,8 +5154,157 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                     </ScrollArea>
                   </CardContent>
                 </Card>
-              </div>
-            </div>
+              );
+
+              return (
+                <>
+                  {/*
+                    Task #118: hidden file inputs are mounted ONCE at the
+                    fragment root so the upload/camera refs are stable
+                    across both the mobile-tab and desktop-grid renders
+                    of the composer. If we left these inside the composer
+                    JSX, React would mount two <input> elements and the
+                    refs would race, breaking image attachments.
+                  */}
+                  <input
+                    ref={tradeImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleTradeImageSelect}
+                  />
+                  <input
+                    ref={tradeCameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handleTradeImageSelect}
+                  />
+
+                  {/*
+                    Task #118: only one of mobile-tabs / desktop-grid is
+                    rendered at a time (driven by useMediaQuery). This
+                    guarantees that interactive controls inside the
+                    composer / workflow / cards exist exactly once in the
+                    DOM, so test selectors and accessibility tooling don't
+                    have to disambiguate duplicates.
+                  */}
+                  {isDesktopTradeRoom ? (
+                    <div className="grid max-h-[72vh] grid-cols-1 gap-4 overflow-y-auto py-1 lg:grid-cols-3">
+                      <div className="space-y-3 lg:col-span-2">
+                        {chatPanel}
+                        {workflowPanel}
+                        {composer}
+                      </div>
+                      <div className="space-y-3">
+                        {tradeInfoCard}
+                        {walletCard}
+                        {statusCard}
+                        {historyCard}
+                      </div>
+                    </div>
+                  ) : (
+                    <Tabs
+                      value={mobileTradeTab}
+                      onValueChange={(value) => setMobileTradeTab(value as "chat" | "pay" | "status")}
+                    >
+                      <TabsList className="grid w-full grid-cols-3 bg-slate-900">
+                        <TabsTrigger value="chat" data-testid="tab-trade-chat">
+                          <MessageSquare className="me-1 h-4 w-4" />
+                          {t('p2p.tradeRoom.tabChat')}
+                        </TabsTrigger>
+                        <TabsTrigger value="pay" data-testid="tab-trade-pay">
+                          <CreditCard className="me-1 h-4 w-4" />
+                          {t('p2p.tradeRoom.tabPay')}
+                        </TabsTrigger>
+                        <TabsTrigger value="status" data-testid="tab-trade-status">
+                          <ListChecks className="me-1 h-4 w-4" />
+                          {t('p2p.tradeRoom.tabStatus')}
+                        </TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="chat" className="mt-3 max-h-[68vh] space-y-3 overflow-y-auto">
+                        {chatPanel}
+                        {composer}
+                      </TabsContent>
+                      <TabsContent value="pay" className="mt-3 max-h-[68vh] space-y-3 overflow-y-auto">
+                        {tradeInfoCard}
+                        {workflowPanel}
+                      </TabsContent>
+                      <TabsContent value="status" className="mt-3 max-h-[68vh] space-y-3 overflow-y-auto">
+                        {statusCard}
+                        {walletCard}
+                        {historyCard}
+                      </TabsContent>
+                    </Tabs>
+                  )}
+
+                  {/*
+                    Task #118: payment-details inline Sheet — opens from
+                    the trade-info card's "Payment details" button.
+                    Surfaces seller's payment method, amount and free-text
+                    instructions/auto-reply without forcing the user to
+                    scroll to the workflow panel or jump to settings.
+                  */}
+                  <Sheet open={paymentDetailsSheetOpen} onOpenChange={setPaymentDetailsSheetOpen}>
+                    <SheetContent
+                      side="bottom"
+                      className="border-slate-800 bg-slate-950 text-slate-100"
+                      data-testid="sheet-payment-details"
+                    >
+                      <SheetHeader>
+                        <SheetTitle className="flex items-center gap-2 text-slate-100">
+                          <CreditCard className="h-4 w-4 text-[#f0c73f]" />
+                          {t('p2p.tradeRoom.viewPaymentDetails')}
+                        </SheetTitle>
+                        <SheetDescription className="text-slate-400">
+                          {t('p2p.tradeRoom.paymentDetailsDesc')}
+                        </SheetDescription>
+                      </SheetHeader>
+                      <div className="mt-3 space-y-3 text-sm">
+                        <div className="flex justify-between gap-2 rounded-md border border-slate-800 bg-slate-900/70 p-3">
+                          <span className="text-slate-400">{t('p2p.paymentMethod')}</span>
+                          <span className="font-medium" data-testid="sheet-payment-method">
+                            {activeTrade.paymentMethod || "-"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2 rounded-md border border-slate-800 bg-slate-900/70 p-3">
+                          <span className="text-slate-400">{t('common.amount')}</span>
+                          <span className="font-medium" data-testid="sheet-payment-amount">
+                            {formatAssetAmount(
+                              activeTrade.amount,
+                              activeTradeOfferCurrency || activeTradeFiatCurrency || "USDT",
+                              numberLocale,
+                            )}
+                          </span>
+                        </div>
+                        {(activeTrade.offerTerms || activeTrade.offerAutoReply) ? (
+                          <div className="space-y-2 rounded-md border border-slate-800 bg-slate-900/70 p-3">
+                            <p className="text-xs uppercase tracking-wide text-slate-400">
+                              {t('transactions.paymentInstructions')}
+                            </p>
+                            {activeTrade.offerTerms && (
+                              <p className="whitespace-pre-wrap break-words text-slate-100" data-testid="sheet-payment-terms">
+                                {activeTrade.offerTerms}
+                              </p>
+                            )}
+                            {activeTrade.offerAutoReply && (
+                              <p className="whitespace-pre-wrap break-words text-slate-100" data-testid="sheet-payment-auto-reply">
+                                {activeTrade.offerAutoReply}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="rounded-md border border-slate-800 bg-slate-900/70 p-3 text-xs text-slate-400">
+                            {t('p2p.tradeRoom.noPaymentDetails')}
+                          </div>
+                        )}
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                </>
+              );
+            })()
           ) : (
             <p className="text-sm text-muted-foreground">{t('p2p.noTrades')}</p>
           )}
