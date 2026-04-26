@@ -294,8 +294,17 @@ function ThemeEditor({ open, theme, onClose, onSaved }: ThemeEditorProps) {
     if (draft) applyAdminTheme(draft);
   };
 
-  const handleResetPreview = () => {
+  const handleResetPreview = async () => {
     clearAdminTheme();
+    try {
+      const res = await fetch("/api/themes/active");
+      if (res.ok) {
+        const active = (await res.json()) as AdminTheme;
+        applyAdminTheme(active);
+      }
+    } catch {
+      // best-effort restore — leaving cleared vars falls back to index.css
+    }
   };
 
   if (!draft) return null;

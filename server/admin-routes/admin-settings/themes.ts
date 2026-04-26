@@ -57,8 +57,13 @@ function validateThemePatch(updates: Partial<Record<PatchableThemeField, unknown
     if (typeof value !== "string") {
       return `Field '${field}' must be a string`;
     }
-    if (COLOR_FIELDS.has(key) && value !== "" && !HEX_COLOR_RE.test(value)) {
-      return `Field '${field}' must be a #RGB or #RRGGBB hex color`;
+    if (COLOR_FIELDS.has(key)) {
+      if (value === "") {
+        return `Field '${field}' must not be empty`;
+      }
+      if (!HEX_COLOR_RE.test(value)) {
+        return `Field '${field}' must be a #RGB or #RRGGBB hex color`;
+      }
     }
     if (key === "mode" && value !== "" && !VALID_MODES.has(value)) {
       return `Field 'mode' must be 'dark' or 'light'`;
