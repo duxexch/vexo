@@ -53,6 +53,11 @@ import {
   type WalletCurrencyConfig,
 } from "@/lib/wallet-currency";
 import type { Transaction, ProjectCurrencyConversion, CountryPaymentMethod } from "@shared/schema";
+import {
+  groupConversionPairs,
+  isConversionPair,
+  type TransactionListItem,
+} from "@/lib/conversion-pairing";
 
 interface WalletStats {
   totalDeposited: string;
@@ -131,6 +136,7 @@ export default function WalletPage() {
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
   const [showWalletConvert, setShowWalletConvert] = useState(false);
+  const [transactionFilter, setTransactionFilter] = useState<'all' | 'conversions'>('all');
   const [walletConvertFrom, setWalletConvertFrom] = useState<string>("");
   const [walletConvertTo, setWalletConvertTo] = useState<string>("");
   const [walletConvertAmount, setWalletConvertAmount] = useState("");
@@ -194,10 +200,16 @@ export default function WalletPage() {
     }
   }, []);
 
+  // Conversions tab pulls more rows so paired legs (which always come as TWO
+  // rows on the same conversion) are unlikely to land on opposite pages.
+  const transactionPageSize = transactionFilter === 'conversions' ? 50 : 10;
+  const transactionTypeParam = transactionFilter === 'conversions' ? 'currency_conversion' : null;
   const { data: txResponse, isLoading: loadingTransactions, isError: isErrorTransactions, error: errorTransactions, refetch: refetchTransactions } = useQuery<{ data: Transaction[]; total: number }>({
-    queryKey: ['/api/transactions', { pageSize: 10 }],
+    queryKey: ['/api/transactions', { pageSize: transactionPageSize, type: transactionTypeParam }],
     queryFn: async () => {
-      const res = await fetch('/api/transactions?pageSize=10', {
+      const params = new URLSearchParams({ pageSize: String(transactionPageSize) });
+      if (transactionTypeParam) params.set('type', transactionTypeParam);
+      const res = await fetch(`/api/transactions?${params.toString()}`, {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       });
@@ -703,6 +715,17 @@ export default function WalletPage() {
 
   const recentTransactions = Array.isArray(transactions) ? transactions : [];
 
+  // Group paired `currency_conversion` legs together so a single conversion
+  // shows as ONE card displaying source amount, destination amount, fee and
+  // effective rate. Pairs are detected primarily via mutual `referenceId`
+  // (executeWalletConversion writes both legs to point at each other), with a
+  // fallback to "same description" so reversal pairs (whose `referenceId`
+  // points at the original legs, not at each other) also collapse correctly.
+  const transactionListItems = useMemo<TransactionListItem[]>(
+    () => groupConversionPairs(recentTransactions),
+    [recentTransactions],
+  );
+
   const getTransactionIcon = (type: string) => {
     switch (type) {
       case 'deposit': return <ArrowDownToLine className="h-4 w-4 text-green-500" />;
@@ -712,6 +735,7 @@ export default function WalletPage() {
       case 'bonus': return <TrendingUp className="h-4 w-4 text-green-500" />;
       case 'reward': return <TrendingUp className="h-4 w-4 text-green-500" />;
       case 'refund': return <ArrowDownToLine className="h-4 w-4 text-green-500" />;
+      case 'currency_conversion': return <ArrowRightLeft className="h-4 w-4 text-blue-500" />;
       default: return <History className="h-4 w-4 text-muted-foreground" />;
     }
   };
@@ -1064,36 +1088,131 @@ export default function WalletPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <Tabs
+            value={transactionFilter}
+            onValueChange={(v) => setTransactionFilter(v === 'conversions' ? 'conversions' : 'all')}
+            className="mb-4"
+          >
+            <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-grid">
+              <TabsTrigger value="all" data-testid="tab-transactions-all">{t('wallet.tx.allTab')}</TabsTrigger>
+              <TabsTrigger value="conversions" data-testid="tab-transactions-conversions">{t('wallet.tx.conversionsTab')}</TabsTrigger>
+            </TabsList>
+          </Tabs>
           {loadingTransactions ? (
             <TableSkeleton rows={3} columns={4} />
           ) : isErrorTransactions ? (
             <QueryErrorState error={errorTransactions} onRetry={() => refetchTransactions()} compact />
-          ) : recentTransactions.length > 0 ? (
+          ) : transactionListItems.length > 0 ? (
             <div className="space-y-3">
-              {recentTransactions.map((tx) => (
-                <div key={tx.id} className="rounded-lg bg-muted/50 p-3" data-testid={`row-transaction-${tx.id}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-background">
-                      {getTransactionIcon(tx.type)}
+              {transactionListItems.map((item) => {
+                if (isConversionPair(item)) {
+                  const debitCurrency = item.debit.walletCurrencyCode || '';
+                  const creditCurrency = item.credit.walletCurrencyCode || '';
+                  const debitAmount = Number.parseFloat(item.debit.amount);
+                  const creditAmount = Number.parseFloat(item.credit.amount);
+                  const dateLabel = new Date(item.debit.createdAt).toLocaleDateString(
+                    language === 'ar' ? 'ar-SA' : 'en-US',
+                    { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' },
+                  );
+                  return (
+                    <div
+                      key={item.pairKey}
+                      className="rounded-lg bg-muted/50 p-3"
+                      data-testid={`row-conversion-pair-${item.pairKey}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-full bg-background">
+                            <ArrowRightLeft className="h-4 w-4 text-blue-500" />
+                          </div>
+                          <div>
+                            <p className="font-medium">
+                              {item.isReversal
+                                ? t('wallet.tx.conversionReversal')
+                                : t('wallet.type.currency_conversion')}
+                            </p>
+                            <p className="text-xs text-muted-foreground" data-testid={`text-conversion-date-${item.pairKey}`}>
+                              {dateLabel}
+                            </p>
+                          </div>
+                        </div>
+                        {getStatusBadge(item.debit.status)}
+                      </div>
+                      <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <div className="text-xs text-muted-foreground">{t('wallet.tx.from')}</div>
+                          <div
+                            className="font-semibold text-red-500"
+                            data-testid={`text-conversion-from-${item.pairKey}`}
+                          >
+                            -{debitAmount.toFixed(2)} {debitCurrency}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">{t('wallet.tx.to')}</div>
+                          <div
+                            className="font-semibold text-green-500"
+                            data-testid={`text-conversion-to-${item.pairKey}`}
+                          >
+                            +{creditAmount.toFixed(2)} {creditCurrency}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-muted-foreground border-t border-border/40 pt-2">
+                        <div data-testid={`text-conversion-rate-${item.pairKey}`}>
+                          <span>{t('wallet.tx.effectiveRate')}: </span>
+                          <span className="font-mono text-foreground/80">
+                            1 {debitCurrency} = {item.effectiveRate.toFixed(6)} {creditCurrency}
+                          </span>
+                        </div>
+                        <div data-testid={`text-conversion-fee-${item.pairKey}`}>
+                          <span>{t('wallet.tx.fee')}: </span>
+                          {item.feeAmount !== null && item.feePct !== null ? (
+                            item.feeAmount === 0 && item.feePct === 0 ? (
+                              <span className="font-mono text-foreground/80">{t('wallet.tx.noFee')}</span>
+                            ) : (
+                              <span className="font-mono text-foreground/80">
+                                {item.feeAmount.toFixed(2)} {creditCurrency} ({item.feePct.toFixed(2)}%)
+                              </span>
+                            )
+                          ) : (
+                            <span>{t('wallet.tx.feeUnknown')}</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium capitalize">{t(`wallet.type.${tx.type}`)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(tx.createdAt).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}
-                      </p>
+                  );
+                }
+
+                const tx = item;
+                return (
+                  <div key={tx.id} className="rounded-lg bg-muted/50 p-3" data-testid={`row-transaction-${tx.id}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-full bg-background">
+                        {getTransactionIcon(tx.type)}
+                      </div>
+                      <div>
+                        <p className="font-medium capitalize">{t(`wallet.type.${tx.type}`)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(tx.createdAt).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3 sm:mt-0 sm:justify-end">
+                      <span className={`font-bold ${['deposit', 'win', 'bonus', 'reward', 'refund'].includes(tx.type) ? 'text-green-500' : 'text-red-500'}`}>
+                        {['deposit', 'win', 'bonus', 'reward', 'refund'].includes(tx.type) ? '+' : '-'}{formatWalletAmount(tx.amount)}
+                      </span>
+                      {getStatusBadge(tx.status)}
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between gap-3 sm:mt-0 sm:justify-end">
-                    <span className={`font-bold ${['deposit', 'win', 'bonus', 'reward', 'refund'].includes(tx.type) ? 'text-green-500' : 'text-red-500'}`}>
-                      {['deposit', 'win', 'bonus', 'reward', 'refund'].includes(tx.type) ? '+' : '-'}{formatWalletAmount(tx.amount)}
-                    </span>
-                    {getStatusBadge(tx.status)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <EmptyState icon={History} title={t('wallet.noTransactions')} />
+            <EmptyState
+              icon={History}
+              title={transactionFilter === 'conversions' ? t('wallet.tx.noConversions') : t('wallet.noTransactions')}
+            />
           )}
         </CardContent>
       </Card>
