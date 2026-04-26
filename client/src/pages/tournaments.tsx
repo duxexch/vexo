@@ -1462,10 +1462,11 @@ function TournamentDetailView({ id }: { id: string }) {
                 const balance = walletBalanceMap[code] ?? 0;
                 const enough = balance + 1e-9 >= safeEntryFee;
                 const isPrimary = code === userPrimaryCurrency;
-                const balanceText = formatTournamentAmountText(
-                  balance.toFixed(2),
-                  'usd',
-                ).replace('$', `${code} `);
+                // Direct `${code} ${amount}` formatting avoids the
+                // brittleness of generating a USD-symbol string and
+                // replacing `$` (which can land in the wrong place for
+                // some locales / formats).
+                const balanceText = `${code} ${balance.toFixed(2)}`;
                 const optionId = `wallet-option-${code}`;
                 return (
                   <Label
