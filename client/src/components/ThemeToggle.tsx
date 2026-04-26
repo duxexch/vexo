@@ -9,8 +9,8 @@ export function ThemeToggle() {
   const { t } = useI18n();
   const tooltipLabel = t("nav.theme") || "Theme";
   const ariaLabel = theme === "dark"
-    ? "Switch to light mode"
-    : "Switch to dark mode";
+    ? (t("nav.themeSwitchToLight") || "Switch to light mode")
+    : (t("nav.themeSwitchToDark") || "Switch to dark mode");
 
   return (
     <Tooltip>

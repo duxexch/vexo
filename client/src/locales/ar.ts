@@ -34,6 +34,8 @@ const ar: Record<string, string> = {
   'nav.admin': 'مشرف',
   'nav.notifications': 'الإشعارات',
   'nav.theme': 'السمة',
+  'nav.themeSwitchToLight': 'التبديل إلى الوضع الفاتح',
+  'nav.themeSwitchToDark': 'التبديل إلى الوضع الداكن',
   'nav.language': 'اللغة',
   'nav.installApp': 'تحميل التطبيق',
   'common.balance': 'الرصيد',

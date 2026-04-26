@@ -34,6 +34,8 @@ const en: Record<string, string> = {
   'nav.admin': 'Admin',
   'nav.notifications': 'Notifications',
   'nav.theme': 'Theme',
+  'nav.themeSwitchToLight': 'Switch to light mode',
+  'nav.themeSwitchToDark': 'Switch to dark mode',
   'nav.language': 'Language',
   'nav.installApp': 'Install App',
   'common.balance': 'Balance',
