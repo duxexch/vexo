@@ -1991,6 +1991,15 @@ function MyOffersTab() {
     }
   }, [form, selectedOfferVisibility]);
 
+  useEffect(() => {
+    const errMsg = createOfferMutation.error?.message;
+    if (errMsg && /wallet currencies/i.test(errMsg)) {
+      createOfferMutation.reset();
+    }
+    // Re-run only when the user picks a different currency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOfferCurrency]);
+
   const userWalletCurrency = normalizeCurrencyCodeValue((user as { balanceCurrency?: string } | null)?.balanceCurrency || "USD");
   const userWalletTotalBalance = Number((user as { balance?: string | number } | null)?.balance || 0);
 
@@ -2850,9 +2859,10 @@ function MyOffersTab() {
                                   </FormControl>
                                   <SelectContent>
                                     {availableOfferCurrencies.map((supportedCurrency) => {
+                                      const normalizedSupported = normalizeCurrencyCodeValue(supportedCurrency) || supportedCurrency;
                                       const showHint = selectedOfferType === "sell"
-                                        && walletBalanceByCurrency.has(supportedCurrency);
-                                      const hintAmount = walletBalanceByCurrency.get(supportedCurrency) ?? 0;
+                                        && walletBalanceByCurrency.has(normalizedSupported);
+                                      const hintAmount = walletBalanceByCurrency.get(normalizedSupported) ?? 0;
                                       return (
                                         <SelectItem key={supportedCurrency} value={supportedCurrency} data-testid={`select-offer-currency-option-${supportedCurrency}`}>
                                           {showHint
