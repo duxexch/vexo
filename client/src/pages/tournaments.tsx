@@ -585,13 +585,13 @@ function TournamentListView() {
                       if (!shouldShow) return null;
                       return (
                         <div className="mt-3 space-y-2">
-                          {refunds.map((refund) => (
+                          {refunds.map((refund, idx) => (
                             <TournamentRefundBanner
-                              key={`${refund.reason}-${refund.currency}`}
+                              key={`${idx}-${refund.reason}-${refund.currency}`}
                               refund={refund}
                               variant="list"
                               en={en}
-                              testId={`tournament-refund-${t.id}-${refund.reason}`}
+                              testId={`tournament-refund-${t.id}-${refund.reason}-${idx}`}
                             />
                           ))}
                         </div>
@@ -884,13 +884,13 @@ function TournamentDetailView({ id }: { id: string }) {
         if (!shouldShow) return null;
         return (
           <div className="space-y-2">
-            {refunds.map((refund) => (
+            {refunds.map((refund, idx) => (
               <TournamentRefundBanner
-                key={`${refund.reason}-${refund.currency}`}
+                key={`${idx}-${refund.reason}-${refund.currency}`}
                 refund={refund}
                 variant="detail"
                 en={en}
-                testId={`tournament-detail-refund-${tournament.id}-${refund.reason}`}
+                testId={`tournament-detail-refund-${tournament.id}-${refund.reason}-${idx}`}
               />
             ))}
           </div>
