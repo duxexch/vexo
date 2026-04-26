@@ -261,6 +261,12 @@ export function registerUserFinancialRoutes(app: Express) {
         return res.status(400).json({ error: "A reason is required (minimum 3 characters)" });
       }
 
+      // CRITICAL (Task #193 sweep): every check below MUST throw on failure,
+      // not return a `{ success: false }` envelope. The first statement is
+      // already an UPDATE, so a return-after-WHERE-miss is only safe today
+      // because the WHERE matched zero rows; throwing keeps the route safe
+      // by construction even if a future edit adds a SELECT/INSERT before
+      // the guard.
       const rewardResult = await db.transaction(async (tx) => {
         const updateRows = await tx.execute(sql`
           UPDATE users
@@ -271,7 +277,7 @@ export function registerUserFinancialRoutes(app: Express) {
 
         const updatedUser = (updateRows.rows as Record<string, unknown>[])[0];
         if (!updatedUser) {
-          return { success: false as const, error: "User not found" };
+          throw createHttpError(404, "User not found");
         }
 
         const newBalance = parseNumeric(updatedUser.balance);
@@ -291,17 +297,12 @@ export function registerUserFinancialRoutes(app: Express) {
         }).returning();
 
         return {
-          success: true as const,
           updatedUser,
           createdTransaction,
           currentBalance,
           newBalance,
         };
       });
-
-      if (!rewardResult.success) {
-        return res.status(404).json({ error: rewardResult.error });
-      }
 
       const updated = rewardResult.updatedUser;
       const createdTransaction = rewardResult.createdTransaction;
@@ -334,7 +335,7 @@ export function registerUserFinancialRoutes(app: Express) {
 
       res.json({ ...toSafeUser(updated), rewardSent: rewardAmount });
     } catch (error: unknown) {
-      res.status(500).json({ error: getErrorMessage(error) });
+      res.status(resolveErrorStatus(error)).json({ error: getErrorMessage(error) });
     }
   });
 
