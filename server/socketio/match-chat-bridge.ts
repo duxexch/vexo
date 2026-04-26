@@ -195,6 +195,14 @@ export async function deliverRealtimeMatchChat(
     quickMessageKey: safeQuickKey,
     wasFiltered: !filterResult.isClean,
   });
+  // Task #139 (architect follow-up): stamp the persisted DB id onto
+  // the broadcast so the casual-match client can dedupe a realtime
+  // bubble against the same `gameplay_messages` row that its
+  // reconnect-catch-up history refetch will return. Without this the
+  // realtime path keys on `clientMsgId`/fallback while history keys
+  // on the row id, and a brief socket disconnect → refetch would
+  // double-render the bubble.
+  broadcast.messageId = saved.id;
 
   for (const s of ioSockets) {
     const rid = s.data?.userId;

@@ -72,6 +72,16 @@ export interface ChatBroadcast {
   /** True when the server's word filter scrubbed the original text. */
   wasFiltered?: boolean;
   /**
+   * Task #139 (architect follow-up): persisted DB id of the message
+   * that produced this broadcast, when the bridge persisted one.
+   * Currently set ONLY by the casual `match:` text bridge so the
+   * client can dedupe a realtime bubble against the history row that
+   * a reconnect catch-up refetch will return for the same message.
+   * Other bridges (challenge / DM / voice) leave this undefined and
+   * keep using `clientMsgId` as their dedup key.
+   */
+  messageId?: string;
+  /**
    * Task #139: optional gameplay-emoji metadata, set ONLY on broadcasts
    * fanned out from the `/api/gameplay/messages` REST endpoint after a
    * successful balance-deducted emoji send. `text` is empty in that

@@ -420,9 +420,17 @@ function buildRenderableChatStream(args: {
         emojiCost: r.gameplayEmoji.price,
       });
     } else {
-      const key = r.clientMsgId
-        ? `c:${r.clientMsgId}`
-        : `t:${r.fromUserId}:${r.ts}:${r.text}`;
+      // Dedup priority: persisted DB id (set by `match-chat-bridge.ts`
+      // for casual-match text broadcasts — collapses against the
+      // history row a reconnect refetch returns) → clientMsgId (echo
+      // for our own optimistic sends from other transports) →
+      // sender+ts+text fallback (session-stable for realtime-only
+      // bubbles that never have either id).
+      const key = r.messageId
+        ? r.messageId
+        : r.clientMsgId
+          ? `c:${r.clientMsgId}`
+          : `t:${r.fromUserId}:${r.ts}:${r.text}`;
       pushUnique(key, {
         key,
         ts: r.ts,
