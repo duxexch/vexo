@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { WithdrawDialog } from "@/components/wallet/WithdrawDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useGuidedFocus } from "@/hooks/use-guided-focus";
 import { useI18n } from "@/lib/i18n";
@@ -141,12 +142,8 @@ export default function WalletPage() {
   const [walletConvertTo, setWalletConvertTo] = useState<string>("");
   const [walletConvertAmount, setWalletConvertAmount] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
   const [convertAmount, setConvertAmount] = useState("");
   const [depositPaymentMethod, setDepositPaymentMethod] = useState("");
-  const [withdrawPaymentMethod, setWithdrawPaymentMethod] = useState("");
-  const [withdrawReceiverNumber, setWithdrawReceiverNumber] = useState("");
-  const [withdrawCurrency, setWithdrawCurrency] = useState<string>("");
   const [paymentReference, setPaymentReference] = useState("");
   const [walletNumber, setWalletNumber] = useState("");
   const [depositCurrency, setDepositCurrency] = useState("USD");
@@ -158,11 +155,6 @@ export default function WalletPage() {
   const paymentReferenceInputRef = useRef<HTMLInputElement | null>(null);
   const walletNumberInputRef = useRef<HTMLInputElement | null>(null);
   const depositConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  const withdrawAmountInputRef = useRef<HTMLInputElement | null>(null);
-  const withdrawPaymentSectionRef = useRef<HTMLDivElement | null>(null);
-  const withdrawReceiverNumberInputRef = useRef<HTMLInputElement | null>(null);
-  const withdrawConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const convertAmountInputRef = useRef<HTMLInputElement | null>(null);
   const convertConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -325,11 +317,6 @@ export default function WalletPage() {
   }, [showDeposit]);
 
   useEffect(() => {
-    if (!showWithdraw) return;
-    queueFocus(withdrawAmountInputRef.current);
-  }, [showWithdraw]);
-
-  useEffect(() => {
     if (!showConvert) return;
     queueFocus(convertAmountInputRef.current);
   }, [showConvert]);
@@ -388,16 +375,6 @@ export default function WalletPage() {
     queryKey: ['/api/wallet/currency-wallets'],
     ...financialQueryOptions,
   });
-
-  const effectiveWithdrawCurrency = withdrawCurrency || walletCurrencyCode;
-  const withdrawWalletEntry = useMemo(() => {
-    if (!currencyWalletsData) return null;
-    return currencyWalletsData.wallets.find((w) => w.currency === effectiveWithdrawCurrency) || null;
-  }, [currencyWalletsData, effectiveWithdrawCurrency]);
-  const withdrawAvailableBalance = withdrawWalletEntry
-    ? Number.parseFloat(withdrawWalletEntry.balance || "0")
-    : availableWalletBalance;
-  const withdrawCurrencySymbol = getCurrencySymbol(effectiveWithdrawCurrency, depositConfig?.currencySymbolByCode);
 
   const { data: currencyConversions } = useQuery<ProjectCurrencyConversion[]>({
     queryKey: ['/api/project-currency/conversions'],
@@ -626,10 +603,6 @@ export default function WalletPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/wallet/currency-wallets'] });
       refreshUser?.();
       setShowWithdraw(false);
-      setWithdrawAmount("");
-      setWithdrawPaymentMethod("");
-      setWithdrawReceiverNumber("");
-      setWithdrawCurrency("");
     },
     onError: (err: Error) => {
       toast({ title: t('common.error'), description: err.message, variant: "destructive" });
@@ -664,37 +637,6 @@ export default function WalletPage() {
       paymentReference: paymentReference.trim(),
       walletNumber: walletNumber.trim() || undefined,
       currency: depositCurrency,
-    });
-  };
-
-  const handleWithdrawSubmit = () => {
-    const parsedAmount = parseFloat(withdrawAmount);
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      focusAndScroll(withdrawAmountInputRef.current);
-      return;
-    }
-
-    if (parsedAmount > withdrawAvailableBalance) {
-      focusAndScroll(withdrawAmountInputRef.current);
-      return;
-    }
-
-    if (!withdrawPaymentMethod) {
-      focusFirstInteractiveIn(withdrawPaymentSectionRef.current);
-      return;
-    }
-
-    const sanitizedReceiverNumber = withdrawReceiverNumber.trim();
-    if (!sanitizedReceiverNumber) {
-      focusAndScroll(withdrawReceiverNumberInputRef.current);
-      return;
-    }
-
-    withdrawMutation.mutate({
-      amount: parsedAmount,
-      paymentMethodId: withdrawPaymentMethod,
-      receiverMethodNumber: sanitizedReceiverNumber,
-      currency: effectiveWithdrawCurrency,
     });
   };
 
@@ -1455,137 +1397,18 @@ export default function WalletPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showWithdraw} onOpenChange={setShowWithdraw}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ArrowUpFromLine className="h-5 w-5 text-red-500" />
-              {t('wallet.withdraw')}
-            </DialogTitle>
-            <DialogDescription>{t('wallet.withdrawDesc')}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pb-1">
-            {currencyWalletsData?.multiCurrencyEnabled && currencyWalletsData.wallets.length > 1 && (
-              <div className="space-y-2">
-                <Label>{language === 'ar' ? 'العملة' : 'Currency'}</Label>
-                <Select
-                  value={effectiveWithdrawCurrency}
-                  onValueChange={(v) => { setWithdrawCurrency(v); setWithdrawAmount(""); }}
-                >
-                  <SelectTrigger data-testid="select-withdraw-currency">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {currencyWalletsData.wallets.map((w) => (
-                      <SelectItem key={w.currency} value={w.currency}>
-                        {w.currency} {w.isPrimary ? (language === 'ar' ? '(أساسية)' : '(Primary)') : ''} — {Number.parseFloat(w.balance).toFixed(2)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div className="p-3 bg-muted rounded-lg text-sm">
-              <span className="text-muted-foreground">{t('wallet.availableBalance')}: </span>
-              <span className="font-bold text-primary" data-testid="text-withdraw-available">
-                {withdrawCurrencySymbol}{withdrawAvailableBalance.toFixed(2)} {effectiveWithdrawCurrency}
-              </span>
-            </div>
-            <div>
-              <Label>{t('wallet.amount')}</Label>
-              <Input
-                ref={withdrawAmountInputRef}
-                type="number"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key !== 'Enter') return;
-                  e.preventDefault();
-                  focusFirstInteractiveIn(withdrawPaymentSectionRef.current);
-                }}
-                placeholder="0.00"
-                inputMode="decimal"
-                enterKeyHint="next"
-                className="mt-2"
-                data-testid="input-withdraw-amount"
-              />
-              <div className="flex gap-2 mt-2 flex-wrap">
-                {[10, 25, 50, 100].map(amount => (
-                  <Button
-                    key={amount}
-                    variant={withdrawAmount === String(amount) ? "default" : "outline"}
-                    size="sm"
-                    className="text-xs"
-                    onClick={() => setWithdrawAmount(String(amount))}
-                  >
-                    {formatWalletNativeAmount(amount, effectiveWithdrawCurrency, depositConfig?.currencySymbolByCode, { withCode: true })}
-                  </Button>
-                ))}
-                <Button
-                  variant={withdrawAmount === String(withdrawAvailableBalance.toFixed(2)) ? "default" : "outline"}
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => setWithdrawAmount(String(withdrawAvailableBalance.toFixed(2)))}
-                >
-                  {language === 'ar' ? 'الكل' : 'All'}
-                </Button>
-              </div>
-            </div>
-            <div>
-              <Label>{t('wallet.paymentMethod')}</Label>
-              <div ref={withdrawPaymentSectionRef} className="grid grid-cols-2 gap-2 mt-2">
-                {withdrawalPaymentMethods.map(method => {
-                  const Icon = getMethodIcon(method.type);
-                  return (
-                    <Button
-                      key={method.id}
-                      variant={withdrawPaymentMethod === method.id ? "default" : "outline"}
-                      className="h-auto py-3 flex-col"
-                      onClick={() => {
-                        setWithdrawPaymentMethod(method.id);
-                        queueFocus(withdrawReceiverNumberInputRef.current);
-                      }}
-                    >
-                      <Icon className="h-5 w-5 mb-1" />
-                      <span className="text-xs font-medium">{method.name}</span>
-                      <span className="text-[10px] opacity-90">{method.methodNumber || "-"}</span>
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-            <div>
-              <Label>{language === 'ar' ? 'رقم الوسيلة المستلم عليها' : 'Receiver Wallet / Account Number'}</Label>
-              <Input
-                ref={withdrawReceiverNumberInputRef}
-                value={withdrawReceiverNumber}
-                onChange={(e) => setWithdrawReceiverNumber(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key !== 'Enter') return;
-                  e.preventDefault();
-                  queueFocus(withdrawConfirmButtonRef.current);
-                }}
-                placeholder={language === 'ar' ? 'أدخل رقم الوسيلة المستلم عليها' : 'Enter receiver wallet or account number'}
-                enterKeyHint="done"
-                className="mt-2"
-              />
-            </div>
-          </div>
-          <DialogFooter className="sticky bottom-0 z-10 px-4 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5 pt-3 border-t bg-background">
-            <Button className="w-full sm:w-auto min-h-11" variant="outline" onClick={() => setShowWithdraw(false)}>{t('common.cancel')}</Button>
-            <Button
-              ref={withdrawConfirmButtonRef}
-              className="w-full sm:w-auto min-h-11"
-              onClick={handleWithdrawSubmit}
-              disabled={!withdrawAmount || !withdrawPaymentMethod || !withdrawReceiverNumber.trim() || withdrawMutation.isPending || parseFloat(withdrawAmount) > withdrawAvailableBalance}
-              data-testid="button-confirm-withdraw"
-            >
-              {withdrawMutation.isPending && <RefreshCw className="h-4 w-4 me-2 animate-spin" />}
-              {t('wallet.confirmWithdraw')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <WithdrawDialog
+        open={showWithdraw}
+        onOpenChange={setShowWithdraw}
+        multiCurrencyEnabled={!!currencyWalletsData?.multiCurrencyEnabled}
+        wallets={currencyWalletsData?.wallets ?? []}
+        defaultCurrency={walletCurrencyCode}
+        fallbackBalance={availableWalletBalance}
+        currencySymbolByCode={depositConfig?.currencySymbolByCode}
+        paymentMethods={withdrawalPaymentMethods}
+        onSubmit={(payload) => withdrawMutation.mutate(payload)}
+        isSubmitting={withdrawMutation.isPending}
+      />
 
       {currencySettings?.isActive && (
         <Dialog open={showConvert} onOpenChange={setShowConvert}>

@@ -31,6 +31,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PerCurrencyWalletsTable } from "@/components/admin/PerCurrencyWalletsTable";
+import {
+  AdminBalanceAdjustDialog,
+  type AdminBalanceAdjustSubmitPayload,
+} from "@/components/admin/AdminBalanceAdjustDialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import {
@@ -212,9 +217,7 @@ export default function AdminUsersPage() {
   const [actionDialog, setActionDialog] = useState<string | null>(null);
   const [actionReason, setActionReason] = useState("");
   const [actionAmount, setActionAmount] = useState("");
-  const [adjustType, setAdjustType] = useState<"add" | "subtract">("add");
-  const [adjustWallet, setAdjustWallet] = useState<"usd" | "vxc">("usd");
-  const [adjustCurrency, setAdjustCurrency] = useState<string>("");
+  const [pendingAdjustCurrency, setPendingAdjustCurrency] = useState<string>("");
   const [multiCurrencyEnabled, setMultiCurrencyEnabled] = useState<boolean>(false);
   const [multiCurrencyAllowList, setMultiCurrencyAllowList] = useState<string[]>([]);
   const [multiCurrencySearch, setMultiCurrencySearch] = useState("");
@@ -438,9 +441,7 @@ export default function AdminUsersPage() {
     setSelectedUser(null);
     setActionReason("");
     setActionAmount("");
-    setAdjustWallet("usd");
-    setAdjustType("add");
-    setAdjustCurrency("");
+    setPendingAdjustCurrency("");
   };
 
   const handleAction = () => {
@@ -455,16 +456,6 @@ export default function AdminUsersPage() {
         break;
       case "suspend":
         suspendMutation.mutate({ id: selectedUser.id, reason: actionReason });
-        break;
-      case "balance":
-        balanceAdjustMutation.mutate({
-          id: selectedUser.id,
-          amount: actionAmount,
-          type: adjustType,
-          reason: actionReason,
-          wallet: adjustWallet,
-          currencyCode: adjustWallet === "usd" ? (adjustCurrency || currencyWalletsData?.primaryCurrency) : undefined,
-        });
         break;
       case "reward":
         rewardMutation.mutate({
@@ -1225,54 +1216,13 @@ export default function AdminUsersPage() {
                 </div>
 
                 {currencyWalletsData?.wallets && currencyWalletsData.wallets.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium">Per-currency balances</div>
-                    <div className="rounded-lg border overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-24">Currency</TableHead>
-                            <TableHead>Role</TableHead>
-                            <TableHead className="text-right">Balance</TableHead>
-                            <TableHead className="text-right w-44">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {currencyWalletsData.wallets.map((w) => {
-                            const meta = WORLD_CURRENCIES.find((c) => c.code === w.currency);
-                            const symbol = meta?.symbol || w.currency;
-                            return (
-                              <TableRow key={w.currency} data-testid={`row-wallet-${w.currency}`}>
-                                <TableCell className="font-mono">{w.currency}</TableCell>
-                                <TableCell>
-                                  <Badge variant={w.isPrimary ? "default" : "outline"}>
-                                    {w.isPrimary ? "Primary" : (w.isAllowed ? "Allowed" : "Legacy")}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-right font-semibold" data-testid={`text-balance-${w.currency}`}>
-                                  {symbol} {Number.parseFloat(w.balance).toFixed(2)}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setActionDialog("balance");
-                                      setAdjustWallet("usd");
-                                      setAdjustCurrency(w.currency);
-                                    }}
-                                    data-testid={`button-adjust-${w.currency}`}
-                                  >
-                                    Adjust
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
+                  <PerCurrencyWalletsTable
+                    wallets={currencyWalletsData.wallets}
+                    onAdjust={(currency) => {
+                      setPendingAdjustCurrency(currency);
+                      setActionDialog("balance");
+                    }}
+                  />
                 )}
               </div>
 
@@ -1447,14 +1397,16 @@ export default function AdminUsersPage() {
         </SheetContent>
       </Sheet>
 
-      <Dialog open={actionDialog !== null} onOpenChange={() => closeDialog()}>
+      <Dialog
+        open={actionDialog !== null && actionDialog !== "balance"}
+        onOpenChange={() => closeDialog()}
+      >
         <DialogContent className="max-w-[calc(100vw-0.75rem)] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {actionDialog === "ban" && "Ban User"}
               {actionDialog === "unban" && "Activate User"}
               {actionDialog === "suspend" && "Suspend User"}
-              {actionDialog === "balance" && "Adjust Balance"}
               {actionDialog === "reward" && "Send Reward"}
               {actionDialog === "p2pBan" && (selectedUser?.p2pBanned ? "Unban P2P Access" : "Ban from P2P")}
             </DialogTitle>
@@ -1476,51 +1428,9 @@ export default function AdminUsersPage() {
               </div>
             )}
 
-            {actionDialog === "balance" && (
+            {actionDialog === "reward" && (
               <div className="space-y-2">
-                <Label>Wallet</Label>
-                <Select value={adjustWallet} onValueChange={(v: "usd" | "vxc") => setAdjustWallet(v)}>
-                  <SelectTrigger data-testid="select-adjust-wallet">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="usd">Real Currency Balance</SelectItem>
-                    <SelectItem value="vxc">Project Currency (VXC)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {actionDialog === "balance" && adjustWallet === "usd" && currencyWalletsData && (
-              <div className="space-y-2">
-                <Label>Currency</Label>
-                <Select value={adjustCurrency || currencyWalletsData.primaryCurrency} onValueChange={(v: string) => setAdjustCurrency(v)}>
-                  <SelectTrigger data-testid="select-adjust-currency">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={currencyWalletsData.primaryCurrency}>
-                      {currencyWalletsData.primaryCurrency} (Primary)
-                    </SelectItem>
-                    {currencyWalletsData.allowedCurrencies
-                      .filter((c) => c !== currencyWalletsData.primaryCurrency)
-                      .map((code) => (
-                        <SelectItem key={code} value={code}>{code}</SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {(actionDialog === "balance" || actionDialog === "reward") && (
-              <div className="space-y-2">
-                <Label>
-                  Amount {actionDialog === "balance"
-                    ? adjustWallet === "vxc"
-                      ? "(VXC)"
-                      : `(${adjustCurrency || currencyWalletsData?.primaryCurrency || "USD"})`
-                    : "($)"}
-                </Label>
+                <Label>Amount ($)</Label>
                 <Input
                   type="number"
                   placeholder="Enter amount"
@@ -1528,21 +1438,6 @@ export default function AdminUsersPage() {
                   onChange={(e) => setActionAmount(e.target.value)}
                   data-testid="input-action-amount"
                 />
-              </div>
-            )}
-
-            {actionDialog === "balance" && (
-              <div className="space-y-2">
-                <Label>Type</Label>
-                <Select value={adjustType} onValueChange={(v: "add" | "subtract") => setAdjustType(v)}>
-                  <SelectTrigger data-testid="select-adjust-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="add">Credit (Add)</SelectItem>
-                    <SelectItem value="subtract">Debit (Subtract)</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             )}
 
@@ -1567,7 +1462,7 @@ export default function AdminUsersPage() {
               variant={actionDialog === "ban" ? "destructive" : actionDialog === "unban" ? "default" : "default"}
               disabled={
                 !actionReason ||
-                ((actionDialog === "balance" || actionDialog === "reward") && !actionAmount)
+                (actionDialog === "reward" && !actionAmount)
               }
               data-testid="button-confirm-action"
             >
@@ -1576,6 +1471,46 @@ export default function AdminUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AdminBalanceAdjustDialog
+        open={actionDialog === "balance"}
+        onOpenChange={(o) => {
+          if (!o) closeDialog();
+        }}
+        selectedUser={
+          selectedUser
+            ? {
+                id: selectedUser.id,
+                username: selectedUser.username,
+                profilePicture: selectedUser.profilePicture ?? undefined,
+                balance: selectedUser.balance,
+              }
+            : null
+        }
+        currencyWalletsData={
+          currencyWalletsData
+            ? {
+                primaryCurrency: currencyWalletsData.primaryCurrency,
+                allowedCurrencies: currencyWalletsData.allowedCurrencies,
+              }
+            : null
+        }
+        initialCurrency={pendingAdjustCurrency}
+        initialWallet="usd"
+        isSubmitting={balanceAdjustMutation.isPending}
+        formatBalance={(raw) => formatCurrency(raw)}
+        onSubmit={(payload: AdminBalanceAdjustSubmitPayload) => {
+          if (!selectedUser) return;
+          balanceAdjustMutation.mutate({
+            id: selectedUser.id,
+            amount: payload.amount,
+            type: payload.type,
+            reason: payload.reason,
+            wallet: payload.wallet,
+            currencyCode: payload.currencyCode,
+          });
+        }}
+      />
     </div>
   );
 }
