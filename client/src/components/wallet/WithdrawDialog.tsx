@@ -274,7 +274,10 @@ export function WithdrawDialog({
                 e.preventDefault();
                 focusFirstInteractiveIn(paymentSectionRef.current);
               }}
-              placeholder={`100.00 ${effectiveWithdrawCurrency}`}
+              placeholder={t("wallet.amountPlaceholder").replace(
+                "{{example}}",
+                `100.00 ${effectiveWithdrawCurrency}`,
+              )}
               inputMode="decimal"
               enterKeyHint="next"
               className="mt-2"

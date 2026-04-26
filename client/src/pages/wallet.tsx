@@ -1220,7 +1220,7 @@ export default function WalletPage() {
                   e.preventDefault();
                   queueFocus(depositCurrencyTriggerRef.current);
                 }}
-                placeholder={`100.00 ${depositCurrency || 'USD'}`}
+                placeholder={t('wallet.amountPlaceholder').replace('{{example}}', `100.00 ${depositCurrency || 'USD'}`)}
                 inputMode="decimal"
                 enterKeyHint="next"
                 className="mt-2"

@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import {
   Bitcoin,
   Building2,
@@ -32,6 +32,9 @@ interface Props {
 
 export function PaymentMethodIcon({ iconUrl, type, alt, className }: Props) {
   const [errored, setErrored] = useState(false);
+  useEffect(() => {
+    setErrored(false);
+  }, [iconUrl]);
   const FallbackIcon = getFallbackIcon(type);
 
   const sizeClass = className ?? "h-6 w-6";
