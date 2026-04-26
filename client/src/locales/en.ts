@@ -2424,6 +2424,11 @@ const en: Record<string, string> = {
   'settings.permissions.banner.body': 'Friend calls work best when the microphone, camera and call-overlay permissions are granted. Open settings to fix this in a few taps.',
   'settings.permissions.banner.action': 'Review permissions',
   'settings.permissions.banner.dismiss': 'Not now',
+  'settings.permissions.cta.allow': 'Allow',
+  'settings.permissions.cta.openSettings': 'Open settings',
+  'settings.permissions.cta.unavailable': 'Not supported on this device',
+  'settings.permissions.iosPwa.title': 'Install to enable notifications',
+  'settings.permissions.iosPwa.body': 'Tap the share icon in Safari, then "Add to Home Screen". Notifications and some advanced features only work after the app is installed.',
 };
 
 export default en;

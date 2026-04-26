@@ -24,7 +24,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Shield, Settings2, Loader2, Monitor, Smartphone, Globe, Trash2, LogOut, CheckCircle, KeyRound, Camera, Users, ImageIcon, Volume2, VolumeX, ShieldCheck, Mail, Copy, Mic, Bell, Layers, RefreshCcw, AlertTriangle } from "lucide-react";
+import { User, Shield, Settings2, Loader2, Monitor, Smartphone, Globe, Trash2, LogOut, CheckCircle, KeyRound, Camera, Users, ImageIcon, Volume2, VolumeX, ShieldCheck, Mail, Copy, Mic, Bell, Layers, RefreshCcw, AlertTriangle, Smartphone as PhoneIcon } from "lucide-react";
+import { PermissionRow } from "@/components/PermissionRow";
+import { PERMISSION_CATALOGUE, type PermissionId } from "@/lib/permission-catalogue";
+import { isIOSSafariTab } from "@/lib/pwa-detect";
 import { BlockedMutedSettings } from "@/components/BlockedMutedSettings";
 import { getChatBubblesEnabled, setChatBubblesEnabled } from "@/lib/chat-bubbles-pref";
 import { useSoundEffects } from "@/hooks/use-sound-effects";
@@ -2680,7 +2683,16 @@ function PermissionsSection() {
   const { toast } = useToast();
   const [summary, setSummary] = useState<import("@/lib/startup-permissions").PermissionSummary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [opening, setOpening] = useState<"app" | "overlay" | null>(null);
+  const [openingApp, setOpeningApp] = useState(false);
+  // Tracks which catalogue row is currently waiting on an OS prompt so
+  // the relevant CTA can show a busy state without disabling the rest
+  // of the table.
+  const [busyId, setBusyId] = useState<PermissionId | null>(null);
+  // Captured once on mount — iOS Safari can't register for web push
+  // unless the user installs the site to the Home Screen first, so
+  // when we detect that combination we surface an explanatory hint
+  // instead of a broken "Allow" button.
+  const [showIOSPwaHint] = useState(() => isIOSSafariTab());
 
   const dir = language === "ar" ? "rtl" : "ltr";
 
@@ -2721,107 +2733,43 @@ function PermissionsSection() {
   }, []);
 
   const openAppSettings = async () => {
-    setOpening("app");
+    setOpeningApp(true);
     try {
       const { openAppSettings: openSettings } = await import("@/lib/startup-permissions");
       await openSettings();
     } finally {
-      setOpening(null);
+      setOpeningApp(false);
     }
   };
 
-  const openOverlaySettings = async () => {
-    setOpening("overlay");
+  const handleAllow = async (id: PermissionId, request?: () => Promise<unknown>) => {
+    if (!request) return;
+    setBusyId(id);
     try {
-      const { requestOverlayPermission } = await import("@/lib/native-call-permissions");
-      await requestOverlayPermission();
-      // Re-check on the next tick — the user must come back to the app
-      // for the new state to take effect.
-      setTimeout(() => {
+      await request();
+      // Always re-read the summary from the source of truth — the prompt
+      // may have surfaced an OS dialog whose result we cannot infer
+      // without re-probing the platform.
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleOpenSettings = async (id: PermissionId, openSettingsFn: () => Promise<void>) => {
+    setBusyId(id);
+    try {
+      await openSettingsFn();
+      // The user has to leave the app for the new state to take
+      // effect. Schedule a re-probe shortly after so the row reflects
+      // any change once they return.
+      window.setTimeout(() => {
         void refresh();
       }, 500);
     } finally {
-      setOpening(null);
+      setBusyId(null);
     }
   };
-
-  const openMicrophone = async () => {
-    const { openMicrophoneSettings } = await import("@/lib/startup-permissions");
-    await openMicrophoneSettings();
-  };
-
-  const openCamera = async () => {
-    // Re-uses the app-settings deep link on native and falls back to
-    // the per-permission browser shortcut on web (microphone settings
-    // in Chromium-family browsers also expose the camera toggle right
-    // next to it, so we send the user there as the closest analogue).
-    const { openMicrophoneSettings, openAppSettings: openSettings } = await import(
-      "@/lib/startup-permissions"
-    );
-    const isNative = (await import("@capacitor/core")).Capacitor.isNativePlatform();
-    if (isNative) {
-      await openSettings();
-    } else {
-      await openMicrophoneSettings();
-    }
-  };
-
-  const openNotifications = async () => {
-    const { openNotificationSettings } = await import("@/lib/startup-permissions");
-    await openNotificationSettings();
-  };
-
-  const renderStatus = (
-    state: "granted" | "denied" | "prompt" | "unavailable",
-  ) => {
-    const map: Record<string, { variant: "default" | "destructive" | "secondary" | "outline"; label: string }> = {
-      granted: { variant: "default", label: t("permissions.gate.status.granted") },
-      denied: { variant: "destructive", label: t("permissions.gate.status.denied") },
-      prompt: { variant: "secondary", label: t("permissions.gate.status.prompt") },
-      unavailable: { variant: "outline", label: t("permissions.gate.status.unavailable") },
-    };
-    const meta = map[state];
-    return (
-      <Badge variant={meta.variant} data-testid={`status-${state}`}>
-        {meta.label}
-      </Badge>
-    );
-  };
-
-  const Row = ({
-    icon: Icon,
-    title,
-    helper,
-    state,
-    extra,
-    testId,
-  }: {
-    icon: typeof Mic;
-    title: string;
-    helper: string;
-    state: "granted" | "denied" | "prompt" | "unavailable";
-    extra?: React.ReactNode;
-    testId: string;
-  }) => (
-    <div
-      className="flex flex-col gap-2 rounded-xl border border-border/60 p-4 sm:flex-row sm:items-center sm:justify-between"
-      data-testid={testId}
-    >
-      <div className="flex items-start gap-3">
-        <div className="rounded-full bg-muted p-2 text-muted-foreground">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div className="space-y-1">
-          <div className="text-sm font-medium leading-tight">{title}</div>
-          <div className="text-xs text-muted-foreground leading-snug">{helper}</div>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 self-start sm:self-center">
-        {renderStatus(state)}
-        {extra}
-      </div>
-    </div>
-  );
 
   return (
     <Card data-testid="card-permissions" dir={dir}>
@@ -2833,83 +2781,65 @@ function PermissionsSection() {
         <CardDescription>{t("settings.permissions.description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <Row
-          icon={Mic}
-          title={t("settings.permissions.microphone.title")}
-          helper={t("settings.permissions.microphone.helper")}
-          state={summary?.microphone ?? "unavailable"}
-          extra={
-            summary?.microphone !== "granted" ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={openMicrophone}
-                data-testid="btn-perm-open-microphone"
-              >
-                {t("permissions.gate.openSettings")}
-              </Button>
-            ) : null
-          }
-          testId="row-perm-microphone"
-        />
-        <Row
-          icon={Camera}
-          title={t("settings.permissions.camera.title")}
-          helper={t("settings.permissions.camera.helper")}
-          state={summary?.camera ?? "unavailable"}
-          extra={
-            summary?.camera !== "granted" ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={openCamera}
-                data-testid="btn-perm-open-camera"
-              >
-                {t("permissions.gate.openSettings")}
-              </Button>
-            ) : null
-          }
-          testId="row-perm-camera"
-        />
-        <Row
-          icon={Bell}
-          title={t("settings.permissions.notifications.title")}
-          helper={t("settings.permissions.notifications.helper")}
-          state={summary?.notifications ?? "unavailable"}
-          extra={
-            summary?.notifications !== "granted" ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={openNotifications}
-                data-testid="btn-perm-open-notifications"
-              >
-                {t("permissions.gate.openSettings")}
-              </Button>
-            ) : null
-          }
-          testId="row-perm-notifications"
-        />
-        <Row
-          icon={Layers}
-          title={t("settings.permissions.overlay.title")}
-          helper={t("settings.permissions.overlay.helper")}
-          state={summary?.overlay ?? "unavailable"}
-          extra={
-            summary?.overlay === "denied" ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={openOverlaySettings}
-                disabled={opening === "overlay"}
-                data-testid="btn-perm-open-overlay"
-              >
-                {t("settings.permissions.overlay.openSettings")}
-              </Button>
-            ) : null
-          }
-          testId="row-perm-overlay"
-        />
+        {showIOSPwaHint ? (
+          <div
+            className="flex items-start gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs text-blue-700 dark:text-blue-300"
+            data-testid="hint-ios-pwa"
+          >
+            <PhoneIcon className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="space-y-1">
+              <div className="font-semibold">{t("settings.permissions.iosPwa.title")}</div>
+              <div>{t("settings.permissions.iosPwa.body")}</div>
+            </div>
+          </div>
+        ) : null}
+
+        {PERMISSION_CATALOGUE.map((entry) => {
+          const rawState = entry.getState(summary);
+          // On iOS Safari (not standalone) the web Notification API
+          // exists but is non-functional — calling Notification.request-
+          // Permission() resolves to "denied" silently. Force the row
+          // into "unavailable" so we render the muted hint and the
+          // top-of-section install card, instead of a doomed Allow
+          // button. The Settings deep-link is also useless in this
+          // environment because the toggle simply isn't there.
+          const state =
+            showIOSPwaHint && entry.id === "notifications"
+              ? ("unavailable" as const)
+              : rawState;
+          const isOverlay = entry.id === "overlay";
+          const allowEnabled =
+            entry.request !== undefined &&
+            !(showIOSPwaHint && entry.id === "notifications");
+          return (
+            <PermissionRow
+              key={entry.id}
+              id={entry.id}
+              icon={entry.icon}
+              title={t(entry.titleKey)}
+              helper={t(entry.helperKey)}
+              state={state}
+              busy={busyId === entry.id}
+              onAllow={
+                allowEnabled
+                  ? () => void handleAllow(entry.id, entry.request)
+                  : undefined
+              }
+              onOpenSettings={() => void handleOpenSettings(entry.id, entry.openSettings)}
+              extraHint={
+                isOverlay && state === "denied" ? (
+                  <div
+                    className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300"
+                    data-testid="hint-overlay-disabled"
+                  >
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{t("permissions.gate.overlayHint")}</span>
+                  </div>
+                ) : null
+              }
+            />
+          );
+        })}
 
         <div className="flex flex-wrap items-center gap-2 pt-2">
           <Button
@@ -2926,21 +2856,12 @@ function PermissionsSection() {
             size="sm"
             variant="outline"
             onClick={openAppSettings}
-            disabled={opening === "app"}
+            disabled={openingApp}
             data-testid="btn-perm-open-app"
           >
             {t("permissions.gate.openSettings")}
           </Button>
         </div>
-        {summary?.overlay === "denied" ? (
-          <div
-            className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300"
-            data-testid="hint-overlay-disabled"
-          >
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{t("permissions.gate.overlayHint")}</span>
-          </div>
-        ) : null}
       </CardContent>
     </Card>
   );

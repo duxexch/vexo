@@ -2412,6 +2412,11 @@ const ar: Record<string, string> = {
   'settings.permissions.banner.body': 'تعمل مكالمات الأصدقاء بأفضل شكل عند تفعيل الميكروفون والكاميرا وإذن الظهور فوق التطبيقات. افتح الإعدادات لإصلاح ذلك بضغطات قليلة.',
   'settings.permissions.banner.action': 'مراجعة الأذونات',
   'settings.permissions.banner.dismiss': 'ليس الآن',
+  'settings.permissions.cta.allow': 'السماح',
+  'settings.permissions.cta.openSettings': 'فتح الإعدادات',
+  'settings.permissions.cta.unavailable': 'غير مدعوم على هذا الجهاز',
+  'settings.permissions.iosPwa.title': 'ثبّت التطبيق لتفعيل الإشعارات',
+  'settings.permissions.iosPwa.body': 'افتح أيقونة المشاركة في Safari ثم اضغط "أضف إلى الشاشة الرئيسية". الإشعارات وبعض الميزات المتقدمة لا تعمل إلا بعد تثبيت التطبيق.',
 };
 
 export default ar;

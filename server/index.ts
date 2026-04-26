@@ -326,8 +326,30 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   // Control referrer information
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
-  // Permissions policy - allow same-origin microphone usage for in-app voice features.
-  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(self), camera=(), payment=(), usb=(), interest-cohort=()");
+  // Permissions policy — allow same-origin access to the device features
+  // the app actually uses (mic + camera for friend calls, fullscreen for
+  // game players, clipboard-write for share / copy buttons). Anything
+  // not listed here is implicitly disabled, so this header doubles as a
+  // self-imposed allow-list.
+  //
+  // Task #143: previously `camera=()` blocked the camera entirely,
+  // which silently broke video calls inside the WebView even though
+  // the platform-level permission was granted. The fix is to allow
+  // same-origin access ("self") for every API the codebase invokes.
+  res.setHeader(
+    "Permissions-Policy",
+    [
+      "geolocation=()",
+      "microphone=(self)",
+      "camera=(self)",
+      "display-capture=(self)",
+      "fullscreen=(self)",
+      "clipboard-write=(self)",
+      "payment=()",
+      "usb=()",
+      "interest-cohort=()",
+    ].join(", "),
+  );
 
   // Content Security Policy (CSP) - prevent XSS and injection attacks
   if (isProduction) {
