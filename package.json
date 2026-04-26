@@ -54,6 +54,7 @@
     "quality:smoke:dm-notifications": "tsx scripts/smoke-dm-notifications.ts",
     "quality:smoke:dm-scroll-anchor": "tsx scripts/smoke-dm-scroll-anchor.ts",
     "quality:smoke:dm-history-pagination": "tsx scripts/smoke-dm-history-pagination.ts",
+    "quality:smoke:dm-load-older-strip": "tsx scripts/smoke-dm-load-older-strip.ts",
     "quality:smoke:tournament-currency": "node scripts/smoke-tournament-currency-e2e.mjs",
     "quality:smoke:tournament-wallet-display": "tsx scripts/smoke-tournament-wallet-display.ts",
     "quality:smoke:tournament-insufficient-error": "tsx scripts/smoke-tournament-insufficient-error.ts",
