@@ -186,6 +186,165 @@ describe("Task #212: capacitor.config.ts server.allowNavigation OAuth domains", 
   }
 });
 
+describe("Task #213: capacitor.config.ts SocialLogin.providers contract", () => {
+  // The native social-login plugin (`@capgo/capacitor-social-login`,
+  // imported and `SocialLogin.initialize()`-d in client/src/pages/login.tsx)
+  // only initialises the providers that are set to `true` here. If the
+  // login page renders a provider button whose toggle below is `false`,
+  // tapping it on iOS / Android is a SILENT NO-OP — the plugin never
+  // loaded the SDK for that provider, so there is nothing to call. The
+  // web build cannot detect this drift at compile time because
+  // capacitor.config.ts is plain TypeScript data, not part of the React
+  // bundle's type graph.
+  //
+  // Each entry below pins one provider's expected boolean and explains
+  // what the corresponding state of client/src/pages/login.tsx must be.
+  // If you flip a provider here, you MUST also update the login page in
+  // the same change (and update this contract test). If you add or
+  // remove a button on the login page, you MUST also update the
+  // corresponding entry here. That is the entire point of the contract.
+  type ProviderExpectation = {
+    provider: "google" | "facebook" | "apple" | "twitter";
+    expected: boolean;
+    why: string;
+  };
+
+  const PROVIDER_EXPECTATIONS: ProviderExpectation[] = [
+    {
+      provider: "google",
+      expected: true,
+      why:
+        "Google is the platform's primary OAuth provider. The login page " +
+        "(client/src/pages/login.tsx) reads `authSettings.googleLoginEnabled` " +
+        "and renders a Google button when admins enable it; the native " +
+        "plugin must therefore initialise Google so taps on iOS / Android " +
+        "actually open the Google sign-in flow instead of silently no-op-ing.",
+    },
+    {
+      provider: "facebook",
+      expected: false,
+      why:
+        "Facebook native sign-in is not currently shipped. The login page " +
+        "(client/src/pages/login.tsx) does check `authSettings.facebookLoginEnabled` " +
+        "but no Facebook OAuth app is wired through the @capgo/capacitor-social-login " +
+        "plugin yet — flipping this to `true` without first registering the " +
+        "Facebook app id and adding the SDK config to iOS Info.plist + " +
+        "android/app/build.gradle would crash plugin init at first launch on " +
+        "real phones with no warning during the web build.",
+    },
+    {
+      provider: "apple",
+      expected: false,
+      why:
+        "Apple Sign-In is not currently shipped. The login page " +
+        "(client/src/pages/login.tsx) has no `appleLoginEnabled` flag in " +
+        "DEFAULT_AUTH_SETTINGS and no `case \"apple\"` branch in " +
+        "isSocialPlatformEnabledInAuthSettings, so no Apple button can render. " +
+        "Flipping this to `true` without first adding the Apple capability in " +
+        "Xcode and a server-side Apple OAuth client would make the plugin " +
+        "advertise Apple sign-in to iOS at init time and Apple's review team " +
+        "rejects builds that advertise capabilities they don't actually use.",
+    },
+    {
+      provider: "twitter",
+      expected: false,
+      why:
+        "Twitter / X native sign-in is not currently shipped. The login page " +
+        "(client/src/pages/login.tsx) checks `authSettings.twitterLoginEnabled` " +
+        "but no X app id / consumer secret is wired through the native plugin " +
+        "yet — flipping this to `true` would make the plugin try to initialise " +
+        "the X SDK with empty credentials and crash plugin init on real phones. " +
+        "When you do wire it, also keep `api.twitter.com` in `server.allowNavigation` " +
+        "(already pinned by Task #212 above).",
+    },
+  ];
+
+  function readSocialLoginProvidersBlock(): string {
+    // pluginBlock() can't be used for SocialLogin because the block has
+    // a nested `providers: { … }` object and the helper's lazy regex
+    // stops at the FIRST `\n}` it sees — i.e. the inner closing brace.
+    // Match the providers map directly off the full source instead.
+    const source = readCapacitorConfigSource();
+    const match = source.match(
+      /SocialLogin:\s*{[\s\S]*?providers:\s*{([\s\S]*?)\n\s*}/,
+    );
+    expect(
+      match,
+      "SocialLogin plugin is missing a `providers: { … }` map. The native " +
+        "@capgo/capacitor-social-login plugin (imported in client/src/pages/login.tsx) " +
+        "uses this map to decide which provider SDKs to initialise — without it, " +
+        "every social login button on the page is a no-op on real phones.",
+    ).not.toBeNull();
+    return match![1];
+  }
+
+  it("declares the SocialLogin plugin block at all", () => {
+    // Sanity check — if the SocialLogin block ever gets deleted from
+    // capacitor.config.ts, every per-provider assertion below would
+    // throw with a noisy "missing plugin block" error from
+    // pluginBlock(). Failing fast with a clearer message here.
+    const source = readCapacitorConfigSource();
+    expect(
+      source,
+      "capacitor.config.ts is missing the `SocialLogin: { providers: { … } }` block. " +
+        "client/src/pages/login.tsx imports @capgo/capacitor-social-login and calls " +
+        "SocialLogin.initialize() / SocialLogin.login() unconditionally; without " +
+        "this config block the plugin will boot with NO providers and every social " +
+        "login button on iOS / Android becomes a silent no-op.",
+    ).toMatch(/SocialLogin:\s*{[\s\S]*?providers:\s*{/);
+  });
+
+  it("rejects unknown SocialLogin.providers keys (catch-all for new providers)", () => {
+    // The plugin's TypeScript types accept any string key, so a future
+    // refactor could add e.g. `discord: true` here without anyone
+    // remembering to also wire client/src/pages/login.tsx, the
+    // server-side OAuth credentials, or the iOS / Android native SDK
+    // config. Force an explicit decision: every key in the providers
+    // map must appear in PROVIDER_EXPECTATIONS above.
+    const block = readSocialLoginProvidersBlock();
+    const knownKeys = new Set(PROVIDER_EXPECTATIONS.map((p) => p.provider));
+    const allKeys = Array.from(block.matchAll(/\b([a-zA-Z]+)\s*:\s*(?:true|false)\b/g)).map(
+      (m) => m[1],
+    );
+    const unknown = allKeys.filter((k) => !knownKeys.has(k as never));
+    expect(
+      unknown,
+      `SocialLogin.providers contains unknown keys: ${unknown.join(", ")}. ` +
+        "Add each new provider to PROVIDER_EXPECTATIONS in this file with its " +
+        "expected boolean and a 'why' string that documents the corresponding " +
+        "state of client/src/pages/login.tsx (button presence, AuthSettings flag, " +
+        "switch case in isSocialPlatformEnabledInAuthSettings) and the native " +
+        "config it depends on (Info.plist on iOS, build.gradle on Android).",
+    ).toEqual([]);
+  });
+
+  for (const { provider, expected, why } of PROVIDER_EXPECTATIONS) {
+    it(`pins SocialLogin.providers.${provider} = ${expected}`, () => {
+      const block = readSocialLoginProvidersBlock();
+      // Match `provider: true` or `provider: false` (with optional
+      // trailing comma / whitespace) so partial substrings of another
+      // value can't satisfy us.
+      const entryRe = new RegExp(`\\b${provider}\\s*:\\s*(true|false)\\b`);
+      const match = block.match(entryRe);
+      expect(
+        match,
+        `SocialLogin.providers.${provider} is missing entirely. ${why} ` +
+          "Flipping a provider on or off here without keeping client/src/pages/login.tsx " +
+          "in sync is the regression this contract test prevents.",
+      ).not.toBeNull();
+      const actual = match![1] === "true";
+      expect(
+        actual,
+        `SocialLogin.providers.${provider} drifted to ${actual} (expected ${expected}). ${why} ` +
+          "If you intentionally flipped this toggle, update " +
+          "client/src/pages/login.tsx in the same change (add/remove the provider's " +
+          "AuthSettings flag and switch case) and update the expectation in this " +
+          "contract test (capacitor-config-contract.test.ts).",
+      ).toBe(expected);
+    });
+  }
+});
+
 describe("Task #200: capacitor.config.ts ios.scheme contract", () => {
   it("pins ios.scheme to 'vexapp' — every OAuth provider calls back into vexapp:// on iOS", () => {
     const source = readCapacitorConfigSource();
