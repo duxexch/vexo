@@ -1523,23 +1523,32 @@ function TournamentDetailView({ id }: { id: string }) {
             >
               {en ? 'Cancel' : 'إلغاء'}
             </Button>
-            <Button
-              type="button"
-              onClick={() =>
-                registerMutation.mutate(effectiveSelectedCurrency)
-              }
-              disabled={
-                registerMutation.isPending
-                || (isWalletSummaryLoading && !walletSummary)
-                || (isWalletSummaryError && !walletSummary)
-                || !selectedHasEnough
-              }
-              className="bg-gradient-to-r from-green-500 to-emerald-600"
-              data-testid="tournament-detail-register-confirm"
-            >
-              <Swords className="w-4 h-4 me-2" />
-              {en ? 'Confirm Register' : 'تأكيد التسجيل'}
-            </Button>
+            {/*
+              Hide the Confirm CTA in the wallet-summary error and
+              empty states — those branches already render their own
+              recovery actions (Retry / Use primary wallet), so a
+              second always-disabled Confirm button would just create
+              mixed signals.
+            */}
+            {pickerCurrencies.length > 0
+              && !(isWalletSummaryError && !walletSummary) && (
+              <Button
+                type="button"
+                onClick={() =>
+                  registerMutation.mutate(effectiveSelectedCurrency)
+                }
+                disabled={
+                  registerMutation.isPending
+                  || (isWalletSummaryLoading && !walletSummary)
+                  || !selectedHasEnough
+                }
+                className="bg-gradient-to-r from-green-500 to-emerald-600"
+                data-testid="tournament-detail-register-confirm"
+              >
+                <Swords className="w-4 h-4 me-2" />
+                {en ? 'Confirm Register' : 'تأكيد التسجيل'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
