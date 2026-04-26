@@ -8,8 +8,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
+import { normalizeCurrencyCode } from "@/lib/wallet-currency";
 import { useToast } from "@/hooks/use-toast";
 import { BackButton } from "@/components/BackButton";
 import { GameConfigIcon } from "@/components/GameConfigIcon";
@@ -691,15 +702,95 @@ function TournamentDetailView({ id }: { id: string }) {
     },
   });
 
+  // Multi-currency users may pay tournament entry from any allowed
+  // sub-wallet. Compute the canonical allowed list (primary first) so we
+  // can decide whether to surface a wallet picker. Single-currency users
+  // continue to see the plain Register button untouched.
+  const userPrimaryCurrency = normalizeCurrencyCode(user?.balanceCurrency) || "USD";
+  const userAllowedCurrencies = useMemo<string[]>(() => {
+    if (!user) return [];
+    if (!user.multiCurrencyEnabled) return [userPrimaryCurrency];
+    const out: string[] = [userPrimaryCurrency];
+    const seen = new Set<string>([userPrimaryCurrency]);
+    const allowed = Array.isArray(user.allowedCurrencies) ? user.allowedCurrencies : [];
+    for (const raw of allowed) {
+      const code = normalizeCurrencyCode(raw);
+      if (!code || seen.has(code)) continue;
+      seen.add(code);
+      out.push(code);
+    }
+    return out;
+  }, [user, userPrimaryCurrency]);
+
+  // Picker only applies when:
+  //   - Tournament is a USD/cash tournament (not VXC project currency)
+  //   - The user is multi-currency enabled
+  //   - The user has more than one allowed currency to pick from
+  // The pre-tournament check `canRegister && safeEntryFee > 0` is applied
+  // at the call site below.
+  const isCashTournament = tournamentCurrency !== 'project';
+  const eligibleForPicker = isCashTournament
+    && Boolean(user?.multiCurrencyEnabled)
+    && userAllowedCurrencies.length > 1;
+
+  const [walletPickerOpen, setWalletPickerOpen] = useState(false);
+  const [selectedWalletCurrency, setSelectedWalletCurrency] = useState<string | null>(null);
+
+  type WalletEntry = {
+    currency: string;
+    balance: string | number | null;
+    role: 'primary' | 'sub';
+    isPrimary: boolean;
+    isAllowed: boolean;
+  };
+  type WalletSummary = {
+    primaryCurrency: string;
+    multiCurrencyEnabled: boolean;
+    allowedCurrencies: string[];
+    wallets: WalletEntry[];
+  };
+
+  const {
+    data: walletSummary,
+    isLoading: isWalletSummaryLoading,
+    isError: isWalletSummaryError,
+  } = useQuery<WalletSummary>({
+    queryKey: ['/api/wallet/currency-wallets'],
+    enabled: eligibleForPicker,
+  });
+
+  // Per-wallet balances for the picker dialog (only populated when
+  // `eligibleForPicker` is true). Map of currency code -> numeric balance.
+  // Declared up here (not after the loading/error early returns below) so
+  // the hook order stays stable across all renders.
+  const walletBalanceMap = useMemo<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    if (!walletSummary) return map;
+    for (const w of walletSummary.wallets) {
+      const code = normalizeCurrencyCode(w.currency);
+      if (!code) continue;
+      const parsed = Number.parseFloat(String(w.balance ?? '0'));
+      map[code] = Number.isFinite(parsed) ? parsed : 0;
+    }
+    return map;
+  }, [walletSummary]);
+
   const registerMutation = useMutation({
-    mutationFn: () => apiRequest('POST', `/api/tournaments/${id}/register`),
+    mutationFn: (walletCurrency?: string | null) =>
+      apiRequest(
+        'POST',
+        `/api/tournaments/${id}/register`,
+        walletCurrency ? { walletCurrency } : undefined,
+      ),
     onSuccess: async () => {
       toast({ title: en ? 'Registered!' : 'تم التسجيل!' });
+      setWalletPickerOpen(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [`/api/tournaments/${id}`] }),
         queryClient.invalidateQueries({ queryKey: ['/api/tournaments'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/user'] }),
         queryClient.invalidateQueries({ queryKey: ['/api/project-currency/wallet'] }),
+        queryClient.invalidateQueries({ queryKey: ['/api/wallet/currency-wallets'] }),
       ]);
     },
     onError: (err: Error) => {
@@ -837,6 +928,17 @@ function TournamentDetailView({ id }: { id: string }) {
   const entryFeeText = formatTournamentAmountText(tournament.entryFee, tournament.currency);
   const insufficientBalance = canRegister && safeEntryFee > 0 && balanceLoaded && !hasEnoughBalance;
   const blockRegister = canRegister && safeEntryFee > 0 && (!balanceLoaded || !hasEnoughBalance);
+  // Multi-currency picker users may pay from any allowed wallet, so the
+  // primary-balance derived `blockRegister` / `insufficientBalance` flags
+  // shouldn't gate the Register CTA — the picker dialog handles per-wallet
+  // sufficiency itself.
+  const showWalletPicker = eligibleForPicker && canRegister && safeEntryFee > 0;
+  const renderInsufficientBalance = !showWalletPicker && insufficientBalance;
+  const pickerCurrencies = showWalletPicker ? userAllowedCurrencies : [];
+  const effectiveSelectedCurrency = selectedWalletCurrency
+    ?? userPrimaryCurrency;
+  const selectedWalletBalance = walletBalanceMap[effectiveSelectedCurrency] ?? 0;
+  const selectedHasEnough = selectedWalletBalance + 1e-9 >= safeEntryFee;
 
   // Build bracket data by round
   const rounds: Record<number, TournamentMatch[]> = {};
@@ -1140,9 +1242,9 @@ function TournamentDetailView({ id }: { id: string }) {
                       : 'لم يعد التسجيل مفتوحاً للاعبين جدد.'}
                   </p>
                 )}
-                {(canRegister || canWithdraw) && safeEntryFee > 0 && (
+                {(canRegister || canWithdraw) && safeEntryFee > 0 && !showWalletPicker && (
                   <p
-                    className={`flex items-center gap-1.5 text-sm font-medium ${insufficientBalance || balanceErrored ? 'text-destructive' : 'text-muted-foreground'}`}
+                    className={`flex items-center gap-1.5 text-sm font-medium ${renderInsufficientBalance || balanceErrored ? 'text-destructive' : 'text-muted-foreground'}`}
                     data-testid="tournament-detail-user-balance"
                     data-currency={tournamentCurrency}
                     data-balance-state={balanceErrored ? 'error' : balanceLoading ? 'loading' : 'ready'}
@@ -1153,7 +1255,20 @@ function TournamentDetailView({ id }: { id: string }) {
                     </span>
                   </p>
                 )}
-                {(canRegister || canWithdraw) && insufficientBalance && (
+                {showWalletPicker && (
+                  <p
+                    className="flex items-center gap-1.5 text-sm text-muted-foreground"
+                    data-testid="tournament-detail-wallet-picker-hint"
+                  >
+                    <Wallet className="w-4 h-4" aria-hidden />
+                    <span>
+                      {en
+                        ? 'You can choose which wallet to pay from.'
+                        : 'يمكنك اختيار المحفظة التي تدفع منها.'}
+                    </span>
+                  </p>
+                )}
+                {(canRegister || canWithdraw) && renderInsufficientBalance && (
                   <p
                     className="text-xs text-destructive"
                     data-testid="tournament-detail-insufficient-balance"
@@ -1176,10 +1291,20 @@ function TournamentDetailView({ id }: { id: string }) {
               </div>
               {canRegister ? (
                 <Button
-                  onClick={() => registerMutation.mutate()}
-                  disabled={registerMutation.isPending || blockRegister}
+                  onClick={() => {
+                    if (showWalletPicker) {
+                      // Default selection: primary currency. Picker
+                      // confirm sends the selected wallet code through.
+                      setSelectedWalletCurrency((current) => current ?? userPrimaryCurrency);
+                      setWalletPickerOpen(true);
+                      return;
+                    }
+                    registerMutation.mutate(undefined);
+                  }}
+                  disabled={registerMutation.isPending || (!showWalletPicker && blockRegister)}
                   className="w-full sm:w-auto min-h-[44px] bg-gradient-to-r from-green-500 to-emerald-600"
                   data-testid="tournament-detail-register"
+                  data-picker={showWalletPicker ? 'true' : 'false'}
                 >
                   <Swords className="w-4 h-4 me-2" />
                   {en ? 'Register' : 'تسجيل'}
@@ -1209,6 +1334,135 @@ function TournamentDetailView({ id }: { id: string }) {
           </Card>
         );
       })()}
+
+      <Dialog
+        open={walletPickerOpen}
+        onOpenChange={(open) => {
+          if (registerMutation.isPending) return;
+          setWalletPickerOpen(open);
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          data-testid="tournament-detail-register-picker"
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {en ? 'Choose a wallet' : 'اختر محفظة'}
+            </DialogTitle>
+            <DialogDescription>
+              {en
+                ? `Pick which wallet pays the ${entryFeeText} entry fee.`
+                : `اختر المحفظة التي ستُدفع منها رسوم الدخول ${entryFeeText}.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {isWalletSummaryLoading && !walletSummary ? (
+            <div
+              className="py-6 text-center text-sm text-muted-foreground"
+              data-testid="tournament-detail-wallet-picker-loading"
+            >
+              {en ? 'Loading wallets…' : 'جاري تحميل المحافظ…'}
+            </div>
+          ) : isWalletSummaryError ? (
+            <div
+              className="py-6 text-center text-sm text-destructive"
+              data-testid="tournament-detail-wallet-picker-error"
+            >
+              {en
+                ? "Couldn't load your wallets. Try again."
+                : 'تعذر تحميل محافظك. حاول مرة أخرى.'}
+            </div>
+          ) : (
+            <RadioGroup
+              value={effectiveSelectedCurrency}
+              onValueChange={(value) => setSelectedWalletCurrency(value)}
+              className="space-y-2"
+            >
+              {pickerCurrencies.map((code) => {
+                const balance = walletBalanceMap[code] ?? 0;
+                const enough = balance + 1e-9 >= safeEntryFee;
+                const isPrimary = code === userPrimaryCurrency;
+                const balanceText = formatTournamentAmountText(
+                  balance.toFixed(2),
+                  'usd',
+                ).replace('$', `${code} `);
+                const optionId = `wallet-option-${code}`;
+                return (
+                  <Label
+                    key={code}
+                    htmlFor={optionId}
+                    className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                      effectiveSelectedCurrency === code
+                        ? 'border-primary bg-primary/5'
+                        : 'border-muted hover:border-muted-foreground/40'
+                    } ${!enough ? 'opacity-80' : ''}`}
+                    data-testid={`tournament-detail-wallet-option-${code}`}
+                    data-currency={code}
+                    data-has-enough={enough ? 'true' : 'false'}
+                    data-primary={isPrimary ? 'true' : 'false'}
+                  >
+                    <RadioGroupItem
+                      id={optionId}
+                      value={code}
+                      disabled={!enough}
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{code}</span>
+                        {isPrimary && (
+                          <Badge variant="outline" className="text-xs">
+                            {en ? 'Primary' : 'الأساسية'}
+                          </Badge>
+                        )}
+                      </div>
+                      <div
+                        className={`text-xs ${enough ? 'text-muted-foreground' : 'text-destructive'}`}
+                      >
+                        {en ? `Balance: ${balanceText}` : `الرصيد: ${balanceText}`}
+                        {!enough && (
+                          <span className="ms-1">
+                            {en ? '(not enough)' : '(غير كافٍ)'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Label>
+                );
+              })}
+            </RadioGroup>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setWalletPickerOpen(false)}
+              disabled={registerMutation.isPending}
+              data-testid="tournament-detail-register-cancel"
+            >
+              {en ? 'Cancel' : 'إلغاء'}
+            </Button>
+            <Button
+              type="button"
+              onClick={() =>
+                registerMutation.mutate(effectiveSelectedCurrency)
+              }
+              disabled={
+                registerMutation.isPending
+                || isWalletSummaryLoading
+                || isWalletSummaryError
+                || !selectedHasEnough
+              }
+              className="bg-gradient-to-r from-green-500 to-emerald-600"
+              data-testid="tournament-detail-register-confirm"
+            >
+              <Swords className="w-4 h-4 me-2" />
+              {en ? 'Confirm Register' : 'تأكيد التسجيل'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Tabs defaultValue={tournament.matches.length > 0 ? "bracket" : "participants"} className="w-full">
         <TabsList className="grid h-auto w-full grid-cols-2 gap-1">
