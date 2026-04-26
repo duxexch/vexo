@@ -760,13 +760,14 @@ export const transactions = pgTable("transactions", {
   // Admin transactions screens (`/api/admin/transactions` listing + pending
   // tab) only ever look at type IN ('deposit','withdrawal'). A partial index
   // on that subset is dramatically smaller than a full-table composite and
-  // serves the common access patterns:
-  //   - status filtered  → exact match on the leading column, then walk
-  //     created_at in order (no separate sort needed).
-  //   - status not filtered → planner can still use it ordered by status,
-  //     created_at within the deposit/withdrawal subset.
-  // Covers both the "all transactions" list (with optional status filter,
-  // sorted DESC) and the pending tab (status='pending', sorted ASC).
+  // serves the dominant access pattern: status filtered → exact match on the
+  // leading column, then walk created_at in order (no separate sort needed).
+  // When status is NOT filtered the index still prunes the heap to the
+  // deposit/withdrawal subset (via bitmap scan), but Postgres still has to
+  // sort the result by created_at because the leading key is status — that
+  // path is acceptable only because the partial WHERE keeps the subset
+  // small. Pending-tab queries (status='pending') are also handled by the
+  // dedicated `idx_transactions_pending_created` partial index below.
   index("idx_transactions_admin_list")
     .on(table.status, table.createdAt)
     .where(sql`type IN ('deposit','withdrawal')`),
