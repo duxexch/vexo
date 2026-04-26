@@ -268,15 +268,39 @@ export async function adjustUserCurrencyBalance(
     if (!options.allowCreate) {
       throw new Error(`No ${normalizedCurrency} sub-wallet exists for this user`);
     }
-    [wallet] = await tx.insert(userCurrencyWallets).values({
-      userId,
-      currencyCode: normalizedCurrency,
-      balance: "0.00",
-      totalDeposited: "0.00",
-      totalWithdrawn: "0.00",
-    }).returning();
-    if (!wallet) {
-      throw new Error("Failed to create sub-wallet row");
+    // Two concurrent first-time credits (Task #135) would both miss the
+    // SELECT above and race to INSERT here. The unique index
+    // (userId, currencyCode) on `user_currency_wallets` would then make
+    // the loser raise a confusing constraint error to the user instead of
+    // merging both credits onto the same row.
+    //
+    // ON CONFLICT DO NOTHING lets the loser quietly observe the partner's
+    // row, after which we re-read it with FOR UPDATE and apply our own
+    // credit on top of whatever balance the partner just committed.
+    const [inserted] = await tx
+      .insert(userCurrencyWallets)
+      .values({
+        userId,
+        currencyCode: normalizedCurrency,
+        balance: "0.00",
+        totalDeposited: "0.00",
+        totalWithdrawn: "0.00",
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (inserted) {
+      wallet = inserted;
+    } else {
+      // Lost the race against a concurrent first-time credit. Re-read with
+      // FOR UPDATE so we serialize behind the winning tx and credit on top
+      // of its committed balance.
+      [wallet] = await tx.select().from(userCurrencyWallets)
+        .where(and(eq(userCurrencyWallets.userId, userId), eq(userCurrencyWallets.currencyCode, normalizedCurrency)))
+        .for("update");
+      if (!wallet) {
+        throw new Error(`Failed to acquire ${normalizedCurrency} sub-wallet row after conflict`);
+      }
     }
   }
 

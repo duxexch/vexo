@@ -605,6 +605,117 @@ describe("adjustUserCurrencyBalance — sub-wallet path (multi-currency)", () =>
     expect(updateCall?.whereParams.length).toBeGreaterThan(0);
     expect(String(updateCall?.whereParams[0])).toMatch(/wallet-user_currency_wallets/);
   });
+
+  it("Task #135: when ON CONFLICT DO NOTHING returns no row (lost the race), re-reads the partner's row and credits on top", async () => {
+    // Hand-rolled tx mock that simulates the loser of a concurrent
+    // first-time credit:
+    //   1) initial SELECT FOR UPDATE on user_currency_wallets -> []
+    //   2) INSERT ... ON CONFLICT DO NOTHING RETURNING * -> []
+    //      (partner tx already committed the row)
+    //   3) follow-up SELECT FOR UPDATE -> the partner's row, balance "20.00"
+    //   4) UPDATE user_currency_wallets balance -> "50.00" (20 + 30)
+    let subWalletSelectCalls = 0;
+    const updates: Array<{ table: string; set: Record<string, unknown> }> = [];
+    let insertOnConflictReturningCalled = false;
+    let plainInsertReturningCalled = false;
+
+    const tx: any = {
+      select() {
+        let currentTable = "";
+        const chain: any = {
+          from(table: unknown) {
+            currentTable = tableName(table);
+            return chain;
+          },
+          where(_p: unknown) { return chain; },
+          for(_mode: string) { return chain; },
+          then(resolve: (rows: unknown[]) => void) {
+            if (currentTable === "users") {
+              resolve([{
+                id: "u-race",
+                balance: "0",
+                balanceCurrency: "USD",
+                multiCurrencyEnabled: true,
+                allowedCurrencies: ["EGP"],
+              }]);
+              return;
+            }
+            if (currentTable === "user_currency_wallets") {
+              subWalletSelectCalls += 1;
+              if (subWalletSelectCalls === 1) {
+                // initial SELECT FOR UPDATE: no row yet
+                resolve([]);
+              } else {
+                // post-conflict re-read: partner's committed row
+                resolve([{
+                  id: "partner-wallet-1",
+                  userId: "u-race",
+                  currencyCode: "EGP",
+                  balance: "20.00",
+                  totalDeposited: "20.00",
+                  totalWithdrawn: "0.00",
+                }]);
+              }
+              return;
+            }
+            resolve([]);
+          },
+        };
+        return chain;
+      },
+      update(table: unknown) {
+        const name = tableName(table);
+        return {
+          set(values: Record<string, unknown>) {
+            return {
+              where(_p: unknown) {
+                updates.push({ table: name, set: values });
+                return Promise.resolve(undefined);
+              },
+            };
+          },
+        };
+      },
+      insert(table: unknown) {
+        const name = tableName(table);
+        return {
+          values(_v: Record<string, unknown>) {
+            return {
+              returning() {
+                plainInsertReturningCalled = true;
+                // Should NOT be hit — helper must use onConflictDoNothing.
+                if (name === "user_currency_wallets") return Promise.resolve([]);
+                return Promise.resolve([]);
+              },
+              onConflictDoNothing() {
+                return {
+                  returning() {
+                    insertOnConflictReturningCalled = true;
+                    // Simulate: partner already inserted -> our INSERT is a no-op
+                    return Promise.resolve([]);
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const result = await adjustUserCurrencyBalance(tx, "u-race", "EGP", 30, { allowCreate: true });
+
+    expect(insertOnConflictReturningCalled).toBe(true);
+    expect(plainInsertReturningCalled).toBe(false);
+    // Two SELECTs against user_currency_wallets: initial + post-conflict re-read.
+    expect(subWalletSelectCalls).toBe(2);
+    // Partner committed 20, we credit 30, final must be 50 (no error raised).
+    expect(result.balanceBefore).toBeCloseTo(20, 2);
+    expect(result.balanceAfter).toBeCloseTo(50, 2);
+    const subWalletUpdate = updates.find((u) => u.table === "user_currency_wallets");
+    expect(subWalletUpdate?.set.balance).toBe("50.00");
+    // Deposit counter merges too: partner's 20 + our 30 = 50.
+    expect(subWalletUpdate?.set.totalDeposited).toBe("50.00");
+  });
 });
 
 describe("adjustUserCurrencyBalance — input validation", () => {
