@@ -345,9 +345,10 @@ afterEach(async () => {
 
 afterAll(async () => {
   // Final sweep in case a test threw before its `afterEach` registered a
-  // row, then close the pool so vitest can exit cleanly.
+  // row. The shared `pool` from `server/db` is intentionally NOT closed
+  // here — other test files in the same worker may import it and would
+  // see a "Cannot use a pool after calling end" failure.
   await cleanup();
-  await pool.end();
 });
 
 // ---------------------------------------------------------------------------
@@ -574,94 +575,241 @@ describe("createP2PTradeAtomic (real DB): escrow debit routing", () => {
 });
 
 // ---------------------------------------------------------------------------
-// P2P trade complete (release credit) — wallet routing
+// FULL P2P LIFECYCLE TESTS
+//
+// These tests start from an EUR offer and walk the trade through
+// `createP2PTradeAtomic` → settle helper, asserting persisted balances on
+// BOTH parties at every hop. They prove `walletCurrency` propagates
+// offer → trade → settlement credit destination end-to-end (not just
+// that each helper, given a pre-seeded trade, routes correctly).
+//
+// `completeP2PTradeAtomic` requires `status='confirmed'` and
+// `resolveP2PDisputedTradeAtomic` requires `status='disputed'`; those
+// state transitions are normally driven by buyer/seller actions
+// (mark-paid, confirm-receipt, open-dispute) that do not move money.
+// To keep the lifecycle test focused on wallet routing and not on those
+// orthogonal status transitions, we advance the status with a single
+// UPDATE between the create call and the settle call.
 // ---------------------------------------------------------------------------
 
-describe("completeP2PTradeAtomic (real DB): release credit routing", () => {
-  it("releases escrow (minus platform fee) into the buyer's EUR sub-wallet when the trade was held in EUR", async () => {
+describe("P2P lifecycle (real DB): create → settle wallet routing end-to-end", () => {
+  it("EUR offer → create → complete: seller EUR debited, buyer EUR credited (escrow − fee), neither primary balance touched", async () => {
     const sellerId = await createUser({
       primary: "USD",
-      initialBalance: "0.00",
+      initialBalance: "500.00",
       multiCurrency: true,
       allowed: ["USD", "EUR"],
+      subWallets: [{ code: "EUR", balance: "200.00" }],
       withTraderProfile: true,
     });
     const buyerId = await createUser({
       primary: "USD",
-      initialBalance: "0.00",
+      initialBalance: "300.00",
       multiCurrency: true,
       allowed: ["USD", "EUR"],
       withTraderProfile: true,
     });
     const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
-    const tradeId = await createTrade({
+
+    // 1) create — escrow debited from seller's EUR wallet
+    const created = await createP2PTradeAtomic({
       offerId,
       buyerId,
       sellerId,
-      status: "confirmed",
-      walletCurrency: "EUR",
-      escrow: "25.00",
-      fee: "0.50",
+      amount: "25.00",
+      fiatAmount: "25.00",
+      price: "1.00",
+      paymentMethod: "bank",
+      platformFee: "0.50",
+      expiresAt: new Date(Date.now() + 60_000),
     });
+    expect(created.success).toBe(true);
+    const tradeId = created.trade!.id;
+    createdTradeIds.add(tradeId);
+    expect(created.trade!.walletCurrency).toBe("EUR");
 
-    const result = await completeP2PTradeAtomic(tradeId, sellerId);
-    expect(result.success).toBe(true);
+    const sellerAfterCreate = await readBalances(sellerId);
+    expect(sellerAfterCreate.subs.EUR).toBe("175.00");
+    expect(sellerAfterCreate.primary).toBe("500.00");
+
+    // Advance status confirmed (normally driven by buyer mark-paid +
+    // seller confirm; orthogonal to wallet routing).
+    await db
+      .update(p2pTrades)
+      .set({ status: "confirmed" })
+      .where(eq(p2pTrades.id, tradeId));
+
+    // 2) complete — release credit lands in buyer's EUR wallet
+    const completed = await completeP2PTradeAtomic(tradeId, sellerId);
+    expect(completed.success).toBe(true);
+
+    const buyerAfterComplete = await readBalances(buyerId);
+    // 25 escrow − 0.50 fee = 24.50 credited to EUR.
+    expect(buyerAfterComplete.subs.EUR).toBe("24.50");
+    // Buyer's primary USD never moved.
+    expect(buyerAfterComplete.primary).toBe("300.00");
+
+    const sellerAfterComplete = await readBalances(sellerId);
+    // Seller's wallets unchanged after release (already paid the escrow).
+    expect(sellerAfterComplete.subs.EUR).toBe("175.00");
+    expect(sellerAfterComplete.primary).toBe("500.00");
+  });
+
+  it("EUR offer → create → cancel: full escrow refunded to seller EUR (primary USD untouched)", async () => {
+    const sellerId = await createUser({
+      primary: "USD",
+      initialBalance: "500.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      subWallets: [{ code: "EUR", balance: "200.00" }],
+      withTraderProfile: true,
+    });
+    const buyerId = await createUser({
+      primary: "USD",
+      initialBalance: "0.00",
+      withTraderProfile: true,
+    });
+    const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
+
+    const created = await createP2PTradeAtomic({
+      offerId,
+      buyerId,
+      sellerId,
+      amount: "25.00",
+      fiatAmount: "25.00",
+      price: "1.00",
+      paymentMethod: "bank",
+      platformFee: "0.50",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    expect(created.success).toBe(true);
+    const tradeId = created.trade!.id;
+    createdTradeIds.add(tradeId);
+
+    const sellerAfterCreate = await readBalances(sellerId);
+    expect(sellerAfterCreate.subs.EUR).toBe("175.00");
+
+    // cancel from pending — no status change needed first.
+    const cancelled = await cancelP2PTradeAtomic(tradeId, sellerId, "test");
+    expect(cancelled.success).toBe(true);
+
+    const sellerAfterCancel = await readBalances(sellerId);
+    // EUR fully refunded back to the starting 200; primary unchanged.
+    expect(sellerAfterCancel.subs.EUR).toBe("200.00");
+    expect(sellerAfterCancel.primary).toBe("500.00");
+  });
+
+  it("EUR offer → create → dispute (seller wins): full escrow returned to seller EUR, no leak to either primary", async () => {
+    const sellerId = await createUser({
+      primary: "USD",
+      initialBalance: "500.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      subWallets: [{ code: "EUR", balance: "200.00" }],
+      withTraderProfile: true,
+    });
+    const buyerId = await createUser({
+      primary: "USD",
+      initialBalance: "300.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      withTraderProfile: true,
+    });
+    const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
+
+    const created = await createP2PTradeAtomic({
+      offerId,
+      buyerId,
+      sellerId,
+      amount: "25.00",
+      fiatAmount: "25.00",
+      price: "1.00",
+      paymentMethod: "bank",
+      platformFee: "0.50",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    expect(created.success).toBe(true);
+    const tradeId = created.trade!.id;
+    createdTradeIds.add(tradeId);
+
+    await db
+      .update(p2pTrades)
+      .set({ status: "disputed" })
+      .where(eq(p2pTrades.id, tradeId));
+
+    const resolved = await resolveP2PDisputedTradeAtomic(
+      tradeId,
+      sellerId,
+      "seller wins",
+    );
+    expect(resolved.success).toBe(true);
+
+    const sellerAfter = await readBalances(sellerId);
+    expect(sellerAfter.subs.EUR).toBe("200.00"); // escrow returned
+    expect(sellerAfter.primary).toBe("500.00");
+    const buyerAfter = await readBalances(buyerId);
+    expect(buyerAfter.primary).toBe("300.00");
+    expect(buyerAfter.subs).toEqual({});
+  });
+
+  it("EUR offer → create → dispute (buyer wins): escrow − fee credited to buyer EUR, no leak to either primary", async () => {
+    const sellerId = await createUser({
+      primary: "USD",
+      initialBalance: "500.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      subWallets: [{ code: "EUR", balance: "200.00" }],
+      withTraderProfile: true,
+    });
+    const buyerId = await createUser({
+      primary: "USD",
+      initialBalance: "300.00",
+      multiCurrency: true,
+      allowed: ["USD", "EUR"],
+      withTraderProfile: true,
+    });
+    const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
+
+    const created = await createP2PTradeAtomic({
+      offerId,
+      buyerId,
+      sellerId,
+      amount: "25.00",
+      fiatAmount: "25.00",
+      price: "1.00",
+      paymentMethod: "bank",
+      platformFee: "0.50",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    expect(created.success).toBe(true);
+    const tradeId = created.trade!.id;
+    createdTradeIds.add(tradeId);
+
+    await db
+      .update(p2pTrades)
+      .set({ status: "disputed" })
+      .where(eq(p2pTrades.id, tradeId));
+
+    const resolved = await resolveP2PDisputedTradeAtomic(
+      tradeId,
+      buyerId,
+      "buyer wins",
+    );
+    expect(resolved.success).toBe(true);
 
     const buyerAfter = await readBalances(buyerId);
-    // Escrow (25) - fee (0.50) = 24.50 credited to the buyer's EUR wallet.
-    expect(buyerAfter.subs.EUR).toBe("24.50");
-    // Buyer's primary USD was NOT touched.
-    expect(buyerAfter.primary).toBe("0.00");
-    // Seller's balances unchanged on completion (escrow already debited at create).
+    expect(buyerAfter.subs.EUR).toBe("24.50"); // 25 − 0.50 fee
+    expect(buyerAfter.primary).toBe("300.00");
     const sellerAfter = await readBalances(sellerId);
-    expect(sellerAfter.primary).toBe("0.00");
-    expect(sellerAfter.subs).toEqual({});
-  });
-});
-
-// ---------------------------------------------------------------------------
-// P2P trade cancel (escrow refund) — wallet routing
-// ---------------------------------------------------------------------------
-
-describe("cancelP2PTradeAtomic (real DB): escrow refund routing", () => {
-  it("refunds the full escrow back to the seller's EUR sub-wallet (NOT primary USD) when the trade was held in EUR", async () => {
-    const sellerId = await createUser({
-      primary: "USD",
-      initialBalance: "0.00",
-      multiCurrency: true,
-      allowed: ["USD", "EUR"],
-      subWallets: [{ code: "EUR", balance: "175.00" }],
-      withTraderProfile: true,
-    });
-    const buyerId = await createUser({
-      primary: "USD",
-      initialBalance: "0.00",
-      withTraderProfile: true,
-    });
-    const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
-    const tradeId = await createTrade({
-      offerId,
-      buyerId,
-      sellerId,
-      status: "pending",
-      walletCurrency: "EUR",
-      escrow: "25.00",
-      fee: "0.50",
-    });
-
-    const result = await cancelP2PTradeAtomic(tradeId, sellerId, "test cancel");
-    expect(result.success).toBe(true);
-
-    const sellerAfter = await readBalances(sellerId);
-    // EUR refunded 175 + 25 = 200; primary USD untouched.
-    expect(sellerAfter.subs.EUR).toBe("200.00");
-    expect(sellerAfter.primary).toBe("0.00");
+    // Seller already debited at create; resolve shouldn't return anything.
+    expect(sellerAfter.subs.EUR).toBe("175.00");
+    expect(sellerAfter.primary).toBe("500.00");
   });
 
-  it("regression: a legacy null-wallet trade refunds escrow through the seller's primary balance", async () => {
+  it("regression (legacy null-wallet lifecycle): create → cancel refunds escrow through the seller's primary balance", async () => {
     const sellerId = await createUser({
       primary: "USD",
-      initialBalance: "75.00",
+      initialBalance: "100.00",
       withTraderProfile: true,
     });
     const buyerId = await createUser({
@@ -670,109 +818,29 @@ describe("cancelP2PTradeAtomic (real DB): escrow refund routing", () => {
       withTraderProfile: true,
     });
     const offerId = await createOffer({ sellerId, walletCurrency: null });
-    const tradeId = await createTrade({
+
+    const created = await createP2PTradeAtomic({
       offerId,
       buyerId,
       sellerId,
-      status: "pending",
-      walletCurrency: null,
-      escrow: "25.00",
-      fee: "0.50",
+      amount: "10.00",
+      fiatAmount: "10.00",
+      price: "1.00",
+      paymentMethod: "bank",
+      platformFee: "0.10",
+      expiresAt: new Date(Date.now() + 60_000),
     });
+    expect(created.success).toBe(true);
+    const tradeId = created.trade!.id;
+    createdTradeIds.add(tradeId);
 
-    const result = await cancelP2PTradeAtomic(tradeId, sellerId, "regression");
-    expect(result.success).toBe(true);
+    const cancelled = await cancelP2PTradeAtomic(tradeId, sellerId, "regression");
+    expect(cancelled.success).toBe(true);
 
     const sellerAfter = await readBalances(sellerId);
-    // 75 + 25 = 100 refunded to primary; no sub-wallet created.
+    // Net zero: -10 escrow then +10 refund, all on primary; no sub-wallet
+    // was opportunistically created for a legacy trade.
     expect(sellerAfter.primary).toBe("100.00");
-    expect(sellerAfter.subs).toEqual({});
-  });
-});
-
-// ---------------------------------------------------------------------------
-// P2P trade dispute resolution — wallet routing
-// ---------------------------------------------------------------------------
-
-describe("resolveP2PDisputedTradeAtomic (real DB): dispute payout routing", () => {
-  it("returns full escrow to the seller's EUR sub-wallet (primary USD untouched) when the dispute is resolved in the seller's favor", async () => {
-    const sellerId = await createUser({
-      primary: "USD",
-      initialBalance: "0.00",
-      multiCurrency: true,
-      allowed: ["USD", "EUR"],
-      subWallets: [{ code: "EUR", balance: "175.00" }],
-      withTraderProfile: true,
-    });
-    const buyerId = await createUser({
-      primary: "USD",
-      initialBalance: "0.00",
-      withTraderProfile: true,
-    });
-    const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
-    const tradeId = await createTrade({
-      offerId,
-      buyerId,
-      sellerId,
-      status: "disputed",
-      walletCurrency: "EUR",
-      escrow: "25.00",
-      fee: "0.50",
-    });
-
-    const result = await resolveP2PDisputedTradeAtomic(
-      tradeId,
-      sellerId,
-      "seller wins",
-    );
-    expect(result.success).toBe(true);
-
-    const sellerAfter = await readBalances(sellerId);
-    expect(sellerAfter.subs.EUR).toBe("200.00"); // 175 + full escrow 25
-    expect(sellerAfter.primary).toBe("0.00");
-    const buyerAfter = await readBalances(buyerId);
-    expect(buyerAfter.primary).toBe("0.00");
-    expect(buyerAfter.subs).toEqual({});
-  });
-
-  it("releases escrow (minus platform fee) into the buyer's EUR sub-wallet when the dispute is resolved in the buyer's favor", async () => {
-    const sellerId = await createUser({
-      primary: "USD",
-      initialBalance: "0.00",
-      multiCurrency: true,
-      allowed: ["USD", "EUR"],
-      withTraderProfile: true,
-    });
-    const buyerId = await createUser({
-      primary: "USD",
-      initialBalance: "0.00",
-      multiCurrency: true,
-      allowed: ["USD", "EUR"],
-      withTraderProfile: true,
-    });
-    const offerId = await createOffer({ sellerId, walletCurrency: "EUR" });
-    const tradeId = await createTrade({
-      offerId,
-      buyerId,
-      sellerId,
-      status: "disputed",
-      walletCurrency: "EUR",
-      escrow: "25.00",
-      fee: "0.50",
-    });
-
-    const result = await resolveP2PDisputedTradeAtomic(
-      tradeId,
-      buyerId,
-      "buyer wins",
-    );
-    expect(result.success).toBe(true);
-
-    const buyerAfter = await readBalances(buyerId);
-    expect(buyerAfter.subs.EUR).toBe("24.50");
-    expect(buyerAfter.primary).toBe("0.00");
-    const sellerAfter = await readBalances(sellerId);
-    expect(sellerAfter.primary).toBe("0.00");
     expect(sellerAfter.subs).toEqual({});
   });
 });
