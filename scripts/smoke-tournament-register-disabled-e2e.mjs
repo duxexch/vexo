@@ -342,6 +342,16 @@ async function main() {
                 "rich: balance pill class does not include text-destructive",
                 { class: richBalanceClass });
 
+            // Lock the visible amount too — `formatTournamentAmountText`
+            // for VXC produces `VXC 100.00` for the seeded balance, so a
+            // regression that flips the formatter or wires the wrong
+            // wallet field would surface here.
+            const richBalanceText = (await balancePill.innerText()).trim();
+            const expectedRichAmount = `VXC ${RICH_BALANCE.toFixed(2)}`;
+            assert(richBalanceText.includes(expectedRichAmount),
+                `rich: balance pill text contains "${expectedRichAmount}"`,
+                { text: richBalanceText });
+
             const insufficient = rich.page.locator('[data-testid="tournament-detail-insufficient-balance"]');
             assert(await insufficient.count() === 0,
                 "rich: insufficient-balance paragraph is NOT rendered");
@@ -404,6 +414,15 @@ async function main() {
             assert(typeof poorBalanceClass === "string" && poorBalanceClass.includes("text-destructive"),
                 "poor: balance pill uses destructive color (insufficient state)",
                 { class: poorBalanceClass });
+
+            // Lock the visible amount: a brand-new poor user has no
+            // wallet row and the API zero-defaults to "VXC 0.00", so a
+            // future regression that wires the wrong wallet field or
+            // formatter would show up as a text mismatch here.
+            const poorBalanceText = (await balancePill.innerText()).trim();
+            assert(poorBalanceText.includes("VXC 0.00"),
+                'poor: balance pill text contains "VXC 0.00"',
+                { text: poorBalanceText });
 
             const insufficient = poor.page.locator('[data-testid="tournament-detail-insufficient-balance"]');
             await insufficient.waitFor({ state: "visible", timeout: 5000 });
