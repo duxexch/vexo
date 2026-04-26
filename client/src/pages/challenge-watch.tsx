@@ -3286,7 +3286,18 @@ export default function ChallengeWatchPage() {
                   player2={challenge.player2}
                   player3={challenge.player3}
                   player4={challenge.player4}
-                  spectatorCount={gameSession?.spectatorCount || 0}
+                  // Task #109: prefer the realtime presence count once it
+                  // has been emitted at least once (matches the same
+                  // fallback the in-game chat dialog uses for the viewer
+                  // pill in challenge-game.tsx) so the avatar stack and
+                  // the count badge can never disagree. Falls back to the
+                  // legacy WS-derived `gameSession.spectatorCount` until
+                  // the first `chat:viewer_count` arrives.
+                  spectatorCount={
+                    spectatorRealtimeChat.viewerCountReceived
+                      ? spectatorRealtimeChat.viewerCount
+                      : (gameSession?.spectatorCount || 0)
+                  }
                   totalMoves={gameSession?.totalMoves}
                   currentTurn={gameSession?.currentTurn || undefined}
                   gameStatus={gameSession?.status}
@@ -3306,6 +3317,11 @@ export default function ChallengeWatchPage() {
                       ? "المشاهدون يستطيعون قراءة الدردشة فقط، ولا يمكنهم الإرسال."
                       : "Spectators can read chat but can't send messages."
                   }
+                  // Task #109: forward the block-list-filtered viewer
+                  // identities so the spectator panel header renders the
+                  // shared "who's watching" pill (avatar stack + popover)
+                  // — same behavior the in-game chat dialog already uses.
+                  spectatorViewers={spectatorRealtimeChat.viewers}
                 />
               </div>
             )}

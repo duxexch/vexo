@@ -54,7 +54,11 @@ export async function broadcastChallengeViewerCount(
   chatNs: ChatNamespace,
   roomId: string,
 ): Promise<void> {
-  if (!roomId.startsWith("challenge:")) return;
+  // Task #109: this helper is also used for `match:` casual-gameplay
+  // rooms (gameMatches.id) — same socket-level spectator semantics, just
+  // a different room-id prefix. DM rooms still skip viewer broadcasts
+  // (no spectator concept there).
+  if (!roomId.startsWith("challenge:") && !roomId.startsWith("match:")) return;
   try {
     const sockets = await chatNs.in(roomId).fetchSockets();
     let count = 0;
@@ -137,7 +141,10 @@ export async function broadcastChallengeViewerList(
   chatNs: ChatNamespace,
   roomId: string,
 ): Promise<void> {
-  if (!roomId.startsWith("challenge:")) return;
+  // Task #109: same prefix-allowlist as `broadcastChallengeViewerCount`
+  // — challenge: and match: rooms both surface viewer popovers; dm:
+  // rooms do not.
+  if (!roomId.startsWith("challenge:") && !roomId.startsWith("match:")) return;
   try {
     const sockets = await chatNs.in(roomId).fetchSockets();
 

@@ -11,7 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
+import type { ChatViewerSummary } from "@shared/socketio-events";
 import { FullScreenGiftPanel } from "./FullScreenGiftPanel";
+import { ChatViewerCountPill } from "./GameChat";
 import {
   Eye,
   Gift,
@@ -66,6 +68,28 @@ interface SpectatorPanelProps {
    * read-only spectator notice.
    */
   sendDisabledReason?: string;
+  /**
+   * Task #109: identities of the spectators currently in this room
+   * (server-side filtered against the viewer's blocked-users list).
+   *
+   * When this prop is supplied — even as an empty array — the panel
+   * header replaces the plain count badge with the shared "who's
+   * watching" pill (avatar stack + popover) used in the challenge
+   * in-game chat (Task #75), so social presence looks the same
+   * everywhere chat appears. The empty-array case is intentional: it
+   * means "realtime is wired but the privacy filter (or transient
+   * empty viewer list) hid every identity," and we still want the
+   * count surface and popover affordance to be consistent with the
+   * challenge chat dialog.
+   *
+   * May be shorter than `spectatorCount` when blocks hide entries —
+   * `spectatorCount` remains the authoritative total.
+   *
+   * Omit the prop entirely (don't pass it at all) to keep the legacy
+   * plain badge — for callers that haven't migrated to realtime yet
+   * (e.g. `challenge-game.tsx`'s SpectatorPanel call site).
+   */
+  spectatorViewers?: ChatViewerSummary[];
 }
 
 function normalizeChatDraft(value: string): string {
@@ -107,6 +131,7 @@ export function SpectatorPanel({
   onSendChat,
   canSendChat = false,
   sendDisabledReason,
+  spectatorViewers,
 }: SpectatorPanelProps) {
   const { language, t } = useI18n();
   const { toast } = useToast();
@@ -346,10 +371,41 @@ export function SpectatorPanel({
                 : (language === "ar" ? "لوحة المباراة" : "Match Panel")}
             </span>
           </div>
-          <Badge variant="secondary" className="rounded-full px-2.5">
-            <Eye className="h-3 w-3 me-1" />
-            {spectatorCount}
-          </Badge>
+          {/* Task #109: pick between the shared "who's watching" pill
+              (avatar stack + popover) used in the challenge in-game
+              chat (Task #75) and the legacy plain count badge.
+
+              Render condition (mirrors the JSX exactly — keep these in
+              sync if either side changes):
+
+                spectatorCount > 0 && spectatorViewers !== undefined
+                  → shared pill
+                otherwise
+                  → legacy `Badge`
+
+              Parity contract with `ChatViewerCountPill` in challenge
+              GameChat: when the realtime caller wires
+              `spectatorViewers` (even as an EMPTY ARRAY — e.g. every
+              viewer was hidden by block-list filtering), we still
+              render the pill so the count surface and popover
+              affordance are consistent everywhere. The legacy `Badge`
+              path is reserved for callers that have not migrated to
+              realtime at all and therefore omit the prop entirely
+              (e.g. challenge-game.tsx's SpectatorPanel call site). At
+              zero spectators we always show the badge — there is
+              nothing to surface in a popover. */}
+          {spectatorCount > 0 && spectatorViewers !== undefined ? (
+            <ChatViewerCountPill
+              spectatorCount={spectatorCount}
+              spectatorViewers={spectatorViewers}
+              language={language}
+            />
+          ) : (
+            <Badge variant="secondary" className="rounded-full px-2.5">
+              <Eye className="h-3 w-3 me-1" />
+              {spectatorCount}
+            </Badge>
+          )}
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           {isViewerPanel

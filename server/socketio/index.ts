@@ -18,7 +18,7 @@ import {
 } from "../../shared/socketio-events";
 import { storage } from "../storage";
 import { db } from "../db";
-import { challenges } from "../../shared/schema";
+import { challenges, gameMatches } from "../../shared/schema";
 import { eq } from "drizzle-orm";
 import {
   deliverRealtimeChallengeChat,
@@ -100,11 +100,47 @@ async function authenticateHandshake(socket: Socket): Promise<AuthedSocketData |
  *
  * Accepted patterns (anything else is denied):
  *   - `challenge:<challengeId>` — user must be one of player1..player4
+ *   - `match:<gameMatchId>`     — user must be player1 or player2 of the
+ *                                 casual gameplay match (`game_matches`
+ *                                 table). Spectators not supported here
+ *                                 because that table has no spectator
+ *                                 concept; only the two participants can
+ *                                 join the realtime chat room.
  *   - `dm:<idA>:<idB>`         — user must be A or B (sorted lexicographically)
  *
  * Failures (DB error, missing row) deny — fail-closed.
  */
 async function isUserAllowedInRoom(userId: string, roomId: string): Promise<RoomAuthzResult> {
+  if (roomId.startsWith("match:")) {
+    // Task #109: casual gameplay matches use a separate `game_matches`
+    // table from challenges, so they get their own room namespace. The
+    // matchmaking pipeline only ever stamps player1Id/player2Id, so
+    // authorization is the strict 2-player set. No spectator role is
+    // exposed for this room type today (mirrors the legacy
+    // /api/gameplay/messages REST endpoint, which also only accepts
+    // posts from those two participants).
+    const matchId = roomId.slice("match:".length);
+    if (!matchId) return { allowed: false };
+    try {
+      const [row] = await db
+        .select({
+          p1: gameMatches.player1Id,
+          p2: gameMatches.player2Id,
+        })
+        .from(gameMatches)
+        .where(eq(gameMatches.id, matchId))
+        .limit(1);
+      if (!row) return { allowed: false };
+      if (userId === row.p1 || userId === row.p2) {
+        return { allowed: true, role: "player" };
+      }
+      return { allowed: false };
+    } catch (err) {
+      logger.warn?.(`[socket.io] match room authz lookup failed: ${(err as Error).message}`);
+      return { allowed: false };
+    }
+  }
+
   if (roomId.startsWith("challenge:")) {
     const challengeId = roomId.slice("challenge:".length);
     if (!challengeId) return { allowed: false };

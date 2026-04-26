@@ -23,6 +23,8 @@ import {
   MessageCircle, Send, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { VoiceChat as SharedVoiceChat } from '@/components/games/VoiceChat';
+import { ChatViewerCountPill } from '@/components/games/GameChat';
+import { useSocketChat } from '@/hooks/use-socket-chat';
 import { BalanceDisplay } from '@/components/BalanceDisplay';
 import type { Game, Transaction, User, Announcement, GameplayEmoji, Advertisement, GameSection as GameSectionType } from '@shared/schema';
 import Autoplay from 'embla-carousel-autoplay';
@@ -336,6 +338,29 @@ function InGameChat({
     refetchInterval: 2000, // Poll every 2 seconds
   });
 
+  // Task #109: subscribe to the realtime chat room for this match purely
+  // to surface "who's watching" presence in the chat header. Casual
+  // matches still send/receive messages over the legacy /api/gameplay
+  // polling path above — we deliberately do NOT touch that transport
+  // here. The hook only contributes `viewerCount` + block-list-filtered
+  // `viewers`, which feed the same avatar-stack pill used in the
+  // challenge in-game chat (Task #75) so social presence looks the same
+  // everywhere chat appears.
+  //
+  // Casual matches live in `game_matches` (NOT `challenges`) so the
+  // room id MUST use the dedicated `match:` namespace — server authz
+  // (server/socketio/index.ts `isUserAllowedInRoom`) routes
+  // `match:<gameMatchId>` through `gameMatches.player1Id/player2Id`.
+  // Using `challenge:<matchId>` here would silently fail authorization
+  // (the id is not a challenges.id), which is the bug Task #109 review
+  // flagged.
+  const realtimeChat = useSocketChat({
+    roomId: matchId ? `match:${matchId}` : null,
+  });
+  const headerViewerCount = realtimeChat.viewerCountReceived
+    ? realtimeChat.viewerCount
+    : 0;
+
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { matchId: string; message?: string; emojiId?: string; isEmoji: boolean }) => {
       return apiRequest('POST', '/api/gameplay/messages', data);
@@ -395,6 +420,19 @@ function InGameChat({
           <MessageCircle className="w-4 h-4" />
           {language === 'ar' ? 'الدردشة' : 'Chat'}
         </h3>
+        {/* Task #109: "who's watching" pill — same component the challenge
+            in-game chat uses (Task #75), so the avatar stack + popover
+            behavior (≤3 avatars, "+N" overflow, profile links, fail-closed
+            privacy) is identical here. Only rendered when the realtime
+            socket has actually reported at least one viewer for this room
+            so the header stays clean for empty matches. */}
+        {headerViewerCount > 0 && (
+          <ChatViewerCountPill
+            spectatorCount={headerViewerCount}
+            spectatorViewers={realtimeChat.viewers}
+            language={language}
+          />
+        )}
       </div>
 
       <ScrollArea className="flex-1 p-3">
