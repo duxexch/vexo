@@ -9,7 +9,7 @@ export const userRoleEnum = pgEnum("user_role", ["admin", "agent", "affiliate", 
 export const userStatusEnum = pgEnum("user_status", ["active", "inactive", "suspended", "banned"]);
 export const gameStatusEnum = pgEnum("game_status", ["active", "listed", "inactive", "maintenance"]);
 export const gameVolatilityEnum = pgEnum("game_volatility", ["low", "medium", "high"]);
-export const transactionTypeEnum = pgEnum("transaction_type", ["deposit", "withdrawal", "stake", "win", "bonus", "commission", "refund", "gift_sent", "gift_received", "platform_fee", "game_refund"]);
+export const transactionTypeEnum = pgEnum("transaction_type", ["deposit", "withdrawal", "stake", "win", "bonus", "commission", "refund", "gift_sent", "gift_received", "platform_fee", "game_refund", "currency_conversion"]);
 export const transactionStatusEnum = pgEnum("transaction_status", ["pending", "approved", "rejected", "completed", "cancelled"]);
 export const complaintStatusEnum = pgEnum("complaint_status", ["open", "assigned", "in_progress", "escalated", "resolved", "closed"]);
 export const complaintPriorityEnum = pgEnum("complaint_priority", ["low", "medium", "high", "urgent"]);
@@ -122,6 +122,12 @@ export const users = pgTable("users", {
   p2pBanned: boolean("p2p_banned").notNull().default(false),
   p2pBanReason: text("p2p_ban_reason"),
   p2pBannedAt: timestamp("p2p_banned_at"),
+  // Per-user kill switch for the multi-currency wallet conversion feature
+  // (Task #104). When true, this user cannot use POST /api/wallet/convert
+  // even when the global toggle (`wallet_conversion.enabled` in app_settings)
+  // is on. Used by admins to restrict abuse without disabling the feature
+  // for everyone else. Default false = follows the global toggle.
+  currencyConversionDisabled: boolean("currency_conversion_disabled").notNull().default(false),
   p2pRating: decimal("p2p_rating", { precision: 3, scale: 2 }).default("5.00"),
   p2pTotalTrades: integer("p2p_total_trades").notNull().default(0),
   p2pSuccessfulTrades: integer("p2p_successful_trades").notNull().default(0),

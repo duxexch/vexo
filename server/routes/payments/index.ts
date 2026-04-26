@@ -5,6 +5,7 @@ import { registerAgentRoutes } from "./agents";
 import { registerAffiliateAndPromoRoutes } from "./affiliates-promos";
 import { registerComplaintRoutes } from "./complaints";
 import { registerFinancialAndAuthRoutes } from "./financial-auth";
+import { registerWalletConversionRoutes } from "./wallet-conversion-routes";
 
 export function registerPaymentRoutes(app: Express): void {
   registerPaymentMethodRoutes(app);
@@ -13,4 +14,5 @@ export function registerPaymentRoutes(app: Express): void {
   registerAffiliateAndPromoRoutes(app);
   registerComplaintRoutes(app);
   registerFinancialAndAuthRoutes(app);
+  registerWalletConversionRoutes(app);
 }

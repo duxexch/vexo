@@ -130,6 +130,10 @@ export default function WalletPage() {
   const [showDeposit, setShowDeposit] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [showConvert, setShowConvert] = useState(false);
+  const [showWalletConvert, setShowWalletConvert] = useState(false);
+  const [walletConvertFrom, setWalletConvertFrom] = useState<string>("");
+  const [walletConvertTo, setWalletConvertTo] = useState<string>("");
+  const [walletConvertAmount, setWalletConvertAmount] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [convertAmount, setConvertAmount] = useState("");
@@ -156,6 +160,8 @@ export default function WalletPage() {
 
   const convertAmountInputRef = useRef<HTMLInputElement | null>(null);
   const convertConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
+  const walletConvertAmountInputRef = useRef<HTMLInputElement | null>(null);
+  const walletConvertConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const { focusAndScroll, queueFocus, focusFirstInteractiveIn } = useGuidedFocus();
 
   useEffect(() => {
@@ -427,6 +433,138 @@ export default function WalletPage() {
     return convertUsdToWalletAmount(currencySettings.maxConversionAmount, walletCurrencyConfig).amount;
   }, [currencySettings?.maxConversionAmount, walletCurrencyConfig]);
 
+  interface WalletConvertSettings {
+    enabled: boolean;
+    feePct: number;
+    userDisabled: boolean;
+    multiCurrencyEnabled: boolean;
+    primaryCurrency: string;
+    eligibleCurrencies: string[];
+    missingRateCurrencies: string[];
+    usdRateByCurrency: Record<string, number>;
+    currencySymbolByCode: Record<string, string>;
+    balances: Record<string, string>;
+  }
+
+  interface WalletConvertQuoteResponse {
+    fromCurrency: string;
+    toCurrency: string;
+    fromAmount: number;
+    amountUsd: number;
+    grossToAmount: number;
+    feePct: number;
+    feeAmount: number;
+    netToAmount: number;
+    fromToUsdRate: number;
+    usdToTargetRate: number;
+  }
+
+  const { data: walletConvertSettings } = useQuery<WalletConvertSettings>({
+    queryKey: ['/api/wallet/convert/settings'],
+    ...financialQueryOptions,
+  });
+
+  const walletConvertEnabled = Boolean(
+    walletConvertSettings?.enabled &&
+    !walletConvertSettings.userDisabled &&
+    walletConvertSettings.multiCurrencyEnabled &&
+    walletConvertSettings.eligibleCurrencies.length >= 2,
+  );
+
+  const walletConvertParsedAmount = useMemo(() => {
+    const value = Number.parseFloat(walletConvertAmount);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }, [walletConvertAmount]);
+
+  const walletConvertSourceBalance = useMemo(() => {
+    if (!walletConvertSettings || !walletConvertFrom) return 0;
+    const raw = walletConvertSettings.balances[walletConvertFrom];
+    return raw ? Number.parseFloat(raw) : 0;
+  }, [walletConvertSettings, walletConvertFrom]);
+
+  const { data: walletConvertQuote, isFetching: walletConvertQuoteLoading } = useQuery<WalletConvertQuoteResponse>({
+    queryKey: ['/api/wallet/convert/quote', walletConvertFrom, walletConvertTo, walletConvertParsedAmount],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        from: walletConvertFrom,
+        to: walletConvertTo,
+        amount: String(walletConvertParsedAmount),
+      });
+      const res = await fetch(`/api/wallet/convert/quote?${params.toString()}`, { credentials: 'include' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Quote failed');
+      }
+      return res.json();
+    },
+    enabled: walletConvertEnabled
+      && Boolean(walletConvertFrom && walletConvertTo)
+      && walletConvertFrom !== walletConvertTo
+      && walletConvertParsedAmount > 0,
+    retry: false,
+    staleTime: 5_000,
+  });
+
+  const walletConvertMutation = useMutation({
+    mutationFn: (data: { fromCurrency: string; toCurrency: string; amount: number }) =>
+      apiRequestWithPaymentToken('POST', '/api/wallet/convert', data, 'convert'),
+    onSuccess: async () => {
+      playSound('coin');
+      toast({
+        title: t('common.success'),
+        description: language === 'ar' ? 'تم تحويل المحفظة بنجاح' : 'Wallet conversion completed',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/wallet/currency-wallets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/wallet/convert/settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/transactions'] });
+      refreshUser?.();
+      setShowWalletConvert(false);
+      setWalletConvertAmount("");
+    },
+    onError: (err: Error) => {
+      toast({ title: t('common.error'), description: err.message, variant: 'destructive' });
+    },
+  });
+
+  useEffect(() => {
+    if (!walletConvertSettings?.eligibleCurrencies?.length) return;
+    setWalletConvertFrom((current) => {
+      if (current && walletConvertSettings.eligibleCurrencies.includes(current)) return current;
+      return walletConvertSettings.primaryCurrency
+        && walletConvertSettings.eligibleCurrencies.includes(walletConvertSettings.primaryCurrency)
+        ? walletConvertSettings.primaryCurrency
+        : walletConvertSettings.eligibleCurrencies[0];
+    });
+    setWalletConvertTo((current) => {
+      if (current && walletConvertSettings.eligibleCurrencies.includes(current)) return current;
+      const firstOther = walletConvertSettings.eligibleCurrencies.find((c) => c !== walletConvertSettings.primaryCurrency);
+      return firstOther || walletConvertSettings.eligibleCurrencies[1] || '';
+    });
+  }, [walletConvertSettings?.eligibleCurrencies, walletConvertSettings?.primaryCurrency]);
+
+  useEffect(() => {
+    if (!showWalletConvert) return;
+    queueFocus(walletConvertAmountInputRef.current);
+  }, [showWalletConvert]);
+
+  const handleWalletConvertSubmit = () => {
+    if (!walletConvertEnabled) return;
+    if (!walletConvertFrom || !walletConvertTo || walletConvertFrom === walletConvertTo) return;
+    if (walletConvertParsedAmount <= 0) {
+      focusAndScroll(walletConvertAmountInputRef.current);
+      return;
+    }
+    if (walletConvertParsedAmount > walletConvertSourceBalance) {
+      focusAndScroll(walletConvertAmountInputRef.current);
+      return;
+    }
+    walletConvertMutation.mutate({
+      fromCurrency: walletConvertFrom,
+      toCurrency: walletConvertTo,
+      amount: walletConvertParsedAmount,
+    });
+  };
+
   const convertMutation = useMutation({
     mutationFn: (data: { amount: string }) =>
       apiRequestWithPaymentToken('POST', '/api/project-currency/convert', data, 'convert'),
@@ -681,15 +819,31 @@ export default function WalletPage() {
       {currencyWalletsData?.multiCurrencyEnabled && currencyWalletsData.wallets.length > 0 && (
         <Card className="border border-primary/30 bg-gradient-to-b from-primary/5 to-transparent">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Wallet className="h-4 w-4 text-primary" />
-              {language === 'ar' ? 'محافظ العملات الخاصة بك' : 'Your Currency Wallets'}
-            </CardTitle>
-            <CardDescription className="text-xs">
-              {language === 'ar'
-                ? 'الإيداعات والسحوبات تخصّص لكل عملة على حدة'
-                : 'Deposits and withdrawals are routed per-currency'}
-            </CardDescription>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-primary" />
+                  {language === 'ar' ? 'محافظ العملات الخاصة بك' : 'Your Currency Wallets'}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {language === 'ar'
+                    ? 'الإيداعات والسحوبات تخصّص لكل عملة على حدة'
+                    : 'Deposits and withdrawals are routed per-currency'}
+                </CardDescription>
+              </div>
+              {walletConvertEnabled && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowWalletConvert(true)}
+                  className="shrink-0 min-h-[36px] gap-1.5"
+                  data-testid="button-wallet-convert"
+                >
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                  {language === 'ar' ? 'تحويل بين المحافظ' : 'Convert'}
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -1429,6 +1583,209 @@ export default function WalletPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog open={showWalletConvert} onOpenChange={setShowWalletConvert}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5 text-primary" />
+              {language === 'ar' ? 'تحويل بين المحافظ' : 'Convert Between Wallets'}
+            </DialogTitle>
+            <DialogDescription>
+              {language === 'ar'
+                ? 'حوّل رصيدك من عملة إلى أخرى داخل محافظك. السعر مبني على أسعار الصرف الحالية.'
+                : 'Move balance between your own currency wallets. Rate is based on current exchange rates.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pb-1">
+            {!walletConvertEnabled ? (
+              <div className="p-3 rounded-md border bg-muted text-sm text-muted-foreground">
+                {walletConvertSettings && !walletConvertSettings.enabled
+                  ? (language === 'ar' ? 'التحويل بين المحافظ معطّل حالياً.' : 'Wallet conversion is currently disabled.')
+                  : walletConvertSettings?.userDisabled
+                    ? (language === 'ar' ? 'تم تعطيل ميزة التحويل بين المحافظ لحسابك.' : 'Wallet conversion is disabled on your account.')
+                    : (language === 'ar' ? 'تحتاج إلى محفظتين على الأقل بأسعار صرف صالحة.' : 'You need at least two wallets with valid exchange rates.')}
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-3 items-end">
+                  <div className="space-y-1">
+                    <Label className="text-xs">{language === 'ar' ? 'من' : 'From'}</Label>
+                    <Select
+                      value={walletConvertFrom}
+                      onValueChange={(v) => {
+                        setWalletConvertFrom(v);
+                        setWalletConvertAmount("");
+                        if (walletConvertTo === v) {
+                          const next = walletConvertSettings?.eligibleCurrencies.find((c) => c !== v) || "";
+                          setWalletConvertTo(next);
+                        }
+                      }}
+                    >
+                      <SelectTrigger data-testid="select-wallet-convert-from">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {walletConvertSettings?.eligibleCurrencies.map((c) => {
+                          const bal = Number.parseFloat(walletConvertSettings.balances[c] || '0');
+                          return (
+                            <SelectItem key={c} value={c}>
+                              {c} — {bal.toFixed(2)}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="hidden sm:flex items-center justify-center pb-2">
+                    <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">{language === 'ar' ? 'إلى' : 'To'}</Label>
+                    <Select
+                      value={walletConvertTo}
+                      onValueChange={setWalletConvertTo}
+                    >
+                      <SelectTrigger data-testid="select-wallet-convert-to">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {walletConvertSettings?.eligibleCurrencies
+                          .filter((c) => c !== walletConvertFrom)
+                          .map((c) => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-muted rounded-lg text-sm flex items-center justify-between">
+                  <span className="text-muted-foreground">
+                    {language === 'ar' ? 'الرصيد المتاح' : 'Available'}:
+                  </span>
+                  <span className="font-bold text-primary" data-testid="text-wallet-convert-balance">
+                    {walletConvertSourceBalance.toFixed(2)} {walletConvertFrom}
+                  </span>
+                </div>
+
+                <div>
+                  <Label>{language === 'ar' ? 'المبلغ' : 'Amount'} ({walletConvertFrom})</Label>
+                  <Input
+                    ref={walletConvertAmountInputRef}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={walletConvertAmount}
+                    onChange={(e) => setWalletConvertAmount(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      e.preventDefault();
+                      queueFocus(walletConvertConfirmButtonRef.current);
+                    }}
+                    placeholder="0.00"
+                    inputMode="decimal"
+                    enterKeyHint="done"
+                    className="mt-2"
+                    data-testid="input-wallet-convert-amount"
+                  />
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {[0.25, 0.5, 1].map((pct) => {
+                      const v = walletConvertSourceBalance * pct;
+                      return (
+                        <Button
+                          key={pct}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => setWalletConvertAmount(v > 0 ? v.toFixed(2) : '0')}
+                          disabled={walletConvertSourceBalance <= 0}
+                        >
+                          {pct === 1 ? (language === 'ar' ? 'الكل' : 'All') : `${Math.round(pct * 100)}%`}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {walletConvertParsedAmount > 0 && walletConvertFrom && walletConvertTo && walletConvertFrom !== walletConvertTo && (
+                  <div className="p-3 bg-primary/10 rounded-lg border border-primary/30 text-sm space-y-2" data-testid="wallet-convert-quote">
+                    {walletConvertQuoteLoading && !walletConvertQuote ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        {language === 'ar' ? 'جارٍ حساب السعر...' : 'Calculating quote...'}
+                      </div>
+                    ) : walletConvertQuote ? (
+                      <>
+                        <div className="flex justify-between">
+                          <span>{language === 'ar' ? 'تدفع' : 'You pay'}:</span>
+                          <span className="font-medium">
+                            {walletConvertQuote.fromAmount.toFixed(2)} {walletConvertQuote.fromCurrency}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>{language === 'ar' ? 'القيمة الإجمالية' : 'Gross'}:</span>
+                          <span>{walletConvertQuote.grossToAmount.toFixed(2)} {walletConvertQuote.toCurrency}</span>
+                        </div>
+                        {walletConvertQuote.feePct > 0 && (
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>{language === 'ar' ? 'الرسوم' : 'Fee'} ({(walletConvertQuote.feePct * 100).toFixed(2)}%):</span>
+                            <span>-{walletConvertQuote.feeAmount.toFixed(2)} {walletConvertQuote.toCurrency}</span>
+                          </div>
+                        )}
+                        <Separator className="my-1" />
+                        <div className="flex justify-between font-bold text-primary">
+                          <span>{language === 'ar' ? 'تستلم' : 'You receive'}:</span>
+                          <span data-testid="text-wallet-convert-net">
+                            {walletConvertQuote.netToAmount.toFixed(2)} {walletConvertQuote.toCurrency}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {language === 'ar'
+                            ? `السعر: 1 ${walletConvertQuote.fromCurrency} ≈ ${(walletConvertQuote.netToAmount / Math.max(walletConvertQuote.fromAmount, 0.0000001)).toFixed(6)} ${walletConvertQuote.toCurrency}`
+                            : `Rate: 1 ${walletConvertQuote.fromCurrency} ≈ ${(walletConvertQuote.netToAmount / Math.max(walletConvertQuote.fromAmount, 0.0000001)).toFixed(6)} ${walletConvertQuote.toCurrency}`}
+                        </p>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {language === 'ar' ? 'تعذّر جلب السعر.' : 'Unable to fetch quote.'}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {walletConvertParsedAmount > walletConvertSourceBalance && (
+                  <p className="text-xs text-destructive">
+                    {language === 'ar' ? 'المبلغ يتجاوز رصيدك المتاح.' : 'Amount exceeds available balance.'}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+          <DialogFooter className="sticky bottom-0 z-10 px-4 sm:px-6 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5 pt-3 border-t bg-background">
+            <Button className="w-full sm:w-auto min-h-11" variant="outline" onClick={() => setShowWalletConvert(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              ref={walletConvertConfirmButtonRef}
+              className="w-full sm:w-auto min-h-11"
+              onClick={handleWalletConvertSubmit}
+              disabled={
+                !walletConvertEnabled ||
+                !walletConvertFrom ||
+                !walletConvertTo ||
+                walletConvertFrom === walletConvertTo ||
+                walletConvertParsedAmount <= 0 ||
+                walletConvertParsedAmount > walletConvertSourceBalance ||
+                walletConvertMutation.isPending
+              }
+              data-testid="button-confirm-wallet-convert"
+            >
+              {walletConvertMutation.isPending && <Loader2 className="h-4 w-4 me-2 animate-spin" />}
+              {language === 'ar' ? 'تأكيد التحويل' : 'Confirm Convert'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
