@@ -3629,17 +3629,8 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const tradeImageInputRef = useRef<HTMLInputElement | null>(null);
   const tradeCameraInputRef = useRef<HTMLInputElement | null>(null);
-  // Task #118: Mobile bottom-sheet style tabs for the trade room. Defaults
-  // are seeded from the trade status whenever the room opens (see effect
-  // below) so a buyer in a "pending" trade lands directly on Pay, while a
-  // seller waiting on a paid trade lands on Pay to confirm receipt, and
-  // anyone in completed/cancelled lands on Status. Manual selection
-  // overrides the default for the rest of the session.
   const [mobileTradeTab, setMobileTradeTab] = useState<"chat" | "pay" | "status">("chat");
   const isDesktopTradeRoom = useMediaQuery("(min-width: 1024px)");
-  // Inline "payment details" sheet — eliminates the previous flow that
-  // forced the user to scroll to the workflow panel or jump to settings
-  // to see the seller's payment instructions and account details.
   const [paymentDetailsSheetOpen, setPaymentDetailsSheetOpen] = useState(false);
   const numberLocale = resolveLanguageLocale(language);
 
@@ -3657,11 +3648,6 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
     queryKey: ["/api/p2p/trades", activeTradeId],
     enabled: !!activeTradeId,
     refetchInterval: activeTradeId ? 5000 : false,
-    // Task #118: when the user backgrounds the tab and comes back (e.g.
-    // after switching apps to complete a bank transfer), refetch
-    // immediately instead of waiting for the next 5s poll. Same logic
-    // for messages and logs so partner actions surface within ms of
-    // returning to the trade room.
     refetchOnWindowFocus: true,
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/p2p/trades/${activeTradeId!}`);
@@ -4027,12 +4013,6 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
     setMobileTradeTab("chat");
   };
 
-  // Task #118: pick a sensible default mobile tab whenever the active
-  // trade or its status changes so the user lands on the section they
-  // actually need to interact with — without scrolling. We only set the
-  // tab on the first detail load per trade; manual selections by the
-  // user after that win, since once they intentionally moved to "Chat"
-  // we don't want a status change to bounce them back to "Pay" mid-chat.
   const tradeDefaultTabAppliedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeTrade || !activeTradeId) {
@@ -4476,14 +4456,6 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
           <DialogHeader className="border-b border-slate-800 pb-3">
             <DialogTitle className="flex flex-wrap items-center gap-2">
               <span>{t('p2p.trade')} {activeTradeId ? `#${activeTradeId.slice(0, 8)}` : ""}</span>
-              {/*
-                Task #118: replaced the legacy raw Badge with the shared
-                StatusPill (already shipped with Task #91) so the trade
-                room header speaks the same status language as the
-                marketplace listing the user just came from. The
-                preciseLabel is the existing localised status word from
-                getStatusBadge so existing translations are reused.
-              */}
               {activeTrade && (
                 <StatusPill
                   bucket={getTradeStatusBucket(activeTrade.status)}
@@ -4492,13 +4464,6 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                   testId="trade-room-status-pill"
                 />
               )}
-              {/*
-                Task #118: tiny "live updates" indicator so the user can
-                see the room is actively syncing without having to hit
-                refresh. Pure presentation — react-query already polls
-                the trade detail / messages / logs every 4-6s and now
-                also refetches on window focus (see useQuery options).
-              */}
               {activeTrade && (
                 <span
                   className="ms-auto inline-flex items-center gap-1 rounded-full border border-emerald-700/40 bg-emerald-900/20 px-2 py-0.5 text-[10px] font-medium text-emerald-200"
@@ -4516,25 +4481,6 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
             <Skeleton className="h-64 w-full" />
           ) : activeTrade ? (
             (() => {
-              /*
-                Task #118: the trade room used to render every section
-                stacked top-to-bottom on mobile, forcing the user to
-                scroll past the chat history just to find the "Pay" or
-                "Confirm" button. We extract each section into a JSX
-                constant and then render TWO layouts:
-
-                  - Mobile (lg:hidden): a 3-tab bottom-sheet style flow
-                    (Chat / Pay / Status) so the user lands on the section
-                    they need with a single tap.
-                  - Desktop (hidden lg:grid): the original two-column
-                    grid is preserved unchanged so power users on a
-                    laptop still see everything at once.
-
-                The hidden file <input>s for the composer's image/camera
-                pickers are rendered ONCE at the top of the body so the
-                refs (tradeImageInputRef, tradeCameraInputRef) are not
-                duplicated when both layouts mount their button copies.
-              */
               const chatPanel = (
                 <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
@@ -4612,13 +4558,6 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                 </div>
               );
 
-              /*
-                Task #118: workflow panel = the action area (instructions
-                ack, payment-reference + proof, confirm/complete buttons,
-                cancellation flow, dispute escalation). Now the *primary*
-                content of the mobile "Pay" tab so the user lands on the
-                button they need.
-              */
               const workflowPanel = canShowTradeWorkflowPanel ? (
                 <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
                   <div className="space-y-2">
@@ -4910,14 +4849,6 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                   </div>
               ) : null;
 
-              /*
-                Task #118: composer keeps the chat-message + image-proof
-                input. The hidden file <input>s for the upload/camera
-                pickers are NOT defined here — they live at the IIFE
-                return so they mount exactly once and the refs stay
-                stable across both the mobile-tab and desktop-grid copies
-                of the composer JSX.
-              */
               const composer = canComposeTradeMessages ? (
                 <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2">
                   {activeTrade.status === "cancelled" && (
@@ -4991,13 +4922,6 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                   <CardHeader className="pb-2">
                     <CardTitle className="flex items-center justify-between gap-2 text-base">
                       <span>{t('p2p.trade')}</span>
-                      {/*
-                        Task #118: inline shortcut into the payment-details
-                        Sheet. Surfaces from the trade-info card so the
-                        buyer can pull up the seller's instructions
-                        without scrolling, switching tabs, or hunting in
-                        the workflow panel for the same info.
-                      */}
                       <Button
                         type="button"
                         variant="outline"
@@ -5158,14 +5082,6 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
 
               return (
                 <>
-                  {/*
-                    Task #118: hidden file inputs are mounted ONCE at the
-                    fragment root so the upload/camera refs are stable
-                    across both the mobile-tab and desktop-grid renders
-                    of the composer. If we left these inside the composer
-                    JSX, React would mount two <input> elements and the
-                    refs would race, breaking image attachments.
-                  */}
                   <input
                     ref={tradeImageInputRef}
                     type="file"
@@ -5182,14 +5098,6 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                     onChange={handleTradeImageSelect}
                   />
 
-                  {/*
-                    Task #118: only one of mobile-tabs / desktop-grid is
-                    rendered at a time (driven by useMediaQuery). This
-                    guarantees that interactive controls inside the
-                    composer / workflow / cards exist exactly once in the
-                    DOM, so test selectors and accessibility tooling don't
-                    have to disambiguate duplicates.
-                  */}
                   {isDesktopTradeRoom ? (
                     <div className="grid max-h-[72vh] grid-cols-1 gap-4 overflow-y-auto py-1 lg:grid-cols-3">
                       <div className="space-y-3 lg:col-span-2">
@@ -5239,13 +5147,6 @@ function MyTradesTab({ onSwitchTab }: { onSwitchTab?: (tab: string) => void } = 
                     </Tabs>
                   )}
 
-                  {/*
-                    Task #118: payment-details inline Sheet — opens from
-                    the trade-info card's "Payment details" button.
-                    Surfaces seller's payment method, amount and free-text
-                    instructions/auto-reply without forcing the user to
-                    scroll to the workflow panel or jump to settings.
-                  */}
                   <Sheet open={paymentDetailsSheetOpen} onOpenChange={setPaymentDetailsSheetOpen}>
                     <SheetContent
                       side="bottom"
