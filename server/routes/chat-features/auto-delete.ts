@@ -1,7 +1,7 @@
 import type { Express, Response } from "express";
 import { db } from "../../db";
 import { chatAutoDeletePermissions, chatMessages, projectCurrencyLedger, projectCurrencyWallets } from "@shared/schema";
-import { eq, and, lt, isNotNull, sql } from "drizzle-orm";
+import { eq, and, lt, isNotNull, sql, inArray } from "drizzle-orm";
 import { deleteFile } from "../../lib/minio-client";
 import { logger } from "../../lib/logger";
 import type { AuthRequest } from "../middleware";
@@ -300,9 +300,7 @@ export function registerAutoDeleteRoutes(app: Express, authMiddleware: AuthMiddl
       }
 
       const idsToDelete = expiredMessages.map(m => m.id);
-      await db.execute(sql`
-        DELETE FROM chat_messages WHERE id = ANY(${idsToDelete})
-      `);
+      await db.delete(chatMessages).where(inArray(chatMessages.id, idsToDelete));
       markAutoDeleteCleanupRecovery(autoDeleteCleanupState);
 
     } catch (error) {
