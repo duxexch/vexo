@@ -20,10 +20,50 @@ function summaryNeedsAttention(summary: PermissionSummary | null): boolean {
   );
 }
 
+// Selector that matches every Radix-based modal surface this app uses
+// (Dialog, AlertDialog, Sheet, Drawer all set role="dialog" or
+// role="alertdialog" with data-state="open" on their content node).
+// Keeping it generic means new modals are covered automatically without
+// having to wire them into a global counter.
+const OPEN_MODAL_SELECTOR =
+  '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
+
+/**
+ * Returns true while ANY modal-style surface is currently open in the
+ * DOM. Used by the permissions banner to step out of the way of
+ * dialogs / sheets so the two layers can never visually overlap.
+ *
+ * Implemented as a MutationObserver on document.body so it picks up
+ * Radix portals as soon as they mount or change their open state,
+ * without requiring every dialog call site to opt in.
+ */
+function useIsAnyModalOpen(): boolean {
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const check = () => {
+      setIsOpen(!!document.querySelector(OPEN_MODAL_SELECTOR));
+    };
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["data-state", "role"],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  return isOpen;
+}
+
 export function PermissionsBanner() {
   const { t } = useI18n();
   const [, navigate] = useLocation();
   const [location] = useLocation();
+  const isModalOpen = useIsAnyModalOpen();
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(() => {
     if (typeof window === "undefined") return true;
@@ -59,6 +99,11 @@ export function PermissionsBanner() {
   // right place to fix things, so the banner would just add noise.
   if (location.startsWith("/settings")) return null;
   if (!visible || dismissed) return null;
+  // Step out of the way whenever any dialog / sheet is open. Radix
+  // dialog overlays sit at z-50, which used to clip the banner
+  // diagonally; rather than fighting the stacking context we simply
+  // unmount the banner while a modal owns the screen.
+  if (isModalOpen) return null;
 
   const handleReview = () => {
     setDismissed(true);
@@ -83,7 +128,17 @@ export function PermissionsBanner() {
     <div
       role="status"
       data-testid="banner-permissions"
-      className="fixed inset-x-3 top-3 z-50 mx-auto flex max-w-2xl items-start gap-3 rounded-xl border border-amber-300/60 bg-amber-50 p-3 shadow-lg dark:border-amber-500/40 dark:bg-amber-950/70"
+      // z-40 keeps the banner above the page + nav dock (which sit
+      // at default / lower stacking) but strictly BELOW Radix dialog,
+      // alert-dialog, sheet, and drawer overlays (z-50 / z-[100]).
+      // Toaster (z-[100]) and OfflineBanner (z-[100]) also stay on
+      // top so urgent notices are never hidden by this card.
+      //
+      // On phones (≤ sm) the card spans the full safe-area width so it
+      // doesn't get pushed under the status-bar notch on the left side
+      // and pinned by a sliver of margin on the right. The desktop
+      // layout (sm+) keeps the centered floating-card look.
+      className="fixed inset-x-0 top-0 z-40 mx-auto flex max-w-2xl items-start gap-3 border-b border-amber-300/60 bg-amber-50 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-lg dark:border-amber-500/40 dark:bg-amber-950/70 sm:inset-x-3 sm:top-3 sm:rounded-xl sm:border sm:pt-3"
     >
       <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-300" />
       <div className="flex-1 space-y-2">
