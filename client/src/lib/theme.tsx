@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
 
@@ -221,15 +221,16 @@ async function fetchActiveTheme(): Promise<AdminTheme | null> {
   }
 }
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Capture whether the user already pinned a preference *before* React's
-  // first effect writes localStorage. Without this ref, the boot effect below
-  // would always see a populated `localStorage.theme` and would never honour
-  // the admin theme's mode.
-  const userPinnedThemeRef = useRef<boolean>(
-    typeof window !== "undefined" && localStorage.getItem("theme") !== null,
-  );
+// Dedicated key set ONLY when the user explicitly toggles light/dark via
+// setTheme()/toggleTheme(). Presence of the older "theme" key alone does NOT
+// imply pinning — that key is written automatically on every render to keep
+// the dark/light class stable across reloads, so it cannot be used as the
+// "user has chosen" signal. Without this dedicated flag, the admin theme's
+// mode would only ever apply on the very first visit and never propagate to
+// returning users on subsequent reloads.
+const THEME_PINNED_KEY = "themeUserPinned";
 
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("theme") as Theme;
@@ -255,13 +256,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     fetchActiveTheme().then((active) => {
       if (cancelled || !active) return;
       applyAdminTheme(active);
-      // If the admin theme dictates a colour mode, honour it — but only when
-      // the user has not explicitly pinned a preference (checked at mount via
-      // the ref above, *before* the first effect wrote localStorage).
-      if (
-        !userPinnedThemeRef.current &&
-        (active.mode === "light" || active.mode === "dark")
-      ) {
+      // Always honour the admin theme's mode *unless* the user explicitly
+      // pinned their own preference via setTheme/toggleTheme — that pin is
+      // tracked via THEME_PINNED_KEY (not the auto-written "theme" key).
+      const userPinned =
+        typeof window !== "undefined" &&
+        localStorage.getItem(THEME_PINNED_KEY) === "1";
+      if (!userPinned && (active.mode === "light" || active.mode === "dark")) {
         setTheme(active.mode);
       }
     });
@@ -270,15 +271,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Once the user explicitly toggles the theme via setTheme/toggleTheme, we
-  // consider the preference "pinned" and stop honouring the admin's mode.
+  // Wrapping setTheme so any call coming from outside the provider (settings
+  // page, toggle button, dev tools) is treated as an explicit user pin and
+  // stops admin mode from overriding it on the next reload.
   const setThemePinned = (next: Theme) => {
-    userPinnedThemeRef.current = true;
+    if (typeof window !== "undefined") {
+      localStorage.setItem(THEME_PINNED_KEY, "1");
+    }
     setTheme(next);
   };
 
   const toggleTheme = () => {
-    userPinnedThemeRef.current = true;
+    if (typeof window !== "undefined") {
+      localStorage.setItem(THEME_PINNED_KEY, "1");
+    }
     setTheme(prev => prev === "dark" ? "light" : "dark");
   };
 
