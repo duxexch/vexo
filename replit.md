@@ -79,6 +79,22 @@ relevant smokes in series. Use these instead of remembering individual scripts.
   resolution.
 - **`quality:gate:i18n-global`** — types + i18n string-key gate.
 
+### Post-deploy header pin (Task #157)
+
+`prod-auto.sh`'s `verify_post_deploy_stack()` now runs
+`scripts/smoke-permissions-policy-header.mjs` inside `vex-app` against
+`https://<APP_URL-domain>/` as the final gate. It asserts the live
+`Permissions-Policy` header still contains every required `=(self)`
+directive (microphone, camera, fullscreen, clipboard-write — same list
+the source-level guard at `tests/permissions-policy-header.test.ts`
+pins) and rejects the pre-Task-#143 forms `camera=()` and `camera=*`.
+
+Failure modes that block rollout: header missing on the wire, header
+rewritten by an upstream proxy (Cloudflare / Hostinger panel / nginx
+include), or the live URL is unreachable after retries. Operators can
+re-run the same check on demand against any URL with
+`npm run security:smoke:permissions-policy-header -- --url=https://...`.
+
 ## Mobile Verification
 
 - **Task #82 — Android Capacitor composer over keyboard:** Manual real-device verification of the Task #43 fix (`Keyboard.resize: 'none'` + `useKeyboardInset` driven by `visualViewport`/Capacitor Keyboard events) is captured as a step-by-step Arabic checklist at `docs/device-tests/android-keyboard-composer-2026-04.md`. Pass/fail outcome to be recorded inline in that file once executed on a physical Android (and ideally iOS) device.
