@@ -56,6 +56,16 @@ export function registerChatMessagingRoutes(app: Express): void {
   // canonical reader (`/api/dm/:peerId/history`) always returns the
   // `{ messages, hasMore }` envelope, so the dual-shape compromise
   // this route used to support is no longer necessary.
+  //
+  // Task #116 — soft-delete filters are now ON for this route too.
+  // Historically it returned every row (including globally tombstoned
+  // and "deleted for me" rows), which left the small handful of
+  // fallback / sync surfaces that still hit it (`ChatBubblesLayer.tsx`
+  // and `use-chat.tsx`) able to silently resurrect deleted messages
+  // back into the inbox after a refresh. Both the realtime DM endpoint
+  // (`getDirectMessageHistory`) and the WS `chat_history` handler
+  // already apply these filters; flipping this route to match closes
+  // the last leak path.
   if (isLegacyChatHistoryEnabled()) {
     app.get("/api/chat/:userId/messages", authMiddleware, async (req: AuthRequest, res: Response) => {
       try {
@@ -69,10 +79,7 @@ export function registerChatMessagingRoutes(app: Express): void {
           peerId: otherUserId,
           limit,
           offset,
-          // Preserve historical behaviour for this endpoint — it never
-          // applied soft-delete filters. The realtime DM endpoint always
-          // does, which is the other reason callers should migrate.
-          applyDeletionFilters: false,
+          applyDeletionFilters: true,
         });
 
         res.json(page.messages);

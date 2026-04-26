@@ -16,13 +16,18 @@
  * cheaper than a separate "is anything older?" probe and accurate
  * regardless of whether the page is exactly full.
  *
- * Two filter modes are offered to faithfully match the historical
- * behaviour of each call site without changing semantics:
+ * Two filter modes are offered. Both production callers
+ * (`GET /api/chat/:userId/messages` after Task #116, and the WS
+ * `chat_history` handler) now opt into `applyDeletionFilters: true`;
+ * the `false` mode is kept only as the unfiltered default for
+ * non-production probes and historical-behaviour tests:
  *
- *   - HTTP `/api/chat/:userId/messages` historically returned every
- *     row (no soft-delete filtering). We keep that behaviour by
- *     default so stale clients see the same set of rows; only the
- *     response *envelope* changes when they opt in.
+ *   - The HTTP route `/api/chat/:userId/messages` historically
+ *     returned every row (no soft-delete filtering), which let the
+ *     fallback / sync surfaces that still call it resurrect deleted
+ *     messages on refresh. Task #116 flipped it to
+ *     `applyDeletionFilters: true` so it matches the realtime DM
+ *     endpoint and the WS handler.
  *
  *   - The WS `chat_history` handler historically filtered globally-
  *     deleted rows (`deleted_at IS NULL`) at the SQL layer and
@@ -64,8 +69,11 @@ export interface LegacyChatHistoryArgs {
    * `chat_history` handler's pre-Task #80 behaviour but moves both
    * filters into SQL so over-fetch math stays accurate.
    *
-   * Defaults to `false` — preserves the legacy HTTP route which
-   * historically returned every row.
+   * Defaults to `false`. Both production callers
+   * (`GET /api/chat/:userId/messages` after Task #116, and the WS
+   * `chat_history` handler) opt in to `true`; the `false` default
+   * is retained only so historical-behaviour probes / tests can
+   * still ask for the unfiltered set.
    */
   applyDeletionFilters?: boolean;
 }

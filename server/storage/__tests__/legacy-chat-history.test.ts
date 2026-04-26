@@ -391,6 +391,89 @@ describe("getLegacyChatHistoryPage — applyDeletionFilters semantics (Task #80)
     expect(olderPage.hasMore).toBe(false);
   });
 
+  it("Task #116 — legacy HTTP route `GET /api/chat/:userId/messages` arg shape hides BOTH globally-tombstoned and viewer-deleted rows", async () => {
+    // Lock the corrected behaviour for the legacy HTTP route
+    // specifically. Pre-Task-#116 the route called the helper with
+    // `applyDeletionFilters: false` and would re-surface deleted
+    // messages back into the inbox via the fallback / sync surfaces
+    // (`ChatBubblesLayer.tsx` ~lines 475/515 and `use-chat.tsx`
+    // ~line 952). After Task #116 the route calls the helper with
+    // `applyDeletionFilters: true` — same as the realtime DM endpoint
+    // and the WS `chat_history` handler — so the union of rows the
+    // route returns must equal {visible-to-viewer} \ {tombstoned ∪
+    // deleted-for-viewer}, regardless of whether the deleted row is
+    // older, newer, or interleaved with visible ones.
+    const baseTime = new Date(Date.UTC(2026, 1, 8, 12, 0, 0));
+    // Visible row from A (oldest)
+    await seedMessages(userA, userB, 1, baseTime);
+    // Globally tombstoned row — must be hidden from BOTH viewers
+    await seedMessages(
+      userA,
+      userB,
+      1,
+      new Date(baseTime.getTime() + 1_000),
+      { deletedAt: new Date() },
+    );
+    // "Delete for me" by userA — must be hidden from userA's call,
+    // visible to userB's call
+    await seedMessages(
+      userB,
+      userA,
+      1,
+      new Date(baseTime.getTime() + 2_000),
+      { deletedForUsers: [userA.id] },
+    );
+    // Visible row from B (newest)
+    await seedMessages(userB, userA, 1, new Date(baseTime.getTime() + 3_000));
+
+    // Mirrors the route handler's call exactly (default limit/offset,
+    // applyDeletionFilters: true). The route returns `page.messages`
+    // directly to the client, so we assert against that array.
+    const routeArgs = {
+      limit: 50,
+      offset: 0,
+      applyDeletionFilters: true as const,
+    };
+
+    const aPage = await getLegacyChatHistoryPage({
+      ...routeArgs,
+      userId: userA.id,
+      peerId: userB.id,
+    });
+    // userA should see exactly the two undeleted A↔B rows.
+    expect(aPage.messages).toHaveLength(2);
+    expect(aPage.hasMore).toBe(false);
+    for (const m of aPage.messages) {
+      expect(m.deletedAt).toBeNull();
+      expect(m.deletedForUsers ?? []).not.toContain(userA.id);
+    }
+    // The deleted-for-userA row's timestamp must NOT appear in userA's
+    // page — guards against a regression where the route reverts to
+    // `applyDeletionFilters: false` (which would re-surface it).
+    const aTimes = aPage.messages.map((m) => m.createdAt!.getTime());
+    expect(aTimes).not.toContain(baseTime.getTime() + 2_000);
+    // Tombstoned row also absent.
+    expect(aTimes).not.toContain(baseTime.getTime() + 1_000);
+
+    const bPage = await getLegacyChatHistoryPage({
+      ...routeArgs,
+      userId: userB.id,
+      peerId: userA.id,
+    });
+    // userB sees the two visible rows AND the row userA "deleted for
+    // me" (because per-user tombstones are viewer-scoped). Globally
+    // deleted row is still hidden.
+    expect(bPage.messages).toHaveLength(3);
+    expect(bPage.hasMore).toBe(false);
+    for (const m of bPage.messages) {
+      expect(m.deletedAt).toBeNull();
+      expect(m.deletedForUsers ?? []).not.toContain(userB.id);
+    }
+    const bTimes = bPage.messages.map((m) => m.createdAt!.getTime());
+    expect(bTimes).toContain(baseTime.getTime() + 2_000);
+    expect(bTimes).not.toContain(baseTime.getTime() + 1_000);
+  });
+
   it("applyDeletionFilters=true: SQL filter keeps hasMore definitive even when over-fetched rows would otherwise be JS-filtered out", async () => {
     // Pre-Task-#80 the WS handler filtered deleted_for_users in JS
     // *after* the SQL fetch. With limit=5, an over-fetch would pull
