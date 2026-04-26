@@ -25,7 +25,7 @@ export function runDatabaseSeeds(): void {
     }
   })();
 
-  // Seed default themes if none exist
+  // Seed default themes if none exist (Task #195 — ship 4 editable presets).
   (async () => {
     try {
       const existingThemes = await db.select().from(themes).limit(1);
@@ -42,6 +42,13 @@ export function runDatabaseSeeds(): void {
             cardColor: "#1a1f2e",
             mutedColor: "#6b7280",
             borderColor: "#2d3748",
+            mode: "dark",
+            fontHeading: "Poppins",
+            fontBody: "Poppins",
+            radiusSm: "0.25rem",
+            radiusMd: "0.5rem",
+            radiusLg: "0.75rem",
+            shadowIntensity: "medium",
             isDefault: true,
           },
           {
@@ -55,10 +62,126 @@ export function runDatabaseSeeds(): void {
             cardColor: "#1e1b4b",
             mutedColor: "#9ca3af",
             borderColor: "#312e81",
+            mode: "dark",
+            fontHeading: "Poppins",
+            fontBody: "Poppins",
+            radiusSm: "0.375rem",
+            radiusMd: "0.625rem",
+            radiusLg: "1rem",
+            shadowIntensity: "strong",
+            isDefault: false,
+          },
+          {
+            name: "vex-light",
+            displayName: "VEX Light",
+            primaryColor: "#0ea5e9",
+            secondaryColor: "#f97316",
+            accentColor: "#22c55e",
+            backgroundColor: "#fafafa",
+            foregroundColor: "#0f172a",
+            cardColor: "#ffffff",
+            mutedColor: "#64748b",
+            borderColor: "#e2e8f0",
+            mode: "light",
+            fontHeading: "Poppins",
+            fontBody: "Poppins",
+            radiusSm: "0.25rem",
+            radiusMd: "0.5rem",
+            radiusLg: "0.75rem",
+            shadowIntensity: "soft",
+            isDefault: false,
+          },
+          {
+            name: "vex-sunset",
+            displayName: "VEX Sunset",
+            primaryColor: "#f97316",
+            secondaryColor: "#ec4899",
+            accentColor: "#facc15",
+            backgroundColor: "#1c1410",
+            foregroundColor: "#fff7ed",
+            cardColor: "#2a1d17",
+            mutedColor: "#d6a48c",
+            borderColor: "#7c2d12",
+            mode: "dark",
+            fontHeading: "Poppins",
+            fontBody: "Poppins",
+            radiusSm: "0.5rem",
+            radiusMd: "0.875rem",
+            radiusLg: "1.25rem",
+            shadowIntensity: "strong",
             isDefault: false,
           },
         ]);
         logger.info("Default themes seeded");
+      } else {
+        // Backfill: if previous installs only had 2 themes, top up to 4 without
+        // touching whichever theme is currently set as default.
+        const existingNames = new Set(
+          (await db.select({ name: themes.name }).from(themes)).map((row) => row.name),
+        );
+        const additions: Array<typeof themes.$inferInsert> = [];
+        if (!existingNames.has("vex-light")) {
+          additions.push({
+            name: "vex-light",
+            displayName: "VEX Light",
+            primaryColor: "#0ea5e9",
+            secondaryColor: "#f97316",
+            accentColor: "#22c55e",
+            backgroundColor: "#fafafa",
+            foregroundColor: "#0f172a",
+            cardColor: "#ffffff",
+            mutedColor: "#64748b",
+            borderColor: "#e2e8f0",
+            mode: "light",
+            fontHeading: "Poppins",
+            fontBody: "Poppins",
+            radiusSm: "0.25rem",
+            radiusMd: "0.5rem",
+            radiusLg: "0.75rem",
+            shadowIntensity: "soft",
+            isDefault: false,
+          });
+        }
+        if (!existingNames.has("vex-sunset")) {
+          additions.push({
+            name: "vex-sunset",
+            displayName: "VEX Sunset",
+            primaryColor: "#f97316",
+            secondaryColor: "#ec4899",
+            accentColor: "#facc15",
+            backgroundColor: "#1c1410",
+            foregroundColor: "#fff7ed",
+            cardColor: "#2a1d17",
+            mutedColor: "#d6a48c",
+            borderColor: "#7c2d12",
+            mode: "dark",
+            fontHeading: "Poppins",
+            fontBody: "Poppins",
+            radiusSm: "0.5rem",
+            radiusMd: "0.875rem",
+            radiusLg: "1.25rem",
+            shadowIntensity: "strong",
+            isDefault: false,
+          });
+        }
+        if (additions.length > 0) {
+          await db.insert(themes).values(additions);
+          logger.info(`Topped up themes table with ${additions.length} additional preset(s)`);
+        }
+
+        // One-time backfill of the new editable fields onto legacy themes so
+        // the admin page shows coherent defaults (admin can override anytime).
+        await db.execute(sql`
+          UPDATE themes
+          SET mode = COALESCE(mode, 'dark'),
+              font_heading = COALESCE(font_heading, 'Poppins'),
+              font_body = COALESCE(font_body, 'Poppins'),
+              radius_sm = COALESCE(radius_sm, '0.25rem'),
+              radius_md = COALESCE(radius_md, '0.5rem'),
+              radius_lg = COALESCE(radius_lg, '0.75rem'),
+              shadow_intensity = COALESCE(shadow_intensity, 'medium')
+          WHERE name IN ('vex-dark', 'vex-royal')
+        `);
       }
     } catch (error) {
       logger.error('Failed to seed themes', error instanceof Error ? error : new Error(String(error)));

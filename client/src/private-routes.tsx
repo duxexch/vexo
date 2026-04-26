@@ -135,6 +135,7 @@ const AdminChallengesPage = lazy(() => import("@/pages/admin/admin-challenges"))
 const AdminChatPage = lazy(() => import("@/pages/admin/admin-chat"));
 const AdminSam9Page = lazy(() => import("@/pages/admin/admin-sam9"));
 const AdminExternalGamesPage = lazy(() => import("@/pages/admin/admin-external-games"));
+const AdminThemesPage = lazy(() => import("@/pages/admin/admin-themes"));
 
 const SupportChatHeaderTrigger = lazy(() =>
     import("@/components/support-chat-widget").then((m) => ({ default: m.SupportChatHeaderTrigger })),
@@ -995,6 +996,11 @@ function AdminRouter() {
                     <Route path="/admin/external-games">
                         <AdminLayout>
                             <AdminExternalGamesPage />
+                        </AdminLayout>
+                    </Route>
+                    <Route path="/admin/themes">
+                        <AdminLayout>
+                            <AdminThemesPage />
                         </AdminLayout>
                     </Route>
                     <Route path="/admin/game-sections">
