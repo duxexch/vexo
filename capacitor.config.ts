@@ -56,7 +56,16 @@ const config: CapacitorConfig = {
       overlaysWebView: false,
     },
     Keyboard: {
-      resize: 'body',
+      // Task #180: MUST stay 'none'. The chat composer (and any other
+      // sticky-bottom surface) reads --keyboard-inset-bottom from
+      // `client/src/hooks/use-keyboard-inset.ts`, which is driven by
+      // `window.visualViewport`. If we let Capacitor *also* resize the
+      // body, the WebView reflow + the JS-driven layout animate at the
+      // same time and produce the visible "double-shift" jitter Task #43
+      // was meant to eliminate. The pinned vitest spec at
+      // `client/src/hooks/__tests__/keyboard-config-contract.test.ts`
+      // asserts this value so the drift cannot return silently.
+      resize: 'none',
       style: 'dark',
       resizeOnFullScreen: true,
     },

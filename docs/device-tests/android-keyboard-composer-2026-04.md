@@ -1,10 +1,17 @@
 # قائمة فحص يدوية: سلوك مربع الكتابة فوق لوحة مفاتيح Android (Capacitor)
 
-> هذه القائمة تخدم المهمة #82. تُنفَّذ على هاتف Android حقيقي (وإن أمكن iOS أيضًا) للتحقق من أن الإصلاح في المهمة #43 (`Keyboard.resize: 'none'` مع `useKeyboardInset` المعتمِد على `visualViewport`) أزال فعلًا فجوة الـ"double-shift" بين مربع الكتابة وأعلى لوحة المفاتيح.
+> هذه القائمة تخدم المهمة #82 وتم تحديثها لإغلاق المهمة #180 (Keyboard config drift). تُنفَّذ على هاتف Android حقيقي (وإن أمكن iOS أيضًا) للتحقق من أن الإصلاح في المهمة #43 (`Keyboard.resize: 'none'` مع `useKeyboardInset` المعتمِد على `visualViewport`) أزال فعلًا فجوة الـ"double-shift" بين مربع الكتابة وأعلى لوحة المفاتيح.
+>
+> ## ملخّص ما تغيّر في المهمة #180
+> - في فترةٍ ما تسرّبت قيمة `Keyboard.resize: 'body'` إلى `capacitor.config.ts`، فصار الـ WebView يعيد تنسيق الجسم في نفس الوقت الذي يحرّك فيه `useKeyboardInset` الـ layout عبر CSS variable. النتيجة: ارتجاج (jitter) ملحوظ على Android كلما فُتحت/أُغلقت اللوحة.
+> - التصحيح: إعادة `Keyboard.resize: 'none'` ليبقى الـ JS hook هو المصدر الوحيد للـ inset، مع تعليق صريح يمنع الانحراف مستقبلًا.
+> - حماية ضدّ التكرار: ملف اختبار جديد `client/src/hooks/__tests__/keyboard-config-contract.test.ts` يفشل فورًا إذا عاد أحدهم لتعيين `resize` إلى أي شيء غير `'none'`، ويتأكد أيضًا أن الـ hook يحسب الـ inset الصحيح من `visualViewport`.
 >
 > الملفات المعنية:
-> - `capacitor.config.ts`
+> - `capacitor.config.ts` (Keyboard plugin block)
 > - `client/src/hooks/use-keyboard-inset.ts`
+> - `client/src/hooks/__tests__/keyboard-config-contract.test.ts` (جديد — حارس الانحراف)
+> - `client/src/hooks/__tests__/use-keyboard-inset.test.tsx` (موجود — اختبار دورة حياة المستمعين)
 > - `client/src/pages/chat.tsx`
 > - `client/src/components/games/GameChat.tsx`
 
