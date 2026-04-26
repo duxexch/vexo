@@ -52,16 +52,23 @@ function validateThemePatch(updates: Partial<Record<PatchableThemeField, unknown
   for (const [field, value] of Object.entries(updates)) {
     const key = field as PatchableThemeField;
     if (value === null || value === undefined) continue; // null is allowed for optional fields
-    if (typeof value !== "string" && typeof value !== "boolean") {
+    // isActive is the *only* boolean column. Everything else is text.
+    if (key === "isActive") {
+      if (typeof value !== "boolean") {
+        return `Field 'isActive' must be a boolean`;
+      }
+      continue;
+    }
+    if (typeof value !== "string") {
       return `Field '${field}' must be a string`;
     }
-    if (COLOR_FIELDS.has(key) && typeof value === "string" && value !== "" && !HEX_COLOR_RE.test(value)) {
+    if (COLOR_FIELDS.has(key) && value !== "" && !HEX_COLOR_RE.test(value)) {
       return `Field '${field}' must be a #RGB or #RRGGBB hex color`;
     }
-    if (key === "mode" && typeof value === "string" && value !== "" && !VALID_MODES.has(value)) {
+    if (key === "mode" && value !== "" && !VALID_MODES.has(value)) {
       return `Field 'mode' must be 'dark' or 'light'`;
     }
-    if (key === "shadowIntensity" && typeof value === "string" && value !== "" && !VALID_SHADOW.has(value)) {
+    if (key === "shadowIntensity" && value !== "" && !VALID_SHADOW.has(value)) {
       return `Field 'shadowIntensity' must be 'soft', 'medium' or 'strong'`;
     }
   }
