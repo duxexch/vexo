@@ -1,0 +1,46 @@
+<!--
+  Add the following keys to the host app's Info.plist (typically
+  ios/App/App/Info.plist after `npx cap add ios`). Without
+  NSMicrophoneUsageDescription / NSCameraUsageDescription the App Store
+  review process rejects the build, AND the WebView's first call to
+  AVCaptureDevice.requestAccess(...) — issued under the hood when JS
+  invokes navigator.mediaDevices.getUserMedia(...) — throws and the app
+  is force-quit.
+
+  Keep the wording in sync with section 3 of
+  docs/CALL_PERMISSIONS_PLAYBOOK.md so the in-app rationale and the OS
+  prompt tell the user the same story.
+
+  These keys are merged from this snippet by hand at iOS build time —
+  unlike the Android plugin manifest, the Capacitor iOS host project's
+  Info.plist is NOT auto-merged from the plugin.
+-->
+<plist version="1.0">
+<dict>
+
+    <!--
+      Friend-call media permissions (added in task #88, finalized for
+      iOS in task #98). Required for voice + video calls.
+    -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>VEX uses your microphone only during voice and video calls so the other person can hear you. Audio is never recorded or stored.</string>
+
+    <key>NSCameraUsageDescription</key>
+    <string>VEX uses your camera only during video calls so the other person can see you. Video is never recorded or stored.</string>
+
+    <!--
+      Already required by the existing CallKit / PushKit wiring; listed
+      here so host-app maintainers see the complete picture in one
+      place. Mirrors the "Background Modes" capability toggles enabled
+      in Xcode (see AppDelegate-snippet.swift step 2).
+    -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>voip</string>
+        <string>audio</string>
+        <string>remote-notification</string>
+        <string>fetch</string>
+    </array>
+
+</dict>
+</plist>

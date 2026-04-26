@@ -90,6 +90,15 @@ Already present from earlier work (kept here for completeness):
 </array>
 ```
 
+A copy-paste-ready version of all the keys above (including the
+existing `UIBackgroundModes` array) lives at
+`native-plugins/capacitor-native-call-ui/examples/Info-plist-snippet.xml`
+so future iOS builds can pull from a single source of truth instead of
+re-typing the wording. **Unlike the Android plugin manifest, the iOS
+host app's `Info.plist` is NOT auto-merged from the plugin** — these
+keys must be added by hand (or by a build script) into
+`ios/App/App/Info.plist` after `npx cap add ios`.
+
 CallKit on iOS handles the actual mic/camera prompt at the moment the
 call is reported as connected — the in-app rationale serves as a
 courtesy explainer before that happens.
