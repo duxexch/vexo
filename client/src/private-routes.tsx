@@ -25,6 +25,7 @@ import {
     UserPlus,
     Download,
     Bell,
+    ArrowDownToLine,
 } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
@@ -46,6 +47,7 @@ import {
     useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { prefetchPage } from "@/components/PrefetchLink";
 import { VexLogo } from "@/components/vex-logo";
@@ -781,25 +783,62 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                         </a>
                         <AppSidebar side={sidebarSide} />
                         <div className="flex flex-col flex-1 overflow-hidden">
-                            <header className="sticky top-0 z-50 flex items-center justify-between gap-4 border-b bg-background px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+                            <header className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b bg-background px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
                                 <SidebarTrigger
-                                    className="h-10 w-10"
+                                    className="h-9 w-9"
                                     aria-label={t("nav.navigation") || "Navigation"}
                                     data-testid="button-sidebar-toggle"
                                 />
-                                <div className="flex items-center gap-3 flex-wrap overflow-visible">
-                                    <Link href="/wallet">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="gap-2"
-                                            aria-label={t("nav.wallet") || "Wallet"}
-                                            data-testid="button-header-wallet"
-                                        >
-                                            <Wallet className="h-4 w-4" />
-                                            <span className="hidden sm:inline">{t("nav.wallet")}</span>
-                                        </Button>
-                                    </Link>
+                                <div className="flex items-center gap-1.5 sm:gap-2 overflow-visible">
+                                    {/* Primary action — one-tap deposit. Render a single anchor
+                                        styled as a button (no a>button nesting) via Button's asChild slot. */}
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                asChild
+                                                variant="default"
+                                                size="sm"
+                                                className="gap-1.5 font-semibold shadow-sm h-9"
+                                            >
+                                                <Link
+                                                    href="/wallet?modal=deposit"
+                                                    aria-label={t("wallet.deposit") || "Deposit"}
+                                                    data-testid="button-header-deposit"
+                                                >
+                                                    <ArrowDownToLine className="h-4 w-4" aria-hidden="true" />
+                                                    <span className="hidden md:inline">{t("wallet.deposit") || "Deposit"}</span>
+                                                </Link>
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom">{t("wallet.deposit") || "Deposit"}</TooltipContent>
+                                    </Tooltip>
+
+                                    {/* Visual separator between the action and the tools cluster */}
+                                    <span
+                                        aria-hidden="true"
+                                        className="hidden sm:block h-6 w-px bg-border/70 mx-0.5"
+                                    />
+
+                                    {/* Tools cluster — uniform ghost icon buttons */}
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                asChild
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-9 w-9"
+                                            >
+                                                <Link
+                                                    href="/wallet"
+                                                    aria-label={t("nav.wallet") || "Wallet"}
+                                                    data-testid="button-header-wallet"
+                                                >
+                                                    <Wallet className="h-5 w-5" />
+                                                </Link>
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom">{t("nav.wallet") || "Wallet"}</TooltipContent>
+                                    </Tooltip>
                                     {isHomeRoute && (
                                         <Suspense fallback={null}>
                                             <SupportChatHeaderTrigger isLoggedIn={true} />

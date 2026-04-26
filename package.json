@@ -60,6 +60,7 @@
     "quality:smoke:tournament-insufficient-error": "tsx scripts/smoke-tournament-insufficient-error.ts",
     "quality:smoke:tournament-register-disabled-e2e": "node scripts/smoke-tournament-register-disabled-e2e.mjs",
     "quality:smoke:chat-keyboard-inset": "node tests/playwright/chat-keyboard-inset.spec.mjs",
+    "quality:smoke:header-deposit-shortcut": "node tests/playwright/header-deposit-shortcut.spec.mjs",
     "quality:smoke:call-experience": "tsx scripts/smoke-call-experience.ts",
     "quality:smoke:ringtone-asset": "tsx scripts/smoke-ringtone-asset.ts",
     "quality:smoke:voip-push": "tsx scripts/smoke-voip-push.ts",
