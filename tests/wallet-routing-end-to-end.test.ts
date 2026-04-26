@@ -16,7 +16,9 @@
  *
  * Test data is fully isolated: every row carries the per-run prefix
  * `wrt127-<ts>-<rand>` and the `afterEach` hook deletes it in reverse-FK
- * order. The pool is closed in `afterAll` so the test runner exits cleanly.
+ * order. The shared `server/db` pool is intentionally NOT closed here —
+ * other test files in the same vitest worker import the same pool and
+ * would fail with "Cannot use a pool after calling end".
  *
  * The wallet helper itself is exhaustively unit-tested in
  * `tests/wallet-balances.test.ts` against a row-level mocked Drizzle tx;
