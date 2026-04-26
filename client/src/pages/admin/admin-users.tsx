@@ -70,6 +70,7 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useUnreadAlertEntities, useMarkAlertReadByEntity } from "@/hooks/use-admin-alert-counts";
+import type { User as UserRow } from "@shared/schema";
 
 function getAdminToken() {
   return localStorage.getItem("adminToken");
@@ -92,32 +93,57 @@ async function adminFetch(url: string, options?: RequestInit) {
   return res.json();
 }
 
-interface UserType {
-  id: string;
-  username: string;
-  nickname?: string;
-  email?: string;
-  phone?: string;
-  firstName?: string;
-  lastName?: string;
-  role: string;
-  status: string;
-  balance: string;
-  profilePicture?: string;
-  vipLevel: number;
-  gamesPlayed: number;
-  gamesWon: number;
-  totalDeposited: string;
-  totalWithdrawn: string;
-  totalWagered: string;
-  totalWon: string;
-  balanceCurrency?: string;
-  p2pBanned: boolean;
-  p2pBanReason?: string;
-  p2pBannedAt?: string;
+// IMPORTANT: do not redeclare row-shape fields here. This type is derived
+// from `users.$inferSelect` in `shared/schema.ts` so that adding, renaming
+// or removing a column there shows up as a type error in this page (see
+// task #123). The wire payload is produced by `toSafeUsers` in
+// `server/lib/safe-user.ts`, which strips a fixed set of credential fields
+// and JSON-serialises timestamps as strings.
+type UserType = Omit<
+  UserRow,
+  | "password"
+  | "twoFactorSecret"
+  | "withdrawalPassword"
+  | "chatPinHash"
+  | "e2eeEncryptedPrivateKey"
+  | "createdAt"
+  | "updatedAt"
+  | "lastLoginAt"
+  | "p2pBannedAt"
+  | "accountDisabledAt"
+  | "accountDeletedAt"
+  | "accountRestoredAt"
+  | "balanceCurrencyLockedAt"
+  | "idVerifiedAt"
+  | "freePlayResetAt"
+  | "passwordChangedAt"
+  | "lockedUntil"
+  | "twoFactorVerifiedAt"
+  | "lastActiveAt"
+  | "chatPinLockedUntil"
+  | "chatPinSetAt"
+  | "e2eeKeyCreatedAt"
+  | "usernameSelectedAt"
+> & {
   createdAt: string;
-  lastLoginAt?: string;
-}
+  updatedAt: string;
+  lastLoginAt: string | null;
+  p2pBannedAt: string | null;
+  accountDisabledAt: string | null;
+  accountDeletedAt: string | null;
+  accountRestoredAt: string | null;
+  balanceCurrencyLockedAt: string | null;
+  idVerifiedAt: string | null;
+  freePlayResetAt: string | null;
+  passwordChangedAt: string | null;
+  lockedUntil: string | null;
+  twoFactorVerifiedAt: string | null;
+  lastActiveAt: string | null;
+  chatPinLockedUntil: string | null;
+  chatPinSetAt: string | null;
+  e2eeKeyCreatedAt: string | null;
+  usernameSelectedAt: string | null;
+};
 
 interface FinancialTimelineEntry {
   id: string;
@@ -505,7 +531,7 @@ export default function AdminUsersPage() {
     }
   };
 
-  const formatDate = (date: string | undefined) => {
+  const formatDate = (date: string | null | undefined) => {
     if (!date) return "-";
     return new Date(date).toLocaleDateString("en-US", {
       year: "numeric",
@@ -588,7 +614,7 @@ export default function AdminUsersPage() {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-10 w-10 shrink-0">
-                              <AvatarImage src={user.profilePicture} />
+                              <AvatarImage src={user.profilePicture ?? undefined} />
                               <AvatarFallback>
                                 {user.username.substring(0, 2).toUpperCase()}
                               </AvatarFallback>
@@ -710,7 +736,7 @@ export default function AdminUsersPage() {
                       <div className="flex items-center justify-between gap-3">
                         <button type="button" className="flex min-w-0 items-center gap-3 text-start" onClick={() => handleUserRowClick(user)}>
                           <Avatar className="h-10 w-10 shrink-0">
-                            <AvatarImage src={user.profilePicture} />
+                            <AvatarImage src={user.profilePicture ?? undefined} />
                             <AvatarFallback>
                               {user.username.substring(0, 2).toUpperCase()}
                             </AvatarFallback>
@@ -836,7 +862,7 @@ export default function AdminUsersPage() {
                 <TabsContent value="profile" className="mt-4 space-y-6">
               <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
                 <Avatar className="h-16 w-16">
-                  <AvatarImage src={selectedUser.profilePicture} />
+                  <AvatarImage src={selectedUser.profilePicture ?? undefined} />
                   <AvatarFallback className="text-xl">
                     {(selectedUser.nickname || selectedUser.username).substring(0, 2).toUpperCase()}
                   </AvatarFallback>
@@ -965,7 +991,7 @@ export default function AdminUsersPage() {
                       {editMode ? (
                         <Select
                           value={editFormData.role}
-                          onValueChange={(v) => setEditFormData({ ...editFormData, role: v })}
+                          onValueChange={(v) => setEditFormData({ ...editFormData, role: v as UserType["role"] })}
                         >
                           <SelectTrigger data-testid="select-edit-role">
                             <SelectValue />
@@ -986,7 +1012,7 @@ export default function AdminUsersPage() {
                       {editMode ? (
                         <Select
                           value={editFormData.status}
-                          onValueChange={(v) => setEditFormData({ ...editFormData, status: v })}
+                          onValueChange={(v) => setEditFormData({ ...editFormData, status: v as UserType["status"] })}
                         >
                           <SelectTrigger data-testid="select-edit-status">
                             <SelectValue />
@@ -1438,7 +1464,7 @@ export default function AdminUsersPage() {
             {selectedUser && (
               <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
                 <Avatar>
-                  <AvatarImage src={selectedUser.profilePicture} />
+                  <AvatarImage src={selectedUser.profilePicture ?? undefined} />
                   <AvatarFallback>{selectedUser.username.substring(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div>

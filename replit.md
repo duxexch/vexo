@@ -27,7 +27,7 @@ VEX is built on a modern, distributed architecture designed for scalability and 
 **Core Architectural Decisions:**
 
 - **Microservices-oriented for AI:** The AI service is decoupled into a separate container, allowing independent scaling and development.
-- **Shared Codebase:** A `shared/` directory centralizes types and Drizzle schema, ensuring consistency between frontend and backend.
+- **Shared Codebase:** A `shared/` directory centralizes types and Drizzle schema, ensuring consistency between frontend and backend. **Client pages must derive their row types from `shared/schema.ts` (via `typeof <table>.$inferSelect` or a thin `Pick`/`Omit`) instead of hand-rewriting them locally** — the previous duplicate `P2POffer` / `UserType` interfaces in `client/src/pages/p2p.tsx`, `client/src/pages/admin/admin-p2p.tsx`, and `client/src/pages/admin/admin-users.tsx` silently drifted whenever the server schema gained or renamed a column (Task #98 patched the symptom; Task #123 removed the duplication). Where the wire payload renames a column or joins extra fields, anchor the override to the schema column (e.g. `currency: P2POfferRow["cryptoCurrency"]`) so the build still breaks if the underlying column name changes.
 - **Containerization:** Docker is used for consistent development and production environments, orchestrated with Docker Compose.
 - **Real-time Communication:** WebSockets are fundamental for interactive features like chat and game updates, with sticky sessions managed by the backend cluster.
 - **Multi-currency Wallet System:** Supports multiple currencies with a primary wallet and lazily created sub-wallets, managed through dedicated financial modules and administrative controls.

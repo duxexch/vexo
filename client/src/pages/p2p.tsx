@@ -38,42 +38,51 @@ import {
   getTradeStatusBucket,
 } from "@/lib/p2p-status";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-interface P2POffer {
-  id: string;
-  userId: string;
-  username: string;
-  country?: string | null;
-  type: "buy" | "sell";
-  dealKind?: "standard_asset" | "digital_product";
-  digitalProductType?: string | null;
-  exchangeOffered?: string | null;
-  exchangeRequested?: string | null;
-  supportMediationRequested?: boolean;
-  requestedAdminFeePercentage?: string | null;
-  amount: string;
-  price: string;
-  currency: string;
-  fiatCurrency: string;
-  minLimit: string;
-  maxLimit: string;
-  paymentMethods: string[];
-  paymentTimeLimit?: number;
-  terms?: string | null;
-  autoReply?: string | null;
-  rating: number;
-  completedTrades: number;
-  status: "pending_approval" | "active" | "paused" | "completed" | "cancelled" | "rejected" | "inactive";
-  visibility?: "public" | "private_friend";
-  targetUserId?: string | null;
-  targetUsername?: string | null;
-  moderationReason?: string | null;
-  counterResponse?: string | null;
-  submittedForReviewAt?: string | null;
-  reviewedAt?: string | null;
-  approvedAt?: string | null;
-  rejectedAt?: string | null;
-  createdAt: string;
-}
+import type { P2POffer as P2POfferRow } from "@shared/schema";
+
+// IMPORTANT: do not redeclare row-shape fields here. This type is derived from
+// `p2pOffers.$inferSelect` in `shared/schema.ts` so that adding, renaming or
+// removing a column there shows up as a type error in this page (see task
+// #123). The wire payload is produced by `mapOfferForClient` in
+// `server/routes/p2p-trading/offers.ts`, which renames a couple of columns
+// (`cryptoCurrency` -> `currency`, `availableAmount` -> `amount`),
+// JSON-serialises timestamps as strings, and joins a few user fields. Those
+// transforms are reflected in the intersection below; everything else flows
+// straight through from the schema.
+type P2POffer =
+  Omit<
+    P2POfferRow,
+    | "cryptoCurrency"
+    | "availableAmount"
+    | "completionRate"
+    | "walletCurrency"
+    | "reviewedBy"
+    | "updatedAt"
+    | "submittedForReviewAt"
+    | "reviewedAt"
+    | "approvedAt"
+    | "rejectedAt"
+    | "createdAt"
+    | "paymentMethods"
+    | "status"
+  >
+  & {
+    username: string;
+    country?: string | null;
+    targetUsername?: string | null;
+    rating: number;
+    currency: P2POfferRow["cryptoCurrency"];
+    amount: P2POfferRow["availableAmount"];
+    paymentMethods: NonNullable<P2POfferRow["paymentMethods"]>;
+    // Schema enum doesn't include "inactive" but the page guards against it
+    // for legacy/back-compat reasons.
+    status: P2POfferRow["status"] | "inactive";
+    submittedForReviewAt: string | null;
+    reviewedAt: string | null;
+    approvedAt: string | null;
+    rejectedAt: string | null;
+    createdAt: string;
+  };
 
 interface FriendUser {
   id: string;

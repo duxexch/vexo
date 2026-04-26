@@ -52,6 +52,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical } from "lucide-react";
+import type { P2POffer as P2POfferRow } from "@shared/schema";
 
 function getAdminToken() {
   return localStorage.getItem("adminToken");
@@ -74,32 +75,41 @@ async function adminFetch(url: string, options?: RequestInit) {
   return res.json();
 }
 
-interface P2POffer {
-  id: string;
-  userId?: string;
-  type: string;
-  username?: string;
-  targetUserId?: string | null;
-  targetUsername?: string | null;
-  visibility?: "public" | "private_friend";
-  currency?: string;
-  amount?: string | number;
-  price?: string;
-  minAmount?: string;
-  maxAmount?: string;
-  status: string;
-  moderationReason?: string | null;
-  counterResponse?: string | null;
-  submittedForReviewAt?: string | null;
-  reviewedAt?: string | null;
-  approvedAt?: string | null;
-  rejectedAt?: string | null;
-  reviewedBy?: string | null;
-  reviewedByUsername?: string | null;
-  paymentMethods?: string[];
-  createdAt?: string;
-  [key: string]: unknown;
-}
+// IMPORTANT: do not redeclare row-shape fields here. This type is derived
+// from `p2pOffers.$inferSelect` in `shared/schema.ts` so that adding,
+// renaming or removing a column there shows up as a type error in this
+// page (see task #123). The wire payload is produced by the
+// `/api/admin/p2p/offers` handler in `server/admin-routes/admin-p2p/index.ts`,
+// which renames `availableAmount` -> `amount`, formats `currency` as
+// "<crypto>/<fiat>", JSON-serialises timestamps as strings, and joins
+// `username` / `targetUsername` / `reviewedByUsername` from `users`.
+type P2POffer =
+  Omit<
+    P2POfferRow,
+    | "availableAmount"
+    | "cryptoCurrency"
+    | "createdAt"
+    | "updatedAt"
+    | "submittedForReviewAt"
+    | "reviewedAt"
+    | "approvedAt"
+    | "rejectedAt"
+  >
+  & {
+    username?: string;
+    targetUsername?: string | null;
+    reviewedByUsername?: string | null;
+    amount: P2POfferRow["availableAmount"];
+    // Wire-formatted "<cryptoCurrency>/<fiatCurrency>" string. Anchored to
+    // the schema columns so renaming either one breaks the build here.
+    currency: `${P2POfferRow["cryptoCurrency"]}/${P2POfferRow["fiatCurrency"]}`;
+    createdAt: string;
+    submittedForReviewAt: string | null;
+    reviewedAt: string | null;
+    approvedAt: string | null;
+    rejectedAt: string | null;
+    [key: string]: unknown;
+  };
 
 interface P2PTrade {
   id: string;
