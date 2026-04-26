@@ -2678,7 +2678,7 @@ function SecuritySection() {
   );
 }
 
-function PermissionsSection() {
+export function PermissionsSection() {
   const { t, language } = useI18n();
   const { toast } = useToast();
   const [summary, setSummary] = useState<import("@/lib/startup-permissions").PermissionSummary | null>(null);
