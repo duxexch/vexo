@@ -425,7 +425,7 @@ export default function AdminTransactionsPage() {
               {archiveResponse?.total !== undefined ? ` / ${archiveResponse.total}` : ""}
             </span>
             <span>
-              {isArabic ? "إيداع" : "Deposits"}: {statsByType.deposits} | {isArabic ? "سحب" : "Withdrawals"}: {statsByType.withdrawals}
+              {isArabic ? "إيداع" : "Deposits"}: {statsByType.deposits} | {isArabic ? "سحب" : "Withdrawals"}: {statsByType.withdrawals} | {isArabic ? "تحويلات" : "Conversions"}: {statsByType.conversions}
               {isFetching ? (
                 <Loader2 className="inline ms-2 h-3 w-3 animate-spin" />
               ) : null}
