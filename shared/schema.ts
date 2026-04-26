@@ -1233,6 +1233,7 @@ export const themes = pgTable("themes", {
   mutedColor: text("muted_color").notNull(),
   borderColor: text("border_color").notNull(),
   // Task #195 — extended customization fields (all NULLABLE for backward compat).
+  destructiveColor: text("destructive_color"),
   mode: text("mode"),
   fontHeading: text("font_heading"),
   fontBody: text("font_body"),

@@ -214,6 +214,17 @@ function ThemePreview({ theme, isArabic }: ThemePreviewProps) {
           >
             {isArabic ? "تمييز" : "Accent"}
           </span>
+          <button
+            type="button"
+            className="px-3 py-1.5 text-xs font-semibold shadow"
+            style={{
+              backgroundColor: theme.destructiveColor || "#ef4444",
+              color: "#fff",
+              borderRadius: theme.radiusSm ?? undefined,
+            }}
+          >
+            {isArabic ? "حذف" : "Delete"}
+          </button>
         </div>
         <p className="mt-3 text-sm" style={{ color: theme.foregroundColor }}>
           {isArabic
@@ -229,7 +240,7 @@ interface ThemeEditorProps {
   open: boolean;
   theme: AdminTheme | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (saved: AdminTheme) => void;
 }
 
 function ThemeEditor({ open, theme, onClose, onSaved }: ThemeEditorProps) {
@@ -254,13 +265,15 @@ function ThemeEditor({ open, theme, onClose, onSaved }: ThemeEditorProps) {
         body: JSON.stringify(editable),
       });
     },
-    onSuccess: () => {
+    onSuccess: (saved: AdminTheme) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/themes"] });
       toast({
         title: isArabic ? "تم الحفظ" : "Saved",
         description: isArabic ? "تم تحديث الثيم" : "Theme updated",
       });
-      onSaved();
+      // Pass the *server response* back so the parent reapplies the freshly
+      // saved values (avoids using a stale pre-edit copy of `editing`).
+      onSaved(saved);
       onClose();
     },
     onError: (error: unknown) => {
@@ -367,6 +380,12 @@ function ThemeEditor({ open, theme, onClose, onSaved }: ThemeEditorProps) {
                   label={isArabic ? "الحدود" : "Border"}
                   value={draft.borderColor}
                   onChange={(v) => update("borderColor", v)}
+                />
+                <ColorField
+                  id="destructiveColor"
+                  label={isArabic ? "الإجراءات الخطرة" : "Destructive"}
+                  value={draft.destructiveColor || "#ef4444"}
+                  onChange={(v) => update("destructiveColor", v)}
                 />
               </div>
             </section>
@@ -742,11 +761,13 @@ export default function AdminThemesPage() {
         open={!!editing}
         theme={editing}
         onClose={() => setEditing(null)}
-        onSaved={() => {
+        onSaved={(saved) => {
           // After save, re-apply the live theme if the saved one is currently
-          // default so the admin sees the change without a hard reload.
-          if (editing?.isDefault) {
-            applyAdminTheme(editing);
+          // default so the admin sees the change without a hard reload. We use
+          // the server response (`saved`) — never the stale `editing` snapshot
+          // — so the live preview reflects the freshly saved values.
+          if (saved.isDefault) {
+            applyAdminTheme(saved);
           }
         }}
       />

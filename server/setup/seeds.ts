@@ -42,6 +42,7 @@ export function runDatabaseSeeds(): void {
             cardColor: "#1a1f2e",
             mutedColor: "#6b7280",
             borderColor: "#2d3748",
+            destructiveColor: "#ef4444",
             mode: "dark",
             fontHeading: "Poppins",
             fontBody: "Poppins",
@@ -62,6 +63,7 @@ export function runDatabaseSeeds(): void {
             cardColor: "#1e1b4b",
             mutedColor: "#9ca3af",
             borderColor: "#312e81",
+            destructiveColor: "#f43f5e",
             mode: "dark",
             fontHeading: "Poppins",
             fontBody: "Poppins",
@@ -82,6 +84,7 @@ export function runDatabaseSeeds(): void {
             cardColor: "#ffffff",
             mutedColor: "#64748b",
             borderColor: "#e2e8f0",
+            destructiveColor: "#dc2626",
             mode: "light",
             fontHeading: "Poppins",
             fontBody: "Poppins",
@@ -102,6 +105,7 @@ export function runDatabaseSeeds(): void {
             cardColor: "#2a1d17",
             mutedColor: "#d6a48c",
             borderColor: "#7c2d12",
+            destructiveColor: "#b91c1c",
             mode: "dark",
             fontHeading: "Poppins",
             fontBody: "Poppins",
@@ -132,6 +136,7 @@ export function runDatabaseSeeds(): void {
             cardColor: "#ffffff",
             mutedColor: "#64748b",
             borderColor: "#e2e8f0",
+            destructiveColor: "#dc2626",
             mode: "light",
             fontHeading: "Poppins",
             fontBody: "Poppins",
@@ -154,6 +159,7 @@ export function runDatabaseSeeds(): void {
             cardColor: "#2a1d17",
             mutedColor: "#d6a48c",
             borderColor: "#7c2d12",
+            destructiveColor: "#b91c1c",
             mode: "dark",
             fontHeading: "Poppins",
             fontBody: "Poppins",
@@ -179,7 +185,8 @@ export function runDatabaseSeeds(): void {
               radius_sm = COALESCE(radius_sm, '0.25rem'),
               radius_md = COALESCE(radius_md, '0.5rem'),
               radius_lg = COALESCE(radius_lg, '0.75rem'),
-              shadow_intensity = COALESCE(shadow_intensity, 'medium')
+              shadow_intensity = COALESCE(shadow_intensity, 'medium'),
+              destructive_color = COALESCE(destructive_color, '#ef4444')
           WHERE name IN ('vex-dark', 'vex-royal')
         `);
       }

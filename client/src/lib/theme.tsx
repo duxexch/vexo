@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 type Theme = "light" | "dark";
 
@@ -14,6 +14,7 @@ export interface AdminTheme {
   cardColor: string;
   mutedColor: string;
   borderColor: string;
+  destructiveColor: string | null;
   mode: string | null;
   fontHeading: string | null;
   fontBody: string | null;
@@ -52,6 +53,8 @@ export const ADMIN_THEME_VAR_NAMES = [
   "--border",
   "--input",
   "--ring",
+  "--destructive",
+  "--destructive-foreground",
   "--sidebar",
   "--sidebar-foreground",
   "--sidebar-primary",
@@ -173,6 +176,11 @@ export function applyAdminTheme(theme: AdminTheme, root: HTMLElement = document.
   setVar("--border", borderHsl);
   setVar("--input", borderHsl);
   setVar("--ring", primaryHsl);
+  if (theme.destructiveColor) {
+    const destructiveHsl = hexToHslString(theme.destructiveColor);
+    setVar("--destructive", destructiveHsl);
+    setVar("--destructive-foreground", pickContrastForeground(theme.destructiveColor));
+  }
   setVar("--sidebar", cardHsl);
   setVar("--sidebar-foreground", foregroundHsl);
   setVar("--sidebar-primary", primaryHsl);
@@ -214,6 +222,14 @@ async function fetchActiveTheme(): Promise<AdminTheme | null> {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // Capture whether the user already pinned a preference *before* React's
+  // first effect writes localStorage. Without this ref, the boot effect below
+  // would always see a populated `localStorage.theme` and would never honour
+  // the admin theme's mode.
+  const userPinnedThemeRef = useRef<boolean>(
+    typeof window !== "undefined" && localStorage.getItem("theme") !== null,
+  );
+
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("theme") as Theme;
@@ -240,12 +256,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       if (cancelled || !active) return;
       applyAdminTheme(active);
       // If the admin theme dictates a colour mode, honour it — but only when
-      // the user has not pinned a preference already.
-      if (active.mode === "light" || active.mode === "dark") {
-        const stored = typeof window !== "undefined" ? localStorage.getItem("theme") : null;
-        if (!stored) {
-          setTheme(active.mode);
-        }
+      // the user has not explicitly pinned a preference (checked at mount via
+      // the ref above, *before* the first effect wrote localStorage).
+      if (
+        !userPinnedThemeRef.current &&
+        (active.mode === "light" || active.mode === "dark")
+      ) {
+        setTheme(active.mode);
       }
     });
     return () => {
@@ -253,12 +270,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Once the user explicitly toggles the theme via setTheme/toggleTheme, we
+  // consider the preference "pinned" and stop honouring the admin's mode.
+  const setThemePinned = (next: Theme) => {
+    userPinnedThemeRef.current = true;
+    setTheme(next);
+  };
+
   const toggleTheme = () => {
+    userPinnedThemeRef.current = true;
     setTheme(prev => prev === "dark" ? "light" : "dark");
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, setTheme: setThemePinned, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );

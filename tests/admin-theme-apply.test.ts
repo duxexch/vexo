@@ -39,6 +39,7 @@ const SAMPLE_THEME: AdminTheme = {
   cardColor: "#1a1f2e",
   mutedColor: "#6b7280",
   borderColor: "#2d3748",
+  destructiveColor: "#ef4444",
   mode: "dark",
   fontHeading: "Inter",
   fontBody: "Cairo",
