@@ -134,6 +134,54 @@ Negative test:
    existing telemetry counters should record one
    `permission_denied` event for the callee.
 
+### 4.1 Video friend-call permanent-denial smoke (Task #128)
+
+The voice-call path was validated on a physical Android device under
+Task #124. The video-call path uses the same JS layer
+(`use-call-session.tsx` and `private-call-layer.tsx` both invoke
+`ensureCallPermissions("video")` and forward the result through
+`isPermanentlyDeniedForCall("video", ...)`) but, because the OS asks
+for **two** permissions in a single batch, the "Don't ask again" flow
+benefits from its own dedicated checklist:
+
+1. **Fresh install** the latest signed APK on a physical phone (or
+   wipe app data on an existing install). Sign in with an account
+   that has at least one mutual friend.
+2. Open the friend chat and tap **Video call**.
+3. Confirm the in-app rationale modal lists **both** the microphone
+   and camera rows, then tap **Allow**.
+4. Confirm the OS surfaces a **single combined** dialog asking for
+   microphone + camera. Granting it should let the call proceed.
+5. End the call. Open Settings → Apps → VEX → Permissions and revoke
+   both microphone and camera. Restart the app.
+6. Tap **Video call** again. Tap **Allow** on the in-app rationale.
+   On the OS dialog, tap **Don't allow** twice (Android requires two
+   consecutive denials before it ticks the internal "permanently
+   denied" flag).
+7. Tap **Video call** a third time. Confirm:
+   - The rationale modal now shows **Open Settings** as the primary
+     CTA.
+   - The **Allow** button is hidden entirely.
+   - Tapping **Open Settings** lands you on the app's permission
+     screen for VEX (not the home Settings root).
+
+A regression in any of these steps means the video path has fallen
+out of sync with the voice path. The JS-side behaviour is locked in
+by `tests/call-permission-prompt.test.tsx` (modal CTA layout for
+video kind) and `tests/native-call-permissions-kind.test.ts`
+(`isPermanentlyDeniedForCall("video", ...)` and
+`isMissingForCall("video", ...)` routing).
+
+#### Device-test log
+
+| Date (YYYY-MM-DD) | Device                | Android version | Result | Notes              |
+| ----------------- | --------------------- | --------------- | ------ | ------------------ |
+| _pending_         | _to be filled in_     | _to be filled_  | _—_    | _engineer's name_  |
+
+After completing the checklist on a real device, append a row above
+with the device model, Android version, pass/fail outcome and any
+follow-up observations.
+
 ---
 
 ## 5. Permissions-tab UI
