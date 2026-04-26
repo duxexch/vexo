@@ -111,6 +111,7 @@ interface UserType {
   totalWithdrawn: string;
   totalWagered: string;
   totalWon: string;
+  balanceCurrency?: string;
   p2pBanned: boolean;
   p2pBanReason?: string;
   p2pBannedAt?: string;

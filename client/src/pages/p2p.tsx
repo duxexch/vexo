@@ -51,6 +51,7 @@ interface P2POffer {
   amount: string;
   price: string;
   currency: string;
+  fiatCurrency: string;
   minLimit: string;
   maxLimit: string;
   paymentMethods: string[];
