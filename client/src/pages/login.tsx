@@ -178,6 +178,11 @@ export default function LoginPage() {
 
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
   const [showNicknameModal, setShowNicknameModal] = useState(false);
+  // True from the moment one-click registration succeeds until the user either
+  // sets their nickname or dismisses the dialogs. Used to pause the background
+  // auth-surface poller so it can't surface a misleading error while the
+  // signup dialogs are open.
+  const quickSignupInProgressRef = useRef(false);
   const [nickname, setNickname] = useState("");
   const [nicknameError, setNicknameError] = useState("");
   const [isCheckingNickname, setIsCheckingNickname] = useState(false);
@@ -551,6 +556,12 @@ export default function LoginPage() {
     let isMounted = true;
 
     const refreshAuthSurface = async () => {
+      // While the one-click signup dialogs are open, the new vex_token cookie
+      // is already attached to outgoing requests but the user hasn't selected
+      // a username yet. Skip this refresh so we can't accidentally surface any
+      // gate-related errors over the open dialog.
+      if (quickSignupInProgressRef.current) return;
+
       try {
         const [settingsRes, socialRes] = await Promise.all([
           fetch("/api/auth/settings"),
@@ -568,6 +579,9 @@ export default function LoginPage() {
           const socials = await socialRes.json();
           if (isMounted) setSocialPlatforms(Array.isArray(socials) ? socials : []);
         }
+        // Any non-OK response (including a 428 USERNAME_SELECTION_REQUIRED) is
+        // intentionally ignored: this poller only refreshes public config and
+        // never surfaces its own errors to the user.
       } catch {
         // Keep previous UI state when network refresh fails.
       }
@@ -1012,6 +1026,11 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       const result = await oneClickRegister(referralCodeFromUrl || undefined);
+      // Pause the background auth-surface poller for the duration of the
+      // credentials → nickname dialogs. The new user has a vex_token cookie
+      // attached to every request but no chosen username yet, so any other
+      // gated call could surface a misleading error toast over the dialog.
+      quickSignupInProgressRef.current = true;
       setGeneratedCredentials(result.credentials);
       setPendingUser(result.user);
       setPendingToken(result.token);
@@ -1310,21 +1329,44 @@ export default function LoginPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        toast({ title: t('common.error'), description: data.error || t('auth.failedSetNickname'), variant: "destructive" });
+        // If the user dismissed the nickname dialog while the request was
+        // in flight, silently abandon — no toast, no side effects.
+        if (!quickSignupInProgressRef.current) return;
+        const data = await res.json().catch(() => ({} as Record<string, unknown>));
+        toast({
+          title: t('common.error'),
+          description: (typeof data.error === "string" && data.error) || t('auth.failedSetNickname'),
+          variant: "destructive",
+        });
         return;
       }
 
-      if (pendingUser && pendingToken) {
-        confirmOneClickLogin(pendingUser as unknown as UserSchema, pendingToken);
+      // The server returns the updated user record. Setting nickname during
+      // one-click signup flips usernameSelectedAt server-side, so we must use
+      // that updated user (not the stale pendingUser) when authenticating —
+      // otherwise the AuthProvider would still see usernameSelectedAt = null
+      // and bounce us to the SelectUsername redirect page.
+      const updatedUser = await res.json().catch(() => null) as UserSchema | null;
+
+      // Guard against late-arriving success after the user dismissed the
+      // dialog: do not log them in or redirect them in that case.
+      if (!quickSignupInProgressRef.current) return;
+
+      if ((updatedUser || pendingUser) && pendingToken) {
+        const userToCommit = (updatedUser ?? (pendingUser as unknown as UserSchema));
+        confirmOneClickLogin(userToCommit, pendingToken);
         promptPostSignupNotifications();
       }
+      // Signup is fully complete — re-enable the background poller.
+      quickSignupInProgressRef.current = false;
       setShowNicknameModal(false);
       setPendingUser(null);
       setPendingToken(null);
       setNickname("");
       setLocation("/");
     } catch (error: unknown) {
+      // Suppress error toast if the dialog was dismissed mid-request.
+      if (!quickSignupInProgressRef.current) return;
       const message = error instanceof Error ? error.message : String(error);
       toast({ title: t('common.error'), description: message, variant: "destructive" });
     } finally {
@@ -1708,7 +1750,14 @@ export default function LoginPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={showCredentialsModal} onOpenChange={setShowCredentialsModal}>
+      <Dialog open={showCredentialsModal} onOpenChange={(open) => {
+        if (!open) {
+          // User dismissed the credentials dialog without continuing — stop
+          // pausing the poller so the login page returns to its normal state.
+          quickSignupInProgressRef.current = false;
+        }
+        setShowCredentialsModal(open);
+      }}>
         <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-primary">
@@ -2179,7 +2228,12 @@ export default function LoginPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showNicknameModal} onOpenChange={(open) => { if (!open) setShowNicknameModal(false); }}>
+      <Dialog open={showNicknameModal} onOpenChange={(open) => {
+        if (!open) {
+          quickSignupInProgressRef.current = false;
+          setShowNicknameModal(false);
+        }
+      }}>
         <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md rounded-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

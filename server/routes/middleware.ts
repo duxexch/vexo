@@ -288,6 +288,17 @@ const USERNAME_GATE_ALLOWLIST = new Set<string>([
   "/api/auth/logout",
   "/api/auth/session",
   "/api/auth/csrf-token",
+  // Public read-only configuration endpoints. They never expose user-specific
+  // data, so blocking them just to enforce username selection causes a
+  // misleading 428 toast during the post-one-click "Choose Your Nickname"
+  // dialog where the polling layer keeps refreshing them.
+  "/api/auth/settings",
+  "/api/social-platforms",
+  // The nickname dialog is part of the one-click registration flow itself —
+  // submitting it satisfies the gate (handler sets usernameSelectedAt when
+  // it's currently null), so this endpoint must be reachable while the gate
+  // is still active.
+  "/api/user/nickname",
 ]);
 
 /**

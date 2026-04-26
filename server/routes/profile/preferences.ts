@@ -367,7 +367,18 @@ export function registerPreferencesRoutes(app: Express): void {
         return res.status(400).json({ error: "Nickname already taken" });
       }
 
-      const user = await storage.updateUser(req.user!.id, { nickname: safeNickname });
+      // The "Choose Your Nickname" dialog is the final step of one-click
+      // registration. For users created via that flow, usernameSelectedAt is
+      // still NULL — flipping it here lets them pass the username gate on
+      // their next request without needing a separate /api/auth/select-username
+      // round-trip. For users who already have a username (changing nickname
+      // later from settings), usernameSelectedAt is left untouched.
+      const updates: { nickname: string; usernameSelectedAt?: Date } = { nickname: safeNickname };
+      if (req.user!.usernameSelected === false) {
+        updates.usernameSelectedAt = new Date();
+      }
+
+      const user = await storage.updateUser(req.user!.id, updates);
       const { password, ...safeUser } = user!;
       res.json(safeUser);
     } catch (error: unknown) {
