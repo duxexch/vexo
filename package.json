@@ -50,6 +50,7 @@
     "quality:smoke:domino-tile-orientation:update": "tsx scripts/smoke-domino-tile-orientation.ts --update",
     "quality:smoke:domino-playthrough-bounds": "tsx scripts/smoke-domino-playthrough-bounds.ts",
     "quality:smoke:domino-playthrough-pips": "tsx scripts/smoke-domino-playthrough-pips.ts",
+    "quality:smoke:domino-elbow-mirror": "tsx scripts/smoke-domino-elbow-mirror.ts",
     "quality:smoke:dm-notifications": "tsx scripts/smoke-dm-notifications.ts",
     "quality:smoke:dm-scroll-anchor": "tsx scripts/smoke-dm-scroll-anchor.ts",
     "quality:smoke:dm-history-pagination": "tsx scripts/smoke-dm-history-pagination.ts",
