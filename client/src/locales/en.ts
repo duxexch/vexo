@@ -2429,6 +2429,8 @@ const en: Record<string, string> = {
   'settings.permissions.cta.unavailable': 'Not supported on this device',
   'settings.permissions.iosPwa.title': 'Install to enable notifications',
   'settings.permissions.iosPwa.body': 'Tap the share icon in Safari, then "Add to Home Screen". Notifications and some advanced features only work after the app is installed.',
+  'settings.permissions.nativeCallUI.title': 'Native call screen',
+  'settings.permissions.nativeCallUI.helper': 'Shows incoming friend calls on the lock screen using CallKit (iOS) or the system dialer (Android), with Bluetooth headset controls.',
   'settings.permissions.wakeLock.title': 'Keep screen awake',
   'settings.permissions.wakeLock.helper': 'Stops the screen from dimming or locking while a game is in progress.',
   'settings.permissions.clipboardWrite.title': 'Copy to clipboard',

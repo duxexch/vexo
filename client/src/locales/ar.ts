@@ -2417,6 +2417,8 @@ const ar: Record<string, string> = {
   'settings.permissions.cta.unavailable': 'غير مدعوم على هذا الجهاز',
   'settings.permissions.iosPwa.title': 'ثبّت التطبيق لتفعيل الإشعارات',
   'settings.permissions.iosPwa.body': 'افتح أيقونة المشاركة في Safari ثم اضغط "أضف إلى الشاشة الرئيسية". الإشعارات وبعض الميزات المتقدمة لا تعمل إلا بعد تثبيت التطبيق.',
+  'settings.permissions.nativeCallUI.title': 'شاشة المكالمة الأصلية',
+  'settings.permissions.nativeCallUI.helper': 'تُظهر مكالمات الأصدقاء الواردة على شاشة القفل عبر CallKit في iOS أو شاشة الاتصال في Android، مع دعم سماعات Bluetooth.',
   'settings.permissions.wakeLock.title': 'إبقاء الشاشة مضاءة',
   'settings.permissions.wakeLock.helper': 'يمنع خفت الشاشة أو قفلها أثناء جلسة اللعب.',
   'settings.permissions.clipboardWrite.title': 'النسخ إلى الحافظة',

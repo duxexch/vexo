@@ -40,6 +40,7 @@ const REQUIRED_IDS: PermissionId[] = [
   "camera",
   "notifications",
   "overlay",
+  "nativeCallUI",
   "wakeLock",
   "clipboardWrite",
   "vibrate",

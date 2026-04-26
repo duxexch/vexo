@@ -33,6 +33,7 @@ import {
   Maximize2,
   Mic,
   Monitor,
+  PhoneIncoming,
   Vibrate,
 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
@@ -44,6 +45,7 @@ export type PermissionId =
   | "camera"
   | "notifications"
   | "overlay"
+  | "nativeCallUI"
   | "wakeLock"
   | "clipboardWrite"
   | "vibrate"
@@ -342,6 +344,25 @@ async function openOverlaySettings(): Promise<void> {
   await requestOverlayPermission();
 }
 
+/**
+ * Probe the native call UI (CallKit on iOS, Telecom on Android) and
+ * resolve to "granted" only when the OS exposes a real native call
+ * surface that we can drive. On the web — and on iOS Safari tabs that
+ * have not been installed as a PWA — there is no CallKit/Telecom
+ * binding to manage, so we report "unavailable" to keep the row
+ * accurate (no misleading Allow CTA).
+ */
+async function probeNativeCallUI(): Promise<PermissionResult> {
+  if (!Capacitor.isNativePlatform()) return "unavailable";
+  try {
+    const mod = await import("@/lib/native-call-ui");
+    const available = await mod.isNativeCallUIAvailable();
+    return available ? "granted" : "unavailable";
+  } catch {
+    return "unavailable";
+  }
+}
+
 // ---------------------------------------------------------------------
 // Catalogue.
 // ---------------------------------------------------------------------
@@ -410,6 +431,20 @@ export const PERMISSION_CATALOGUE: PermissionEntry[] = [
     openSettings: openOverlaySettings,
   },
   {
+    // Native-only row that surfaces whether CallKit (iOS) or Telecom
+    // (Android) is wired up for incoming-call UI. We deliberately keep
+    // it read-only — there is no per-app prompt for these system
+    // frameworks, only the underlying notification permission (already
+    // covered by the `notifications` row).
+    id: "nativeCallUI",
+    icon: PhoneIncoming,
+    titleKey: "settings.permissions.nativeCallUI.title",
+    helperKey: "settings.permissions.nativeCallUI.helper",
+    probe: probeNativeCallUI,
+    getState: (s) => readSummary(s, "nativeCallUI"),
+    isAvailable: (s) => readSummary(s, "nativeCallUI") !== "unavailable",
+  },
+  {
     id: "wakeLock",
     icon: Monitor,
     titleKey: "settings.permissions.wakeLock.title",
@@ -429,7 +464,10 @@ export const PERMISSION_CATALOGUE: PermissionEntry[] = [
     getState: (s) => readSummary(s, "clipboardWrite"),
     isAvailable: (s) => readSummary(s, "clipboardWrite") !== "unavailable",
     request: requestClipboardWritePrompt,
-    openSettings: openMicrophoneSettings,
+    // The Clipboard API has no per-site settings panel — Chromium and
+    // Safari both grant `clipboard.writeText` automatically when the
+    // call originates from a user gesture, so a "Open settings" deep
+    // link would only mislead the user. We deliberately omit it.
   },
   {
     id: "vibrate",
