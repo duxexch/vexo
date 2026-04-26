@@ -141,4 +141,26 @@ describe("<PermissionRow /> — state-driven CTA", () => {
 
     expect(screen.queryByTestId("btn-perm-overlay-allow")).toBeNull();
   });
+
+  it("denied without onOpenSettings: shows passive recovery hint, never a dead button", () => {
+    // Some catalogue entries (e.g. clipboardWrite) intentionally have no
+    // openSettings deep-link. Even when their state is "denied" the row
+    // must NOT render a clickable settings button that does nothing —
+    // that would be a dead-end recovery path.
+    render(
+      <PermissionRow
+        id="clipboardWrite"
+        icon={Mic}
+        title="Clipboard"
+        helper="Lets the app place text on your clipboard"
+        state="denied"
+        onAllow={() => {}}
+      />,
+    );
+
+    expect(screen.queryByTestId("btn-perm-clipboardWrite-settings")).toBeNull();
+    expect(screen.getByTestId("hint-perm-clipboardWrite-denied-no-settings")).toBeTruthy();
+    // Status pill still reflects the denied state.
+    expect(screen.getByTestId("status-perm-clipboardWrite-denied")).toBeTruthy();
+  });
 });

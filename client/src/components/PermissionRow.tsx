@@ -74,7 +74,7 @@ export function PermissionRow({
         {t("settings.permissions.cta.allow")}
       </Button>
     );
-  } else if (state === "denied") {
+  } else if (state === "denied" && onOpenSettings) {
     action = (
       <Button
         size="sm"
@@ -85,6 +85,19 @@ export function PermissionRow({
       >
         {t("settings.permissions.cta.openSettings")}
       </Button>
+    );
+  } else if (state === "denied") {
+    // Some permissions (e.g. clipboard write) have no per-site settings
+    // panel to deep-link into. Rather than render a dead "Open settings"
+    // button, show a passive recovery hint so the row still reflects
+    // the denied status without offering an action that goes nowhere.
+    action = (
+      <span
+        className="text-xs text-muted-foreground"
+        data-testid={`hint-perm-${id}-denied-no-settings`}
+      >
+        {t("settings.permissions.cta.unavailable")}
+      </span>
     );
   } else if (state === "unavailable") {
     action = (
