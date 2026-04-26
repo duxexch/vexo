@@ -33,6 +33,8 @@ const en: Record<string, string> = {
   'nav.player': 'Player',
   'nav.admin': 'Admin',
   'nav.notifications': 'Notifications',
+  'nav.theme': 'Theme',
+  'nav.language': 'Language',
   'nav.installApp': 'Install App',
   'common.balance': 'Balance',
   'common.deposit': 'Deposit',

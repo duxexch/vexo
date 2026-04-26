@@ -33,6 +33,8 @@ const ar: Record<string, string> = {
   'nav.player': 'لاعب',
   'nav.admin': 'مشرف',
   'nav.notifications': 'الإشعارات',
+  'nav.theme': 'السمة',
+  'nav.language': 'اللغة',
   'nav.installApp': 'تحميل التطبيق',
   'common.balance': 'الرصيد',
   'common.deposit': 'إيداع',

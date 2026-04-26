@@ -839,16 +839,47 @@ function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
                                         </TooltipTrigger>
                                         <TooltipContent side="bottom">{t("nav.wallet") || "Wallet"}</TooltipContent>
                                     </Tooltip>
+                                    {/* Remaining icon-only controls — each wrapped in a Tooltip
+                                        with a localized accessible name so the whole top-right
+                                        cluster speaks consistently in both Arabic and English. */}
                                     {isHomeRoute && (
-                                        <Suspense fallback={null}>
-                                            <SupportChatHeaderTrigger isLoggedIn={true} />
-                                        </Suspense>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className="inline-flex">
+                                                    <Suspense fallback={null}>
+                                                        <SupportChatHeaderTrigger isLoggedIn={true} />
+                                                    </Suspense>
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom">{t("nav.support") || "Support"}</TooltipContent>
+                                        </Tooltip>
                                     )}
-                                    <ThemeToggle />
-                                    <NotificationBell />
-                                    <Suspense fallback={null}>
-                                        <LanguageSwitcher />
-                                    </Suspense>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="inline-flex">
+                                                <ThemeToggle />
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom">{t("nav.theme") || "Theme"}</TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="inline-flex">
+                                                <NotificationBell />
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom">{t("nav.notifications") || "Notifications"}</TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="inline-flex">
+                                                <Suspense fallback={null}>
+                                                    <LanguageSwitcher />
+                                                </Suspense>
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom">{t("nav.language") || "Language"}</TooltipContent>
+                                    </Tooltip>
                                 </div>
                             </header>
                             <main

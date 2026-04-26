@@ -201,6 +201,46 @@ async function runProfile(browser, profile, viewerToken) {
         const wallet = page.locator('[data-testid="button-header-wallet"]');
         assert(await wallet.isVisible(), `${profile.name}: legacy wallet icon still visible`);
 
+        // The full icon cluster shares the same tooltip/aria treatment.
+        // We assert each control exists and exposes an accessible name
+        // so the row speaks consistently in both Arabic and English.
+        const tooledControls = [
+            { testid: "button-theme-toggle",       name: "theme toggle" },
+            { testid: "button-notification-bell",  name: "notification bell" },
+            { testid: "button-language-switch",    name: "language switcher" },
+        ];
+        for (const control of tooledControls) {
+            const locator = page.locator(`[data-testid="${control.testid}"]`);
+            await locator.waitFor({ state: "visible", timeout: 10000 });
+            const accessibleName =
+                (await locator.getAttribute("aria-label"))
+                || (await locator.getAttribute("title"))
+                || (await locator.textContent());
+            assert(
+                typeof accessibleName === "string" && accessibleName.trim().length > 0,
+                `${profile.name}: ${control.name} exposes an accessible name`,
+                { accessibleName },
+            );
+        }
+
+        // Hover the theme toggle and prove that a Radix tooltip with the
+        // localized label materializes (sanity check for the shared
+        // Tooltip wrapper added in private-routes.tsx). We pick the
+        // theme toggle because it's stable and unconditional.
+        const themeToggle = page.locator('[data-testid="button-theme-toggle"]');
+        await themeToggle.hover();
+        const tooltip = page.locator('[role="tooltip"]', { hasText: /Theme|السمة/ });
+        await tooltip.first().waitFor({ state: "visible", timeout: 5000 });
+        const tooltipText = (await tooltip.first().textContent() || "").trim();
+        assert(
+            /^(Theme|السمة)$/.test(tooltipText),
+            `${profile.name}: theme toggle shows localized tooltip on hover`,
+            { tooltipText },
+        );
+        // Move pointer away so the tooltip doesn't intercept the next click.
+        await page.mouse.move(0, 0);
+        await page.waitForTimeout(150);
+
         // The whole right-hand cluster sits in the same flex row as the
         // deposit button and must stay on a single line. We measure the
         // container that owns the cluster via the deposit button's
