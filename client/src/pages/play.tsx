@@ -551,6 +551,13 @@ function InGameChat({
   const realtimeChat = useSocketChat({
     roomId: matchId ? `match:${matchId}` : null,
     onError: onRealtimeError,
+    // The hook defaults to 100 messages, which is enough for a normal
+    // match but can drop bubbles in long sessions (e.g. casual rooms
+    // where two friends chat across many rounds). With history fetch
+    // now one-shot, we lift the in-memory cap so realtime stays
+    // authoritative for the whole session; reconnect refetch is the
+    // safety net if anything still gets evicted.
+    historyLimit: 1000,
   });
   const headerViewerCount = realtimeChat.viewerCountReceived
     ? realtimeChat.viewerCount
@@ -575,6 +582,16 @@ function InGameChat({
     wasConnectedRef.current = realtimeChat.connected;
   }, [realtimeChat.connected, refetchHistory]);
 
+  // Task #139 (architect follow-up): defensive — if `InGameChat` is
+  // ever reused across match transitions without a remount, drop the
+  // optimistic emoji buffer so we never bleed bubbles from match A
+  // into match B. matchId IS already in the history queryKey (so RQ
+  // resets there automatically), but `localEmojiSends` lives in
+  // component state, hence this manual reset.
+  // (No-op on first mount since the buffer starts empty.)
+  // Placed BEFORE the buffer's declaration so the effect runs after
+  // every mount lifecycle that changes matchId.
+  // -- declaration follows --
   // Task #139: optimistically-added emoji sends from this client. The
   // REST `/api/gameplay/messages` endpoint still owns the balance debit
   // (it runs in a row-locked transaction), so emojis aren't sent over
@@ -584,6 +601,9 @@ function InGameChat({
   // `chat:message` fan-out from the REST handler (broadcast carries
   // `gameplayEmoji` metadata) so they don't need a refetch either.
   const [localEmojiSends, setLocalEmojiSends] = useState<EmojiBubble[]>([]);
+  useEffect(() => {
+    setLocalEmojiSends([]);
+  }, [matchId]);
 
   const sendEmojiMutation = useMutation({
     mutationFn: async (data: { matchId: string; emojiId: string }) => {
