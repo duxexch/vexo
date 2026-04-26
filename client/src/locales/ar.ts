@@ -891,6 +891,8 @@ const ar: Record<string, string> = {
   'p2p.noCurrencyFound': 'لم يتم العثور على عملة',
   'p2p.country': 'الدولة',
   'p2p.currency': 'العملة',
+  'p2p.balanceHint': '{{currency}} — {{amount}} متاح',
+  'p2p.escrowFromWallet': 'سيتم حجز الضمان من محفظة {{currency}} الخاصة بك.',
   'p2p.paymentMethod': 'طريقة الدفع',
   'p2p.paymentMethods': 'طرق الدفع',
   'p2p.bankTransfer': 'تحويل بنكي',

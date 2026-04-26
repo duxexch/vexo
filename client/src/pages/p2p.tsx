@@ -248,6 +248,20 @@ interface P2PWalletBalanceEntry {
   freezeHours: number;
 }
 
+interface UserCurrencyWalletEntry {
+  currency: string;
+  balance: string;
+  isPrimary: boolean;
+  isAllowed: boolean;
+}
+
+interface UserCurrencyWalletsResponse {
+  multiCurrencyEnabled: boolean;
+  primaryCurrency: string;
+  allowedCurrencies: string[];
+  wallets: UserCurrencyWalletEntry[];
+}
+
 interface OfferEligibility {
   canCreateOffer: boolean;
   reasons: string[];
@@ -1893,6 +1907,23 @@ function MyOffersTab() {
     queryKey: ["/api/p2p/wallet-balances"],
   });
 
+  const { data: currencyWalletsResponse } = useQuery<UserCurrencyWalletsResponse>({
+    queryKey: ["/api/wallet/currency-wallets"],
+  });
+
+  const walletBalanceByCurrency = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const w of currencyWalletsResponse?.wallets || []) {
+      const code = normalizeCurrencyCodeValue(w.currency);
+      if (!code) continue;
+      const balance = Number(w.balance || 0);
+      if (Number.isFinite(balance)) {
+        map.set(code, balance);
+      }
+    }
+    return map;
+  }, [currencyWalletsResponse]);
+
   const { data: digitalProductTypes = [] } = useQuery<string[]>({
     queryKey: ["/api/p2p/digital-product-types"],
   });
@@ -1968,17 +1999,28 @@ function MyOffersTab() {
     return matched ? Number(matched.frozen || 0) : 0;
   }, [p2pWalletBalances, selectedOfferCurrency]);
 
+  const selectedCurrencyWalletBalance = useMemo(() => {
+    if (!selectedOfferCurrency) return 0;
+    if (walletBalanceByCurrency.has(selectedOfferCurrency)) {
+      return walletBalanceByCurrency.get(selectedOfferCurrency) || 0;
+    }
+    // Fallback to legacy primary balance when the wallets endpoint hasn't loaded
+    // yet but the user is operating in their primary currency.
+    if (selectedOfferCurrency === userWalletCurrency) {
+      return userWalletTotalBalance;
+    }
+    return 0;
+  }, [selectedOfferCurrency, userWalletCurrency, userWalletTotalBalance, walletBalanceByCurrency]);
+
   const sellAvailableBalance = useMemo(() => {
     if (selectedOfferType !== "sell") {
       return 0;
     }
-
-    if (!selectedOfferCurrency || selectedOfferCurrency !== userWalletCurrency) {
+    if (!selectedOfferCurrency) {
       return 0;
     }
-
-    return Math.max(0, userWalletTotalBalance - selectedCurrencyFrozenBalance);
-  }, [selectedCurrencyFrozenBalance, selectedOfferCurrency, selectedOfferType, userWalletCurrency, userWalletTotalBalance]);
+    return Math.max(0, selectedCurrencyWalletBalance - selectedCurrencyFrozenBalance);
+  }, [selectedCurrencyFrozenBalance, selectedCurrencyWalletBalance, selectedOfferCurrency, selectedOfferType]);
 
   const sellAmountNumeric = Number(form.watch("amount"));
   const isSellAmountOverBalance = selectedOfferType === "sell"
@@ -2289,10 +2331,10 @@ function MyOffersTab() {
 
     if (data.type === "sell") {
       const normalizedSellCurrency = normalizeCurrencyCodeValue(data.currency);
-      if (!normalizedSellCurrency || normalizedSellCurrency !== userWalletCurrency) {
+      if (!normalizedSellCurrency) {
         toast({
           title: t('common.error'),
-          description: `${t('wallet.availableBalance')}: ${formatAssetAmount(0, normalizedSellCurrency || userWalletCurrency || "USD", numberLocale)}`,
+          description: t('p2p.noCurrencyFound'),
           variant: "destructive",
         });
         return;
@@ -2766,16 +2808,16 @@ function MyOffersTab() {
                       )}
 
                       {selectedOfferType === "sell" && (
-                        <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 space-y-2">
+                        <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-3 space-y-2" data-testid="sell-wallet-summary">
                           <div className="flex items-center justify-between gap-2 text-sm">
                             <span className="text-slate-300">{t('wallet.currentBalance')}</span>
-                            <span className="font-semibold text-slate-100">
-                              {formatAssetAmount(userWalletTotalBalance, userWalletCurrency || "USD", numberLocale)}
+                            <span className="font-semibold text-slate-100" data-testid="sell-wallet-current-balance">
+                              {formatAssetAmount(selectedCurrencyWalletBalance, selectedOfferCurrency || userWalletCurrency || "USD", numberLocale)}
                             </span>
                           </div>
                           <div className="flex items-center justify-between gap-2 text-sm">
                             <span className="text-slate-300">{t('wallet.availableBalance')}</span>
-                            <span className="font-semibold text-emerald-300">
+                            <span className="font-semibold text-emerald-300" data-testid="sell-wallet-available-balance">
                               {formatAssetAmount(sellAvailableBalance, selectedOfferCurrency || userWalletCurrency || "USD", numberLocale)}
                             </span>
                           </div>
@@ -2792,24 +2834,52 @@ function MyOffersTab() {
                         <FormField
                           control={form.control}
                           name="currency"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>{t('p2p.currency')}</FormLabel>
-                              <Select value={field.value} onValueChange={field.onChange}>
-                                <FormControl>
-                                  <SelectTrigger data-testid="select-offer-currency">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {availableOfferCurrencies.map((supportedCurrency) => (
-                                    <SelectItem key={supportedCurrency} value={supportedCurrency}>{supportedCurrency}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
+                          render={({ field }) => {
+                            const serverWalletErrorMatch = createOfferMutation.error
+                              && /wallet currencies/i.test(createOfferMutation.error.message)
+                              ? createOfferMutation.error.message
+                              : null;
+                            return (
+                              <FormItem>
+                                <FormLabel>{t('p2p.currency')}</FormLabel>
+                                <Select value={field.value} onValueChange={field.onChange}>
+                                  <FormControl>
+                                    <SelectTrigger data-testid="select-offer-currency">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {availableOfferCurrencies.map((supportedCurrency) => {
+                                      const showHint = selectedOfferType === "sell"
+                                        && walletBalanceByCurrency.has(supportedCurrency);
+                                      const hintAmount = walletBalanceByCurrency.get(supportedCurrency) ?? 0;
+                                      return (
+                                        <SelectItem key={supportedCurrency} value={supportedCurrency} data-testid={`select-offer-currency-option-${supportedCurrency}`}>
+                                          {showHint
+                                            ? t('p2p.balanceHint', {
+                                                currency: supportedCurrency,
+                                                amount: formatAssetAmount(hintAmount, supportedCurrency, numberLocale),
+                                              })
+                                            : supportedCurrency}
+                                        </SelectItem>
+                                      );
+                                    })}
+                                  </SelectContent>
+                                </Select>
+                                {selectedOfferType === "sell" && selectedOfferCurrency && (
+                                  <p className="text-xs text-muted-foreground" data-testid="sell-currency-helper">
+                                    {t('p2p.escrowFromWallet', { currency: selectedOfferCurrency })}
+                                  </p>
+                                )}
+                                {serverWalletErrorMatch && (
+                                  <p className="text-xs text-destructive" data-testid="sell-currency-server-error">
+                                    {serverWalletErrorMatch}
+                                  </p>
+                                )}
+                                <FormMessage />
+                              </FormItem>
+                            );
+                          }}
                         />
 
                         <FormField

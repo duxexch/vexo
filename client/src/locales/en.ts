@@ -891,6 +891,8 @@ const en: Record<string, string> = {
   'p2p.noCurrencyFound': 'No currency found',
   'p2p.country': 'Country',
   'p2p.currency': 'Currency',
+  'p2p.balanceHint': '{{currency}} — {{amount}} available',
+  'p2p.escrowFromWallet': 'Escrow will be held from your {{currency}} wallet.',
   'p2p.paymentMethod': 'Payment Method',
   'p2p.paymentMethods': 'Payment Methods',
   'p2p.bankTransfer': 'Bank Transfer',
