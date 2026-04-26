@@ -757,6 +757,32 @@ export const transactions = pgTable("transactions", {
   // (user_id, type, reference_id) index keeps it fast even for power users
   // with very large transaction histories.
   index("idx_transactions_user_type_reference").on(table.userId, table.type, table.referenceId),
+  // Admin transactions screens (`/api/admin/transactions` listing + pending
+  // tab) only ever look at type IN ('deposit','withdrawal'). A partial index
+  // on that subset is dramatically smaller than a full-table composite and
+  // serves the common access patterns:
+  //   - status filtered  → exact match on the leading column, then walk
+  //     created_at in order (no separate sort needed).
+  //   - status not filtered → planner can still use it ordered by status,
+  //     created_at within the deposit/withdrawal subset.
+  // Covers both the "all transactions" list (with optional status filter,
+  // sorted DESC) and the pending tab (status='pending', sorted ASC).
+  index("idx_transactions_admin_list")
+    .on(table.status, table.createdAt)
+    .where(sql`type IN ('deposit','withdrawal')`),
+  // `storage.getPendingTransactions()` is `WHERE status='pending' ORDER BY
+  // created_at ASC` (no type filter — used by the agent confirmation queue).
+  // A partial index on the small pending subset, ordered by created_at,
+  // gives sort-free top-N reads without bloating writes for the common
+  // 'completed'/'rejected' rows.
+  index("idx_transactions_pending_created")
+    .on(table.createdAt)
+    .where(sql`status = 'pending'`),
+  // User-side history with a type filter (e.g. "show only my deposits") and
+  // admin per-user drilldowns ("all 'win' transactions for user X"). The
+  // existing (user_id, created_at) index has to filter type after the scan;
+  // (user_id, type, created_at) lets the planner do an index-only walk.
+  index("idx_transactions_user_type_created").on(table.userId, table.type, table.createdAt),
   uniqueIndex("uq_transactions_public_reference").on(table.publicReference),
   check("chk_transactions_amount_positive", sql`${table.amount} > 0`),
 ]);
