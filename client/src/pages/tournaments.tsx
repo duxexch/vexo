@@ -731,7 +731,10 @@ function TournamentDetailView({ id }: { id: string }) {
   // The pre-tournament check `canRegister && safeEntryFee > 0` is applied
   // at the call site below.
   const isCashTournament = tournamentCurrency === 'usd';
-  const eligibleForPicker = isCashTournament
+  // Gate on `tournament` presence too so the wallet-summary query
+  // doesn't fire while we're still waiting for the tournament payload.
+  const eligibleForPicker = Boolean(tournament)
+    && isCashTournament
     && Boolean(user?.multiCurrencyEnabled)
     && userAllowedCurrencies.length > 1;
 
@@ -1425,6 +1428,29 @@ function TournamentDetailView({ id }: { id: string }) {
                     : `استخدم المحفظة الأساسية (${userPrimaryCurrency})`}
                 </Button>
               </div>
+            </div>
+          ) : pickerCurrencies.length === 0 ? (
+            <div
+              className="py-6 space-y-3 text-center"
+              data-testid="tournament-detail-wallet-picker-empty"
+            >
+              <p className="text-sm text-muted-foreground">
+                {en
+                  ? "We couldn't find any of your wallets that match this tournament."
+                  : 'لم نعثر على أي محفظة من محافظك تطابق هذه البطولة.'}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => registerMutation.mutate(undefined)}
+                disabled={registerMutation.isPending}
+                data-testid="tournament-detail-wallet-picker-fallback-primary"
+              >
+                {en
+                  ? `Use primary wallet (${userPrimaryCurrency})`
+                  : `استخدم المحفظة الأساسية (${userPrimaryCurrency})`}
+              </Button>
             </div>
           ) : (
             <RadioGroup
