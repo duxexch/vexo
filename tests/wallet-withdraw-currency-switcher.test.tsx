@@ -16,12 +16,13 @@
  *   2. The available-balance line now reflects the SAR wallet's balance
  *      (proving the picker actually changed the selected currency).
  *
- * Radix Select in jsdom needs a few pointer-event APIs polyfilled before
- * the popover will open, so they are added here rather than globally to
- * keep the existing setup file minimal.
+ * The Radix-on-jsdom pointer-event polyfills required to make the Select
+ * popover open under `userEvent.click(trigger)` live in the shared
+ * `tests/setup-vitest.ts` so this file (and any future Radix interaction
+ * test) does not need its own copy.
  */
 
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -62,24 +63,6 @@ const WALLETS = [
   { currency: "USD", balance: "1000.00", isPrimary: true },
   { currency: "SAR", balance: "50.00", isPrimary: false },
 ];
-
-beforeAll(() => {
-  // Radix Select uses Pointer Events / setPointerCapture under the hood;
-  // jsdom doesn't ship them, so the popover never opens unless we stub
-  // the few APIs Radix actually calls. Using a typed cast instead of
-  // `as any` keeps the test file clean of escape hatches.
-  type ElementWithPointerCapture = Element & {
-    hasPointerCapture: (id: number) => boolean;
-    setPointerCapture: (id: number) => void;
-    releasePointerCapture: (id: number) => void;
-    scrollIntoView: () => void;
-  };
-  const proto = Element.prototype as ElementWithPointerCapture;
-  if (!proto.hasPointerCapture) proto.hasPointerCapture = () => false;
-  if (!proto.setPointerCapture) proto.setPointerCapture = () => {};
-  if (!proto.releasePointerCapture) proto.releasePointerCapture = () => {};
-  if (!proto.scrollIntoView) proto.scrollIntoView = () => {};
-});
 
 afterEach(() => {
   cleanup();

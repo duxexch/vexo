@@ -31,3 +31,23 @@ if (typeof window !== "undefined" && typeof window.matchMedia === "undefined") {
     }),
   });
 }
+
+// Radix UI primitives (Select, Dropdown, Popover, …) drive their open/close
+// state through Pointer Events / pointer capture and call `scrollIntoView`
+// on the active item. jsdom ships none of those, so the popover never opens
+// in a real `userEvent.click(trigger)` interaction. Stubbing the four APIs
+// Radix actually touches lets every interaction test exercise the popover
+// without per-file hacks.
+if (typeof Element !== "undefined") {
+  type ElementWithPointerCapture = Element & {
+    hasPointerCapture: (id: number) => boolean;
+    setPointerCapture: (id: number) => void;
+    releasePointerCapture: (id: number) => void;
+    scrollIntoView: () => void;
+  };
+  const proto = Element.prototype as ElementWithPointerCapture;
+  if (!proto.hasPointerCapture) proto.hasPointerCapture = () => false;
+  if (!proto.setPointerCapture) proto.setPointerCapture = () => {};
+  if (!proto.releasePointerCapture) proto.releasePointerCapture = () => {};
+  if (!proto.scrollIntoView) proto.scrollIntoView = () => {};
+}
