@@ -87,8 +87,14 @@ Already present from earlier work (kept here for completeness):
   <string>voip</string>
   <string>audio</string>
   <string>remote-notification</string>
+  <string>fetch</string>
 </array>
 ```
+
+The four entries above mirror the four "Background Modes" capability
+toggles enabled in Xcode (see step 2 of
+`native-plugins/capacitor-native-call-ui/examples/AppDelegate-snippet.swift`)
+and match the canonical snippet referenced below.
 
 A copy-paste-ready version of all the keys above (including the
 existing `UIBackgroundModes` array) lives at
