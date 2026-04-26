@@ -76,7 +76,7 @@ take priority over net-new features**. When proposing or executing work:
   `__REDACTED_USE_REPLIT_SECRETS__` (or similar) when documenting that a key
   exists.
 - If you discover a secret committed in plain text: stop, redact the
-  working-tree copy, document the leak in `.local/mobile-audit.md` (or a
+  working-tree copy, document the leak in `docs/mobile/PRO_AUDIT_2026-04.md` (or a
   fresh audit doc), and propose a follow-up task for rotation + history
   scrub. **Never run `git filter-repo`, `git filter-branch`, or any history
   rewrite autonomously** — destructive git ops require explicit user approval
@@ -119,7 +119,7 @@ version every agent must know:
 
 - `replit.md` — full project overview, architecture, quality gates, mobile
   verification index, signing canon.
-- `.local/mobile-audit.md` — Task #177 audit of every native/web parity gap
+- `docs/mobile/PRO_AUDIT_2026-04.md` — Tasks #175 / #177 audit of every native/web parity gap
   and performance risk; propose follow-ups against this list rather than
   re-discovering the same gaps.
 - `docs/` — playbooks (CALL_PERMISSIONS_PLAYBOOK, CHAT_BUBBLES_PLAYBOOK, …)

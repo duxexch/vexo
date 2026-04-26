@@ -8,7 +8,26 @@ The business vision is to create a leading platform for online gaming and digita
 
 ## User Preferences
 
-No explicit user preferences were provided in the original `replit.md` file.
+The user is the owner of vixo.click and runs the production VPS personally. The following preferences are **standing instructions** — every agent (Replit main, planning, isolated task agent, design, code-review, or external) must apply them on every task without re-asking.
+
+**Communication**
+- Reply to the user in **Arabic** (Modern Standard / Egyptian register, matching their tone). Internal docs (`replit.md`, `AGENTS.md`, audit files, plan files, code comments) stay in English so the codebase is readable by every agent and contributor.
+- Never name internal tools, function names, plugin SDKs, or platform internals in user-facing replies — describe the **action** ("سأحدّث الإعدادات", "سأشغّل المتصفح للتجربة") rather than the mechanism.
+- Be concise; show diffs/file paths only when they actually help the user verify the change.
+
+**Engineering bias**
+- **Audit-first.** For any cross-cutting work, sweep the surface end-to-end before proposing fixes (see `docs/mobile/PRO_AUDIT_2026-04.md` for the canonical pattern). Convert findings into individual follow-up tasks, one plan file per follow-up under `.local/tasks/`.
+- **Performance-first ordering.** When sequencing follow-ups, perceived perf (cold start, first paint, animation smoothness, keyboard jank) outranks polish — except when a security finding is in play, in which case secret rotation / history scrub jumps to P0.
+- **Cross-surface rule (PERMANENT).** Every feature/change/fix must work on browser + mobile + every screen size. Mirror this rule **verbatim** in both `replit.md` and `AGENTS.md`; if you change the wording in one place, change it in the other in the same task. Canonical text lives below in the **Cross-Surface Rule** section.
+
+**Repo hygiene**
+- `.local/` is **tracked by git** in this repo (intentional — task plans, audit pointers, and session notes are part of the project record). Never assume `.local/` is throwaway scratch.
+- Never write secrets to disk inside the repo. Replit Secrets is the only home for `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEYSTORE_PATH`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, LiveKit, TURN, SMTP, and admin credentials. Gradle and the Node build script read them from `process.env` at build time only — see the **Android Release Signing** section below.
+- Destructive git operations (`filter-repo`, `filter-branch`, force-push, history rewrites) require **explicit user approval** and a dedicated task — never autonomous.
+
+---
+
+**ملاحظة بالعربية للمستخدم:** هذه التفضيلات دائمة. أي وكيل يعمل على المشروع ملزم بها — الردود بالعربية، التدقيق قبل البناء، الأداء أولاً، والقاعدة العابرة للأسطح (متصفح + موبايل + كل المقاسات) في كل تغيير. الأسرار تُحفظ فقط في Replit Secrets ولا تُكتب على القرص.
 
 ## System Architecture
 
