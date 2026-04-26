@@ -190,3 +190,7 @@ The VEX Android release build is signed with **the user's official VEX release k
 | Valid until | 2053-08-23 |
 
 **If you suspect either password has leaked** (e.g. it was pasted into chat, a tracked file, or shared screen): stop, do not roll a release with the same keystore, and open a follow-up task to (a) rotate the passwords on the existing keystore via `keytool -storepasswd` / `keytool -keypasswd`, and (b) scrub the leaked values from git history with explicit user approval (destructive git ops are never run autonomously).
+
+## Active Security Advisories
+
+- **2026-04 — Mass secret leak in `.env.example` (C0).** Working tree is clean as of Task #178: `.env.example` and the corresponding paste in `attached_assets/` no longer hold any plaintext secrets (all 19 assignments redacted to `__REDACTED_USE_REPLIT_SECRETS__`, including infrastructure-layer secrets `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `MINIO_*`, `SESSION_SECRET`, `JWT_*`, `ADMIN_*`, `SECRETS_ENCRYPTION_KEY`, `AI_AGENT_*`, `VAPID_*`, `WEB_PUSH_VAPID_*`). **Git history still holds the originals** until the owner runs the scrub. Full inventory + per-secret rotation procedures + git-history scrub recipe: [`docs/security/SECRET_ROTATION_2026-04.md`](docs/security/SECRET_ROTATION_2026-04.md). Until rotation completes, treat every value listed there as compromised.
