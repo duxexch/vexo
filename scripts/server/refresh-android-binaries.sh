@@ -46,6 +46,46 @@ log()  { printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"; }
 fail() { log "ERROR: $*"; exit 1; }
 
 # -----------------------------------------------------------------------------
+# Wipe ALL existing .apk and .aab files in DEST_DIR before fetching the new
+# binaries. This guarantees no stale build (regardless of filename — canonical
+# `app.apk` / `app.aab`, legacy `VEX-official-release.{apk,aab}`, hand-uploaded
+# copies, or anything else with a `.apk`/`.aab` extension) ever lingers next to
+# the freshly published release. Without this step a partially-failed previous
+# refresh could leave a mismatched mix of versions in the public download dir.
+#
+# We also wipe the same extensions inside the production build output dir
+# `dist/public/downloads/` when it exists, because the docker-compose bind
+# mount only covers the source tree — the build output is a sibling location
+# that the container itself writes to during a rebuild.
+# -----------------------------------------------------------------------------
+wipe_old_binaries() {
+  local target_dir="$1"
+  [ -d "$target_dir" ] || return 0
+
+  local removed=0
+  while IFS= read -r -d '' old; do
+    rm -f "$old"
+    log "  Removed old binary: ${old}"
+    removed=$((removed + 1))
+  done < <(find "$target_dir" -maxdepth 1 -type f \
+              \( -iname '*.apk' -o -iname '*.aab' \) -print0)
+
+  if [ "$removed" -gt 0 ]; then
+    log "Wiped ${removed} old binary file(s) from ${target_dir}"
+  else
+    log "No existing binaries to wipe in ${target_dir}"
+  fi
+}
+
+log "Cleaning previous Android binaries before fetching the latest release..."
+wipe_old_binaries "${DEST_DIR}"
+# Also clean the production build output if present (created by `npm run build`).
+# The bind mount in docker-compose.prod.yml maps the source DEST_DIR onto the
+# container's dist path read-only, but a rebuilt image may have its own copies
+# baked in — drop them too so only the freshly downloaded binaries remain.
+wipe_old_binaries "dist/public/downloads"
+
+# -----------------------------------------------------------------------------
 # Download a single asset to a temp file, validate it, then atomically
 # move it into the destination directory. Validation rules:
 #   1) HTTP status must be 200 (curl --fail).
@@ -95,18 +135,9 @@ fetch_asset() {
 fetch_asset "${APK_URL}" "${DEST_DIR}/${APK_DEST_NAME}"
 fetch_asset "${AAB_URL}" "${DEST_DIR}/${AAB_DEST_NAME}"
 
-# Drop any stale legacy-named copies that may have been committed by older
-# pipelines so the public download links never silently serve outdated builds.
-for legacy in VEX-official-release.apk VEX-official-release.aab; do
-  if [ -f "${DEST_DIR}/${legacy}" ]; then
-    rm -f "${DEST_DIR}/${legacy}"
-    log "Removed stale legacy file ${DEST_DIR}/${legacy}"
-  fi
-done
-
 log "Done. Binaries refreshed in ${DEST_DIR}/"
 log "  ${APK_DEST_NAME}: $(stat -c%s "${DEST_DIR}/${APK_DEST_NAME}" 2>/dev/null || stat -f%z "${DEST_DIR}/${APK_DEST_NAME}") bytes  → public download (vixo.click/downloads/app.apk)"
-log "  ${AAB_DEST_NAME}: $(stat -c%s "${DEST_DIR}/${AAB_DEST_NAME}" 2>/dev/null || stat -f%z "${DEST_DIR}/${AAB_DEST_NAME}") bytes  → admin download (/api/admin/downloads/aab)"
+log "  ${AAB_DEST_NAME}: $(stat -c%s "${DEST_DIR}/${AAB_DEST_NAME}" 2>/dev/null || stat -f%z "${DEST_DIR}/${AAB_DEST_NAME}") bytes  → admin-only download (/api/admin/downloads/aab) — blocked from public /downloads/ path"
 log ""
 log "The vex-app container reads these via the read-only volume mount"
 log "(./client/public/downloads:/app/dist/public/downloads:ro), so the new"
