@@ -61,8 +61,42 @@ COMPOSE_FILE="${VEX_COMPOSE_FILE:-${REPO_ROOT}/docker-compose.prod.yml}"
 # ("vex-db"). They are different namespaces. Override with VEX_DB_SERVICE
 # only if you've renamed the service block in docker-compose.prod.yml.
 DB_SERVICE="${VEX_DB_SERVICE:-db}"
-DB_USER="${VEX_DB_USER:-vex}"
-DB_NAME="${VEX_DB_NAME:-vex}"
+
+# Auto-load DB credentials from the same .env file that docker-compose
+# uses, so this script doesn't drift from the actual deployment. We do a
+# minimal grep-based parse (no `source`) to avoid executing any code in
+# .env (it may contain shell-special characters in passwords) and we
+# only pick the keys we need. Operators can still override any of them
+# by exporting VEX_DB_USER / VEX_DB_NAME / PGPASSWORD before running.
+ENV_FILE="${VEX_ENV_FILE:-${REPO_ROOT}/.env}"
+read_env_var() {
+  # $1 = variable name. Returns the last non-comment assignment found.
+  # Handles `KEY=value`, `KEY="value"`, `KEY='value'`, with or without
+  # trailing whitespace. Returns empty string if not found.
+  local key="$1"
+  [ -f "$ENV_FILE" ] || { printf ''; return; }
+  # `tac`-style "last one wins" via awk (some envs override earlier keys).
+  awk -F= -v k="$key" '
+    /^[[:space:]]*#/ { next }
+    $1 ~ "^[[:space:]]*"k"[[:space:]]*$" {
+      sub("^[^=]*=", "")
+      gsub(/^[[:space:]]*["'\'']?|["'\'']?[[:space:]]*$/, "")
+      val = $0
+    }
+    END { print val }
+  ' "$ENV_FILE"
+}
+
+ENV_DB_USER="$(read_env_var POSTGRES_USER)"
+ENV_DB_NAME="$(read_env_var POSTGRES_DB)"
+ENV_DB_PASS="$(read_env_var POSTGRES_PASSWORD)"
+
+DB_USER="${VEX_DB_USER:-${ENV_DB_USER:-vex_user}}"
+DB_NAME="${VEX_DB_NAME:-${ENV_DB_NAME:-vex_db}}"
+# Export for the docker-compose exec call further down. Existing
+# PGPASSWORD in the operator's shell takes priority, then .env, then
+# the legacy fallback used by the old version of this script.
+export PGPASSWORD="${PGPASSWORD:-${ENV_DB_PASS:-postgres}}"
 
 # ANSI colors (degraded gracefully if stdout isn't a TTY).
 if [ -t 1 ]; then
