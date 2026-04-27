@@ -383,7 +383,13 @@
         linkEl.setAttribute('download', m.apkFile);
 
         const mb = m.apkSizeMb || Math.round(m.apkSize / 1048576);
-        sizeEl.textContent = '~' + mb + ' MB — Android 7.0+';
+        // The card sits inside a `dir="rtl"` document, which makes any
+        // mixed Latin string ("~14 MB — Android 7.0+") render in a
+        // visually scrambled order ("+MB — Android 7.0 14~"). Wrap the
+        // whole label in an LTR override (U+202A … U+202C) so the
+        // browser keeps the digits and units in the intended sequence
+        // while the surrounding Arabic UI stays right-to-left.
+        sizeEl.textContent = '\u202A~' + mb + ' MB \u2014 Android 7.0+\u202C';
         if (m.version) {
           versionEl.textContent = 'الإصدار ' + m.version;
         }

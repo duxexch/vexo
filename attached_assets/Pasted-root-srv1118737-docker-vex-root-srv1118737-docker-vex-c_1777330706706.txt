@@ -1,0 +1,176 @@
+root@srv1118737:/docker/vex# 
+root@srv1118737:/docker/vex# cd /docker/vex
+ls -la package.json scripts/server/
+-rw-r--r-- 1 root root 15230 Apr 27 22:22 package.json
+
+scripts/server/:
+total 40
+drwxr-xr-x 2 root root  4096 Apr 27 21:53 .
+drwxr-xr-x 6 root root  4096 Apr 27 19:41 ..
+-rwxr-xr-x 1 root root 10844 Apr 27 21:53 refresh-android-binaries.sh
+-rwxr-xr-x 1 root root 17620 Apr 27 21:53 verify-vex-deployment.sh
+root@srv1118737:/docker/vex# # اقرا النسخة من package.json بأمر مباشر
+node -e "console.log(require('./package.json').version)"
+
+# لو طلع لك مثلاً 1.0.0، شغل السكربت بـ override:
+VEX_APP_VERSION=1.0.0 bash scripts/server/refresh-android-binaries.sh
+Command 'node' not found, but can be installed with:
+apt install nodejs
+[2026-04-27T22:54:28Z] App version (from package.json): 1.0.0
+[2026-04-27T22:54:28Z] Destination filenames:           VEX-1.0.0.apk / VEX-1.0.0.aab
+[2026-04-27T22:54:28Z] Downloading https://github.com/duxexch/vexo/releases/download/latest-android/VEX-official-release.apk
+[2026-04-27T22:54:29Z]   Saved → client/public/downloads/VEX-1.0.0.apk (14734767 bytes)
+[2026-04-27T22:54:29Z] Downloading https://github.com/duxexch/vexo/releases/download/latest-android/VEX-official-release.aab
+[2026-04-27T22:54:30Z]   Saved → client/public/downloads/VEX-1.0.0.aab (14255313 bytes)
+[2026-04-27T22:54:30Z] Wrote manifest: client/public/downloads/manifest.json
+[2026-04-27T22:54:30Z]   version:   1.0.0
+[2026-04-27T22:54:30Z]   apk:       VEX-1.0.0.apk  (14 MB)  sha256=57ac076fcffff18cda3484f920564b9fe447a5a8aab0eb4dd29b0cffc1323ba1
+[2026-04-27T22:54:30Z]   aab:       VEX-1.0.0.aab  (13 MB)  sha256=fb7598057cd9870b5d7a5bba25419da6d877290c212185e34e344ca80e458138
+[2026-04-27T22:54:30Z]   Removed stale binary: client/public/downloads/app.apk
+[2026-04-27T22:54:30Z]   Removed stale binary: client/public/downloads/app.aab
+[2026-04-27T22:54:30Z] Pruned 2 stale binary file(s) from client/public/downloads
+[2026-04-27T22:54:30Z] Done. Public link: https://vixo.click/downloads/VEX-1.0.0.apk
+[2026-04-27T22:54:30Z]       Manifest:    https://vixo.click/downloads/manifest.json
+root@srv1118737:/docker/vex# echo 'export VEX_HOME=/docker/vex' >> ~/.bashrc
+echo 'alias vex="cd $VEX_HOME"' >> ~/.bashrc
+source ~/.bashrc
+root@srv1118737:/docker/vex# cd /docker/vex
+
+# 1) الـ manifest يطلع JSON صحيح
+curl -s https://vixo.click/downloads/manifest.json
+
+# 2) الـ APK الجديد يتحمل بالاسم الصح
+curl -sI https://vixo.click/downloads/VEX-1.0.0.apk | head -5
+
+# 3) رابط التحديث في API الصحة بقى يشاور على الاسم الجديد
+curl -s https://vixo.click/api/health | grep -o '"nativeUpdateUrlAndroid":"[^"]*"'
+
+# 4) شغّل سكربت التحقق الكامل (لازم تثبت node الأول)
+bash scripts/server/verify-vex-deployment.sh
+{
+  "version": "1.0.0",
+  "apkFile": "VEX-1.0.0.apk",
+  "apkUrl": "/downloads/VEX-1.0.0.apk",
+  "apkSize": 14734767,
+  "apkSizeMb": 14,
+  "apkSha256": "57ac076fcffff18cda3484f920564b9fe447a5a8aab0eb4dd29b0cffc1323ba1",
+  "aabFile": "VEX-1.0.0.aab",
+  "aabSize": 14255313,
+  "aabSha256": "fb7598057cd9870b5d7a5bba25419da6d877290c212185e34e344ca80e458138",
+  "releasedAt": "2026-04-27T22:54:30Z"
+}
+HTTP/2 200 
+accept-ranges: bytes
+cache-control: public, max-age=3600
+content-disposition: attachment; filename="VEX-1.0.0.apk"
+content-type: application/vnd.android.package-archive
+"nativeUpdateUrlAndroid":"https://vixo.click/downloads/VEX-1.0.0.apk"
+
+== 1. Binary presence & size ==
+  ✗ APK NOT found at /docker/vex/client/public/downloads/app.apk
+  ! AAB not found at /docker/vex/client/public/downloads/app.aab — admin Play Store upload won't work until refresh-android-binaries.sh is run
+
+== 2. SHA-256 checksums (record these for your audit trail) ==
+
+== 3. APK signature verification ==
+  ! Skipping signature check — APK not present
+
+== 4. APK package identity ==
+  ! Skipping package check — APK not present
+
+== 5. Public download URL reachability (root cause of "تعذر التنزيل") ==
+  · Probing: https://vixo.click/downloads/app.apk
+  ✓ HTTP 200 OK — public URL is reachable
+  · http_code=200 size=0 content_type=text/html; charset=utf-8 time=0.019567s
+  ! Content-Type is text/html; — should be application/vnd.android.package-archive (some browsers will refuse the file)
+  ! No Content-Disposition header — browser may open the file inline instead of downloading it
+  ✗ Server is serving 0 bytes — this is the file users are downloading and it is too small / empty. The container is not seeing the bind-mounted APK. Run prod-update.sh.
+  · Probing AAB (must be 404 publicly): https://vixo.click/downloads/app.aab
+  ✓ AAB is correctly blocked publicly (HTTP 404)
+
+== 6. Database integrity (read-only) ==
+  ✗ Database service 'vex-postgres' is not running
+
+== Summary ==
+  Passed:  2
+  Warnings: 5
+  Failed:  3
+
+Failed checks:
+  - APK NOT found at /docker/vex/client/public/downloads/app.apk
+  - Server is serving 0 bytes — this is the file users are downloading and it is too small / empty. The container is not seeing the bind-mounted APK. Run prod-update.sh.
+  - Database service 'vex-postgres' is not running
+
+Deployment is NOT fully verified.
+root@srv1118737:/docker/vex# # Node.js 20 (يطابق اللي في docker-compose عندك)
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
+
+# تأكد إنه اتثبت
+node --version
+2026-04-27 22:56:25 - Installing pre-requisites
+Hit:1 https://download.docker.com/linux/ubuntu questing InRelease
+Hit:2 http://archive.ubuntu.com/ubuntu questing InRelease
+Get:3 http://security.ubuntu.com/ubuntu questing-security InRelease [136 kB]
+Get:4 http://archive.ubuntu.com/ubuntu questing-updates InRelease [136 kB]
+Hit:5 http://archive.ubuntu.com/ubuntu questing-backports InRelease 
+Get:6 http://security.ubuntu.com/ubuntu questing-security/main amd64 Packages [295 kB]
+Get:7 http://archive.ubuntu.com/ubuntu questing-updates/main amd64 Packages [401 kB]
+Get:8 http://security.ubuntu.com/ubuntu questing-security/universe amd64 Packages [234 kB]
+Get:9 http://archive.ubuntu.com/ubuntu questing-updates/universe amd64 Packages [301 kB]
+Get:10 http://archive.ubuntu.com/ubuntu questing-updates/restricted amd64 Packages [223 kB]
+Get:11 http://archive.ubuntu.com/ubuntu questing-updates/restricted Translation-en [51.2 kB]
+Get:12 http://archive.ubuntu.com/ubuntu questing-updates/multiverse amd64 Packages [17.9 kB]
+Get:13 http://archive.ubuntu.com/ubuntu questing-updates/multiverse Translation-en [4360 B]
+Fetched 1799 kB in 0s (3828 kB/s)                                
+27 packages can be upgraded. Run 'apt list --upgradable' to see them.
+apt-transport-https is already the newest version (3.1.6ubuntu2).
+ca-certificates is already the newest version (20250419).
+curl is already the newest version (8.14.1-2ubuntu1.2).
+gnupg is already the newest version (2.4.8-2ubuntu2.1).
+Summary:                    
+  Upgrading: 0, Installing: 0, Removing: 0, Not Upgrading: 27
+Hit:1 https://download.docker.com/linux/ubuntu questing InRelease
+Hit:2 http://archive.ubuntu.com/ubuntu questing InRelease                                                 
+Hit:3 http://security.ubuntu.com/ubuntu questing-security InRelease                                       
+Hit:4 http://archive.ubuntu.com/ubuntu questing-updates InRelease                                         
+Hit:5 http://archive.ubuntu.com/ubuntu questing-backports InRelease
+Get:6 https://deb.nodesource.com/node_20.x nodistro InRelease [12.1 kB]
+Get:7 https://deb.nodesource.com/node_20.x nodistro/main amd64 Packages [14.1 kB]
+Fetched 26.3 kB in 0s (111 kB/s)
+27 packages can be upgraded. Run 'apt list --upgradable' to see them.
+2026-04-27 22:56:30 - Repository configured successfully.
+2026-04-27 22:56:30 - To install Node.js, run: apt install nodejs -y
+2026-04-27 22:56:30 - You can use N|solid Runtime as a node.js alternative
+2026-04-27 22:56:30 - To install N|solid Runtime, run: apt install nsolid -y 
+
+Installing:                     
+  nodejs
+
+Summary:
+  Upgrading: 0, Installing: 1, Removing: 0, Not Upgrading: 27
+  Download size: 32.2 MB
+  Space needed: 196 MB / 40.9 GB available
+
+Get:1 https://deb.nodesource.com/node_20.x nodistro/main amd64 nodejs amd64 20.20.2-1nodesource1 [32.2 MB]
+Fetched 32.2 MB in 0s (71.3 MB/s)
+Selecting previously unselected package nodejs.
+(Reading database ... 128342 files and directories currently installed.)
+Preparing to unpack .../nodejs_20.20.2-1nodesource1_amd64.deb ...
+Unpacking nodejs (20.20.2-1nodesource1) ...
+Setting up nodejs (20.20.2-1nodesource1) ...
+Processing triggers for man-db (2.13.1-1) ...
+Scanning processes...                                                                                                                                                                                                                                         
+Scanning linux images...                                                                                                                                                                                                                                      
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+v20.20.2
+root@srv1118737:/docker/vex# 

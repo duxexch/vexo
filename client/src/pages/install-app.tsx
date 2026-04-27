@@ -232,7 +232,9 @@ export default function InstallAppPage() {
               </div>
               <div className="w-px h-8 bg-border/50" />
               <div className="text-center">
-                <div className="text-lg md:text-xl font-bold text-emerald-500">v1.1.0</div>
+                <div className="text-lg md:text-xl font-bold text-emerald-500">
+                  v{apkManifest?.version || '—'}
+                </div>
                 <div className="text-[10px] text-muted-foreground">{t('install.latestVersion')}</div>
               </div>
             </div>
@@ -566,7 +568,19 @@ export default function InstallAppPage() {
                 </thead>
                 <tbody className="divide-y divide-border/20">
                   {[
-                    { label: 'install.compSize', pwa: '< 1 MB', apk: '11.8 MB', isText: true },
+                    {
+                      label: 'install.compSize',
+                      pwa: '< 1 MB',
+                      // Pull APK size live from the manifest (the same source
+                      // the download button itself uses) so this row never
+                      // drifts from the file users actually download.
+                      apk: apkManifest?.apkSizeMb
+                        ? `${apkManifest.apkSizeMb} MB`
+                        : apkManifest?.apkSize
+                          ? `${Math.round(apkManifest.apkSize / 1048576)} MB`
+                          : '— MB',
+                      isText: true,
+                    },
                     { label: 'install.compUpdate', pwa: true, apk: false },
                     { label: 'install.compOffline', pwa: true, apk: true },
                     { label: 'install.compNotif', pwa: true, apk: true },
@@ -603,7 +617,9 @@ export default function InstallAppPage() {
             <h3 className="text-sm font-bold flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary" />
               {t('install.whatsNew')}
-              <span className="text-[10px] px-2 py-0.5 bg-primary/10 text-primary rounded-full">v1.1.0</span>
+              <span className="text-[10px] px-2 py-0.5 bg-primary/10 text-primary rounded-full">
+                v{apkManifest?.version || '—'}
+              </span>
             </h3>
             <ul className="space-y-2">
               {['install.changelog1', 'install.changelog2', 'install.changelog3', 'install.changelog4'].map((key) => (
