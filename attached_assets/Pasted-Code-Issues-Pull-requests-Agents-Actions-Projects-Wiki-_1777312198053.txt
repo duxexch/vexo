@@ -1,0 +1,1284 @@
+Code
+Issues
+Pull requests
+Agents
+Actions
+Projects
+Wiki
+Security and quality
+1
+ (1)
+Insights
+Settings
+Android Build (Manual)
+Android Build (Manual) #10
+All jobs
+Run details
+build
+failed now in 4m 10s
+Search logs
+4s
+4s
+0s
+6s
+1s
+11s
+9s
+34s
+Run npm run build
+> rest-express@1.0.0 build
+> tsx script/build.ts
+building client...
+vite v7.3.2 building client environment for production...
+transforming...
+warn - The class `duration-[3000ms]` is ambiguous and matches multiple utilities.
+warn - If this is content and not a class, replace it with `duration-&lsqb;3000ms&rsqb;` to silence this warning.
+✓ 3351 modules transformed.
+rendering chunks...
+[plugin vite:reporter] 
+(!) /home/runner/work/vexo/vexo/client/src/lib/startup-permissions.ts is dynamically imported by /home/runner/work/vexo/vexo/client/src/lib/permission-catalogue.ts, /home/runner/work/vexo/vexo/client/src/lib/permission-catalogue.ts, /home/runner/work/vexo/vexo/client/src/lib/permission-catalogue.ts, /home/runner/work/vexo/vexo/client/src/lib/permission-catalogue.ts, /home/runner/work/vexo/vexo/client/src/pages/settings.tsx, /home/runner/work/vexo/vexo/client/src/pages/settings.tsx, /home/runner/work/vexo/vexo/client/src/pages/settings.tsx but also statically imported by /home/runner/work/vexo/vexo/client/src/components/PermissionsBanner.tsx, /home/runner/work/vexo/vexo/client/src/components/calls/CallPermissionPrompt.tsx, /home/runner/work/vexo/vexo/client/src/components/games/VoiceChat.tsx, /home/runner/work/vexo/vexo/client/src/pages/login.tsx, dynamic import will not move module into another chunk.
+
+computing gzip size...
+../dist/public/index.html                                    18.19 kB │ gzip:  4.63 kB
+../dist/public/assets/index-DIssZKvF.css                    349.67 kB │ gzip: 45.36 kB
+../dist/public/assets/chevron-right-UL1t0Toq.js               0.12 kB │ gzip:  0.13 kB
+../dist/public/assets/check-CR0lRvMX.js                       0.12 kB │ gzip:  0.14 kB
+../dist/public/assets/chevron-up-BzEIO6hQ.js                  0.12 kB │ gzip:  0.14 kB
+../dist/public/assets/chevron-down-8qpmwpkz.js                0.12 kB │ gzip:  0.14 kB
+../dist/public/assets/chevron-left-BQ0M12B9.js                0.13 kB │ gzip:  0.14 kB
+../dist/public/assets/play-BH6WFrnA.js                        0.13 kB │ gzip:  0.14 kB
+../dist/public/assets/plus-DFCsDnNO.js                        0.15 kB │ gzip:  0.15 kB
+../dist/public/assets/arrow-right-CUP5ctSX.js                 0.16 kB │ gzip:  0.16 kB
+../dist/public/assets/filter-1YmlGgBY.js                      0.16 kB │ gzip:  0.16 kB
+../dist/public/assets/arrow-left-lM3kK6k9.js                  0.16 kB │ gzip:  0.16 kB
+../dist/public/assets/arrow-up-right-eKgC2_z0.js              0.16 kB │ gzip:  0.16 kB
+../dist/public/assets/arrow-down-right-BPT5f4li.js            0.16 kB │ gzip:  0.16 kB
+../dist/public/assets/search-CShcnvrn.js                      0.17 kB │ gzip:  0.16 kB
+../dist/public/assets/power-CIOymfY7.js                       0.17 kB │ gzip:  0.16 kB
+../dist/public/assets/ban-ClB_mkdk.js                         0.17 kB │ gzip:  0.16 kB
+../dist/public/assets/message-square-CxsABOvf.js              0.18 kB │ gzip:  0.16 kB
+../dist/public/assets/circle-dot-BiDTYMKe.js                  0.18 kB │ gzip:  0.15 kB
+../dist/public/assets/clock-CMm7rQlw.js                       0.18 kB │ gzip:  0.17 kB
+../dist/public/assets/code-NPBhket-.js                        0.18 kB │ gzip:  0.16 kB
+../dist/public/assets/circle-check-big-B8emMJ-4.js            0.19 kB │ gzip:  0.18 kB
+../dist/public/assets/smartphone-DtXcpMUO.js                  0.19 kB │ gzip:  0.18 kB
+../dist/public/assets/rotate-ccw-3Eyb9IDb.js                  0.20 kB │ gzip:  0.18 kB
+../dist/public/assets/trending-up-PhOaVicM.js                 0.20 kB │ gzip:  0.18 kB
+../dist/public/assets/lock-Ccm2x0Fa.js                        0.20 kB │ gzip:  0.19 kB
+../dist/public/assets/circle-x-BXO1JfrU.js                    0.20 kB │ gzip:  0.17 kB
+../dist/public/assets/arrow-up-from-line-CoZ47J2z.js          0.20 kB │ gzip:  0.18 kB
+../dist/public/assets/trending-down-MQvYGVWG.js               0.20 kB │ gzip:  0.17 kB
+../dist/public/assets/star-C019EIQf.js                        0.21 kB │ gzip:  0.18 kB
+../dist/public/assets/mail-BE1-FOGm.js                        0.21 kB │ gzip:  0.20 kB
+../dist/public/assets/admin-api-BM0__-Hf.js                   0.21 kB │ gzip:  0.18 kB
+../dist/public/assets/gem-BPqhf1rp.js                         0.21 kB │ gzip:  0.18 kB
+../dist/public/assets/flag-Cr6rrDGn.js                        0.22 kB │ gzip:  0.19 kB
+../dist/public/assets/paperclip-OzGyGjNx.js                   0.22 kB │ gzip:  0.19 kB
+../dist/public/assets/target-C3gJML-c.js                      0.22 kB │ gzip:  0.16 kB
+../dist/public/assets/activity-D2sCAT3T.js                    0.23 kB │ gzip:  0.20 kB
+../dist/public/assets/ellipsis-vertical-DlZ5B851.js           0.23 kB │ gzip:  0.17 kB
+../dist/public/assets/headphones-UtkS8bYc.js                  0.23 kB │ gzip:  0.18 kB
+../dist/public/assets/history-CY8dGI-7.js                     0.23 kB │ gzip:  0.19 kB
+../dist/public/assets/timer-Jvl6VFe9.js                       0.24 kB │ gzip:  0.18 kB
+../dist/public/assets/arrow-right-left-C-LtgaOh.js            0.24 kB │ gzip:  0.19 kB
+../dist/public/assets/link-2-DpRSiXrO.js                      0.24 kB │ gzip:  0.20 kB
+../dist/public/assets/globe-VRVjiMub.js                       0.24 kB │ gzip:  0.19 kB
+../dist/public/assets/percent-asGG4Rqr.js                     0.24 kB │ gzip:  0.18 kB
+../dist/public/assets/diamond-DgfqDiz9.js                     0.24 kB │ gzip:  0.18 kB
+../dist/public/assets/circle-alert-BuULHoLO.js                0.25 kB │ gzip:  0.18 kB
+../dist/public/assets/settings-2-eeVtvSq4.js                  0.25 kB │ gzip:  0.19 kB
+../dist/public/assets/user-check-LJiILrJX.js                  0.25 kB │ gzip:  0.22 kB
+../dist/public/assets/link-EiAVf29p.js                        0.25 kB │ gzip:  0.19 kB
+../dist/public/assets/calendar-BaJYxfNq.js                    0.25 kB │ gzip:  0.20 kB
+../dist/public/assets/upload-BORYbYSM.js                      0.25 kB │ gzip:  0.21 kB
+../dist/public/assets/zap-BsmVjOk3.js                         0.26 kB │ gzip:  0.20 kB
+../dist/public/assets/loader-circle-DdQCt7Va.js               0.26 kB │ gzip:  0.22 kB
+../dist/public/assets/image-DW3J_m8D.js                       0.27 kB │ gzip:  0.22 kB
+../dist/public/assets/shield-7pm1pDuh.js                      0.27 kB │ gzip:  0.22 kB
+../dist/public/assets/pencil-BQBcM_7v.js                      0.27 kB │ gzip:  0.22 kB
+../dist/public/assets/wifi-CK-YgcWA.js                        0.28 kB │ gzip:  0.20 kB
+../dist/public/assets/send-B2jkJ22L.js                        0.29 kB │ gzip:  0.23 kB
+../dist/public/assets/thumbs-up-CVwRK5FO.js                   0.30 kB │ gzip:  0.23 kB
+../dist/public/assets/web-CAflJLBG.js                         0.30 kB │ gzip:  0.20 kB
+../dist/public/assets/badge-check-BNGXjdtT.js                 0.31 kB │ gzip:  0.21 kB
+../dist/public/assets/bell-off-BUBz3TJv.js                    0.32 kB │ gzip:  0.23 kB
+../dist/public/assets/square-pen-6yrcFI_Q.js                  0.32 kB │ gzip:  0.24 kB
+../dist/public/assets/save-CzvJEn7N.js                        0.32 kB │ gzip:  0.22 kB
+../dist/public/assets/bitcoin-CzU8GYzs.js                     0.34 kB │ gzip:  0.26 kB
+../dist/public/assets/use-guided-focus-cW1GSSza.js            0.34 kB │ gzip:  0.27 kB
+../dist/public/assets/key-round-Dq04JEY-.js                   0.35 kB │ gzip:  0.26 kB
+../dist/public/assets/trash-2-_C1xovV7.js                     0.35 kB │ gzip:  0.25 kB
+../dist/public/assets/scale-BK6pzp1T.js                       0.36 kB │ gzip:  0.23 kB
+../dist/public/assets/grip-vertical-Cs7O4qof.js               0.37 kB │ gzip:  0.19 kB
+../dist/public/assets/shuffle-vEFbeS4P.js                     0.38 kB │ gzip:  0.26 kB
+../dist/public/assets/label-BZ0bRYI4.js                       0.38 kB │ gzip:  0.27 kB
+../dist/public/assets/ws-errors-DdU5yVpY.js                   0.42 kB │ gzip:  0.26 kB
+../dist/public/assets/building-2-CFq11LrG.js                  0.43 kB │ gzip:  0.24 kB
+../dist/public/assets/rocket-DwcCqOxQ.js                      0.45 kB │ gzip:  0.31 kB
+../dist/public/assets/progress-rKmXyC73.js                    0.48 kB │ gzip:  0.33 kB
+../dist/public/assets/tournament-currency-Cgwxgras.js         0.50 kB │ gzip:  0.32 kB
+../dist/public/assets/phone-call-CDzNx7hP.js                  0.50 kB │ gzip:  0.30 kB
+../dist/public/assets/sparkles-BjdlIgXH.js                    0.51 kB │ gzip:  0.29 kB
+../dist/public/assets/GameConfigIcon-Bhtwg20Z.js              0.51 kB │ gzip:  0.33 kB
+../dist/public/assets/share-2-iVoWPi5v.js                     0.53 kB │ gzip:  0.34 kB
+../dist/public/assets/textarea-BzJUiKh1.js                    0.54 kB │ gzip:  0.35 kB
+../dist/public/assets/web--Bmsf0iz.js                         0.56 kB │ gzip:  0.33 kB
+../dist/public/assets/payment-operation-yfv9Y-2u.js           0.58 kB │ gzip:  0.39 kB
+../dist/public/assets/BackButton-Yu-rHl48.js                  0.59 kB │ gzip:  0.41 kB
+../dist/public/assets/palette-CVFQUJk-.js                     0.61 kB │ gzip:  0.34 kB
+../dist/public/assets/GameCardBackground-BtsNW0zk.js          0.66 kB │ gzip:  0.43 kB
+../dist/public/assets/chat-bubbles-pref-BS6VA5S2.js           0.66 kB │ gzip:  0.38 kB
+../dist/public/assets/EmptyState-Ch7jR_-I.js                  0.67 kB │ gzip:  0.40 kB
+../dist/public/assets/users-CeKmzpQB.js                       0.71 kB │ gzip:  0.39 kB
+../dist/public/assets/TableSkeleton-eedYuA7r.js               0.71 kB │ gzip:  0.33 kB
+../dist/public/assets/volume-x-B5Gz_q3w.js                    0.72 kB │ gzip:  0.33 kB
+../dist/public/assets/user-BpdyMISR.js                        0.72 kB │ gzip:  0.40 kB
+../dist/public/assets/ProjectCurrencySymbol-DNATz9xM.js       0.74 kB │ gzip:  0.47 kB
+../dist/public/assets/checkbox-DNPdSvv-.js                    0.74 kB │ gzip:  0.42 kB
+../dist/public/assets/GameCardSkeleton-DN7XH1dP.js            0.75 kB │ gzip:  0.37 kB
+../dist/public/assets/slider-wwXohIqO.js                      0.79 kB │ gzip:  0.44 kB
+../dist/public/assets/radio-group-C7ujKD5C.js                 0.83 kB │ gzip:  0.45 kB
+../dist/public/assets/scroll-area-Ds1EJOgx.js                 0.85 kB │ gzip:  0.44 kB
+../dist/public/assets/switch-C86iVPgW.js                      0.85 kB │ gzip:  0.45 kB
+../dist/public/assets/ConfirmDialog-BxGWFiSe.js               0.86 kB │ gzip:  0.49 kB
+../dist/public/assets/popover-X7bTWzjI.js                     0.86 kB │ gzip:  0.45 kB
+../dist/public/assets/avatar-DrCJLNcg.js                      0.87 kB │ gzip:  0.43 kB
+../dist/public/assets/web-DX2471tA.js                         0.94 kB │ gzip:  0.43 kB
+../dist/public/assets/accordion-tuKWjvKW.js                   1.06 kB │ gzip:  0.53 kB
+../dist/public/assets/tabs-BfrxaUGO.js                        1.14 kB │ gzip:  0.48 kB
+../dist/public/assets/QueryErrorState-D8dHun3j.js             1.28 kB │ gzip:  0.63 kB
+../dist/public/assets/game-speed-CxYGsnzd.js                  1.40 kB │ gzip:  0.59 kB
+../dist/public/assets/use-keyboard-inset-DJnGShpj.js          1.40 kB │ gzip:  0.61 kB
+../dist/public/assets/LegalDocumentLayout-C7ZExUfQ.js         1.43 kB │ gzip:  0.78 kB
+../dist/public/assets/table-CmWQnT3K.js                       1.51 kB │ gzip:  0.53 kB
+../dist/public/assets/searchable-select-Dwm2hp3N.js           1.59 kB │ gzip:  0.87 kB
+../dist/public/assets/input-3Kl2N0zg.js                       1.62 kB │ gzip:  0.83 kB
+../dist/public/assets/form-Dj6KzL0G.js                        1.84 kB │ gzip:  0.81 kB
+../dist/public/assets/native-call-permissions-BkBJhTQ3.js     1.92 kB │ gzip:  0.74 kB
+../dist/public/assets/native-call-ui-CDUW3Xbd.js              2.11 kB │ gzip:  0.83 kB
+../dist/public/assets/alert-dialog-Bg1A8UO7.js                2.22 kB │ gzip:  0.83 kB
+../dist/public/assets/category-hub-Dd0-C1bR.js                2.33 kB │ gzip:  1.01 kB
+../dist/public/assets/dialog-Cf-_OHHR.js                      2.36 kB │ gzip:  0.93 kB
+../dist/public/assets/i18n-ui-BvDfniK3.js                     2.56 kB │ gzip:  1.12 kB
+../dist/public/assets/wallet-currency-D_J9DZTv.js             2.62 kB │ gzip:  1.12 kB
+../dist/public/assets/skeleton-CUWpHftQ.js                    2.67 kB │ gzip:  1.23 kB
+../dist/public/assets/match-recap-BsQkU6Xr.js                 2.87 kB │ gzip:  1.32 kB
+../dist/public/assets/select-x2yH7Fu_.js                      3.22 kB │ gzip:  1.17 kB
+../dist/public/assets/select-username-C8xAsKkK.js             3.33 kB │ gzip:  1.48 kB
+../dist/public/assets/leaderboard-game-CppO93yU.js            3.54 kB │ gzip:  1.52 kB
+../dist/public/assets/GiftAnimation-eGhqzsAo.js               3.64 kB │ gzip:  1.66 kB
+../dist/public/assets/player-profile-public-BuI1Wm2B.js       3.95 kB │ gzip:  1.61 kB
+../dist/public/assets/admin-login-DygL_TA4.js                 3.98 kB │ gzip:  1.59 kB
+../dist/public/assets/use-game-fullscreen-DZgDQW3D.js         4.16 kB │ gzip:  1.64 kB
+../dist/public/assets/game-landing-BNhPVuxi.js                4.23 kB │ gzip:  1.57 kB
+../dist/public/assets/admin-sections-DM32H6X-.js              4.37 kB │ gzip:  1.97 kB
+../dist/public/assets/game-config-BeJ0wEyc.js                 4.65 kB │ gzip:  1.58 kB
+../dist/public/assets/vendor-router--GV0WEYX.js               4.75 kB │ gzip:  2.27 kB
+../dist/public/assets/auth-callback-BsaNJERc.js               5.29 kB │ gzip:  2.07 kB
+../dist/public/assets/index-u4i0qDwo.js                       5.34 kB │ gzip:  1.90 kB
+../dist/public/assets/currencies-BTXmwi4O.js                  6.29 kB │ gzip:  2.11 kB
+../dist/public/assets/admin-analytics-DhTgS7AS.js             7.37 kB │ gzip:  1.94 kB
+../dist/public/assets/use-sound-effects-DaJWBiLZ.js           7.42 kB │ gzip:  2.43 kB
+../dist/public/assets/game-sounds-iMJJ-5fw.js                 7.46 kB │ gzip:  2.07 kB
+../dist/public/assets/support-DuoraPwT.js                     7.76 kB │ gzip:  2.68 kB
+../dist/public/assets/daily-rewards-B14CoUCS.js               8.06 kB │ gzip:  2.59 kB
+../dist/public/assets/use-message-translation-BA1MjpSH.js     8.17 kB │ gzip:  3.09 kB
+../dist/public/assets/leaderboard-BW78hJ69.js                 8.79 kB │ gzip:  3.10 kB
+../dist/public/assets/seasonal-leaderboard-C1vA9CWW.js        8.82 kB │ gzip:  3.02 kB
+../dist/public/assets/game-player-B030IHa5.js                 8.99 kB │ gzip:  3.08 kB
+../dist/public/assets/admin-anti-cheat-CR8LEptw.js            9.84 kB │ gzip:  2.56 kB
+../dist/public/assets/BackgammonBoard-CrrpQGld.js             9.88 kB │ gzip:  3.50 kB
+../dist/public/assets/game-history-BicAEkBC.js               10.07 kB │ gzip:  3.10 kB
+../dist/public/assets/complaints-BHpFauyd.js                 10.11 kB │ gzip:  3.00 kB
+../dist/public/assets/referral-uklvRiRp.js                   10.52 kB │ gzip:  3.21 kB
+../dist/public/assets/notifications-Dl1Trd2C.js              10.90 kB │ gzip:  3.93 kB
+../dist/public/assets/admin-audit-logs-CyMYtB1S.js           10.92 kB │ gzip:  3.73 kB
+../dist/public/assets/vendor-react-Dci6tuFz.js               11.49 kB │ gzip:  4.37 kB
+../dist/public/assets/BalootGame-Db_NzYkc.js                 11.89 kB │ gzip:  4.11 kB
+../dist/public/assets/admin-dashboard-CPOAd0wu.js            12.28 kB │ gzip:  3.12 kB
+../dist/public/assets/TarneebGame-eWMc-VDl.js                13.50 kB │ gzip:  4.84 kB
+../dist/public/assets/admin-disputes-CrU1fmNU.js             13.82 kB │ gzip:  4.08 kB
+../dist/public/assets/command-_ExJCV8o.js                    13.88 kB │ gzip:  5.22 kB
+../dist/public/assets/BackgammonGame-ChGevkcl.js             13.93 kB │ gzip:  4.20 kB
+../dist/public/assets/dashboard-B41tbx5D.js                  13.99 kB │ gzip:  3.84 kB
+../dist/public/assets/admin-notifications-DBNNZ0zm.js        14.09 kB │ gzip:  4.34 kB
+../dist/public/assets/ChatBubblesLayer-B9rXcUYh.js           14.11 kB │ gzip:  5.12 kB
+../dist/public/assets/games-Bcw9lIlV.js                      14.16 kB │ gzip:  3.69 kB
+../dist/public/assets/vendor-social-icons-Ba2Q5dx7.js        14.41 kB │ gzip:  6.15 kB
+../dist/public/assets/admin-support-DN0buaY-.js              14.48 kB │ gzip:  4.14 kB
+../dist/public/assets/DominoGame-Bj5OF5Qp.js                 15.41 kB │ gzip:  5.46 kB
+../dist/public/assets/admin-themes-BawePpqw.js               15.51 kB │ gzip:  4.88 kB
+../dist/public/assets/admin-game-sections-B_gezTNb.js        15.59 kB │ gzip:  4.47 kB
+../dist/public/assets/admin-id-verification-B1F-nbpX.js      16.08 kB │ gzip:  4.50 kB
+../dist/public/assets/games-catalog-DzaxttR7.js              16.21 kB │ gzip:  4.64 kB
+../dist/public/assets/admin-challenges-Dlg3zQT1.js           16.38 kB │ gzip:  4.35 kB
+../dist/public/assets/transactions-0LAR1kgP.js               16.56 kB │ gzip:  4.43 kB
+../dist/public/assets/admin-transactions-Z19iBHHA.js         17.32 kB │ gzip:  5.76 kB
+../dist/public/assets/free-BRPKIwpQ.js                       17.65 kB │ gzip:  4.63 kB
+../dist/public/assets/admin-marketers-BWO7ZUsz.js            17.85 kB │ gzip:  4.61 kB
+../dist/public/assets/multiplayer-B379uGKW.js                18.08 kB │ gzip:  4.86 kB
+../dist/public/assets/admin-integrations-BmhycwHr.js         18.24 kB │ gzip:  5.73 kB
+../dist/public/assets/p2p-profile-DTNClvcI.js                18.49 kB │ gzip:  4.43 kB
+../dist/public/assets/privacy-BaREyble.js                    18.87 kB │ gzip:  5.14 kB
+../dist/public/assets/admin-advertisements-B2tn-TXe.js       18.88 kB │ gzip:  5.21 kB
+../dist/public/assets/terms-DUYq7Axi.js                      19.20 kB │ gzip:  5.29 kB
+../dist/public/assets/announcements-CMG0oFrY.js              19.35 kB │ gzip:  4.88 kB
+../dist/public/assets/admin-languages-BijQKcfe.js            20.03 kB │ gzip:  5.49 kB
+../dist/public/assets/game-lobby-_LaMYIr0.js                 20.93 kB │ gzip:  5.99 kB
+../dist/public/assets/friends-QDbNrjAC.js                    20.98 kB │ gzip:  5.21 kB
+../dist/public/assets/support-chat-widget-BW2FdfiV.js        21.10 kB │ gzip:  6.78 kB
+../dist/public/assets/useGameWebSocket-B9yJVk5b.js           21.31 kB │ gzip:  6.68 kB
+../dist/public/assets/admin-app-settings-DdLGPnTI.js         22.23 kB │ gzip:  6.45 kB
+../dist/public/assets/vendor-forms-DK5oyPpm.js               24.45 kB │ gzip:  8.94 kB
+../dist/public/assets/player-profile-O0ju5z-V.js             24.89 kB │ gzip:  7.26 kB
+../dist/public/assets/admin-challenge-settings-DNp4Hjhe.js   25.19 kB │ gzip:  5.84 kB
+../dist/public/assets/admin-support-settings-CSXSOBxD.js     25.24 kB │ gzip:  6.03 kB
+../dist/public/assets/admin-payment-methods-DIRpYZbz.js      25.81 kB │ gzip:  6.41 kB
+../dist/public/assets/admin-seo-C99pM66z.js                  26.37 kB │ gzip:  6.54 kB
+../dist/public/assets/BalootBoard-D43eXwIW.js                27.34 kB │ gzip:  8.28 kB
+../dist/public/assets/admin-payment-security-BIw45UbU.js     29.63 kB │ gzip:  6.67 kB
+../dist/public/assets/install-app-B_Dp8nJ0.js                29.71 kB │ gzip:  7.46 kB
+../dist/public/assets/admin-sam9-Di35jP-A.js                 30.21 kB │ gzip:  8.16 kB
+../dist/public/assets/vendor-date-B9wDoJ-U.js                30.32 kB │ gzip:  7.98 kB
+../dist/public/assets/admin-gifts--g1DpPjO.js                31.08 kB │ gzip: 11.24 kB
+../dist/public/assets/p2p-settings-CVJ5NHIR.js               33.33 kB │ gzip:  8.34 kB
+../dist/public/assets/admin-currency-C0TEn-D-.js             34.03 kB │ gzip:  6.54 kB
+../dist/public/assets/admin-badges-CTAmU3wq.js               34.48 kB │ gzip:  9.24 kB
+../dist/public/assets/admin-external-games-Dqc5pTwi.js       37.06 kB │ gzip:  9.58 kB
+../dist/public/assets/tournaments-DM-I32FP.js                37.56 kB │ gzip: 10.88 kB
+../dist/public/assets/admin-social-platforms-DH8u_wah.js     38.75 kB │ gzip: 10.73 kB
+../dist/public/assets/vendor-query-H4bntfrP.js               39.13 kB │ gzip: 11.26 kB
+../dist/public/assets/web-BTuZ9PdL.js                        39.95 kB │ gzip:  9.79 kB
+../dist/public/assets/admin-users-CvyQLiW2.js                40.97 kB │ gzip:  9.24 kB
+../dist/public/assets/admin-tournaments-Drb3lqRz.js          41.06 kB │ gzip:  9.93 kB
+../dist/public/assets/admin-free-play-QCv6t_CN.js            43.48 kB │ gzip:  8.31 kB
+../dist/public/assets/ChessGame-Dl_mJbMs.js                  46.82 kB │ gzip: 14.40 kB
+../dist/public/assets/ShareMatchButton-BQMqTTR0.js           48.13 kB │ gzip: 15.58 kB
+../dist/public/assets/login-Ynqp9e2R.js                      48.90 kB │ gzip: 12.17 kB
+../dist/public/assets/challenges-ByMijxcQ.js                 51.83 kB │ gzip: 13.04 kB
+../dist/public/assets/wallet-Ca-VV_xv.js                     53.84 kB │ gzip: 13.42 kB
+../dist/public/assets/GameChat-5ZPNVdbU.js                   58.95 kB │ gzip: 16.08 kB
+../dist/public/assets/vendor-validation-CMCqQFar.js          62.18 kB │ gzip: 14.91 kB
+../dist/public/assets/admin-unified-games-p3-uvpCS.js        66.68 kB │ gzip: 16.92 kB
+../dist/public/assets/admin-p2p-Dpx2QO8s.js                  67.40 kB │ gzip: 12.53 kB
+../dist/public/assets/challenge-watch-DTHx4D9B.js            70.81 kB │ gzip: 20.00 kB
+../dist/public/assets/admin-chat-C8vHetGQ.js                 73.42 kB │ gzip: 16.73 kB
+../dist/public/assets/chat-BGag6ry6.js                       91.88 kB │ gzip: 24.97 kB
+../dist/public/assets/challenge-game-DvsfbnFg.js             94.71 kB │ gzip: 26.45 kB
+../dist/public/assets/settings-D2kh1q_v.js                   97.54 kB │ gzip: 25.45 kB
+../dist/public/assets/zh_TW-DHSkvNVq.js                     106.75 kB │ gzip: 32.63 kB
+../dist/public/assets/zh-B54vSo77.js                        106.82 kB │ gzip: 32.29 kB
+../dist/public/assets/ht-BtE3k8WY.js                        109.43 kB │ gzip: 30.14 kB
+../dist/public/assets/jv-CvOx_Vnp.js                        112.34 kB │ gzip: 30.32 kB
+../dist/public/assets/no-CqF5-bF4.js                        112.56 kB │ gzip: 31.06 kB
+../dist/public/assets/ha-CO_fVakH.js                        113.53 kB │ gzip: 31.11 kB
+../dist/public/assets/su-CEX5E_Sh.js                        114.13 kB │ gzip: 31.41 kB
+../dist/public/assets/fy-jWr2W4Ao.js                        114.31 kB │ gzip: 31.87 kB
+../dist/public/assets/sn-tytmCVMJ.js                        114.76 kB │ gzip: 31.93 kB
+../dist/public/assets/sv-DHjvxFBg.js                        114.78 kB │ gzip: 31.57 kB
+../dist/public/assets/rw-DJgiY0oO.js                        114.84 kB │ gzip: 30.68 kB
+../dist/public/assets/la-Dnp3KMA0.js                        114.89 kB │ gzip: 32.52 kB
+../dist/public/assets/sl-0xFHUX2r.js                        115.60 kB │ gzip: 32.45 kB
+../dist/public/assets/ms-CG9S0YQX.js                        115.72 kB │ gzip: 30.76 kB
+../dist/public/assets/fi-Cpnnj1dl.js                        115.82 kB │ gzip: 32.36 kB
+../dist/public/assets/eo-DYb1q0oH.js                        115.86 kB │ gzip: 32.46 kB
+../dist/public/assets/hr-dPyUdbbo.js                        116.25 kB │ gzip: 32.69 kB
+../dist/public/assets/id-CQCnm0dk.js                        116.48 kB │ gzip: 30.79 kB
+../dist/public/assets/da-C-UixxS2.js                        116.54 kB │ gzip: 32.16 kB
+../dist/public/assets/sm-Cx1K1aTr.js                        116.65 kB │ gzip: 30.78 kB
+../dist/public/assets/sw-BXwTLhKT.js                        116.94 kB │ gzip: 31.63 kB
+../dist/public/assets/nl-HQ8vG31q.js                        117.01 kB │ gzip: 31.99 kB
+../dist/public/assets/mi-C-bFa0eb.js                        117.16 kB │ gzip: 30.69 kB
+../dist/public/assets/lb-DBiUEIBD.js                        117.23 kB │ gzip: 32.05 kB
+../dist/public/assets/tk-4pW1sWqW.js                        117.53 kB │ gzip: 32.19 kB
+../dist/public/assets/af-CkJCoZBx.js                        117.88 kB │ gzip: 32.40 kB
+../dist/public/assets/et-Cd-ckuS1.js                        117.90 kB │ gzip: 32.81 kB
+../dist/public/assets/is-DkJbMT0G.js                        117.93 kB │ gzip: 33.08 kB
+../dist/public/assets/cy-najlDTye.js                        118.15 kB │ gzip: 33.04 kB
+../dist/public/assets/mt-DrK9pCef.js                        118.30 kB │ gzip: 33.00 kB
+../dist/public/assets/ny-d_mp_R7t.js                        118.38 kB │ gzip: 31.76 kB
+../dist/public/assets/bs-CyCqyuQ1.js                        118.47 kB │ gzip: 33.25 kB
+../dist/public/assets/eu-CHp9cUv0.js                        118.54 kB │ gzip: 31.83 kB
+../dist/public/assets/tr-Cl5ZgdYp.js                        118.57 kB │ gzip: 32.99 kB
+../dist/public/assets/hmn-D0QgPDnS.js                       118.60 kB │ gzip: 30.84 kB
+../dist/public/assets/sk-uYAthPAM.js                        119.21 kB │ gzip: 33.81 kB
+../dist/public/assets/xh-ChHOu5lB.js                        119.36 kB │ gzip: 33.13 kB
+../dist/public/assets/pt-ttdhZzlN.js                        119.46 kB │ gzip: 31.89 kB
+../dist/public/assets/yo-3pq_YXAk.js                        119.50 kB │ gzip: 31.56 kB
+../dist/public/assets/ku-CdKsP8k_.js                        119.53 kB │ gzip: 32.95 kB
+../dist/public/assets/mg-DuldczGU.js                        119.63 kB │ gzip: 31.00 kB
+../dist/public/assets/gl-E4NUGgoT.js                        119.74 kB │ gzip: 31.96 kB
+../dist/public/assets/st-DUMge4Pl.js                        119.75 kB │ gzip: 31.99 kB
+../dist/public/assets/ig-DgjhqL7t.js                        119.96 kB │ gzip: 30.57 kB
+../dist/public/assets/so-C4asSXzK.js                        120.74 kB │ gzip: 33.54 kB
+../dist/public/assets/pl-lan3YWmd.js                        120.96 kB │ gzip: 34.14 kB
+../dist/public/assets/uz-BkzQiz26.js                        121.05 kB │ gzip: 32.40 kB
+../dist/public/assets/ro-CyJb4otA.js                        121.37 kB │ gzip: 32.85 kB
+../dist/public/assets/lt-Ijj0ShyD.js                        121.39 kB │ gzip: 33.69 kB
+../dist/public/assets/ga-COAbfNix.js                        121.59 kB │ gzip: 33.54 kB
+../dist/public/assets/haw-CuCHSgO9.js                       121.75 kB │ gzip: 30.33 kB
+../dist/public/assets/sq-DV3vYOMN.js                        121.83 kB │ gzip: 33.05 kB
+../dist/public/assets/zu-irTM4ObF.js                        121.86 kB │ gzip: 33.01 kB
+../dist/public/assets/lv-CAZ351WN.js                        122.09 kB │ gzip: 33.29 kB
+../dist/public/assets/co-DRpQSp8X.js                        122.26 kB │ gzip: 33.08 kB
+../dist/public/assets/ko-DfDOfai3.js                        122.29 kB │ gzip: 33.11 kB
+../dist/public/assets/cs-piTrb_va.js                        122.36 kB │ gzip: 34.51 kB
+../dist/public/assets/tl-DbDv0DAs.js                        123.05 kB │ gzip: 32.14 kB
+../dist/public/assets/fr-CmZKVX18.js                        123.36 kB │ gzip: 32.98 kB
+../dist/public/assets/hu-B0udoC_9.js                        124.15 kB │ gzip: 34.59 kB
+../dist/public/assets/es-DyPGoHlI.js                        124.21 kB │ gzip: 33.25 kB
+../dist/public/assets/ca-frR75hpy.js                        124.60 kB │ gzip: 33.41 kB
+../dist/public/assets/ceb-BMk9M1_3.js                       125.85 kB │ gzip: 32.90 kB
+../dist/public/assets/it-BAf9-wnY.js                        126.10 kB │ gzip: 33.79 kB
+../dist/public/assets/az-Cw3QKHYp.js                        126.57 kB │ gzip: 34.20 kB
+../dist/public/assets/gd-DP0YBOPg.js                        126.74 kB │ gzip: 33.37 kB
+../dist/public/assets/de-Dcbom9nk.js                        127.26 kB │ gzip: 34.32 kB
+../dist/public/assets/vendor-react-dom-QTpbwF2S.js          128.77 kB │ gzip: 41.47 kB
+../dist/public/assets/he-Di97KbQO.js                        130.33 kB │ gzip: 32.90 kB
+../dist/public/assets/vi-B6CkmlDh.js                        134.77 kB │ gzip: 32.75 kB
+../dist/public/assets/ja-2UlykVi5.js                        136.21 kB │ gzip: 35.36 kB
+../dist/public/assets/p2p-Fc146_ne.js                       140.10 kB │ gzip: 27.66 kB
+../dist/public/assets/ps-DrwUppDO.js                        144.91 kB │ gzip: 35.08 kB
+../dist/public/assets/sd-BiyhB6p9.js                        145.20 kB │ gzip: 34.98 kB
+../dist/public/assets/fa-CFSwkUVA.js                        147.29 kB │ gzip: 34.63 kB
+../dist/public/assets/ar-5MaoY6CV.js                        149.81 kB │ gzip: 36.06 kB
+../dist/public/assets/tt-DjznAvHK.js                        150.72 kB │ gzip: 35.66 kB
+../dist/public/assets/ur-VIW2akK1.js                        151.20 kB │ gzip: 35.46 kB
+../dist/public/assets/DominoChallengeContainer-5xcU8PB3.js  151.62 kB │ gzip: 47.36 kB
+../dist/public/assets/ug-BwzASVMO.js                        156.48 kB │ gzip: 35.22 kB
+../dist/public/assets/am-BGQHMdkZ.js                        156.68 kB │ gzip: 37.25 kB
+../dist/public/assets/yi-CuhLOUM_.js                        157.70 kB │ gzip: 35.57 kB
+../dist/public/assets/ky-BGPRcwMc.js                        159.01 kB │ gzip: 37.28 kB
+../dist/public/assets/kk-CR5vjoeC.js                        160.37 kB │ gzip: 36.77 kB
+../dist/public/assets/uk-C_zh3D1t.js                        160.89 kB │ gzip: 38.53 kB
+../dist/public/assets/mn-DQU0YnFj.js                        161.53 kB │ gzip: 36.81 kB
+../dist/public/assets/hy-K56_q6JF.js                        162.14 kB │ gzip: 37.26 kB
+../dist/public/assets/tg-9EVOr3no.js                        162.37 kB │ gzip: 37.25 kB
+../dist/public/assets/vendor-radix-zRP5fKdt.js              162.53 kB │ gzip: 48.38 kB
+../dist/public/assets/ru-DMyN0MLC.js                        163.30 kB │ gzip: 38.92 kB
+../dist/public/assets/mk-DZ7RaFs9.js                        163.85 kB │ gzip: 37.27 kB
+../dist/public/assets/be-BiFK0xtV.js                        166.22 kB │ gzip: 39.48 kB
+../dist/public/assets/sr-CDoktZAe.js                        166.77 kB │ gzip: 40.15 kB
+../dist/public/assets/bg-BvVNaBBb.js                        169.69 kB │ gzip: 38.60 kB
+../dist/public/assets/el-g31l3yRw.js                        178.35 kB │ gzip: 41.13 kB
+../dist/public/assets/gu-B4dPLZOA.js                        185.43 kB │ gzip: 37.12 kB
+../dist/public/assets/pa-Btf50KAa.js                        187.78 kB │ gzip: 37.61 kB
+../dist/public/assets/mr-xjVJzA_S.js                        189.04 kB │ gzip: 37.22 kB
+../dist/public/assets/lo-CaDhMCud.js                        189.75 kB │ gzip: 37.02 kB
+../dist/public/assets/hi-DWM0Gz8K.js                        191.23 kB │ gzip: 37.66 kB
+../dist/public/assets/th-DvNQfHNf.js                        193.02 kB │ gzip: 36.43 kB
+../dist/public/assets/si-CjTviWmM.js                        197.97 kB │ gzip: 37.95 kB
+../dist/public/assets/private-routes-C7rq0tMJ.js            200.83 kB │ gzip: 57.56 kB
+../dist/public/assets/ne-BTURLSRD.js                        202.61 kB │ gzip: 37.29 kB
+../dist/public/assets/bn-BFcrYKtR.js                        203.34 kB │ gzip: 38.14 kB
+../dist/public/assets/or-BDZguXy9.js                        203.89 kB │ gzip: 37.90 kB
+../dist/public/assets/km-DSERJe_l.js                        208.29 kB │ gzip: 37.42 kB
+../dist/public/assets/ka-C8fIAFfd.js                        210.28 kB │ gzip: 37.98 kB
+../dist/public/assets/kn-BRo7Oz2n.js                        213.08 kB │ gzip: 37.95 kB
+../dist/public/assets/te-B-9p1jit.js                        214.60 kB │ gzip: 38.63 kB
+../dist/public/assets/ml-D2Fnwjno.js                        224.02 kB │ gzip: 39.13 kB
+../dist/public/assets/ta-BcYESkur.js                        226.80 kB │ gzip: 38.02 kB
+../dist/public/assets/index-z-JmqYa-.js                     228.60 kB │ gzip: 65.97 kB
+../dist/public/assets/my-DoaNVe9W.js                        234.31 kB │ gzip: 39.33 kB
+✓ built in 31.59s
+building server...
+  dist/index.cjs  3.0mb ⚠️
+⚡ Done in 281ms
+1s
+Run if [ ! -d "android" ]; then
+  
+✔ Adding native android project in android in 37.68ms
+✔ add in 38.34ms
+ℹ Configuring dynamic provider dependencies for SocialLogin
+
+Provider configuration:
+  ✔ Google: enabled
+  ✖ Facebook: disabled
+  ✖ Apple: disabled
+  ✖ Twitter: disabled
+ℹ Configuring Android dependencies...
+✔ Updated gradle.properties
+✔ Configuration complete
+
+✔ Copying web assets from public to android/app/src/main/assets/public in 43.59ms
+✔ Creating capacitor.config.json in android/app/src/main/assets in 427.27μs
+✔ copy android in 116.83ms
+✔ Updating Android plugins in 18.83ms
+[info] Found 12 Capacitor plugins for android:
+       @capacitor/app@8.0.1
+       @capacitor/browser@8.0.1
+       @capacitor/haptics@8.0.1
+       @capacitor/keyboard@8.0.1
+       @capacitor/local-notifications@8.0.2
+       @capacitor/network@8.0.1
+       @capacitor/push-notifications@8.0.3
+       @capacitor/splash-screen@8.0.1
+       @capacitor/status-bar@8.0.1
+       @capgo/capacitor-social-login@8.3.11
+       capacitor-chat-bubbles@1.0.0
+       capacitor-native-call-ui@1.0.0
+✔ update android in 100.24ms
+✔ Syncing Gradle in 228.48μs
+[success] android platform added!
+Follow the Developer Workflow guide to get building:
+https://capacitorjs.com/docs/basics/workflow
+1s
+Run npx cap sync android
+  
+ℹ Configuring dynamic provider dependencies for SocialLogin
+
+Provider configuration:
+  ✔ Google: enabled
+  ✖ Facebook: disabled
+  ✖ Apple: disabled
+  ✖ Twitter: disabled
+ℹ Configuring Android dependencies...
+✔ Updated gradle.properties
+✔ Configuration complete
+
+✔ Copying web assets from public to android/app/src/main/assets/public in 57.03ms
+✔ Creating capacitor.config.json in android/app/src/main/assets in 585.65μs
+✔ copy android in 134.68ms
+✔ Updating Android plugins in 20.41ms
+[info] Found 12 Capacitor plugins for android:
+       @capacitor/app@8.0.1
+       @capacitor/browser@8.0.1
+       @capacitor/haptics@8.0.1
+       @capacitor/keyboard@8.0.1
+       @capacitor/local-notifications@8.0.2
+       @capacitor/network@8.0.1
+       @capacitor/push-notifications@8.0.3
+       @capacitor/splash-screen@8.0.1
+       @capacitor/status-bar@8.0.1
+       @capgo/capacitor-social-login@8.3.11
+       capacitor-chat-bubbles@1.0.0
+       capacitor-native-call-ui@1.0.0
+✔ update android in 104.60ms
+[info] Sync finished in 0.371s
+0s
+Run if [ -z "$KEYSTORE_B64" ]; then
+  
+0s
+Run KEYSTORE_FILE="android/keystore/vex-release-official.jks"
+Keystore verified: 2738 bytes
+0s
+Run node scripts/ci/patch-android-kotlin.mjs
+[patch-kotlin] Injected Kotlin Gradle plugin classpath (1.9.24) into android/build.gradle.
+0s
+Run node scripts/ci/patch-android-signing.mjs
+[patch-signing] Appended VEX release-signing block to android/app/build.gradle.
+0s
+Run missing=()
+All required signing secrets are present.
+2m 54s
+Run cd android
+Downloading https://services.gradle.org/distributions/gradle-8.14.3-all.zip
+.....................10%.....................20%......................30%.....................40%......................50%.....................60%.....................70%......................80%.....................90%......................100%
+Welcome to Gradle 8.14.3!
+Here are the highlights of this release:
+ - Java 24 support
+ - GraalVM Native Image toolchain selection
+ - Enhancements to test reporting
+ - Build Authoring improvements
+For more details see https://docs.gradle.org/8.14.3/release-notes.html
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Configure project :app
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+> Configure project :capacitor-cordova-android-plugins
+WARNING: Using flatDir should be avoided because it doesn't support any meta-data formats.
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:mergeReleaseJniLibFolders
+> Task :capacitor-android:preBuild UP-TO-DATE
+> Task :capacitor-android:preReleaseBuild UP-TO-DATE
+> Task :capacitor-android:mergeReleaseJniLibFolders
+> Task :capacitor-android:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-app:preBuild UP-TO-DATE
+> Task :capacitor-app:preReleaseBuild UP-TO-DATE
+> Task :capacitor-android:copyReleaseJniLibsProjectOnly
+> Task :capacitor-app:mergeReleaseJniLibFolders
+> Task :capacitor-app:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-browser:preBuild UP-TO-DATE
+> Task :capacitor-browser:preReleaseBuild UP-TO-DATE
+> Task :capacitor-app:copyReleaseJniLibsProjectOnly
+> Task :capacitor-browser:mergeReleaseJniLibFolders
+> Task :capacitor-browser:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-chat-bubbles:preBuild UP-TO-DATE
+> Task :capacitor-chat-bubbles:preReleaseBuild UP-TO-DATE
+> Task :capacitor-browser:copyReleaseJniLibsProjectOnly
+> Task :capacitor-chat-bubbles:mergeReleaseJniLibFolders
+> Task :capacitor-chat-bubbles:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-cordova-android-plugins:preBuild UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:preReleaseBuild UP-TO-DATE
+> Task :capacitor-chat-bubbles:copyReleaseJniLibsProjectOnly
+> Task :capacitor-cordova-android-plugins:mergeReleaseJniLibFolders
+> Task :capacitor-cordova-android-plugins:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-haptics:preBuild UP-TO-DATE
+> Task :capacitor-haptics:preReleaseBuild UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:copyReleaseJniLibsProjectOnly
+> Task :capacitor-haptics:mergeReleaseJniLibFolders
+> Task :capacitor-haptics:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-keyboard:preBuild UP-TO-DATE
+> Task :capacitor-keyboard:preReleaseBuild UP-TO-DATE
+> Task :capacitor-haptics:copyReleaseJniLibsProjectOnly
+> Task :capacitor-keyboard:mergeReleaseJniLibFolders
+> Task :capacitor-keyboard:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-local-notifications:preBuild UP-TO-DATE
+> Task :capacitor-local-notifications:preReleaseBuild UP-TO-DATE
+> Task :capacitor-keyboard:copyReleaseJniLibsProjectOnly
+> Task :capacitor-local-notifications:mergeReleaseJniLibFolders
+> Task :capacitor-local-notifications:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-native-call-ui:preBuild UP-TO-DATE
+> Task :capacitor-native-call-ui:preReleaseBuild UP-TO-DATE
+> Task :capacitor-local-notifications:copyReleaseJniLibsProjectOnly
+> Task :capacitor-native-call-ui:mergeReleaseJniLibFolders
+> Task :capacitor-native-call-ui:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-network:preBuild UP-TO-DATE
+> Task :capacitor-network:preReleaseBuild UP-TO-DATE
+> Task :capacitor-native-call-ui:copyReleaseJniLibsProjectOnly
+> Task :capacitor-network:mergeReleaseJniLibFolders
+> Task :capacitor-network:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-push-notifications:preBuild UP-TO-DATE
+> Task :capacitor-push-notifications:preReleaseBuild UP-TO-DATE
+> Task :capacitor-network:copyReleaseJniLibsProjectOnly
+> Task :capacitor-push-notifications:mergeReleaseJniLibFolders
+> Task :capacitor-push-notifications:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-splash-screen:preBuild UP-TO-DATE
+> Task :capacitor-splash-screen:preReleaseBuild UP-TO-DATE
+> Task :capacitor-push-notifications:copyReleaseJniLibsProjectOnly
+> Task :capacitor-splash-screen:mergeReleaseJniLibFolders
+> Task :capacitor-splash-screen:mergeReleaseNativeLibs NO-SOURCE
+> Task :capacitor-status-bar:preBuild UP-TO-DATE
+> Task :capacitor-status-bar:preReleaseBuild UP-TO-DATE
+> Task :capacitor-splash-screen:copyReleaseJniLibsProjectOnly
+> Task :capacitor-status-bar:mergeReleaseJniLibFolders
+> Task :capacitor-status-bar:mergeReleaseNativeLibs NO-SOURCE
+> Task :capgo-capacitor-social-login:preBuild UP-TO-DATE
+> Task :capgo-capacitor-social-login:preReleaseBuild UP-TO-DATE
+> Task :capacitor-status-bar:copyReleaseJniLibsProjectOnly
+> Task :capgo-capacitor-social-login:mergeReleaseJniLibFolders
+> Task :capgo-capacitor-social-login:mergeReleaseNativeLibs NO-SOURCE
+> Task :capgo-capacitor-social-login:copyReleaseJniLibsProjectOnly
+> Task :capacitor-android:generateReleaseResValues
+> Task :capacitor-android:generateReleaseResources
+> Task :app:mergeReleaseNativeLibs
+> Task :capacitor-android:packageReleaseResources
+> Task :capacitor-android:processReleaseNavigationResources
+> Task :app:stripReleaseDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libdatastore_shared_counter.so. Run with --info option to learn more.
+> Task :app:extractReleaseNativeSymbolTables
+> Task :capacitor-app:generateReleaseResValues
+> Task :capacitor-android:javaPreCompileRelease
+> Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
+> Task :capacitor-app:generateReleaseResources
+> Task :capacitor-app:packageReleaseResources
+> Task :capacitor-app:processReleaseNavigationResources
+> Task :capacitor-browser:generateReleaseResValues
+> Task :capacitor-app:javaPreCompileRelease
+> Task :capacitor-browser:generateReleaseResources
+> Task :capacitor-browser:packageReleaseResources
+> Task :capacitor-browser:processReleaseNavigationResources
+> Task :capacitor-browser:javaPreCompileRelease
+> Task :capacitor-haptics:generateReleaseResValues
+> Task :capacitor-app:parseReleaseLocalResources
+> Task :capacitor-haptics:generateReleaseResources
+> Task :capacitor-android:parseReleaseLocalResources
+> Task :capacitor-browser:parseReleaseLocalResources
+> Task :capacitor-haptics:packageReleaseResources
+> Task :capacitor-android:generateReleaseRFile
+> Task :capacitor-app:generateReleaseRFile
+> Task :capacitor-browser:generateReleaseRFile
+> Task :capacitor-android:compileReleaseJavaWithJavac
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+> Task :capacitor-haptics:processReleaseNavigationResources
+> Task :capacitor-haptics:javaPreCompileRelease
+> Task :capacitor-haptics:parseReleaseLocalResources
+> Task :capacitor-keyboard:generateReleaseResValues
+> Task :capacitor-android:bundleLibCompileToJarRelease
+> Task :capacitor-keyboard:generateReleaseResources
+> Task :capacitor-app:compileReleaseJavaWithJavac
+> Task :capacitor-app:bundleLibRuntimeToDirRelease
+> Task :capacitor-browser:compileReleaseJavaWithJavac
+> Task :capacitor-browser:bundleLibRuntimeToDirRelease
+> Task :capacitor-haptics:generateReleaseRFile
+> Task :capacitor-keyboard:packageReleaseResources
+> Task :capacitor-haptics:compileReleaseJavaWithJavac
+> Task :capacitor-keyboard:processReleaseNavigationResources
+> Task :capacitor-haptics:bundleLibRuntimeToDirRelease
+> Task :capacitor-keyboard:parseReleaseLocalResources
+> Task :capacitor-keyboard:generateReleaseRFile
+> Task :capacitor-keyboard:javaPreCompileRelease
+> Task :capacitor-keyboard:compileReleaseJavaWithJavac
+> Task :capacitor-keyboard:bundleLibRuntimeToDirRelease
+> Task :capacitor-local-notifications:generateReleaseResValues
+> Task :capacitor-local-notifications:generateReleaseResources
+> Task :capacitor-local-notifications:packageReleaseResources
+> Task :capacitor-local-notifications:processReleaseNavigationResources
+> Task :capacitor-local-notifications:javaPreCompileRelease
+> Task :capacitor-network:generateReleaseResValues
+> Task :capacitor-local-notifications:parseReleaseLocalResources
+> Task :capacitor-network:generateReleaseResources
+> Task :capacitor-network:packageReleaseResources
+> Task :capacitor-local-notifications:generateReleaseRFile
+Note: /home/runner/work/vexo/vexo/node_modules/@capacitor/local-notifications/android/src/main/java/com/capacitorjs/plugins/localnotifications/LocalNotificationsPlugin.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+> Task :capacitor-local-notifications:compileReleaseJavaWithJavac
+> Task :capacitor-network:processReleaseNavigationResources
+> Task :capacitor-local-notifications:bundleLibRuntimeToDirRelease
+> Task :capacitor-network:javaPreCompileRelease
+> Task :capacitor-network:parseReleaseLocalResources
+> Task :capacitor-push-notifications:generateReleaseResValues
+> Task :capacitor-push-notifications:generateReleaseResources
+> Task :capacitor-network:generateReleaseRFile
+> Task :capacitor-push-notifications:packageReleaseResources
+> Task :capacitor-network:compileReleaseJavaWithJavac
+> Task :capacitor-network:bundleLibRuntimeToDirRelease
+> Task :capacitor-push-notifications:processReleaseNavigationResources
+> Task :capacitor-push-notifications:javaPreCompileRelease
+> Task :capacitor-splash-screen:generateReleaseResValues
+> Task :capacitor-push-notifications:parseReleaseLocalResources
+> Task :capacitor-splash-screen:generateReleaseResources
+> Task :capacitor-push-notifications:generateReleaseRFile
+> Task :capacitor-splash-screen:packageReleaseResources
+Note: /home/runner/work/vexo/vexo/node_modules/@capacitor/push-notifications/android/src/main/java/com/capacitorjs/plugins/pushnotifications/PushNotificationsPlugin.java uses or overrides a deprecated API.
+> Task :capacitor-push-notifications:compileReleaseJavaWithJavac
+Note: Recompile with -Xlint:deprecation for details.
+> Task :capacitor-splash-screen:processReleaseNavigationResources
+> Task :capacitor-push-notifications:bundleLibRuntimeToDirRelease
+> Task :capacitor-splash-screen:javaPreCompileRelease
+> Task :capacitor-splash-screen:parseReleaseLocalResources
+> Task :capacitor-status-bar:generateReleaseResValues
+> Task :capacitor-status-bar:generateReleaseResources
+> Task :capacitor-splash-screen:generateReleaseRFile
+> Task :capacitor-status-bar:packageReleaseResources
+> Task :capacitor-splash-screen:compileReleaseJavaWithJavac
+> Task :capacitor-status-bar:processReleaseNavigationResources
+> Task :capacitor-splash-screen:bundleLibRuntimeToDirRelease
+> Task :capacitor-status-bar:javaPreCompileRelease
+> Task :capgo-capacitor-social-login:generateReleaseResValues
+> Task :capgo-capacitor-social-login:generateReleaseResources
+> Task :capacitor-status-bar:parseReleaseLocalResources
+> Task :capgo-capacitor-social-login:packageReleaseResources
+> Task :capgo-capacitor-social-login:processReleaseNavigationResources
+> Task :capacitor-status-bar:generateReleaseRFile
+> Task :capgo-capacitor-social-login:parseReleaseLocalResources
+> Task :capacitor-status-bar:compileReleaseJavaWithJavac
+> Task :capacitor-chat-bubbles:checkKotlinGradlePluginConfigurationErrors
+> Task :capacitor-status-bar:bundleLibRuntimeToDirRelease
+> Task :capgo-capacitor-social-login:javaPreCompileRelease
+> Task :capacitor-chat-bubbles:generateReleaseResValues
+> Task :capgo-capacitor-social-login:generateReleaseRFile
+> Task :capacitor-chat-bubbles:generateReleaseResources
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+> Task :capgo-capacitor-social-login:compileReleaseJavaWithJavac
+> Task :capacitor-chat-bubbles:packageReleaseResources
+> Task :capacitor-chat-bubbles:processReleaseNavigationResources
+> Task :capgo-capacitor-social-login:bundleLibRuntimeToDirRelease
+> Task :capacitor-native-call-ui:checkKotlinGradlePluginConfigurationErrors
+> Task :capacitor-chat-bubbles:javaPreCompileRelease
+> Task :capacitor-native-call-ui:generateReleaseResValues
+> Task :capacitor-chat-bubbles:parseReleaseLocalResources
+> Task :capacitor-native-call-ui:generateReleaseResources
+> Task :capacitor-chat-bubbles:generateReleaseRFile
+> Task :capacitor-native-call-ui:packageReleaseResources
+> Task :capacitor-native-call-ui:processReleaseNavigationResources
+> Task :capacitor-native-call-ui:javaPreCompileRelease
+> Task :capacitor-cordova-android-plugins:generateReleaseResValues
+> Task :capacitor-native-call-ui:parseReleaseLocalResources
+> Task :capacitor-cordova-android-plugins:generateReleaseResources
+> Task :capacitor-native-call-ui:generateReleaseRFile
+> Task :capacitor-android:bundleLibRuntimeToDirRelease
+> Task :capacitor-cordova-android-plugins:packageReleaseResources
+> Task :capacitor-cordova-android-plugins:processReleaseNavigationResources
+> Task :capacitor-cordova-android-plugins:parseReleaseLocalResources
+> Task :capacitor-cordova-android-plugins:generateReleaseRFile
+> Task :capacitor-cordova-android-plugins:javaPreCompileRelease
+> Task :capacitor-cordova-android-plugins:compileReleaseJavaWithJavac NO-SOURCE
+> Task :capacitor-cordova-android-plugins:bundleLibRuntimeToDirRelease
+> Task :app:javaPreCompileRelease
+> Task :app:checkReleaseDuplicateClasses
+> Task :capacitor-android:writeReleaseAarMetadata
+> Task :capacitor-app:writeReleaseAarMetadata
+> Task :capacitor-chat-bubbles:writeReleaseAarMetadata
+> Task :capacitor-browser:writeReleaseAarMetadata
+> Task :capacitor-haptics:writeReleaseAarMetadata
+> Task :capacitor-cordova-android-plugins:writeReleaseAarMetadata
+> Task :capacitor-keyboard:writeReleaseAarMetadata
+> Task :capacitor-local-notifications:writeReleaseAarMetadata
+> Task :capacitor-native-call-ui:writeReleaseAarMetadata
+> Task :capacitor-network:writeReleaseAarMetadata
+> Task :capacitor-push-notifications:writeReleaseAarMetadata
+> Task :capacitor-splash-screen:writeReleaseAarMetadata
+> Task :capacitor-status-bar:writeReleaseAarMetadata
+> Task :capgo-capacitor-social-login:writeReleaseAarMetadata
+> Task :app:processReleaseNavigationResources
+> Task :app:checkReleaseAarMetadata
+> Task :app:generateReleaseResValues
+> Task :app:compileReleaseNavigationResources
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:generateReleaseResources
+> Task :app:packageReleaseResources
+> Task :app:parseReleaseLocalResources
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease
+> Task :capacitor-android:extractDeepLinksRelease
+> Task :capacitor-android:processReleaseManifest
+> Task :capacitor-app:extractDeepLinksRelease
+> Task :capacitor-app:processReleaseManifest
+> Task :capacitor-browser:extractDeepLinksRelease
+> Task :capacitor-browser:processReleaseManifest
+> Task :capacitor-chat-bubbles:extractDeepLinksRelease
+> Task :capacitor-chat-bubbles:processReleaseManifest
+> Task :capacitor-cordova-android-plugins:extractDeepLinksRelease
+> Task :capacitor-cordova-android-plugins:processReleaseManifest
+> Task :capacitor-haptics:extractDeepLinksRelease
+> Task :capacitor-haptics:processReleaseManifest
+> Task :capacitor-keyboard:extractDeepLinksRelease
+> Task :capacitor-keyboard:processReleaseManifest
+> Task :capacitor-local-notifications:extractDeepLinksRelease
+> Task :capacitor-local-notifications:processReleaseManifest
+> Task :capacitor-native-call-ui:extractDeepLinksRelease
+> Task :app:mergeReleaseResources
+> Task :capacitor-network:extractDeepLinksRelease
+> Task :capacitor-native-call-ui:processReleaseManifest
+> Task :capacitor-push-notifications:extractDeepLinksRelease
+> Task :capacitor-network:processReleaseManifest
+> Task :capacitor-splash-screen:extractDeepLinksRelease
+> Task :capacitor-push-notifications:processReleaseManifest
+> Task :capacitor-status-bar:extractDeepLinksRelease
+> Task :capacitor-splash-screen:processReleaseManifest
+> Task :capacitor-status-bar:processReleaseManifest
+> Task :capgo-capacitor-social-login:extractDeepLinksRelease
+> Task :capgo-capacitor-social-login:processReleaseManifest
+/home/runner/work/vexo/vexo/node_modules/@capgo/capacitor-social-login/android/src/main/AndroidManifest.xml:7:9-11:35 Warning:
+	provider#com.facebook.internal.FacebookInitProvider was tagged at AndroidManifest.xml:7 to remove other declarations but no other declaration present
+> Task :capacitor-android:compileReleaseLibraryResources
+> Task :app:processReleaseMainManifest
+/home/runner/work/vexo/vexo/android/app/src/main/AndroidManifest.xml Warning:
+	provider#com.facebook.internal.FacebookInitProvider was tagged at AndroidManifest.xml:0 to remove other declarations but no other declaration present
+> Task :app:processReleaseManifest
+> Task :capacitor-app:compileReleaseLibraryResources
+> Task :app:processReleaseManifestForPackage
+> Task :capacitor-browser:compileReleaseLibraryResources
+> Task :capacitor-chat-bubbles:compileReleaseLibraryResources
+> Task :capacitor-cordova-android-plugins:compileReleaseLibraryResources
+> Task :capacitor-haptics:compileReleaseLibraryResources
+> Task :capacitor-keyboard:compileReleaseLibraryResources
+> Task :capacitor-local-notifications:compileReleaseLibraryResources
+> Task :capacitor-native-call-ui:compileReleaseLibraryResources
+> Task :capacitor-network:compileReleaseLibraryResources
+> Task :capacitor-push-notifications:compileReleaseLibraryResources
+> Task :capacitor-splash-screen:compileReleaseLibraryResources
+> Task :capacitor-status-bar:compileReleaseLibraryResources
+> Task :capgo-capacitor-social-login:compileReleaseLibraryResources
+> Task :capacitor-app:bundleLibCompileToJarRelease
+> Task :capacitor-browser:bundleLibCompileToJarRelease
+> Task :capacitor-cordova-android-plugins:bundleLibCompileToJarRelease
+> Task :capacitor-haptics:bundleLibCompileToJarRelease
+> Task :capacitor-keyboard:bundleLibCompileToJarRelease
+> Task :capacitor-local-notifications:bundleLibCompileToJarRelease
+> Task :capacitor-network:bundleLibCompileToJarRelease
+> Task :capacitor-push-notifications:bundleLibCompileToJarRelease
+> Task :capacitor-splash-screen:bundleLibCompileToJarRelease
+> Task :capacitor-status-bar:bundleLibCompileToJarRelease
+> Task :capgo-capacitor-social-login:bundleLibCompileToJarRelease
+> Task :app:desugarReleaseFileDependencies
+> Task :app:mergeReleaseStartupProfile
+> Task :app:processReleaseResources
+> Task :capacitor-chat-bubbles:compileReleaseKotlin
+w: file:///home/runner/work/vexo/vexo/native-plugins/capacitor-chat-bubbles/android/src/main/java/click/vixo/chatbubbles/BubbleOverlayService.kt:261:26 'getter for defaultDisplay: Display!' is deprecated. Deprecated in Java
+w: file:///home/runner/work/vexo/vexo/native-plugins/capacitor-chat-bubbles/android/src/main/java/click/vixo/chatbubbles/BubbleOverlayService.kt:339:26 'getter for defaultDisplay: Display!' is deprecated. Deprecated in Java
+w: file:///home/runner/work/vexo/vexo/native-plugins/capacitor-chat-bubbles/android/src/main/java/click/vixo/chatbubbles/BubbleOverlayService.kt:414:13 Parameter 'body' is never used
+> Task :capacitor-native-call-ui:compileReleaseKotlin
+> Task :capacitor-chat-bubbles:compileReleaseJavaWithJavac NO-SOURCE
+> Task :capacitor-native-call-ui:compileReleaseJavaWithJavac NO-SOURCE
+> Task :capacitor-chat-bubbles:bundleLibCompileToJarRelease
+> Task :capacitor-chat-bubbles:bundleLibRuntimeToDirRelease
+> Task :capacitor-native-call-ui:bundleLibRuntimeToDirRelease
+> Task :capacitor-native-call-ui:bundleLibCompileToJarRelease
+> Task :app:compileReleaseJavaWithJavac
+> Task :app:dexBuilderRelease
+> Task :capacitor-android:prepareReleaseArtProfile
+> Task :app:mergeExtDexRelease
+> Task :capacitor-app:prepareReleaseArtProfile
+> Task :capacitor-browser:prepareReleaseArtProfile
+> Task :capacitor-chat-bubbles:prepareReleaseArtProfile
+> Task :capacitor-cordova-android-plugins:prepareReleaseArtProfile
+> Task :capacitor-haptics:prepareReleaseArtProfile
+> Task :capacitor-keyboard:prepareReleaseArtProfile
+> Task :capacitor-local-notifications:prepareReleaseArtProfile
+> Task :capacitor-native-call-ui:prepareReleaseArtProfile
+> Task :capacitor-network:prepareReleaseArtProfile
+> Task :capacitor-push-notifications:prepareReleaseArtProfile
+> Task :capacitor-splash-screen:prepareReleaseArtProfile
+> Task :capacitor-status-bar:prepareReleaseArtProfile
+> Task :capgo-capacitor-social-login:prepareReleaseArtProfile
+> Task :capacitor-app:bundleLibRuntimeToJarRelease
+> Task :app:mergeReleaseArtProfile
+> Task :capacitor-browser:bundleLibRuntimeToJarRelease
+> Task :capacitor-haptics:bundleLibRuntimeToJarRelease
+> Task :capacitor-keyboard:bundleLibRuntimeToJarRelease
+> Task :capacitor-local-notifications:bundleLibRuntimeToJarRelease
+> Task :capacitor-network:bundleLibRuntimeToJarRelease
+> Task :capacitor-push-notifications:bundleLibRuntimeToJarRelease
+> Task :capacitor-splash-screen:bundleLibRuntimeToJarRelease
+> Task :capacitor-status-bar:bundleLibRuntimeToJarRelease
+> Task :capgo-capacitor-social-login:bundleLibRuntimeToJarRelease
+> Task :capacitor-chat-bubbles:bundleLibRuntimeToJarRelease
+> Task :capacitor-native-call-ui:bundleLibRuntimeToJarRelease
+> Task :capacitor-android:bundleLibRuntimeToJarRelease
+> Task :capacitor-cordova-android-plugins:bundleLibRuntimeToJarRelease
+> Task :app:mergeReleaseShaders
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-android:mergeReleaseShaders
+> Task :capacitor-android:compileReleaseShaders NO-SOURCE
+> Task :capacitor-android:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-android:mergeReleaseAssets
+> Task :capacitor-app:mergeReleaseShaders
+> Task :capacitor-app:compileReleaseShaders NO-SOURCE
+> Task :capacitor-app:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-app:mergeReleaseAssets
+> Task :capacitor-browser:mergeReleaseShaders
+> Task :capacitor-browser:compileReleaseShaders NO-SOURCE
+> Task :capacitor-browser:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-browser:mergeReleaseAssets
+> Task :capacitor-chat-bubbles:mergeReleaseShaders
+> Task :capacitor-chat-bubbles:compileReleaseShaders NO-SOURCE
+> Task :capacitor-chat-bubbles:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-chat-bubbles:mergeReleaseAssets
+> Task :capacitor-cordova-android-plugins:mergeReleaseShaders
+> Task :capacitor-cordova-android-plugins:compileReleaseShaders NO-SOURCE
+> Task :capacitor-cordova-android-plugins:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-cordova-android-plugins:mergeReleaseAssets
+> Task :capacitor-haptics:mergeReleaseShaders
+> Task :capacitor-haptics:compileReleaseShaders NO-SOURCE
+> Task :capacitor-haptics:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-haptics:mergeReleaseAssets
+> Task :capacitor-keyboard:mergeReleaseShaders
+> Task :capacitor-keyboard:compileReleaseShaders NO-SOURCE
+> Task :capacitor-keyboard:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-keyboard:mergeReleaseAssets
+> Task :capacitor-local-notifications:mergeReleaseShaders
+> Task :capacitor-local-notifications:compileReleaseShaders NO-SOURCE
+> Task :capacitor-local-notifications:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-local-notifications:mergeReleaseAssets
+> Task :capacitor-native-call-ui:mergeReleaseShaders
+> Task :capacitor-native-call-ui:compileReleaseShaders NO-SOURCE
+> Task :capacitor-native-call-ui:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-native-call-ui:mergeReleaseAssets
+> Task :capacitor-network:mergeReleaseShaders
+> Task :capacitor-network:compileReleaseShaders NO-SOURCE
+> Task :capacitor-network:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-network:mergeReleaseAssets
+> Task :capacitor-push-notifications:mergeReleaseShaders
+> Task :capacitor-push-notifications:compileReleaseShaders NO-SOURCE
+> Task :capacitor-push-notifications:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-push-notifications:mergeReleaseAssets
+> Task :capacitor-splash-screen:mergeReleaseShaders
+> Task :capacitor-splash-screen:compileReleaseShaders NO-SOURCE
+> Task :capacitor-splash-screen:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-splash-screen:mergeReleaseAssets
+> Task :capacitor-status-bar:mergeReleaseShaders
+> Task :capacitor-status-bar:compileReleaseShaders NO-SOURCE
+> Task :capacitor-status-bar:generateReleaseAssets UP-TO-DATE
+> Task :capacitor-status-bar:mergeReleaseAssets
+> Task :capgo-capacitor-social-login:mergeReleaseShaders
+> Task :capgo-capacitor-social-login:compileReleaseShaders NO-SOURCE
+> Task :capgo-capacitor-social-login:generateReleaseAssets UP-TO-DATE
+> Task :capgo-capacitor-social-login:mergeReleaseAssets
+> Task :app:mergeReleaseAssets
+> Task :app:mergeReleaseGlobalSynthetics
+> Task :app:extractReleaseVersionControlInfo
+> Task :app:extractProguardFiles
+> Task :capacitor-android:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-android:createFullJarRelease
+> Task :capacitor-android:extractProguardFiles
+> Task :capacitor-android:generateReleaseLintModel
+> Task :capacitor-app:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-app:createFullJarRelease
+> Task :capacitor-app:extractProguardFiles
+> Task :capacitor-android:prepareLintJarForPublish
+> Task :capacitor-app:generateReleaseLintModel
+> Task :capacitor-browser:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-browser:createFullJarRelease
+> Task :capacitor-browser:extractProguardFiles
+> Task :capacitor-app:prepareLintJarForPublish
+> Task :capacitor-browser:generateReleaseLintModel
+> Task :capacitor-browser:prepareLintJarForPublish
+> Task :capacitor-chat-bubbles:processReleaseJavaRes
+> Task :capacitor-chat-bubbles:createFullJarRelease
+> Task :capacitor-chat-bubbles:extractProguardFiles
+> Task :app:compressReleaseAssets
+> Task :capacitor-chat-bubbles:generateReleaseLintModel
+> Task :capacitor-chat-bubbles:prepareLintJarForPublish
+> Task :capacitor-cordova-android-plugins:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-cordova-android-plugins:createFullJarRelease
+> Task :capacitor-cordova-android-plugins:extractProguardFiles
+> Task :app:mergeDexRelease
+> Task :capacitor-cordova-android-plugins:generateReleaseLintModel
+> Task :capacitor-haptics:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-cordova-android-plugins:prepareLintJarForPublish
+> Task :capacitor-haptics:createFullJarRelease
+> Task :capacitor-haptics:extractProguardFiles
+> Task :capacitor-haptics:generateReleaseLintModel
+> Task :capacitor-haptics:prepareLintJarForPublish
+> Task :capacitor-keyboard:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-keyboard:createFullJarRelease
+> Task :capacitor-keyboard:extractProguardFiles
+> Task :capacitor-keyboard:generateReleaseLintModel
+> Task :capacitor-keyboard:prepareLintJarForPublish
+> Task :capacitor-local-notifications:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-local-notifications:createFullJarRelease
+> Task :capacitor-local-notifications:extractProguardFiles
+> Task :capacitor-local-notifications:generateReleaseLintModel
+> Task :capacitor-local-notifications:prepareLintJarForPublish
+> Task :capacitor-native-call-ui:processReleaseJavaRes
+> Task :capacitor-native-call-ui:createFullJarRelease
+> Task :capacitor-native-call-ui:extractProguardFiles
+> Task :capacitor-native-call-ui:generateReleaseLintModel
+> Task :capacitor-network:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-native-call-ui:prepareLintJarForPublish
+> Task :capacitor-network:createFullJarRelease
+> Task :capacitor-network:extractProguardFiles
+> Task :capacitor-network:generateReleaseLintModel
+> Task :capacitor-network:prepareLintJarForPublish
+> Task :capacitor-push-notifications:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-push-notifications:createFullJarRelease
+> Task :capacitor-push-notifications:extractProguardFiles
+> Task :app:compileReleaseArtProfile
+> Task :capacitor-push-notifications:generateReleaseLintModel
+> Task :capacitor-splash-screen:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-push-notifications:prepareLintJarForPublish
+> Task :capacitor-splash-screen:createFullJarRelease
+> Task :capacitor-splash-screen:extractProguardFiles
+> Task :capacitor-splash-screen:generateReleaseLintModel
+> Task :capacitor-splash-screen:prepareLintJarForPublish
+> Task :capacitor-status-bar:processReleaseJavaRes NO-SOURCE
+> Task :capacitor-status-bar:createFullJarRelease
+> Task :capacitor-status-bar:extractProguardFiles
+> Task :capacitor-status-bar:generateReleaseLintModel
+> Task :capacitor-status-bar:prepareLintJarForPublish
+> Task :capgo-capacitor-social-login:processReleaseJavaRes NO-SOURCE
+> Task :capgo-capacitor-social-login:createFullJarRelease
+> Task :capgo-capacitor-social-login:extractProguardFiles
+> Task :capgo-capacitor-social-login:generateReleaseLintModel
+> Task :capgo-capacitor-social-login:prepareLintJarForPublish
+> Task :capacitor-app:checkReleaseAarMetadata
+> Task :app:generateReleaseLintVitalReportModel
+> Task :capacitor-app:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-app:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-app:extractDeepLinksForAarRelease
+> Task :capacitor-app:extractReleaseAnnotations
+> Task :capacitor-app:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-app:mergeReleaseConsumerProguardFiles
+> Task :capacitor-browser:checkReleaseAarMetadata
+> Task :capacitor-browser:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-browser:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-browser:extractDeepLinksForAarRelease
+> Task :capacitor-browser:extractReleaseAnnotations
+> Task :capacitor-browser:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-browser:mergeReleaseConsumerProguardFiles
+> Task :capacitor-haptics:checkReleaseAarMetadata
+> Task :capacitor-haptics:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-haptics:extractDeepLinksForAarRelease
+> Task :capacitor-haptics:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-haptics:extractReleaseAnnotations
+> Task :capacitor-browser:mergeReleaseJavaResource
+> Task :capacitor-app:mergeReleaseJavaResource
+> Task :capacitor-haptics:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-app:syncReleaseLibJars
+> Task :capacitor-app:bundleReleaseLocalLintAar
+> Task :capacitor-browser:syncReleaseLibJars
+> Task :capacitor-browser:bundleReleaseLocalLintAar
+> Task :capacitor-haptics:mergeReleaseConsumerProguardFiles
+> Task :capacitor-haptics:mergeReleaseJavaResource
+> Task :capacitor-keyboard:checkReleaseAarMetadata
+> Task :capacitor-haptics:syncReleaseLibJars
+> Task :capacitor-haptics:bundleReleaseLocalLintAar
+> Task :capacitor-keyboard:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-keyboard:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-keyboard:extractDeepLinksForAarRelease
+> Task :capacitor-keyboard:extractReleaseAnnotations
+> Task :capacitor-keyboard:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-keyboard:mergeReleaseConsumerProguardFiles
+> Task :capacitor-keyboard:mergeReleaseJavaResource
+> Task :capacitor-local-notifications:checkReleaseAarMetadata
+> Task :capacitor-keyboard:syncReleaseLibJars
+> Task :capacitor-keyboard:bundleReleaseLocalLintAar
+> Task :capacitor-local-notifications:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-local-notifications:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-local-notifications:extractDeepLinksForAarRelease
+> Task :capacitor-local-notifications:extractReleaseAnnotations
+> Task :capacitor-local-notifications:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-local-notifications:mergeReleaseConsumerProguardFiles
+> Task :capacitor-network:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-local-notifications:mergeReleaseJavaResource
+> Task :capacitor-network:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-network:checkReleaseAarMetadata
+> Task :capacitor-network:extractDeepLinksForAarRelease
+> Task :capacitor-local-notifications:syncReleaseLibJars
+> Task :capacitor-local-notifications:bundleReleaseLocalLintAar
+> Task :capacitor-network:extractReleaseAnnotations
+> Task :capacitor-network:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-network:mergeReleaseConsumerProguardFiles
+> Task :capacitor-network:mergeReleaseJavaResource
+> Task :capacitor-push-notifications:checkReleaseAarMetadata
+> Task :capacitor-network:syncReleaseLibJars
+> Task :capacitor-network:bundleReleaseLocalLintAar
+> Task :capacitor-push-notifications:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-push-notifications:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-push-notifications:extractDeepLinksForAarRelease
+> Task :capacitor-push-notifications:extractReleaseAnnotations
+> Task :capacitor-push-notifications:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-push-notifications:mergeReleaseConsumerProguardFiles
+> Task :capacitor-push-notifications:mergeReleaseJavaResource
+> Task :capacitor-splash-screen:checkReleaseAarMetadata
+> Task :capacitor-push-notifications:syncReleaseLibJars
+> Task :capacitor-push-notifications:bundleReleaseLocalLintAar
+> Task :capacitor-splash-screen:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-splash-screen:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-splash-screen:extractDeepLinksForAarRelease
+> Task :capacitor-splash-screen:extractReleaseAnnotations
+> Task :capacitor-splash-screen:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-splash-screen:mergeReleaseConsumerProguardFiles
+> Task :capacitor-splash-screen:mergeReleaseJavaResource
+> Task :capacitor-status-bar:checkReleaseAarMetadata
+> Task :capacitor-splash-screen:syncReleaseLibJars
+> Task :capacitor-splash-screen:bundleReleaseLocalLintAar
+> Task :capacitor-status-bar:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-status-bar:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-status-bar:extractDeepLinksForAarRelease
+> Task :capacitor-status-bar:extractReleaseAnnotations
+> Task :capacitor-status-bar:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-status-bar:mergeReleaseConsumerProguardFiles
+> Task :capacitor-status-bar:mergeReleaseJavaResource
+> Task :capgo-capacitor-social-login:checkReleaseAarMetadata
+> Task :capacitor-status-bar:syncReleaseLibJars
+> Task :capacitor-status-bar:bundleReleaseLocalLintAar
+> Task :capgo-capacitor-social-login:stripReleaseDebugSymbols NO-SOURCE
+> Task :capgo-capacitor-social-login:extractDeepLinksForAarRelease
+> Task :capgo-capacitor-social-login:copyReleaseJniLibsProjectAndLocalJars
+> Task :capgo-capacitor-social-login:extractReleaseAnnotations
+> Task :capgo-capacitor-social-login:mergeReleaseGeneratedProguardFiles
+> Task :capgo-capacitor-social-login:mergeReleaseConsumerProguardFiles
+> Task :capgo-capacitor-social-login:mergeReleaseJavaResource
+> Task :capacitor-chat-bubbles:checkReleaseAarMetadata
+> Task :capgo-capacitor-social-login:syncReleaseLibJars
+> Task :capgo-capacitor-social-login:bundleReleaseLocalLintAar
+> Task :capacitor-chat-bubbles:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-chat-bubbles:extractDeepLinksForAarRelease
+> Task :capacitor-chat-bubbles:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-chat-bubbles:extractReleaseAnnotations
+> Task :capacitor-chat-bubbles:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-chat-bubbles:mergeReleaseConsumerProguardFiles
+> Task :capacitor-native-call-ui:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-native-call-ui:checkReleaseAarMetadata
+> Task :capacitor-native-call-ui:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-native-call-ui:extractDeepLinksForAarRelease
+> Task :capacitor-native-call-ui:extractReleaseAnnotations
+> Task :capacitor-native-call-ui:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-native-call-ui:mergeReleaseConsumerProguardFiles
+> Task :capacitor-android:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-android:checkReleaseAarMetadata
+> Task :capacitor-android:extractDeepLinksForAarRelease
+> Task :capacitor-android:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-native-call-ui:mergeReleaseJavaResource
+> Task :capacitor-chat-bubbles:mergeReleaseJavaResource
+> Task :capacitor-android:extractReleaseAnnotations
+> Task :capacitor-chat-bubbles:syncReleaseLibJars
+> Task :capacitor-chat-bubbles:bundleReleaseLocalLintAar
+> Task :capacitor-native-call-ui:syncReleaseLibJars
+> Task :capacitor-native-call-ui:bundleReleaseLocalLintAar
+> Task :capacitor-android:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-android:mergeReleaseConsumerProguardFiles
+> Task :capacitor-android:mergeReleaseJavaResource
+> Task :capacitor-cordova-android-plugins:checkReleaseAarMetadata
+> Task :capacitor-android:syncReleaseLibJars
+> Task :capacitor-android:bundleReleaseLocalLintAar
+> Task :capacitor-cordova-android-plugins:stripReleaseDebugSymbols NO-SOURCE
+> Task :capacitor-cordova-android-plugins:copyReleaseJniLibsProjectAndLocalJars
+> Task :capacitor-cordova-android-plugins:extractDeepLinksForAarRelease
+> Task :capacitor-cordova-android-plugins:extractReleaseAnnotations
+> Task :capacitor-cordova-android-plugins:mergeReleaseGeneratedProguardFiles
+> Task :capacitor-cordova-android-plugins:mergeReleaseConsumerProguardFiles
+> Task :capacitor-cordova-android-plugins:mergeReleaseJavaResource
+> Task :capacitor-cordova-android-plugins:syncReleaseLibJars
+> Task :capacitor-cordova-android-plugins:bundleReleaseLocalLintAar
+> Task :capacitor-android:writeReleaseLintModelMetadata
+> Task :capacitor-app:writeReleaseLintModelMetadata
+> Task :capacitor-browser:writeReleaseLintModelMetadata
+> Task :capacitor-chat-bubbles:writeReleaseLintModelMetadata
+> Task :capacitor-cordova-android-plugins:writeReleaseLintModelMetadata
+> Task :capacitor-haptics:writeReleaseLintModelMetadata
+> Task :capacitor-keyboard:writeReleaseLintModelMetadata
+> Task :capacitor-local-notifications:writeReleaseLintModelMetadata
+> Task :capacitor-native-call-ui:writeReleaseLintModelMetadata
+> Task :capacitor-network:writeReleaseLintModelMetadata
+> Task :capacitor-push-notifications:writeReleaseLintModelMetadata
+> Task :capacitor-splash-screen:writeReleaseLintModelMetadata
+> Task :capacitor-status-bar:writeReleaseLintModelMetadata
+> Task :capgo-capacitor-social-login:writeReleaseLintModelMetadata
+> Task :capacitor-android:generateReleaseLintVitalModel
+> Task :capacitor-app:generateReleaseLintVitalModel
+> Task :capacitor-browser:generateReleaseLintVitalModel
+> Task :capacitor-chat-bubbles:generateReleaseLintVitalModel
+> Task :capacitor-cordova-android-plugins:generateReleaseLintVitalModel
+> Task :capacitor-haptics:generateReleaseLintVitalModel
+> Task :capacitor-keyboard:generateReleaseLintVitalModel
+> Task :capacitor-local-notifications:generateReleaseLintVitalModel
+> Task :capacitor-native-call-ui:generateReleaseLintVitalModel
+> Task :capacitor-network:generateReleaseLintVitalModel
+> Task :capacitor-push-notifications:generateReleaseLintVitalModel
+> Task :capacitor-splash-screen:generateReleaseLintVitalModel
+> Task :capacitor-status-bar:generateReleaseLintVitalModel
+> Task :capgo-capacitor-social-login:generateReleaseLintVitalModel
+> Task :app:processReleaseJavaRes NO-SOURCE
+> Task :app:optimizeReleaseResources
+> Task :app:collectReleaseDependencies
+> Task :app:sdkReleaseDependencyData
+> Task :app:validateSigningRelease
+> Task :app:writeReleaseAppMetadata
+> Task :app:writeReleaseSigningConfigVersions
+> Task :capacitor-android:bundleReleaseAar
+> Task :capacitor-android:mapReleaseSourceSetPaths
+> Task :app:mergeReleaseJavaResource
+> Task :capacitor-android:mergeReleaseResources
+> Task :capacitor-app:bundleReleaseAar
+> Task :capacitor-app:mapReleaseSourceSetPaths
+> Task :capacitor-app:mergeReleaseResources
+> Task :capacitor-android:verifyReleaseResources
+> Task :capacitor-android:assembleRelease
+> Task :capacitor-browser:bundleReleaseAar
+> Task :capacitor-browser:mapReleaseSourceSetPaths
+> Task :capacitor-app:verifyReleaseResources
+> Task :capacitor-browser:mergeReleaseResources
+> Task :capacitor-app:assembleRelease
+> Task :capacitor-chat-bubbles:bundleReleaseAar
+> Task :capacitor-chat-bubbles:mapReleaseSourceSetPaths
+> Task :capacitor-browser:verifyReleaseResources
+> Task :capacitor-chat-bubbles:mergeReleaseResources
+> Task :capacitor-browser:assembleRelease
+> Task :capacitor-cordova-android-plugins:bundleReleaseAar
+> Task :capacitor-cordova-android-plugins:mapReleaseSourceSetPaths
+> Task :capacitor-cordova-android-plugins:mergeReleaseResources
+> Task :capacitor-chat-bubbles:verifyReleaseResources
+> Task :capacitor-chat-bubbles:assembleRelease
+> Task :capacitor-haptics:bundleReleaseAar
+> Task :capacitor-haptics:mapReleaseSourceSetPaths
+> Task :capacitor-haptics:mergeReleaseResources
+> Task :capacitor-cordova-android-plugins:verifyReleaseResources
+> Task :capacitor-cordova-android-plugins:assembleRelease
+> Task :capacitor-keyboard:bundleReleaseAar
+> Task :capacitor-keyboard:mapReleaseSourceSetPaths
+> Task :capacitor-haptics:verifyReleaseResources
+> Task :capacitor-keyboard:mergeReleaseResources
+> Task :capacitor-haptics:assembleRelease
+> Task :capacitor-local-notifications:bundleReleaseAar
+> Task :capacitor-local-notifications:mapReleaseSourceSetPaths
+> Task :capacitor-local-notifications:mergeReleaseResources
+> Task :capacitor-app:lintVitalAnalyzeRelease
+> Task :capacitor-keyboard:verifyReleaseResources
+> Task :capacitor-keyboard:assembleRelease
+> Task :capacitor-native-call-ui:bundleReleaseAar
+> Task :capacitor-native-call-ui:mapReleaseSourceSetPaths
+> Task :capacitor-local-notifications:verifyReleaseResources
+> Task :capacitor-native-call-ui:mergeReleaseResources
+> Task :capacitor-local-notifications:assembleRelease
+> Task :capacitor-network:bundleReleaseAar
+> Task :capacitor-network:mapReleaseSourceSetPaths
+> Task :capacitor-network:mergeReleaseResources
+> Task :capacitor-browser:lintVitalAnalyzeRelease
+> Task :capacitor-native-call-ui:verifyReleaseResources
+> Task :capacitor-native-call-ui:assembleRelease
+> Task :capacitor-push-notifications:bundleReleaseAar
+> Task :capacitor-network:verifyReleaseResources
+> Task :capacitor-push-notifications:mapReleaseSourceSetPaths
+> Task :capacitor-network:assembleRelease
+> Task :capacitor-push-notifications:mergeReleaseResources
+> Task :capacitor-splash-screen:bundleReleaseAar
+> Task :capacitor-splash-screen:mapReleaseSourceSetPaths
+> Task :capacitor-splash-screen:mergeReleaseResources
+> Task :capacitor-android:lintVitalAnalyzeRelease
+> Task :capacitor-push-notifications:verifyReleaseResources
+> Task :capacitor-push-notifications:assembleRelease
+> Task :capacitor-status-bar:bundleReleaseAar
+> Task :capacitor-status-bar:mapReleaseSourceSetPaths
+> Task :capacitor-splash-screen:verifyReleaseResources
+> Task :capacitor-status-bar:mergeReleaseResources
+> Task :capacitor-splash-screen:assembleRelease
+> Task :capgo-capacitor-social-login:bundleReleaseAar
+> Task :capgo-capacitor-social-login:mapReleaseSourceSetPaths
+> Task :capacitor-cordova-android-plugins:lintVitalAnalyzeRelease
+> Task :capacitor-status-bar:verifyReleaseResources
+> Task :capgo-capacitor-social-login:mergeReleaseResources
+> Task :capacitor-status-bar:assembleRelease
+> Task :app:processApplicationManifestReleaseForBundle
+> Task :capacitor-haptics:lintVitalAnalyzeRelease
+> Task :app:bundleReleaseResources
+> Task :capgo-capacitor-social-login:verifyReleaseResources
+> Task :app:buildReleasePreBundle
+> Task :capgo-capacitor-social-login:assembleRelease
+> Task :app:configureReleaseDependencies
+> Task :app:parseReleaseIntegrityConfig
+> Task :capacitor-keyboard:lintVitalAnalyzeRelease
+> Task :capacitor-local-notifications:lintVitalAnalyzeRelease
+> Task :capacitor-native-call-ui:lintVitalAnalyzeRelease
+> Task :capacitor-chat-bubbles:lintVitalAnalyzeRelease
+> Task :capacitor-network:lintVitalAnalyzeRelease
+> Task :capacitor-push-notifications:lintVitalAnalyzeRelease
+> Task :capacitor-splash-screen:lintVitalAnalyzeRelease
+> Task :capacitor-status-bar:lintVitalAnalyzeRelease
+> Task :capgo-capacitor-social-login:lintVitalAnalyzeRelease
+> Task :app:lintVitalAnalyzeRelease
+> Task :app:lintVitalReportRelease
+> Task :app:lintVitalRelease
+> Task :app:packageReleaseBundle
+> Task :app:packageRelease
+> Task :app:createReleaseApkListingFileRedirect
+> Task :app:assembleRelease
+> Task :app:signReleaseBundle
+> Task :app:produceReleaseBundleIdeListingFile
+> Task :app:createReleaseBundleListingFileRedirect
+> Task :app:bundleRelease
+[Incubating] Problems report is available at: file:///home/runner/work/vexo/vexo/android/build/reports/problems/problems-report.html
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+BUILD SUCCESSFUL in 2m 53s
+620 actionable tasks: 620 executed
+0s
+Run mkdir -p client/public/downloads
+APK staged: 39563235 bytes
+AAB staged: 39107566 bytes
+0s
+Run git config user.name  "github-actions[bot]"
+The following paths are ignored by one of your .gitignore files:
+client/public/downloads/app.apk
+hint: Use -f if you really want to add them.
+hint: Disable this message with "git config set advice.addIgnoredFile false"
+Error: Process completed with exit code 1.
+0s
+0s
+0s
+Post job cleanup.
+0s
+1s
+Post job cleanup.
+/usr/bin/git version
+git version 2.53.0
+Copying '/home/runner/.gitconfig' to '/home/runner/work/_temp/5a4b7894-7f8d-4a7e-b812-20a9c50fe56c/.gitconfig'
+Temporarily overriding HOME='/home/runner/work/_temp/5a4b7894-7f8d-4a7e-b812-20a9c50fe56c' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+/usr/bin/git config --global --add safe.directory /home/runner/work/vexo/vexo
+/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+http.https://github.com/.extraheader
+/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
