@@ -3,12 +3,12 @@ name: Android Build (Manual)
 # Manual-only Android build pipeline.
 # Triggered from Actions → "Android Build (Manual)" → Run workflow.
 #
-# Required repository secrets:
+# Required repository secrets (configured under Settings → Secrets → Actions):
 #   ANDROID_KEYSTORE_BASE64    base64 of the .jks keystore
 #                              (generate with: base64 -w 0 vex-release-official.jks)
-#   ANDROID_KEYSTORE_PASSWORD  store password
-#   ANDROID_KEY_ALIAS          key alias inside the keystore
-#   ANDROID_KEY_PASSWORD       password for the alias entry
+#   KEYSTORE_PASSWORD          store password
+#   KEY_ALIAS                  key alias inside the keystore
+#   KEY_PASSWORD               password for the alias entry
 
 on:
   workflow_dispatch:
@@ -106,12 +106,29 @@ jobs:
       - name: Inject signing config into build.gradle
         run: node scripts/ci/patch-android-signing.mjs
 
+      - name: Verify signing secrets are present
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          missing=()
+          [ -z "$KEY_ALIAS" ]         && missing+=("KEY_ALIAS")
+          [ -z "$KEYSTORE_PASSWORD" ] && missing+=("KEYSTORE_PASSWORD")
+          [ -z "$KEY_PASSWORD" ]      && missing+=("KEY_PASSWORD")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required GitHub secrets: ${missing[*]}"
+            echo "::error::Add them under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          echo "All required signing secrets are present."
+
       - name: Build APK and/or AAB with Gradle
         env:
           ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/keystore/vex-release-official.jks
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           TARGET: ${{ github.event.inputs.target }}
         run: |
           cd android

@@ -62,8 +62,16 @@ android {
     }
 }
 
-android.buildTypes.release.tasks?.configureEach { task ->
-    task.doFirst {
+// Late-bound verification: fail fast if release signing was not configured.
+// Uses tasks.matching(...).configureEach so we attach to real Gradle tasks
+// (assembleRelease / bundleRelease) rather than the BuildType DSL object,
+// which has no \`tasks\` property and would break the configuration phase.
+gradle.taskGraph.whenReady { graph ->
+    def needsSigning = graph.allTasks.any {
+        it.name == "assembleRelease" || it.name == "bundleRelease" ||
+        it.name == "packageRelease"  || it.name == "signReleaseBundle"
+    }
+    if (needsSigning) {
         def cfg = android.buildTypes.release.signingConfig
         if (cfg == null || cfg.storeFile == null) {
             throw new GradleException(

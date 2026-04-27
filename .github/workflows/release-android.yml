@@ -1,202 +1,34 @@
-name: Release Android (APK + AAB)
+name: Release Android (DEPRECATED — use Android Build (Manual))
 
-# Builds a signed APK + AAB on every push to main (and on demand),
-# publishes them as a GitHub Release, then deletes any older releases
-# so only the latest two ever exist.
+# DEPRECATED — this workflow has been superseded by android-build.yml,
+# which now produces both APK and AAB in a single manual run.
 #
-# Required repository secrets (Settings → Secrets and variables → Actions):
-#   ANDROID_KEYSTORE_BASE64    base64 of vex-release-official.jks
-#                              (generate with: base64 -w 0 vex-release-official.jks)
-#   ANDROID_KEYSTORE_PASSWORD  store password for the keystore
-#   ANDROID_KEY_ALIAS          key alias inside the keystore (e.g. vex_release_official)
-#   ANDROID_KEY_PASSWORD       password for the alias entry
+# This file is kept only as a placeholder so existing references
+# (links, badges, history) do not 404. It is manual-only and exits
+# immediately with an explanatory message; it cannot be triggered by
+# pushes or pull requests.
 #
-# Expected signing identity (verified by the workflow — build fails on mismatch):
-#   SHA-256: 46:67:5A:1E:EA:17:A4:76:B9:1F:B3:11:3F:13:6F:85:3E:8B:65:BC:48:24:6C:91:BB:0E:BD:25:E7:EA:A5:CB
+# To produce a signed Android build go to:
+#   Actions → Android Build (Manual) → Run workflow
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: release-android-${{ github.ref }}
+  group: release-android-deprecated-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  EXPECTED_SIGNING_SHA256: "46:67:5A:1E:EA:17:A4:76:B9:1F:B3:11:3F:13:6F:85:3E:8B:65:BC:48:24:6C:91:BB:0E:BD:25:E7:EA:A5:CB"
-
 jobs:
-  build:
+  notify-deprecated:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-
+    timeout-minutes: 1
     steps:
-      - name: Checkout (with LFS)
-        uses: actions/checkout@v5
-        with:
-          lfs: true
-
-      - name: Setup Git LFS
+      - name: Print deprecation notice and exit
         run: |
-          git lfs install
-          git lfs pull
-
-      - name: Setup Node 22
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          cache: "npm"
-
-      - name: Setup Java 17 (Temurin)
-        uses: actions/setup-java@v5
-        with:
-          distribution: "temurin"
-          java-version: "17"
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
-
-      - name: Install npm dependencies
-        run: npm ci
-
-      - name: Build web bundle
-        run: npm run build
-
-      - name: Add Capacitor android platform
-        run: |
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
-
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      - name: Decode keystore from secret
-        env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          if [ -z "$KEYSTORE_B64" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 secret is not set"
-            exit 1
-          fi
-          mkdir -p android/keystore
-          printf '%s' "$KEYSTORE_B64" | base64 -d > android/keystore/vex-release-official.jks
-          test -s android/keystore/vex-release-official.jks || (echo "::error::Decoded keystore is empty" && exit 1)
-
-      - name: Verify keystore identity matches expected SHA-256
-        env:
-          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: |
-          ACTUAL=$(keytool -list -v \
-            -keystore android/keystore/vex-release-official.jks \
-            -alias "$KEY_ALIAS" \
-            -storepass "$STORE_PASS" 2>/dev/null \
-            | awk -F': ' '/SHA256:/{print $2; exit}' \
-            | tr -d '[:space:]')
-          EXPECTED=$(echo "$EXPECTED_SIGNING_SHA256" | tr -d '[:space:]')
-          if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "::error::Keystore SHA-256 mismatch."
-            echo "Expected: $EXPECTED"
-            echo "Actual:   $ACTUAL"
-            exit 1
-          fi
-          echo "Keystore identity verified."
-
-      - name: Inject signing config into build.gradle
-        run: node scripts/ci/patch-android-signing.mjs
-
-      - name: Build signed APK + AAB
-        env:
-          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/keystore/vex-release-official.jks
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          # The validator in scripts/mobile-android-build.mjs looks for
-          # "ANDROID_KEYSTORE_PASSWORD" inside build.gradle — added in the
-          # previous step — so it will accept these env-driven inputs.
-          cd android
-          ./gradlew --no-daemon assembleRelease bundleRelease
-
-      - name: Verify built artefacts exist
-        run: |
-          test -s android/app/build/outputs/apk/release/app-release.apk \
-            || (echo "::error::APK missing" && exit 1)
-          test -s android/app/build/outputs/bundle/release/app-release.aab \
-            || (echo "::error::AAB missing" && exit 1)
-
-      - name: Verify APK signature matches expected SHA-256
-        run: |
-          ACTUAL=$(keytool -printcert -jarfile \
-            android/app/build/outputs/apk/release/app-release.apk \
-            | awk -F': ' '/SHA256:/{print $2; exit}' \
-            | tr -d '[:space:]')
-          EXPECTED=$(echo "$EXPECTED_SIGNING_SHA256" | tr -d '[:space:]')
-          if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "::error::APK signed with wrong key. Expected $EXPECTED, got $ACTUAL"
-            exit 1
-          fi
-          echo "APK signature identity confirmed."
-
-      - name: Stage release artefacts
-        run: |
-          mkdir -p release-artifacts
-          cp android/app/build/outputs/apk/release/app-release.apk \
-             release-artifacts/VEX-official-release.apk
-          cp android/app/build/outputs/bundle/release/app-release.aab \
-             release-artifacts/VEX-official-release.aab
-          ls -lh release-artifacts/
-
-      - name: Compute release tag
-        id: tag
-        run: |
-          DATE=$(date -u +%Y%m%d-%H%M%S)
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          echo "tag=android-v${DATE}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "title=VEX Android v${DATE} (${SHORT_SHA})" >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "${{ steps.tag.outputs.tag }}" \
-            "release-artifacts/VEX-official-release.apk" \
-            "release-artifacts/VEX-official-release.aab" \
-            --title "${{ steps.tag.outputs.title }}" \
-            --target "${{ github.sha }}" \
-            --notes "Automated signed Android build for ${{ github.sha }}.
-
-          Signing identity SHA-256: \`${EXPECTED_SIGNING_SHA256}\`
-
-          Artifacts:
-          - VEX-official-release.apk
-          - VEX-official-release.aab"
-
-      - name: Cleanup older Android releases (keep latest 2)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Only consider tags created by this workflow (prefix android-v)
-          # so we never touch unrelated releases.
-          gh release list --limit 200 \
-              --json tagName,createdAt,isDraft,isPrerelease \
-              --jq 'map(select(.isDraft == false and (.tagName | startswith("android-v")))) | sort_by(.createdAt) | reverse | .[2:] | .[].tagName' \
-            | while read -r old_tag; do
-                if [ -n "$old_tag" ]; then
-                  echo "Deleting older release: $old_tag"
-                  gh release delete "$old_tag" --yes --cleanup-tag || true
-                fi
-              done
-
-      - name: Upload artefacts (workflow run)
-        uses: actions/upload-artifact@v4
-        with:
-          name: vex-android-${{ steps.tag.outputs.tag }}
-          path: release-artifacts/
-          retention-days: 14
-          if-no-files-found: error
+          echo "::warning::This workflow is deprecated."
+          echo "::warning::Use 'Android Build (Manual)' (.github/workflows/android-build.yml) instead."
+          echo "::warning::That workflow builds both APK and AAB in a single run."
+          exit 0
