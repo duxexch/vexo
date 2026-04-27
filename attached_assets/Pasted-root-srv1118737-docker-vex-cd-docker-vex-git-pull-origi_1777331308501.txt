@@ -1,0 +1,110 @@
+root@srv1118737:/docker/vex# cd /docker/vex
+git pull origin main          # المرة الأولى عشان تجيب السكربت
+bash scripts/server/update-all.sh
+remote: Enumerating objects: 42, done.
+remote: Counting objects: 100% (42/42), done.
+remote: Compressing objects: 100% (13/13), done.
+remote: Total 31 (delta 20), reused 29 (delta 18), pack-reused 0 (from 0)
+Unpacking objects: 100% (31/31), 552.87 KiB | 1.38 MiB/s, done.
+From github.com:duxexch/vexo
+ * branch            main       -> FETCH_HEAD
+   1e55cb2..7da1243  main       -> origin/main
+Updating 1e55cb2..7da1243
+Fast-forward
+ attached_assets/Pasted--unpacking-to-docker-io-library-vex-app-latest--1777328_1777328938678.txt | 172 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ attached_assets/Pasted-27-104-vex-app-timestamp-2026-04-27T22-49-49-178Z-level_1777330352750.txt |  74 +++++++++++++++++++++++++++++++++++++++++++
+ attached_assets/Pasted-root-srv1118737-docker-vex-root-srv1118737-docker-vex-c_1777330499338.txt |  37 ++++++++++++++++++++++
+ attached_assets/Pasted-root-srv1118737-docker-vex-root-srv1118737-docker-vex-c_1777330706706.txt | 176 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ attached_assets/Pasted-usCode-200-duration-44-ip-41-233-127-104-vex-app-timest_1777330333493.txt | 177 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ attached_assets/image_1777330640954.png                                                          | Bin 0 -> 241200 bytes
+ attached_assets/image_1777330657342.png                                                          | Bin 0 -> 393681 bytes
+ client/public/downloads/index.html                                                               |   8 ++++-
+ client/src/pages/install-app.tsx                                                                 |  22 +++++++++++--
+ scripts/server/update-all.sh                                                                     | 259 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 10 files changed, 921 insertions(+), 4 deletions(-)
+ create mode 100644 attached_assets/Pasted--unpacking-to-docker-io-library-vex-app-latest--1777328_1777328938678.txt
+ create mode 100644 attached_assets/Pasted-27-104-vex-app-timestamp-2026-04-27T22-49-49-178Z-level_1777330352750.txt
+ create mode 100644 attached_assets/Pasted-root-srv1118737-docker-vex-root-srv1118737-docker-vex-c_1777330499338.txt
+ create mode 100644 attached_assets/Pasted-root-srv1118737-docker-vex-root-srv1118737-docker-vex-c_1777330706706.txt
+ create mode 100644 attached_assets/Pasted-usCode-200-duration-44-ip-41-233-127-104-vex-app-timest_1777330333493.txt
+ create mode 100644 attached_assets/image_1777330640954.png
+ create mode 100644 attached_assets/image_1777330657342.png
+ create mode 100755 scripts/server/update-all.sh
+
+━━━ Pre-flight checks ━━━
+[OK]    All required commands available
+
+━━━ Step 1/4: git pull ━━━
+[INFO]  Branch: main (current: main)
+[INFO]  Pulling main from origin...
+From github.com:duxexch/vexo
+ * branch            main       -> FETCH_HEAD
+From github.com:duxexch/vexo
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+[OK]    Already up to date (HEAD: 7da1243)
+
+━━━ Step 2/4: refresh Android binaries (APK + AAB + manifest.json) ━━━
+[2026-04-27T23:08:08Z] App version (from package.json): 1.0.1
+[2026-04-27T23:08:08Z] Destination filenames:           VEX-1.0.1.apk / VEX-1.0.1.aab
+[2026-04-27T23:08:08Z] Downloading https://github.com/duxexch/vexo/releases/download/latest-android/VEX-official-release.apk
+[2026-04-27T23:08:09Z]   Saved → client/public/downloads/VEX-1.0.1.apk (14734767 bytes)
+[2026-04-27T23:08:09Z] Downloading https://github.com/duxexch/vexo/releases/download/latest-android/VEX-official-release.aab
+[2026-04-27T23:08:09Z]   Saved → client/public/downloads/VEX-1.0.1.aab (14255313 bytes)
+[2026-04-27T23:08:09Z] Wrote manifest: client/public/downloads/manifest.json
+[2026-04-27T23:08:09Z]   version:   1.0.1
+[2026-04-27T23:08:09Z]   apk:       VEX-1.0.1.apk  (14 MB)  sha256=57ac076fcffff18cda3484f920564b9fe447a5a8aab0eb4dd29b0cffc1323ba1
+[2026-04-27T23:08:09Z]   aab:       VEX-1.0.1.aab  (13 MB)  sha256=fb7598057cd9870b5d7a5bba25419da6d877290c212185e34e344ca80e458138
+[2026-04-27T23:08:09Z]   Removed stale binary: client/public/downloads/VEX-1.0.0.apk
+[2026-04-27T23:08:09Z]   Removed stale binary: client/public/downloads/VEX-1.0.0.aab
+[2026-04-27T23:08:09Z] Pruned 2 stale binary file(s) from client/public/downloads
+[2026-04-27T23:08:09Z] Done. Public link: https://vixo.click/downloads/VEX-1.0.1.apk
+[2026-04-27T23:08:09Z]       Manifest:    https://vixo.click/downloads/manifest.json
+[OK]    Android binaries refreshed
+
+━━━ Step 3/4: docker-compose redeploy (skipped — no code changes; pass --force to override) ━━━
+
+━━━ Step 4/4: post-deploy verification ━━━
+
+== 1. Binary presence & size ==
+  ✓ APK exists at /docker/vex/client/public/downloads/VEX-1.0.1.apk (14 MB)
+  ✓ APK has valid ZIP magic bytes (PK)
+  ✓ AAB exists at /docker/vex/client/public/downloads/VEX-1.0.1.aab (13 MB) — admin-only via /api/admin/downloads/aab
+
+== 2. SHA-256 checksums (record these for your audit trail) ==
+  · APK SHA-256: 57ac076fcffff18cda3484f920564b9fe447a5a8aab0eb4dd29b0cffc1323ba1
+  · AAB SHA-256: fb7598057cd9870b5d7a5bba25419da6d877290c212185e34e344ca80e458138
+
+== 3. APK signature verification ==
+  ! Neither apksigner nor unzip+openssl available — cannot verify signature
+
+== 4. APK package identity ==
+  ! aapt/aapt2 not installed — cannot read package name from APK
+
+== 5. Public download URL reachability (root cause of "تعذر التنزيل") ==
+  · Probing: https://vixo.click/downloads/VEX-1.0.1.apk
+  ✓ HTTP 200 OK — public URL is reachable
+  · http_code=200 size=0 content_type=application/vnd.android.package-archive time=0.036891s
+  ✓ Content-Type is correct (application/vnd.android.package-archive)
+  ✓ Content-Disposition header present: content-disposition: attachment; filename="VEX-1.0.1.apk"
+  ✓ Server is serving 14 MB (matches a real APK)
+  · Probing AAB (must be 404 publicly): https://vixo.click/downloads/VEX-1.0.1.aab
+  ✓ AAB is correctly blocked publicly (HTTP 404)
+
+== 6. Database integrity (read-only) ==
+  ✗ Database service 'vex-postgres' is not running
+
+== Summary ==
+  Passed:  8
+  Warnings: 2
+  Failed:  1
+
+Failed checks:
+  - Database service 'vex-postgres' is not running
+
+Deployment is NOT fully verified.
+[ERROR] update-all.sh aborted on line 242 (exit code 1)
+[ERROR] Re-run with the --skip-* flag for whichever step succeeded
+[ERROR] to avoid redoing work, e.g.:
+[ERROR]   bash scripts/server/update-all.sh --skip-pull --skip-apk
+root@srv1118737:/docker/vex# 

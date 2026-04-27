@@ -56,7 +56,11 @@ fi
 APK_PATH="${DOWNLOADS_DIR}/${APK_NAME}"
 AAB_PATH="${DOWNLOADS_DIR}/${AAB_NAME}"
 COMPOSE_FILE="${VEX_COMPOSE_FILE:-${REPO_ROOT}/docker-compose.prod.yml}"
-DB_SERVICE="${VEX_DB_SERVICE:-vex-postgres}"
+# `docker compose ps --services` and `docker compose exec <svc>` both use
+# the service KEY from the compose file ("db") — NOT the container_name
+# ("vex-db"). They are different namespaces. Override with VEX_DB_SERVICE
+# only if you've renamed the service block in docker-compose.prod.yml.
+DB_SERVICE="${VEX_DB_SERVICE:-db}"
 DB_USER="${VEX_DB_USER:-vex}"
 DB_NAME="${VEX_DB_NAME:-vex}"
 
