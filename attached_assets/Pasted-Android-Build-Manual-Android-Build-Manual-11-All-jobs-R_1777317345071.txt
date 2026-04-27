@@ -1,0 +1,85 @@
+Android Build (Manual)
+Android Build (Manual) #11
+All jobs
+Run details
+Annotations
+1 error
+build
+failed 1 minute ago in 4m 47s
+Search logs
+4s
+6s
+0s
+9s
+0s
+11s
+13s
+33s
+1s
+1s
+0s
+0s
+1s
+1s
+0s
+0s
+0s
+3m 23s
+0s
+0s
+1s
+Run # The destination filenames (VEX-official-release.apk / .aab) are
+  # The destination filenames (VEX-official-release.apk / .aab) are
+  # explicitly whitelisted in .gitignore so a normal `git add` works.
+  # Pushing them back to main means the Hostinger VPS can pick up the
+  # newest binaries automatically on `git pull` — no manual upload.
+  git config user.name  "github-actions[bot]"
+  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+  
+  if [ "$TARGET" = "apk" ] || [ "$TARGET" = "both" ]; then
+    git add client/public/downloads/VEX-official-release.apk
+  fi
+  if [ "$TARGET" = "aab" ] || [ "$TARGET" = "both" ]; then
+    git add client/public/downloads/VEX-official-release.aab
+  fi
+  
+  if git diff --cached --quiet; then
+    echo "No binary changes to commit (outputs identical to current files)."
+  else
+    git commit -m "chore(android): publish ${FULL_VERSION} signed ${TARGET} build [skip ci]"
+    # Pull-then-push to survive races with other commits on main.
+    git pull --rebase origin "main"
+    git push origin "HEAD:main"
+    echo "Pushed updated ${TARGET} binary/binaries (${FULL_VERSION})."
+  fi
+  shell: /usr/bin/bash -e {0}
+  env:
+    JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+    JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+    ANDROID_HOME: /usr/local/lib/android/sdk
+    ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    TARGET: both
+    FULL_VERSION: v1.0.0-build11
+[main 4d35716] chore(android): publish v1.0.0-build11 signed both build [skip ci]
+ 2 files changed, 0 insertions(+), 0 deletions(-)
+From https://github.com/duxexch/vexo
+ * branch            main       -> FETCH_HEAD
+   a7adf6b..44e6623  main       -> origin/main
+warning: Cannot merge binary files: client/public/downloads/VEX-official-release.apk (HEAD vs. 4d35716 (chore(android): publish v1.0.0-build11 signed both build [skip ci]))
+Auto-merging client/public/downloads/VEX-official-release.apk
+CONFLICT (content): Merge conflict in client/public/downloads/VEX-official-release.apk
+Rebasing (1/1)
+error: could not apply 4d35716... chore(android): publish v1.0.0-build11 signed both build [skip ci]
+hint: Resolve all conflicts manually, mark them as resolved with
+hint: "git add/rm <conflicted_files>", then run "git rebase --continue".
+hint: You can instead skip this commit: run "git rebase --skip".
+hint: To abort and get back to the state before "git rebase", run "git rebase --abort".
+hint: Disable this message with "git config set advice.mergeConflict false"
+Could not apply 4d35716... # chore(android): publish v1.0.0-build11 signed both build [skip ci]
+Error: Process completed with exit code 1.
+0s
+0s
+0s
+0s
+1s
+0s

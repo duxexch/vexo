@@ -51,8 +51,6 @@ android/app/build/
 .cache/
 client/public/downloads/*.apk
 client/public/downloads/*.aab
-!client/public/downloads/VEX-official-release.apk
-!client/public/downloads/VEX-official-release.aab
 dist/public/downloads/*.apk
 dist/public/downloads/*.aab
 ios/App/build/ts_errors.txt

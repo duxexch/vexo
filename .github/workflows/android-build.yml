@@ -36,16 +36,10 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: Checkout (with LFS)
+      - name: Checkout
         uses: actions/checkout@v5
         with:
-          lfs: true
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Git LFS
-        run: |
-          git lfs install
-          git lfs pull
 
       - name: Setup Node 22
         uses: actions/setup-node@v5
@@ -220,24 +214,20 @@ jobs:
           echo "full_version=v${VERSION}-build${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           echo "Resolved version: v${VERSION}-build${{ github.run_number }}"
 
-      - name: Copy outputs to client/public/downloads/
+      - name: Stage signed binaries for release upload
         env:
           TARGET: ${{ github.event.inputs.target }}
         run: |
-          # Stage the signed binaries under the canonical filenames that are
-          # explicitly whitelisted in .gitignore (lines 54-55):
-          #   !client/public/downloads/VEX-official-release.apk
-          #   !client/public/downloads/VEX-official-release.aab
-          # Using these exact names allows `git add` to pick them up while the
-          # rest of *.apk / *.aab in that folder stays ignored. The names are
-          # ALSO stable: each build overwrites the previous file at the same
-          # path, so a `git pull` on the Hostinger VPS automatically replaces
-          # the old binary with the newest one on every deploy.
-          mkdir -p client/public/downloads
+          # Binaries go to a workflow-only staging directory (NOT into the
+          # git tree). The next step uploads them to a GitHub Release; the
+          # Hostinger VPS pulls them from the Release CDN at deploy time
+          # via scripts/server/refresh-android-binaries.sh — keeping git
+          # history clean and eliminating LFS / merge-conflict pain.
+          mkdir -p dist/android-release
           APK_SRC="android/app/build/outputs/apk/release/app-release.apk"
           AAB_SRC="android/app/build/outputs/bundle/release/app-release.aab"
-          APK_DST="client/public/downloads/VEX-official-release.apk"
-          AAB_DST="client/public/downloads/VEX-official-release.aab"
+          APK_DST="dist/android-release/VEX-official-release.apk"
+          AAB_DST="dist/android-release/VEX-official-release.aab"
 
           if [ "$TARGET" = "apk" ] || [ "$TARGET" = "both" ]; then
             if [ ! -s "$APK_SRC" ]; then
@@ -257,69 +247,6 @@ jobs:
             cp -f "$AAB_SRC" "$AAB_DST"
             test -s "$AAB_DST" || (echo "::error::Failed to stage AAB at $AAB_DST" && exit 1)
             echo "AAB staged: $AAB_DST ($(wc -c < "$AAB_DST") bytes)"
-          fi
-
-      - name: Commit and push updated binaries to repo
-        env:
-          TARGET: ${{ github.event.inputs.target }}
-          FULL_VERSION: ${{ steps.version.outputs.full_version }}
-        run: |
-          # The destination filenames (VEX-official-release.apk / .aab) are
-          # explicitly whitelisted in .gitignore AND have an .gitattributes
-          # override that disables LFS for them specifically — so a normal
-          # `git add` stages them as raw binary blobs (not 133-byte LFS
-          # pointers). This means a plain `git pull` on the Hostinger VPS
-          # retrieves the actual installable APK/AAB, not a text pointer
-          # the web server would serve as a broken HTML response.
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Defensive: previous builds (before the .gitattributes override)
-          # committed these paths as LFS pointers. Drop the LFS-pointer
-          # entry from the index first so `git add` re-stages the freshly
-          # built file as a raw blob under the new attribute rules.
-          if [ "$TARGET" = "apk" ] || [ "$TARGET" = "both" ]; then
-            git rm --cached --ignore-unmatch client/public/downloads/VEX-official-release.apk >/dev/null 2>&1 || true
-            git add client/public/downloads/VEX-official-release.apk
-          fi
-          if [ "$TARGET" = "aab" ] || [ "$TARGET" = "both" ]; then
-            git rm --cached --ignore-unmatch client/public/downloads/VEX-official-release.aab >/dev/null 2>&1 || true
-            git add client/public/downloads/VEX-official-release.aab
-          fi
-
-          # Sanity check: confirm the staged blob is the real binary, not a
-          # tiny LFS pointer. Pointer files start with the literal string
-          # `version https://git-lfs.github.com/spec/v1` — bail loudly if we
-          # ever see one entering the commit, so the bug never silently
-          # ships a broken artefact again.
-          for STAGED in client/public/downloads/VEX-official-release.apk \
-                        client/public/downloads/VEX-official-release.aab; do
-            if git ls-files --stage --error-unmatch "$STAGED" >/dev/null 2>&1; then
-              SHA=$(git ls-files --stage "$STAGED" | awk '{print $2}')
-              SIZE=$(git cat-file -s "$SHA")
-              FIRST=$(git cat-file blob "$SHA" | head -c 50 || true)
-              echo "Staged $STAGED → blob $SHA ($SIZE bytes)"
-              case "$FIRST" in
-                "version https://git-lfs."*)
-                  echo "::error::Staged $STAGED is still an LFS pointer ($SIZE bytes). Aborting to prevent shipping a broken artefact."
-                  exit 1
-                  ;;
-              esac
-              if [ "$SIZE" -lt 1000000 ]; then
-                echo "::error::Staged $STAGED is suspiciously small ($SIZE bytes < 1 MB). Aborting."
-                exit 1
-              fi
-            fi
-          done
-
-          if git diff --cached --quiet; then
-            echo "No binary changes to commit (outputs identical to current files)."
-          else
-            git commit -m "chore(android): publish ${FULL_VERSION} signed ${TARGET} build [skip ci]"
-            # Pull-then-push to survive races with other commits on main.
-            git pull --rebase origin "${{ github.ref_name }}"
-            git push origin "HEAD:${{ github.ref_name }}"
-            echo "Pushed updated ${TARGET} binary/binaries (${FULL_VERSION})."
           fi
 
       - name: Create or update GitHub Release (versioned + latest)
@@ -344,10 +271,10 @@ jobs:
 
           ASSETS=()
           if [ "$TARGET" = "apk" ] || [ "$TARGET" = "both" ]; then
-            ASSETS+=("client/public/downloads/VEX-official-release.apk")
+            ASSETS+=("dist/android-release/VEX-official-release.apk")
           fi
           if [ "$TARGET" = "aab" ] || [ "$TARGET" = "both" ]; then
-            ASSETS+=("client/public/downloads/VEX-official-release.aab")
+            ASSETS+=("dist/android-release/VEX-official-release.aab")
           fi
 
           publish_release() {
@@ -379,7 +306,33 @@ jobs:
         with:
           name: VEX-android-${{ steps.version.outputs.full_version }}-${{ github.event.inputs.target }}
           path: |
-            client/public/downloads/VEX-official-release.apk
-            client/public/downloads/VEX-official-release.aab
+            dist/android-release/VEX-official-release.apk
+            dist/android-release/VEX-official-release.aab
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Print deploy instructions
+        env:
+          FULL_VERSION: ${{ steps.version.outputs.full_version }}
+          TARGET: ${{ github.event.inputs.target }}
+        run: |
+          REPO="${{ github.repository }}"
+          echo "=========================================================="
+          echo "  ✅ Android build ${FULL_VERSION} (${TARGET}) published"
+          echo "=========================================================="
+          echo ""
+          echo "Stable download URLs (always point to the newest build):"
+          echo "  APK: https://github.com/${REPO}/releases/download/latest-android/VEX-official-release.apk"
+          echo "  AAB: https://github.com/${REPO}/releases/download/latest-android/VEX-official-release.aab"
+          echo ""
+          echo "Versioned URLs (immutable, kept forever):"
+          echo "  APK: https://github.com/${REPO}/releases/download/${FULL_VERSION}/VEX-official-release.apk"
+          echo "  AAB: https://github.com/${REPO}/releases/download/${FULL_VERSION}/VEX-official-release.aab"
+          echo ""
+          echo "To deploy to the Hostinger VPS, SSH in and run:"
+          echo "  bash scripts/server/refresh-android-binaries.sh"
+          echo ""
+          echo "(That script downloads the binaries from the latest-android"
+          echo " release straight into client/public/downloads/, with size +"
+          echo " content-type sanity checks to prevent shipping broken files.)"
+          echo "=========================================================="
