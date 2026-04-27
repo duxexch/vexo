@@ -1,0 +1,27 @@
+CodeQL Advanced
+Update build workflows to use latest actions and SDKs #317
+All jobs
+Run details
+Triggered via push 4 minutes ago
+@duxexchduxexch
+pushed
+ 1c0f282
+main
+Status
+Success
+Total duration
+4m 35s
+Artifacts
+–
+
+
+Annotations
+4 warnings
+Analyze (actions)
+Node.js 20 actions are deprecated. The following actions are running on Node.js 20 and may not work as expected: github/codeql-action/analyze@v3, github/codeql-action/init@v3. Actions will be forced to run with Node.js 24 by default starting June 2nd, 2026. Node.js 20 will be removed from the runner on September 16th, 2026. Please check if updated versions of these actions are available that support Node.js 24. To opt into Node.js 24 now, set the FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true environment variable on the runner or in your workflow file. Once Node.js 24 becomes the default, you can temporarily opt out by setting ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+Analyze (actions)
+CodeQL Action v3 will be deprecated in December 2026. Please update all occurrences of the CodeQL Action in your workflow files to v4. For more information, see https://github.blog/changelog/2025-10-28-upcoming-deprecation-of-codeql-action-v3/
+Analyze (javascript-typescript)
+Node.js 20 actions are deprecated. The following actions are running on Node.js 20 and may not work as expected: github/codeql-action/analyze@v3, github/codeql-action/init@v3. Actions will be forced to run with Node.js 24 by default starting June 2nd, 2026. Node.js 20 will be removed from the runner on September 16th, 2026. Please check if updated versions of these actions are available that support Node.js 24. To opt into Node.js 24 now, set the FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true environment variable on the runner or in your workflow file. Once Node.js 24 becomes the default, you can temporarily opt out by setting ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+Analyze (javascript-typescript)
+CodeQL Action v3 will be deprecated in December 2026. Please update all occurrences of the CodeQL Action in your workflow files to v4. For more information, see https://github.blog/changelog/2025-10-28-upcoming-deprecation-of-codeql-action-v3/
