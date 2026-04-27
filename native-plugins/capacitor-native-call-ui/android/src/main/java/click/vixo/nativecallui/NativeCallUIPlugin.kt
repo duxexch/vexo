@@ -203,8 +203,8 @@ class NativeCallUIPlugin : Plugin() {
 
     @PluginMethod
     fun requestCallMediaPermissions(call: PluginCall) {
-        val needsMic = !hasPermission(Manifest.permission.RECORD_AUDIO)
-        val needsCam = !hasPermission(Manifest.permission.CAMERA)
+        val needsMic = !isPermissionGranted(Manifest.permission.RECORD_AUDIO)
+        val needsCam = !isPermissionGranted(Manifest.permission.CAMERA)
         if (!needsMic && !needsCam) {
             call.resolve(buildCallMediaState())
             return
@@ -237,11 +237,15 @@ class NativeCallUIPlugin : Plugin() {
         return ret
     }
 
-    private fun hasPermission(name: String): Boolean =
+    // Renamed from `hasPermission` to avoid clashing with the public
+    // `Plugin.hasPermission(name)` method in Capacitor 8 — overriding
+    // it would require matching the parent's exact signature, which
+    // we don't want here.
+    private fun isPermissionGranted(name: String): Boolean =
         ContextCompat.checkSelfPermission(context, name) == PackageManager.PERMISSION_GRANTED
 
     private fun permissionStateString(name: String): String =
-        if (hasPermission(name)) PermissionState.GRANTED.toString()
+        if (isPermissionGranted(name)) PermissionState.GRANTED.toString()
         else PermissionState.DENIED.toString()
 
     /**
@@ -257,7 +261,7 @@ class NativeCallUIPlugin : Plugin() {
      * mislead the user into Settings on first launch.
      */
     private fun isPermanentlyDenied(name: String): Boolean {
-        if (hasPermission(name)) return false
+        if (isPermissionGranted(name)) return false
         if (!hasRequestedPermissionBefore(name)) return false
         val activity = bridge?.activity ?: return false
         return !ActivityCompat.shouldShowRequestPermissionRationale(activity, name)
@@ -302,7 +306,11 @@ class NativeCallUIPlugin : Plugin() {
             ret.put("opened", true)
             call.resolve(ret)
         } catch (err: Throwable) {
-            call.reject("Could not open overlay-permission settings", err)
+            // Capacitor's PluginCall.reject only accepts (String, Exception)
+            // — wrap arbitrary Throwables (e.g. Errors) so the call still
+            // resolves with a meaningful failure payload.
+            val asException = err as? Exception ?: Exception(err.message ?: err.toString(), err)
+            call.reject("Could not open overlay-permission settings", asException)
         }
     }
 
