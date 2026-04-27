@@ -72,19 +72,19 @@ fetch_asset() {
     fail "Downloaded file is too small (${size} bytes < ${MIN_BYTES}). URL: ${url}"
   fi
 
-  local head
-  head="$(head -c 200 "$tmp")"
-  case "$head" in
-    *"<html"*|*"<!DOCTYPE"*|*"version https://git-lfs."*)
-      fail "Downloaded file looks like HTML/LFS-pointer, not a binary. URL: ${url}"
-      ;;
-  esac
+  # Reject HTML / LFS-pointer responses. Pipe through tr to drop NULs so
+  # bash does not warn about binary data inside command substitution.
+  if head -c 200 "$tmp" | LC_ALL=C tr -d '\0' \
+       | grep -q -E '<html|<!DOCTYPE|version https://git-lfs\.'; then
+    fail "Downloaded file looks like HTML/LFS-pointer, not a binary. URL: ${url}"
+  fi
 
-  # APK/AAB are ZIP-based — first two bytes must be "PK".
-  local magic
-  magic="$(head -c 2 "$tmp")"
-  if [ "$magic" != "PK" ]; then
-    fail "Downloaded file is not a ZIP/APK/AAB (magic=${magic}). URL: ${url}"
+  # APK/AAB are ZIP-based — first two bytes must be "PK" (0x50 0x4B).
+  # Read as hex via od so binary NULs never enter a shell variable.
+  local magic_hex
+  magic_hex="$(od -An -tx1 -N2 "$tmp" | tr -d ' \n')"
+  if [ "$magic_hex" != "504b" ]; then
+    fail "Downloaded file is not a ZIP/APK/AAB (magic=0x${magic_hex}). URL: ${url}"
   fi
 
   mv -f "$tmp" "$final"
