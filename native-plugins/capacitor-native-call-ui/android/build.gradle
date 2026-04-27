@@ -3,11 +3,14 @@ apply plugin: 'kotlin-android'
 
 android {
     namespace 'click.vixo.nativecallui'
-    compileSdk 34
+    // Bumped to 36 because androidx.core:core-ktx 1.17.0 (pulled in
+    // transitively via firebase-messaging 23.4.1) hard-requires
+    // compileSdk >= 36 in its AAR metadata.
+    compileSdk 36
 
     defaultConfig {
         minSdk 24
-        targetSdk 34
+        targetSdk 36
     }
 
     compileOptions {
