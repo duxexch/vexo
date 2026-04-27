@@ -1,0 +1,115 @@
+You are working on a full CI/CD setup for an Android + Capacitor project.
+
+Your task: implement a production-ready manual Android build pipeline using GitHub Actions.
+
+DO NOT ask questions. DO NOT propose plans. JUST IMPLEMENT.
+
+────────────────────────────
+🎯 GOAL
+────────────────────────────
+Create a manual Android build system that:
+1. Builds APK and/or AAB on demand only (NO automatic builds on push)
+2. Signs the app using GitHub Secrets keystore
+3. Stores outputs in:
+   client/public/downloads/app.apk
+   client/public/downloads/app.aab
+4. Commits and pushes updated binaries back to the repo
+5. Creates/updates a GitHub Release per build
+6. Uses Git LFS for APK/AAB files
+7. Ensures overwrite behavior (no accumulation of old builds)
+
+────────────────────────────
+⚠️ CRITICAL RULES
+────────────────────────────
+- NO workflow should run on push to main
+- ONLY workflow_dispatch is allowed
+- Use Node.js 22 (must match existing project)
+- Use Android SDK:
+  platform-tools
+  platforms;android-35
+  build-tools;35.0.0
+- NEVER use echo for decoding base64 secrets
+- ALWAYS use:
+  printf '%s' "$KEYSTORE_B64" | base64 -d
+
+────────────────────────────
+🔐 REQUIRED GITHUB SECRETS
+────────────────────────────
+ANDROID_KEYSTORE_BASE64
+ANDROID_KEYSTORE_PASSWORD
+ANDROID_KEY_ALIAS
+ANDROID_KEY_PASSWORD
+
+────────────────────────────
+📁 FILES TO CREATE / UPDATE
+────────────────────────────
+
+1. .github/workflows/android-build.yml
+
+- Must be manual only:
+  workflow_dispatch with input:
+  target: apk | aab | both
+
+- Must include:
+  - checkout with LFS
+  - node 22 setup
+  - java 17 setup
+  - android sdk setup with explicit packages
+  - npm ci + build
+  - capacitor sync
+  - keystore decoding (SAFE method using printf)
+  - signing injection script
+  - build apk/aab with gradle
+  - copy outputs to client/public/downloads/
+  - commit only:
+    app.apk + app.aab (explicit files only)
+  - push to HEAD:${{ github.ref_name }}
+  - create/update GitHub release using gh CLI
+
+- MUST include safety checks:
+  - verify keystore file exists and is non-empty
+  - verify APK/AAB output exists using test -s
+  - fail fast with clear error messages
+
+────────────────────────────
+2. .github/workflows/release-android.yml
+
+MODIFY ONLY THIS:
+- remove push trigger completely
+- keep ONLY:
+  workflow_dispatch
+
+DO NOT change anything else in file.
+
+────────────────────────────
+3. .gitattributes
+
+Add Git LFS support:
+*.apk filter=lfs diff=lfs merge=lfs -text
+*.aab filter=lfs diff=lfs merge=lfs -text
+
+────────────────────────────
+🧠 ENGINEERING REQUIREMENTS
+────────────────────────────
+- No duplicate workflows running automatically
+- No infinite CI loops ([skip ci] must be included in commit message)
+- Use safe git push:
+  git push origin HEAD:${{ github.ref_name }}
+
+- Use explicit file commits only (no wildcards)
+- Use robust error handling for missing build outputs
+- Ensure deterministic build output paths
+
+────────────────────────────
+✅ SUCCESS CRITERIA
+────────────────────────────
+- Workflow appears in GitHub Actions
+- Can be triggered manually
+- Produces signed APK/AAB successfully
+- Files appear in:
+  client/public/downloads/
+- GitHub release is created per run
+- No workflow runs on push anymore
+
+────────────────────────────
+NOW IMPLEMENT EVERYTHING EXACTLY.

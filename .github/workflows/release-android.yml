@@ -15,18 +15,6 @@ name: Release Android (APK + AAB)
 #   SHA-256: 46:67:5A:1E:EA:17:A4:76:B9:1F:B3:11:3F:13:6F:85:3E:8B:65:BC:48:24:6C:91:BB:0E:BD:25:E7:EA:A5:CB
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "client/**"
-      - "shared/**"
-      - "server/**"
-      - "capacitor.config.ts"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/release-android.yml"
-      - "scripts/ci/patch-android-signing.mjs"
-      - "scripts/mobile-android-build.mjs"
   workflow_dispatch: {}
 
 permissions:

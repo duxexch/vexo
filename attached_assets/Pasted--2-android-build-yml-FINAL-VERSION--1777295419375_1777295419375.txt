@@ -1,0 +1,162 @@
+✅ 2) android-build.yml (FINAL VERSION — نظيف ومحسّن)
+
+دي النسخة النهائية اللي أنصح تعتمدها (مع شوية تحسينات صغيرة على المعاينة):
+
+name: Android Build (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which artefact(s) to build"
+        required: true
+        default: both
+        type: choice
+        options:
+          - apk
+          - aab
+          - both
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout (with LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+          cache: "gradle"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web
+        run: npm run build
+
+      - name: Add Android platform (if missing)
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Decode keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p android/keystore
+          echo "$KEYSTORE_B64" | base64 -d > android/keystore/release.jks
+
+      - name: Inject signing config
+        run: node scripts/ci/patch-android-signing.mjs
+
+      - name: Build APK
+        if: ${{ inputs.target == 'apk' || inputs.target == 'both' }}
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/keystore/release.jks
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
+          ./gradlew assembleRelease
+
+      - name: Build AAB
+        if: ${{ inputs.target == 'aab' || inputs.target == 'both' }}
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/android/keystore/release.jks
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
+          ./gradlew bundleRelease
+
+      - name: Copy outputs
+        run: |
+          mkdir -p client/public/downloads
+
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp -f android/app/build/outputs/apk/release/app-release.apk client/public/downloads/app.apk
+          fi
+
+          if [ -f android/app/build/outputs/bundle/release/app-release.aab ]; then
+            cp -f android/app/build/outputs/bundle/release/app-release.aab client/public/downloads/app.aab
+          fi
+
+      - name: Commit & push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+
+          git add client/public/downloads/* || true
+
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "chore: update android build [skip ci]"
+            git push
+          fi
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="build-${{ github.run_number }}"
+
+          FILES=()
+          [ -f client/public/downloads/app.apk ] && FILES+=("client/public/downloads/app.apk")
+          [ -f client/public/downloads/app.aab ] && FILES+=("client/public/downloads/app.aab")
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${FILES[@]}" --clobber
+          else
+            gh release create "$TAG" "${FILES[@]}" \
+              --title "Android build #${{ github.run_number }}" \
+              --notes "Manual build"
+          fi
+✅ 3) .gitattributes (مهم جدًا)
+*.apk filter=lfs diff=lfs merge=lfs -text
+*.aab filter=lfs diff=lfs merge=lfs -text
+⚠️ ملاحظات حاسمة قبل الموافقة
+1. secrets لازم تكون كده بالظبط:
+ANDROID_KEYSTORE_BASE64
+ANDROID_KEYSTORE_PASSWORD
+ANDROID_KEY_ALIAS
+ANDROID_KEY_PASSWORD
+
+أي اسم غلط = build fail ❌
+
+2. لازم Git LFS يتفعل مرة واحدة:
+git lfs install
+git lfs track "*.apk"
+git lfs track "*.aab"
+3. [skip ci] مهم جدًا
+
+بدونه → infinite loop 🔥

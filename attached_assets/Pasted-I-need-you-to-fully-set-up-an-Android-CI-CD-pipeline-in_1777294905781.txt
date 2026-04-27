@@ -1,0 +1,127 @@
+I need you to fully set up an Android CI/CD pipeline in my repository using GitHub Actions.
+
+### 🎯 Goal
+
+Create a manual-triggered workflow that builds, signs, and publishes Android APK/AAB files, and also stores the latest builds inside the repo for my VPS to pull.
+
+### 🔁 My Deployment Flow
+
+* I develop on Replit
+* Code is pushed to GitHub
+* My VPS (Hostinger) pulls updates from GitHub
+* The APK should always be available at:
+  `client/public/downloads/app.apk`
+
+---
+
+## ⚙️ Required Setup
+
+### 1) Create GitHub Actions Workflow
+
+Create this file:
+`.github/workflows/android-build.yml`
+
+Trigger:
+
+* Manual only using `workflow_dispatch`
+* Add input خيار: `apk`, `aab`, `both`
+
+---
+
+### 2) Build + Sign Android App
+
+* Use Java 17
+* Run Gradle from `/android`
+* Build:
+
+  * APK → `assembleRelease`
+  * AAB → `bundleRelease`
+* Sign using keystore via secrets:
+
+  * ANDROID_KEYSTORE_BASE64
+  * ANDROID_KEYSTORE_PASSWORD
+  * ANDROID_KEY_ALIAS
+  * ANDROID_KEY_PASSWORD
+
+Decode keystore during workflow.
+
+---
+
+### 3) Output Handling
+
+* Copy outputs to:
+  `client/public/downloads/`
+* Rename:
+
+  * APK → `app.apk`
+  * AAB → `app.aab`
+* Always overwrite old files (do NOT create new filenames)
+
+---
+
+### 4) Commit Back to Repo
+
+* Commit updated APK/AAB back to the repository
+* Use commit message:
+  `"chore: update android build"`
+* Prevent infinite loop (ignore commits from GitHub Actions if needed)
+
+---
+
+### 5) Git LFS Setup
+
+* Enable Git LFS for:
+
+  * `.apk`
+  * `.aab`
+* Add `.gitattributes` if missing
+
+---
+
+### 6) GitHub Release
+
+* Automatically create/update a Release
+* Attach:
+
+  * app.apk
+  * app.aab
+* Tag format:
+  `build-${{ github.run_number }}`
+
+---
+
+### 7) Safety & Optimization
+
+* Ensure workflow does NOT trigger itself from its own commit
+* Skip build if nothing changed in android/
+* Fail clearly if signing fails
+* Use caching if possible (Gradle)
+
+---
+
+## 📁 Expected Result
+
+After running the workflow manually:
+
+* Signed APK/AAB are built successfully
+* Files exist at:
+  `client/public/downloads/app.apk`
+* GitHub Release contains the files
+* VPS can pull and serve APK directly
+
+---
+
+## ⚠️ Important Notes
+
+* Do NOT change project structure
+* Do NOT remove existing configs
+* Only add what is required
+* Keep everything production-ready and clean
+
+---
+
+Now implement everything step by step and show me:
+
+1. The workflow file
+2. Any new files created
+3. Any required manual steps (like adding secrets)
