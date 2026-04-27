@@ -129,6 +129,33 @@ jobs:
             exit 1
           fi
 
+      - name: Verify KEY_PASSWORD can decrypt the private key
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          KEYSTORE_FILE="android/keystore/vex-release-official.jks"
+          # `-certreq` requires unwrapping the private key, which exercises
+          # the key password. If KEY_PASSWORD is wrong, this fails fast (in
+          # ~1 second) instead of waiting ~3 minutes for the full Gradle
+          # build to fail at :app:packageRelease.
+          # We discard the CSR output — we only care about the exit code.
+          if keytool -certreq -keystore "$KEYSTORE_FILE" \
+                     -storepass "$KEYSTORE_PASSWORD" \
+                     -alias "$KEY_ALIAS" \
+                     -keypass "$KEY_PASSWORD" >/dev/null 2>&1; then
+            echo "OK: KEY_PASSWORD successfully decrypts the private key for alias '$KEY_ALIAS' style entry."
+          else
+            echo "::error::KEY_PASSWORD does NOT match the password of the key inside the keystore."
+            echo "::error::Update the KEY_PASSWORD secret in GitHub Settings → Secrets and variables → Actions."
+            echo "::error::Hint: For PKCS12 keystores created with keytool, the key password is usually the SAME as KEYSTORE_PASSWORD."
+            echo "::error::To verify locally, run:"
+            echo "::error::  keytool -certreq -keystore vex-release-official.jks -alias vex_release"
+            echo "::error::and enter your KEYSTORE_PASSWORD then your KEY_PASSWORD when prompted."
+            exit 1
+          fi
+
       - name: Inject Kotlin Gradle plugin classpath into root build.gradle
         run: node scripts/ci/patch-android-kotlin.mjs
 
