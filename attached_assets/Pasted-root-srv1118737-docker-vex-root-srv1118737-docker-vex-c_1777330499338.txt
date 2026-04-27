@@ -1,0 +1,37 @@
+root@srv1118737:/docker/vex# 
+root@srv1118737:/docker/vex# cd /docker/vex
+ls -la package.json scripts/server/
+-rw-r--r-- 1 root root 15230 Apr 27 22:22 package.json
+
+scripts/server/:
+total 40
+drwxr-xr-x 2 root root  4096 Apr 27 21:53 .
+drwxr-xr-x 6 root root  4096 Apr 27 19:41 ..
+-rwxr-xr-x 1 root root 10844 Apr 27 21:53 refresh-android-binaries.sh
+-rwxr-xr-x 1 root root 17620 Apr 27 21:53 verify-vex-deployment.sh
+root@srv1118737:/docker/vex# # اقرا النسخة من package.json بأمر مباشر
+node -e "console.log(require('./package.json').version)"
+
+# لو طلع لك مثلاً 1.0.0، شغل السكربت بـ override:
+VEX_APP_VERSION=1.0.0 bash scripts/server/refresh-android-binaries.sh
+Command 'node' not found, but can be installed with:
+apt install nodejs
+[2026-04-27T22:54:28Z] App version (from package.json): 1.0.0
+[2026-04-27T22:54:28Z] Destination filenames:           VEX-1.0.0.apk / VEX-1.0.0.aab
+[2026-04-27T22:54:28Z] Downloading https://github.com/duxexch/vexo/releases/download/latest-android/VEX-official-release.apk
+[2026-04-27T22:54:29Z]   Saved → client/public/downloads/VEX-1.0.0.apk (14734767 bytes)
+[2026-04-27T22:54:29Z] Downloading https://github.com/duxexch/vexo/releases/download/latest-android/VEX-official-release.aab
+[2026-04-27T22:54:30Z]   Saved → client/public/downloads/VEX-1.0.0.aab (14255313 bytes)
+[2026-04-27T22:54:30Z] Wrote manifest: client/public/downloads/manifest.json
+[2026-04-27T22:54:30Z]   version:   1.0.0
+[2026-04-27T22:54:30Z]   apk:       VEX-1.0.0.apk  (14 MB)  sha256=57ac076fcffff18cda3484f920564b9fe447a5a8aab0eb4dd29b0cffc1323ba1
+[2026-04-27T22:54:30Z]   aab:       VEX-1.0.0.aab  (13 MB)  sha256=fb7598057cd9870b5d7a5bba25419da6d877290c212185e34e344ca80e458138
+[2026-04-27T22:54:30Z]   Removed stale binary: client/public/downloads/app.apk
+[2026-04-27T22:54:30Z]   Removed stale binary: client/public/downloads/app.aab
+[2026-04-27T22:54:30Z] Pruned 2 stale binary file(s) from client/public/downloads
+[2026-04-27T22:54:30Z] Done. Public link: https://vixo.click/downloads/VEX-1.0.0.apk
+[2026-04-27T22:54:30Z]       Manifest:    https://vixo.click/downloads/manifest.json
+root@srv1118737:/docker/vex# echo 'export VEX_HOME=/docker/vex' >> ~/.bashrc
+echo 'alias vex="cd $VEX_HOME"' >> ~/.bashrc
+source ~/.bashrc
+root@srv1118737:/docker/vex# 
