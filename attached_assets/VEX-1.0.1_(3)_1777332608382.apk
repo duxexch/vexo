@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en-us" dir="ltr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>VEX - منصة ألعاب وتداول P2P | Gaming &amp; P2P Trading Platform</title>
+  <meta name="theme-color" content="#0f1419" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="VEX" />
+  <meta name="application-name" content="VEX" />
+  <meta name="msapplication-TileColor" content="#0f1419" />
+  <meta name="msapplication-TileImage" content="/icons/vex-gaming-logo-144x144.png" />
+  <meta name="description"
+    content="منصة VEX للألعاب الأونلاين وتداول P2P الآمن: شطرنج، طاولة زهر، دومينو، طرنيب وبلوت مع لاعبين حقيقيين، محفظة رقمية، بطولات، ومكافآت يومية." />
+  <meta name="keywords"
+    content="VEX, vixo, ألعاب اونلاين, لعب اونلاين, شطرنج اونلاين, طاولة زهر اونلاين, دومينو اونلاين, طرنيب اونلاين, بلوت اونلاين, العاب ورق اونلاين, العاب جماعية, تحديات العاب, بطولات اونلاين, تداول P2P, منصة P2P, تداول آمن, شراء وبيع عملات رقمية, محفظة رقمية, مكافآت يومية, chess online, backgammon online, domino online, tarneeb online, baloot online, multiplayer games, online board games, secure p2p trading, digital wallet" />
+  <meta name="author" content="VEX Platform" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <meta name="googlebot" content="index, follow, max-image-preview:large" />
+  <meta name="bingbot" content="index, follow" />
+  <meta name="rating" content="general" />
+  <meta name="revisit-after" content="3 days" />
+  <meta name="geo.region" content="SA" />
+  <meta name="geo.placename" content="Saudi Arabia" />
+  <meta name="DC.language" content="ar" />
+  <!-- canonical URL is set dynamically per page; default to homepage -->
+  <link rel="canonical" href="https://vixo.click/" />
+  <!-- hreflang for multilingual SEO -->
+  <link rel="alternate" hreflang="ar" href="https://vixo.click/" />
+  <link rel="alternate" hreflang="en" href="https://vixo.click/" />
+  <link rel="alternate" hreflang="x-default" href="https://vixo.click/" />
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://vixo.click/" />
+  <meta property="og:title" content="VEX | منصة ألعاب وتداول P2P - Gaming &amp; P2P Trading Platform" />
+  <meta property="og:description"
+    content="شطرنج، طاولة زهر، دومينو، طرنيب وبلوت أونلاين مع لاعبين حقيقيين، بالإضافة إلى تداول P2P آمن ومحفظة رقمية ومكافآت يومية." />
+  <meta property="og:image" content="https://vixo.click/icons/vex-gaming-logo-512x512.png" />
+  <meta property="og:image:secure_url" content="https://vixo.click/icons/vex-gaming-logo-512x512.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta property="og:image:alt" content="VEX Gaming Platform Logo" />
+  <meta property="og:site_name" content="VEX" />
+  <meta property="og:locale" content="en_us" />
+  <meta property="og:locale:alternate" content="en_US" />
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://vixo.click/" />
+  <meta name="twitter:domain" content="vixo.click" />
+  <meta name="twitter:title" content="VEX | منصة ألعاب وتداول P2P - Gaming &amp; P2P Trading Platform" />
+  <meta name="twitter:description"
+    content="العب أشهر ألعاب الطاولة والورق أونلاين وتداول P2P بأمان داخل منصة VEX مع محفظة رقمية ومكافآت يومية." />
+  <meta name="twitter:image" content="https://vixo.click/icons/vex-gaming-logo-512x512.png" />
+  <meta name="twitter:image:alt" content="VEX Gaming Platform" />
+  <link rel="preload" as="image" href="/icons/vex-gaming-logo-96x96.png"
+    imagesrcset="/icons/vex-gaming-logo-96x96.png 96w, /icons/vex-gaming-logo-192x192.png 192w" imagesizes="64px" />
+  <link rel="icon" type="image/png" sizes="96x96" href="/icons/vex-gaming-logo-96x96.png" />
+  <link rel="shortcut icon" href="/favicon.ico" />
+  <link rel="manifest" href="/manifest.json" />
+  <!-- Service Worker link for PWA analyzers / static discovery -->
+  <link rel="serviceworker" href="/sw.js" scope="/" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/vex-gaming-logo-192x192.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="/icons/vex-gaming-logo-152x152.png" />
+  <link rel="apple-touch-icon" sizes="144x144" href="/icons/vex-gaming-logo-144x144.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+  <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+  <link id="vex-fonts" rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Cairo:wght@400;600;700&display=swap"
+    media="print" />
+  <script>
+    (() => {
+      const fonts = document.getElementById("vex-fonts");
+      if (fonts && fonts.tagName === "LINK") {
+        const applyFonts = () => {
+          if (fonts.getAttribute("media") !== "all") {
+            fonts.setAttribute("media", "all");
+          }
+        };
+
+        if ("requestAnimationFrame" in window) {
+          requestAnimationFrame(() => requestAnimationFrame(applyFonts));
+        } else {
+          setTimeout(applyFonts, 0);
+        }
+      }
+    })();
+  </script>
+  <noscript>
+    <link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Cairo:wght@400;600;700&display=swap" />
+  </noscript>
+  <!-- Structured Data: WebApplication -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "VEX",
+      "alternateName": ["VEX Gaming", "VEX Platform", "منصة VEX", "فيكس"],
+      "url": "https://vixo.click",
+      "description": "منصة ألعاب وتداول P2P - العب شطرنج، طاولة، دومينو، طرنيب وبلوت أونلاين. Play Chess, Backgammon, Domino, Tarneeb & Baloot online with real players.",
+      "applicationCategory": "GameApplication",
+      "applicationSubCategory": "Board Games & Trading",
+      "operatingSystem": "Web, Android, iOS",
+      "browserRequirements": "Requires JavaScript, WebSocket support",
+      "softwareVersion": "2.0",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "availability": "https://schema.org/InStock"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.8",
+        "ratingCount": "1200",
+        "bestRating": "5",
+        "worstRating": "1"
+      },
+      "author": {
+        "@type": "Organization",
+        "name": "VEX Platform",
+        "url": "https://vixo.click"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "VEX Platform",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+          "width": 512,
+          "height": 512
+        }
+      },
+      "image": "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+      "screenshot": "https://vixo.click/screenshots/vex-gaming-desktop-screenshot.png",
+      "inLanguage": ["ar", "en"],
+      "availableLanguage": [
+        {"@type": "Language", "name": "Arabic", "alternateName": "ar"},
+        {"@type": "Language", "name": "English", "alternateName": "en"}
+      ],
+      "featureList": [
+        "Online Chess Multiplayer",
+        "Backgammon with Real Players",
+        "Domino Online",
+        "Tarneeb Card Game",
+        "Baloot Card Game",
+        "P2P Trading with 85+ Currencies",
+        "Secure Digital Wallet",
+        "Daily Rewards & Challenges",
+        "Real-time Tournaments",
+        "Friends & Chat System"
+      ],
+      "sameAs": [
+        "https://play.google.com/store/apps/details?id=click.vixo.app"
+      ]
+    }
+    </script>
+  <!-- Structured Data: WebSite -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://vixo.click/#website",
+      "name": "VEX",
+      "alternateName": ["VEX Platform", "منصة VEX", "vixo.click"],
+      "url": "https://vixo.click/",
+      "inLanguage": ["ar", "en"],
+      "description": "VEX platform for online games and secure P2P trading in Arabic and English.",
+      "publisher": {
+        "@type": "Organization",
+        "name": "VEX",
+        "url": "https://vixo.click",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+          "width": 512,
+          "height": 512
+        }
+      },
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://vixo.click/games?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+  <!-- Structured Data: Organization -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "VEX",
+      "url": "https://vixo.click",
+      "logo": "https://vixo.click/icons/vex-gaming-logo-512x512.png",
+      "description": "منصة الألعاب والتداول الرقمي - Gaming & P2P Trading Platform",
+      "foundingDate": "2024",
+      "sameAs": [
+        "https://play.google.com/store/apps/details?id=click.vixo.app"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "customer support",
+        "availableLanguage": ["Arabic", "English"]
+      }
+    }
+    </script>
+  <!-- Structured Data: VideoGame (for each game type) -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      "name": "VEX Online Games",
+      "description": "ألعاب أونلاين متعددة اللاعبين - Multiplayer Online Board Games",
+      "numberOfItems": 5,
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "item": {
+            "@type": "VideoGame",
+            "name": "شطرنج أونلاين - Online Chess",
+            "description": "العب شطرنج مع لاعبين حقيقيين من حول العالم",
+            "url": "https://vixo.click/games",
+            "gamePlatform": "Web Browser",
+            "applicationCategory": "Game",
+            "genre": "Board Game",
+            "numberOfPlayers": {"@type": "QuantitativeValue", "minValue": 2, "maxValue": 2},
+            "playMode": "MultiPlayer",
+            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+          }
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "item": {
+            "@type": "VideoGame",
+            "name": "طاولة زهر أونلاين - Online Backgammon",
+            "description": "العب طاولة الزهر مع أصدقائك أو لاعبين عشوائيين",
+            "url": "https://vixo.click/games",
+            "gamePlatform": "Web Browser",
+            "genre": "Board Game",
+            "numberOfPlayers": {"@type": "QuantitativeValue", "minValue": 2, "maxValue": 2},
+            "playMode": "MultiPlayer",
+            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+          }
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "item": {
+            "@type": "VideoGame",
+            "name": "دومينو أونلاين - Online Domino",
+            "description": "العب دومينو مع لاعبين حقيقيين في الوقت الفعلي",
+            "url": "https://vixo.click/games",
+            "gamePlatform": "Web Browser",
+            "genre": "Board Game",
+            "numberOfPlayers": {"@type": "QuantitativeValue", "minValue": 2, "maxValue": 4},
+            "playMode": "MultiPlayer",
+            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+          }
+        },
+        {
+          "@type": "ListItem",
+          "position": 4,
+          "item": {
+            "@type": "VideoGame",
+            "name": "طرنيب أونلاين - Online Tarneeb",
+            "description": "العب طرنيب مع فريقك ضد فريق آخر",
+            "url": "https://vixo.click/games",
+            "gamePlatform": "Web Browser",
+            "genre": "Card Game",
+            "numberOfPlayers": {"@type": "QuantitativeValue", "minValue": 4, "maxValue": 4},
+            "playMode": "MultiPlayer",
+            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+          }
+        },
+        {
+          "@type": "ListItem",
+          "position": 5,
+          "item": {
+            "@type": "VideoGame",
+            "name": "بلوت أونلاين - Online Baloot",
+            "description": "العب بلوت مع أصدقائك أو لاعبين عشوائيين",
+            "url": "https://vixo.click/games",
+            "gamePlatform": "Web Browser",
+            "genre": "Card Game",
+            "numberOfPlayers": {"@type": "QuantitativeValue", "minValue": 4, "maxValue": 4},
+            "playMode": "MultiPlayer",
+            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+          }
+        }
+      ]
+    }
+    </script>
+  <script type="module" crossorigin src="/assets/index-DnJpVxzb.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/vendor-react-Dci6tuFz.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-react-dom-QTpbwF2S.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-router--GV0WEYX.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-query-H4bntfrP.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-radix-zRP5fKdt.js">
+  <link rel="stylesheet" crossorigin href="/assets/index-CefVsnKa.css">
+</head>
+
+<body>
+  <div id="root">
+    <!-- Inline loading skeleton to eliminate CLS and show content before JS loads -->
+    <div id="app-skeleton"
+      style="min-height:100vh;background:#0f1419;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;">
+      <div style="text-align:center;">
+        <img src="/icons/vex-gaming-logo-96x96.png" alt="VEX - منصة الألعاب والتداول" width="80" height="80"
+          decoding="async" style="width:80px;height:80px;border-radius:16px;margin:0 auto 16px;display:block;" />
+        <div style="color:#4ade80;font-size:28px;font-weight:700;letter-spacing:2px;">VEX</div>
+        <div style="color:#848e9c;font-size:13px;margin-top:8px;">جاري التحميل...</div>
+        <div
+          style="margin-top:20px;width:120px;height:3px;background:#1e2329;border-radius:3px;overflow:hidden;margin-left:auto;margin-right:auto;">
+          <div
+            style="width:40%;height:100%;background:#4ade80;border-radius:3px;animation:skeleton-load 1.2s ease-in-out infinite;">
+          </div>
+        </div>
+      </div>
+    </div>
+    <style>
+      @keyframes skeleton-load {
+        0% {
+          transform: translateX(-100%)
+        }
+
+        100% {
+          transform: translateX(350%)
+        }
+      }
+    </style>
+    <!-- SEO: Noscript fallback content for crawlers that don't execute JavaScript -->
+    <noscript>
+      <div
+        style="max-width:900px;margin:0 auto;padding:40px 20px;font-family:system-ui,sans-serif;color:#333;direction:rtl;">
+        <h1>VEX - منصة الألعاب والتداول الرقمي</h1>
+        <h2>VEX - Gaming & P2P Trading Platform</h2>
+        <p>العب شطرنج، طاولة، دومينو، طرنيب وبلوت أونلاين مع لاعبين حقيقيين من حول العالم. تداول P2P آمن مع أكثر من 85
+          عملة.</p>
+        <p>Play Chess, Backgammon, Domino, Tarneeb & Baloot online with real players worldwide. Secure P2P trading with
+          85+ currencies.</p>
+        <h3>ألعابنا - Our Games</h3>
+        <ul>
+          <li><a href="/games">شطرنج أونلاين - Online Chess</a></li>
+          <li><a href="/games">طاولة زهر أونلاين - Online Backgammon</a></li>
+          <li><a href="/games">دومينو أونلاين - Online Domino</a></li>
+          <li><a href="/games">طرنيب أونلاين - Online Tarneeb</a></li>
+          <li><a href="/games">بلوت أونلاين - Online Baloot</a></li>
+        </ul>
+        <h3>روابط مهمة - Important Links</h3>
+        <ul>
+          <li><a href="/challenges">التحديات - Challenges</a></li>
+          <li><a href="/p2p">تداول P2P - P2P Trading</a></li>
+          <li><a href="/tournaments">البطولات - Tournaments</a></li>
+          <li><a href="/leaderboard">المتصدرين - Leaderboard</a></li>
+          <li><a href="/free">ألعاب مجانية - Free Games</a></li>
+          <li><a href="/daily-rewards">مكافآت يومية - Daily Rewards</a></li>
+          <li><a href="/install-app">حمّل التطبيق - Download App</a></li>
+          <li><a href="/terms">شروط الاستخدام - Terms</a></li>
+          <li><a href="/privacy">سياسة الخصوصية - Privacy</a></li>
+        </ul>
+        <p>© 2024-2026 VEX Platform. All rights reserved.</p>
+      </div>
+    </noscript>
+  </div>
+</body>
+
+</html>
