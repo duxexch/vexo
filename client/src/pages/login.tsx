@@ -319,10 +319,11 @@ export default function LoginPage() {
   };
 
   const resolveOAuthEventRedirect = (payload: { redirect?: unknown; isNew?: unknown }): string => {
-    if (payload.isNew === true) {
-      return "/profile?setup=true";
-    }
-
+    // Social signups now have a usable username assigned at creation time
+    // (derived from the verified provider profile), so we no longer force
+    // them through /profile?setup=true. The username-selection middleware
+    // (HTTP 428) still gates any other flow that genuinely lacks a chosen
+    // username — so we keep this resolver focused on the redirect target.
     const redirect = sanitizeRelativeRedirect(typeof payload.redirect === "string" ? payload.redirect : undefined);
     if (!redirect || redirect.startsWith("/auth/callback") || redirect === "/login" || redirect.startsWith("/login?")) {
       return "/";
@@ -389,11 +390,9 @@ export default function LoginPage() {
     sessionStorage.setItem("pwm_token_backup", payload.token);
     await refreshUser();
 
-    if (payload.isNew === true) {
-      setLocation("/profile?setup=true");
-      return;
-    }
-
+    // Social signups now have their username assigned automatically from
+    // the verified provider profile, so we send them straight to the
+    // requested destination instead of the manual setup screen.
     const redirectTarget = sanitizeRelativeRedirect(
       typeof payload.redirect === "string" && payload.redirect.length > 0 ? payload.redirect : "/",
     ) || "/";

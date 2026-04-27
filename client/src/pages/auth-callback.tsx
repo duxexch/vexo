@@ -61,11 +61,15 @@ export default function AuthCallbackPage() {
     }
   };
 
-  const resolveSuccessRedirect = (rawRedirect?: unknown, isNew?: unknown): string => {
-    if (isNew === true) {
-      return "/profile?setup=true";
-    }
-
+  const resolveSuccessRedirect = (rawRedirect?: unknown, _isNew?: unknown): string => {
+    // Note: we deliberately ignore the `isNew` flag for redirect targeting.
+    // Social signups now derive their username from the verified provider
+    // profile (Google/Facebook name) and persist usernameSelectedAt at
+    // creation time, so there's no need to send them through the manual
+    // /profile?setup=true selection step. Any user that genuinely still
+    // needs to pick a username (e.g. legacy one-click without nickname)
+    // is handled by the dedicated nickname dialog and the backend
+    // username-selection middleware (HTTP 428) — not by this redirect.
     const sanitized = sanitizeRelativeRedirect(typeof rawRedirect === "string" ? rawRedirect : undefined);
     if (!sanitized || sanitized.startsWith("/auth/callback")) {
       return "/";

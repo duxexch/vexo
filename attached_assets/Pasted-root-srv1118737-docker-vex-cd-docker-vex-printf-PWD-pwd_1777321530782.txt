@@ -1,0 +1,311 @@
+root@srv1118737:/docker/vex# cd /docker/vex && printf 'PWD: '; pwd && printf '
+> --- recent download-related lines ---
+> ' && (grep -RIn --max-count=20 -E 'downloads/app\.(apk|aab)|/downloads|download' logs client server . 2>/dev/null | head -n 40)
+PWD: /docker/vex
+
+--- recent download-related lines ---
+client/public/downloads/index.html:277:        <a href="/downloads/app.apk" class="btn btn-apk" download>تحميل APK</a>
+client/public/downloads/index.html:287:        <a href="/downloads/app.aab" class="btn btn-aab" download>تحميل AAB</a>
+client/public/sitemap.xml:162:    <loc>https://vixo.click/downloads</loc>
+client/public/sitemap.xml:166:    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/downloads" />
+client/public/sitemap.xml:167:    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/downloads" />
+client/public/guides/vex-seo-keywords-en.html:209:                        class="chip">android apk download</span>
+client/public/guides/vex-html-sitemap.html:107:                <li><a href="https://vixo.click/downloads">https://vixo.click/downloads</a></li>
+client/src/locales/gl.ts:79:  'common.download': 'Descargar',
+client/src/locales/gl.ts:1737:  'install.downloadOn': 'Descarga en',
+client/src/locales/gl.ts:1767:  'install.downloadNowFree': 'Descarga a aplicación agora - ¡Gratis!',
+client/src/locales/gl.ts:1775:  'install.downloadApk': 'Descargar VEX APK v1.1.0',
+client/src/locales/gl.ts:1804:  'install.downloadApp': '⬇ Descarga a aplicación',
+client/src/locales/gl.ts:1827:  'install.downloadAab': 'Descarga VEX AAB v1.1.0',
+client/src/locales/lb.ts:79:  'common.download': 'Download',
+client/src/locales/lb.ts:1737:  'install.downloadOn': 'Download op der',
+client/src/locales/lb.ts:1767:  'install.downloadNowFree': 'Luet d\'App elo erof - Gratis!',
+client/src/locales/lb.ts:1775:  'install.downloadApk': 'Luet VEX APK 1.1.0 erof',
+client/src/locales/lb.ts:1804:  'install.downloadApp': '⬇ Download App',
+client/src/locales/lb.ts:1827:  'install.downloadAab': 'Luet VEX AAB V 1.1.0 erof',
+client/src/locales/so.ts:79:  'common.download': 'Download',
+client/src/locales/so.ts:1737:  'install.downloadOn': 'Ku soo dejiso',
+client/src/locales/so.ts:1767:  'install.downloadNowFree': 'Soo deji Appka Hadda - Bilaash!',
+client/src/locales/so.ts:1775:  'install.downloadApk': 'Soo deji VEX APK v1.1.0',
+client/src/locales/so.ts:1804:  'install.downloadApp': 'Soo deji App-ka',
+client/src/locales/so.ts:1827:  'install.downloadAab': 'Soo deji VEX AAB v1.1.0',
+client/src/locales/th.ts:79:  'common.download': 'ดาวน์โหลด',
+client/src/locales/th.ts:1737:  'install.downloadOn': 'ดาวน์โหลดได้ที่',
+client/src/locales/th.ts:1767:  'install.downloadNowFree': 'ดาวน์โหลดแอปทันที — ฟรี!',
+client/src/locales/th.ts:1775:  'install.downloadApk': 'ดาวน์โหลด VEX APK v1.1.0',
+client/src/locales/th.ts:1804:  'install.downloadApp': '⬇ ดาวน์โหลดแอพ',
+client/src/locales/th.ts:1827:  'install.downloadAab': 'ดาวน์โหลด VEX AAB v1.1.0',
+client/src/locales/af.ts:79:  'common.download': 'Laai af',
+client/src/locales/af.ts:2094:  'install.downloadOn': 'Laai af op die',
+client/src/locales/af.ts:2124:  'install.downloadNowFree': 'Laai die toepassing nou af - gratis!',
+client/src/locales/af.ts:2132:  'install.downloadApk': 'Laai VEX APK v1.1.0 af',
+client/src/locales/af.ts:2161:  'install.downloadApp': '⬇ Laai die toepassing af',
+client/src/locales/af.ts:2184:  'install.downloadAab': 'Laai VEX AAB v1.1.0 af',
+client/src/locales/sm.ts:79:  'common.download': 'La\'u mai',
+client/src/locales/sm.ts:1737:  'install.downloadOn': 'La\'uina i luga o le',
+client/src/locales/sm.ts:1767:  'install.downloadNowFree': 'La\'u le App Nei — Free!',
+root@srv1118737:/docker/vex# cd /docker/vex && printf '--- log files ---
+> ' && find . -maxdepth 3 -type f \( -iname '*access*.log' -o -iname '*error*.log' -o -path './logs/*' \) | sed 's#^./##' | head -n 50 && printf '
+> --- maybe download hits ---
+> ' && grep -RIn --max-count=30 -E 'GET /downloads|app\.apk|app\.aab|404|403|500|denied|not found' . 2>/dev/null | head -n 50
+-bash: printf: --: invalid option
+printf: usage: printf [-v var] format [arguments]
+root@srv1118737:/docker/vex# cd /docker/vex && echo '--- top-level ---' && ls -la && echo '--- log candidates ---' && find . -maxdepth 4 -type f \( -iname '*.log' -o -iname '*access*' -o -iname '*error*' -o -path './logs/*' \) | sed 's#^./##' | sort | head -n 120
+--- top-level ---
+total 2036
+drwxr-xr-x 27 root root   4096 Apr 27 20:13 .
+drwxr-xr-x  4 root root   4096 Apr 23 18:45 ..
+drwxr-xr-x  3 root root   4096 Apr 24 19:29 .agents
+-rw-r--r--  1 root root    948 Apr 23 21:17 .browserslistrc
+-rw-r--r--  1 root root   1946 Apr 23 16:11 .cwe_scan.py
+-rw-r--r--  1 root root   1029 Apr 23 16:11 .dockerignore
+-rw-------  1 root root  10720 Apr 27 20:13 .env
+-rw-r--r--  1 root root  12451 Apr 26 17:21 .env.example
+drwxr-xr-x  7 root root   4096 Apr 27 20:13 .git
+-rw-r--r--  1 root root    613 Apr 27 19:41 .gitattributes
+drwxr-xr-x  7 root root   4096 Apr 26 21:33 .github
+-rw-r--r--  1 root root   1130 Apr 27 19:41 .gitignore
+-rw-r--r--  1 root root  53046 Apr 23 16:11 .memory
+-rw-r--r--  1 root root   1081 Apr 24 03:41 .replit
+-rw-r--r--  1 root root      6 Apr 23 16:11 .server.pid
+-rw-r--r--  1 root root   1350 Apr 23 16:11 .tmp-playwright-check.cjs
+-rw-r--r--  1 root root   1350 Apr 23 16:11 .tmp-playwright-check.js
+drwxr-xr-x  3 root root   4096 Apr 23 16:11 .tools
+drwxr-xr-x  2 root root   4096 Apr 23 16:11 .vscode
+-rw-r--r--  1 root root   6043 Apr 26 17:21 AGENTS.md
+-rw-r--r--  1 root root   2608 Apr 23 16:11 Dockerfile
+drwxr-xr-x  3 root root   4096 Apr 26 03:38 PROJECT_KNOWLEDGE_ENGINE
+-rw-r--r--  1 root root  15326 Apr 23 16:11 README.md
+drwxr-xr-x  3 root root   4096 Apr 23 16:11 ai-service
+drwxr-xr-x  3 root root   4096 Apr 27 20:13 attached_assets
+drwxr-xr-x  2 root root   4096 Apr 27 20:13 backups
+-rw-r--r--  1 root root   5125 Apr 26 17:21 capacitor.config.ts
+drwxr-xr-x  4 root root   4096 Apr 23 21:17 client
+-rw-r--r--  1 root root    459 Apr 23 16:11 components.json
+drwxr-xr-x  5 root root   4096 Apr 26 03:38 deploy
+drwxr-xr-x  2 root root   4096 Apr 23 16:11 docker
+-rw-r--r--  1 root root  16690 Apr 27 20:13 docker-compose.prod.yml
+-rw-r--r--  1 root root   6930 Apr 23 16:11 docker-compose.yml
+drwxr-xr-x  5 root root   4096 Apr 27 18:35 docs
+-rw-r--r--  1 root root    325 Apr 23 16:11 drizzle.config.ts
+-rw-r--r--  1 root root    147 Apr 23 16:11 filters.yaml
+drwxr-xr-x  2 root root   4096 Apr 23 16:11 k8s
+-rw-r--r--  1 root root   3656 Apr 26 23:29 key.txt
+-rw-r--r--  1 root root   3656 Apr 26 23:23 keystore_base64.txt
+drwxr-xr-x  2 1001 1001   4096 Apr 23 16:11 logs
+drwxr-xr-x  2 root root   4096 Apr 26 22:11 migrations
+drwxr-xr-x  4 root root   4096 Apr 25 19:01 native-plugins
+-rw-r--r--  1 root root 496830 Apr 26 19:49 package-lock.json
+-rw-r--r--  1 root root  15230 Apr 26 19:49 package.json
+-rw-r--r--  1 root root     80 Apr 23 16:11 postcss.config.js
+-rwxr-xr-x  1 root root  43635 Apr 26 17:21 prod-auto.sh
+-rwxr-xr-x  1 root root  11427 Apr 23 16:11 prod-update.sh
+-rw-r--r--  1 root root   2738 Apr 27 16:43 release-key.keystore
+-rw-r--r--  1 root root  23820 Apr 27 20:13 replit.md
+-rw-r--r--  1 root root    433 Apr 23 21:17 replit.nix
+-rw-r--r--  1 root root  50282 Apr 23 16:11 screenshot-sequence-fix-mobile.png
+-rw-r--r--  1 root root  51782 Apr 23 16:11 screenshot-watch-desktop.png
+-rw-r--r--  1 root root  50282 Apr 23 16:11 screenshot-watch-mobile.png
+-rw-r--r--  1 root root  51782 Apr 23 16:11 screenshot-watchpage-desktop.png
+-rw-r--r--  1 root root  50282 Apr 23 16:11 screenshot-watchpage-mobile.png
+drwxr-xr-x  2 root root   4096 Apr 23 16:11 script
+drwxr-xr-x  6 root root   4096 Apr 27 19:41 scripts
+drwxr-xr-x 12 root root   4096 Apr 26 03:38 server
+drwxr-xr-x  2 root root   4096 Apr 26 22:11 shared
+-rw-r--r--  1 root root   3518 Apr 24 19:29 skills-lock.json
+-rw-r--r--  1 root root   5086 Apr 23 16:11 tailwind.config.ts
+drwxr-xr-x  3 root root   4096 Apr 26 21:33 tests
+-rw-r--r--  1 root root  21951 Apr 23 16:11 translation_audit.txt
+-rw-r--r--  1 root root  67093 Apr 23 16:11 translation_audit_byfile.txt
+-rw-r--r--  1 root root    207 Apr 23 16:11 ts_errors.txt
+-rw-r--r--  1 root root    713 Apr 23 16:11 tsconfig.json
+drwxr-xr-x  2 root root   4096 Apr 23 16:11 twa
+-rw-r--r--  1 root root  20842 Apr 23 16:11 unique_keys.txt
+drwxr-xr-x  2 1001 1001   4096 Apr 23 16:11 uploads
+-rw-r--r--  1 root root 741996 Apr 23 16:11 vex_database_production.sql
+-rw-r--r--  1 root root   2938 Apr 23 21:17 vite.config.ts
+-rw-r--r--  1 root root    609 Apr 26 00:27 vitest.config.ts
+drwxr-xr-x 15 root root   4096 Apr 23 16:11 vxmarket
+--- log candidates ---
+.agents/skills/next-best-practices/error-handling.md
+.agents/skills/next-best-practices/hydration-error.md
+attached_assets/Pasted--All-jobs-Run-details-Annotations-1-error-Build-APK-and_1777309329148.txt
+client/src/components/QueryErrorState.tsx
+client/src/components/error-boundary.tsx
+client/src/lib/ws-errors.ts
+scripts/smoke-tournament-insufficient-error.ts
+ts_errors.txt
+root@srv1118737:/docker/vex# cd /docker/vex && grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E 'downloads/app\.(apk|aab)|/downloads|app\.apk|app\.aab|sendFile|download' client server scripts shared 2>/dev/null | head -n 120
+client/public/downloads/index.html:277:        <a href="/downloads/app.apk" class="btn btn-apk" download>تحميل APK</a>
+client/public/downloads/index.html:287:        <a href="/downloads/app.aab" class="btn btn-aab" download>تحميل AAB</a>
+client/public/sitemap.xml:162:    <loc>https://vixo.click/downloads</loc>
+client/public/sitemap.xml:166:    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/downloads" />
+client/public/sitemap.xml:167:    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/downloads" />
+client/public/guides/vex-seo-keywords-en.html:209:                        class="chip">android apk download</span>
+client/public/guides/vex-html-sitemap.html:107:                <li><a href="https://vixo.click/downloads">https://vixo.click/downloads</a></li>
+client/src/locales/gl.ts:79:  'common.download': 'Descargar',
+client/src/locales/gl.ts:1737:  'install.downloadOn': 'Descarga en',
+client/src/locales/gl.ts:1767:  'install.downloadNowFree': 'Descarga a aplicación agora - ¡Gratis!',
+client/src/locales/gl.ts:1775:  'install.downloadApk': 'Descargar VEX APK v1.1.0',
+client/src/locales/gl.ts:1804:  'install.downloadApp': '⬇ Descarga a aplicación',
+client/src/locales/gl.ts:1827:  'install.downloadAab': 'Descarga VEX AAB v1.1.0',
+client/src/locales/lb.ts:79:  'common.download': 'Download',
+client/src/locales/lb.ts:1737:  'install.downloadOn': 'Download op der',
+client/src/locales/lb.ts:1767:  'install.downloadNowFree': 'Luet d\'App elo erof - Gratis!',
+client/src/locales/lb.ts:1775:  'install.downloadApk': 'Luet VEX APK 1.1.0 erof',
+client/src/locales/lb.ts:1804:  'install.downloadApp': '⬇ Download App',
+client/src/locales/lb.ts:1827:  'install.downloadAab': 'Luet VEX AAB V 1.1.0 erof',
+client/src/locales/so.ts:79:  'common.download': 'Download',
+client/src/locales/so.ts:1737:  'install.downloadOn': 'Ku soo dejiso',
+client/src/locales/so.ts:1767:  'install.downloadNowFree': 'Soo deji Appka Hadda - Bilaash!',
+client/src/locales/so.ts:1775:  'install.downloadApk': 'Soo deji VEX APK v1.1.0',
+client/src/locales/so.ts:1804:  'install.downloadApp': 'Soo deji App-ka',
+client/src/locales/so.ts:1827:  'install.downloadAab': 'Soo deji VEX AAB v1.1.0',
+client/src/locales/th.ts:79:  'common.download': 'ดาวน์โหลด',
+client/src/locales/th.ts:1737:  'install.downloadOn': 'ดาวน์โหลดได้ที่',
+client/src/locales/th.ts:1767:  'install.downloadNowFree': 'ดาวน์โหลดแอปทันที — ฟรี!',
+client/src/locales/th.ts:1775:  'install.downloadApk': 'ดาวน์โหลด VEX APK v1.1.0',
+client/src/locales/th.ts:1804:  'install.downloadApp': '⬇ ดาวน์โหลดแอพ',
+client/src/locales/th.ts:1827:  'install.downloadAab': 'ดาวน์โหลด VEX AAB v1.1.0',
+client/src/locales/af.ts:79:  'common.download': 'Laai af',
+client/src/locales/af.ts:2094:  'install.downloadOn': 'Laai af op die',
+client/src/locales/af.ts:2124:  'install.downloadNowFree': 'Laai die toepassing nou af - gratis!',
+client/src/locales/af.ts:2132:  'install.downloadApk': 'Laai VEX APK v1.1.0 af',
+client/src/locales/af.ts:2161:  'install.downloadApp': '⬇ Laai die toepassing af',
+client/src/locales/af.ts:2184:  'install.downloadAab': 'Laai VEX AAB v1.1.0 af',
+client/src/locales/sm.ts:79:  'common.download': 'La\'u mai',
+client/src/locales/sm.ts:1737:  'install.downloadOn': 'La\'uina i luga o le',
+client/src/locales/sm.ts:1767:  'install.downloadNowFree': 'La\'u le App Nei — Free!',
+client/src/locales/sm.ts:1775:  'install.downloadApk': 'La\'u VEX APK v1.1.0',
+client/src/locales/sm.ts:1804:  'install.downloadApp': '⬇ Download le App',
+client/src/locales/sm.ts:1807:  'install.chooseMethod': 'Filifili lau download',
+client/src/locales/sm.ts:1827:  'install.downloadAab': 'La\'u mai VEX AAB v1.1.0',
+client/src/locales/sw.ts:79:  'common.download': 'Pakua',
+client/src/locales/sw.ts:1737:  'install.downloadOn': 'Pakua kwenye',
+client/src/locales/sw.ts:1767:  'install.downloadNowFree': 'Pakua Programu Sasa - Bure!',
+client/src/locales/sw.ts:1775:  'install.downloadApk': 'Pakua VEX APK v1.1.0',
+client/src/locales/sw.ts:1804:  'install.downloadApp': '⬇ Pakua Programu',
+client/src/locales/sw.ts:1827:  'install.downloadAab': 'Pakua VEX AAB v1.1.0',
+client/src/locales/hy.ts:79:  'common.download': 'Բեռնել',
+client/src/locales/hy.ts:1737:  'install.downloadOn': 'Ներբեռնեք վրա',
+client/src/locales/hy.ts:1767:  'install.downloadNowFree': 'Ներբեռնեք հավելվածը հիմա՝ անվճար:',
+client/src/locales/hy.ts:1775:  'install.downloadApk': 'Ներբեռնեք VEX APK v1.1.0',
+client/src/locales/hy.ts:1804:  'install.downloadApp': '⬇ Ներբեռնեք հավելվածը',
+client/src/locales/hy.ts:1827:  'install.downloadAab': 'Ներբեռնեք VEX AAB v1.1.0',
+client/src/locales/fi.ts:79:  'common.download': 'Lataa',
+client/src/locales/fi.ts:1737:  'install.downloadOn': 'Lataa osoitteesta',
+client/src/locales/fi.ts:1767:  'install.downloadNowFree': 'Lataa sovellus nyt – ilmainen!',
+client/src/locales/fi.ts:1775:  'install.downloadApk': 'Lataa VEX APK v1.1.0',
+client/src/locales/fi.ts:1804:  'install.downloadApp': '⬇ Lataa sovellus',
+client/src/locales/fi.ts:1827:  'install.downloadAab': 'Lataa VEX AAB v1.1.0',
+client/src/locales/yo.ts:79:  'common.download': 'Gba lati ayelujara',
+client/src/locales/yo.ts:1737:  'install.downloadOn': 'Download lori awọn',
+client/src/locales/yo.ts:1767:  'install.downloadNowFree': 'Ṣe igbasilẹ ohun elo naa Bayi - Ọfẹ!',
+client/src/locales/yo.ts:1775:  'install.downloadApk': 'Ṣe igbasilẹ VEX apk v1.1.0',
+client/src/locales/yo.ts:1804:  'install.downloadApp': '⬇ Gbigba lati ayelujara App',
+client/src/locales/yo.ts:1827:  'install.downloadAab': 'Ṣe igbasilẹ VEX AAB v1.1.0',
+client/src/locales/am.ts:79:  'common.download': 'አውርድ',
+client/src/locales/am.ts:2094:  'install.downloadOn': 'በ ላይ ያውርዱ',
+client/src/locales/am.ts:2124:  'install.downloadNowFree': 'መተግበሪያውን አሁን ያውርዱ - ነፃ!',
+client/src/locales/am.ts:2132:  'install.downloadApk': 'VEX APK v1.1.0 አውርድ',
+client/src/locales/am.ts:2161:  'install.downloadApp': 'መተግበሪያ አውርድ',
+client/src/locales/am.ts:2184:  'install.downloadAab': 'VEX AAB v1.1.0 አውርድ',
+client/src/locales/vi.ts:79:  'common.download': 'Tải xuống',
+client/src/locales/vi.ts:1737:  'install.downloadOn': 'Tải xuống trên',
+client/src/locales/vi.ts:1767:  'install.downloadNowFree': 'Tải ứng dụng ngay - Miễn phí!',
+client/src/locales/vi.ts:1775:  'install.downloadApk': 'Tải xuống VEX APK v1.1.0',
+client/src/locales/vi.ts:1804:  'install.downloadApp': '⬇ Tải ứng dụng',
+client/src/locales/vi.ts:1827:  'install.downloadAab': 'Tải xuống VEX AAB v1.1.0',
+client/src/locales/tg.ts:79:  'common.download': 'Зеркашӣ кунед',
+client/src/locales/tg.ts:1737:  'install.downloadOn': 'Дар зер зеркашӣ кунед',
+client/src/locales/tg.ts:1767:  'install.downloadNowFree': 'Барномаро ҳоло зеркашӣ кунед - ройгон!',
+client/src/locales/tg.ts:1775:  'install.downloadApk': 'VEX APK v1.1.0-ро зеркашӣ кунед',
+client/src/locales/tg.ts:1804:  'install.downloadApp': '⬇ Барномаро зеркашӣ кунед',
+client/src/locales/tg.ts:1827:  'install.downloadAab': 'VEX AAB v1.1.0-ро зеркашӣ кунед',
+client/src/locales/sr.ts:79:  'common.download': 'Преузми',
+client/src/locales/sr.ts:1737:  'install.downloadOn': 'Преузмите на',
+client/src/locales/sr.ts:1767:  'install.downloadNowFree': 'Преузмите апликацију одмах — бесплатно!',
+client/src/locales/sr.ts:1775:  'install.downloadApk': 'Преузмите ВЕКС АПК в1.1.0',
+client/src/locales/sr.ts:1804:  'install.downloadApp': '⬇ Преузмите апликацију',
+client/src/locales/sr.ts:1813:  'install.pwaPro1': 'No download needed — installs in seconds',
+client/src/locales/sr.ts:1824:  'install.aabPro1': 'Smaller optimized download per device',
+client/src/locales/sr.ts:1827:  'install.downloadAab': 'Download VEX AAB v1.1.0',
+client/src/locales/sr.ts:1864:  'install.faq2a': 'Yes! Our APK is digitally signed with an official VEX certificate. You can verify the signature before installing. Just make sure you download it only from this official page.',
+client/src/locales/sr.ts:1868:  'install.faq4a': 'The PWA version auto-updates every time you open it. For APK, you\'ll need to download the latest version from this page. We\'ll notify you when a new version is available.',
+client/src/locales/sr.ts:1870:  'install.faq5a': 'AAB (Android App Bundle) is Google\'s official format for publishing apps on the Play Store. It produces smaller, device-optimized downloads. For sideloading, you\'ll need Google\'s bundletool to extract APKs from it.',
+client/src/locales/zu.ts:79:  'common.download': 'Landa',
+client/src/locales/zu.ts:1737:  'install.downloadOn': 'Landa ku',
+client/src/locales/zu.ts:1767:  'install.downloadNowFree': 'Landa uhlelo lokusebenza manje - Mahhala!',
+client/src/locales/zu.ts:1775:  'install.downloadApk': 'Landa i-VEX APK v1.1.0',
+client/src/locales/zu.ts:1804:  'install.downloadApp': '⬇ Landa uhlelo lokusebenza',
+client/src/locales/zu.ts:1827:  'install.downloadAab': 'Landa i-VEX AAB v1.1.0',
+client/src/locales/et.ts:79:  'common.download': 'Laadi alla',
+client/src/locales/et.ts:2094:  'install.downloadOn': 'Laadige alla',
+client/src/locales/et.ts:2124:  'install.downloadNowFree': 'Laadige rakendus alla kohe – tasuta!',
+client/src/locales/et.ts:2132:  'install.downloadApk': 'Laadige alla VEX APK v1.1.0',
+client/src/locales/et.ts:2161:  'install.downloadApp': '⬇ Laadige alla rakendus',
+client/src/locales/et.ts:2184:  'install.downloadAab': 'Laadige alla VEX AAB v1.1.0',
+client/src/locales/ht.ts:79:  'common.download': 'Telechaje',
+client/src/locales/ht.ts:1737:  'install.downloadOn': 'Telechaje sou la',
+client/src/locales/ht.ts:1767:  'install.downloadNowFree': 'Telechaje aplikasyon an kounye a - gratis!',
+client/src/locales/ht.ts:1775:  'install.downloadApk': 'Telechaje VEX APK v1.1.0',
+client/src/locales/ht.ts:1804:  'install.downloadApp': '⬇ Telechaje aplikasyon an',
+client/src/locales/ht.ts:1813:  'install.pwaPro1': 'Pa gen okenn download nesesè - enstale nan segonn',
+client/src/locales/ht.ts:1827:  'install.downloadAab': 'Telechaje VEX AAB v1.1.0',
+client/src/locales/tr.ts:79:  'common.download': 'İndir',
+client/src/locales/tr.ts:1737:  'install.downloadOn': 'Şuradan indirin:',
+client/src/locales/tr.ts:1767:  'install.downloadNowFree': 'Uygulamayı Şimdi İndirin — Ücretsiz!',
+client/src/locales/tr.ts:1775:  'install.downloadApk': 'VEX APK v1.1.0\'ı indirin',
+root@srv1118737:/docker/vex# cd /docker/vex && printf '
+> === download files ===
+> ' && find client/public/downloads -maxdepth 1 -type f \( -name '*.apk' -o -name '*.aab' \) -printf '%f
+> ' | sort && printf '
+> === routes ===
+> ' && grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E '/downloads|app\.(apk|aab)|sendFile|download' client server scripts shared 2>/dev/null | head -n 40
+
+=== download files ===
+app.aab
+app.apk
+
+=== routes ===
+client/public/downloads/index.html:277:        <a href="/downloads/app.apk" class="btn btn-apk" download>تحميل APK</a>
+client/public/downloads/index.html:287:        <a href="/downloads/app.aab" class="btn btn-aab" download>تحميل AAB</a>
+client/public/sitemap.xml:162:    <loc>https://vixo.click/downloads</loc>
+client/public/sitemap.xml:166:    <xhtml:link rel="alternate" hreflang="ar" href="https://vixo.click/downloads" />
+client/public/sitemap.xml:167:    <xhtml:link rel="alternate" hreflang="en" href="https://vixo.click/downloads" />
+client/public/guides/vex-seo-keywords-en.html:209:                        class="chip">android apk download</span>
+client/public/guides/vex-html-sitemap.html:107:                <li><a href="https://vixo.click/downloads">https://vixo.click/downloads</a></li>
+client/src/locales/gl.ts:79:  'common.download': 'Descargar',
+client/src/locales/gl.ts:1737:  'install.downloadOn': 'Descarga en',
+client/src/locales/gl.ts:1767:  'install.downloadNowFree': 'Descarga a aplicación agora - ¡Gratis!',
+client/src/locales/gl.ts:1775:  'install.downloadApk': 'Descargar VEX APK v1.1.0',
+client/src/locales/gl.ts:1804:  'install.downloadApp': '⬇ Descarga a aplicación',
+client/src/locales/gl.ts:1827:  'install.downloadAab': 'Descarga VEX AAB v1.1.0',
+client/src/locales/lb.ts:79:  'common.download': 'Download',
+client/src/locales/lb.ts:1737:  'install.downloadOn': 'Download op der',
+client/src/locales/lb.ts:1767:  'install.downloadNowFree': 'Luet d\'App elo erof - Gratis!',
+client/src/locales/lb.ts:1775:  'install.downloadApk': 'Luet VEX APK 1.1.0 erof',
+client/src/locales/lb.ts:1804:  'install.downloadApp': '⬇ Download App',
+client/src/locales/lb.ts:1827:  'install.downloadAab': 'Luet VEX AAB V 1.1.0 erof',
+client/src/locales/so.ts:79:  'common.download': 'Download',
+client/src/locales/so.ts:1737:  'install.downloadOn': 'Ku soo dejiso',
+client/src/locales/so.ts:1767:  'install.downloadNowFree': 'Soo deji Appka Hadda - Bilaash!',
+client/src/locales/so.ts:1775:  'install.downloadApk': 'Soo deji VEX APK v1.1.0',
+client/src/locales/so.ts:1804:  'install.downloadApp': 'Soo deji App-ka',
+client/src/locales/so.ts:1827:  'install.downloadAab': 'Soo deji VEX AAB v1.1.0',
+client/src/locales/th.ts:79:  'common.download': 'ดาวน์โหลด',
+client/src/locales/th.ts:1737:  'install.downloadOn': 'ดาวน์โหลดได้ที่',
+client/src/locales/th.ts:1767:  'install.downloadNowFree': 'ดาวน์โหลดแอปทันที — ฟรี!',
+client/src/locales/th.ts:1775:  'install.downloadApk': 'ดาวน์โหลด VEX APK v1.1.0',
+client/src/locales/th.ts:1804:  'install.downloadApp': '⬇ ดาวน์โหลดแอพ',
+client/src/locales/th.ts:1827:  'install.downloadAab': 'ดาวน์โหลด VEX AAB v1.1.0',
+client/src/locales/af.ts:79:  'common.download': 'Laai af',
+client/src/locales/af.ts:2094:  'install.downloadOn': 'Laai af op die',
+client/src/locales/af.ts:2124:  'install.downloadNowFree': 'Laai die toepassing nou af - gratis!',
+client/src/locales/af.ts:2132:  'install.downloadApk': 'Laai VEX APK v1.1.0 af',
+client/src/locales/af.ts:2161:  'install.downloadApp': '⬇ Laai die toepassing af',
+client/src/locales/af.ts:2184:  'install.downloadAab': 'Laai VEX AAB v1.1.0 af',
+client/src/locales/sm.ts:79:  'common.download': 'La\'u mai',
+client/src/locales/sm.ts:1737:  'install.downloadOn': 'La\'uina i luga o le',
+client/src/locales/sm.ts:1767:  'install.downloadNowFree': 'La\'u le App Nei — Free!',
+root@srv1118737:/docker/vex# 

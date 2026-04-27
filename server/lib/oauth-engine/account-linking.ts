@@ -146,6 +146,12 @@ export async function findOrCreateUser(
     const bcrypt = await import("bcryptjs");
     const hashedPassword = await bcrypt.hash(randomPassword, 12);
 
+    // The username we just generated is derived from the verified social
+    // profile name (e.g. Google "name" claim). The user already presented
+    // this identity to the provider — asking them to "choose a username"
+    // again is redundant friction and was the root cause of the post-OAuth
+    // /profile?setup=true loop. So we mark usernameSelectedAt up front and
+    // skip the selection gate entirely for social-registered accounts.
     user = await storage.createUser({
       username,
       email: profile.email || null,
@@ -154,8 +160,29 @@ export async function findOrCreateUser(
       nickname: profile.displayName || username,
       profilePicture: profile.avatar || null,
       registrationType: `social_${platformName}`,
+      usernameSelectedAt: new Date(),
     } as InsertUser);
     isNew = true;
+  } else if (
+    user.usernameSelectedAt === null &&
+    typeof user.username === "string" &&
+    user.username.trim().length > 0 &&
+    // Skip both placeholder patterns:
+    //   - `player_<accountId>` from one-click registration
+    //   - `user_<hex>` from generateUniqueUsername's UUID fallback when
+    //     the social profile had no usable display name
+    !/^(player|user)_/i.test(user.username)
+  ) {
+    // Backfill for existing social users created before this fix: if they
+    // already have a real (non-placeholder) username derived from their
+    // social profile, treat the social re-login as confirming it so the
+    // username-selection middleware stops blocking their requests.
+    try {
+      await storage.updateUser(user.id, { usernameSelectedAt: new Date() });
+      user = { ...user, usernameSelectedAt: new Date() };
+    } catch {
+      // Non-fatal — login still succeeds; the gate will just remain active.
+    }
   }
 
   // 4. Link social account

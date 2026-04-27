@@ -1,0 +1,203 @@
+oot@srv1118737:/docker/vex# cd /docker/vex && echo '--- all apk/aab/download references ---' && grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E '(/downloads/|downloads/|app\.(apk|aab)|\.apk|\.aab)' . 2>/dev/null | head -n 200
+--- all apk/aab/download references ---
+./scripts/mobile-android-build.mjs:215:        console.log('[android-build] Output: android/app/build/outputs/bundle/release/app-release.aab');
+./scripts/mobile-android-build.mjs:219:        console.log('[android-build] Output: android/app/build/outputs/apk/release/app-release.apk');
+./scripts/prod-auto.sh:511:    "app.apk"
+./scripts/prod-auto.sh:512:    "app.aab"
+./scripts/prod-auto.sh:514:    # android-build.yml output (app.apk / app.aab). Safe to drop
+./scripts/prod-auto.sh:516:    "VEX-official-release.apk"
+./scripts/prod-auto.sh:517:    "VEX-official-release.aab"
+./scripts/prod-auto.sh:550:    done < <(find "$dir" -maxdepth 1 -type f \( -name '*.apk' -o -name '*.aab' \))
+./scripts/server/refresh-android-binaries.sh:5:# Releases CDN and atomically swaps them into client/public/downloads/ on
+./scripts/server/refresh-android-binaries.sh:34:# names app.apk / app.aab in client/public/downloads/. We download from
+./scripts/server/refresh-android-binaries.sh:38:APK_URL="${BASE_URL}/VEX-official-release.apk"
+./scripts/server/refresh-android-binaries.sh:39:AAB_URL="${BASE_URL}/VEX-official-release.aab"
+./scripts/server/refresh-android-binaries.sh:40:APK_DEST_NAME="app.apk"
+./scripts/server/refresh-android-binaries.sh:41:AAB_DEST_NAME="app.aab"
+./scripts/server/refresh-android-binaries.sh:100:for legacy in VEX-official-release.apk VEX-official-release.aab; do
+./scripts/server/refresh-android-binaries.sh:108:log "  ${APK_DEST_NAME}: $(stat -c%s "${DEST_DIR}/${APK_DEST_NAME}" 2>/dev/null || stat -f%z "${DEST_DIR}/${APK_DEST_NAME}") bytes  → public download (vixo.click/downloads/app.apk)"
+./scripts/server/refresh-android-binaries.sh:109:log "  ${AAB_DEST_NAME}: $(stat -c%s "${DEST_DIR}/${AAB_DEST_NAME}" 2>/dev/null || stat -f%z "${DEST_DIR}/${AAB_DEST_NAME}") bytes  → admin download (/api/admin/downloads/aab)"
+./replit.md:201:- [`.github/workflows/android-build.yml`](.github/workflows/android-build.yml) — sole manual build pipeline with target `apk | aab | both`. Decodes the keystore from `ANDROID_KEYSTORE_BASE64` (safe `printf '%s' | base64 -d` form), pre-flights it with `keytool` (alias match + key-password decrypt) so config errors fail in <1s instead of after a 3-minute Gradle build, patches `android/app/build.gradle` via [`scripts/ci/patch-android-signing.mjs`](scripts/ci/patch-android-signing.mjs), patches the Kotlin Gradle plugin classpath via [`scripts/ci/patch-android-kotlin.mjs`](scripts/ci/patch-android-kotlin.mjs), runs gradle `assembleRelease` / `bundleRelease` on **Java 21 + compileSdk/targetSdk 36 + build-tools 36.0.0** (Node 22). Signed outputs are staged under `dist/android-release/VEX-official-release.{apk,aab}` (workflow scratch only — never committed) and uploaded to **two** GitHub Release tags simultaneously: a versioned, immutable `v<pkg-version>-build<run>` (kept forever for history) and a moving `latest-android` pointer (always the newest build, giving stable direct-download URLs `https://github.com/duxexch/vexo/releases/download/latest-android/VEX-official-release.{apk,aab}`). Workflow artifacts mirror the same files for 14 days. **Binaries are deliberately NOT committed back to git** — earlier attempts at that strategy hit Git LFS pointer corruption (133-byte text shipped in place of 13 MB binaries) and binary-merge conflicts on every rebase. Instead the Hostinger VPS pulls the binaries straight from the Release CDN via [`scripts/server/refresh-android-binaries.sh`](scripts/server/refresh-android-binaries.sh), which downloads each asset to a temp file, validates HTTP 200 + size ≥ 1 MB + ZIP magic bytes (`PK` checked via `od -An -tx1`, never via command substitution to avoid bash NUL-byte warnings) + non-HTML / non-LFS-pointer content, then atomically `mv`s it into `client/public/downloads/app.{apk,aab}` (the canonical names that the public download page links to and that the admin AAB endpoint resolves first). The `vex-app` container picks the binaries up live through a read-only bind mount declared in `docker-compose.prod.yml`: `./client/public/downloads:/app/dist/public/downloads:ro`. **Without that mount the container can only ever serve whatever was baked into the image at build time, which is empty for APK/AAB now that they no longer travel through git** — so a one-time `prod-update.sh` is required after pulling this commit on the VPS, then any future `refresh-android-binaries.sh` run is reflected immediately with no container restart. The previous `release-android.yml` was deleted in 2026-04 — this single workflow now owns the entire path.
+./.gitignore:52:client/public/downloads/*.apk
+./.gitignore:53:client/public/downloads/*.aab
+./.gitignore:54:dist/public/downloads/*.apk
+./.gitignore:55:dist/public/downloads/*.aab
+./PROJECT_KNOWLEDGE_ENGINE/legacy/docs/TWA_BUILD_GUIDE.md:100:6. Download the signed `.aab` file
+./PROJECT_KNOWLEDGE_ENGINE/legacy/docs/TWA_BUILD_GUIDE.md:124:adb install app-release-signed.apk
+./PROJECT_KNOWLEDGE_ENGINE/legacy/docs/TWA_BUILD_GUIDE.md:147:2. Upload `.aab` file
+./PROJECT_KNOWLEDGE_ENGINE/legacy/docs/DEPLOYMENT_GUIDE.md:465:# build/app/outputs/flutter-apk/app-release.apk
+./PROJECT_KNOWLEDGE_ENGINE/legacy/docs/DEPLOYMENT_GUIDE.md:468:# build/app/outputs/bundle/release/app-release.aab
+./PROJECT_KNOWLEDGE_ENGINE/legacy/root-docs/APP_BUILD_GUIDE.md:160:# - app-release-signed.apk (للاختبار)
+./PROJECT_KNOWLEDGE_ENGINE/legacy/root-docs/APP_BUILD_GUIDE.md:161:# - app-release-bundle.aab (لـ Google Play)
+./PROJECT_KNOWLEDGE_ENGINE/legacy/root-docs/APP_BUILD_GUIDE.md:208:     - app-release.aab (الذي ترفعه لـ Google Play)
+./PROJECT_KNOWLEDGE_ENGINE/legacy/root-docs/APP_BUILD_GUIDE.md:210:9. إذا لم يوجد .aab جاهز، افتح المجلد في Android Studio:
+./PROJECT_KNOWLEDGE_ENGINE/legacy/root-docs/APP_BUILD_GUIDE.md:249:#    اختر: Android App Bundle (.aab)
+./PROJECT_KNOWLEDGE_ENGINE/legacy/root-docs/APP_BUILD_GUIDE.md:409:2. Upload: app-release.aab
+./PROJECT_KNOWLEDGE_ENGINE/legacy/root-docs/APP_BUILD_GUIDE.md:452:| App Bundle (.aab) | ⬜ يحتاج بناء |
+./PROJECT_KNOWLEDGE_ENGINE/legacy/root-docs/MOBILE_APP_BUILD.md:200:# الملف في: android/app/build/outputs/bundle/release/app-release.aab
+./PROJECT_KNOWLEDGE_ENGINE/legacy/root-docs/MOBILE_APP_BUILD.md:207:# الملف في: android/app/build/outputs/apk/release/app-release.apk
+./client/public/downloads/index.html:108:    .card.apk::before {
+./client/public/downloads/index.html:112:    .card.aab::before {
+./client/public/downloads/index.html:277:        <a href="/downloads/app.apk" class="btn btn-apk" download>تحميل APK</a>
+./client/public/downloads/index.html:287:        <a href="/downloads/app.aab" class="btn btn-aab" download>تحميل AAB</a>
+./client/src/locales/gl.ts:1774:  'install.apkInfo': 'Android 7.0+ — 11,8 MB — Asinado dixitalmente',
+./client/src/locales/gl.ts:1816:  'install.apkSubtitle': 'Instalador estándar de Android: descarga lateral directamente',
+./client/src/locales/gl.ts:1817:  'install.apkPro1': 'Experiencia nativa completa de Android',
+./client/src/locales/gl.ts:1818:  'install.apkPro2': 'Funciona sen Google Play Store',
+./client/src/locales/gl.ts:1819:  'install.apkPro3': 'Instala en calquera dispositivo Android 7.0+',
+./client/src/locales/gl.ts:1820:  'install.apkNote': 'É posible que teñas que activar "Instalar desde fontes descoñecidas" na configuración do teu dispositivo.',
+./client/src/locales/gl.ts:1821:  'install.aabTitle': 'AAB — Android App Bundle',
+./client/src/locales/gl.ts:1822:  'install.aabSubtitle': 'Formato de paquete optimizado para a publicación de Google Play',
+./client/src/locales/gl.ts:1824:  'install.aabPro1': 'Descarga optimizada máis pequena por dispositivo',
+./client/src/locales/gl.ts:1825:  'install.aabPro2': 'Formato Google Play Store',
+./client/src/locales/gl.ts:1826:  'install.aabPro3': 'Pódese instalar mediante bundletool',
+./client/src/locales/gl.ts:1828:  'install.aabNote': 'AAB é o formato estándar para Google Play. Para cargar de forma paralela, usa a ferramenta de paquetes de Google para xerar APK a partir deste paquete.',
+./client/src/locales/lb.ts:1774:  'install.apkInfo': 'Android 7.0+ - 11,8 MB - Digital ënnerschriwwen',
+./client/src/locales/lb.ts:1816:  'install.apkSubtitle': 'Standard Android Installateur - Sideload direkt',
+./client/src/locales/lb.ts:1817:  'install.apkPro1': 'Voll gebierteg Android Erfahrung',
+./client/src/locales/lb.ts:1818:  'install.apkPro2': 'Wierker ouni Google Play Store',
+./client/src/locales/lb.ts:1819:  'install.apkPro3': 'Installéiert op all Android 7.0+ Apparat',
+./client/src/locales/lb.ts:1820:  'install.apkNote': 'Dir musst vläicht "Installéiere vun onbekannte Quellen" an Ären Apparatastellungen aktivéieren.',
+./client/src/locales/lb.ts:1821:  'install.aabTitle': 'AAB - Android App Bundle',
+./client/src/locales/lb.ts:1822:  'install.aabSubtitle': 'Optimiséiert Bündelformat fir Google Play Verëffentlechung',
+./client/src/locales/lb.ts:1824:  'install.aabPro1': 'Méi kleng optimiséiert Download pro Apparat',
+./client/src/locales/lb.ts:1825:  'install.aabPro2': 'Google Play Store Format',
+./client/src/locales/lb.ts:1826:  'install.aabPro3': 'Kann iwwer bundletool installéiert ginn',
+./client/src/locales/lb.ts:1828:  'install.aabNote': 'AAB ass de Standardformat fir Google Play. Fir Sideload ze benotzen, benotzt de Google Bundletool fir APKs aus dësem Bündel ze generéieren.',
+./client/src/locales/so.ts:1774:  'install.apkInfo': 'Android 7.0+ — 11.8 MB - Si Dijital ah loogu saxeexay',
+./client/src/locales/so.ts:1816:  'install.apkSubtitle': 'Rakibaadaha caadiga ah ee Android — si toos ah u raran',
+./client/src/locales/so.ts:1817:  'install.apkPro1': 'Khibrad buuxda oo Android ah',
+./client/src/locales/so.ts:1818:  'install.apkPro2': 'Ku shaqeeya Google Play Store la\'aanteed',
+./client/src/locales/so.ts:1819:  'install.apkPro3': 'Ku rakib qalab kasta oo Android 7.0+ ah',
+./client/src/locales/so.ts:1820:  'install.apkNote': 'Waxa laga yaabaa inaad u baahato inaad karti u geliso "ku soo shubida ilo aan la garanayn" goobaha qalabkaaga.',
+./client/src/locales/so.ts:1821:  'install.aabTitle': 'AAB - Xidhmada App-ka Android',
+./client/src/locales/so.ts:1822:  'install.aabSubtitle': 'Qaab xidhmo la hagaajiyay ee daabacaada Google Play',
+./client/src/locales/so.ts:1824:  'install.aabPro1': 'Soo dejin yar oo la hagaajiyay qalabkiiba',
+./client/src/locales/so.ts:1825:  'install.aabPro2': 'Qaabka dukaanka Play Google',
+./client/src/locales/so.ts:1826:  'install.aabPro3': 'Waxaa lagu rakibi karaa iyada oo loo marayo bundletool',
+./client/src/locales/so.ts:1828:  'install.aabNote': 'AAB waa qaabka caadiga ah ee Google Play. Si loo raro dhinac, isticmaal bundletool Google si aad uga soo saarto xidhmadan.',
+./client/src/locales/th.ts:1774:  'install.apkInfo': 'Android 7.0+ — 11.8 MB — เซ็นชื่อแบบดิจิทัล',
+./client/src/locales/th.ts:1816:  'install.apkSubtitle': 'ตัวติดตั้ง Android มาตรฐาน — ไซด์โหลดโดยตรง',
+./client/src/locales/th.ts:1817:  'install.apkPro1': 'ประสบการณ์ Android ดั้งเดิมเต็มรูปแบบ',
+./client/src/locales/th.ts:1818:  'install.apkPro2': 'ทำงานโดยไม่มี Google Play Store',
+./client/src/locales/th.ts:1819:  'install.apkPro3': 'ติดตั้งบนอุปกรณ์ Android 7.0+ ใด ๆ',
+./client/src/locales/th.ts:1820:  'install.apkNote': 'คุณอาจต้องเปิดใช้งาน "ติดตั้งจากแหล่งที่ไม่รู้จัก" ในการตั้งค่าอุปกรณ์ของคุณ',
+./client/src/locales/th.ts:1821:  'install.aabTitle': 'AAB — ชุดแอป Android',
+./client/src/locales/th.ts:1822:  'install.aabSubtitle': 'รูปแบบกลุ่มที่ปรับให้เหมาะสมสำหรับการเผยแพร่ใน Google Play',
+./client/src/locales/th.ts:1824:  'install.aabPro1': 'การดาวน์โหลดที่ปรับให้เหมาะสมน้อยลงต่ออุปกรณ์',
+./client/src/locales/th.ts:1825:  'install.aabPro2': 'รูปแบบ Google Play สโตร์',
+./client/src/locales/th.ts:1826:  'install.aabPro3': 'สามารถติดตั้งผ่าน Bundletool',
+./client/src/locales/th.ts:1828:  'install.aabNote': 'AAB เป็นรูปแบบมาตรฐานสำหรับ Google Play หากต้องการไซด์โหลด ให้ใช้ Bundletool ของ Google เพื่อสร้าง APK จากชุดรวมนี้',
+./client/src/locales/af.ts:2131:  'install.apkInfo': 'Android 7.0+ — 11.8 MB — Digitaal onderteken',
+./client/src/locales/af.ts:2173:  'install.apkSubtitle': 'Standaard Android-installeerder — sylaai direk',
+./client/src/locales/af.ts:2174:  'install.apkPro1': 'Volledige inheemse Android-ervaring',
+./client/src/locales/af.ts:2175:  'install.apkPro2': 'Werk sonder Google Play Winkel',
+./client/src/locales/af.ts:2176:  'install.apkPro3': 'Installeer op enige Android 7.0+ toestel',
+./client/src/locales/af.ts:2177:  'install.apkNote': 'Jy sal dalk "Installeer vanaf onbekende bronne" in jou toestelinstellings moet aktiveer.',
+./client/src/locales/af.ts:2178:  'install.aabTitle': 'AAB — Android App Bundle',
+./client/src/locales/af.ts:2179:  'install.aabSubtitle': 'Geoptimaliseerde bondelformaat vir Google Play-publisering',
+./client/src/locales/af.ts:2181:  'install.aabPro1': 'Kleiner geoptimaliseerde aflaai per toestel',
+./client/src/locales/af.ts:2182:  'install.aabPro2': 'Google Play Winkel-formaat',
+./client/src/locales/af.ts:2183:  'install.aabPro3': 'Kan via bundletool geïnstalleer word',
+./client/src/locales/af.ts:2185:  'install.aabNote': 'AAB is die standaardformaat vir Google Play. Gebruik Google se bondelnutsding om APK\'s uit hierdie bondel te genereer om te laai.',
+./client/src/locales/sm.ts:1774:  'install.apkInfo': 'Android 7.0+ — 11.8 MB — Saini Numera',
+./client/src/locales/sm.ts:1816:  'install.apkSubtitle': 'Fa\'atonu Android fa\'apipi\'i - uta sa\'o',
+./client/src/locales/sm.ts:1817:  'install.apkPro1': 'A\'oa\'oga atoatoa i le Android',
+./client/src/locales/sm.ts:1818:  'install.apkPro2': 'E galue e aunoa ma le Google Play Store',
+./client/src/locales/sm.ts:1819:  'install.apkPro3': 'Fa\'apipi\'i i so\'o se masini Android 7.0+',
+./client/src/locales/sm.ts:1820:  'install.apkNote': 'Atonu e te manaʻomia le faʻatagaina o le "Install from unknown sources" i lau masini faʻatulagaina.',
+./client/src/locales/sm.ts:1821:  'install.aabTitle': 'AAB - Android App Bundle',
+./client/src/locales/sm.ts:1822:  'install.aabSubtitle': 'Fa\'atonu fa\'aputuga mo le fa\'asalalauga Google Play',
+./client/src/locales/sm.ts:1824:  'install.aabPro1': 'Laititi sili ona lelei la\'uina i lalo ile masini',
+./client/src/locales/sm.ts:1825:  'install.aabPro2': 'Google Play Faleoloa faatulagaga',
+./client/src/locales/sm.ts:1826:  'install.aabPro3': 'E mafai ona faʻapipiʻi e ala i le bundletool',
+./client/src/locales/sm.ts:1828:  'install.aabNote': 'AAB o le faatulagaga masani mo Google Play. Ina ia fa\'apipi\'i, fa\'aoga le Google\'s bundletool e fa\'atupu ai APK mai lenei fusi.',
+./client/src/locales/sw.ts:1774:  'install.apkInfo': 'Android 7.0+ — MB 11.8 — Imetiwa Sahihi Dijitali',
+./client/src/locales/sw.ts:1816:  'install.apkSubtitle': 'Kisakinishi cha kawaida cha Android - pakia kando moja kwa moja',
+./client/src/locales/sw.ts:1817:  'install.apkPro1': 'Utumiaji kamili wa Android',
+./client/src/locales/sw.ts:1818:  'install.apkPro2': 'Inafanya kazi bila Google Play Store',
+./client/src/locales/sw.ts:1819:  'install.apkPro3': 'Sakinisha kwenye kifaa chochote cha Android 7.0+',
+./client/src/locales/sw.ts:1820:  'install.apkNote': 'Huenda ukahitaji kuwezesha "Sakinisha kutoka kwa vyanzo visivyojulikana" katika mipangilio ya kifaa chako.',
+./client/src/locales/sw.ts:1821:  'install.aabTitle': 'AAB — Android App Bundle',
+./client/src/locales/sw.ts:1822:  'install.aabSubtitle': 'Umbizo la bundle lililoboreshwa la uchapishaji wa Google Play',
+./client/src/locales/sw.ts:1824:  'install.aabPro1': 'Upakuaji mdogo ulioboreshwa kwa kila kifaa',
+./client/src/locales/sw.ts:1825:  'install.aabPro2': 'Umbizo la Duka la Google Play',
+./client/src/locales/sw.ts:1826:  'install.aabPro3': 'Inaweza kusakinishwa kupitia bundletool',
+./client/src/locales/sw.ts:1828:  'install.aabNote': 'AAB ndiyo umbizo la kawaida la Google Play. Ili upakie kando, tumia bundletool ya Google kutengeneza APK kutoka kwa kifungu hiki.',
+./client/src/locales/hy.ts:1774:  'install.apkInfo': 'Android 7.0+ — 11.8 ՄԲ — Թվային ստորագրված',
+./client/src/locales/hy.ts:1816:  'install.apkSubtitle': 'Ստանդարտ Android տեղադրող — անմիջականորեն կողմնակի բեռնվածություն',
+./client/src/locales/hy.ts:1817:  'install.apkPro1': 'Ամբողջական բնիկ Android փորձ',
+./client/src/locales/hy.ts:1818:  'install.apkPro2': 'Աշխատում է առանց Google Play Store-ի',
+./client/src/locales/hy.ts:1819:  'install.apkPro3': 'Տեղադրեք ցանկացած Android 7.0+ սարքի վրա',
+./client/src/locales/hy.ts:1820:  'install.apkNote': 'Հնարավոր է, որ ձեզ անհրաժեշտ լինի միացնել «Տեղադրել անհայտ աղբյուրներից» ձեր սարքի կարգավորումներում:',
+./client/src/locales/hy.ts:1821:  'install.aabTitle': 'AAB - Android հավելվածների փաթեթ',
+./client/src/locales/hy.ts:1822:  'install.aabSubtitle': 'Օպտիմիզացված փաթեթի ձևաչափ Google Play-ի հրապարակման համար',
+./client/src/locales/hy.ts:1824:  'install.aabPro1': 'Ավելի փոքր օպտիմիզացված ներբեռնում մեկ սարքի համար',
+./client/src/locales/hy.ts:1825:  'install.aabPro2': 'Google Play Store-ի ձևաչափը',
+./client/src/locales/hy.ts:1826:  'install.aabPro3': 'Կարող է տեղադրվել bundletool-ի միջոցով',
+./client/src/locales/hy.ts:1828:  'install.aabNote': 'AAB-ը Google Play-ի ստանդարտ ձևաչափն է: Կողմնակի բեռնման համար օգտագործեք Google-ի փաթեթային գործիքը՝ այս փաթեթից APK-ներ ստեղծելու համար:',
+./client/src/locales/fi.ts:1774:  'install.apkInfo': 'Android 7.0+ – 11,8 Mt – digitaalisesti allekirjoitettu',
+./client/src/locales/fi.ts:1816:  'install.apkSubtitle': 'Tavallinen Android-asennusohjelma – lataa suoraan sivulta',
+./client/src/locales/fi.ts:1817:  'install.apkPro1': 'Täysi alkuperäinen Android-kokemus',
+./client/src/locales/fi.ts:1818:  'install.apkPro2': 'Toimii ilman Google Play Kauppaa',
+./client/src/locales/fi.ts:1819:  'install.apkPro3': 'Asenna mihin tahansa Android 7.0+ -laitteeseen',
+./client/src/locales/fi.ts:1820:  'install.apkNote': 'Sinun on ehkä otettava käyttöön "Asenna tuntemattomista lähteistä" laitteen asetuksista.',
+./client/src/locales/fi.ts:1821:  'install.aabTitle': 'AAB – Android App Bundle',
+./client/src/locales/fi.ts:1822:  'install.aabSubtitle': 'Optimoitu nippumuoto Google Play -julkaisua varten',
+./client/src/locales/fi.ts:1824:  'install.aabPro1': 'Pienempi optimoitu lataus laitetta kohti',
+./client/src/locales/fi.ts:1825:  'install.aabPro2': 'Google Play Kaupan muoto',
+./client/src/locales/fi.ts:1826:  'install.aabPro3': 'Voidaan asentaa bundletoolin kautta',
+./client/src/locales/fi.ts:1828:  'install.aabNote': 'AAB on Google Playn vakiomuoto. Sivulataaksesi käytä Googlen pakettityökalua APK:iden luomiseen tästä paketista.',
+./client/src/locales/yo.ts:1774:  'install.apkInfo': 'Android 7.0+ — 11.8 MB — Digitally wole',
+./client/src/locales/yo.ts:1816:  'install.apkSubtitle': 'Insitola Android boṣewa — sideload taara',
+./client/src/locales/yo.ts:1817:  'install.apkPro1': 'Ni kikun abinibi Android iriri',
+./client/src/locales/yo.ts:1818:  'install.apkPro2': 'Ṣiṣẹ lai Google Play itaja',
+./client/src/locales/yo.ts:1819:  'install.apkPro3': 'Fi sori ẹrọ lori ẹrọ Android 7.0+ eyikeyi',
+./client/src/locales/yo.ts:1820:  'install.apkNote': 'O le nilo lati mu "Fi sori ẹrọ lati awọn orisun aimọ" ni awọn eto ẹrọ rẹ.',
+./client/src/locales/yo.ts:1821:  'install.aabTitle': 'AAB - Android App lapapo',
+./client/src/locales/yo.ts:1822:  'install.aabSubtitle': 'Iṣapeye ọna kika fun Google Play titẹjade',
+./client/src/locales/yo.ts:1824:  'install.aabPro1': 'Igbasilẹ iṣapeye kere fun ẹrọ kan',
+./client/src/locales/yo.ts:1825:  'install.aabPro2': 'Google Play itaja kika',
+./client/src/locales/yo.ts:1826:  'install.aabPro3': 'O le fi sii nipasẹ budletool',
+./client/src/locales/yo.ts:1828:  'install.aabNote': 'AAB jẹ ọna kika boṣewa fun Google Play. Lati ṣe ikojọpọ ẹgbẹ, lo budletool Google lati ṣe ipilẹṣẹ apks lati inu opo yii.',
+./client/src/locales/am.ts:2131:  'install.apkInfo': 'አንድሮይድ 7.0+ — 11.8 ሜባ — በዲጂታል የተፈረመ',
+./client/src/locales/am.ts:2173:  'install.apkSubtitle': 'መደበኛ አንድሮይድ ጫኝ - በቀጥታ የጎን ጭነት',
+./client/src/locales/am.ts:2174:  'install.apkPro1': 'ሙሉ ቤተኛ የአንድሮይድ ተሞክሮ',
+./client/src/locales/am.ts:2175:  'install.apkPro2': 'ያለ ጎግል ፕሌይ ስቶር ይሰራል',
+./client/src/locales/am.ts:2176:  'install.apkPro3': 'በማንኛውም አንድሮይድ 7.0+ መሳሪያ ላይ ይጫኑ',
+./client/src/locales/am.ts:2177:  'install.apkNote': 'በመሣሪያዎ ቅንብሮች ውስጥ "ከማይታወቁ ምንጮች ጫን" የሚለውን ማንቃት ሊኖርብዎ ይችላል።',
+./client/src/locales/am.ts:2178:  'install.aabTitle': 'AAB - አንድሮይድ መተግበሪያ ቅርቅብ',
+./client/src/locales/am.ts:2179:  'install.aabSubtitle': 'ለGoogle Play ሕትመት የተሻሻለ የጥቅል ቅርጸት',
+./client/src/locales/am.ts:2181:  'install.aabPro1': 'አነስተኛ የተመቻቸ ማውረድ በአንድ መሣሪያ',
+./client/src/locales/am.ts:2182:  'install.aabPro2': 'Google Play መደብር ቅርጸት',
+./client/src/locales/am.ts:2183:  'install.aabPro3': 'በ bundletool በኩል መጫን ይቻላል',
+./client/src/locales/am.ts:2185:  'install.aabNote': 'AAB የGoogle Play መደበኛ ቅርጸት ነው። ወደ ጎን ለመጫን ከዚህ ቅርቅብ ኤፒኬዎችን ለማመንጨት የGoogle bundletoolን ይጠቀሙ።',
+./client/src/locales/vi.ts:1774:  'install.apkInfo': 'Android 7.0+ — 11,8 MB — Được ký điện tử',
+./client/src/locales/vi.ts:1816:  'install.apkSubtitle': 'Trình cài đặt Android tiêu chuẩn - tải trực tiếp',
+./client/src/locales/vi.ts:1817:  'install.apkPro1': 'Trải nghiệm Android gốc đầy đủ',
+./client/src/locales/vi.ts:1818:  'install.apkPro2': 'Hoạt động mà không cần Cửa hàng Google Play',
+./client/src/locales/vi.ts:1819:  'install.apkPro3': 'Cài đặt trên mọi thiết bị Android 7.0+',
+./client/src/locales/vi.ts:1820:  'install.apkNote': 'Bạn có thể cần bật "Cài đặt từ các nguồn không xác định" trong cài đặt thiết bị của mình.',
+./client/src/locales/vi.ts:1821:  'install.aabTitle': 'AAB — Gói ứng dụng Android',
+./client/src/locales/vi.ts:1822:  'install.aabSubtitle': 'Định dạng gói được tối ưu hóa để xuất bản trên Google Play',
+./client/src/locales/vi.ts:1824:  'install.aabPro1': 'Tải xuống được tối ưu hóa nhỏ hơn cho mỗi thiết bị',
+./client/src/locales/vi.ts:1825:  'install.aabPro2': 'Định dạng Cửa hàng Google Play',
+./client/src/locales/vi.ts:1826:  'install.aabPro3': 'Có thể cài đặt qua Bundletool',
+./client/src/locales/vi.ts:1828:  'install.aabNote': 'AAB là định dạng chuẩn cho Google Play. Để tải qua, hãy sử dụng công cụ bó của Google để tạo APK từ gói này.',
+./client/src/locales/tg.ts:1774:  'install.apkInfo': 'Android 7.0+ — 11,8 МБ — Рақамӣ имзо шудааст',
+./client/src/locales/tg.ts:1816:  'install.apkSubtitle': 'Насбкунандаи стандартии Android - боркунии мустақим',
+./client/src/locales/tg.ts:1817:  'install.apkPro1': 'Таҷрибаи пурраи модарии Android',
+./client/src/locales/tg.ts:1818:  'install.apkPro2': 'Бе Google Play Store кор мекунад',
+./client/src/locales/tg.ts:1819:  'install.apkPro3': 'Дар ҳама гуна дастгоҳи Android 7.0+ насб кунед',
+./client/src/locales/tg.ts:1820:  'install.apkNote': 'Ба шумо лозим меояд, ки дар танзимоти дастгоҳи худ "Насб аз манбаъҳои номаълум" -ро фаъол созед.',
+./client/src/locales/tg.ts:1821:  'install.aabTitle': 'AAB - бастаи барномаҳои Android',
+./client/src/locales/tg.ts:1822:  'install.aabSubtitle': 'Формати бастаи оптимизатсияшуда барои нашри Google Play',
+./client/src/locales/tg.ts:1824:  'install.aabPro1': 'Зеркашии хурдтар оптимизатсияшуда барои як дастгоҳ',
+./client/src/locales/tg.ts:1825:  'install.aabPro2': 'Формати Google Play Store',
+./client/src/locales/tg.ts:1826:  'install.aabPro3': 'Онро тавассути bundletool насб кардан мумкин аст',
+./client/src/locales/tg.ts:1828:  'install.aabNote': 'AAB формати стандартии Google Play мебошад. Барои боркунии канорӣ, асбоби bundletool-и Google-ро барои тавлиди APK аз ин баста истифода баред.',
+./client/src/locales/sr.ts:1774:  'install.apkInfo': 'Андроид 7.0+ — 11,8 МБ — Дигитално потписан',
+./client/src/locales/sr.ts:1816:  'install.apkSubtitle': 'Standard Android installer — sideload directly',
+./client/src/locales/sr.ts:1817:  'install.apkPro1': 'Full native Android experience',
+./client/src/locales/sr.ts:1818:  'install.apkPro2': 'Works without Google Play Store',
+root@srv1118737:/docker/vex# 
