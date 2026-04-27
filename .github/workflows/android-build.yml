@@ -103,6 +103,9 @@ jobs:
           fi
           echo "Keystore verified: $(wc -c < "$KEYSTORE_FILE") bytes"
 
+      - name: Inject Kotlin Gradle plugin classpath into root build.gradle
+        run: node scripts/ci/patch-android-kotlin.mjs
+
       - name: Inject signing config into build.gradle
         run: node scripts/ci/patch-android-signing.mjs
 
