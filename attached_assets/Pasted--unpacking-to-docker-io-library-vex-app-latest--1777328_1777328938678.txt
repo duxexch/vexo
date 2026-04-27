@@ -1,0 +1,172 @@
+=> => unpacking to docker.io/library/vex-app:latest                                                                                                                                                                                                     6.5s
+ => [app] resolving provenance for metadata file                                                                                                                                                                                                         0.0s
+[+] up 7/7
+ ✔ Image vex-app          Built                                                                                                                                                                                                                         152.7s
+ ✔ Image vex-ai-agent     Built                                                                                                                                                                                                                         152.7s
+ ✔ Container vex-redis    Healthy                                                                                                                                                                                                                         3.4s
+ ✔ Container vex-minio    Healthy                                                                                                                                                                                                                         3.4s
+ ✔ Container vex-ai-agent Healthy                                                                                                                                                                                                                         8.4s
+ ✔ Container vex-db       Healthy                                                                                                                                                                                                                         3.4s
+ ✔ Container vex-app      Started                                                                                                                                                                                                                         8.2s
+[OK] vex-app is attached to Traefik network: vex-traefik
+[WARN] traefik-mrnn-traefik-1 is running in host network mode; skipping shared-network attachment check
+[ERROR] Local app health endpoint did not return 200
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[⣯] Pulling schema from database...
+[⣟] Pulling schema from database...
+[⡿] Pulling schema from database...
+[⢿] Pulling schema from database...
+[⣻] Pulling schema from database...
+[⣽] Pulling schema from database...
+[⣷] Pulling schema from database...
+[✓] Pulling schema from database...
+[✓] Changes applied
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.13.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.13.0
+npm notice To update run: npm install -g npm@11.13.0
+npm notice
+  Migrations completed
+
+[4/5] Database seeding...
+Starting seed...
+Seeding currencies...
+Seeded 68 currencies
+Seeding payment methods...
+Payment methods seed complete: inserted 0, skipped 44
+No single-player games to seed (removed).
+Seed completed successfully!
+  Seeding completed
+
+[5/5] Starting VEX Platform...
+========================================
+  Port: 3001
+  Node: v20.20.2
+  PID: 7
+========================================
+
+Starting database seed...
+{"timestamp":"2026-04-27T22:25:54.205Z","level":"INFO","message":"[SEO] Prerender enabled with upstream https://service.prerender.io (host allowlist: <none>)"}
+{"timestamp":"2026-04-27T22:25:54.251Z","level":"INFO","message":"[socket.io] Redis adapter attached"}
+{"timestamp":"2026-04-27T22:25:54.251Z","level":"INFO","message":"[socket.io] mounted at /socket.io (namespaces: /chat, /rtc)"}
+{"timestamp":"2026-04-27T22:25:54.252Z","level":"INFO","message":"[Marketer Scheduler] started (interval: 300s)"}
+{"timestamp":"2026-04-27T22:25:54.252Z","level":"INFO","message":"[Scheduler] Started scheduled config changes processor (interval: 300s)"}
+{"timestamp":"2026-04-27T22:25:54.252Z","level":"INFO","message":"[AI Monitor] Started adaptive AI health monitor (interval: 300s)"}
+{"timestamp":"2026-04-27T22:25:54.253Z","level":"INFO","message":"[P2P Scheduler] Started expired trades processor (interval: 60s)"}
+{"timestamp":"2026-04-27T22:25:54.253Z","level":"INFO","message":"[P2P Dispute Scheduler] Started stale open disputes escalator (interval: 300s, timeout=10m)"}
+{"timestamp":"2026-04-27T22:25:54.253Z","level":"INFO","message":"[Notification Cleanup] Started (interval: 6h)"}
+{"timestamp":"2026-04-27T22:25:54.253Z","level":"INFO","message":"[Sitemap Rebuild] Started (interval: 30m)"}
+{"timestamp":"2026-04-27T22:25:54.253Z","level":"INFO","message":"[Chess Timeout Watchdog] Started (interval: 3000ms)"}
+{"timestamp":"2026-04-27T22:25:54.253Z","level":"INFO","message":"[Domino Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-27T22:25:54.253Z","level":"INFO","message":"[Language Duel Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-27T22:25:54.253Z","level":"INFO","message":"[Baloot Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-27T22:25:54.253Z","level":"INFO","message":"[Tarneeb Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-27T22:25:54.280Z","level":"INFO","message":"10:25:54 PM [storage] Uploads directory is writable: /app/uploads"}
+{"timestamp":"2026-04-27T22:25:54.280Z","level":"INFO","message":"[MinIO] Client initialized → vex-minio:9000"}
+{"timestamp":"2026-04-27T22:25:54.293Z","level":"INFO","message":"[Redis:main] Connected"}
+{"timestamp":"2026-04-27T22:25:54.298Z","level":"INFO","message":"[Redis:pub] Connected"}
+{"timestamp":"2026-04-27T22:25:54.299Z","level":"INFO","message":"[Redis:sub] Connected"}
+{"timestamp":"2026-04-27T22:25:54.314Z","level":"INFO","message":"[MinIO] Bucket \"vex-uploads\" already exists"}
+{"timestamp":"2026-04-27T22:25:54.314Z","level":"INFO","message":"10:25:54 PM [storage] MinIO initialized successfully"}
+{"timestamp":"2026-04-27T22:25:54.318Z","level":"INFO","message":"10:25:54 PM [express] serving on port 3001"}
+{"timestamp":"2026-04-27T22:25:54.318Z","level":"INFO","message":"10:25:54 PM [redis] Redis connected successfully"}
+Games already exist, skipping seed.
+Social platforms already exist, skipping seed.
+{"timestamp":"2026-04-27T22:25:54.389Z","level":"INFO","message":"10:25:54 PM [db] DB enum support_message verified"}
+{"timestamp":"2026-04-27T22:25:54.396Z","level":"INFO","message":"Multiplayer games already seeded"}
+{"timestamp":"2026-04-27T22:25:54.396Z","level":"INFO","message":"10:25:54 PM [db] DB support media columns verified"}
+{"timestamp":"2026-04-27T22:25:54.399Z","level":"INFO","message":"10:25:54 PM [db] DB multiplayer thumbnail column verified"}
+{"timestamp":"2026-04-27T22:25:54.410Z","level":"INFO","message":"10:25:54 PM [db] DB transactions public references verified"}
+{"timestamp":"2026-04-27T22:25:54.413Z","level":"INFO","message":"10:25:54 PM [db] DB chat_messages Telegram columns verified"}
+Multiplayer games already seeded
+Gift catalog already seeded
+Free play settings already seeded
+{"timestamp":"2026-04-27T22:25:54.455Z","level":"INFO","message":"[Security Cleanup] Scheduled hourly cleanup job"}
+{"timestamp":"2026-04-27T22:25:54.456Z","level":"INFO","message":"[CRON] Challenge expiry job started (every 5 min)"}
+{"timestamp":"2026-04-27T22:26:07.694Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777328767673_ca6b5d66dd45","method":"GET","path":"/api/auth/me","statusCode":200,"duration":21,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:26:14.266Z","level":"INFO","message":"[Marketer Scheduler] success run=7acd0d6d-b5ec-4bab-8044-4a22681fdf4b attempt=1 generated=0/0.00 released=0/0.00"}
+{"timestamp":"2026-04-27T22:26:36.678Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777328796657_175d811f42fc","method":"GET","path":"/api/auth/me","statusCode":200,"duration":21,"userId":"f1a8226a-36e4-4a3f-8a72-7b9f3e50312a","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:26:36.751Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777328796721_0bf0dad31175","method":"GET","path":"/api/auth/me","statusCode":200,"duration":30,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:26:36.879Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777328796871_6351a5fd1226","method":"GET","path":"/api/auth/me","statusCode":304,"duration":8,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:26:37.704Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777328797696_5cc31f492d89","method":"GET","path":"/api/auth/me","statusCode":304,"duration":8,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:26:37.925Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777328796730_b689633404b6","method":"GET","path":"/api/auth/me","statusCode":200,"duration":1195,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:26:39.664Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777328799646_331afd5fab19","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":18,"userId":"f1a8226a-36e4-4a3f-8a72-7b9f3e50312a","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:26:39.667Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777328799653_1696c5e1d1ae","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":14,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:26:43.660Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777328803655_988d6b03ee70","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":5,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:26:54.255Z","level":"INFO","message":"[SEO] Sitemap cache invalidated"}
+{"timestamp":"2026-04-27T22:26:54.255Z","level":"INFO","message":"[Sitemap Rebuild] Cleared sitemap and dynamic SEO caches"}
+{"timestamp":"2026-04-27T22:27:36.692Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777328856677_5d7e22a61ff5","method":"GET","path":"/api/auth/me","statusCode":304,"duration":15,"userId":"f1a8226a-36e4-4a3f-8a72-7b9f3e50312a","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:27:36.694Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777328856671_e0e5f890bdc8","method":"GET","path":"/api/auth/me","statusCode":304,"duration":23,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:27:36.749Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777328856706_69672443761a","method":"GET","path":"/api/auth/me","statusCode":304,"duration":42,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:27:37.030Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777328857024_06f8aa6532d2","method":"GET","path":"/api/auth/me","statusCode":304,"duration":6,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:27:39.721Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777328859645_da5b9fa6a081","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":76,"userId":"f1a8226a-36e4-4a3f-8a72-7b9f3e50312a","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:27:39.722Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777328859665_906e3c9469da","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":57,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T22:27:39.722Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777328859663_b56941a8f467","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":59,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+
+== 1. Binary presence & size ==
+  ✓ APK exists at /docker/vex/client/public/downloads/app.apk (12 MB)
+  ✓ APK has valid ZIP magic bytes (PK)
+  ✓ AAB exists at /docker/vex/client/public/downloads/app.aab (12 MB) — admin-only via /api/admin/downloads/aab
+
+== 2. SHA-256 checksums (record these for your audit trail) ==
+  · APK SHA-256: aaaa745f898c6bcfda5e53f7c868c0f1619c22c4b90fb089b1e0a3491390b869
+  · AAB SHA-256: 60e097d2f58c5593adfd89ded1152e0b5446f3a7a3a281f33bacb6e6aa6933fd
+
+== 3. APK signature verification ==
+  ! Neither apksigner nor unzip+openssl available — cannot verify signature
+
+== 4. APK package identity ==
+  ! aapt/aapt2 not installed — cannot read package name from APK
+
+== 5. Public download URL reachability (root cause of "تعذر التنزيل") ==
+  · Probing: https://vixo.click/downloads/app.apk
+  ✓ HTTP 200 OK — public URL is reachable
+  · http_code=200 size=0 content_type=application/vnd.android.package-archive time=0.045041s
+  ✓ Content-Type is correct (application/vnd.android.package-archive)
+  ✓ Content-Disposition header present: content-disposition: attachment; filename="app.apk"
+  ✓ Server is serving 12 MB (matches a real APK)
+  · Probing AAB (must be 404 publicly): https://vixo.click/downloads/app.aab
+  ✓ AAB is correctly blocked publicly (HTTP 404)
+
+== 6. Database integrity (read-only) ==
+  ✗ Database service 'vex-postgres' is not running
+
+== Summary ==
+  Passed:  8
+  Warnings: 2
+  Failed:  1
+
+Failed checks:
+  - Database service 'vex-postgres' is not running
+
+Deployment is NOT fully verified.
+root@srv1118737:/docker/vex# 
