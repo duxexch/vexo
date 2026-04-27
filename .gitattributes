@@ -11,3 +11,11 @@ Dockerfile text eol=lf
 # Git LFS — Android release artefacts
 *.apk filter=lfs diff=lfs merge=lfs -text
 *.aab filter=lfs diff=lfs merge=lfs -text
+
+# Override: the canonical published binaries that the GitHub Actions
+# pipeline writes back to main MUST be stored as raw blobs (not LFS
+# pointers) so that a plain `git pull` on the Hostinger VPS retrieves
+# the actual installable binary — not a 133-byte text pointer that
+# the web server would serve as a broken HTML/text response.
+client/public/downloads/VEX-official-release.apk -filter -diff -merge binary
+client/public/downloads/VEX-official-release.aab -filter -diff -merge binary

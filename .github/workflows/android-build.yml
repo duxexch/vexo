@@ -265,18 +265,52 @@ jobs:
           FULL_VERSION: ${{ steps.version.outputs.full_version }}
         run: |
           # The destination filenames (VEX-official-release.apk / .aab) are
-          # explicitly whitelisted in .gitignore so a normal `git add` works.
-          # Pushing them back to main means the Hostinger VPS can pick up the
-          # newest binaries automatically on `git pull` — no manual upload.
+          # explicitly whitelisted in .gitignore AND have an .gitattributes
+          # override that disables LFS for them specifically — so a normal
+          # `git add` stages them as raw binary blobs (not 133-byte LFS
+          # pointers). This means a plain `git pull` on the Hostinger VPS
+          # retrieves the actual installable APK/AAB, not a text pointer
+          # the web server would serve as a broken HTML response.
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # Defensive: previous builds (before the .gitattributes override)
+          # committed these paths as LFS pointers. Drop the LFS-pointer
+          # entry from the index first so `git add` re-stages the freshly
+          # built file as a raw blob under the new attribute rules.
           if [ "$TARGET" = "apk" ] || [ "$TARGET" = "both" ]; then
+            git rm --cached --ignore-unmatch client/public/downloads/VEX-official-release.apk >/dev/null 2>&1 || true
             git add client/public/downloads/VEX-official-release.apk
           fi
           if [ "$TARGET" = "aab" ] || [ "$TARGET" = "both" ]; then
+            git rm --cached --ignore-unmatch client/public/downloads/VEX-official-release.aab >/dev/null 2>&1 || true
             git add client/public/downloads/VEX-official-release.aab
           fi
+
+          # Sanity check: confirm the staged blob is the real binary, not a
+          # tiny LFS pointer. Pointer files start with the literal string
+          # `version https://git-lfs.github.com/spec/v1` — bail loudly if we
+          # ever see one entering the commit, so the bug never silently
+          # ships a broken artefact again.
+          for STAGED in client/public/downloads/VEX-official-release.apk \
+                        client/public/downloads/VEX-official-release.aab; do
+            if git ls-files --stage --error-unmatch "$STAGED" >/dev/null 2>&1; then
+              SHA=$(git ls-files --stage "$STAGED" | awk '{print $2}')
+              SIZE=$(git cat-file -s "$SHA")
+              FIRST=$(git cat-file blob "$SHA" | head -c 50 || true)
+              echo "Staged $STAGED → blob $SHA ($SIZE bytes)"
+              case "$FIRST" in
+                "version https://git-lfs."*)
+                  echo "::error::Staged $STAGED is still an LFS pointer ($SIZE bytes). Aborting to prevent shipping a broken artefact."
+                  exit 1
+                  ;;
+              esac
+              if [ "$SIZE" -lt 1000000 ]; then
+                echo "::error::Staged $STAGED is suspiciously small ($SIZE bytes < 1 MB). Aborting."
+                exit 1
+              fi
+            fi
+          done
 
           if git diff --cached --quiet; then
             echo "No binary changes to commit (outputs identical to current files)."
