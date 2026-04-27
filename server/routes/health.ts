@@ -2,6 +2,8 @@ import type { Express, Request, Response } from "express";
 import { db, pool } from "../db";
 import { sql } from "drizzle-orm";
 import os from "os";
+import fs from "fs";
+import path from "path";
 import { getDominoMoveErrorTelemetry, getHealthReport } from "../lib/health";
 import { getAllCircuitBreakerStats } from "../lib/circuit-breaker";
 import { redisHealthCheck } from "../lib/redis";
@@ -12,6 +14,44 @@ import { clients } from "../websocket/shared";
 import { getVoiceTelemetrySnapshot } from "../websocket/voice";
 
 const PROCESS_BOOT_AT = new Date().toISOString();
+
+// Read /downloads/manifest.json (written by refresh-android-binaries.sh)
+// to discover the current APK filename. The manifest IS the source of
+// truth — bumping package.json -> version and re-running the refresh
+// script makes /api/health automatically advertise the new download URL
+// without redeploying the server. Falls back to the legacy app.apk
+// path if no manifest is present (first-time deploy / dev environment).
+interface DownloadsManifest {
+  version: string;
+  apkFile: string;
+  apkUrl: string;
+  apkSize?: number;
+  apkSha256?: string;
+}
+
+function readDownloadsManifest(): DownloadsManifest | null {
+  // Same candidate dirs as resolveAdminAabFilePath() in app-settings.ts —
+  // production reads from dist/public/downloads (bind-mounted by docker
+  // compose), dev reads from client/public/downloads.
+  const candidates = [
+    path.resolve(process.cwd(), "dist", "public", "downloads", "manifest.json"),
+    path.resolve(process.cwd(), "client", "public", "downloads", "manifest.json"),
+  ];
+  for (const file of candidates) {
+    try {
+      if (fs.existsSync(file)) {
+        const raw = fs.readFileSync(file, "utf8");
+        const parsed = JSON.parse(raw) as DownloadsManifest;
+        if (parsed && typeof parsed.apkUrl === "string" && parsed.apkUrl.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Ignore parse errors and try the next candidate.
+    }
+  }
+  return null;
+}
 
 interface ReleaseInfo {
   webVersion: string;
@@ -49,21 +89,37 @@ function resolveNativeLatestVersion(webVersion: string): string | null {
 }
 
 function readReleaseInfo(req: Request): ReleaseInfo {
+  // The downloads manifest (if present) wins over package.json so that
+  // refreshing the binaries on the VPS — without redeploying the server
+  // — automatically advertises the new version to in-app update probes.
+  const manifest = readDownloadsManifest();
+
   const webVersion =
     process.env.APP_RELEASE_VERSION ||
     process.env.RELEASE_VERSION ||
+    manifest?.version ||
     process.env.npm_package_version ||
     "dev";
 
   const requestOrigin = resolveRequestOrigin(req);
   const nativeLatestVersion = resolveNativeLatestVersion(webVersion);
 
+  // Prefer the manifest filename (e.g. /downloads/VEX-1.0.0.apk) so the
+  // update URL always matches the freshly-published binary on disk.
+  // Fall back to the legacy /downloads/app.apk path so first-time
+  // deployments and dev environments without a manifest still return
+  // a usable URL to native update probes (the static serve will 404
+  // gracefully if no APK exists yet — never returning null here).
+  const manifestApkUrl = manifest?.apkUrl
+    ? `${requestOrigin}${manifest.apkUrl}`
+    : `${requestOrigin}/downloads/app.apk`;
+
   return {
     webVersion,
     releasedAt: process.env.APP_RELEASED_AT || process.env.BUILD_TIMESTAMP || PROCESS_BOOT_AT,
     nativeLatestVersion,
     nativeUpdateUrlAndroid:
-      process.env.APP_UPDATE_URL_ANDROID || `${requestOrigin}/downloads/app.apk`,
+      process.env.APP_UPDATE_URL_ANDROID || manifestApkUrl,
     nativeUpdateUrlIos: process.env.APP_UPDATE_URL_IOS || null,
     forceNativeUpdate: process.env.APP_FORCE_UPDATE === "true",
   };

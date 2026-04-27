@@ -146,17 +146,39 @@ function resolveAdminAabFilePath(): string | null {
       continue;
     }
 
-    // Preferred: new canonical name produced by android-build.yml.
-    const preferred = path.join(dirPath, "app.aab");
-    if (fs.existsSync(preferred)) {
-      return preferred;
+    // Preferred: read manifest.json (written by refresh-android-binaries.sh)
+    // for the exact current AAB filename. The manifest is the single source
+    // of truth — bumping package.json -> version and re-running the refresh
+    // script makes this resolver return the new VEX-<version>.aab without
+    // any code change.
+    const manifestPath = path.join(dirPath, "manifest.json");
+    if (fs.existsSync(manifestPath)) {
+      try {
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+          aabFile?: string;
+        };
+        if (manifest.aabFile) {
+          const fromManifest = path.join(dirPath, manifest.aabFile);
+          if (fs.existsSync(fromManifest)) {
+            return fromManifest;
+          }
+        }
+      } catch {
+        // Manifest is corrupt — fall through to the discovery fallbacks.
+      }
     }
 
-    // Legacy fallback for installs that still have the old filename on disk
-    // before the first run of the new workflow.
-    const legacy = path.join(dirPath, "VEX-official-release.aab");
-    if (fs.existsSync(legacy)) {
-      return legacy;
+    // Legacy fallback chain — covers installs that haven't run the
+    // refresh script yet (no manifest), and the older `app.aab` /
+    // `VEX-official-release.aab` filenames from previous releases.
+    const legacyCanonical = path.join(dirPath, "app.aab");
+    if (fs.existsSync(legacyCanonical)) {
+      return legacyCanonical;
+    }
+
+    const legacyCi = path.join(dirPath, "VEX-official-release.aab");
+    if (fs.existsSync(legacyCi)) {
+      return legacyCi;
     }
 
     const fallback = fs

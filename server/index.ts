@@ -217,6 +217,14 @@ const cspInlineScriptHashes = isProduction ? computeInlineScriptHashes() : [];
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
         res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
       }
+      // manifest.json drives the APK filename shown in the download UI —
+      // it MUST never be cached, otherwise a freshly-published version
+      // (e.g. VEX-1.0.1.apk) would serve a stale filename for up to an
+      // hour after the operator runs refresh-android-binaries.sh.
+      if (path.basename(filePath) === 'manifest.json') {
+        res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+      }
     }
   }));
 }

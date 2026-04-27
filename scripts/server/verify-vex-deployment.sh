@@ -36,12 +36,25 @@ set -uo pipefail
 
 REPO_ROOT="${REPO_ROOT:-$(pwd)}"
 DOWNLOADS_DIR="${REPO_ROOT}/client/public/downloads"
-APK_NAME="app.apk"
-AAB_NAME="app.aab"
-APK_PATH="${DOWNLOADS_DIR}/${APK_NAME}"
-AAB_PATH="${DOWNLOADS_DIR}/${AAB_NAME}"
+MANIFEST_PATH="${DOWNLOADS_DIR}/manifest.json"
 PUBLIC_URL="${VEX_PUBLIC_URL:-https://vixo.click}"
 EXPECTED_PACKAGE="click.vixo.app"
+
+# Resolve current APK / AAB filenames from manifest.json (the single source
+# of truth written by refresh-android-binaries.sh). Falls back to the legacy
+# fixed names so this script still works on first-time deployments that
+# haven't run the refresh script yet.
+if [ -f "$MANIFEST_PATH" ]; then
+  APK_NAME="$(node -e "console.log(require('${MANIFEST_PATH}').apkFile || 'app.apk')" 2>/dev/null || echo 'app.apk')"
+  AAB_NAME="$(node -e "console.log(require('${MANIFEST_PATH}').aabFile || 'app.aab')" 2>/dev/null || echo 'app.aab')"
+  APP_VERSION="$(node -e "console.log(require('${MANIFEST_PATH}').version || 'unknown')" 2>/dev/null || echo 'unknown')"
+else
+  APK_NAME="app.apk"
+  AAB_NAME="app.aab"
+  APP_VERSION="unknown"
+fi
+APK_PATH="${DOWNLOADS_DIR}/${APK_NAME}"
+AAB_PATH="${DOWNLOADS_DIR}/${AAB_NAME}"
 COMPOSE_FILE="${VEX_COMPOSE_FILE:-${REPO_ROOT}/docker-compose.prod.yml}"
 DB_SERVICE="${VEX_DB_SERVICE:-vex-postgres}"
 DB_USER="${VEX_DB_USER:-vex}"

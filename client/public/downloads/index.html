@@ -269,7 +269,7 @@
       <img src="/icons/vex-gaming-logo-192x192.png" alt="VEX Logo">
       <h1>VEX</h1>
       <p>منصة الألعاب والتداول</p>
-      <span class="version-badge">الإصدار 1.1.0</span>
+      <span class="version-badge" id="version-badge">الإصدار —</span>
     </div>
 
     <div class="cards">
@@ -289,8 +289,11 @@
         <div class="card-icon">📱</div>
         <h2>Android APK</h2>
         <div class="subtitle">تثبيت مباشر على أندرويد</div>
-        <div class="size">~28 MB — Android 7.0+</div>
-        <a href="/downloads/app.apk" class="btn btn-apk" download>تحميل APK</a>
+        <div class="size" id="apk-size">جاري تحميل بيانات الإصدار…</div>
+        <a href="#" class="btn btn-apk" id="apk-download-link" download
+           onclick="if(this.getAttribute('href')==='#'){event.preventDefault();alert('يتم تحضير الملف، حاول بعد قليل.');}">
+          تحميل APK
+        </a>
         <div class="signed-badge">🔒 موقّع بشهادة VEX</div>
       </div>
     </div>
@@ -299,8 +302,8 @@
       <strong>⚠️ قبل تثبيت APK</strong>
       <ol>
         <li>إذا كان لديك نسخة سابقة من VEX على هاتفك، <b>قم بإلغاء تثبيتها أولاً</b> من إعدادات الهاتف ← التطبيقات ← VEX ← إلغاء التثبيت. هذا يحل خطأ "الحزم غير متوافقة".</li>
-        <li>عند ظهور تنبيه "تطبيق ضار" أو "حظر من مصادر غير معروفة"، اضغط <b>"تثبيت على أي حال"</b> أو <b>"السماح من هذا المصدر"</b>. التطبيق موقّع رقمياً بشهادة VEX (SHA-256 موضحة أدناه).</li>
-        <li>تأكد من اكتمال التحميل (~28 MB) قبل فتح الملف. التحميل الناقص يظهر كـ "حزمة تالفة".</li>
+        <li>عند ظهور تنبيه "تطبيق ضار" أو "حظر من مصادر غير معروفة"، اضغط <b>"تثبيت على أي حال"</b> أو <b>"السماح من هذا المصدر"</b>. التطبيق موقّع رقمياً بشهادة VEX (البصمة الكاملة موضحة أدناه).</li>
+        <li>تأكد من اكتمال التحميل (الحجم الكامل موضح بجانب الزر) قبل فتح الملف. التحميل الناقص يظهر كـ "حزمة تالفة".</li>
       </ol>
     </div>
 
@@ -321,12 +324,15 @@
     <div class="footer">
       <p>© 2026 VEX Platform — <a href="/">الرئيسية</a></p>
       <p style="margin-top: 8px;">
-        SHA-256: <code style="font-size:0.7rem;color:#8899a6">2B:94:C7:21:A3:81:27:05:C2:3C:33:7A:01:D2:C9:26</code>
+        SHA-256 APK: <code id="apk-sha256" style="font-size:0.7rem;color:#8899a6">—</code>
       </p>
     </div>
   </div>
 
   <script>
+    // ──────────────────────────────────────────────────────────────────
+    // PWA install prompt (unchanged behaviour).
+    // ──────────────────────────────────────────────────────────────────
     let deferredPrompt;
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
@@ -347,6 +353,52 @@
       document.getElementById('pwa-install-btn').textContent = '✓ التطبيق مثبت';
       document.getElementById('pwa-install-btn').style.background = '#333';
     });
+
+    // ──────────────────────────────────────────────────────────────────
+    // APK manifest — fetch the version + filename + size + SHA-256 from
+    // /downloads/manifest.json (written by scripts/server/refresh-android-binaries.sh)
+    // and update the download card in place. We start with the link href
+    // disabled (#) and the size in a "loading" state so a user who
+    // clicks before the manifest arrives gets a clear "حاول بعد قليل"
+    // message instead of a 404. Cache-busted so a fresh deploy is picked
+    // up without a hard refresh.
+    // ──────────────────────────────────────────────────────────────────
+    (async function loadApkManifest() {
+      const linkEl = document.getElementById('apk-download-link');
+      const sizeEl = document.getElementById('apk-size');
+      const versionEl = document.getElementById('version-badge');
+      const shaEl = document.getElementById('apk-sha256');
+      try {
+        const res = await fetch('/downloads/manifest.json?_=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) throw new Error('manifest http ' + res.status);
+        const m = await res.json();
+        if (!m.apkUrl || !m.apkFile) throw new Error('manifest missing apk fields');
+
+        linkEl.setAttribute('href', m.apkUrl);
+        // The HTML5 `download` attribute, when set to a non-empty string,
+        // forces the browser to save the file under THAT name regardless
+        // of what the URL ends with. Setting it to the manifest filename
+        // guarantees the user sees "VEX-1.0.0.apk" in their downloads
+        // list every time, even if the link was prefetched/cached.
+        linkEl.setAttribute('download', m.apkFile);
+
+        const mb = m.apkSizeMb || Math.round(m.apkSize / 1048576);
+        sizeEl.textContent = '~' + mb + ' MB — Android 7.0+';
+        if (m.version) {
+          versionEl.textContent = 'الإصدار ' + m.version;
+        }
+        if (m.apkSha256) {
+          // Format as colon-separated hex pairs so the user can paste it
+          // straight into a verifier without manual reformatting.
+          shaEl.textContent = m.apkSha256.match(/.{1,2}/g).join(':').toUpperCase();
+        }
+      } catch (err) {
+        // Don't break the page — just leave the user-facing strings in
+        // their loading state. The PWA card still works as a fallback.
+        console.error('[downloads] failed to load manifest:', err);
+        sizeEl.textContent = 'تعذّر قراءة بيانات الإصدار';
+      }
+    })();
   </script>
 </body>
 

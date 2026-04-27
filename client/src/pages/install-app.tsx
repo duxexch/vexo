@@ -24,6 +24,23 @@ interface StoreSettings {
   store_show_apple?: string | null;
 }
 
+// Shape of /downloads/manifest.json — written by
+// scripts/server/refresh-android-binaries.sh whenever a new build is
+// published. The frontend reads this so the user's "Save as" dialog
+// always shows VEX-<version>.apk and never the legacy app.apk name.
+interface ApkManifest {
+  version: string;
+  apkFile: string;
+  apkUrl: string;
+  apkSize: number;
+  apkSizeMb: number;
+  apkSha256: string;
+  aabFile?: string;
+  aabSize?: number;
+  aabSha256?: string;
+  releasedAt?: string;
+}
+
 /* ══════════════════════════════════════════════════════════
    Animated counter hook — counts from 0 → target
    ══════════════════════════════════════════════════════════ */
@@ -83,6 +100,26 @@ export default function InstallAppPage() {
       const res = await fetch("/api/settings/store-links");
       if (!res.ok) return {};
       return res.json();
+    },
+    staleTime: 60000,
+  });
+
+  // Fetch the APK release manifest written by refresh-android-binaries.sh.
+  // The manifest is the single source of truth for the current APK
+  // filename (VEX-<version>.apk), size, and SHA-256 — bumping
+  // package.json -> version and re-running the refresh script updates
+  // every download surface (this page + /downloads/index.html + the
+  // /api/health release info) without any other code edit.
+  const { data: apkManifest } = useQuery<ApkManifest | null>({
+    queryKey: ["/downloads/manifest.json"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/downloads/manifest.json", { cache: "no-store" });
+        if (!res.ok) return null;
+        return (await res.json()) as ApkManifest;
+      } catch {
+        return null;
+      }
     },
     staleTime: 60000,
   });
@@ -453,9 +490,21 @@ export default function InstallAppPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1 px-2 py-1 bg-background/50 rounded-md"><HardDrive className="w-3 h-3" /> 11.8 MB</span>
+                    <span className="flex items-center gap-1 px-2 py-1 bg-background/50 rounded-md">
+                      <HardDrive className="w-3 h-3" />
+                      {apkManifest?.apkSizeMb
+                        ? `${apkManifest.apkSizeMb} MB`
+                        : apkManifest?.apkSize
+                          ? `${Math.round(apkManifest.apkSize / 1048576)} MB`
+                          : '— MB'}
+                    </span>
                     <span className="flex items-center gap-1 px-2 py-1 bg-background/50 rounded-md"><Smartphone className="w-3 h-3" /> Android 7.0+</span>
                     <span className="flex items-center gap-1 px-2 py-1 bg-background/50 rounded-md"><Shield className="w-3 h-3" /> {t('install.signedCert')}</span>
+                    {apkManifest?.version && (
+                      <span className="flex items-center gap-1 px-2 py-1 bg-background/50 rounded-md font-mono">
+                        v{apkManifest.version}
+                      </span>
+                    )}
                   </div>
                   <ul className="space-y-2 text-sm">
                     {['install.apkPro1', 'install.apkPro2', 'install.apkPro3'].map((key) => (
@@ -466,9 +515,17 @@ export default function InstallAppPage() {
                     ))}
                   </ul>
                   <a
-                    href="/downloads/app.apk"
-                    download
-                    className="flex min-h-[44px] items-center justify-center gap-2 w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/20"
+                    href={apkManifest?.apkUrl || '#'}
+                    download={apkManifest?.apkFile || true}
+                    onClick={(e) => {
+                      // Block premature clicks before the manifest finishes
+                      // loading so the user never gets a 404 / empty file.
+                      if (!apkManifest?.apkUrl) {
+                        e.preventDefault();
+                      }
+                    }}
+                    aria-disabled={!apkManifest?.apkUrl}
+                    className={`flex min-h-[44px] items-center justify-center gap-2 w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/20 ${!apkManifest?.apkUrl ? 'opacity-60 pointer-events-none' : ''}`}
                   >
                     <ArrowDown className="w-5 h-5" />
                     {t('install.downloadApk')}

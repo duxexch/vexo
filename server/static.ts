@@ -567,6 +567,13 @@ export function serveStatic(app: Express) {
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
         res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
       }
+      // manifest.json drives the live APK filename / version — never cache
+      // it, otherwise refresh-android-binaries.sh updates won't surface
+      // until the 1h TTL expires.
+      if (path.basename(filePath) === 'manifest.json') {
+        res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+      }
     }
   }));
 

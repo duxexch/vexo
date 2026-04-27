@@ -75,6 +75,12 @@ export async function setupVite(server: Server, app: Express) {
         res.setHeader('Content-Type', 'application/vnd.android.package-archive');
         res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
       }
+      // manifest.json drives the live APK filename — never cache so dev
+      // edits to the manifest reflect on the next page load.
+      if (path.basename(filePath) === 'manifest.json') {
+        res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+      }
     }
   }));
 
