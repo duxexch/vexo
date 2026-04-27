@@ -1,0 +1,194 @@
+root@srv1118737:/docker/vex# 
+root@srv1118737:/docker/vex# cd /docker/vex
+
+echo "=== 1) هل الـ binary لسه موجود على الـ host؟ ==="
+ls -la client/public/downloads/
+
+echo ""
+echo "=== 2) هل الـ container شغال؟ متى آخر restart؟ ==="
+docker compose -f docker-compose.prod.yml ps
+
+echo ""
+echo "=== 3) هل الـ container بيشوف الـ binary من جواه؟ ==="
+docker compose -f docker-compose.prod.yml exec -T app ls -la /app/dist/public/downloads/ 2>&1 | head -20
+
+echo ""
+echo "=== 4) curl من جوا الـ container على نفسه (بايباس Traefik) ==="
+docker compose -f docker-compose.prod.yml exec -T app sh -c "wget -S -O /tmp/test.apk http://localhost:3001/downloads/VEX-1.0.1.apk 2>&1 | head -20 && echo '--- size ---' && ls -la /tmp/test.apk && echo '--- first bytes ---' && head -c 4 /tmp/test.apk | od -c | head -1"
+
+echo ""
+echo "=== 5) آخر logs من vex-app ==="
+docker logs vex-app --tail 30 2>&1 | tail -20
+=== 1) هل الـ binary لسه موجود على الـ host؟ ===
+total 180
+drwxr-xr-x 2 root root   4096 Apr 27 23:24 .
+drwxr-xr-x 9 root root   4096 Apr 25 19:01 ..
+-rw-r--r-- 1 root root  13201 Apr 27 23:08 index.html
+-rw-r--r-- 1 root root    396 Apr 27 23:22 manifest.json
+-rw-r--r-- 1 root root 155081 Apr 23 16:11 vex-play-store-icon.png
+
+=== 2) هل الـ container شغال؟ متى آخر restart؟ ===
+NAME           IMAGE                COMMAND                  SERVICE    CREATED          STATUS                    PORTS
+vex-ai-agent   vex-ai-agent         "/sbin/tini -- node …"   ai-agent   10 minutes ago   Up 10 minutes (healthy)   3100/tcp
+vex-app        vex-app              "/sbin/tini -- ./scr…"   app        10 minutes ago   Up 10 minutes (healthy)   3001/tcp
+vex-db         postgres:15-alpine   "docker-entrypoint.s…"   db         38 minutes ago   Up 38 minutes (healthy)   5432/tcp
+vex-minio      minio/minio:latest   "/usr/bin/docker-ent…"   minio      38 minutes ago   Up 38 minutes (healthy)   9000/tcp
+vex-redis      redis:7-alpine       "docker-entrypoint.s…"   redis      38 minutes ago   Up 38 minutes (healthy)   6379/tcp
+
+=== 3) هل الـ container بيشوف الـ binary من جواه؟ ===
+total 180
+drwxr-xr-x    2 root     root          4096 Apr 27 23:24 .
+drwxr-xr-x   10 vexuser  vexgroup      4096 Apr 27 23:26 ..
+-rw-r--r--    1 root     root         13201 Apr 27 23:08 index.html
+-rw-r--r--    1 root     root           396 Apr 27 23:22 manifest.json
+-rw-r--r--    1 root     root        155081 Apr 23 16:11 vex-play-store-icon.png
+
+=== 4) curl من جوا الـ container على نفسه (بايباس Traefik) ===
+Connecting to localhost:3001 ([::1]:3001)
+wget: can't connect to remote host: Connection refused
+--- size ---
+ls: /tmp/test.apk: No such file or directory
+
+=== 5) آخر logs من vex-app ===
+{"timestamp":"2026-04-27T23:35:36.814Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777332936766_b5858dfcd9c1","method":"GET","path":"/api/auth/me","statusCode":304,"duration":48,"userId":"f1a8226a-36e4-4a3f-8a72-7b9f3e50312a","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:35:36.929Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777332936924_2991cbd752ab","method":"GET","path":"/api/auth/me","statusCode":304,"duration":5,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:35:36.980Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777332936956_924864658c68","method":"GET","path":"/api/auth/me","statusCode":304,"duration":24,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:35:37.110Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777332937105_28739decadd2","method":"GET","path":"/api/auth/me","statusCode":304,"duration":5,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:35:39.858Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777332939849_2fa7f18894ff","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":9,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:35:39.865Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777332939852_4c777b88d860","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":13,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:35:39.865Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777332939852_061d10685244","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":13,"userId":"f1a8226a-36e4-4a3f-8a72-7b9f3e50312a","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:35:39.952Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777332939943_69d0b0e617fc","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":9,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:35:39.954Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777332939947_1141b26f57d4","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":7,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:36:36.723Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777332996717_8e147fe53d97","method":"GET","path":"/api/auth/me","statusCode":304,"duration":6,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:36:36.770Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777332996732_3dadb4b17b96","method":"GET","path":"/api/auth/me","statusCode":304,"duration":37,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:36:36.786Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777332996738_3416dd702113","method":"GET","path":"/api/auth/me","statusCode":304,"duration":47,"userId":"f1a8226a-36e4-4a3f-8a72-7b9f3e50312a","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:36:36.842Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777332996808_2c9009aafcc5","method":"GET","path":"/api/auth/me","statusCode":304,"duration":34,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:36:36.882Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777332996857_148e00170364","method":"GET","path":"/api/auth/me","statusCode":304,"duration":25,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:36:36.964Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777332996959_b82288f871bf","method":"GET","path":"/api/auth/me","statusCode":304,"duration":5,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:36:39.717Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777332999707_f01e6bdb83e0","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":9,"userId":"f1a8226a-36e4-4a3f-8a72-7b9f3e50312a","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:36:39.717Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777332999709_49c9e5b247b3","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":8,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:36:39.725Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777332999718_6a7c041caeb9","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":7,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:36:39.804Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777332999800_5b31669f05cd","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":4,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.104"}}
+{"timestamp":"2026-04-27T23:36:39.812Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777332999807_fac5728b12f0","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":5,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.104"}}
+root@srv1118737:/docker/vex# cd /docker/vex && bash prod-update.sh --auth-mode ssh --repo-url git@github.com:duxexch/vexo.git --repo-dir /docker/vex --branch main
+[INFO] Update auth mode: ssh
+[WARN] Ubuntu 25.10 detected. If updates fail, run: sudo apt install --update rust-coreutils
+[OK] Backup created: /docker/vex/backups/vex_db_20260427_233752.sql.gz
+[INFO] Pre-pulling latest repository state using ssh auth
+remote: Enumerating objects: 10, done.
+remote: Counting objects: 100% (10/10), done.
+remote: Compressing objects: 100% (6/6), done.
+remote: Total 8 (delta 5), reused 5 (delta 2), pack-reused 0 (from 0)
+Unpacking objects: 100% (8/8), 7.28 KiB | 1.46 MiB/s, done.
+From github.com:duxexch/vexo
+ * branch            main       -> FETCH_HEAD
+   6b78b64..56a472e  main       -> origin/main
+Updating 6b78b64..56a472e
+Fast-forward
+ attached_assets/Pasted-root-srv1118737-docker-vex-cd-docker-vex-git-pull-origi_1777332019081.txt |  83 +++++++++++++++++++++++++++++++++
+ attached_assets/VEX-1.0.1_(3)_1777332608382.apk                                                  | 376 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 459 insertions(+)
+ create mode 100644 attached_assets/Pasted-root-srv1118737-docker-vex-cd-docker-vex-git-pull-origi_1777332019081.txt
+ create mode 100644 attached_assets/VEX-1.0.1_(3)_1777332608382.apk
+[INFO] Running strict update flow via prod-auto (pull latest + env reconcile + redeploy)
+[INFO] Git auth mode: ssh
+[WARN] Ubuntu 25.10 detected. If updates fail, run: sudo apt install --update rust-coreutils
+[INFO] Refreshing upstream images for infrastructure services
+[OK] Pulled image: db
+[OK] Pulled image: redis
+[OK] Pulled image: minio
+[OK] Pulled image: livekit
+[OK] Pulled image: coturn
+[INFO] Running strict production deploy
+========================================
+  VEX Production Auto Bootstrap
+  2026-04-27 23:38:00 UTC
+========================================
+[INFO] No mobile release artifacts found to remove
+[INFO] Detected Traefik container: traefik-mrnn-traefik-1 (network mode: host)
+[INFO] Using Traefik network: vex-traefik
+[OK] Persistent host tuning applied: vm.overcommit_memory=1
+[OK] Docker network exists: vex-traefik
+[OK] Runtime directories prepared (logs/uploads/backups)
+[INFO] Starting dependency services
+[+] up 4/4
+ ✔ Container vex-db       Running                                                                                                                                                                                                                         0.0s
+ ✔ Container vex-redis    Running                                                                                                                                                                                                                         0.0s
+ ✔ Container vex-minio    Running                                                                                                                                                                                                                         0.0s
+ ✔ Container vex-ai-agent Running                                                                                                                                                                                                                         0.0s
+[OK] Database role password synchronized for vex_user
+[INFO] Deploying application service
+[+] Building 1.3s (41/41) FINISHED                                                                                                                                                                                                                            
+ => [internal] load local bake definitions                                                                                                                                                                                                               0.0s
+ => => reading from stdin 863B                                                                                                                                                                                                                           0.0s
+ => [app internal] load build definition from Dockerfile                                                                                                                                                                                                 0.0s
+ => => transferring dockerfile: 2.65kB                                                                                                                                                                                                                   0.0s
+ => [ai-agent internal] load build definition from Dockerfile                                                                                                                                                                                            0.0s
+ => => transferring dockerfile: 504B                                                                                                                                                                                                                     0.0s
+ => [ai-agent internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                                                               0.6s
+ => [app internal] load .dockerignore                                                                                                                                                                                                                    0.0s
+ => => transferring context: 1.07kB                                                                                                                                                                                                                      0.0s
+ => [ai-agent internal] load .dockerignore                                                                                                                                                                                                               0.0s
+ => => transferring context: 2B                                                                                                                                                                                                                          0.0s
+ => [ai-agent internal] load build context                                                                                                                                                                                                               0.0s
+ => => transferring context: 128B                                                                                                                                                                                                                        0.0s
+ => [ai-agent 1/7] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293                                                                                                                         0.0s
+ => => resolve docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293                                                                                                                                  0.0s
+ => [app internal] load build context                                                                                                                                                                                                                    0.1s
+ => => transferring context: 55.27kB                                                                                                                                                                                                                     0.1s
+ => CACHED [app 2/7] WORKDIR /app                                                                                                                                                                                                                        0.0s
+ => CACHED [ai-agent 3/7] RUN apk add --no-cache curl tini                                                                                                                                                                                               0.0s
+ => CACHED [ai-agent 4/7] COPY package*.json ./                                                                                                                                                                                                          0.0s
+ => CACHED [ai-agent 5/7] RUN npm install --omit=dev && npm cache clean --force                                                                                                                                                                          0.0s
+ => CACHED [ai-agent 6/7] COPY src ./src                                                                                                                                                                                                                 0.0s
+ => CACHED [ai-agent 7/7] RUN mkdir -p /app/data                                                                                                                                                                                                         0.0s
+ => [ai-agent] exporting to image                                                                                                                                                                                                                        0.1s
+ => => exporting layers                                                                                                                                                                                                                                  0.0s
+ => => exporting manifest sha256:6e58f41b7c905af278e06c3d5502e33a10f1318df1f71d899f30137dec705186                                                                                                                                                        0.0s
+ => => exporting config sha256:93dff4a83b33d6da597007cf786a0ed670d28a82999b0fee6b2afe4db642743d                                                                                                                                                          0.0s
+ => => exporting attestation manifest sha256:86286d8bf70aca0b7d8ed5b6d687dc2b64198c89fc9392d2220371269af80e0a                                                                                                                                            0.0s
+ => => exporting manifest list sha256:4e46d14c5592de524c55629fbe45e9bad81056a5a7962bf18baf14b4c4689a88                                                                                                                                                   0.0s
+ => => naming to docker.io/library/vex-ai-agent:latest                                                                                                                                                                                                   0.0s
+ => => unpacking to docker.io/library/vex-ai-agent:latest                                                                                                                                                                                                0.0s
+ => CACHED [app production  2/14] RUN addgroup -g 1001 -S vexgroup &&     adduser -S -u 1001 -G vexgroup vexuser                                                                                                                                         0.0s
+ => CACHED [app production  3/14] WORKDIR /app                                                                                                                                                                                                           0.0s
+ => CACHED [app production  4/14] RUN apk add --no-cache postgresql-client curl tini                                                                                                                                                                     0.0s
+ => CACHED [app production  5/14] COPY --chown=vexuser:vexgroup package*.json ./                                                                                                                                                                         0.0s
+ => CACHED [app production  6/14] RUN npm install --omit=dev &&     npm install --no-save drizzle-kit tsx &&     npm cache clean --force &&     rm -rf /tmp/* /root/.npm                                                                                 0.0s
+ => CACHED [app builder  3/11] RUN apk add --no-cache python3 make g++                                                                                                                                                                                   0.0s
+ => CACHED [app builder  4/11] COPY package*.json ./                                                                                                                                                                                                     0.0s
+ => CACHED [app builder  5/11] RUN npm install                                                                                                                                                                                                           0.0s
+ => CACHED [app builder  6/11] COPY shared ./shared                                                                                                                                                                                                      0.0s
+ => CACHED [app builder  7/11] COPY drizzle.config.ts tsconfig.json vite.config.ts postcss.config.js tailwind.config.ts ./                                                                                                                               0.0s
+ => CACHED [app builder  8/11] COPY server ./server                                                                                                                                                                                                      0.0s
+ => CACHED [app builder  9/11] COPY client ./client                                                                                                                                                                                                      0.0s
+ => CACHED [app builder 10/11] COPY script ./script                                                                                                                                                                                                      0.0s
+ => CACHED [app builder 11/11] RUN npm run build                                                                                                                                                                                                         0.0s
+ => CACHED [app production  7/14] COPY --from=builder --chown=vexuser:vexgroup /app/dist ./dist                                                                                                                                                          0.0s
+ => CACHED [app production  8/14] COPY --from=builder --chown=vexuser:vexgroup /app/drizzle.config.ts ./                                                                                                                                                 0.0s
+ => CACHED [app production  9/14] COPY --from=builder --chown=vexuser:vexgroup /app/shared ./shared                                                                                                                                                      0.0s
+ => CACHED [app production 10/14] COPY --from=builder --chown=vexuser:vexgroup /app/tsconfig.json ./                                                                                                                                                     0.0s
+ => CACHED [app production 11/14] COPY --from=builder --chown=vexuser:vexgroup /app/server ./server                                                                                                                                                      0.0s
+ => CACHED [app production 12/14] COPY --chown=vexuser:vexgroup scripts ./scripts                                                                                                                                                                        0.0s
+ => CACHED [app production 13/14] RUN chmod +x scripts/*.sh 2>/dev/null || true                                                                                                                                                                          0.0s
+ => CACHED [app production 14/14] RUN mkdir -p logs uploads temp &&     chown -R vexuser:vexgroup logs uploads temp &&     chmod 755 logs uploads temp                                                                                                   0.0s
+ => [app] exporting to image                                                                                                                                                                                                                             0.1s
+ => => exporting layers                                                                                                                                                                                                                                  0.0s
+ => => exporting manifest sha256:6badf89ec278021358986fb8318ed5ec03a004ee10bcd73bf0dc48baccfebd7d                                                                                                                                                        0.0s
+ => => exporting config sha256:2411d2cf36f1e5fa811168aeb66e4467197dbc1941ecd6e54b37458b23583fa9                                                                                                                                                          0.0s
+ => => exporting attestation manifest sha256:8149adf239f0eb465791a87e2cf1445a2c7e8dcc00fd1697b03358a6c428a5e0                                                                                                                                            0.0s
+ => => exporting manifest list sha256:2c1d88354bb745016259714c9dc01677884b0021c4cd772cc41eb7259e732c84                                                                                                                                                   0.0s
+ => => naming to docker.io/library/vex-app:latest                                                                                                                                                                                                        0.0s
+ => => unpacking to docker.io/library/vex-app:latest                                                                                                                                                                                                     0.0s
+ => [ai-agent] resolving provenance for metadata file                                                                                                                                                                                                    0.0s
+ => [app] resolving provenance for metadata file                                                                                                                                                                                                         0.0s
+[+] up 7/7
+ ✔ Image vex-ai-agent     Built                                                                                                                                                                                                                           1.4s
+ ✔ Image vex-app          Built                                                                                                                                                                                                                           1.4s
+ ✔ Container vex-db       Healthy                                                                                                                                                                                                                         1.5s
+ ✔ Container vex-redis    Healthy                                                                                                                                                                                                                         1.5s
+ ✔ Container vex-minio    Healthy                                                                                                                                                                                                                         1.5s
+ ✔ Container vex-ai-agent Healthy                                                                                                                                                                                                                         6.5s
+ ✔ Container vex-app      Started                                                                                                                                                                                                                         6.5s
+[OK] vex-app is attached to Traefik network: vex-traefik
+[WARN] traefik-mrnn-traefik-1 is running in host network mode; skipping shared-network attachment check

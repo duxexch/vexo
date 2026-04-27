@@ -517,6 +517,25 @@ cleanup_mobile_release_artifacts() {
     "VEX-official-release.aab"
   )
 
+  # CRITICAL: also keep whatever filenames the live downloads
+  # manifest.json points at. Without this, every prod-update.sh run
+  # would silently delete the freshly-published VEX-<version>.{apk,aab}
+  # binaries written by scripts/server/refresh-android-binaries.sh,
+  # leaving https://vixo.click/downloads/VEX-1.0.1.apk to fall back
+  # to the SPA index.html (HTTP 200, content-type text/html, ~18 KB)
+  # — which Android can't install. The manifest is the single source
+  # of truth that the install-app UI, /api/health, and the static
+  # /downloads/index.html all read from, so honoring it here keeps
+  # the cleanup logic in sync with what users actually download.
+  local manifest_path="client/public/downloads/manifest.json"
+  if [[ -f "$manifest_path" ]] && command -v node >/dev/null 2>&1; then
+    local manifest_apk manifest_aab
+    manifest_apk="$(node -e "try { console.log(require('./${manifest_path}').apkFile || '') } catch (_) { process.exit(0) }" 2>/dev/null || true)"
+    manifest_aab="$(node -e "try { console.log(require('./${manifest_path}').aabFile || '') } catch (_) { process.exit(0) }" 2>/dev/null || true)"
+    [[ -n "$manifest_apk" ]] && official_files+=("$manifest_apk")
+    [[ -n "$manifest_aab" ]] && official_files+=("$manifest_aab")
+  fi
+
   local removed_count=0
   local dir
   local path
