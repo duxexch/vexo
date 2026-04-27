@@ -63,7 +63,7 @@ function readReleaseInfo(req: Request): ReleaseInfo {
     releasedAt: process.env.APP_RELEASED_AT || process.env.BUILD_TIMESTAMP || PROCESS_BOOT_AT,
     nativeLatestVersion,
     nativeUpdateUrlAndroid:
-      process.env.APP_UPDATE_URL_ANDROID || `${requestOrigin}/downloads/VEX-official-release.apk`,
+      process.env.APP_UPDATE_URL_ANDROID || `${requestOrigin}/downloads/app.apk`,
     nativeUpdateUrlIos: process.env.APP_UPDATE_URL_IOS || null,
     forceNativeUpdate: process.env.APP_FORCE_UPDATE === "true",
   };

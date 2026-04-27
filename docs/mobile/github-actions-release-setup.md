@@ -16,7 +16,7 @@ When enabled, every push to `main` (and any manual run) will:
 6. Build a signed APK and AAB with the fixed identity.
 7. Verify the APK signature SHA-256 again, after the build.
 8. Publish a new GitHub Release named `android-v<UTC-date>-<short-sha>`
-   containing both `VEX-official-release.apk` and `VEX-official-release.aab`.
+   containing both `app.apk` and `app.aab`.
 9. Delete any older releases whose tag starts with `android-v` so that
    only the **latest two** Android releases ever exist on GitHub.
 
@@ -110,14 +110,14 @@ After a successful run:
 - The latest two releases live at
   `https://github.com/<owner>/<repo>/releases`.
 - Each release contains:
-  - `VEX-official-release.apk` (sideload-friendly)
-  - `VEX-official-release.aab` (Play Store upload)
+  - `app.apk` (sideload-friendly)
+  - `app.aab` (Play Store upload)
 - The same files are also attached to the workflow run for 14 days
   under the **Artifacts** section.
 
 ## Pulling the new release onto the Hostinger VPS
 
-The Hostinger deploy serves `client/public/downloads/VEX-official-release.{apk,aab}`
+The Hostinger deploy serves `client/public/downloads/app.{apk,aab}`
 out of the docker image. Two options:
 
 ### Option A — pull from GitHub Releases on the VPS (recommended)
@@ -128,7 +128,7 @@ Run this once after each successful workflow run, on the VPS:
 cd /opt/vex   # or wherever the repo lives
 TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
 gh release download "$TAG" \
-  --pattern 'VEX-official-release.*' \
+  --pattern 'app.{apk,aab}' \
   --dir client/public/downloads/ --clobber
 git status   # should show only the two updated binaries
 # Either commit + redeploy, or rebuild the docker image with the new files baked in:
@@ -145,9 +145,9 @@ commit:
 ```bash
 TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
 gh release download "$TAG" \
-  --pattern 'VEX-official-release.*' \
+  --pattern 'app.{apk,aab}' \
   --dir client/public/downloads/ --clobber
-git add client/public/downloads/VEX-official-release.apk client/public/downloads/VEX-official-release.aab
+git add client/public/downloads/app.apk client/public/downloads/app.aab
 git commit -m "Update Android release artefacts ($TAG)"
 git push
 ```

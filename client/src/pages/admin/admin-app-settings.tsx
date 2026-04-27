@@ -262,7 +262,7 @@ export default function AdminAppSettingsPage() {
       const blob = await res.blob();
       const contentDisposition = res.headers.get("content-disposition") || "";
       const fileNameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?\"?([^\";]+)/i);
-      const rawFileName = fileNameMatch?.[1] || "VEX-official-release.aab";
+      const rawFileName = fileNameMatch?.[1] || "app.aab";
       const fileName = (() => {
         try {
           return decodeURIComponent(rawFileName);

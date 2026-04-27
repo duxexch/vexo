@@ -466,7 +466,7 @@ export default function InstallAppPage() {
                     ))}
                   </ul>
                   <a
-                    href="/downloads/VEX-official-release.apk"
+                    href="/downloads/app.apk"
                     download
                     className="flex min-h-[44px] items-center justify-center gap-2 w-full py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/20"
                   >

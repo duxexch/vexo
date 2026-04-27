@@ -508,6 +508,11 @@ cleanup_mobile_release_artifacts() {
   )
 
   local official_files=(
+    "app.apk"
+    "app.aab"
+    # Legacy filenames kept during the transition to the new
+    # android-build.yml output (app.apk / app.aab). Safe to drop
+    # once the new workflow has run successfully on the server.
     "VEX-official-release.apk"
     "VEX-official-release.aab"
   )

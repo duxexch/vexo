@@ -243,9 +243,9 @@ cd ..
 #    the canonical filenames — install-app.tsx, admin-app-settings.tsx
 #    and server/health.ts all hard-code these names.
 cp android/app/build/outputs/bundle/release/app-release.aab \
-   client/public/downloads/VEX-official-release.aab
+   client/public/downloads/app.aab
 cp android/app/build/outputs/apk/release/app-release.apk \
-   client/public/downloads/VEX-official-release.apk
+   client/public/downloads/app.apk
 ```
 
 ### 6.3. Verify the signature
@@ -255,7 +255,7 @@ the SHA-1 fingerprint must match the value registered with Google Play
 and any social login OAuth clients:
 
 ```bash
-keytool -printcert -jarfile client/public/downloads/VEX-official-release.apk \
+keytool -printcert -jarfile client/public/downloads/app.apk \
   | grep 'SHA1:'
 # expect: SHA1: 7F:8D:A0:CB:12:42:1A:7F:90:6D:43:2E:6C:C2:96:1A:DD:AE:C8:B8
 ```
@@ -267,8 +267,8 @@ on every user's device.
 ### 6.4. Ship to production
 
 ```bash
-git add client/public/downloads/VEX-official-release.aab \
-        client/public/downloads/VEX-official-release.apk
+git add client/public/downloads/app.aab \
+        client/public/downloads/app.apk
 git commit -m "chore(android): rebuild signed AAB+APK"
 git push origin main
 

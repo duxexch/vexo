@@ -146,9 +146,17 @@ function resolveAdminAabFilePath(): string | null {
       continue;
     }
 
-    const preferred = path.join(dirPath, "VEX-official-release.aab");
+    // Preferred: new canonical name produced by android-build.yml.
+    const preferred = path.join(dirPath, "app.aab");
     if (fs.existsSync(preferred)) {
       return preferred;
+    }
+
+    // Legacy fallback for installs that still have the old filename on disk
+    // before the first run of the new workflow.
+    const legacy = path.join(dirPath, "VEX-official-release.aab");
+    if (fs.existsSync(legacy)) {
+      return legacy;
     }
 
     const fallback = fs
