@@ -236,6 +236,30 @@
     .show {
       display: inline-block !important;
     }
+
+    .install-tip {
+      background: rgba(255, 193, 7, 0.08);
+      border: 1px solid rgba(255, 193, 7, 0.25);
+      color: #FFD54F;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin: 18px 0 6px;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      text-align: right;
+    }
+
+    .install-tip strong {
+      color: #FFB300;
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.95rem;
+    }
+
+    .install-tip ol {
+      margin: 6px 0 0;
+      padding-right: 20px;
+    }
   </style>
 </head>
 
@@ -265,10 +289,19 @@
         <div class="card-icon">📱</div>
         <h2>Android APK</h2>
         <div class="subtitle">تثبيت مباشر على أندرويد</div>
-        <div class="size">27.9 MB — Android 7.0+</div>
+        <div class="size">~28 MB — Android 7.0+</div>
         <a href="/downloads/app.apk" class="btn btn-apk" download>تحميل APK</a>
         <div class="signed-badge">🔒 موقّع بشهادة VEX</div>
       </div>
+    </div>
+
+    <div class="install-tip">
+      <strong>⚠️ قبل تثبيت APK</strong>
+      <ol>
+        <li>إذا كان لديك نسخة سابقة من VEX على هاتفك، <b>قم بإلغاء تثبيتها أولاً</b> من إعدادات الهاتف ← التطبيقات ← VEX ← إلغاء التثبيت. هذا يحل خطأ "الحزم غير متوافقة".</li>
+        <li>عند ظهور تنبيه "تطبيق ضار" أو "حظر من مصادر غير معروفة"، اضغط <b>"تثبيت على أي حال"</b> أو <b>"السماح من هذا المصدر"</b>. التطبيق موقّع رقمياً بشهادة VEX (SHA-256 موضحة أدناه).</li>
+        <li>تأكد من اكتمال التحميل (~28 MB) قبل فتح الملف. التحميل الناقص يظهر كـ "حزمة تالفة".</li>
+      </ol>
     </div>
 
     <div class="features">

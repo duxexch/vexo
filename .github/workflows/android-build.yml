@@ -64,6 +64,29 @@ jobs:
       - name: Build web bundle
         run: npm run build
 
+      - name: Verify web bundle is complete (size sanity check)
+        # The Capacitor APK embeds the entire dist/public/ tree under
+        # android/app/src/main/assets/public/. A truncated build would
+        # silently produce a tiny APK (~12 MB) that loads a broken WebView
+        # at runtime — exactly the "size keeps changing" symptom the user
+        # reported. We refuse to proceed unless dist/public/index.html
+        # exists AND the total dist/public/ tree is at least 3 MB, which
+        # is the floor the real VEX bundle has hit since v1.0.0.
+        run: |
+          if [ ! -f "dist/public/index.html" ]; then
+            echo "::error::dist/public/index.html missing — npm run build did not produce a web bundle."
+            exit 1
+          fi
+          BYTES=$(du -sb dist/public | awk '{print $1}')
+          MIN_BYTES=$((3 * 1024 * 1024))
+          MB=$((BYTES / 1024 / 1024))
+          if [ "$BYTES" -lt "$MIN_BYTES" ]; then
+            echo "::error::dist/public is only ${MB} MB (< 3 MB minimum). The web bundle is incomplete and the resulting APK would not work offline."
+            echo "::error::Investigate vite.config.ts and the build step before re-running."
+            exit 1
+          fi
+          echo "Web bundle OK: dist/public is ${MB} MB."
+
       - name: Add Capacitor Android platform
         run: |
           if [ ! -d "android" ]; then
@@ -72,6 +95,15 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync android
+
+      - name: Generate Android launcher icons + splash from VEX logo
+        # Replaces Capacitor's default white-square placeholder icons with
+        # the real VEX brand mark across every density (mdpi → xxxhdpi),
+        # plus the Android 8+ adaptive icon foreground/background and the
+        # SplashScreen plugin's drawable/splash.png. Without this step the
+        # installed APK shows a blank white icon on the home screen and
+        # during installation, which is what the user reported.
+        run: node scripts/ci/generate-android-assets.mjs
 
       - name: Decode keystore from secret (safe printf method)
         env:
