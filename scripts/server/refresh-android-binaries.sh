@@ -105,5 +105,9 @@ for legacy in VEX-official-release.apk VEX-official-release.aab; do
 done
 
 log "Done. Binaries refreshed in ${DEST_DIR}/"
-log "  ${APK_DEST_NAME}: $(stat -c%s "${DEST_DIR}/${APK_DEST_NAME}" 2>/dev/null || stat -f%z "${DEST_DIR}/${APK_DEST_NAME}") bytes"
-log "  ${AAB_DEST_NAME}: $(stat -c%s "${DEST_DIR}/${AAB_DEST_NAME}" 2>/dev/null || stat -f%z "${DEST_DIR}/${AAB_DEST_NAME}") bytes"
+log "  ${APK_DEST_NAME}: $(stat -c%s "${DEST_DIR}/${APK_DEST_NAME}" 2>/dev/null || stat -f%z "${DEST_DIR}/${APK_DEST_NAME}") bytes  → public download (vixo.click/downloads/app.apk)"
+log "  ${AAB_DEST_NAME}: $(stat -c%s "${DEST_DIR}/${AAB_DEST_NAME}" 2>/dev/null || stat -f%z "${DEST_DIR}/${AAB_DEST_NAME}") bytes  → admin download (/api/admin/downloads/aab)"
+log ""
+log "The vex-app container reads these via the read-only volume mount"
+log "(./client/public/downloads:/app/dist/public/downloads:ro), so the new"
+log "binaries are live immediately — no container restart required."

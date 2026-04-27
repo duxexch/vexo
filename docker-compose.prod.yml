@@ -308,6 +308,14 @@ services:
     volumes:
       - app_logs:/app/logs
       - app_uploads:/app/uploads
+      # Mount the host's downloads directory (where refresh-android-binaries.sh
+      # writes app.apk / app.aab pulled from the GitHub Releases CDN) on top
+      # of the container's static-served downloads dir. Read-only so nothing
+      # inside the container can corrupt the published binaries. Without this
+      # mount, the container would only ever serve whatever was baked into
+      # the image at build time — which is empty for APK/AAB since we no
+      # longer commit them to git.
+      - ./client/public/downloads:/app/dist/public/downloads:ro
     networks:
       - vex-internal
       - vex-traefik
