@@ -103,6 +103,32 @@ jobs:
           fi
           echo "Keystore verified: $(wc -c < "$KEYSTORE_FILE") bytes"
 
+      - name: Verify KEY_ALIAS matches an alias inside the keystore
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          KEYSTORE_FILE="android/keystore/vex-release-official.jks"
+          echo "=== Aliases present inside the keystore ==="
+          # Print each alias on its own line. The alias names themselves
+          # are NOT GitHub secrets, so they are not masked — this is what
+          # lets us tell the user what to put in KEY_ALIAS.
+          keytool -list -keystore "$KEYSTORE_FILE" \
+                  -storepass "$KEYSTORE_PASSWORD" 2>/dev/null \
+            | awk -F',' '/PrivateKeyEntry|trustedCertEntry/ { print "  - " $1 }'
+          echo ""
+          # The KEY_ALIAS value itself is masked in the log, but the
+          # success/failure message tells us whether it matched.
+          if keytool -list -keystore "$KEYSTORE_FILE" \
+                     -storepass "$KEYSTORE_PASSWORD" \
+                     -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+            echo "OK: the value of the KEY_ALIAS secret matches an alias inside the keystore."
+          else
+            echo "::error::The value of the KEY_ALIAS secret does NOT match any alias inside the keystore."
+            echo "::error::Update the KEY_ALIAS secret in GitHub Settings → Secrets and variables → Actions to one of the names listed above."
+            exit 1
+          fi
+
       - name: Inject Kotlin Gradle plugin classpath into root build.gradle
         run: node scripts/ci/patch-android-kotlin.mjs
 
