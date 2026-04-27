@@ -1,0 +1,61 @@
+root@srv1118737:/docker/vex# cd /docker/vex
+git pull origin main
+bash scripts/server/update-all.sh --skip-pull --skip-apk --skip-deploy
+# ↑ يشغل الـ verify بس عشان يتأكد فحص DB ينجح
+From github.com:duxexch/vexo
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+
+━━━ Pre-flight checks ━━━
+[OK]    All required commands available
+
+━━━ Step 1/4: git pull (skipped) ━━━
+
+━━━ Step 2/4: refresh Android binaries (skipped) ━━━
+
+━━━ Step 3/4: docker-compose redeploy (skipped) ━━━
+
+━━━ Step 4/4: post-deploy verification ━━━
+
+== 1. Binary presence & size ==
+  ✓ APK exists at /docker/vex/client/public/downloads/VEX-1.0.1.apk (14 MB)
+  ✓ APK has valid ZIP magic bytes (PK)
+  ✓ AAB exists at /docker/vex/client/public/downloads/VEX-1.0.1.aab (13 MB) — admin-only via /api/admin/downloads/aab
+
+== 2. SHA-256 checksums (record these for your audit trail) ==
+  · APK SHA-256: 57ac076fcffff18cda3484f920564b9fe447a5a8aab0eb4dd29b0cffc1323ba1
+  · AAB SHA-256: fb7598057cd9870b5d7a5bba25419da6d877290c212185e34e344ca80e458138
+
+== 3. APK signature verification ==
+  ! Neither apksigner nor unzip+openssl available — cannot verify signature
+
+== 4. APK package identity ==
+  ! aapt/aapt2 not installed — cannot read package name from APK
+
+== 5. Public download URL reachability (root cause of "تعذر التنزيل") ==
+  · Probing: https://vixo.click/downloads/VEX-1.0.1.apk
+  ✓ HTTP 200 OK — public URL is reachable
+  · http_code=200 size=0 content_type=application/vnd.android.package-archive time=0.018338s
+  ✓ Content-Type is correct (application/vnd.android.package-archive)
+  ✓ Content-Disposition header present: content-disposition: attachment; filename="VEX-1.0.1.apk"
+  ✓ Server is serving 14 MB (matches a real APK)
+  · Probing AAB (must be 404 publicly): https://vixo.click/downloads/VEX-1.0.1.aab
+  ✓ AAB is correctly blocked publicly (HTTP 404)
+
+== 6. Database integrity (read-only) ==
+  ✗ Database service 'vex-postgres' is not running
+
+== Summary ==
+  Passed:  8
+  Warnings: 2
+  Failed:  1
+
+Failed checks:
+  - Database service 'vex-postgres' is not running
+
+Deployment is NOT fully verified.
+[ERROR] update-all.sh aborted on line 242 (exit code 1)
+[ERROR] Re-run with the --skip-* flag for whichever step succeeded
+[ERROR] to avoid redoing work, e.g.:
+[ERROR]   bash scripts/server/update-all.sh --skip-pull --skip-apk
+root@srv1118737:/docker/vex# 
