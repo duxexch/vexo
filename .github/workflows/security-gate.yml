@@ -2,12 +2,32 @@ name: Security Gate
 
 on:
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "client/public/downloads/**"
+      - "attached_assets/**"
+      - ".local/**"
+      - ".github/workflows/android-build.yml"
+      - ".github/workflows/release-android.yml"
   push:
     branches:
       - main
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "client/public/downloads/**"
+      - "attached_assets/**"
+      - ".local/**"
+      - ".github/workflows/android-build.yml"
+      - ".github/workflows/release-android.yml"
 
 permissions:
   contents: read
+
+concurrency:
+  group: security-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   security-gate:
