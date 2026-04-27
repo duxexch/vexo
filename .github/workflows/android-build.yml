@@ -234,27 +234,11 @@ jobs:
             echo "AAB staged: $(wc -c < "$AAB_DST") bytes"
           fi
 
-      - name: Commit and push updated binaries
-        env:
-          TARGET: ${{ github.event.inputs.target }}
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Stage explicit files only — never wildcards.
-          if [ "$TARGET" = "apk" ] || [ "$TARGET" = "both" ]; then
-            git add client/public/downloads/app.apk
-          fi
-          if [ "$TARGET" = "aab" ] || [ "$TARGET" = "both" ]; then
-            git add client/public/downloads/app.aab
-          fi
-
-          if git diff --cached --quiet; then
-            echo "No binary changes to commit (outputs identical to current files)."
-          else
-            git commit -m "chore(android): update signed ${TARGET} build [skip ci]"
-            git push origin HEAD:${{ github.ref_name }}
-          fi
+      # NOTE: We deliberately do NOT commit the built APK/AAB back into the
+      # repository. Both files live under client/public/downloads/ which is
+      # listed in .gitignore (large signed binaries don't belong in git
+      # history). Distribution happens via the GitHub Release step below
+      # and via the workflow run artifacts step at the end of the job.
 
       - name: Create or update GitHub Release
         env:
