@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 root@srv1118737:/docker/vex# cd /docker/vex
 
 # ════════════════════════════════════════
@@ -117,4 +118,125 @@ ccacc12bad6a   minio/minio:latest   "/usr/bin/docker-ent…"   10 minutes ago   
 === اختبار الموقع ===
 curl: (22) The requested URL returned error: 404
 ❌ لسه فيه مشكلة
+=======
+root@srv1118737:/docker/vex# cd /docker/vex
+
+# ════════════════════════════════════════
+# الخطوة 1: شوف بالظبط مين ماسك كل منفذ
+# ════════════════════════════════════════
+echo "=== كل الحاويات (شغّالة + متوقفة) ==="
+docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+echo ""
+echo "=== مين ماسك المنافذ على نظام التشغيل ==="
+sudo lsof -nP -iTCP:80 -iTCP:443 -iTCP:9010 -iTCP:9011 -sTCP:LISTEN 2>/dev/null
+=== كل الحاويات (شغّالة + متوقفة) ===
+NAMES          STATUS                    PORTS
+vex-minio      Up 9 minutes (healthy)    9000/tcp
+vex-traefik    Created                   
+vex-db         Up 17 minutes (healthy)   5432/tcp
+vex-ai-agent   Up 17 minutes (healthy)   3100/tcp
+vex-redis      Up 17 minutes (healthy)   6379/tcp
+
+=== مين ماسك المنافذ على نظام التشغيل ===
+COMMAND    PID USER FD   TYPE DEVICE SIZE/OFF NODE NAME
+docker-pr 4635 root 8u  IPv4  27840      0t0  TCP *:80 (LISTEN)
+docker-pr 4639 root 8u  IPv6  27841      0t0  TCP *:80 (LISTEN)
+docker-pr 4669 root 8u  IPv4  27925      0t0  TCP *:443 (LISTEN)
+docker-pr 4676 root 8u  IPv6  27926      0t0  TCP *:443 (LISTEN)
+docker-pr 4805 root 8u  IPv4  28299      0t0  TCP 127.0.0.1:9010 (LISTEN)
+docker-pr 4824 root 8u  IPv4  28416      0t0  TCP 127.0.0.1:9011 (LISTEN)
+root@srv1118737:/docker/vex# # ════════════════════════════════════════
+# الخطوة 2: تنظيف عدواني - يقتل أي حاوية ماسكة المنافذ
+# ════════════════════════════════════════
+
+# امسح كل حاوية ماسكة منفذ 80, 443, 9010, 9011 (شغّالة أو متوقفة)
+for port in 80 443 9010 9011; do
+  containers=$(docker ps -aq --filter "publish=${port}")
+  if [ -n "$containers" ]; then
+    echo "🔥 امسح الحاويات الماسكة للمنفذ ${port}: $containers"
+    docker rm -f $containers
+  fi
+done
+
+# امسح أي Traefik قديم بأي اسم
+docker ps -a --format '{{.Names}}' | grep -iE 'traefik|minio' | xargs -r docker rm -f
+
+# تأكد إن المنافذ بقت فاضية تماماً
+echo ""
+echo "=== المنافذ بعد التنظيف ==="
+ss -tlnp 2>/dev/null | grep -E ':(80|443|9010|9011) ' && echo "❌ لسه فيه شي ماسك المنفذ!" || echo "✅ كل المنافذ فاضية"
+
+# ════════════════════════════════════════
+# الخطوة 3: اسحب التعديلات الجديدة من GitHub
+# ════════════════════════════════════════
+git pull origin main
+echo ""
+echo "=== آخر 3 commits (لازم تشوف 'Remove unnecessary host port mappings') ==="
+git log --oneline -3
+
+# ════════════════════════════════════════
+# الخطوة 4: شغّل الـ VEX stack
+# ════════════════════════════════════════
+bash prod-update.sh \
+  --auth-mode ssh \
+  --repo-url git@github.com:duxexch/exchexch/vexo.git \
+  --repo-dir /docker/vex \
+  --branch main
+
+# ════════════════════════════════════════
+# الخطوة 5: شغّل Traefik
+# ════════════════════════════════════════
+docker compose -f deploy/docker-compose.traefik.yml --env-file .env up -d
+
+# ════════════════════════════════════════
+# الخطوة 6: تحقق نهائي
+# ════════════════════════════════════════
+sleep 30
+echo ""
+echo "=== الحاويات الشغّالة ==="
+docker ps --filter name=vex-
+echo ""
+curl -fsS https://vixo.click/api/health && echo "✅ vixo.click شغّال!" || echo "❌ لسه فيه مشكلة"
+vex-traefik
+Error response from daemon: cannot remove container "vex-minio": could not kill container: permission denied
+
+=== المنافذ بعد التنظيف ===
+LISTEN 0      4096       127.0.0.1:9010      0.0.0.0:*    users:(("docker-proxy",pid=4805,fd=8))               
+LISTEN 0      4096       127.0.0.1:9011      0.0.0.0:*    users:(("docker-proxy",pid=4824,fd=8))               
+LISTEN 0      4096         0.0.0.0:443       0.0.0.0:*    users:(("docker-proxy",pid=4669,fd=8))               
+LISTEN 0      4096         0.0.0.0:80        0.0.0.0:*    users:(("docker-proxy",pid=4635,fd=8))               
+LISTEN 0      4096            [::]:443          [::]:*    users:(("docker-proxy",pid=4676,fd=8))               
+LISTEN 0      4096            [::]:80           [::]:*    users:(("docker-proxy",pid=4639,fd=8))               
+❌ لسه فيه شي ماسك المنفذ!
+From github.com:duxexch/vexo
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+
+=== آخر 3 commits (لازم تشوف 'Remove unnecessary host port mappings') ===
+7323b1a (HEAD -> main, origin/main, origin/HEAD) Update deployment instructions and fix port binding issues
+aab4127 Remove unnecessary host port mappings for MinIO service
+2419d15 Update production deployment and Traefik configuration for improved reliability
+[INFO] Update auth mode: ssh
+[WARN] Ubuntu 25.10 detected. If updates fail, run: sudo apt install --update rust-coreutils
+[OK] Backup created: /docker/vex/backups/vex_db_20260423_145059.sql.gz
+[INFO] Pre-pulling latest repository state using ssh auth
+fatal: remote error: 
+ duxexch/exchexch/vexo is not a valid repository name
+Visit https://support.github.com/ for help
+[+] up 0/1
+ ⠸ Container vex-traefik Starting                                                                                                                                                                                               0.4s
+Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint vex-traefik (4f991d29c61388dedafd861993765cf68ba2abbf7c7a1adf62383f70838ce470): failed to bind host port for 0.0.0.0:80:172.17.0.2:80/tcp: address already in use
+
+=== الحاويات الشغّالة ===
+CONTAINER ID   IMAGE                COMMAND                  CREATED          STATUS                    PORTS      NAMES
+ccacc12bad6a   minio/minio:latest   "/usr/bin/docker-ent…"   10 minutes ago   Up 10 minutes (healthy)   9000/tcp   vex-minio
+5cc4e10858e1   postgres:15-alpine   "docker-entrypoint.s"   5 hours ago      Up 18 minutes (healthy)   5432/tcp   vex-db
+785a0cba72b1   928bb3f0a314         "/sbin/tini -- node …"   5 hours ago      Up 18 minutes (healthy)   3100/tcp   vex-ai-agent
+4c9cdfdbef30   redis:7-alpine       "docker-entrypoint.s"   5 hours ago      Up 18 minutes (healthy)   6379/tcp   vex-redis
+
+=== اختبار الموقع ===
+curl: (22) The requested URL returned error: 404
+❌ لسه فيه مشكلة
+>>>>>>> 368b268 (تحديث تلقائي للنسخ الموقعة APK/AAB)
 root@srv1118737:/docker/vex# 

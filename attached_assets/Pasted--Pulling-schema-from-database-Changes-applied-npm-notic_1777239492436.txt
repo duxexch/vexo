@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 [✓] Pulling schema from database...
 [✓] Changes applied
 npm notice
@@ -105,4 +106,113 @@ Free play settings already seeded
 {"timestamp":"2026-04-26T21:37:02.118Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239421777_fced411296f7","method":"GET","path":"/api/auth/me","statusCode":200,"duration":341,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
 {"timestamp":"2026-04-26T21:37:02.120Z","level":"INFO","message":"GET /api/users/followers","context":{"requestId":"req_1777239421788_692877d027fb","method":"GET","path":"/api/users/followers","statusCode":200,"duration":332,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
 {"timestamp":"2026-04-26T21:37:02.175Z","level":"INFO","message":"GET /api/users/friends","context":{"requestId":"req_1777239421801_505a0d7d9f43","method":"GET","path":"/api/users/friends","statusCode":200,"duration":374,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
+=======
+[✓] Pulling schema from database...
+[✓] Changes applied
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.13.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.13.0
+npm notice To update run: npm install -g npm@11.13.0
+npm notice
+  Migrations completed
+
+[4/5] Database seeding...
+Starting seed...
+Seeding currencies...
+Seeded 68 currencies
+Seeding payment methods...
+Payment methods seed complete: inserted 0, skipped 44
+No single-player games to seed (removed).
+Seed completed successfully!
+  Seeding completed
+
+[5/5] Starting VEX Platform...
+========================================
+  Port: 3001
+  Node: v20.20.2
+  PID: 7
+========================================
+
+Starting database seed...
+{"timestamp":"2026-04-26T21:34:58.769Z","level":"INFO","message":"[SEO] Prerender enabled with upstream https://service.prerender.io (host allowlist: <none>)"}
+{"timestamp":"2026-04-26T21:34:58.821Z","level":"INFO","message":"[socket.io] Redis adapter attached"}
+{"timestamp":"2026-04-26T21:34:58.821Z","level":"INFO","message":"[socket.io] mounted at /socket.io (namespaces: /chat, /rtc)"}
+{"timestamp":"2026-04-26T21:34:58.822Z","level":"INFO","message":"[Marketer Scheduler] started (interval: 300s)"}
+{"timestamp":"2026-04-26T21:34:58.822Z","level":"INFO","message":"[Scheduler] Started scheduled config changes processor (interval: 300s)"}
+{"timestamp":"2026-04-26T21:34:58.822Z","level":"INFO","message":"[AI Monitor] Started adaptive AI health monitor (interval: 300s)"}
+{"timestamp":"2026-04-26T21:34:58.823Z","level":"INFO","message":"[P2P Scheduler] Started expired trades processor (interval: 60s)"}
+{"timestamp":"2026-04-26T21:34:58.823Z","level":"INFO","message":"[P2P Dispute Scheduler] Started stale open disputes escalator (interval: 300s, timeout=10m)"}
+{"timestamp":"2026-04-26T21:34:58.823Z","level":"INFO","message":"[Notification Cleanup] Started (interval: 6h)"}
+{"timestamp":"2026-04-26T21:34:58.823Z","level":"INFO","message":"[Sitemap Rebuild] Started (interval: 30m)"}
+{"timestamp":"2026-04-26T21:34:58.823Z","level":"INFO","message":"[Chess Timeout Watchdog] Started (interval: 3000ms)"}
+{"timestamp":"2026-04-26T21:34:58.823Z","level":"INFO","message":"[Domino Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-26T21:34:58.824Z","level":"INFO","message":"[Language Duel Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-26T21:34:58.824Z","level":"INFO","message":"[Baloot Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-26T21:34:58.824Z","level":"INFO","message":"[Tarneeb Timeout Watchdog] Started (interval: 1000ms, turn=30000ms)"}
+{"timestamp":"2026-04-26T21:34:58.866Z","level":"INFO","message":"9:34:58 PM [storage] Uploads directory is writable: /app/uploads"}
+{"timestamp":"2026-04-26T21:34:58.867Z","level":"INFO","message":"[MinIO] Client initialized → vex-minio:9000"}
+{"timestamp":"2026-04-26T21:34:58.880Z","level":"INFO","message":"[Redis:main] Connected"}
+{"timestamp":"2026-04-26T21:34:58.887Z","level":"INFO","message":"[Redis:pub] Connected"}
+{"timestamp":"2026-04-26T21:34:58.895Z","level":"INFO","message":"[Redis:sub] Connected"}
+{"timestamp":"2026-04-26T21:34:58.905Z","level":"INFO","message":"[MinIO] Bucket \"vex-uploads\" already exists"}
+{"timestamp":"2026-04-26T21:34:58.905Z","level":"INFO","message":"9:34:58 PM [storage] MinIO initialized successfully"}
+{"timestamp":"2026-04-26T21:34:58.908Z","level":"INFO","message":"9:34:58 PM [express] serving on port 3001"}
+{"timestamp":"2026-04-26T21:34:58.909Z","level":"INFO","message":"9:34:58 PM [redis] Redis connected successfully"}
+Games already exist, skipping seed.
+{"timestamp":"2026-04-26T21:34:58.995Z","level":"INFO","message":"9:34:58 PM [db] DB enum support_message verified"}
+Social platforms already exist, skipping seed.
+{"timestamp":"2026-04-26T21:34:59.002Z","level":"INFO","message":"Multiplayer games already seeded"}
+{"timestamp":"2026-04-26T21:34:59.004Z","level":"INFO","message":"9:34:59 PM [db] DB support media columns verified"}
+{"timestamp":"2026-04-26T21:34:59.006Z","level":"INFO","message":"9:34:59 PM [db] DB multiplayer thumbnail column verified"}
+{"timestamp":"2026-04-26T21:34:59.032Z","level":"INFO","message":"9:34:59 PM [db] DB transactions public references verified"}
+{"timestamp":"2026-04-26T21:34:59.035Z","level":"INFO","message":"9:34:59 PM [db] DB chat_messages Telegram columns verified"}
+Multiplayer games already seeded
+Gift catalog already seeded
+Free play settings already seeded
+{"timestamp":"2026-04-26T21:34:59.069Z","level":"INFO","message":"[Security Cleanup] Scheduled hourly cleanup job"}
+{"timestamp":"2026-04-26T21:34:59.069Z","level":"INFO","message":"[CRON] Challenge expiry job started (every 5 min)"}
+{"timestamp":"2026-04-26T21:35:18.844Z","level":"INFO","message":"[Marketer Scheduler] success run=c5329a5d-1df7-4dc6-8153-9c0387bf5f97 attempt=1 generated=0/0.00 released=0/0.00"}
+{"timestamp":"2026-04-26T21:35:37.775Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239337750_23a1ba60668b","method":"GET","path":"/api/auth/me","statusCode":200,"duration":25,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:37.897Z","level":"INFO","message":"GET /api/auth/settings","context":{"requestId":"req_1777239337853_f20fdffdb20f","method":"GET","path":"/api/auth/settings","statusCode":200,"duration":44,"ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:37.903Z","level":"INFO","message":"GET /api/social-platforms","context":{"requestId":"req_1777239337871_4dc694879491","method":"GET","path":"/api/social-platforms","statusCode":200,"duration":32,"ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:37.938Z","level":"INFO","message":"GET /api/social-platforms","context":{"requestId":"req_1777239337916_6eb0c32f51be","method":"GET","path":"/api/social-platforms","statusCode":200,"duration":22,"ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:37.940Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239337907_8b265fc6385e","method":"GET","path":"/api/auth/me","statusCode":200,"duration":33,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:37.941Z","level":"INFO","message":"GET /api/auth/settings","context":{"requestId":"req_1777239337912_caa788e4a0ed","method":"GET","path":"/api/auth/settings","statusCode":200,"duration":29,"ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:37.944Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239337911_196c38b01bee","method":"GET","path":"/api/auth/me","statusCode":200,"duration":33,"userId":"cd45540c-7bd4-4a2c-9d20-b819b0fdd3eb","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:38.483Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239338475_8f77e70339d6","method":"GET","path":"/api/auth/me","statusCode":304,"duration":8,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:38.891Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239338875_25d48bcbd3d9","method":"GET","path":"/api/auth/me","statusCode":304,"duration":15,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:40.678Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777239340668_a5455518a75a","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":10,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:40.692Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777239340679_e337e01f17a4","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":13,"userId":"cd45540c-7bd4-4a2c-9d20-b819b0fdd3eb","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:40.693Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777239340680_92f30824c4b7","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":13,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:40.768Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777239340761_0ab1336b25e6","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":7,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:41.681Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777239341677_e21c045230b3","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":4,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:35:58.791Z","level":"ERROR","message":"[Auto-Delete] Error cleaning expired messages (failure #1, next retry in 60000ms)","error":{"name":"Error","message":"Failed query: \n        DELETE FROM chat_messages WHERE id = ANY(($1, $2, $3))\n      \nparams: b269cad3-6942-43ca-a72b-e29be8ddef21,76446be2-d7bc-45bd-8742-9e548f6a18b9,2bf44b1e-68cc-4547-a893-892bfab94d63"}}
+{"timestamp":"2026-04-26T21:35:58.824Z","level":"INFO","message":"[SEO] Sitemap cache invalidated"}
+{"timestamp":"2026-04-26T21:35:58.825Z","level":"INFO","message":"[Sitemap Rebuild] Cleared sitemap and dynamic SEO caches"}
+{"timestamp":"2026-04-26T21:36:37.695Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239397680_57eb72a77b0b","method":"GET","path":"/api/auth/me","statusCode":304,"duration":15,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:37.821Z","level":"INFO","message":"GET /api/auth/settings","context":{"requestId":"req_1777239397813_2edc2703098e","method":"GET","path":"/api/auth/settings","statusCode":200,"duration":8,"ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:37.826Z","level":"INFO","message":"GET /api/social-platforms","context":{"requestId":"req_1777239397820_53833ad85d38","method":"GET","path":"/api/social-platforms","statusCode":200,"duration":6,"ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:37.932Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239397925_9e588847f80f","method":"GET","path":"/api/auth/me","statusCode":304,"duration":7,"userId":"cd45540c-7bd4-4a2c-9d20-b819b0fdd3eb","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:38.015Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239398006_88ec09e26758","method":"GET","path":"/api/auth/me","statusCode":304,"duration":9,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:38.260Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239398241_84da46398f51","method":"GET","path":"/api/auth/me","statusCode":304,"duration":18,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:38.928Z","level":"INFO","message":"GET /api/social-platforms","context":{"requestId":"req_1777239398917_3bdcfc0223f7","method":"GET","path":"/api/social-platforms","statusCode":200,"duration":11,"ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:38.935Z","level":"INFO","message":"GET /api/auth/settings","context":{"requestId":"req_1777239398921_25b6467bcc34","method":"GET","path":"/api/auth/settings","statusCode":200,"duration":14,"ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:38.940Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239398929_fd5ea70ab814","method":"GET","path":"/api/auth/me","statusCode":304,"duration":11,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:40.677Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777239400673_88b0ffb37c74","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":4,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:40.684Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777239400679_23135e35a095","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":5,"userId":"cd45540c-7bd4-4a2c-9d20-b819b0fdd3eb","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:40.686Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777239400681_a440f103d191","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":5,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:40.766Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777239400761_5dfc043ed985","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":5,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:36:41.688Z","level":"INFO","message":"GET /api/notifications/push/public-key","context":{"requestId":"req_1777239401682_c91e698acd0d","method":"GET","path":"/api/notifications/push/public-key","statusCode":304,"duration":6,"userId":"43f77c96-e69e-473f-956e-acb7a61a1003","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:37:01.776Z","level":"INFO","message":"GET /api/notifications/section-counts","context":{"requestId":"req_1777239421755_a66a0bd397b7","method":"GET","path":"/api/notifications/section-counts","statusCode":304,"duration":21,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:37:01.777Z","level":"INFO","message":"GET /api/users/friend-requests/incoming","context":{"requestId":"req_1777239421757_95a68d6ab09c","method":"GET","path":"/api/users/friend-requests/incoming","statusCode":304,"duration":20,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:37:02.022Z","level":"INFO","message":"GET /api/users/blocked","context":{"requestId":"req_1777239421903_9f247dbc8311","method":"GET","path":"/api/users/blocked","statusCode":304,"duration":119,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:37:02.061Z","level":"INFO","message":"GET /api/support-chat/unread","context":{"requestId":"req_1777239421773_8544fb9db6c5","method":"GET","path":"/api/support-chat/unread","statusCode":304,"duration":288,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:37:02.083Z","level":"INFO","message":"GET /api/notifications/unread-count","context":{"requestId":"req_1777239421783_1e59af17723b","method":"GET","path":"/api/notifications/unread-count","statusCode":304,"duration":300,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:37:02.110Z","level":"INFO","message":"GET /api/settings/public","context":{"requestId":"req_1777239421957_f8ccf24cf350","method":"GET","path":"/api/settings/public","statusCode":304,"duration":153,"ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:37:02.111Z","level":"INFO","message":"GET /api/users/search","context":{"requestId":"req_1777239421987_0a9dcff98ae2","method":"GET","path":"/api/users/search","statusCode":304,"duration":124,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:37:02.117Z","level":"INFO","message":"GET /api/users/following","context":{"requestId":"req_1777239421766_80b52b7403d9","method":"GET","path":"/api/users/following","statusCode":200,"duration":351,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:37:02.118Z","level":"INFO","message":"GET /api/auth/me","context":{"requestId":"req_1777239421777_fced411296f7","method":"GET","path":"/api/auth/me","statusCode":200,"duration":341,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:37:02.120Z","level":"INFO","message":"GET /api/users/followers","context":{"requestId":"req_1777239421788_692877d027fb","method":"GET","path":"/api/users/followers","statusCode":200,"duration":332,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
+{"timestamp":"2026-04-26T21:37:02.175Z","level":"INFO","message":"GET /api/users/friends","context":{"requestId":"req_1777239421801_505a0d7d9f43","method":"GET","path":"/api/users/friends","statusCode":200,"duration":374,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"41.233.127.181"}}
+>>>>>>> 368b268 (تحديث تلقائي للنسخ الموقعة APK/AAB)
 root@srv1118737:/docker/vex# 

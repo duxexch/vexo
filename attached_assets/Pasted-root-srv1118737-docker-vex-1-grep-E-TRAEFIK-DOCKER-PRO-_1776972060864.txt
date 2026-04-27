@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 root@srv1118737:/docker/vex# # 1) شوفي قيمة المفتاح ده فى ملف الإنتاج
 grep -E '^TRAEFIK_(DOCKER_PROVIDER_ENABLED|EXTERNAL_NETWORK)=' /docker/vex/.env
 
@@ -61,4 +62,69 @@ x-content-type-options: nosniff
 content-length: 19
 date: Thu, 23 Apr 2026 19:20:22 GMT
 
+=======
+root@srv1118737:/docker/vex# # 1) شوفي قيمة المفتاح ده فى ملف الإنتاج
+grep -E '^TRAEFIK_(DOCKER_PROVIDER_ENABLED|EXTERNAL_NETWORK)=' /docker/vex/.env
+
+# 2) شوفي الـ vex-app متصل بأنهى شبكة وعنده labels ولا لأ
+docker inspect vex-app --format '{{json .NetworkSettings.Networks}}'
+docker inspect vex-app --format '{{json .Config.Labels}}' | python3 -m json.tool 2>/dev/null | grep -E 'traefik\.'
+
+# 3) شوفي الـ Traefik الشغّال (mrnn) بيراقب أنهى شبكة وإيه إعداداته
+docker inspect traefik-mrnn-traefik-1 --format '{{json .NetworkSettings.Networks}}'
+docker inspect traefik-mrnn-traefik-1 --format '{{range .Args}}{{println .}}{{end}}'
+
+# 4) جرّبى تعرفى اللى بيرد 404 من جوّا
+curl -sk -H "Host: vixo.click" https://127.0.0.1/api/health -I
+docker exec vex-app wget -qO- http://127.0.0.1:3001/api/health
+TRAEFIK_EXTERNAL_NETWORK=vex-traefik
+{"vex-traefik":{"IPAMConfig":null,"Links":null,"Aliases":["vex-app","app"],"DriverOpts":null,"GwPriority":0,"NetworkID":"c9ddaadac26a0f4611252b5754e62a94e1a28fef244de942f5077e630340ff16","EndpointID":"d821d65a52b028b590d41c9c8593e0b62e034811525b57a8727a7923f691411d","Gateway":"172.18.0.1","IPAddress":"172.18.0.2","MacAddress":"aa:37:e4:5c:95:26","IPPrefixLen":16,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DNSNames":["vex-app","app","c39c182e1470"]},"vex_vex-internal":{"IPAMConfig":null,"Links":null,"Aliases":["vex-app","app"],"DriverOpts":null,"GwPriority":0,"NetworkID":"50c051453213b7cbe3f25049eb91c1bc9498eec0964d43b7e86f50c601ecb36e","EndpointID":"a6812d274d0792835c80a31d930cdd7940dfe036dc85886f1826e3ce4d3188c9","Gateway":"172.20.0.1","IPAddress":"172.20.0.6","MacAddress":"22:7b:d9:27:27:7b","IPPrefixLen":16,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DNSNames":["vex-app","app","c39c182e1470"]}}
+    "traefik.docker.network": "vex-traefik",
+    "traefik.enable": "false",
+    "traefik.http.middlewares.vex-compress.compress": "true",
+    "traefik.http.middlewares.vex-compress.compress.minResponseBodyBytes": "1024",
+    "traefik.http.middlewares.vex-headers.headers.browserXssFilter": "true",
+    "traefik.http.middlewares.vex-headers.headers.contentTypeNosniff": "true",
+    "traefik.http.middlewares.vex-headers.headers.customResponseHeaders.Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+    "traefik.http.middlewares.vex-headers.headers.customResponseHeaders.X-Robots-Tag": "index, follow",
+    "traefik.http.middlewares.vex-headers.headers.forceSTSHeader": "true",
+    "traefik.http.middlewares.vex-headers.headers.frameDeny": "true",
+    "traefik.http.middlewares.vex-headers.headers.referrerPolicy": "strict-origin-when-cross-origin",
+    "traefik.http.middlewares.vex-headers.headers.stsIncludeSubdomains": "true",
+    "traefik.http.middlewares.vex-headers.headers.stsPreload": "true",
+    "traefik.http.middlewares.vex-headers.headers.stsSeconds": "31536000",
+    "traefik.http.middlewares.vex-https-redirect.redirectscheme.permanent": "true",
+    "traefik.http.middlewares.vex-https-redirect.redirectscheme.scheme": "https",
+    "traefik.http.routers.vex-http.entrypoints": "web",
+    "traefik.http.routers.vex-http.middlewares": "vex-https-redirect",
+    "traefik.http.routers.vex-http.rule": "Host(`vixo.click`) || Host(`www.vixo.click`)",
+    "traefik.http.routers.vex.entrypoints": "websecure",
+    "traefik.http.routers.vex.middlewares": "vex-compress,vex-headers",
+    "traefik.http.routers.vex.rule": "Host(`vixo.click`) || Host(`www.vixo.click`)",
+    "traefik.http.routers.vex.tls": "true",
+    "traefik.http.routers.vex.tls.certresolver": "letsencrypt",
+    "traefik.http.services.vex.loadbalancer.server.port": "3001",
+    "traefik.http.services.vex.loadbalancer.server.scheme": "http",
+{"host":{"IPAMConfig":null,"Links":null,"Aliases":null,"DriverOpts":null,"GwPriority":0,"NetworkID":"b59f11459e0e5a551fd26e7b16f6e4e2448d4f7d129ea9da67f336bf8041c59c","EndpointID":"8c8de0e9202f24dd35a48ddb1c2256f5780739b6d1de2791dc9795c1a48b94fd","Gateway":"","IPAddress":"","MacAddress":"","IPPrefixLen":0,"IPv6Gateway":"","GlobalIPv6Address":"","GlobalIPv6PrefixLen":0,"DNSNames":null}}
+--api.dashboard=false
+--api.insecure=false
+--log.level=INFO
+--providers.docker=true
+--providers.docker.exposedbydefault=false
+--entrypoints.web.address=:80
+--entrypoints.websecure.address=:443
+--certificatesresolvers.letsencrypt.acme.httpchallenge=true
+--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+--certificatesresolvers.letsencrypt.acme.email=postmaster@srv1118737.hstgr.cloud
+--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+--entrypoints.web.http.redirections.entrypoint.to=websecure
+--entrypoints.web.http.redirections.entrypoint.scheme=https
+
+HTTP/2 404 
+content-type: text/plain; charset=utf-8
+x-content-type-options: nosniff
+content-length: 19
+date: Thu, 23 Apr 2026 19:20:22 GMT
+
+>>>>>>> 368b268 (تحديث تلقائي للنسخ الموقعة APK/AAB)
 {"status":"healthy","timestamp":"2026-04-23T19:20:22.136Z","database":{"status":"connected","latency":"1ms"},"redis":{"status":"connected"},"minio":{"status":"connected"},"release":{"webVersion":"dev","releasedAt":"2026-04-23T19:06:35.184Z","nativeLatestVersion":null,"nativeUpdateUrlAndroid":"http://127.0.0.1:3001/downloads/VEX-official-release.apk","nativeUpdateUrlIos":null,"forceNativeUpdate":false},"uptime":827.47558641}root@srv1118737:/docker/vex# 

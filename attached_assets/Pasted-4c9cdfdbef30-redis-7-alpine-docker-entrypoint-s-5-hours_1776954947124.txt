@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 4c9cdfdbef30   redis:7-alpine       "docker-entrypoint.s…"   5 hours ago   Up 1 second (health: starting)   6379/tcp   vex-redis
 curl: (22) The requested URL returned error: 404
 root@srv1118737:/docker/vex# cd /docker/vex
@@ -78,4 +79,86 @@ CONTAINER ID   IMAGE                COMMAND                  CREATED       STATU
 785a0cba72b1   vex-ai-agent         "/sbin/tini -- node …"   5 hours ago   Up About a minute (healthy)   3100/tcp   vex-ai-agent
 4c9cdfdbef30   redis:7-alpine       "docker-entrypoint.s…"   5 hours ago   Up About a minute (healthy)   6379/tcp   vex-redis
 curl: (22) The requested URL returned error: 404
+=======
+4c9cdfdbef30   redis:7-alpine       "docker-entrypoint.s…"   5 hours ago   Up 1 second (health: starting)   6379/tcp   vex-redis
+curl: (22) The requested URL returned error: 404
+root@srv1118737:/docker/vex# cd /docker/vex
+
+# 1) امسح الحاوية القديمة المعلّقة (السبب الجذري للمشكلة)
+docker rm -f vex-minio 2>/dev/null || true
+
+# 2) (لو لسه ما عملتش ده) امسح Traefik القديم المعطّل اللي اسمه traefik-rgmg
+docker compose -p traefik-rgmg down 2>/dev/null || true
+
+# 3) تأكد إن المنافذ 80/443 فاضية (مهم لـ Traefik)
+ss -tlnp | grep -E ':(80|443|9010|9011) '
+
+# 4) جهّز ACME_EMAIL في .env (لو مش موجود)
+grep -q '^ACME_EMAIL=' .env || echo 'ACME_EMAIL=admin@vixo.click' >> .env
+
+# 5) شغّل التحديث (هيجلب الـ commit الجديد ويعيد البناء)
+bash prod-update.sh \
+  --auth-mode ssh \
+  --repo-url git@github.com:duxexch/vexo.git \
+  --repo-dir /docker/vex \
+  --branch main
+
+# 6) شغّل Traefik (لازم يكون شغّال علشان vixo.click يرد)
+docker compose -f deploy/docker-compose.traefik.yml --env-file .env up -d
+
+# 7) تحقق
+docker ps --filter name=vex-
+sleep 30
+curl -fsS https://vixo.click/api/health
+docker logs --tail 50 vex-traefik 2>&1 | grep -iE "error|certificate|acme" | head -20
+vex-minio
+LISTEN 0      4096       127.0.0.1:9010      0.0.0.0:*    users:(("docker-proxy",pid=4805,fd=8))               
+LISTEN 0      4096       127.0.0.1:9011      0.0.0.0:*    users:(("docker-proxy",pid=4824,fd=8))               
+LISTEN 0      4096         0.0.0.0:443       0.0.0.0:*    users:(("docker-proxy",pid=4669,fd=8))               
+LISTEN 0      4096         0.0.0.0:80        0.0.0.0:*    users:(("docker-proxy",pid=4635,fd=8))               
+LISTEN 0      4096            [::]:443          [::]:*    users:(("docker-proxy",pid=4676,fd=8))               
+LISTEN 0      4096            [::]:80           [::]:*    users:(("docker-proxy",pid=4639,fd=8))               
+[INFO] Update auth mode: ssh
+[WARN] Ubuntu 25.10 detected. If updates fail, run: sudo apt install --update rust-coreutils
+[OK] Backup created: /docker/vex/backups/vex_db_20260423_143436.sql.gz
+[INFO] Pre-pulling latest repository state using ssh auth
+From github.com:duxexch/vexo
+ * branch            main       -> FETCH_HEAD
+Already up to date.
+[INFO] Running strict update flow via prod-auto (pull latest + env reconcile + redeploy)
+[INFO] Git auth mode: ssh
+[WARN] Ubuntu 25.10 detected. If updates fail, run: sudo apt install --update rust-coreutils
+[INFO] Refreshing upstream images for infrastructure services
+[OK] Pulled image: db
+[OK] Pulled image: redis
+[OK] Pulled image: minio
+[OK] Pulled image: livekit
+[OK] Pulled image: coturn
+[INFO] Running strict production deploy
+========================================
+  VEX Production Auto Bootstrap
+  2026-04-23 14:34:42 UTC
+========================================
+[INFO] No mobile release artifacts found to remove
+[WARN] No running Traefik container detected. Falling back to default Traefik network heuristics.
+[INFO] Using Traefik network: vex-traefik
+[OK] Persistent host tuning applied: vm.overcommit_memory=1
+[OK] Docker network exists: vex-traefik
+[OK] Runtime directories prepared (logs/uploads/backups)
+[INFO] Starting dependency services
+[+] up 3/4
+ ✔ Container vex-db       Running                                                                                                                                                                                               0.0s
+ ✔ Container vex-redis    Running                                                                                                                                                                                               0.0s
+ ⠸ Container vex-minio    Starting                                                                                                                                                                                              0.3s
+ ✔ Container vex-ai-agent Running                                                                                                                                                                                               0.0s
+Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint vex-minio (6672e561132fe5d17469fc08dc812d730be968f523307e895127bc430311c0e1): failed to bind host port for 127.0.0.1:9010:172.19.0.4:9000/tcp: address already in use
+[+] up 0/1
+ ⠹ Container vex-traefik Starting                                                                                                                                                                                               0.2s
+Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint vex-traefik (d40227b82328b088233fb48ea65ff751702c5480f810183f580b21cb8311d292): failed to bind host port for 0.0.0.0:80:172.17.0.2:80/tcp: address already in use
+CONTAINER ID   IMAGE                COMMAND                  CREATED       STATUS                        PORTS      NAMES
+5cc4e10858e1   postgres:15-alpine   "docker-entrypoint.s"   5 hours ago   Up About a minute (healthy)   5432/tcp   vex-db
+785a0cba72b1   vex-ai-agent         "/sbin/tini -- node …"   5 hours ago   Up About a minute (healthy)   3100/tcp   vex-ai-agent
+4c9cdfdbef30   redis:7-alpine       "docker-entrypoint.s…"   5 hours ago   Up About a minute (healthy)   6379/tcp   vex-redis
+curl: (22) The requested URL returned error: 404
+>>>>>>> 368b268 (تحديث تلقائي للنسخ الموقعة APK/AAB)
 root@srv1118737:/docker/vex# 

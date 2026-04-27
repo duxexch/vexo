@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 NS (A record) ولا Traefik router rule / entrypoints.
 
 
@@ -94,3 +95,101 @@ docker inspect vex-app --format '{{json .Config.Labels}}' | head -n 5
 
 
 
+=======
+NS (A record) ولا Traefik router rule / entrypoints.
+
+
+
+root@srv1118737:/docker/vex# docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Ports}}"
+NAMES IMAGE PORTS
+vex-app vex-app 3001/tcp
+vex-ai-agent vex-ai-agent 3100/tcp
+vex-db postgres:15-alpine 5432/tcp
+vex-redis redis:7-alpine 6379/tcp
+vex-minio minio/minio:latest 9000/tcp
+traefik-mrnn-traefik-1 traefik:latest
+root@srv1118737:/docker/vex#
+root@srv1118737:/docker/vex#
+root@srv1118737:/docker/vex#
+root@srv1118737:/docker/vex#
+root@srv1118737:/docker/vex#
+root@srv1118737:/docker/vex# curl -I http://127.0.0.1/api/health
+curl -I http://127.0.0.1/
+curl -I http://vixo.click/api/health
+curl -I http://www.vixo.click/api/health
+HTTP/1.1 308 Permanent Redirect
+Location: https://127.0.0.1/api/health
+Date: Thu, 23 Apr 2026 19:04:57 GMT
+Content-Length: 18
+
+HTTP/1.1 308 Permanent Redirect
+Location: https://127.0.0.1/
+Date: Thu, 23 Apr 2026 19:04
+
+Kodee
+تمام—الـ 404 بيطلع على HTTPS حتى على 127.0.0.1، بينما الـ app شغال (الـ container بيرد على HTTP). كده المشكلة غالبًا إن Traefik/HTTPS routing مش رايح لنفس الـ endpoint (أو إن الـ app endpoint متاح على http://...:3001 لكن مش على https://... بنفس المسار).
+
+جرّب/نفّذ التالي فورًا لتحديد المسار الصحيح:
+
+curl -I http://127.0.0.1/api/health
+curl -I http://127.0.0.1:3001/api/health
+curl -I http://127.0.0.1:3001/
+لو http://127.0.0.1:3001/api/health 200 و https://vixo.click/api/health 404، يبقى لازم نعدّل Traefik router/service بحيث يمرّر للـ HTTP scheme/port الصحيح (حاليًا السيرفس موجود على port 3001 لكن الـ HTTPS path بيطلع 404).
+
+ابعتي نتائج الـ 3 أوامر فوق، وساعتها أضبط لك إعدادات Traefik على نفس الكونتينر.
+
+
+
+root@srv1118737:/docker/vex# curl -I http://127.0.0.1/api/health
+curl -I http://127.0.0.1/
+curl -I http://vixo.click/api/health
+curl -I http://www.vixo.click/api/health
+HTTP/1.1 308 Permanent Redirect
+Location: https://127.0.0.1/api/health
+Date: Thu, 23 Apr 2026 19:04:57 GMT
+Content-Length: 18
+
+HTTP/1.1 308 Permanent Redirect
+Location: https://127.0.0.1/
+Date: Thu, 23 Apr 2026 19:04:57 GMT
+Content-Length: 18
+
+HTTP/1.1 308 Permanent Redirect
+Location: https://vixo.click/api/health
+Date: Thu, 23 Apr 2026 19:04:57 GMT
+Content-Length: 18
+
+HTTP/1.1 308 Permanent Redirect
+Location: https://www.vixo.click/api/health
+Date: Thu, 23 Apr 2026 19:04:57 GMT
+Content-Length: 18
+
+root@srv1118737:/docker/vex# curl -I http://127.0.0.1/api/health
+curl -I http://127.0.0.1:3001/api/health
+curl -I http://127.0.0.1:3001/
+HTTP/1.1 308 Permanent Redirect
+Location: https://127.0.0.1/api/health
+Date: Thu, 23 Apr 2026 19:06:03 GMT
+Content-Length: 18
+
+curl: (7) Failed to connect to 127.0.0.1 port 3001 after 0 ms:
+
+Kodee
+تمام—الـ app نفسه بيرد على HTTPS بـ 404 (مش موجود/مش متطابق المسار على الـ HTTPS)، وفي نفس الوقت الـ Traefik عامل redirect لـ HTTPS حتى لو طلبته على HTTP. كمان من إعدادات الـ container واضح إن Traefik بيحوّل الـ request على server.port = 3001 scheme = http، فالمفروض الـ endpoint يبقى شغال على HTTP داخل الكونتينر لكن الـ route على HTTPS (اللي بيروح لـ Traefik) مش مطابق.
+
+النتيجة العملية: Traefik router/service mapping لمسار /api/health مش رايح لنفس الـ handler (غالبًا router rule/entrypoint middleware أو basePath مختلف).
+
+علشان نصلّح بسرعة: افتح إعدادات Traefik الخاصة بـ vex-app (أو ملف compose) وابعث لي جزء الـ labels الخاصة بـ:
+
+traefik.http.routers.vex.rule
+traefik.http.routers.vex.entrypoints
+أي middlewares مرتبطة بـ vex-...
+و traefik.http.services.vex.loadbalancer.server.port/scheme
+أو ابعت ناتج:
+
+docker inspect vex-app --format '{{json .Config.Labels}}' | head -n 5
+وساعتها أعدّل الـ labels بحيث https://vixo.click/api/health يرجع 200.
+
+
+
+>>>>>>> 368b268 (تحديث تلقائي للنسخ الموقعة APK/AAB)

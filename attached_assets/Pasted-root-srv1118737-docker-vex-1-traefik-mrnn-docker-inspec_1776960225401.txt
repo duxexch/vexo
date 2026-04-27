@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 root@srv1118737:/docker/vex# # 1) اعرف اسم شبكة traefik-mrnn
 docker inspect traefik-mrnn-traefik-1 --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{"\n"}}{{end}}' 2>/dev/null \
   || docker network ls | grep -i mrnn
@@ -59,4 +60,67 @@ volumes:
   traefik-letsencrypt:
 LISTEN 0      4096               *:80              *:*    users:(("traefik",pid=28319,fd=4))                     
 LISTEN 0      4096               *:443             *:*    users:(("traefik",pid=28319,fd=7))                     
+=======
+root@srv1118737:/docker/vex# # 1) اعرف اسم شبكة traefik-mrnn
+docker inspect traefik-mrnn-traefik-1 --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{"\n"}}{{end}}' 2>/dev/null \
+  || docker network ls | grep -i mrnn
+
+# 2) اعرف الـ entryPoints و certResolvers بتاعته
+docker exec $(docker ps -q --filter "name=mrnn") traefik version 2>/dev/null
+docker inspect $(docker ps -q --filter "name=mrnn") --format '{{range .Config.Cmd}}{{println .}}{{end}}' 2>/dev/null
+ls /docker/traefik-mrnn/ 2>/dev/null
+cat /docker/traefik-mrnn/docker-compose.yml 2>/dev/null | head -80
+
+# 3) اعرف هل ماسك المنافذ
+ss -tlnp | grep -E ':(80|443) '
+host
+
+Version:      3.6.14
+Codename:     ramequin
+Go version:   go1.25.9
+Built:        2026-04-22T09:00:25Z
+OS/Arch:      linux/amd64
+--api.dashboard=false
+--api.insecure=false
+--log.level=INFO
+--providers.docker=true
+--providers.docker.exposedbydefault=false
+--entrypoints.web.address=:80
+--entrypoints.websecure.address=:443
+--certificatesresolvers.letsencrypt.acme.httpchallenge=true
+--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+--certificatesresolvers.letsencrypt.acme.email=postmaster@srv1118737.hstgr.cloud
+--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+--entrypoints.web.http.redirections.entrypoint.to=websecure
+--entrypoints.web.http.redirections.entrypoint.scheme=https
+
+docker-compose.yml
+services:
+  traefik:
+    image: traefik:latest
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - --api.dashboard=false
+      - --api.insecure=false
+      - --log.level=INFO
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+    volumes:
+      - traefik-letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+volumes:
+  traefik-letsencrypt:
+LISTEN 0      4096               *:80              *:*    users:(("traefik",pid=28319,fd=4))                     
+LISTEN 0      4096               *:443             *:*    users:(("traefik",pid=28319,fd=7))                     
+>>>>>>> 368b268 (تحديث تلقائي للنسخ الموقعة APK/AAB)
 root@srv1118737:/docker/vex# 

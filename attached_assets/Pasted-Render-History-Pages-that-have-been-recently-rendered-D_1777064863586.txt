@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 Render History
 Pages that have been recently rendered.
 Domain
@@ -109,3 +110,116 @@ CDN
 19 hours ago	404	8167 ms	https://vixo.click/df5bad49-ef5c-4f70-9729-239710478995-404check		
 CDN
 Page 1, 1 - 50
+=======
+Render History
+Pages that have been recently rendered.
+Domain
+Render Usage - Last 24 Hours
+Rendered At
+HTTP Status
+Render Time
+URL	
+Device
+Source
+6 mins ago	404	941 ms	https://vixo.click/98c5a09c-0c3f-4f3d-885a-77c504c844e1-404check		
+CDN
+6 mins ago	404	1169 ms	https://www.vixo.click/f0bc5b23-bfe4-4d39-a7b7-4aa91544e70e-404check		
+CDN
+13 mins ago	404	1996 ms	https://www.vixo.click/d4e618aa-6c27-4215-8ae7-429dd57d760b-404check		
+CDN
+19 mins ago	404	1371 ms	https://vixo.click/87fc9e53-f91a-4d15-8988-2e954e4e4d64-404check		
+CDN
+19 mins ago	404	1284 ms	https://www.vixo.click/ba2e1764-5ba1-495a-92ef-bedd65a55dbc-404check		
+CDN
+1 hour ago	404	3217 ms	https://vixo.click/d47a99ff-3163-4c64-95f7-6b13b718acc7-404check		
+CDN
+1 hour ago	404	1138 ms	https://vixo.click/b091b308-c932-47fe-845a-b913d84f9660-404check		
+CDN
+1 hour ago	404	1011 ms	https://vixo.click/fca08162-832c-45b2-901b-1fb93b97f9da-404check		
+CDN
+1 hour ago	404	1241 ms	https://vixo.click/3272d981-09bd-4b03-8d4e-442596dd5bb1-404check		
+CDN
+1 hour ago	404	1076 ms	https://vixo.click/f1cb8d0b-4d4f-4475-81b3-cf653d959087-404check		
+CDN
+2 hours ago	404	1036 ms	https://vixo.click/d98b822b-3d77-4c9c-9044-c725780d8641-404check		
+CDN
+2 hours ago	404	928 ms	https://www.vixo.click/9775f669-893a-4d2f-a7d7-0dd2796363f3-404check		
+CDN
+2 hours ago	404	1074 ms	https://vixo.click/3232d77b-7432-427f-9338-5232bf62d476-404check		
+CDN
+2 hours ago	404	972 ms	https://www.vixo.click/0119d553-17df-4c4d-84cc-539d4b7504e6-404check		
+CDN
+2 hours ago	200	1796 ms	https://vixo.click/register?ref=08af4e01https%3A%2F%2Fvixo.click%2Fregister&ref=		
+CDN
+2 hours ago	200	1433 ms	https://vixo.click/register?ref=08af4e01https%3A%2F%2Fvixo.click%2Fregister&ref=l		
+CDN
+3 hours ago	404	952 ms	https://www.vixo.click/fb9be9a4-7032-4eac-ba18-db16f0ca593c-404check		
+CDN
+3 hours ago	404	1030 ms	https://vixo.click/cae7d89d-8912-44af-8ad6-b2b08dbc2919-404check		
+CDN
+3 hours ago	404	1077 ms	https://www.vixo.click/514f7d1b-da9c-4498-9875-2afa2b3fc9b9-404check		
+CDN
+5 hours ago	404	1062 ms	https://vixo.click/ff6364be-75a0-41e3-ae7d-b1c77f5331f6-404check		
+CDN
+5 hours ago	404	1066 ms	https://www.vixo.click/27b30658-a0bf-4bd8-be55-2b041dcd17b3-404check		
+CDN
+7 hours ago	404	1133 ms	https://vixo.click/462a7590-eb75-47c3-a79b-611015a08f0c-404check		
+CDN
+7 hours ago	404	998 ms	https://www.vixo.click/8d19fdd8-c2b9-4738-b425-fc134f266076-404check		
+CDN
+9 hours ago	404	1244 ms	https://vixo.click/ed6f87e4-cd3d-45f1-94a8-f6490f9f5bfc-404check		
+CDN
+9 hours ago	404	1135 ms	https://www.vixo.click/803c029e-840f-42cb-af76-1f84a41f7c67-404check		
+CDN
+9 hours ago	404	1288 ms	https://vixo.click/451334c6-0d29-4546-bb11-199aef799775-404check		
+CDN
+9 hours ago	404	1042 ms	https://www.vixo.click/e4428101-9c8f-48e9-a084-d2f3d61b9337-404check		
+CDN
+9 hours ago	404	1257 ms	https://vixo.click/7864dbdb-1724-4f07-84fb-03a72e43e721-404check		
+CDN
+9 hours ago	404	1203 ms	https://www.vixo.click/ba5140cb-7e47-45ee-b244-267bc65ad1c4-404check		
+CDN
+11 hours ago	200	1570 ms	https://www.vixo.click/		
+Automated
+11 hours ago	404	1131 ms	https://vixo.click/a489e863-37b1-47dd-b850-7658ead5d00d-404check		
+CDN
+11 hours ago	404	1040 ms	https://www.vixo.click/2ced2c70-6081-4dfb-9fca-a0de729709c9-404check		
+CDN
+13 hours ago	404	1173 ms	https://www.vixo.click/ff4a4b29-ad28-46a6-a0ea-1921d9d5ed0a-404check		
+CDN
+13 hours ago	404	1076 ms	https://vixo.click/0c9f6a9a-bc82-4cbd-955f-c03e697c8bf4-404check		
+CDN
+15 hours ago	404	1793 ms	https://vixo.click/2068bd41-7232-447f-99c0-bbea9f5d33ba-404check		
+CDN
+15 hours ago	404	931 ms	https://www.vixo.click/87a1dd82-ff09-473a-a953-5fbc197f12c5-404check		
+CDN
+15 hours ago	200	1377 ms	https://vixo.click/register?ref=08af4e01https%3A%2F%2Fvixo.click%2Fregister&ref=l		
+CDN
+15 hours ago	200	1391 ms	https://vixo.click/register?ref=08af4e01https%3A%2F%2Fvixo.click%2Fregister&ref=		
+CDN
+15 hours ago	200	1408 ms	https://vixo.click/register?ref=08af4e01https%3A%2F%2Fvixo.click%2Fregister&ref=08af4e01		
+CDN
+15 hours ago	200	1644 ms	https://vixo.click/register?ref=08af4e01		
+CDN
+16 hours ago	404	1017 ms	https://www.vixo.click/61cac39e-fd38-431c-bb11-02a710b69a99-404check		
+CDN
+16 hours ago	404	1233 ms	https://vixo.click/f201e23e-83f8-48e9-81e6-4f5781b6c0db-404check		
+CDN
+16 hours ago	404	1022 ms	https://www.vixo.click/b08f61a8-335e-40a4-b280-31aed904c524-404check		
+CDN
+16 hours ago	404	980 ms	https://vixo.click/530a4189-b857-4dcb-9c81-08a71e04b247-404check		
+CDN
+16 hours ago	404	1030 ms	https://www.vixo.click/ea6911cc-24cf-4ff4-ba6f-503ddb9a449c-404check		
+CDN
+17 hours ago	404	1197 ms	https://vixo.click/3b4d4c42-6652-4151-988c-91c9f1b11b8e-404check		
+CDN
+17 hours ago	404	949 ms	https://www.vixo.click/a3e294dc-130c-4962-8b11-45773372b17f-404check		
+CDN
+19 hours ago	404	1060 ms	https://vixo.click/c5a1d329-01b3-4a1e-877d-87bb1b50b77c-404check		
+CDN
+19 hours ago	404	985 ms	https://www.vixo.click/c755a283-28bb-4620-a0d3-21ad7b5a00ec-404check		
+CDN
+19 hours ago	404	8167 ms	https://vixo.click/df5bad49-ef5c-4f70-9729-239710478995-404check		
+CDN
+Page 1, 1 - 50
+>>>>>>> 368b268 (تحديث تلقائي للنسخ الموقعة APK/AAB)
