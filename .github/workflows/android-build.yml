@@ -204,15 +204,40 @@ jobs:
               ;;
           esac
 
+      - name: Resolve app version from package.json
+        id: version
+        run: |
+          # Extract semantic version from the project package.json so every
+          # build artefact carries a meaningful version stamp (used in commit
+          # messages, release titles, and notes).
+          VERSION=$(node -p "require('./package.json').version")
+          if [ -z "$VERSION" ] || [ "$VERSION" = "undefined" ]; then
+            echo "::error::Could not read version from package.json"
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "build_number=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "full_version=v${VERSION}-build${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: v${VERSION}-build${{ github.run_number }}"
+
       - name: Copy outputs to client/public/downloads/
         env:
           TARGET: ${{ github.event.inputs.target }}
         run: |
+          # Stage the signed binaries under the canonical filenames that are
+          # explicitly whitelisted in .gitignore (lines 54-55):
+          #   !client/public/downloads/VEX-official-release.apk
+          #   !client/public/downloads/VEX-official-release.aab
+          # Using these exact names allows `git add` to pick them up while the
+          # rest of *.apk / *.aab in that folder stays ignored. The names are
+          # ALSO stable: each build overwrites the previous file at the same
+          # path, so a `git pull` on the Hostinger VPS automatically replaces
+          # the old binary with the newest one on every deploy.
           mkdir -p client/public/downloads
           APK_SRC="android/app/build/outputs/apk/release/app-release.apk"
           AAB_SRC="android/app/build/outputs/bundle/release/app-release.aab"
-          APK_DST="client/public/downloads/app.apk"
-          AAB_DST="client/public/downloads/app.aab"
+          APK_DST="client/public/downloads/VEX-official-release.apk"
+          AAB_DST="client/public/downloads/VEX-official-release.aab"
 
           if [ "$TARGET" = "apk" ] || [ "$TARGET" = "both" ]; then
             if [ ! -s "$APK_SRC" ]; then
@@ -221,7 +246,7 @@ jobs:
             fi
             cp -f "$APK_SRC" "$APK_DST"
             test -s "$APK_DST" || (echo "::error::Failed to stage APK at $APK_DST" && exit 1)
-            echo "APK staged: $(wc -c < "$APK_DST") bytes"
+            echo "APK staged: $APK_DST ($(wc -c < "$APK_DST") bytes)"
           fi
 
           if [ "$TARGET" = "aab" ] || [ "$TARGET" = "both" ]; then
@@ -231,55 +256,96 @@ jobs:
             fi
             cp -f "$AAB_SRC" "$AAB_DST"
             test -s "$AAB_DST" || (echo "::error::Failed to stage AAB at $AAB_DST" && exit 1)
-            echo "AAB staged: $(wc -c < "$AAB_DST") bytes"
+            echo "AAB staged: $AAB_DST ($(wc -c < "$AAB_DST") bytes)"
           fi
 
-      # NOTE: We deliberately do NOT commit the built APK/AAB back into the
-      # repository. Both files live under client/public/downloads/ which is
-      # listed in .gitignore (large signed binaries don't belong in git
-      # history). Distribution happens via the GitHub Release step below
-      # and via the workflow run artifacts step at the end of the job.
+      - name: Commit and push updated binaries to repo
+        env:
+          TARGET: ${{ github.event.inputs.target }}
+          FULL_VERSION: ${{ steps.version.outputs.full_version }}
+        run: |
+          # The destination filenames (VEX-official-release.apk / .aab) are
+          # explicitly whitelisted in .gitignore so a normal `git add` works.
+          # Pushing them back to main means the Hostinger VPS can pick up the
+          # newest binaries automatically on `git pull` — no manual upload.
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Create or update GitHub Release
+          if [ "$TARGET" = "apk" ] || [ "$TARGET" = "both" ]; then
+            git add client/public/downloads/VEX-official-release.apk
+          fi
+          if [ "$TARGET" = "aab" ] || [ "$TARGET" = "both" ]; then
+            git add client/public/downloads/VEX-official-release.aab
+          fi
+
+          if git diff --cached --quiet; then
+            echo "No binary changes to commit (outputs identical to current files)."
+          else
+            git commit -m "chore(android): publish ${FULL_VERSION} signed ${TARGET} build [skip ci]"
+            # Pull-then-push to survive races with other commits on main.
+            git pull --rebase origin "${{ github.ref_name }}"
+            git push origin "HEAD:${{ github.ref_name }}"
+            echo "Pushed updated ${TARGET} binary/binaries (${FULL_VERSION})."
+          fi
+
+      - name: Create or update GitHub Release (versioned + latest)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TARGET: ${{ github.event.inputs.target }}
+          VERSION: ${{ steps.version.outputs.version }}
+          FULL_VERSION: ${{ steps.version.outputs.full_version }}
         run: |
-          TAG="android-build-${{ github.run_number }}"
-          TITLE="VEX Android build #${{ github.run_number }} (${TARGET})"
-          NOTES="Manual signed Android build.
+          # We publish to TWO release tags on every successful build:
+          #   1) ${FULL_VERSION}   — immutable, version-stamped (history).
+          #   2) latest-android    — moving pointer, always the newest build,
+          #                          giving you a stable download URL like:
+          #      https://github.com/<owner>/<repo>/releases/download/latest-android/VEX-official-release.apk
+          NOTES="Signed Android build for VEX (${FULL_VERSION}).
 
-          Commit: ${{ github.sha }}
-          Target: ${TARGET}
+          App version : ${VERSION}
+          Build number: ${{ github.run_number }}
+          Target      : ${TARGET}
+          Commit      : ${{ github.sha }}
           Triggered by: ${{ github.actor }}"
 
-          # Collect artefact list to attach.
           ASSETS=()
           if [ "$TARGET" = "apk" ] || [ "$TARGET" = "both" ]; then
-            ASSETS+=("client/public/downloads/app.apk")
+            ASSETS+=("client/public/downloads/VEX-official-release.apk")
           fi
           if [ "$TARGET" = "aab" ] || [ "$TARGET" = "both" ]; then
-            ASSETS+=("client/public/downloads/app.aab")
+            ASSETS+=("client/public/downloads/VEX-official-release.aab")
           fi
 
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists — uploading/replacing assets."
-            gh release upload "$TAG" "${ASSETS[@]}" --clobber
-            gh release edit "$TAG" --title "$TITLE" --notes "$NOTES"
-          else
-            echo "Creating new release $TAG."
-            gh release create "$TAG" "${ASSETS[@]}" \
-              --title "$TITLE" \
-              --notes "$NOTES" \
-              --target "${{ github.sha }}"
-          fi
+          publish_release() {
+            local TAG="$1"
+            local TITLE="$2"
+            if gh release view "$TAG" >/dev/null 2>&1; then
+              echo "Release $TAG already exists — replacing assets."
+              gh release upload "$TAG" "${ASSETS[@]}" --clobber
+              gh release edit "$TAG" --title "$TITLE" --notes "$NOTES"
+            else
+              echo "Creating new release $TAG."
+              gh release create "$TAG" "${ASSETS[@]}" \
+                --title "$TITLE" \
+                --notes "$NOTES" \
+                --target "${{ github.sha }}"
+            fi
+          }
+
+          # 1) Versioned, immutable release — kept forever in history.
+          publish_release "${FULL_VERSION}" \
+            "VEX Android ${FULL_VERSION} (${TARGET})"
+
+          # 2) Moving pointer — always the freshest build at a stable URL.
+          publish_release "latest-android" \
+            "VEX Android — latest (${FULL_VERSION}, ${TARGET})"
 
       - name: Upload artefacts to workflow run
         uses: actions/upload-artifact@v4
         with:
-          name: android-build-${{ github.run_number }}-${{ github.event.inputs.target }}
+          name: VEX-android-${{ steps.version.outputs.full_version }}-${{ github.event.inputs.target }}
           path: |
-            client/public/downloads/app.apk
-            client/public/downloads/app.aab
+            client/public/downloads/VEX-official-release.apk
+            client/public/downloads/VEX-official-release.aab
           if-no-files-found: ignore
           retention-days: 14
