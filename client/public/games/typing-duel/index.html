@@ -12,69 +12,152 @@
     display: flex; flex-direction: column;
   }
   .td-side {
-    flex: 1; padding: 16px 12px;
-    background: linear-gradient(135deg, var(--vex-surface), rgba(168,85,247,0.06));
-    border: 1px solid rgba(168,85,247,0.3);
-    border-radius: 14px;
+    flex: 1; padding: 18px 14px;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(168,85,247,0.18), transparent 70%),
+      linear-gradient(180deg, #1a1430 0%, #0a0820 100%);
+    border: 1px solid rgba(168,85,247,0.40);
+    border-radius: 18px;
     display: flex; flex-direction: column; gap: 12px; align-items: center;
-    position: relative; min-height: 220px;
+    position: relative; min-height: 230px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -2px 0 rgba(0,0,0,0.55),
+      inset 0 0 22px rgba(168,85,247,0.10),
+      0 12px 24px -8px rgba(0,0,0,0.6);
   }
   .td-side.bot { transform: rotate(0deg); }
-  .td-side.top { transform: rotate(180deg); margin-bottom: 10px; }
+  .td-side.top { transform: rotate(180deg); margin-bottom: 0; }
   .td-side.top > * { transform: rotate(0deg); }
+  /* Diagonal hazard stripe between players */
   .td-mid {
-    text-align: center; font-family: 'Bebas Neue', sans-serif; color: rgba(168,85,247,0.55);
-    letter-spacing: 0.15em; padding: 6px 0; font-size: 0.95rem;
+    position: relative;
+    text-align: center; font-family: 'Bebas Neue', sans-serif;
+    color: #1a0c00;
+    letter-spacing: 0.20em; padding: 10px 0; font-size: 1.1rem;
+    margin: 8px 0;
+    background-image: repeating-linear-gradient(
+      45deg,
+      #ffb627 0 14px,
+      #1a1430 14px 28px
+    );
+    border-radius: 10px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.20),
+      inset 0 -2px 0 rgba(0,0,0,0.45),
+      0 4px 12px rgba(0,0,0,0.4);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.40);
   }
   .td-word {
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem;
     color: var(--vex-text); letter-spacing: 0.18em;
-    display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;
+    display: flex; gap: 5px; flex-wrap: wrap; justify-content: center;
   }
   .td-letter {
-    width: 28px; height: 36px; line-height: 36px; text-align: center;
-    background: rgba(255,255,255,0.04); border: 1px solid var(--vex-border);
-    border-radius: 6px; transition: all 0.18s ease;
+    width: 30px; height: 40px; line-height: 40px; text-align: center;
+    background: linear-gradient(180deg, #2a2545 0%, #131028 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      inset 0 -2px 0 rgba(0,0,0,0.45),
+      0 2px 0 #050208;
+    transition: transform 0.15s ease, color 0.15s ease, background 0.18s ease, box-shadow 0.18s ease;
   }
   .td-letter.done {
-    background: rgba(34,197,94,0.18); color: #86efac; border-color: rgba(34,197,94,0.45);
+    background: linear-gradient(180deg, #34d57c 0%, #14532d 100%);
+    color: #f0fdf4;
+    border-color: rgba(255,255,255,0.20);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -2px 0 rgba(0,0,0,0.30),
+      0 2px 0 #052010,
+      0 0 12px rgba(34,197,94,0.45);
+    transform: translateY(-2px);
   }
   .td-keys {
-    display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; width: 100%;
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; width: 100%;
   }
   .td-key {
-    aspect-ratio: 1.1; background: var(--vex-surface);
-    border: 1px solid var(--vex-border); border-radius: 8px;
+    aspect-ratio: 1.1;
+    background: linear-gradient(180deg, #2a2545 0%, #14102a 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 9px;
     color: var(--vex-text); font-family: monospace; font-weight: 700;
     font-size: 1.05rem; display: grid; place-items: center;
-    cursor: pointer; user-select: none; transition: all 0.12s;
+    cursor: pointer; user-select: none;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      inset 0 -2px 0 rgba(0,0,0,0.45),
+      0 3px 0 #050208,
+      0 4px 8px rgba(0,0,0,0.35);
+    transition: transform 0.06s ease, box-shadow 0.06s ease, background 0.18s;
   }
-  .td-key:active { transform: scale(0.92); background: rgba(168,85,247,0.25); border-color: rgba(168,85,247,0.6); }
+  .td-key:active {
+    transform: translateY(3px);
+    background: linear-gradient(180deg, #5b3a8e 0%, #2c1957 100%);
+    color: #d8b4fe;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.20),
+      inset 0 -1px 0 rgba(0,0,0,0.35),
+      0 1px 0 #050208,
+      0 0 10px rgba(168,85,247,0.40);
+  }
   .td-key.shake { animation: tdShake 0.28s ease; }
-  @keyframes tdShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px); background:rgba(239,68,68,0.2)} 75%{transform:translateX(4px); background:rgba(239,68,68,0.2)} }
+  @keyframes tdShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px); background:linear-gradient(180deg,#9b1f1f,#3f0a0a); color:#fecaca} 75%{transform:translateX(5px); background:linear-gradient(180deg,#9b1f1f,#3f0a0a); color:#fecaca} }
   .td-side .td-name {
-    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.12em;
-    color: var(--vex-text-dim); font-size: 1rem;
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #2a2545, #141028);
+    border: 1px solid rgba(255,255,255,0.10);
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.14em;
+    color: var(--vex-text-dim); font-size: 1.05rem;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.15),
+      inset 0 -1px 0 rgba(0,0,0,0.40),
+      0 3px 8px rgba(0,0,0,0.35);
   }
-  .td-side .td-name.win { color: #ffb627; }
+  .td-side .td-name.win {
+    color: #1a0c00;
+    background: linear-gradient(180deg, #ffd166, #b07406);
+    border-color: rgba(255,255,255,0.25);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.45),
+      inset 0 -1px 0 rgba(0,0,0,0.30),
+      0 3px 0 #4a3000,
+      0 6px 14px -2px rgba(255,182,39,0.55);
+  }
   .td-rounds {
-    display: flex; gap: 4px;
+    display: flex; gap: 6px;
   }
   .td-round-pip {
-    width: 12px; height: 12px; border-radius: 50%;
-    background: rgba(255,255,255,0.12); border: 1px solid var(--vex-border);
+    width: 14px; height: 14px; border-radius: 50%;
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: inset 0 -1px 1px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.10);
   }
-  .td-round-pip.p1 { background: #22c55e; border-color: #22c55e; }
-  .td-round-pip.p2 { background: #ef4444; border-color: #ef4444; }
+  .td-round-pip.p1 {
+    background: radial-gradient(circle at 35% 30%, #86efac, #16a34a 70%, #052010);
+    border-color: #22c55e;
+    box-shadow: 0 0 10px rgba(34,197,94,0.65), inset 0 1px 1px rgba(255,255,255,0.30);
+  }
+  .td-round-pip.p2 {
+    background: radial-gradient(circle at 35% 30%, #fca5a5, #dc2626 70%, #4a0a0a);
+    border-color: #ef4444;
+    box-shadow: 0 0 10px rgba(239,68,68,0.65), inset 0 1px 1px rgba(255,255,255,0.30);
+  }
   .td-countdown {
     position: absolute; inset: 0; display: grid; place-items: center;
     background: rgba(7,11,20,0.85); backdrop-filter: blur(4px);
-    z-index: 10; border-radius: 14px;
-    font-family: 'Bebas Neue', sans-serif; font-size: 6rem; color: #a855f7;
-    text-shadow: 0 0 20px rgba(168,85,247,0.5);
+    z-index: 10; border-radius: 18px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 6.5rem; color: #c4b5fd;
+    text-shadow: 0 0 24px rgba(168,85,247,0.65), 0 4px 0 #2c1957, 0 6px 18px rgba(0,0,0,0.6);
     pointer-events: none;
+    animation: tdCountPop 0.5s ease-out;
   }
-  .td-countdown.go { color: #22c55e; text-shadow: 0 0 24px rgba(34,197,94,0.6); }
+  @keyframes tdCountPop { 0% { transform: scale(0.4); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+  .td-countdown.go { color: #86efac; text-shadow: 0 0 28px rgba(34,197,94,0.7), 0 4px 0 #052010, 0 6px 18px rgba(0,0,0,0.6); }
 </style>
 </head>
 <body class="vex-game">

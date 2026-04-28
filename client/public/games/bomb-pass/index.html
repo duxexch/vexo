@@ -10,128 +10,257 @@
   .bp-arena {
     width: 100%; max-width: 380px; margin: 0 auto;
     aspect-ratio: 3/4;
-    background: radial-gradient(circle at center, rgba(249,115,22,0.18), rgba(7,11,20,0.95));
-    border: 1px solid rgba(249,115,22,0.35);
-    border-radius: 14px;
+    background:
+      radial-gradient(circle at 50% 38%, rgba(249,115,22,0.30), transparent 55%),
+      radial-gradient(ellipse 100% 60% at 50% 100%, rgba(249,115,22,0.12), transparent 80%),
+      linear-gradient(180deg, #1a0c06 0%, #060306 100%);
+    border: 1px solid rgba(249,115,22,0.40);
+    border-radius: 18px;
     position: relative; overflow: hidden;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 0 24px rgba(249,115,22,0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -2px 0 rgba(0,0,0,0.55),
+      inset 0 0 36px rgba(249,115,22,0.25),
+      0 14px 28px -10px rgba(0,0,0,0.7);
+  }
+  /* Pulsing concentric danger rings around bomb */
+  .bp-arena::before {
+    content:""; position:absolute; left:50%; top:38%; width:300px; height:300px;
+    transform: translate(-50%,-50%);
+    border-radius: 50%;
+    background:
+      radial-gradient(circle, transparent 30%, rgba(249,115,22,0.18) 32%, transparent 36%),
+      radial-gradient(circle, transparent 50%, rgba(249,115,22,0.12) 52%, transparent 56%);
+    pointer-events: none; z-index: 0;
+    animation: bpRingPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes bpRingPulse { 0%,100% { opacity: 0.5; transform: translate(-50%,-50%) scale(0.92); } 50% { opacity: 1; transform: translate(-50%,-50%) scale(1.08); } }
+  /* Stadium floor lines fading toward horizon */
+  .bp-arena::after {
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(rgba(249,115,22,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(249,115,22,0.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: linear-gradient(180deg, transparent 0%, transparent 60%, #000 100%);
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, transparent 60%, #000 100%);
   }
   .bp-bomb {
     position: absolute; left: 50%; top: 38%; transform: translate(-50%,-50%);
-    width: 130px; height: 130px;
+    width: 140px; height: 140px;
     display: grid; place-items: center;
+    z-index: 2;
   }
   .bp-bomb-inner {
-    width: 110px; height: 110px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #525b6e 0%, #1f2937 60%, #0a0f1c);
-    box-shadow: 0 0 30px rgba(249,115,22,0.4), inset -8px -10px 14px rgba(0,0,0,0.55);
+    width: 118px; height: 118px; border-radius: 50%;
+    background:
+      radial-gradient(circle at 30% 25%, #ffffff 0%, #b9c1d2 6%, #525b6e 22%, #1f2937 55%, #0a0f1c 90%);
+    box-shadow:
+      0 0 38px rgba(249,115,22,0.55),
+      0 12px 24px rgba(0,0,0,0.55),
+      inset -10px -12px 18px rgba(0,0,0,0.55),
+      inset 6px 8px 14px rgba(255,255,255,0.10);
     position: relative;
     animation: bpJiggle 0.4s ease-in-out infinite;
   }
-  @keyframes bpJiggle { 0%,100%{transform:translate(0,0) rotate(0deg)} 50%{transform:translate(0,2px) rotate(-1.5deg)} }
+  /* Gloss highlight crescent */
+  .bp-bomb-inner::before {
+    content:""; position:absolute; top:8%; left:18%; width:40%; height:22%;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(255,255,255,0.55), rgba(255,255,255,0));
+    filter: blur(2px);
+    pointer-events: none;
+  }
+  @keyframes bpJiggle { 0%,100%{transform:translate(0,0) rotate(0deg)} 25%{transform:translate(-1px,2px) rotate(-1.5deg)} 75%{transform:translate(1px,-1px) rotate(1.5deg)} }
   .bp-bomb-inner::after {
-    content: ''; position: absolute; top: -10px; left: 50%; width: 4px; height: 30px;
-    background: linear-gradient(to top, #525b6e, #737373);
-    transform: translateX(-50%) rotate(20deg); transform-origin: bottom center;
+    content: ''; position: absolute; top: -14px; left: 50%; width: 5px; height: 36px;
+    background: linear-gradient(to top, #2a2a2a, #525b6e 30%, #737373);
+    transform: translateX(-50%) rotate(22deg); transform-origin: bottom center;
     border-radius: 2px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.30) inset, 0 -1px 0 rgba(0,0,0,0.4) inset;
   }
   .bp-spark {
-    position: absolute; top: -34px; left: calc(50% + 10px);
-    width: 14px; height: 14px; border-radius: 50%;
-    background: radial-gradient(circle, #fef08a, #f97316);
-    box-shadow: 0 0 18px #f97316, 0 0 32px #fb923c;
+    position: absolute; top: -38px; left: calc(50% + 12px);
+    width: 16px; height: 16px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fffbeb, #fef08a 35%, #f97316 70%, #c2410c);
+    box-shadow:
+      0 0 22px #f97316,
+      0 0 40px #fb923c,
+      0 0 60px rgba(249,115,22,0.55);
     animation: bpSpark 0.3s ease-in-out infinite alternate;
+    z-index: 3;
   }
-  @keyframes bpSpark { 0%{transform:scale(0.85)} 100%{transform:scale(1.25)} }
+  @keyframes bpSpark { 0%{transform:scale(0.85) rotate(0deg)} 100%{transform:scale(1.30) rotate(20deg)} }
   .bp-pass-btn {
-    position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
-    padding: 18px 40px; background: linear-gradient(135deg,#f97316,#7c2d12);
-    color: #fff; border: none; border-radius: 99px;
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.18em;
-    cursor: pointer; box-shadow: 0 0 24px -4px #f97316, 0 6px 18px rgba(0,0,0,0.5);
-    transition: transform 0.12s ease;
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    padding: 18px 44px;
+    background: linear-gradient(180deg, #fb923c 0%, #ea580c 50%, #7c2d12 100%);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 999px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; letter-spacing: 0.20em;
+    cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -2px 0 rgba(0,0,0,0.40),
+      0 5px 0 #4a1505,
+      0 8px 22px -3px rgba(249,115,22,0.65);
+    text-shadow: 0 1px 0 rgba(0,0,0,0.30);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+    z-index: 5;
   }
-  .bp-pass-btn:active { transform: translateX(-50%) scale(0.94); }
+  .bp-pass-btn:active {
+    transform: translateX(-50%) translateY(4px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.30),
+      inset 0 -1px 0 rgba(0,0,0,0.35),
+      0 1px 0 #4a1505,
+      0 2px 6px rgba(249,115,22,0.50);
+  }
   .bp-current-name {
-    position: absolute; top: 14px; left: 0; right: 0; text-align: center;
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.12em;
-    color: #fdba74;
-    text-shadow: 0 0 12px rgba(249,115,22,0.5);
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 3;
+    padding: 8px 24px; border-radius: 12px;
+    background: linear-gradient(180deg, #fdba74, #c2410c);
+    color: #1a0c06;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.14em;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.45),
+      inset 0 -1px 0 rgba(0,0,0,0.30),
+      0 4px 0 #4a1505,
+      0 6px 14px -2px rgba(249,115,22,0.55);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.30);
   }
   .bp-players {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
     width: 100%; margin: 12px 0;
   }
   .bp-player {
-    background: var(--vex-surface); border: 1px solid var(--vex-border);
-    border-radius: 10px; padding: 10px;
+    background: linear-gradient(180deg, #1a1f3a 0%, #0a0e1c 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 10px 12px;
     display: flex; align-items: center; gap: 10px;
-    transition: all 0.18s ease;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -1px 0 rgba(0,0,0,0.40),
+      0 3px 0 #050912,
+      0 4px 8px rgba(0,0,0,0.30);
+    transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
   }
   .bp-player.active {
-    background: rgba(249,115,22,0.18); border-color: rgba(249,115,22,0.55);
-    box-shadow: 0 0 14px -4px #f97316;
+    background: linear-gradient(180deg, #ea580c 0%, #7c2d12 100%);
+    color: #fff;
+    border-color: rgba(255,255,255,0.20);
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.35),
+      inset 0 -2px 0 rgba(0,0,0,0.30),
+      0 4px 0 #4a1505,
+      0 6px 16px -2px rgba(249,115,22,0.55);
   }
   .bp-player.dead {
-    opacity: 0.35; filter: grayscale(0.7);
+    opacity: 0.30; filter: grayscale(0.85);
+    transform: translateY(2px);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 1px 0 #050912;
   }
   .bp-player-dot {
-    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+    width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+    box-shadow: inset 0 -2px 3px rgba(0,0,0,0.4), inset 0 2px 2px rgba(255,255,255,0.35);
   }
   .bp-player-name {
-    flex: 1; font-weight: 700; font-size: 0.95rem;
+    flex: 1; font-weight: 800; font-size: 0.98rem;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.45);
   }
   .bp-lives {
-    display: flex; gap: 3px;
+    display: flex; gap: 4px;
   }
   .bp-life {
-    width: 9px; height: 9px; border-radius: 50%;
-    background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,0.6);
+    width: 11px; height: 11px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fca5a5, #dc2626 70%, #4a0a0a);
+    box-shadow: 0 0 8px rgba(239,68,68,0.7), inset 0 1px 1px rgba(255,255,255,0.30);
   }
-  .bp-life.gone { background: rgba(255,255,255,0.12); box-shadow: none; }
+  .bp-life.gone {
+    background: rgba(0,0,0,0.40);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.6);
+  }
   .bp-explosion {
     position: absolute; inset: 0; display: grid; place-items: center;
-    background: radial-gradient(circle, rgba(249,115,22,0.6), rgba(0,0,0,0.7));
-    z-index: 5; opacity: 0; pointer-events: none;
+    background: radial-gradient(circle, rgba(255,255,255,0.20) 0%, rgba(249,115,22,0.7) 25%, rgba(0,0,0,0.75) 70%);
+    z-index: 8; opacity: 0; pointer-events: none;
     transition: opacity 0.2s;
   }
   .bp-explosion.show { opacity: 1; }
   .bp-explosion-text {
-    font-family: 'Bebas Neue', sans-serif; font-size: 4rem; color: #fff;
-    text-shadow: 0 0 30px #f97316, 0 0 50px #ef4444;
-    animation: bpExplode 0.5s ease-out;
+    font-family: 'Bebas Neue', sans-serif; font-size: 4.4rem; color: #fff;
+    text-shadow: 0 0 32px #f97316, 0 0 56px #ef4444, 0 4px 0 #4a1505;
+    letter-spacing: 0.08em;
+    animation: bpExplode 0.55s ease-out;
   }
-  @keyframes bpExplode { 0%{transform:scale(0.3)} 100%{transform:scale(1.3)} }
+  @keyframes bpExplode { 0%{transform:scale(0.3) rotate(-10deg); opacity: 0;} 60%{transform:scale(1.4) rotate(2deg); opacity: 1;} 100%{transform:scale(1.3) rotate(0); opacity: 1;} }
   .bp-setup-overlay {
-    position: absolute; inset: 0; background: rgba(7,11,20,0.96);
-    z-index: 20; padding: 16px; display: flex; flex-direction: column; gap: 10px;
-    align-items: stretch; justify-content: center; border-radius: 14px;
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(15,8,4,0.97), rgba(7,4,2,0.97));
+    z-index: 20; padding: 18px; display: flex; flex-direction: column; gap: 10px;
+    align-items: stretch; justify-content: center; border-radius: 18px;
   }
   .bp-setup-title {
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: #fdba74;
-    text-align: center; letter-spacing: 0.1em;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; color: #fdba74;
+    text-align: center; letter-spacing: 0.12em;
+    text-shadow: 0 0 14px rgba(249,115,22,0.55), 0 3px 0 rgba(0,0,0,0.5);
   }
   .bp-setup-row { display: flex; gap: 8px; align-items: center; }
   .bp-setup-row input {
-    flex: 1; padding: 10px; background: var(--vex-surface);
-    border: 1px solid var(--vex-border); border-radius: 8px;
+    flex: 1; padding: 11px;
+    background: linear-gradient(180deg, #1a1f3a, #0a0e1c);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 10px;
     color: var(--vex-text); font-family: inherit; font-size: 0.95rem;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), inset 0 2px 4px rgba(0,0,0,0.4);
   }
   .bp-setup-start {
-    margin-top: 12px; padding: 14px; background: linear-gradient(135deg,#f97316,#7c2d12);
-    color: #fff; border: none; border-radius: 12px; font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.4rem; letter-spacing: 0.15em; cursor: pointer;
-    box-shadow: 0 0 18px -3px #f97316;
-  }
-  .bp-count-row { display: flex; gap: 6px; justify-content: center; margin: 6px 0; }
-  .bp-count-btn {
-    width: 40px; height: 40px; border-radius: 10px;
-    background: var(--vex-surface); border: 1px solid var(--vex-border);
-    color: var(--vex-text); font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem;
+    margin-top: 14px; padding: 16px;
+    background: linear-gradient(180deg, #fb923c 0%, #ea580c 50%, #7c2d12 100%);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.20);
+    border-radius: 14px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.18em;
     cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -2px 0 rgba(0,0,0,0.30),
+      0 5px 0 #4a1505,
+      0 8px 22px -4px rgba(249,115,22,0.55);
+    text-shadow: 0 1px 0 rgba(0,0,0,0.30);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
   }
+  .bp-setup-start:active {
+    transform: translateY(4px);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 1px 0 #4a1505;
+  }
+  .bp-count-row { display: flex; gap: 8px; justify-content: center; margin: 8px 0; }
+  .bp-count-btn {
+    width: 46px; height: 46px; border-radius: 12px;
+    background: linear-gradient(180deg, #1a1f3a, #0a0e1c);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: var(--vex-text);
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      inset 0 -2px 0 rgba(0,0,0,0.40),
+      0 3px 0 #050912;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .bp-count-btn:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 0 #050912; }
   .bp-count-btn.active {
-    background: rgba(249,115,22,0.25); color: #fdba74; border-color: rgba(249,115,22,0.6);
+    background: linear-gradient(180deg, #fb923c, #c2410c);
+    color: #1a0c06;
+    border-color: rgba(255,255,255,0.25);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.45),
+      inset 0 -2px 0 rgba(0,0,0,0.30),
+      0 3px 0 #4a1505,
+      0 5px 12px -2px rgba(249,115,22,0.55);
   }
 </style>
 </head>

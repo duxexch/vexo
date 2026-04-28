@@ -10,33 +10,75 @@
   .pg-arena {
     width: 100%; max-width: 360px; margin: 0 auto;
     aspect-ratio: 3/4;
-    background: linear-gradient(180deg,#072a36,#031b25);
-    border: 1px solid rgba(34,211,238,0.3);
-    border-radius: 14px;
+    background:
+      radial-gradient(ellipse 80% 30% at 50% 0%, rgba(34,211,238,0.20), transparent 60%),
+      radial-gradient(ellipse 80% 30% at 50% 100%, rgba(255,182,39,0.18), transparent 60%),
+      linear-gradient(180deg,#062235 0%,#020c14 100%);
+    border: 1px solid rgba(34,211,238,0.35);
+    border-radius: 18px;
     position: relative; overflow: hidden;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 0 28px rgba(34,211,238,0.1);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      inset 0 -2px 0 rgba(0,0,0,0.55),
+      inset 0 0 30px rgba(34,211,238,0.16),
+      0 14px 28px -10px rgba(0,0,0,0.7);
     touch-action: none;
   }
-  .pg-canvas { width:100%; height:100%; display:block; }
+  /* faint stadium grid */
+  .pg-arena::before {
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(rgba(34,211,238,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,211,238,0.06) 1px, transparent 1px);
+    background-size: 30px 30px;
+    mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 90%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 90%);
+  }
+  /* center spotlight beam */
+  .pg-arena::after {
+    content:""; position:absolute; inset:-8% -8%; pointer-events:none; z-index:0;
+    background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.05) 50%, transparent 65%);
+    animation: vexBeamSweep 9s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+  .pg-canvas { position:relative; z-index:1; width:100%; height:100%; display:block; }
   .pg-mode-row {
-    display: flex; gap: 8px; justify-content: center; margin-bottom: 12px;
+    display: flex; gap: 10px; justify-content: center; margin-bottom: 14px;
   }
   .pg-mode-btn {
-    flex: 1; max-width: 130px; padding: 10px;
-    background: var(--vex-surface); border: 1px solid var(--vex-border);
-    border-radius: 10px; color: var(--vex-text-dim); font-family: inherit;
-    font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.18s;
+    flex: 1; max-width: 140px; padding: 11px;
+    background: linear-gradient(180deg, #1a2540 0%, #0a1224 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    color: var(--vex-text-dim); font-family: inherit;
+    font-size: 0.92rem; font-weight: 700;
+    cursor: pointer; letter-spacing: 0.04em;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -2px 0 rgba(0,0,0,0.45),
+      0 3px 0 #050912,
+      0 5px 10px rgba(0,0,0,0.4);
+    transition: transform 0.08s ease, box-shadow 0.08s ease, color 0.18s, background 0.18s;
   }
+  .pg-mode-btn:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.4), 0 1px 0 #050912; }
   .pg-mode-btn.active {
-    background: rgba(34,211,238,0.15); color: #67e8f9; border-color: rgba(34,211,238,0.55);
-    box-shadow: 0 0 14px -4px #22d3ee;
+    background: linear-gradient(180deg, #38e6f9 0%, #0891b2 100%);
+    color: #02323b;
+    border-color: rgba(255,255,255,0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -2px 0 rgba(0,0,0,0.30),
+      0 3px 0 #074150,
+      0 6px 16px -2px rgba(34,211,238,0.55);
   }
   .pg-score-overlay {
     position: absolute; left: 0; right: 0; text-align: center;
-    font-family: 'Bebas Neue', sans-serif; font-size: 4.6rem; line-height: 1;
+    font-family: 'Bebas Neue', sans-serif; font-size: 4.8rem; line-height: 1;
     color: rgba(34,211,238,0.18); pointer-events: none; user-select: none;
+    text-shadow: 0 0 18px rgba(34,211,238,0.25);
+    z-index: 0;
   }
-  .pg-score-top { top: 38%; }
+  .pg-score-top { top: 38%; color: rgba(255,182,39,0.18); text-shadow: 0 0 18px rgba(255,182,39,0.25); }
   .pg-score-bot { bottom: 38%; transform: rotate(180deg); }
 </style>
 </head>
@@ -119,6 +161,30 @@
 
   let p1, p2, ball, scores, gameOver, raf, lastT;
   let touchTop = null, touchBot = null;
+  // Cached paint assets — rebuilt on resize/reset only, NEVER per-frame.
+  let padGrad1 = null, padGrad2 = null;     // linear gradients in paddle-local coords (0..p.h)
+  let ballGrad = null;                        // radial gradient in ball-local coords centered at (0,0)
+  let ballGradRadius = 0;                     // radius the cached gradient was built for
+  function rebuildPaintAssets(){
+    // paddle gradients use local Y coords (0 → p.h); we translate before fill
+    if (p1){
+      padGrad1 = ctx.createLinearGradient(0, 0, 0, p1.h);
+      padGrad1.addColorStop(0, '#22d3ee'); padGrad1.addColorStop(1, '#0e7490');
+    }
+    if (p2){
+      padGrad2 = ctx.createLinearGradient(0, 0, 0, p2.h);
+      padGrad2.addColorStop(0, '#ffd166'); padGrad2.addColorStop(1, '#7c5300');
+    }
+    if (ball){ rebuildBallGrad(ball.r); }
+  }
+  function rebuildBallGrad(r){
+    ballGradRadius = r;
+    // local coords: highlight at (-0.35r, -0.4r), center at (0,0)
+    ballGrad = ctx.createRadialGradient(-r*0.35, -r*0.4, 1, 0, 0, r);
+    ballGrad.addColorStop(0, '#ffffff');
+    ballGrad.addColorStop(0.55, '#e2e8f0');
+    ballGrad.addColorStop(1, '#64748b');
+  }
 
   function applyLang(){
     const s = STRINGS[lang];
@@ -152,6 +218,7 @@
     $('bigP1').textContent = 0; $('bigP2').textContent = 0;
     $('endOverlay').classList.remove('show');
     resetBall(Math.random() < 0.5 ? 1 : -1);
+    rebuildPaintAssets();
     if (raf) cancelAnimationFrame(raf);
     lastT = performance.now();
     raf = requestAnimationFrame(loop);
@@ -230,32 +297,63 @@
     resetBall(who === 'p1' ? -1 : 1);
   }
 
+  // Trail for ball motion blur (cheap — opacity-only fades stored positions)
+  const TRAIL = [];
+  const TRAIL_MAX = 5;
+
   function draw(){
     ctx.clearRect(0,0,W,H);
-    // mid line
-    ctx.strokeStyle = 'rgba(34,211,238,0.25)';
-    ctx.setLineDash([6, 8]); ctx.lineWidth = 1;
+    // mid line — twin-track look
+    ctx.strokeStyle = 'rgba(34,211,238,0.30)';
+    ctx.setLineDash([8, 10]); ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
     ctx.setLineDash([]);
-    // paddles
-    drawPad(p1, '#22d3ee');
-    drawPad(p2, '#ffb627');
-    // ball
-    ctx.shadowColor = '#fff'; ctx.shadowBlur = 14;
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
+    // center circle
+    ctx.strokeStyle = 'rgba(34,211,238,0.18)';
+    ctx.beginPath(); ctx.arc(W/2, H/2, Math.min(W,H)*0.10, 0, Math.PI*2); ctx.stroke();
+    // paddles — 3D bevel via cached gradient + rim
+    drawPad(p1, '#22d3ee', '#0e7490', padGrad1);
+    drawPad(p2, '#ffd166', '#7c5300', padGrad2);
+    // ball trail (back to front)
+    for (let i = 0; i < TRAIL.length; i++){
+      const t = TRAIL[i];
+      const a = (i + 1) / (TRAIL.length + 1) * 0.35;
+      ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(t.x, t.y, ball.r * (0.65 + i*0.06), 0, Math.PI*2); ctx.fill();
+    }
+    // ball — sphere via cached radial gradient (translate, then draw at origin)
+    if (ball.r !== ballGradRadius) rebuildBallGrad(ball.r);
+    ctx.shadowColor = '#7dd3fc'; ctx.shadowBlur = 12;
+    ctx.save();
+    ctx.translate(ball.x, ball.y);
+    ctx.fillStyle = ballGrad;
+    ctx.beginPath(); ctx.arc(0, 0, ball.r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
     ctx.shadowBlur = 0;
+    // record position for next frame's trail
+    TRAIL.push({x: ball.x, y: ball.y});
+    if (TRAIL.length > TRAIL_MAX) TRAIL.shift();
   }
 
-  function drawPad(p, color){
-    ctx.shadowColor = color; ctx.shadowBlur = 14;
-    ctx.fillStyle = color;
+  function drawPad(p, lightColor, darkColor, cachedGrad){
+    // soft glow base
+    ctx.shadowColor = lightColor; ctx.shadowBlur = 16;
+    // body — cached vertical gradient (translate to paddle origin first)
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.fillStyle = cachedGrad;
     if (ctx.roundRect){
-      ctx.beginPath(); ctx.roundRect(p.x, p.y, p.w, p.h, 4); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(0, 0, p.w, p.h, p.h/2); ctx.fill();
     } else {
-      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.fillRect(0, 0, p.w, p.h);
     }
     ctx.shadowBlur = 0;
+    // rim highlight (top)
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    if (ctx.roundRect){
+      ctx.beginPath(); ctx.roundRect(4, 1, p.w - 8, Math.max(1.5, p.h*0.25), p.h*0.15); ctx.fill();
+    }
+    ctx.restore();
   }
 
   function end(winner){

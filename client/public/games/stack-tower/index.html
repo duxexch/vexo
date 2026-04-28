@@ -10,25 +10,61 @@
   .st-arena {
     width: 100%; max-width: 360px; margin: 0 auto;
     aspect-ratio: 3/4;
-    background: linear-gradient(180deg,#0a1020,#070b14);
-    border: 1px solid var(--vex-border);
-    border-radius: 14px; padding: 0;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    background:
+      radial-gradient(ellipse 80% 40% at 50% 100%, rgba(255,182,39,0.18), transparent 70%),
+      linear-gradient(180deg,#0a1530 0%,#040814 100%);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 18px; padding: 0;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -2px 0 rgba(0,0,0,0.55),
+      0 14px 28px -10px rgba(0,0,0,0.7),
+      0 4px 10px rgba(0,0,0,0.45);
     position: relative; overflow: hidden;
     cursor: pointer;
   }
-  .st-canvas { width: 100%; height: 100%; display: block; touch-action: manipulation; }
+  /* stadium floor — fades toward bottom (horizon) */
+  .st-arena::before {
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: linear-gradient(180deg, transparent 0%, transparent 55%, #000 100%);
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, transparent 55%, #000 100%);
+    animation: vexFloorScroll 8s linear infinite;
+    will-change: background-position;
+  }
+  /* horizon glow line */
+  .st-arena::after {
+    content:""; position:absolute; left:0; right:0; bottom:30%; height:1px; z-index:0;
+    background: linear-gradient(90deg, transparent, rgba(255,182,39,0.55) 50%, transparent);
+    box-shadow: 0 0 12px rgba(255,182,39,0.4);
+    pointer-events: none;
+  }
+  .st-canvas { position:relative; z-index:1; width: 100%; height: 100%; display: block; touch-action: manipulation; }
   .st-tap-hint {
     position: absolute; bottom: 16px; left: 0; right: 0; text-align: center;
-    color: rgba(255,255,255,0.55); font-size: 0.85rem; font-weight: 600;
+    color: rgba(255,255,255,0.65); font-size: 0.85rem; font-weight: 700;
+    letter-spacing: 0.15em; text-transform: uppercase;
     text-shadow: 0 0 8px rgba(0,0,0,0.6); pointer-events: none;
     animation: vexPulse 1.2s ease-in-out infinite;
+    z-index: 2;
   }
   .st-stat-badge {
-    position: absolute; top: 12px; right: 12px;
-    background: rgba(0,0,0,0.55); padding: 6px 12px; border-radius: 99px;
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: #ffb627;
-    text-shadow: 0 0 10px rgba(255,182,39,0.4); pointer-events: none;
+    position: absolute; top: 12px; right: 12px; z-index: 2;
+    padding: 6px 16px; border-radius: 12px;
+    background: linear-gradient(180deg, #ffd166, #b07406);
+    color: #1a0c00;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; line-height: 1;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.55),
+      inset 0 -2px 0 rgba(0,0,0,0.30),
+      0 4px 0 #4a3000,
+      0 6px 16px -2px rgba(255,182,39,0.55);
+    transform: perspective(200px) rotateX(8deg);
   }
 </style>
 </head>
@@ -108,6 +144,26 @@
   let cameraOffset; // how much we've shifted up
   let score, best, perfectStreak;
   let alive, raf;
+  // Cached paint assets — rebuilt only on resize / new color, NEVER per-frame.
+  let bgGrad = null;            // background vertical gradient
+  const blockGradCache = new Map(); // key: color → CanvasGradient (relative coords)
+  function rebuildBgGrad(){
+    bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+    bgGrad.addColorStop(0, 'rgba(255,182,39,0.06)');
+    bgGrad.addColorStop(1, 'rgba(7,11,20,0)');
+  }
+  function getBlockGrad(color, sideColor){
+    const key = color + '|' + sideColor;
+    let g = blockGradCache.get(key);
+    if (g) return g;
+    // Relative coords (0 → blockH); we'll translate the canvas to (x,y) before fill.
+    const blockH = BLOCK_H - 2;
+    g = ctx.createLinearGradient(0, 0, 0, blockH);
+    g.addColorStop(0, color);
+    g.addColorStop(1, sideColor);
+    blockGradCache.set(key, g);
+    return g;
+  }
 
   function applyLang(){
     const s = STRINGS[lang];
@@ -125,9 +181,15 @@
     const hue = (180 + i*18) % 360;
     return `hsl(${hue}, 70%, 55%)`;
   }
+  // darker shade of an HSL color for the 3D side-face
+  function shadeForLevel(i){
+    const hue = (180 + i*18) % 360;
+    return `hsl(${hue}, 65%, 30%)`;
+  }
 
   function reset(){
     fitCanvas();
+    rebuildBgGrad();
     const baseW = W * 0.5;
     stack = [{ x: (W - baseW)/2, w: baseW, color: '#1e3a8a' }];
     cameraOffset = 0;
@@ -208,32 +270,53 @@
 
   function draw(){
     ctx.clearRect(0,0,W,H);
-    // BG glow
-    const grad = ctx.createLinearGradient(0,0,0,H);
-    grad.addColorStop(0, 'rgba(255,182,39,0.06)');
-    grad.addColorStop(1, 'rgba(7,11,20,0)');
-    ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+    // BG glow — cached gradient (rebuilt only on resize)
+    ctx.fillStyle = bgGrad; ctx.fillRect(0,0,W,H);
     // stack
     stack.forEach((b, i) => {
       const y = H - (i+1)*BLOCK_H + cameraOffset;
       if (y > H + BLOCK_H || y < -BLOCK_H) return;
-      drawBlock(b.x, y, b.w, b.color);
+      drawBlock(b.x, y, b.w, b.color, false, i);
     });
     // moving block
-    if (cur && alive) drawBlock(cur.x, cur.y, cur.w, cur.color, true);
+    if (cur && alive) drawBlock(cur.x, cur.y, cur.w, cur.color, true, stack.length);
   }
 
-  function drawBlock(x, y, w, color, glow){
+  function drawBlock(x, y, w, color, glow, levelIdx){
+    const idx = (typeof levelIdx === 'number') ? levelIdx : stack.length;
+    const sideColor = shadeForLevel(idx);
+    const depth = 5;
+    const blockH = BLOCK_H - 2;
+    // 3D side faces (right-bottom isometric offset)
+    ctx.fillStyle = sideColor;
+    ctx.beginPath();
+    ctx.moveTo(x + w, y);
+    ctx.lineTo(x + w + depth, y + depth);
+    ctx.lineTo(x + w + depth, y + blockH + depth);
+    ctx.lineTo(x + depth, y + blockH + depth);
+    ctx.lineTo(x, y + blockH);
+    ctx.lineTo(x + w, y + blockH);
+    ctx.closePath();
+    ctx.fill();
+    // optional glow on moving block
     if (glow){ ctx.shadowColor = color; ctx.shadowBlur = 14; }
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, w, BLOCK_H - 2);
+    // front face — cached vertical gradient (relative coords; translate before fill)
+    const grad = getBlockGrad(color, sideColor);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, blockH);
+    ctx.restore();
     ctx.shadowBlur = 0;
-    // top highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.18)';
-    ctx.fillRect(x, y, w, 4);
-    // bottom shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.fillRect(x, y + BLOCK_H - 6, w, 4);
+    // glossy top highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.32)';
+    ctx.fillRect(x, y, w, 3);
+    // soft bottom shadow line
+    ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    ctx.fillRect(x, y + blockH - 3, w, 2);
+    // crisp top edge
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillRect(x, y, w, 1);
   }
 
   function die(){

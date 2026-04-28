@@ -10,107 +10,207 @@
   .qr-arena {
     width: 100%; max-width: 380px; margin: 0 auto;
     aspect-ratio: 3/4;
-    background: linear-gradient(180deg,#0a1a30,#040810);
-    border: 1px solid rgba(30,136,255,0.3);
-    border-radius: 14px;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 50%, rgba(30,136,255,0.18), transparent 70%),
+      linear-gradient(180deg,#0a1a30 0%,#040810 100%);
+    border: 1px solid rgba(30,136,255,0.40);
+    border-radius: 18px;
     position: relative; overflow: hidden;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -2px 0 rgba(0,0,0,0.55),
+      0 14px 28px -10px rgba(0,0,0,0.7);
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-rows: 1fr 1fr;
+    gap: 4px;
+    padding: 4px;
   }
   .qr-buzzer {
     position: relative; cursor: pointer;
     display: grid; place-items: center;
-    transition: all 0.18s ease;
+    border-radius: 16px;
     user-select: none;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.10);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.30),
+      inset 0 -3px 0 rgba(0,0,0,0.40),
+      0 5px 0 rgba(0,0,0,0.55),
+      0 8px 18px -3px rgba(0,0,0,0.45);
+    transition: transform 0.10s ease, box-shadow 0.10s ease, filter 0.18s ease;
+  }
+  /* Glossy dome highlight on each buzzer */
+  .qr-buzzer::before {
+    content:""; position:absolute; left:0; right:0; top:0; height:48%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.05) 60%, transparent 100%);
+    pointer-events: none;
+    border-radius: 16px 16px 0 0;
+  }
+  /* Inner ring on each buzzer */
+  .qr-buzzer::after {
+    content:""; position:absolute; inset: 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.20);
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.30);
+    pointer-events: none;
   }
   .qr-buzzer .qr-buzzer-content {
-    text-align: center; padding: 8px;
+    text-align: center; padding: 10px; position: relative; z-index: 1;
   }
   .qr-buzzer .qr-name {
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem;
-    letter-spacing: 0.1em; opacity: 0.85;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem;
+    letter-spacing: 0.12em; opacity: 0.95;
+    text-shadow: 0 2px 0 rgba(0,0,0,0.45);
   }
   .qr-buzzer .qr-score {
-    font-family: 'Bebas Neue', sans-serif; font-size: 2.4rem; line-height: 1;
+    font-family: 'Bebas Neue', sans-serif; font-size: 2.6rem; line-height: 1;
     margin-top: 4px;
+    text-shadow: 0 2px 0 rgba(0,0,0,0.45), 0 0 14px currentColor;
   }
-  .qr-buzzer.active { box-shadow: inset 0 0 30px currentColor; }
-  .qr-buzzer.locked { opacity: 0.45; }
-  .qr-buzzer.correct { animation: qrFlashGood 0.5s ease; }
-  .qr-buzzer.wrong { animation: qrFlashBad 0.5s ease; }
-  @keyframes qrFlashGood { 0%,100%{} 50%{box-shadow: inset 0 0 60px #22c55e} }
-  @keyframes qrFlashBad { 0%,100%{} 50%{box-shadow: inset 0 0 60px #ef4444} }
-  .qr-buzzer[data-i="0"] { background: linear-gradient(135deg,#22c55e,#14532d); color: #86efac; }
-  .qr-buzzer[data-i="1"] { background: linear-gradient(135deg,#ef4444,#7f1d1d); color: #fca5a5; }
-  .qr-buzzer[data-i="2"] { background: linear-gradient(135deg,#ffb627,#7c5300); color: #fde68a; }
-  .qr-buzzer[data-i="3"] { background: linear-gradient(135deg,#a855f7,#581c87); color: #d8b4fe; }
+  .qr-buzzer:active { transform: translateY(4px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.20), inset 0 -1px 0 rgba(0,0,0,0.35), 0 1px 0 rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.4); }
+  .qr-buzzer.active { transform: translateY(-2px) scale(1.02); }
+  .qr-buzzer.active::before { opacity: 0.55; }
+  .qr-buzzer.locked { opacity: 0.40; transform: translateY(2px); }
+  /* Compositor-only flashes: pulse a pre-positioned overlay via opacity + a tiny scale on the buzzer.
+     We keep ::before tinted with a green/red overlay (set via .correct / .wrong) and animate its opacity. */
+  .qr-buzzer.correct::before {
+    background: radial-gradient(60% 80% at 50% 30%, rgba(34,197,94,0.85), rgba(34,197,94,0.0) 75%);
+    opacity: 0;
+    animation: qrPulseGood 0.6s ease;
+  }
+  .qr-buzzer.wrong::before {
+    background: radial-gradient(60% 80% at 50% 30%, rgba(239,68,68,0.85), rgba(239,68,68,0.0) 75%);
+    opacity: 0;
+    animation: qrPulseBad 0.6s ease;
+  }
+  .qr-buzzer.correct, .qr-buzzer.wrong { animation: qrBuzzerPop 0.6s ease; }
+  @keyframes qrPulseGood { 0%,100%{ opacity: 0; } 30%,70%{ opacity: 1; } }
+  @keyframes qrPulseBad  { 0%,100%{ opacity: 0; } 30%,70%{ opacity: 1; } }
+  @keyframes qrBuzzerPop { 0%,100%{ transform: translateY(0) scale(1);} 30%,70%{ transform: translateY(-3px) scale(1.04);} }
+  .qr-buzzer[data-i="0"] { background: radial-gradient(ellipse 100% 100% at 50% 25%, #4ade80 0%, #22c55e 30%, #14532d 70%, #052010 100%); color: #f0fdf4; }
+  .qr-buzzer[data-i="1"] { background: radial-gradient(ellipse 100% 100% at 50% 25%, #fca5a5 0%, #ef4444 30%, #7f1d1d 70%, #2a0606 100%); color: #fee2e2; }
+  .qr-buzzer[data-i="2"] { background: radial-gradient(ellipse 100% 100% at 50% 25%, #fde68a 0%, #ffb627 30%, #7c5300 70%, #2a1c00 100%); color: #fffbeb; }
+  .qr-buzzer[data-i="3"] { background: radial-gradient(ellipse 100% 100% at 50% 25%, #d8b4fe 0%, #a855f7 30%, #581c87 70%, #1d0a3a 100%); color: #faf5ff; }
   .qr-question-overlay {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-    width: 80%; max-width: 280px;
-    background: rgba(7,11,20,0.95); backdrop-filter: blur(8px);
-    border: 1.5px solid rgba(30,136,255,0.5);
-    border-radius: 14px; padding: 14px;
+    width: 84%; max-width: 290px;
+    background: linear-gradient(180deg, rgba(15,25,50,0.97) 0%, rgba(7,11,20,0.97) 100%);
+    backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(30,136,255,0.55);
+    border-radius: 16px; padding: 16px;
     z-index: 5; text-align: center;
-    box-shadow: 0 0 30px rgba(30,136,255,0.3);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      inset 0 -2px 0 rgba(0,0,0,0.40),
+      0 0 36px rgba(30,136,255,0.40),
+      0 14px 28px -8px rgba(0,0,0,0.7);
     transition: opacity 0.2s ease;
   }
   .qr-q-text {
-    font-size: 1.05rem; font-weight: 700; line-height: 1.35; color: var(--vex-text);
-    margin-bottom: 12px;
+    font-size: 1.08rem; font-weight: 700; line-height: 1.4; color: var(--vex-text);
+    margin-bottom: 14px;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.40);
   }
   .qr-q-num {
-    font-family: 'Bebas Neue', sans-serif; font-size: 0.9rem;
-    color: #93c5fd; letter-spacing: 0.15em; margin-bottom: 6px;
+    display: inline-block;
+    padding: 4px 12px; border-radius: 999px;
+    background: linear-gradient(180deg, #4a9eff, #1e88ff);
+    color: #fff;
+    font-family: 'Bebas Neue', sans-serif; font-size: 0.95rem;
+    letter-spacing: 0.18em; margin-bottom: 10px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 2px 0 #0a3a78, 0 4px 8px rgba(30,136,255,0.50);
   }
-  .qr-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .qr-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .qr-answer {
-    padding: 10px 6px; background: var(--vex-surface);
-    border: 1px solid var(--vex-border); border-radius: 8px;
-    color: var(--vex-text); font-family: inherit; font-weight: 600;
-    font-size: 0.9rem; cursor: pointer; transition: all 0.18s;
+    padding: 12px 8px;
+    background: linear-gradient(180deg, #2a3550 0%, #131b30 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    color: var(--vex-text); font-family: inherit; font-weight: 700;
+    font-size: 0.92rem; cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.15),
+      inset 0 -2px 0 rgba(0,0,0,0.40),
+      0 3px 0 #050912;
+    transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.18s;
   }
-  .qr-answer:hover { background: rgba(30,136,255,0.18); }
-  .qr-answer.correct { background: rgba(34,197,94,0.3); border-color: #22c55e; }
-  .qr-answer.wrong { background: rgba(239,68,68,0.3); border-color: #ef4444; }
+  .qr-answer:hover { background: linear-gradient(180deg, #3a4870, #1a2540); }
+  .qr-answer:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 0 #050912; }
+  .qr-answer.correct {
+    background: linear-gradient(180deg, #34d57c, #14532d);
+    color: #f0fdf4; border-color: #22c55e;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.40), 0 3px 0 #052010, 0 0 14px rgba(34,197,94,0.55);
+  }
+  .qr-answer.wrong {
+    background: linear-gradient(180deg, #f87171, #7f1d1d);
+    color: #fee2e2; border-color: #ef4444;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.40), 0 3px 0 #4a0a0a, 0 0 14px rgba(239,68,68,0.55);
+  }
   .qr-buzz-state {
     position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
     font-family: 'Bebas Neue', sans-serif; font-size: 0.95rem;
-    color: rgba(255,255,255,0.5); letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.55); letter-spacing: 0.18em;
     text-align: center; pointer-events: none;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.5);
   }
   .qr-setup-overlay {
-    position: absolute; inset: 0; background: rgba(7,11,20,0.96);
-    z-index: 20; padding: 14px; display: flex; flex-direction: column; gap: 10px;
-    align-items: stretch; justify-content: center; border-radius: 14px;
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(8,12,28,0.97), rgba(4,6,14,0.97));
+    z-index: 20; padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    align-items: stretch; justify-content: center; border-radius: 18px;
   }
   .qr-setup-title {
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; color: #93c5fd;
-    text-align: center; letter-spacing: 0.1em;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: #93c5fd;
+    text-align: center; letter-spacing: 0.12em;
+    text-shadow: 0 0 14px rgba(30,136,255,0.55), 0 3px 0 rgba(0,0,0,0.5);
   }
-  .qr-count-row { display: flex; gap: 6px; justify-content: center; }
+  .qr-count-row { display: flex; gap: 8px; justify-content: center; }
   .qr-count-btn {
-    width: 40px; height: 40px; border-radius: 10px;
-    background: var(--vex-surface); border: 1px solid var(--vex-border);
-    color: var(--vex-text); font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem;
+    width: 46px; height: 46px; border-radius: 12px;
+    background: linear-gradient(180deg, #1a2540, #0a1224);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--vex-text);
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem;
     cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.15),
+      inset 0 -2px 0 rgba(0,0,0,0.40),
+      0 3px 0 #050912;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
   }
+  .qr-count-btn:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 0 #050912; }
   .qr-count-btn.active {
-    background: rgba(30,136,255,0.25); color: #93c5fd; border-color: rgba(30,136,255,0.6);
+    background: linear-gradient(180deg, #4a9eff, #1e88ff);
+    color: #fff; border-color: rgba(255,255,255,0.25);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.45), 0 3px 0 #0a3a78, 0 5px 12px -2px rgba(30,136,255,0.55);
   }
   .qr-setup-row { display: flex; gap: 8px; align-items: center; }
   .qr-setup-row input {
-    flex: 1; padding: 9px; background: var(--vex-surface);
-    border: 1px solid var(--vex-border); border-radius: 8px;
-    color: var(--vex-text); font-family: inherit; font-size: 0.9rem;
+    flex: 1; padding: 11px;
+    background: linear-gradient(180deg, #1a2540, #0a1224);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 10px;
+    color: var(--vex-text); font-family: inherit; font-size: 0.92rem;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
   }
   .qr-setup-start {
-    margin-top: 10px; padding: 13px; background: linear-gradient(135deg,#1e88ff,#0a3a78);
-    color: #fff; border: none; border-radius: 12px; font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.4rem; letter-spacing: 0.15em; cursor: pointer;
-    box-shadow: 0 0 18px -3px #1e88ff;
+    margin-top: 12px; padding: 15px;
+    background: linear-gradient(180deg, #4a9eff 0%, #1e88ff 50%, #0a3a78 100%);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.20);
+    border-radius: 14px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.18em;
+    cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -2px 0 rgba(0,0,0,0.30),
+      0 5px 0 #082a52,
+      0 8px 22px -4px rgba(30,136,255,0.55);
+    text-shadow: 0 1px 0 rgba(0,0,0,0.30);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
   }
+  .qr-setup-start:active { transform: translateY(4px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 1px 0 #082a52; }
 </style>
 </head>
 <body class="vex-game">

@@ -9,25 +9,68 @@
 <style>
   .sn-board {
     width: 100%; max-width: 360px; margin: 0 auto;
-    aspect-ratio: 1; background: linear-gradient(135deg,#0a1a14,#06120c);
-    border: 1px solid rgba(34,197,94,0.25);
-    border-radius: 14px; padding: 8px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 0 30px rgba(34,197,94,0.12);
+    aspect-ratio: 1;
+    background:
+      radial-gradient(ellipse 70% 100% at 50% 0%, rgba(34,197,94,0.18), transparent 60%),
+      linear-gradient(180deg,#08160f 0%,#040a06 100%);
+    border: 1px solid rgba(34,197,94,0.30);
+    border-radius: 18px; padding: 8px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      inset 0 -2px 0 rgba(0,0,0,0.55),
+      inset 0 0 30px rgba(34,197,94,0.18),
+      0 14px 28px -10px rgba(0,0,0,0.7),
+      0 4px 10px rgba(0,0,0,0.45);
     position: relative; overflow: hidden;
   }
-  .sn-canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+  .sn-board::before {
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(rgba(34,197,94,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,197,94,0.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse 80% 90% at 50% 60%, #000 0%, transparent 85%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 90% at 50% 60%, #000 0%, transparent 85%);
+    animation: vexFloorScroll 7s linear infinite;
+    will-change: background-position;
+  }
+  .sn-board::after {
+    content:""; position:absolute; inset:-8% -8%; pointer-events:none; z-index:2;
+    background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.05) 50%, transparent 65%);
+    animation: vexBeamSweep 8s ease-in-out infinite;
+    animation-delay: 1s;
+    will-change: transform, opacity;
+  }
+  .sn-canvas { position:relative; z-index:1; width: 100%; height: 100%; display: block; touch-action: none; }
   .pad {
     display: grid; grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(3, 1fr);
-    gap: 6px; max-width: 220px; margin: 14px auto 0;
+    gap: 8px; max-width: 240px; margin: 16px auto 0;
   }
   .pad-btn {
-    aspect-ratio: 1; background: var(--vex-surface);
-    border: 1px solid var(--vex-border); border-radius: 12px;
-    color: var(--vex-text); display: grid; place-items: center;
-    font-size: 1.2rem; cursor: pointer; transition: all 0.15s ease;
+    aspect-ratio: 1;
+    background: linear-gradient(180deg, #2a3550 0%, #131b30 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    color: #d1fae5; display: grid; place-items: center;
+    font-size: 1.4rem; font-weight: 700; cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      inset 0 -2px 0 rgba(0,0,0,0.45),
+      0 4px 0 #050912,
+      0 6px 14px rgba(0,0,0,0.45);
+    transition: transform 0.08s ease, box-shadow 0.08s ease, color 0.18s;
   }
-  .pad-btn:active { background: rgba(34,197,94,0.2); border-color: rgba(34,197,94,0.55); transform: scale(0.94); }
+  .pad-btn:active {
+    transform: translateY(3px);
+    color: #86efac;
+    background: linear-gradient(180deg, #1c5436 0%, #0c2418 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(134,239,172,0.30),
+      inset 0 -1px 0 rgba(0,0,0,0.45),
+      0 1px 0 #050912,
+      0 2px 6px rgba(34,197,94,0.40);
+  }
   .pad-btn.empty { visibility: hidden; }
 </style>
 </head>
@@ -170,31 +213,66 @@
     draw();
   }
 
+  // Cached gradients (built once, reused every frame for perf)
+  let bodyGrad = null, headGrad = null, foodGrad = null;
+  function buildGrads(){
+    bodyGrad = ctx.createLinearGradient(0, 0, 0, CELL);
+    bodyGrad.addColorStop(0, '#34d57c'); bodyGrad.addColorStop(0.5, '#1aa455'); bodyGrad.addColorStop(1, '#0a6431');
+    headGrad = ctx.createLinearGradient(0, 0, 0, CELL);
+    headGrad.addColorStop(0, '#bbf7d0'); headGrad.addColorStop(0.45, '#4ade80'); headGrad.addColorStop(1, '#15803d');
+    foodGrad = ctx.createRadialGradient(CELL*0.35, CELL*0.30, 1, CELL*0.5, CELL*0.5, CELL*0.55);
+    foodGrad.addColorStop(0, '#fff5f5'); foodGrad.addColorStop(0.25, '#fca5a5');
+    foodGrad.addColorStop(0.75, '#dc2626'); foodGrad.addColorStop(1, '#5b0a0a');
+  }
+
   function draw(){
-    ctx.fillStyle = '#06120c';
+    if (!bodyGrad) buildGrads();
+    // dark base — let CSS background show through subtly
+    ctx.fillStyle = 'rgba(4,10,6,0.65)';
     ctx.fillRect(0,0,cv.width,cv.height);
-    // grid lines
-    ctx.strokeStyle = 'rgba(34,197,94,0.05)'; ctx.lineWidth = 1;
-    for (let i=1; i<COLS; i++){ ctx.beginPath(); ctx.moveTo(i*CELL,0); ctx.lineTo(i*CELL,cv.height); ctx.stroke(); }
-    for (let i=1; i<ROWS; i++){ ctx.beginPath(); ctx.moveTo(0,i*CELL); ctx.lineTo(cv.width,i*CELL); ctx.stroke(); }
-    // food
-    const fx = food.x*CELL + CELL/2, fy = food.y*CELL + CELL/2;
-    const grad = ctx.createRadialGradient(fx, fy, 1, fx, fy, CELL/2);
-    grad.addColorStop(0, '#fca5a5'); grad.addColorStop(1, '#dc2626');
-    ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.arc(fx, fy, CELL*0.42, 0, Math.PI*2); ctx.fill();
-    // snake
+    // food (apple) — 3D sphere using cached radial; translate gradient to position
+    const fx = food.x*CELL, fy = food.y*CELL;
+    ctx.save();
+    ctx.translate(fx, fy);
+    ctx.fillStyle = foodGrad;
+    ctx.beginPath(); ctx.arc(CELL/2, CELL/2, CELL*0.42, 0, Math.PI*2); ctx.fill();
+    // glossy highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath(); ctx.ellipse(CELL*0.38, CELL*0.30, CELL*0.10, CELL*0.05, -0.4, 0, Math.PI*2); ctx.fill();
+    // tiny stem
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(CELL*0.48, CELL*0.06, CELL*0.05, CELL*0.10);
+    ctx.restore();
+    // snake — 3D segments with vertical gradient + rim highlight
     snake.forEach((s, i) => {
       const x = s.x*CELL + 1, y = s.y*CELL + 1, w = CELL - 2;
       const isHead = i === 0;
-      ctx.fillStyle = isHead ? '#86efac' : (i%2 ? '#22c55e' : '#16a34a');
-      ctx.shadowColor = '#22c55e';
-      ctx.shadowBlur = isHead ? 12 : 0;
-      const r = isHead ? 5 : 3;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = isHead ? headGrad : bodyGrad;
+      const r = isHead ? 7 : 4;
       ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(x, y, w, w, r); else ctx.rect(x, y, w, w);
+      if (ctx.roundRect) ctx.roundRect(0, 0, w, w, r); else ctx.rect(0, 0, w, w);
       ctx.fill();
-      ctx.shadowBlur = 0;
+      // top edge highlight
+      ctx.fillStyle = isHead ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.22)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(2, 1.5, w-4, 2, 1); else ctx.rect(2, 1.5, w-4, 2);
+      ctx.fill();
+      // bottom shadow line
+      ctx.fillStyle = 'rgba(0,0,0,0.30)';
+      ctx.fillRect(2, w-3, w-4, 2);
+      // head: eyes
+      if (isHead){
+        ctx.fillStyle = '#0a0a0a';
+        const ex = dir.x === 0 ? [w*0.3, w*0.7] : (dir.x > 0 ? [w*0.62, w*0.62] : [w*0.32, w*0.32]);
+        const ey = dir.y === 0 ? [w*0.35, w*0.35] : (dir.y > 0 ? [w*0.58, w*0.58] : [w*0.30, w*0.30]);
+        const ex2 = dir.x === 0 ? [w*0.3, w*0.7] : (dir.x > 0 ? [w*0.62, w*0.62] : [w*0.32, w*0.32]);
+        const ey2 = dir.y === 0 ? [w*0.62, w*0.62] : (dir.y > 0 ? [w*0.58, w*0.58] : [w*0.30, w*0.30]);
+        ctx.beginPath(); ctx.arc(ex[0], ey[0], 1.6, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(ex2[1], ey2[1], 1.6, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.restore();
     });
   }
 

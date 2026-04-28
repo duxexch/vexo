@@ -10,26 +10,67 @@
   .ah-arena {
     width: 100%; max-width: 360px; margin: 0 auto;
     aspect-ratio: 3/4;
-    background: linear-gradient(180deg,#0e3a72,#062048);
-    border: 1px solid rgba(30,136,255,0.4);
-    border-radius: 14px;
+    background:
+      radial-gradient(ellipse 80% 25% at 50% 0%, rgba(239,68,68,0.18), transparent 60%),
+      radial-gradient(ellipse 80% 25% at 50% 100%, rgba(34,197,94,0.18), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 50% 50%, rgba(255,255,255,0.06), transparent 70%),
+      linear-gradient(180deg,#0e3a72 0%,#04173a 100%);
+    border: 1px solid rgba(30,136,255,0.45);
+    border-radius: 18px;
     position: relative; overflow: hidden;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 0 30px rgba(30,136,255,0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -2px 0 rgba(0,0,0,0.55),
+      inset 0 0 30px rgba(30,136,255,0.20),
+      0 14px 28px -10px rgba(0,0,0,0.7);
     touch-action: none;
   }
-  .ah-canvas { width:100%; height:100%; display:block; }
+  /* ice-rink scratches (sweeping shimmer) */
+  .ah-arena::before {
+    content:""; position:absolute; inset:-8% -8%; pointer-events:none; z-index:0;
+    background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.07) 50%, transparent 65%);
+    animation: vexBeamSweep 7s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+  /* faint grid */
+  .ah-arena::after {
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 95%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 90% at 50% 50%, #000 0%, transparent 95%);
+  }
+  .ah-canvas { position:relative; z-index:1; width:100%; height:100%; display:block; }
   .ah-mode-row {
-    display: flex; gap: 8px; justify-content: center; margin-bottom: 12px;
+    display: flex; gap: 10px; justify-content: center; margin-bottom: 14px;
   }
   .ah-mode-btn {
-    flex: 1; max-width: 130px; padding: 10px;
-    background: var(--vex-surface); border: 1px solid var(--vex-border);
-    border-radius: 10px; color: var(--vex-text-dim); font-family: inherit;
-    font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.18s;
+    flex: 1; max-width: 140px; padding: 11px;
+    background: linear-gradient(180deg, #1a2540 0%, #0a1224 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    color: var(--vex-text-dim); font-family: inherit;
+    font-size: 0.92rem; font-weight: 700; letter-spacing: 0.04em;
+    cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -2px 0 rgba(0,0,0,0.45),
+      0 3px 0 #050912,
+      0 5px 10px rgba(0,0,0,0.4);
+    transition: transform 0.08s ease, box-shadow 0.08s ease, color 0.18s, background 0.18s;
   }
+  .ah-mode-btn:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 0 #050912; }
   .ah-mode-btn.active {
-    background: rgba(30,136,255,0.2); color: #93c5fd; border-color: rgba(30,136,255,0.55);
-    box-shadow: 0 0 14px -4px #1e88ff;
+    background: linear-gradient(180deg, #4a9eff 0%, #1e88ff 100%);
+    color: #fff;
+    border-color: rgba(255,255,255,0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -2px 0 rgba(0,0,0,0.30),
+      0 3px 0 #0a3a78,
+      0 6px 16px -2px rgba(30,136,255,0.55);
   }
 </style>
 </head>
@@ -111,6 +152,9 @@
 
   let p1, p2, puck, scores, gameOver, raf, lastT;
   let goalW; // width of goals
+  // puck motion trail (cheap, opacity-only)
+  const PUCK_TRAIL = [];
+  const PUCK_TRAIL_MAX = 6;
 
   function applyLang(){
     const s = STRINGS[lang];
@@ -130,6 +174,47 @@
     };
   }
 
+  // Cached paint assets — built on reset, NEVER per-frame.
+  let goalGradTop = null, goalGradBot = null;
+  let strikerGrad1 = null, strikerGrad1Inner = null;
+  let strikerGrad2 = null, strikerGrad2Inner = null;
+  let puckGrad = null, puckGradR = 0;
+  function buildStrikerAssets(p, lightC, darkC){
+    // outer dome — radial gradient in striker-local coords centered at (0,0)
+    const outer = ctx.createRadialGradient(-p.r*0.30, -p.r*0.40, 1, 0, 0, p.r);
+    outer.addColorStop(0, '#ffffff'); outer.addColorStop(0.20, lightC);
+    outer.addColorStop(0.85, darkC); outer.addColorStop(1, '#000');
+    // inner handle — relative coords, radius p.r*0.42
+    const inner = ctx.createRadialGradient(-p.r*0.10, -p.r*0.15, 1, 0, 0, p.r*0.42);
+    inner.addColorStop(0, '#ffffff'); inner.addColorStop(0.4, '#e2e8f0'); inner.addColorStop(1, '#64748b');
+    return { outer, inner };
+  }
+  function buildPuckGrad(r){
+    puckGradR = r;
+    puckGrad = ctx.createRadialGradient(-r*0.4, -r*0.5, 1, 0, 0, r);
+    puckGrad.addColorStop(0, '#ffffff'); puckGrad.addColorStop(0.4, '#e2e8f0');
+    puckGrad.addColorStop(0.85, '#475569'); puckGrad.addColorStop(1, '#1e293b');
+  }
+  function rebuildPaintAssets(){
+    // Goals — vertical 5-px slots; coords are absolute Y (no per-instance translation needed)
+    goalGradTop = ctx.createLinearGradient(0, 0, 0, 8);
+    goalGradTop.addColorStop(0, 'rgba(255,182,39,0.55)');
+    goalGradTop.addColorStop(1, 'rgba(255,182,39,0.10)');
+    goalGradBot = ctx.createLinearGradient(0, H-8, 0, H);
+    goalGradBot.addColorStop(0, 'rgba(255,182,39,0.10)');
+    goalGradBot.addColorStop(1, 'rgba(255,182,39,0.55)');
+    // Strikers — gradients in striker-local coords (translate before fill)
+    if (p1){
+      const a = buildStrikerAssets(p1, '#22c55e', '#14532d');
+      strikerGrad1 = a.outer; strikerGrad1Inner = a.inner;
+    }
+    if (p2){
+      const a = buildStrikerAssets(p2, '#ef4444', '#7f1d1d');
+      strikerGrad2 = a.outer; strikerGrad2Inner = a.inner;
+    }
+    if (puck) buildPuckGrad(puck.r);
+  }
+
   function reset(){
     fitCanvas();
     const r = Math.max(20, Math.min(W,H)*0.07);
@@ -141,6 +226,7 @@
     $('p1').textContent = 0; $('p2').textContent = 0;
     $('endOverlay').classList.remove('show');
     resetPuck(Math.random() < 0.5 ? 1 : -1);
+    rebuildPaintAssets();
     if (raf) cancelAnimationFrame(raf);
     lastT = performance.now();
     raf = requestAnimationFrame(loop);
@@ -237,40 +323,78 @@
 
   function draw(){
     ctx.clearRect(0,0,W,H);
-    // mid line
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5;
+    // mid line — neon stripe
+    ctx.strokeStyle = 'rgba(255,255,255,0.32)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
-    // center circle
+    // center circle (double ring)
+    ctx.strokeStyle = 'rgba(255,255,255,0.30)'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(W/2, H/2, Math.min(W,H)*0.13, 0, Math.PI*2); ctx.stroke();
-    // goals
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.beginPath(); ctx.arc(W/2, H/2, Math.min(W,H)*0.04, 0, Math.PI*2); ctx.stroke();
+    // goals — gold glowing slot (cached gradients)
     const gw = goalW;
-    ctx.fillStyle = 'rgba(255,182,39,0.18)';
-    ctx.fillRect((W-gw)/2, 0, gw, 4);
-    ctx.fillRect((W-gw)/2, H-4, gw, 4);
-    ctx.strokeStyle = '#ffb627'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo((W-gw)/2, 0); ctx.lineTo((W-gw)/2, 12); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo((W+gw)/2, 0); ctx.lineTo((W+gw)/2, 12); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo((W-gw)/2, H); ctx.lineTo((W-gw)/2, H-12); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo((W+gw)/2, H); ctx.lineTo((W+gw)/2, H-12); ctx.stroke();
+    ctx.fillStyle = goalGradTop;
+    ctx.fillRect((W-gw)/2, 0, gw, 5);
+    ctx.fillStyle = goalGradBot;
+    ctx.fillRect((W-gw)/2, H-5, gw, 5);
+    ctx.strokeStyle = '#ffb627'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo((W-gw)/2, 0); ctx.lineTo((W-gw)/2, 14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo((W+gw)/2, 0); ctx.lineTo((W+gw)/2, 14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo((W-gw)/2, H); ctx.lineTo((W-gw)/2, H-14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo((W+gw)/2, H); ctx.lineTo((W+gw)/2, H-14); ctx.stroke();
 
-    // strikers
-    drawStriker(p1, '#22c55e');
-    drawStriker(p2, '#ef4444');
+    // puck trail (oldest → newest, fading)
+    for (let i = 0; i < PUCK_TRAIL.length; i++){
+      const t = PUCK_TRAIL[i];
+      const a = ((i + 1) / (PUCK_TRAIL.length + 1)) * 0.40;
+      ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(t.x, t.y, puck.r * (0.55 + i*0.06), 0, Math.PI*2); ctx.fill();
+    }
 
-    // puck
+    // strikers (3D dome) — cached gradients
+    drawStriker(p1, '#22c55e', strikerGrad1, strikerGrad1Inner);
+    drawStriker(p2, '#ef4444', strikerGrad2, strikerGrad2Inner);
+
+    // puck — chrome disc with rim + highlight (cached radial gradient)
+    if (puck.r !== puckGradR) buildPuckGrad(puck.r);
     ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(puck.x, puck.y, puck.r, 0, Math.PI*2); ctx.fill();
+    ctx.save();
+    ctx.translate(puck.x, puck.y);
+    ctx.fillStyle = puckGrad;
+    ctx.beginPath(); ctx.arc(0, 0, puck.r, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
     ctx.shadowBlur = 0;
+    // rim
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(puck.x, puck.y, puck.r, 0, Math.PI*2); ctx.stroke();
+
+    // record trail position
+    PUCK_TRAIL.push({x: puck.x, y: puck.y});
+    if (PUCK_TRAIL.length > PUCK_TRAIL_MAX) PUCK_TRAIL.shift();
   }
 
-  function drawStriker(p, c){
-    ctx.shadowColor = c; ctx.shadowBlur = 16;
-    ctx.fillStyle = c;
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+  function drawStriker(p, glowColor, outerGrad, innerGrad){
+    // shadow on table (absolute coords)
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + p.r*0.25, p.r*0.95, p.r*0.35, 0, 0, Math.PI*2); ctx.fill();
+    // translate once into striker-local space; cached gradients are local-coord
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    // body — cached radial gradient (3D dome)
+    ctx.shadowColor = glowColor; ctx.shadowBlur = 14;
+    ctx.fillStyle = outerGrad;
+    ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI*2); ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 0.42, 0, Math.PI*2); ctx.fill();
+    // chrome ring
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, p.r * 0.78, 0, Math.PI*2); ctx.stroke();
+    // center handle (inner disc) — cached
+    ctx.fillStyle = innerGrad;
+    ctx.beginPath(); ctx.arc(0, 0, p.r * 0.42, 0, Math.PI*2); ctx.fill();
+    // top highlight dot
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath(); ctx.arc(-p.r*0.2, -p.r*0.25, p.r*0.10, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
   }
 
   function end(winner){

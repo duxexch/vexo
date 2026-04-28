@@ -9,123 +9,233 @@
 <style>
   .db-arena {
     width: 100%; max-width: 380px; margin: 0 auto;
-    padding: 16px;
-    background: linear-gradient(180deg, rgba(255,182,39,0.06), rgba(7,11,20,1));
-    border: 1px solid rgba(255,182,39,0.3);
-    border-radius: 14px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    padding: 18px;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(255,182,39,0.20), transparent 70%),
+      radial-gradient(ellipse 90% 100% at 50% 50%, rgba(20,80,30,0.18), transparent 80%),
+      linear-gradient(180deg, #0a1810 0%, #04080a 100%);
+    border: 1px solid rgba(255,182,39,0.40);
+    border-radius: 18px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -2px 0 rgba(0,0,0,0.55),
+      inset 0 0 36px rgba(34,197,94,0.10),
+      0 14px 28px -10px rgba(0,0,0,0.7);
     position: relative; overflow: hidden;
   }
+  /* Felt texture pattern */
+  .db-arena::before {
+    content:""; position:absolute; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(255,255,255,0.04) 1px, transparent 2px),
+      radial-gradient(circle at 70% 70%, rgba(255,255,255,0.03) 1px, transparent 2px),
+      radial-gradient(circle at 80% 20%, rgba(255,255,255,0.04) 1px, transparent 2px);
+    background-size: 24px 24px, 32px 32px, 28px 28px;
+    opacity: 0.6;
+  }
+  .db-arena > * { position: relative; z-index: 1; }
   .db-current {
     text-align: center; font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.6rem; letter-spacing: 0.12em;
-    color: #fde68a; text-shadow: 0 0 12px rgba(255,182,39,0.4);
+    font-size: 1.7rem; letter-spacing: 0.14em;
+    color: #fde68a; text-shadow: 0 0 16px rgba(255,182,39,0.55), 0 3px 0 rgba(0,0,0,0.5);
     margin-bottom: 6px;
   }
   .db-round {
     text-align: center; color: var(--vex-text-dim);
-    font-size: 0.9rem; letter-spacing: 0.1em; margin-bottom: 14px;
+    font-size: 0.92rem; letter-spacing: 0.14em; margin-bottom: 14px;
+    text-transform: uppercase;
   }
   .db-dice-row {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
-    margin: 14px 0;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+    margin: 16px 0;
+    perspective: 600px;
   }
   .db-die {
-    aspect-ratio: 1; background: #fff; border-radius: 14px;
-    box-shadow: 0 6px 14px rgba(0,0,0,0.45), inset 0 -3px 0 rgba(0,0,0,0.08);
+    aspect-ratio: 1;
+    background: linear-gradient(140deg, #ffffff 0%, #f1f5f9 50%, #cbd5e1 100%);
+    border-radius: 16px;
+    box-shadow:
+      inset 0 2px 0 rgba(255,255,255,0.85),
+      inset 0 -4px 0 rgba(0,0,0,0.18),
+      inset 4px 0 0 rgba(255,255,255,0.30),
+      inset -4px 0 0 rgba(0,0,0,0.12),
+      0 8px 16px rgba(0,0,0,0.55),
+      0 14px 24px -6px rgba(0,0,0,0.45),
+      0 0 0 1px rgba(0,0,0,0.10);
     position: relative;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(3, 1fr);
-    padding: 10px;
+    padding: 11px;
     transition: transform 0.18s ease;
+    transform-style: preserve-3d;
   }
-  .db-die.rolling {
-    animation: dbRoll 0.5s ease-in-out;
+  /* Glossy highlight on top of die */
+  .db-die::before {
+    content:""; position:absolute; top: 6%; left: 12%; width: 50%; height: 30%;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(255,255,255,0.85), rgba(255,255,255,0));
+    filter: blur(3px);
+    pointer-events: none;
   }
+  .db-die.rolling { animation: dbRoll 0.6s ease-in-out; }
   @keyframes dbRoll {
-    0% { transform: rotate(0); }
-    25% { transform: rotate(-12deg) scale(0.95); }
-    50% { transform: rotate(8deg) scale(1.05); }
-    75% { transform: rotate(-4deg); }
-    100% { transform: rotate(0); }
+    0% { transform: rotate(0) rotateY(0deg) scale(1); }
+    20% { transform: rotate(-15deg) rotateY(180deg) scale(0.92); }
+    40% { transform: rotate(10deg) rotateY(360deg) scale(1.08); }
+    60% { transform: rotate(-8deg) rotateY(540deg) scale(1.05); }
+    80% { transform: rotate(4deg) rotateY(720deg) scale(0.98); }
+    100% { transform: rotate(0) rotateY(720deg) scale(1); }
   }
   .db-pip {
     width: 100%; height: 100%; display: grid; place-items: center;
   }
   .db-pip::after {
-    content: ''; width: 70%; height: 70%; border-radius: 50%;
-    background: #1f2937; box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+    content: ''; width: 72%; height: 72%; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #4b5563, #1f2937 60%, #0a0f1c);
+    box-shadow:
+      inset 0 -2px 3px rgba(255,255,255,0.18),
+      inset 0 2px 3px rgba(0,0,0,0.55),
+      0 1px 0 rgba(255,255,255,0.45);
     transform: scale(0); transition: transform 0.18s;
   }
   .db-pip.on::after { transform: scale(1); }
   .db-roll-btn {
-    width: 100%; padding: 16px; margin-top: 8px;
-    background: linear-gradient(135deg,#ffb627,#7c5300);
-    color: #1c0a06; border: none; border-radius: 12px;
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.18em;
-    cursor: pointer; box-shadow: 0 0 18px -3px #ffb627;
-    transition: all 0.15s ease;
+    width: 100%; padding: 18px; margin-top: 10px;
+    background: linear-gradient(180deg, #ffd166 0%, #ffb627 50%, #7c5300 100%);
+    color: #1a0c00;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 14px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; letter-spacing: 0.20em;
+    cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.55),
+      inset 0 -2px 0 rgba(0,0,0,0.30),
+      0 5px 0 #4a3000,
+      0 8px 22px -3px rgba(255,182,39,0.65);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.40);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
   }
-  .db-roll-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
-  .db-roll-btn:not(:disabled):active { transform: scale(0.97); }
+  .db-roll-btn:disabled {
+    opacity: 0.45; cursor: not-allowed;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.20), 0 1px 0 #4a3000;
+    transform: none;
+  }
+  .db-roll-btn:not(:disabled):active {
+    transform: translateY(4px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.30),
+      inset 0 -1px 0 rgba(0,0,0,0.30),
+      0 1px 0 #4a3000,
+      0 2px 6px rgba(255,182,39,0.45);
+  }
   .db-roll-result {
     text-align: center; font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.4rem; color: #fff; min-height: 38px; margin-top: 8px;
-    letter-spacing: 0.1em;
+    font-size: 1.5rem; color: #fff; min-height: 42px; margin-top: 10px;
+    letter-spacing: 0.12em;
+    text-shadow: 0 2px 0 rgba(0,0,0,0.50);
   }
-  .db-roll-result.bonus { color: #ffb627; text-shadow: 0 0 10px rgba(255,182,39,0.5); }
-  .db-roll-result.boom { color: #ef4444; text-shadow: 0 0 12px rgba(239,68,68,0.5); }
+  .db-roll-result.bonus { color: #fde68a; text-shadow: 0 0 14px rgba(255,182,39,0.60), 0 2px 0 rgba(0,0,0,0.5); }
+  .db-roll-result.boom { color: #fca5a5; text-shadow: 0 0 16px rgba(239,68,68,0.65), 0 2px 0 rgba(0,0,0,0.5); animation: dbBoom 0.5s ease; }
+  @keyframes dbBoom { 0% { transform: scale(0.7); } 60% { transform: scale(1.30); } 100% { transform: scale(1); } }
   .db-leaderboard {
-    margin-top: 14px; display: flex; flex-direction: column; gap: 6px;
+    margin-top: 16px; display: flex; flex-direction: column; gap: 7px;
   }
   .db-row {
-    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
-    background: var(--vex-surface); border: 1px solid var(--vex-border); border-radius: 10px;
-    transition: all 0.18s;
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    background: linear-gradient(180deg, #1a1f3a 0%, #0a0e1c 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -2px 0 rgba(0,0,0,0.40),
+      0 3px 0 #050912,
+      0 4px 8px rgba(0,0,0,0.30);
+    transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
   }
   .db-row.active {
-    background: rgba(255,182,39,0.15); border-color: rgba(255,182,39,0.55);
-    box-shadow: 0 0 14px -4px #ffb627;
+    background: linear-gradient(180deg, #ffd166 0%, #b07406 100%);
+    color: #1a0c00;
+    border-color: rgba(255,255,255,0.30);
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.50),
+      inset 0 -2px 0 rgba(0,0,0,0.30),
+      0 4px 0 #4a3000,
+      0 6px 16px -2px rgba(255,182,39,0.55);
   }
+  .db-row.active .db-name { color: #1a0c00; text-shadow: 0 1px 0 rgba(255,255,255,0.40); }
+  .db-row.active .db-score { color: #1a0c00; text-shadow: 0 1px 0 rgba(255,255,255,0.40); }
   .db-row .db-dot {
-    width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+    width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0;
+    box-shadow: inset 0 -2px 3px rgba(0,0,0,0.4), inset 0 2px 2px rgba(255,255,255,0.40);
   }
-  .db-row .db-name { flex: 1; font-weight: 700; font-size: 0.95rem; }
+  .db-row .db-name {
+    flex: 1; font-weight: 800; font-size: 0.98rem;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.45);
+  }
   .db-row .db-score {
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; color: #fde68a;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem;
+    color: #fde68a;
+    text-shadow: 0 2px 0 rgba(0,0,0,0.45), 0 0 8px rgba(255,182,39,0.30);
   }
   .db-setup-overlay {
-    position: absolute; inset: 0; background: rgba(7,11,20,0.96);
-    z-index: 20; padding: 16px; display: flex; flex-direction: column; gap: 10px;
-    justify-content: center; border-radius: 14px;
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(8,16,12,0.97), rgba(4,8,6,0.97));
+    z-index: 20; padding: 18px; display: flex; flex-direction: column; gap: 12px;
+    justify-content: center; border-radius: 18px;
   }
   .db-setup-title {
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; color: #fde68a;
-    text-align: center; letter-spacing: 0.12em;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: #fde68a;
+    text-align: center; letter-spacing: 0.14em;
+    text-shadow: 0 0 14px rgba(255,182,39,0.55), 0 3px 0 rgba(0,0,0,0.5);
   }
-  .db-count-row { display: flex; gap: 6px; justify-content: center; }
+  .db-count-row { display: flex; gap: 8px; justify-content: center; }
   .db-count-btn {
-    width: 40px; height: 40px; border-radius: 10px;
-    background: var(--vex-surface); border: 1px solid var(--vex-border);
-    color: var(--vex-text); font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; cursor: pointer;
+    width: 46px; height: 46px; border-radius: 12px;
+    background: linear-gradient(180deg, #1a1f3a, #0a0e1c);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--vex-text);
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.15),
+      inset 0 -2px 0 rgba(0,0,0,0.40),
+      0 3px 0 #050912;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
   }
+  .db-count-btn:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 0 #050912; }
   .db-count-btn.active {
-    background: rgba(255,182,39,0.25); color: #fde68a; border-color: rgba(255,182,39,0.6);
+    background: linear-gradient(180deg, #ffd166, #b07406);
+    color: #1a0c00; border-color: rgba(255,255,255,0.25);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.45), 0 3px 0 #4a3000, 0 5px 12px -2px rgba(255,182,39,0.55);
   }
   .db-setup-row { display: flex; gap: 8px; align-items: center; }
   .db-setup-row input {
-    flex: 1; padding: 10px; background: var(--vex-surface);
-    border: 1px solid var(--vex-border); border-radius: 8px;
+    flex: 1; padding: 11px;
+    background: linear-gradient(180deg, #1a1f3a, #0a0e1c);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 10px;
     color: var(--vex-text); font-family: inherit; font-size: 0.95rem;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
   }
   .db-setup-start {
-    margin-top: 10px; padding: 13px;
-    background: linear-gradient(135deg,#ffb627,#7c5300);
-    color: #1c0a06; border: none; border-radius: 12px;
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.15em;
-    cursor: pointer; box-shadow: 0 0 18px -3px #ffb627;
+    margin-top: 12px; padding: 15px;
+    background: linear-gradient(180deg, #ffd166 0%, #ffb627 50%, #7c5300 100%);
+    color: #1a0c00;
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 14px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.18em;
+    cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.55),
+      inset 0 -2px 0 rgba(0,0,0,0.30),
+      0 5px 0 #4a3000,
+      0 8px 22px -4px rgba(255,182,39,0.65);
+    text-shadow: 0 1px 0 rgba(255,255,255,0.40);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
   }
+  .db-setup-start:active { transform: translateY(4px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.30), 0 1px 0 #4a3000; }
 </style>
 </head>
 <body class="vex-game">
