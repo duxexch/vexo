@@ -100,6 +100,7 @@ export function VoiceChat({
   const lastVoiceRejoinAttemptAtRef = useRef(0);
   const isAuthenticatedRef = useRef(false);
   const suppressReconnectOnCloseRef = useRef(false);
+  const iceFailureNotifiedRef = useRef(false);
   const intentionalStopRef = useRef(false);
   const startingRef = useRef(false);
 
@@ -496,19 +497,68 @@ export function VoiceChat({
       syncPeerAudioElement(peerUserId);
     };
 
+    pc.oniceconnectionstatechange = () => {
+      console.log(
+        `[VoiceChat] ICE state for peer ${peerUserId}: ${pc.iceConnectionState}`,
+      );
+      // Only "failed" is a hard, permanent error. "disconnected" is often a
+      // transient network blip (cellular handoff, brief Wi-Fi loss) and ICE
+      // can recover on its own — surfacing it as an error would produce
+      // false-positive UX, so we let onconnectionstatechange make the final
+      // call once the state stabilises.
+      if (
+        pc.iceConnectionState === "failed"
+        && !iceFailureNotifiedRef.current
+        && !intentionalStopRef.current
+      ) {
+        iceFailureNotifiedRef.current = true;
+        console.warn(
+          `[VoiceChat] ICE connectivity check failed for peer ${peerUserId}. `
+            + "This usually indicates the TURN server is unreachable or its "
+            + "credentials are invalid (PUBLIC_RTC_TURN_URLS / PUBLIC_RTC_TURN_USERNAME"
+            + " / PUBLIC_RTC_TURN_CREDENTIAL). Audio cannot flow without a working "
+            + "relay path on most mobile/cellular networks.",
+        );
+        toast({
+          variant: "destructive",
+          title: t("challenge.voiceErrorRetry"),
+          description: t("challenge.voiceRtcNetworkHint"),
+        });
+        setConnectionState("error");
+      }
+    };
+
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "connected") {
         reconnectAttemptsRef.current = 0;
         clearReconnectTimer();
         setConnectionState("connected");
+        iceFailureNotifiedRef.current = false;
       }
-      if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+      if (pc.connectionState === "failed") {
+        if (!iceFailureNotifiedRef.current && !intentionalStopRef.current) {
+          iceFailureNotifiedRef.current = true;
+          console.warn(
+            `[VoiceChat] Peer connection failed for ${peerUserId} `
+              + `(iceState=${pc.iceConnectionState}). Likely TURN/network issue.`,
+          );
+          toast({
+            variant: "destructive",
+            title: t("challenge.voiceErrorRetry"),
+            description: t("challenge.voiceRtcNetworkHint"),
+          });
+          setConnectionState("error");
+        }
+        closePeerConnection(peerUserId);
+        return;
+      }
+      if (pc.connectionState === "closed") {
         closePeerConnection(peerUserId);
       }
     };
 
     return pc;
-  }, [challengeId, clearReconnectTimer, closePeerConnection, isMicMuted, rtcConfiguration, safelySend, syncPeerAudioElement, upsertPeer]);
+  }, [challengeId, clearReconnectTimer, closePeerConnection, isMicMuted, rtcConfiguration, safelySend, syncPeerAudioElement, t, toast, upsertPeer]);
 
   const initiateOfferToPeer = useCallback(async (peerUserId: string) => {
     const pc = createPeerConnection(peerUserId);
@@ -569,6 +619,10 @@ export function VoiceChat({
     isAuthenticatedRef.current = false;
     startingRef.current = false;
     suppressReconnectOnCloseRef.current = false;
+    // Reset the one-shot ICE notification guard so the next session can
+    // surface its own failure toast even if the previous session ended in a
+    // failed state without ever reaching "connected".
+    iceFailureNotifiedRef.current = false;
     setConnectionState("disconnected");
   }, [challengeId, clearHeartbeatInterval, clearJoinAckTimer, clearReconnectTimer, closeAllPeerConnections, safelySend]);
 
