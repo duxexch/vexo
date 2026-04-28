@@ -288,6 +288,11 @@ const BOTTOM_NAV_ACCENTS: Record<string, BottomNavAccent> = {
         inactive: "bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 border-slate-500/45",
         glow: "bg-rose-500/45",
     },
+    tournaments: {
+        active: "bg-gradient-to-br from-amber-400 via-yellow-500 to-orange-500 border-amber-200/65",
+        inactive: "bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 border-slate-500/45",
+        glow: "bg-amber-400/45",
+    },
     chat: {
         active: "bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-600 border-sky-200/65",
         inactive: "bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 border-slate-500/45",
@@ -491,6 +496,7 @@ function BottomNavigation({
     const navItems: MenuItem[] = [
         { title: t("nav.p2p") || "P2P", url: "/p2p", icon: ArrowLeftRight, key: "p2p" },
         { title: t("nav.main") || "Main", url: "/", icon: Home, key: "main" },
+        { title: t("nav.tournaments") || "Tournaments", url: "/tournaments", icon: Trophy, key: "tournaments" },
         { title: t("nav.play") || "Games", url: "/games", icon: Gamepad2, key: "play" },
         { title: t("nav.challenges") || "Challenges", url: "/challenges", icon: Swords, key: "challenges" },
     ];
@@ -576,8 +582,17 @@ function BottomNavigation({
     };
 
     return (
+        // When the on-screen keyboard opens, iOS Safari (and most mobile
+        // browsers) shrink the visual viewport so that `bottom: 0` ends
+        // up sitting ABOVE the keyboard — which would push this nav up
+        // into the chat area, leaving an empty band between the keyboard
+        // and the chat composer. Subtracting `--keyboard-inset-bottom`
+        // slides the nav down by exactly the keyboard height so it
+        // stays pinned to the real screen edge (hidden behind the
+        // keyboard) and the composer can sit flush against the keyboard.
         <nav
-            className={`fixed bottom-0 start-0 end-0 flex items-center justify-around gap-1 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-slate-950/95 backdrop-blur-md shadow-[0_-14px_30px_rgba(0,0,0,0.45)] md:hidden z-50 transition-transform duration-300 ease-out ${isVisible ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}
+            className={`fixed start-0 end-0 flex items-center justify-around gap-1 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] border-t border-white/10 bg-slate-950/95 backdrop-blur-md shadow-[0_-14px_30px_rgba(0,0,0,0.45)] md:hidden z-50 transition-transform duration-300 ease-out ${isVisible ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}
+            style={{ bottom: "calc(0px - var(--keyboard-inset-bottom, 0px))" }}
             aria-label="Main navigation"
             onTouchStart={handleNavTouchStart}
             onTouchMove={handleNavTouchMove}
