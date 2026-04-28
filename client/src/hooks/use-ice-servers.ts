@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, type MutableRefObject } from "react";
 import type { IceServersResponse } from "@shared/socketio-events";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -27,7 +27,7 @@ export interface UseIceServersResult {
   rtcConfiguration: RTCConfiguration;
   hasRelay: boolean;
   isLoading: boolean;
-  iceServersRef: React.MutableRefObject<RTCIceServer[]>;
+  iceServersRef: MutableRefObject<RTCIceServer[]>;
 }
 
 export function useIceServers(): UseIceServersResult {
