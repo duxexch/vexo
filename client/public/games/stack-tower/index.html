@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Stack Tower</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .st-arena {
+    width: 100%; max-width: 360px; margin: 0 auto;
+    aspect-ratio: 3/4;
+    background: linear-gradient(180deg,#0a1020,#070b14);
+    border: 1px solid var(--vex-border);
+    border-radius: 14px; padding: 0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    position: relative; overflow: hidden;
+    cursor: pointer;
+  }
+  .st-canvas { width: 100%; height: 100%; display: block; touch-action: manipulation; }
+  .st-tap-hint {
+    position: absolute; bottom: 16px; left: 0; right: 0; text-align: center;
+    color: rgba(255,255,255,0.55); font-size: 0.85rem; font-weight: 600;
+    text-shadow: 0 0 8px rgba(0,0,0,0.6); pointer-events: none;
+    animation: vexPulse 1.2s ease-in-out infinite;
+  }
+  .st-stat-badge {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(0,0,0,0.55); padding: 6px 12px; border-radius: 99px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: #ffb627;
+    text-shadow: 0 0 10px rgba(255,182,39,0.4); pointer-events: none;
+  }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge gold">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="14" width="12" height="6"/><rect x="8" y="8" width="8" height="6"/><rect x="10" y="2" width="4" height="6"/></svg>
+      </div>
+      <span id="title">برج المكعبات</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblScore">الارتفاع</div><div class="vex-stat-value" id="score">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblBest">الأفضل</div><div class="vex-stat-value" id="best">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblPerfect">دقيق</div><div class="vex-stat-value emerald" id="perfect">0</div></div>
+  </div>
+
+  <div class="st-arena" id="arena">
+    <canvas class="st-canvas" id="cv" width="360" height="480"></canvas>
+    <div class="st-stat-badge" id="liveScore">0</div>
+    <div class="st-tap-hint" id="tapHint">اضغط للإسقاط</div>
+  </div>
+
+  <div class="vex-hint" id="hint">اضغط في الوقت المناسب لمحاذاة المكعب. الانحراف يقلّص الكتلة.</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon gold">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 22 6 18 10 22 14 18 18 22 22 18"/><line x1="2" y1="14" x2="22" y2="14"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">سقط البرج!</div>
+    <div class="vex-overlay-subtitle" id="endSub">حاول الوصول لأعلى.</div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalScore">الارتفاع</div><div class="vex-overlay-stat-value" id="finalScore">0</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalBest">الأفضل</div><div class="vex-overlay-stat-value" id="finalBest">0</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-gold" id="endRestart" style="flex:1">جولة جديدة</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar:{ title:'برج المكعبات', reset:'إعادة', score:'الارتفاع', best:'الأفضل', perfect:'دقيق',
+      tap:'اضغط للإسقاط', end:'سقط البرج!', endSub:'حاول الوصول لأعلى.',
+      newRound:'جولة جديدة', hint:'اضغط في الوقت المناسب لمحاذاة المكعب. الانحراف يقلّص الكتلة.', },
+    en:{ title:'Stack Tower', reset:'Reset', score:'Height', best:'Best', perfect:'Perfect',
+      tap:'Tap to drop', end:'Tower fell!', endSub:'Try to climb higher.',
+      newRound:'New tower', hint:'Tap at the right moment. Misalignment shrinks the block.', },
+  };
+  let lang = 'ar';
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  let W = cv.width, H = cv.height;
+  function fitCanvas(){
+    const dpr = window.devicePixelRatio || 1;
+    const rect = cv.getBoundingClientRect();
+    cv.width = Math.round(rect.width * dpr);
+    cv.height = Math.round(rect.height * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    W = rect.width; H = rect.height;
+  }
+
+  const BLOCK_H = 28;
+  let stack;       // array of {x, w, color}
+  let cur;         // moving block { x, w, dir, speed, color, y }
+  let cameraOffset; // how much we've shifted up
+  let score, best, perfectStreak;
+  let alive, raf;
+
+  function applyLang(){
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
+    $('lblScore').textContent = s.score; $('lblBest').textContent = s.best; $('lblPerfect').textContent = s.perfect;
+    $('hint').textContent = s.hint;
+    $('tapHint').textContent = s.tap;
+    $('endTitle').textContent = s.end; $('endSub').textContent = s.endSub;
+    $('endRestart').textContent = s.newRound;
+    $('lblFinalScore').textContent = s.score; $('lblFinalBest').textContent = s.best;
+  }
+
+  function colorForLevel(i){
+    const hue = (180 + i*18) % 360;
+    return `hsl(${hue}, 70%, 55%)`;
+  }
+
+  function reset(){
+    fitCanvas();
+    const baseW = W * 0.5;
+    stack = [{ x: (W - baseW)/2, w: baseW, color: '#1e3a8a' }];
+    cameraOffset = 0;
+    score = 0; perfectStreak = 0;
+    best = parseInt(localStorage.getItem('vex.best.stack-tower') || '0', 10);
+    $('score').textContent = '0'; $('liveScore').textContent = '0';
+    $('best').textContent = best; $('perfect').textContent = '0';
+    $('endOverlay').classList.remove('show');
+    alive = true;
+    spawnBlock();
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(loop);
+  }
+
+  function spawnBlock(){
+    const last = stack[stack.length-1];
+    const speed = 2.2 + Math.min(2, score * 0.05);
+    cur = {
+      x: 0,
+      w: last.w,
+      dir: 1,
+      speed,
+      color: colorForLevel(score+1),
+      y: H - (stack.length+1)*BLOCK_H + cameraOffset,
+    };
+  }
+
+  function drop(){
+    if (!alive || !cur) return;
+    const last = stack[stack.length-1];
+    const left = Math.max(cur.x, last.x);
+    const right = Math.min(cur.x + cur.w, last.x + last.w);
+    const overlap = right - left;
+    if (overlap <= 0) return die();
+
+    // Perfect alignment bonus (within 6px)
+    const aligned = Math.abs(cur.x - last.x) < 6;
+    let newW = aligned ? last.w : overlap;
+    let newX = aligned ? last.x : left;
+    if (aligned){
+      perfectStreak++;
+      $('perfect').textContent = perfectStreak;
+      if (typeof VexGame !== 'undefined'){
+        const r = cv.getBoundingClientRect();
+        VexGame.popScore(document.body, '+2', r.left + r.width/2 + 'px', r.top + 100 + 'px', '');
+      }
+    } else {
+      perfectStreak = 0;
+      $('perfect').textContent = '0';
+    }
+
+    stack.push({ x: newX, w: newW, color: cur.color });
+    score++;
+    $('score').textContent = score; $('liveScore').textContent = score;
+
+    // Camera shift up if tower exceeds half height
+    const towerHeight = stack.length * BLOCK_H;
+    const desiredOffset = Math.max(0, towerHeight - H * 0.55);
+    cameraOffset = desiredOffset;
+
+    spawnBlock();
+  }
+
+  function loop(){
+    if (!alive) return;
+    update();
+    draw();
+    raf = requestAnimationFrame(loop);
+  }
+
+  function update(){
+    if (!cur) return;
+    cur.x += cur.dir * cur.speed;
+    if (cur.x <= 0){ cur.x = 0; cur.dir = 1; }
+    if (cur.x + cur.w >= W){ cur.x = W - cur.w; cur.dir = -1; }
+    cur.y = H - (stack.length+1)*BLOCK_H + cameraOffset;
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // BG glow
+    const grad = ctx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0, 'rgba(255,182,39,0.06)');
+    grad.addColorStop(1, 'rgba(7,11,20,0)');
+    ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+    // stack
+    stack.forEach((b, i) => {
+      const y = H - (i+1)*BLOCK_H + cameraOffset;
+      if (y > H + BLOCK_H || y < -BLOCK_H) return;
+      drawBlock(b.x, y, b.w, b.color);
+    });
+    // moving block
+    if (cur && alive) drawBlock(cur.x, cur.y, cur.w, cur.color, true);
+  }
+
+  function drawBlock(x, y, w, color, glow){
+    if (glow){ ctx.shadowColor = color; ctx.shadowBlur = 14; }
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, w, BLOCK_H - 2);
+    ctx.shadowBlur = 0;
+    // top highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fillRect(x, y, w, 4);
+    // bottom shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(x, y + BLOCK_H - 6, w, 4);
+  }
+
+  function die(){
+    alive = false;
+    if (raf) cancelAnimationFrame(raf);
+    if (score > best){ best = score; localStorage.setItem('vex.best.stack-tower', best); }
+    $('best').textContent = best; $('finalScore').textContent = score; $('finalBest').textContent = best;
+    setTimeout(() => $('endOverlay').classList.add('show'), 500);
+    if (typeof VexGame !== 'undefined'){
+      VexGame.confetti(perfectStreak >= 3 ? 700 : 300);
+      VexGame.setBest(best);
+      VexGame.endSession({ score, result: 'loss', metadata: { perfectStreak } });
+    }
+  }
+
+  $('arena').addEventListener('click', drop);
+  window.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') drop(); });
+  $('resetBtn').addEventListener('click', reset);
+  $('endRestart').addEventListener('click', reset);
+  window.addEventListener('resize', () => { fitCanvas(); });
+
+  if (typeof VexGame !== 'undefined'){
+    VexGame.boot({
+      slug: 'stack-tower',
+      onReady: function(player){
+        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+  reset();
+})();
+</script>
+</body>
+</html>

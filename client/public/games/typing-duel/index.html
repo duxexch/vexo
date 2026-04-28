@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Typing Duel</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .td-arena {
+    width: 100%; max-width: 380px; margin: 0 auto;
+    display: flex; flex-direction: column;
+  }
+  .td-side {
+    flex: 1; padding: 16px 12px;
+    background: linear-gradient(135deg, var(--vex-surface), rgba(168,85,247,0.06));
+    border: 1px solid rgba(168,85,247,0.3);
+    border-radius: 14px;
+    display: flex; flex-direction: column; gap: 12px; align-items: center;
+    position: relative; min-height: 220px;
+  }
+  .td-side.bot { transform: rotate(0deg); }
+  .td-side.top { transform: rotate(180deg); margin-bottom: 10px; }
+  .td-side.top > * { transform: rotate(0deg); }
+  .td-mid {
+    text-align: center; font-family: 'Bebas Neue', sans-serif; color: rgba(168,85,247,0.55);
+    letter-spacing: 0.15em; padding: 6px 0; font-size: 0.95rem;
+  }
+  .td-word {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem;
+    color: var(--vex-text); letter-spacing: 0.18em;
+    display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;
+  }
+  .td-letter {
+    width: 28px; height: 36px; line-height: 36px; text-align: center;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--vex-border);
+    border-radius: 6px; transition: all 0.18s ease;
+  }
+  .td-letter.done {
+    background: rgba(34,197,94,0.18); color: #86efac; border-color: rgba(34,197,94,0.45);
+  }
+  .td-keys {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; width: 100%;
+  }
+  .td-key {
+    aspect-ratio: 1.1; background: var(--vex-surface);
+    border: 1px solid var(--vex-border); border-radius: 8px;
+    color: var(--vex-text); font-family: monospace; font-weight: 700;
+    font-size: 1.05rem; display: grid; place-items: center;
+    cursor: pointer; user-select: none; transition: all 0.12s;
+  }
+  .td-key:active { transform: scale(0.92); background: rgba(168,85,247,0.25); border-color: rgba(168,85,247,0.6); }
+  .td-key.shake { animation: tdShake 0.28s ease; }
+  @keyframes tdShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px); background:rgba(239,68,68,0.2)} 75%{transform:translateX(4px); background:rgba(239,68,68,0.2)} }
+  .td-side .td-name {
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.12em;
+    color: var(--vex-text-dim); font-size: 1rem;
+  }
+  .td-side .td-name.win { color: #ffb627; }
+  .td-rounds {
+    display: flex; gap: 4px;
+  }
+  .td-round-pip {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: rgba(255,255,255,0.12); border: 1px solid var(--vex-border);
+  }
+  .td-round-pip.p1 { background: #22c55e; border-color: #22c55e; }
+  .td-round-pip.p2 { background: #ef4444; border-color: #ef4444; }
+  .td-countdown {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: rgba(7,11,20,0.85); backdrop-filter: blur(4px);
+    z-index: 10; border-radius: 14px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 6rem; color: #a855f7;
+    text-shadow: 0 0 20px rgba(168,85,247,0.5);
+    pointer-events: none;
+  }
+  .td-countdown.go { color: #22c55e; text-shadow: 0 0 24px rgba(34,197,94,0.6); }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge" style="background:linear-gradient(135deg,#a855f7,#581c87);box-shadow:0 0 18px -4px #a855f7;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><line x1="6" y1="10" x2="6" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="14" y1="10" x2="14" y2="10"/><line x1="18" y1="10" x2="18" y2="10"/><line x1="6" y1="14" x2="18" y2="14"/></svg>
+      </div>
+      <span id="title">نزال الكتابة</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblP1">لاعب 1</div><div class="vex-stat-value emerald" id="p1">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblBest">أفضل من 5</div><div class="vex-stat-value gold">3</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblP2">لاعب 2</div><div class="vex-stat-value rose" id="p2">0</div></div>
+  </div>
+
+  <div class="td-arena">
+    <div class="td-side top" id="sideP2">
+      <div class="td-name" id="p2Name">لاعب 2</div>
+      <div class="td-rounds" id="p2Pips"></div>
+      <div class="td-word" id="word2"></div>
+      <div class="td-keys" id="keys2"></div>
+    </div>
+    <div class="td-mid" id="midText">دور جديد قريباً…</div>
+    <div class="td-side bot" id="sideP1">
+      <div class="td-name" id="p1Name">لاعب 1</div>
+      <div class="td-rounds" id="p1Pips"></div>
+      <div class="td-word" id="word1"></div>
+      <div class="td-keys" id="keys1"></div>
+    </div>
+  </div>
+
+  <div class="vex-hint" id="hint">كل لاعب على نصفه. اضغط الحروف بالترتيب الصحيح. أول من يكمل الكلمة يكسب الجولة.</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon" style="background:linear-gradient(135deg,#a855f7,#581c87);box-shadow:0 0 18px -4px #a855f7;">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهى النزال!</div>
+    <div class="vex-overlay-subtitle" id="endSub"></div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;background:linear-gradient(135deg,#a855f7,#581c87);box-shadow:0 0 18px -3px #a855f7;">جولة جديدة</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar:{ title:'نزال الكتابة', reset:'إعادة', p1:'لاعب 1', p2:'لاعب 2', best:'أفضل من 5',
+      win1:'فاز اللاعب 1!', win2:'فاز اللاعب 2!', round:'الجولة', go:'انطلق!',
+      hint:'كل لاعب على نصفه. اضغط الحروف بالترتيب الصحيح. أول من يكمل الكلمة يكسب الجولة.',
+      newRound:'جولة جديدة', mid:'استعدوا…', },
+    en:{ title:'Typing Duel', reset:'Reset', p1:'Player 1', p2:'Player 2', best:'Best of 5',
+      win1:'Player 1 wins!', win2:'Player 2 wins!', round:'Round', go:'GO!',
+      hint:'Each player on their side. Tap the letters in order. First to finish wins the round.',
+      newRound:'New match', mid:'Ready…', },
+  };
+  const WORDS_AR = ['نصر','بطل','هدف','لعب','نجم','فوز','سرعة','قوة','دقة','حماس','تحدي','شغف'];
+  const WORDS_EN = ['VEX','GOAL','WIN','FAST','EPIC','PLAY','HERO','RUSH','GAME','BOLT','EDGE','PULSE'];
+  let lang = 'ar';
+  const ROUNDS_TO_WIN = 3;
+  const $ = id => document.getElementById(id);
+
+  let scores, currentWord, p1Idx, p2Idx, gameOver, locked;
+  let pendingTimers = [];
+  function later(fn, ms){ const id = setTimeout(() => { pendingTimers = pendingTimers.filter(x => x !== id); fn(); }, ms); pendingTimers.push(id); return id; }
+  function clearPending(){ pendingTimers.forEach(clearTimeout); pendingTimers = []; }
+
+  function applyLang(){
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
+    $('lblP1').textContent = s.p1; $('lblP2').textContent = s.p2;
+    $('lblBest').textContent = s.best;
+    $('p1Name').textContent = s.p1; $('p2Name').textContent = s.p2;
+    $('hint').textContent = s.hint;
+    $('endRestart').textContent = s.newRound;
+  }
+
+  function pickWord(){
+    const pool = lang === 'ar' ? WORDS_AR : WORDS_EN;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function shuffle(arr){
+    const a = arr.slice();
+    for (let i = a.length-1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i+1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function renderWord(elId, word, idx){
+    const el = $(elId);
+    el.innerHTML = '';
+    [...word].forEach((ch, i) => {
+      const sp = document.createElement('div');
+      sp.className = 'td-letter' + (i < idx ? ' done' : '');
+      sp.textContent = i < idx ? ch : '_';
+      el.appendChild(sp);
+    });
+  }
+
+  function renderKeys(elId, word, who){
+    const el = $(elId);
+    el.innerHTML = '';
+    // Build shuffled keypad: word letters + a few decoys
+    const wordLetters = [...word];
+    const decoyPool = lang === 'ar' ? 'ابتثجحخدذرزسشصضطعغفقكلمنهوي' : 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const decoys = [];
+    while (decoys.length + wordLetters.length < 12){
+      const d = decoyPool[Math.floor(Math.random() * decoyPool.length)];
+      if (!wordLetters.includes(d) && !decoys.includes(d)) decoys.push(d);
+    }
+    const keys = shuffle([...wordLetters, ...decoys]);
+    keys.forEach(k => {
+      const b = document.createElement('button');
+      b.className = 'td-key'; b.textContent = k; b.dataset.k = k;
+      b.addEventListener('click', () => press(who, k, b));
+      el.appendChild(b);
+    });
+  }
+
+  function press(who, ch, btn){
+    if (gameOver || locked) return;
+    if (who === 'p1'){
+      if (currentWord[p1Idx] === ch){
+        p1Idx++;
+        renderWord('word1', currentWord, p1Idx);
+        if (p1Idx >= currentWord.length) winRound('p1');
+      } else {
+        btn.classList.add('shake');
+        setTimeout(() => btn.classList.remove('shake'), 280);
+      }
+    } else {
+      if (currentWord[p2Idx] === ch){
+        p2Idx++;
+        renderWord('word2', currentWord, p2Idx);
+        if (p2Idx >= currentWord.length) winRound('p2');
+      } else {
+        btn.classList.add('shake');
+        setTimeout(() => btn.classList.remove('shake'), 280);
+      }
+    }
+  }
+
+  function pipsRender(){
+    const a = $('p1Pips'); a.innerHTML = '';
+    for (let i = 0; i < ROUNDS_TO_WIN; i++){
+      const d = document.createElement('div');
+      d.className = 'td-round-pip' + (i < scores.p1 ? ' p1' : '');
+      a.appendChild(d);
+    }
+    const b = $('p2Pips'); b.innerHTML = '';
+    for (let i = 0; i < ROUNDS_TO_WIN; i++){
+      const d = document.createElement('div');
+      d.className = 'td-round-pip' + (i < scores.p2 ? ' p2' : '');
+      b.appendChild(d);
+    }
+  }
+
+  function winRound(who){
+    locked = true;
+    scores[who]++;
+    $('p1').textContent = scores.p1; $('p2').textContent = scores.p2;
+    pipsRender();
+    if (typeof VexGame !== 'undefined') VexGame.confetti(360);
+    if (scores[who] >= ROUNDS_TO_WIN){ end(who); return; }
+    const s = STRINGS[lang];
+    $('midText').textContent = `${s.round} ${scores.p1 + scores.p2 + 1} / ${ROUNDS_TO_WIN*2-1}`;
+    later(newRound, 1200);
+  }
+
+  function newRound(){
+    currentWord = pickWord();
+    p1Idx = 0; p2Idx = 0; locked = true;
+    renderWord('word1', currentWord, 0);
+    renderWord('word2', currentWord, 0);
+    renderKeys('keys1', currentWord, 'p1');
+    renderKeys('keys2', currentWord, 'p2');
+    // countdown
+    showCountdown();
+  }
+
+  function showCountdown(){
+    const exists = document.querySelector('.td-countdown'); if (exists) exists.remove();
+    const cd = document.createElement('div');
+    cd.className = 'td-countdown'; cd.textContent = '3';
+    document.querySelector('.td-arena').appendChild(cd);
+    later(() => { if (cd.parentNode) cd.textContent = '2'; }, 800);
+    later(() => { if (cd.parentNode) cd.textContent = '1'; }, 1600);
+    later(() => { if (cd.parentNode){ cd.textContent = STRINGS[lang].go; cd.classList.add('go'); } }, 2400);
+    later(() => { cd.remove(); if (!gameOver) locked = false; }, 3000);
+  }
+
+  function reset(){
+    clearPending();
+    document.querySelectorAll('.td-countdown').forEach(n => n.remove());
+    scores = { p1: 0, p2: 0 };
+    gameOver = false; locked = false;
+    $('p1').textContent = 0; $('p2').textContent = 0;
+    pipsRender();
+    $('endOverlay').classList.remove('show');
+    $('midText').textContent = STRINGS[lang].mid;
+    newRound();
+  }
+
+  function end(winner){
+    gameOver = true;
+    const s = STRINGS[lang];
+    $('endTitle').textContent = winner === 'p1' ? s.win1 : s.win2;
+    $('endSub').textContent = `${scores.p1} — ${scores.p2}`;
+    setTimeout(() => $('endOverlay').classList.add('show'), 600);
+    if (typeof VexGame !== 'undefined'){
+      VexGame.confetti(800);
+      VexGame.endSession({
+        score: scores.p1, result: winner === 'p1' ? 'win' : 'loss',
+        metadata: { p1: scores.p1, p2: scores.p2, winner },
+      });
+    }
+  }
+
+  $('resetBtn').addEventListener('click', reset);
+  $('endRestart').addEventListener('click', reset);
+
+  if (typeof VexGame !== 'undefined'){
+    VexGame.boot({
+      slug: 'typing-duel',
+      onReady: function(player){
+        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+  reset();
+})();
+</script>
+</body>
+</html>

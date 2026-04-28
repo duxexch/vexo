@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Dice Battle</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .db-arena {
+    width: 100%; max-width: 380px; margin: 0 auto;
+    padding: 16px;
+    background: linear-gradient(180deg, rgba(255,182,39,0.06), rgba(7,11,20,1));
+    border: 1px solid rgba(255,182,39,0.3);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    position: relative; overflow: hidden;
+  }
+  .db-current {
+    text-align: center; font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.6rem; letter-spacing: 0.12em;
+    color: #fde68a; text-shadow: 0 0 12px rgba(255,182,39,0.4);
+    margin-bottom: 6px;
+  }
+  .db-round {
+    text-align: center; color: var(--vex-text-dim);
+    font-size: 0.9rem; letter-spacing: 0.1em; margin-bottom: 14px;
+  }
+  .db-dice-row {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+    margin: 14px 0;
+  }
+  .db-die {
+    aspect-ratio: 1; background: #fff; border-radius: 14px;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.45), inset 0 -3px 0 rgba(0,0,0,0.08);
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    padding: 10px;
+    transition: transform 0.18s ease;
+  }
+  .db-die.rolling {
+    animation: dbRoll 0.5s ease-in-out;
+  }
+  @keyframes dbRoll {
+    0% { transform: rotate(0); }
+    25% { transform: rotate(-12deg) scale(0.95); }
+    50% { transform: rotate(8deg) scale(1.05); }
+    75% { transform: rotate(-4deg); }
+    100% { transform: rotate(0); }
+  }
+  .db-pip {
+    width: 100%; height: 100%; display: grid; place-items: center;
+  }
+  .db-pip::after {
+    content: ''; width: 70%; height: 70%; border-radius: 50%;
+    background: #1f2937; box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+    transform: scale(0); transition: transform 0.18s;
+  }
+  .db-pip.on::after { transform: scale(1); }
+  .db-roll-btn {
+    width: 100%; padding: 16px; margin-top: 8px;
+    background: linear-gradient(135deg,#ffb627,#7c5300);
+    color: #1c0a06; border: none; border-radius: 12px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.18em;
+    cursor: pointer; box-shadow: 0 0 18px -3px #ffb627;
+    transition: all 0.15s ease;
+  }
+  .db-roll-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+  .db-roll-btn:not(:disabled):active { transform: scale(0.97); }
+  .db-roll-result {
+    text-align: center; font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem; color: #fff; min-height: 38px; margin-top: 8px;
+    letter-spacing: 0.1em;
+  }
+  .db-roll-result.bonus { color: #ffb627; text-shadow: 0 0 10px rgba(255,182,39,0.5); }
+  .db-roll-result.boom { color: #ef4444; text-shadow: 0 0 12px rgba(239,68,68,0.5); }
+  .db-leaderboard {
+    margin-top: 14px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .db-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    background: var(--vex-surface); border: 1px solid var(--vex-border); border-radius: 10px;
+    transition: all 0.18s;
+  }
+  .db-row.active {
+    background: rgba(255,182,39,0.15); border-color: rgba(255,182,39,0.55);
+    box-shadow: 0 0 14px -4px #ffb627;
+  }
+  .db-row .db-dot {
+    width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0;
+  }
+  .db-row .db-name { flex: 1; font-weight: 700; font-size: 0.95rem; }
+  .db-row .db-score {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; color: #fde68a;
+  }
+  .db-setup-overlay {
+    position: absolute; inset: 0; background: rgba(7,11,20,0.96);
+    z-index: 20; padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    justify-content: center; border-radius: 14px;
+  }
+  .db-setup-title {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; color: #fde68a;
+    text-align: center; letter-spacing: 0.12em;
+  }
+  .db-count-row { display: flex; gap: 6px; justify-content: center; }
+  .db-count-btn {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: var(--vex-surface); border: 1px solid var(--vex-border);
+    color: var(--vex-text); font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; cursor: pointer;
+  }
+  .db-count-btn.active {
+    background: rgba(255,182,39,0.25); color: #fde68a; border-color: rgba(255,182,39,0.6);
+  }
+  .db-setup-row { display: flex; gap: 8px; align-items: center; }
+  .db-setup-row input {
+    flex: 1; padding: 10px; background: var(--vex-surface);
+    border: 1px solid var(--vex-border); border-radius: 8px;
+    color: var(--vex-text); font-family: inherit; font-size: 0.95rem;
+  }
+  .db-setup-start {
+    margin-top: 10px; padding: 13px;
+    background: linear-gradient(135deg,#ffb627,#7c5300);
+    color: #1c0a06; border: none; border-radius: 12px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 0.15em;
+    cursor: pointer; box-shadow: 0 0 18px -3px #ffb627;
+  }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge gold">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1"/><circle cx="16" cy="8" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="8" cy="16" r="1"/><circle cx="16" cy="16" r="1"/></svg>
+      </div>
+      <span id="title">معركة النرد</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="db-arena" id="arena">
+    <div class="db-current" id="currentName">—</div>
+    <div class="db-round" id="roundLbl">الجولة 1 / 5</div>
+
+    <div class="db-dice-row" id="diceRow">
+      <div class="db-die" id="die0"></div>
+      <div class="db-die" id="die1"></div>
+      <div class="db-die" id="die2"></div>
+    </div>
+
+    <div class="db-roll-result" id="rollResult"></div>
+    <button class="db-roll-btn" id="rollBtn">ارمِ النرد</button>
+
+    <div class="db-leaderboard" id="leaderboard"></div>
+
+    <div class="db-setup-overlay" id="setupOverlay">
+      <div class="db-setup-title" id="setupTitle">عدد اللاعبين</div>
+      <div class="db-count-row" id="countRow">
+        <button class="db-count-btn" data-c="2">2</button>
+        <button class="db-count-btn" data-c="3">3</button>
+        <button class="db-count-btn active" data-c="4">4</button>
+      </div>
+      <div id="namesArea"></div>
+      <button class="db-setup-start" id="setupStart">ابدأ</button>
+    </div>
+  </div>
+
+  <div class="vex-hint" id="hint">كل لاعب يرمي 3 نرد في دوره. التطابق ثنائي = +5، الثلاثي = +20. أعلى مجموع بعد 5 جولات يفوز.</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon gold">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهت اللعبة!</div>
+    <div class="vex-overlay-subtitle" id="endSub"></div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-gold" id="endRestart" style="flex:1">جولة جديدة</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar:{ title:'معركة النرد', reset:'إعادة', setupTitle:'عدد اللاعبين',
+      defaultName:'لاعب', start:'ابدأ', roll:'ارمِ النرد', rolling:'يدور…',
+      round:(i,n)=>`الجولة ${i} / ${n}`,
+      pair:(s)=>`زوج! +5 (المجموع ${s})`,
+      triple:(s)=>`ثلاثي! +20 (المجموع ${s})`,
+      sum:(s)=>`المجموع ${s}`,
+      end:'انتهت اللعبة!', endSub:(n,s)=>`الفائز: ${n} (${s})`,
+      newRound:'جولة جديدة',
+      hint:'كل لاعب يرمي 3 نرد في دوره. التطابق ثنائي = +5، الثلاثي = +20. أعلى مجموع بعد 5 جولات يفوز.', },
+    en:{ title:'Dice Battle', reset:'Reset', setupTitle:'Number of players',
+      defaultName:'Player', start:'Start', roll:'Roll dice', rolling:'Rolling…',
+      round:(i,n)=>`Round ${i} / ${n}`,
+      pair:(s)=>`Pair! +5 (sum ${s})`,
+      triple:(s)=>`Triple! +20 (sum ${s})`,
+      sum:(s)=>`Sum ${s}`,
+      end:'Game over!', endSub:(n,s)=>`Winner: ${n} (${s})`,
+      newRound:'New game',
+      hint:'Each player rolls 3 dice on their turn. Pair = +5, triple = +20. Highest after 5 rounds wins.', },
+  };
+  const TOTAL_ROUNDS = 5;
+  let lang = 'ar', count = 4;
+  const $ = id => document.getElementById(id);
+
+  let players;     // [{name, score, color}]
+  let current;     // index
+  let round;       // 1..TOTAL_ROUNDS
+  let rolling = false;
+  let gameOver = false;
+  let pendingTimers = [];
+  let pendingIntervals = [];
+  function later(fn, ms){ const id = setTimeout(() => { pendingTimers = pendingTimers.filter(x => x !== id); fn(); }, ms); pendingTimers.push(id); return id; }
+  function tick(fn, ms){ const id = setInterval(fn, ms); pendingIntervals.push(id); return id; }
+  function clearPending(){ pendingTimers.forEach(clearTimeout); pendingTimers = []; pendingIntervals.forEach(clearInterval); pendingIntervals = []; }
+
+  function applyLang(){
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
+    $('setupTitle').textContent = s.setupTitle;
+    $('setupStart').textContent = s.start;
+    $('rollBtn').textContent = s.roll;
+    $('hint').textContent = s.hint;
+    $('endRestart').textContent = s.newRound;
+    rebuildSetupNames();
+  }
+
+  function rebuildSetupNames(){
+    const area = $('namesArea'); area.innerHTML = '';
+    const s = STRINGS[lang];
+    for (let i = 0; i < count; i++){
+      const row = document.createElement('div');
+      row.className = 'db-setup-row';
+      const dot = document.createElement('div');
+      dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:${playerColor(i)};box-shadow:0 0 8px ${playerColor(i)};flex-shrink:0;`;
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.maxLength = 12;
+      inp.placeholder = `${s.defaultName} ${i+1}`;
+      inp.value = `${s.defaultName} ${i+1}`;
+      inp.dataset.i = i;
+      row.appendChild(dot); row.appendChild(inp);
+      area.appendChild(row);
+    }
+  }
+
+  function playerColor(i){ return ['#22c55e','#ef4444','#1e88ff','#a855f7'][i % 4]; }
+
+  function startSetup(){
+    clearPending();
+    rolling = false;
+    $('setupOverlay').style.display = 'flex';
+    $('endOverlay').classList.remove('show');
+    $('rollResult').textContent = '';
+    $('rollResult').className = 'db-roll-result';
+    [0,1,2].forEach(renderDie);
+  }
+
+  function startGame(){
+    const s = STRINGS[lang];
+    const inputs = $('namesArea').querySelectorAll('input');
+    players = Array.from(inputs).map((inp, i) => ({
+      name: inp.value.trim() || `${s.defaultName} ${i+1}`,
+      score: 0, color: playerColor(i),
+    }));
+    current = 0; round = 1; gameOver = false;
+    $('setupOverlay').style.display = 'none';
+    renderLeaderboard();
+    updateTurn();
+  }
+
+  function updateTurn(){
+    const s = STRINGS[lang];
+    $('currentName').textContent = players[current].name;
+    $('currentName').style.color = players[current].color;
+    $('currentName').style.textShadow = `0 0 12px ${players[current].color}66`;
+    $('roundLbl').textContent = s.round(round, TOTAL_ROUNDS);
+    $('rollBtn').disabled = false;
+    $('rollResult').textContent = '';
+    $('rollResult').className = 'db-roll-result';
+    renderLeaderboard();
+  }
+
+  function renderLeaderboard(){
+    const root = $('leaderboard'); root.innerHTML = '';
+    players.forEach((p, i) => {
+      const row = document.createElement('div');
+      row.className = 'db-row' + (i === current && !gameOver ? ' active' : '');
+      const dot = document.createElement('div');
+      dot.className = 'db-dot'; dot.style.background = p.color; dot.style.boxShadow = `0 0 8px ${p.color}`;
+      const name = document.createElement('div');
+      name.className = 'db-name'; name.textContent = p.name;
+      const sc = document.createElement('div');
+      sc.className = 'db-score'; sc.textContent = p.score;
+      row.appendChild(dot); row.appendChild(name); row.appendChild(sc);
+      root.appendChild(row);
+    });
+  }
+
+  // Pip positions per face value
+  const PIPS = {
+    1: [4],
+    2: [0, 8],
+    3: [0, 4, 8],
+    4: [0, 2, 6, 8],
+    5: [0, 2, 4, 6, 8],
+    6: [0, 2, 3, 5, 6, 8],
+  };
+  function renderDie(idx, value){
+    const el = $('die' + idx);
+    el.innerHTML = '';
+    const v = value || 1;
+    const set = new Set(PIPS[v]);
+    for (let i = 0; i < 9; i++){
+      const p = document.createElement('div');
+      p.className = 'db-pip' + (set.has(i) ? ' on' : '');
+      el.appendChild(p);
+    }
+  }
+
+  function roll(){
+    if (rolling || gameOver) return;
+    rolling = true;
+    $('rollBtn').disabled = true;
+    const s = STRINGS[lang];
+    $('rollResult').textContent = s.rolling;
+    $('rollResult').className = 'db-roll-result';
+    [0,1,2].forEach(idx => {
+      const el = $('die' + idx);
+      el.classList.remove('rolling'); void el.offsetWidth; el.classList.add('rolling');
+      // animate value changes during roll
+      const ticks = 6;
+      let i = 0;
+      const iv = tick(() => {
+        renderDie(idx, 1 + Math.floor(Math.random()*6));
+        i++;
+        if (i >= ticks){
+          clearInterval(iv);
+          pendingIntervals = pendingIntervals.filter(x => x !== iv);
+        }
+      }, 70);
+    });
+    later(() => {
+      const vals = [
+        1 + Math.floor(Math.random()*6),
+        1 + Math.floor(Math.random()*6),
+        1 + Math.floor(Math.random()*6),
+      ];
+      vals.forEach((v, i) => renderDie(i, v));
+      finishRoll(vals);
+    }, 600);
+  }
+
+  function finishRoll(vals){
+    const sum = vals[0] + vals[1] + vals[2];
+    const counts = {};
+    vals.forEach(v => counts[v] = (counts[v]||0)+1);
+    let bonus = 0, kind = 'sum';
+    if (Object.values(counts).some(c => c === 3)){ bonus = 20; kind = 'triple'; }
+    else if (Object.values(counts).some(c => c === 2)){ bonus = 5; kind = 'pair'; }
+    const total = sum + bonus;
+    players[current].score += total;
+    const s = STRINGS[lang];
+    if (kind === 'triple'){
+      $('rollResult').textContent = s.triple(sum); $('rollResult').className = 'db-roll-result boom';
+      if (typeof VexGame !== 'undefined') VexGame.confetti(700);
+    } else if (kind === 'pair'){
+      $('rollResult').textContent = s.pair(sum); $('rollResult').className = 'db-roll-result bonus';
+    } else {
+      $('rollResult').textContent = s.sum(sum); $('rollResult').className = 'db-roll-result';
+    }
+    if (typeof VexGame !== 'undefined'){
+      VexGame.popScore(document.body, '+' + total, '50%', '40%', kind === 'triple' ? 'gold' : '');
+    }
+    renderLeaderboard();
+    rolling = false;
+    later(nextTurn, 1300);
+  }
+
+  function nextTurn(){
+    current = (current + 1) % players.length;
+    if (current === 0){
+      round++;
+      if (round > TOTAL_ROUNDS){ return endGame(); }
+    }
+    updateTurn();
+  }
+
+  function endGame(){
+    gameOver = true;
+    $('rollBtn').disabled = true;
+    const winner = players.reduce((a,b) => b.score > a.score ? b : a, players[0]);
+    const s = STRINGS[lang];
+    $('endTitle').textContent = s.end;
+    $('endSub').textContent = s.endSub(winner.name, winner.score);
+    $('currentName').textContent = winner.name;
+    $('currentName').style.color = winner.color;
+    later(() => $('endOverlay').classList.add('show'), 600);
+    if (typeof VexGame !== 'undefined'){
+      VexGame.confetti(900);
+      VexGame.endSession({
+        score: winner.score, result: 'win',
+        metadata: { winner: winner.name, scores: players.map(p => ({n:p.name,s:p.score})) },
+      });
+    }
+  }
+
+  document.querySelectorAll('.db-count-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      count = parseInt(b.dataset.c, 10);
+      document.querySelectorAll('.db-count-btn').forEach(x => x.classList.toggle('active', x===b));
+      rebuildSetupNames();
+    });
+  });
+  $('setupStart').addEventListener('click', startGame);
+  $('rollBtn').addEventListener('click', roll);
+  $('resetBtn').addEventListener('click', startSetup);
+  $('endRestart').addEventListener('click', startSetup);
+
+  if (typeof VexGame !== 'undefined'){
+    VexGame.boot({
+      slug: 'dice-battle',
+      onReady: function(player){
+        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+  // initial dice display
+  [0,1,2].forEach(i => renderDie(i, 1));
+  startSetup();
+})();
+</script>
+</body>
+</html>

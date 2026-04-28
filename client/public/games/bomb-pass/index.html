@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Bomb Pass</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .bp-arena {
+    width: 100%; max-width: 380px; margin: 0 auto;
+    aspect-ratio: 3/4;
+    background: radial-gradient(circle at center, rgba(249,115,22,0.18), rgba(7,11,20,0.95));
+    border: 1px solid rgba(249,115,22,0.35);
+    border-radius: 14px;
+    position: relative; overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5), inset 0 0 24px rgba(249,115,22,0.18);
+  }
+  .bp-bomb {
+    position: absolute; left: 50%; top: 38%; transform: translate(-50%,-50%);
+    width: 130px; height: 130px;
+    display: grid; place-items: center;
+  }
+  .bp-bomb-inner {
+    width: 110px; height: 110px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #525b6e 0%, #1f2937 60%, #0a0f1c);
+    box-shadow: 0 0 30px rgba(249,115,22,0.4), inset -8px -10px 14px rgba(0,0,0,0.55);
+    position: relative;
+    animation: bpJiggle 0.4s ease-in-out infinite;
+  }
+  @keyframes bpJiggle { 0%,100%{transform:translate(0,0) rotate(0deg)} 50%{transform:translate(0,2px) rotate(-1.5deg)} }
+  .bp-bomb-inner::after {
+    content: ''; position: absolute; top: -10px; left: 50%; width: 4px; height: 30px;
+    background: linear-gradient(to top, #525b6e, #737373);
+    transform: translateX(-50%) rotate(20deg); transform-origin: bottom center;
+    border-radius: 2px;
+  }
+  .bp-spark {
+    position: absolute; top: -34px; left: calc(50% + 10px);
+    width: 14px; height: 14px; border-radius: 50%;
+    background: radial-gradient(circle, #fef08a, #f97316);
+    box-shadow: 0 0 18px #f97316, 0 0 32px #fb923c;
+    animation: bpSpark 0.3s ease-in-out infinite alternate;
+  }
+  @keyframes bpSpark { 0%{transform:scale(0.85)} 100%{transform:scale(1.25)} }
+  .bp-pass-btn {
+    position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+    padding: 18px 40px; background: linear-gradient(135deg,#f97316,#7c2d12);
+    color: #fff; border: none; border-radius: 99px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.18em;
+    cursor: pointer; box-shadow: 0 0 24px -4px #f97316, 0 6px 18px rgba(0,0,0,0.5);
+    transition: transform 0.12s ease;
+  }
+  .bp-pass-btn:active { transform: translateX(-50%) scale(0.94); }
+  .bp-current-name {
+    position: absolute; top: 14px; left: 0; right: 0; text-align: center;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.12em;
+    color: #fdba74;
+    text-shadow: 0 0 12px rgba(249,115,22,0.5);
+  }
+  .bp-players {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    width: 100%; margin: 12px 0;
+  }
+  .bp-player {
+    background: var(--vex-surface); border: 1px solid var(--vex-border);
+    border-radius: 10px; padding: 10px;
+    display: flex; align-items: center; gap: 10px;
+    transition: all 0.18s ease;
+  }
+  .bp-player.active {
+    background: rgba(249,115,22,0.18); border-color: rgba(249,115,22,0.55);
+    box-shadow: 0 0 14px -4px #f97316;
+  }
+  .bp-player.dead {
+    opacity: 0.35; filter: grayscale(0.7);
+  }
+  .bp-player-dot {
+    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+  }
+  .bp-player-name {
+    flex: 1; font-weight: 700; font-size: 0.95rem;
+  }
+  .bp-lives {
+    display: flex; gap: 3px;
+  }
+  .bp-life {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,0.6);
+  }
+  .bp-life.gone { background: rgba(255,255,255,0.12); box-shadow: none; }
+  .bp-explosion {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: radial-gradient(circle, rgba(249,115,22,0.6), rgba(0,0,0,0.7));
+    z-index: 5; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .bp-explosion.show { opacity: 1; }
+  .bp-explosion-text {
+    font-family: 'Bebas Neue', sans-serif; font-size: 4rem; color: #fff;
+    text-shadow: 0 0 30px #f97316, 0 0 50px #ef4444;
+    animation: bpExplode 0.5s ease-out;
+  }
+  @keyframes bpExplode { 0%{transform:scale(0.3)} 100%{transform:scale(1.3)} }
+  .bp-setup-overlay {
+    position: absolute; inset: 0; background: rgba(7,11,20,0.96);
+    z-index: 20; padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    align-items: stretch; justify-content: center; border-radius: 14px;
+  }
+  .bp-setup-title {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; color: #fdba74;
+    text-align: center; letter-spacing: 0.1em;
+  }
+  .bp-setup-row { display: flex; gap: 8px; align-items: center; }
+  .bp-setup-row input {
+    flex: 1; padding: 10px; background: var(--vex-surface);
+    border: 1px solid var(--vex-border); border-radius: 8px;
+    color: var(--vex-text); font-family: inherit; font-size: 0.95rem;
+  }
+  .bp-setup-start {
+    margin-top: 12px; padding: 14px; background: linear-gradient(135deg,#f97316,#7c2d12);
+    color: #fff; border: none; border-radius: 12px; font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem; letter-spacing: 0.15em; cursor: pointer;
+    box-shadow: 0 0 18px -3px #f97316;
+  }
+  .bp-count-row { display: flex; gap: 6px; justify-content: center; margin: 6px 0; }
+  .bp-count-btn {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: var(--vex-surface); border: 1px solid var(--vex-border);
+    color: var(--vex-text); font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem;
+    cursor: pointer;
+  }
+  .bp-count-btn.active {
+    background: rgba(249,115,22,0.25); color: #fdba74; border-color: rgba(249,115,22,0.6);
+  }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge" style="background:linear-gradient(135deg,#f97316,#7c2d12);box-shadow:0 0 18px -4px #f97316;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="7"/><path d="M12 7V4"/><path d="M14 4l3-2"/></svg>
+      </div>
+      <span id="title">تمرير القنبلة</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="bp-players" id="players"></div>
+
+  <div class="bp-arena" id="arena">
+    <div class="bp-current-name" id="currentName">—</div>
+    <div class="bp-bomb">
+      <div class="bp-bomb-inner">
+        <div class="bp-spark" id="spark"></div>
+      </div>
+    </div>
+    <button class="bp-pass-btn" id="passBtn">PASS</button>
+    <div class="bp-explosion" id="boom">
+      <div class="bp-explosion-text">💥 BOOM</div>
+    </div>
+
+    <div class="bp-setup-overlay" id="setupOverlay">
+      <div class="bp-setup-title" id="setupTitle">عدد اللاعبين</div>
+      <div class="bp-count-row" id="countRow">
+        <button class="bp-count-btn" data-c="2">2</button>
+        <button class="bp-count-btn active" data-c="3">3</button>
+        <button class="bp-count-btn" data-c="4">4</button>
+      </div>
+      <div id="namesArea"></div>
+      <button class="bp-setup-start" id="setupStart">ابدأ</button>
+    </div>
+  </div>
+
+  <div class="vex-hint" id="hint">مرّر القنبلة قبل أن تنفجر! اللاعب الذي يحملها عند الانفجار يفقد حياة. آخر باقٍ يفوز.</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon" style="background:linear-gradient(135deg,#f97316,#7c2d12);box-shadow:0 0 18px -4px #f97316;">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهت اللعبة!</div>
+    <div class="vex-overlay-subtitle" id="endSub"></div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;background:linear-gradient(135deg,#f97316,#7c2d12);box-shadow:0 0 18px -3px #f97316;">جولة جديدة</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar:{ title:'تمرير القنبلة', reset:'إعادة', pass:'مرّر', setupTitle:'عدد اللاعبين',
+      defaultName:'لاعب', start:'ابدأ', boom:'انفجر!', winner:(n)=>`${n} فاز!`,
+      newRound:'جولة جديدة', endSub:'تهانينا للناجي.',
+      hint:'مرّر القنبلة قبل أن تنفجر! اللاعب الذي يحملها عند الانفجار يفقد حياة. آخر باقٍ يفوز.', },
+    en:{ title:'Bomb Pass', reset:'Reset', pass:'PASS', setupTitle:'Number of players',
+      defaultName:'Player', start:'Start', boom:'BOOM!', winner:(n)=>`${n} wins!`,
+      newRound:'New game', endSub:'Congratulations to the survivor.',
+      hint:'Pass the bomb before it explodes! The holder loses a life. Last alive wins.', },
+  };
+  let lang = 'ar';
+  const $ = id => document.getElementById(id);
+
+  let players;        // [{name, lives, alive}]
+  let current;        // index of holder
+  let bombTimer;      // setTimeout for explosion
+  let nextExplodeAt;  // ms timestamp
+  let running = false;
+  let count = 3;
+  let pendingTimers = [];
+  function later(fn, ms){ const id = setTimeout(() => { pendingTimers = pendingTimers.filter(x => x !== id); fn(); }, ms); pendingTimers.push(id); return id; }
+  function clearPending(){ pendingTimers.forEach(clearTimeout); pendingTimers = []; }
+
+  function applyLang(){
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
+    $('passBtn').textContent = s.pass;
+    $('setupTitle').textContent = s.setupTitle;
+    $('setupStart').textContent = s.start;
+    $('hint').textContent = s.hint;
+    $('endRestart').textContent = s.newRound;
+    rebuildSetupNames();
+  }
+
+  function rebuildSetupNames(){
+    const area = $('namesArea'); area.innerHTML = '';
+    const s = STRINGS[lang];
+    for (let i = 0; i < count; i++){
+      const row = document.createElement('div');
+      row.className = 'bp-setup-row';
+      const dot = document.createElement('div');
+      dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:${playerColor(i)};box-shadow:0 0 8px ${playerColor(i)};flex-shrink:0;`;
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.maxLength = 12;
+      inp.placeholder = `${s.defaultName} ${i+1}`;
+      inp.value = `${s.defaultName} ${i+1}`;
+      inp.dataset.i = i;
+      row.appendChild(dot); row.appendChild(inp);
+      area.appendChild(row);
+    }
+  }
+
+  function playerColor(i){
+    return ['#22c55e','#ef4444','#1e88ff','#ffb627'][i % 4];
+  }
+
+  function startSetup(){
+    running = false;
+    if (bombTimer){ clearTimeout(bombTimer); bombTimer = null; }
+    clearPending();
+    $('boom').classList.remove('show');
+    $('setupOverlay').style.display = 'flex';
+    $('endOverlay').classList.remove('show');
+    rebuildSetupNames();
+  }
+
+  function startGame(){
+    const s = STRINGS[lang];
+    const inputs = $('namesArea').querySelectorAll('input');
+    players = Array.from(inputs).map((inp, i) => ({
+      name: inp.value.trim() || `${s.defaultName} ${i+1}`,
+      lives: 3, alive: true, color: playerColor(i),
+    }));
+    current = 0;
+    $('setupOverlay').style.display = 'none';
+    running = true;
+    renderPlayers();
+    nextRound();
+  }
+
+  function renderPlayers(){
+    const root = $('players'); root.innerHTML = '';
+    players.forEach((p, i) => {
+      const row = document.createElement('div');
+      row.className = 'bp-player' + (i === current && p.alive ? ' active' : '') + (!p.alive ? ' dead' : '');
+      const dot = document.createElement('div');
+      dot.className = 'bp-player-dot'; dot.style.background = p.color; dot.style.boxShadow = `0 0 8px ${p.color}`;
+      const name = document.createElement('div');
+      name.className = 'bp-player-name'; name.textContent = p.name;
+      const lives = document.createElement('div');
+      lives.className = 'bp-lives';
+      for (let l = 0; l < 3; l++){
+        const lf = document.createElement('div');
+        lf.className = 'bp-life' + (l >= p.lives ? ' gone' : '');
+        lives.appendChild(lf);
+      }
+      row.appendChild(dot); row.appendChild(name); row.appendChild(lives);
+      root.appendChild(row);
+    });
+    $('currentName').textContent = players[current] ? players[current].name : '—';
+    $('currentName').style.color = players[current] ? players[current].color : '#fdba74';
+  }
+
+  function nextRound(){
+    if (!running) return;
+    // Random fuse 6-22 seconds
+    const ms = 6000 + Math.random() * 16000;
+    nextExplodeAt = performance.now() + ms;
+    if (bombTimer) clearTimeout(bombTimer);
+    bombTimer = setTimeout(explode, ms);
+  }
+
+  function pass(){
+    if (!running) return;
+    if (!players[current].alive) return; // safety
+    // Move to next alive player
+    let next = current;
+    for (let i = 0; i < players.length; i++){
+      next = (next + 1) % players.length;
+      if (players[next].alive){ current = next; break; }
+    }
+    renderPlayers();
+  }
+
+  function explode(){
+    if (!running) return;
+    const holder = players[current];
+    holder.lives--;
+    $('boom').classList.add('show');
+    if (typeof VexGame !== 'undefined') VexGame.toast(holder.name + (lang==='ar'?' فقد حياة!':' lost a life!'), 'danger');
+    later(() => $('boom').classList.remove('show'), 800);
+    if (holder.lives <= 0){
+      holder.alive = false;
+      // Check survivors
+      const alive = players.filter(p => p.alive);
+      if (alive.length === 1){
+        renderPlayers();
+        return endGame(alive[0]);
+      }
+    }
+    // Move bomb to next alive player after a brief beat
+    later(() => {
+      if (!running) return;
+      // start from next alive
+      let next = current;
+      for (let i = 0; i < players.length; i++){
+        next = (next + 1) % players.length;
+        if (players[next].alive){ current = next; break; }
+      }
+      renderPlayers();
+      nextRound();
+    }, 1100);
+  }
+
+  function endGame(winner){
+    running = false;
+    if (bombTimer){ clearTimeout(bombTimer); bombTimer = null; }
+    const s = STRINGS[lang];
+    $('endTitle').textContent = s.winner(winner.name);
+    $('endSub').textContent = s.endSub;
+    later(() => $('endOverlay').classList.add('show'), 700);
+    if (typeof VexGame !== 'undefined'){
+      VexGame.confetti(900);
+      VexGame.endSession({ score: winner.lives, result: 'win', metadata: { winner: winner.name } });
+    }
+  }
+
+  // Setup events
+  document.querySelectorAll('.bp-count-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      count = parseInt(b.dataset.c, 10);
+      document.querySelectorAll('.bp-count-btn').forEach(x => x.classList.toggle('active', x===b));
+      rebuildSetupNames();
+    });
+  });
+  $('setupStart').addEventListener('click', startGame);
+  $('passBtn').addEventListener('click', pass);
+  $('resetBtn').addEventListener('click', startSetup);
+  $('endRestart').addEventListener('click', startSetup);
+
+  if (typeof VexGame !== 'undefined'){
+    VexGame.boot({
+      slug: 'bomb-pass',
+      onReady: function(player){
+        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+  startSetup();
+})();
+</script>
+</body>
+</html>

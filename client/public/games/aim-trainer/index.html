@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Aim Trainer</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .at-arena {
+    width: 100%; max-width: 380px; margin: 0 auto;
+    aspect-ratio: 3/4;
+    background: radial-gradient(circle at center, rgba(239,68,68,0.08), rgba(7,11,20,1));
+    border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 14px;
+    position: relative; overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    cursor: crosshair;
+    user-select: none;
+  }
+  .at-target {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fca5a5, #dc2626 60%, #7f1d1d);
+    box-shadow: 0 0 20px rgba(239,68,68,0.6);
+    cursor: pointer;
+    animation: at-pop 0.18s ease-out;
+    transform: translate(-50%,-50%);
+    border: 2px solid #fee2e2;
+  }
+  .at-target::after {
+    content: ''; position: absolute; inset: 30%;
+    border-radius: 50%; background: #fff;
+  }
+  @keyframes at-pop { 0%{transform:translate(-50%,-50%) scale(0)} 70%{transform:translate(-50%,-50%) scale(1.15)} 100%{transform:translate(-50%,-50%) scale(1)} }
+  .at-target.hit {
+    animation: at-hit 0.22s ease-out forwards;
+    pointer-events: none;
+  }
+  @keyframes at-hit {
+    0% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%,-50%) scale(1.6); opacity: 0; }
+  }
+  .at-miss-fx {
+    position: absolute; width: 30px; height: 30px;
+    border: 2px solid #ef4444; border-radius: 50%;
+    transform: translate(-50%,-50%);
+    pointer-events: none;
+    animation: at-miss 0.4s ease-out forwards;
+  }
+  @keyframes at-miss { 0%{opacity:1; transform:translate(-50%,-50%) scale(0.5)} 100%{opacity:0; transform:translate(-50%,-50%) scale(2)} }
+  .at-time-bar {
+    position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: rgba(255,255,255,0.08);
+  }
+  .at-time-fill {
+    height: 100%; background: linear-gradient(to right, #22c55e, #ef4444);
+    transition: width 0.1s linear;
+  }
+  .at-start-curtain {
+    position: absolute; inset: 0; background: rgba(7,11,20,0.92);
+    backdrop-filter: blur(6px); display: grid; place-items: center;
+    z-index: 5; transition: opacity 0.25s ease;
+  }
+  .at-start-curtain.hide { opacity: 0; pointer-events: none; }
+  .at-start-text {
+    text-align: center; padding: 16px;
+  }
+  .at-start-title {
+    font-family: 'Bebas Neue', sans-serif; font-size: 2.4rem;
+    color: #ef4444; text-shadow: 0 0 16px rgba(239,68,68,0.5); letter-spacing: 0.05em;
+  }
+  .at-start-sub { font-size: 0.9rem; color: var(--vex-text-dim); margin-top: 8px; }
+  .at-start-btn {
+    margin-top: 14px; padding: 12px 24px;
+    background: linear-gradient(135deg,#ef4444,#7f1d1d); color: #fff;
+    border: none; border-radius: 12px; font-family: inherit; font-weight: 700;
+    font-size: 1rem; cursor: pointer; box-shadow: 0 0 18px -3px #ef4444;
+  }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge rose">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+      </div>
+      <span id="title">مدرّب التصويب</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="vex-stats">
+    <div class="vex-stat"><div class="vex-stat-label" id="lblHits">إصابات</div><div class="vex-stat-value rose" id="hits">0</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblAcc">دقة</div><div class="vex-stat-value" id="acc">100%</div></div>
+    <div class="vex-stat"><div class="vex-stat-label" id="lblTime">الوقت</div><div class="vex-stat-value emerald" id="time">30</div></div>
+  </div>
+
+  <div class="at-arena" id="arena">
+    <div class="at-time-bar"><div class="at-time-fill" id="timeFill" style="width:100%"></div></div>
+    <div class="at-start-curtain" id="curtain">
+      <div class="at-start-text">
+        <div class="at-start-title" id="curtainTitle">جاهز؟</div>
+        <div class="at-start-sub" id="curtainSub">30 ثانية، أكبر عدد من الإصابات</div>
+        <button class="at-start-btn" id="curtainBtn">ابدأ</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="vex-hint" id="hint">اضغط على الأهداف بأسرع وأدق ما يمكن. النقر خارج الهدف يعدّ خطأً.</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon rose">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهى الوقت!</div>
+    <div class="vex-overlay-subtitle" id="endSub"></div>
+    <div class="vex-overlay-stats">
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalHits">إصابات</div><div class="vex-overlay-stat-value" id="finalHits">0</div></div>
+      <div class="vex-overlay-stat"><div class="vex-overlay-stat-label" id="lblFinalAcc">دقة</div><div class="vex-overlay-stat-value" id="finalAcc">0%</div></div>
+    </div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1;background:linear-gradient(135deg,#ef4444,#7f1d1d);box-shadow:0 0 18px -3px #ef4444;">جولة جديدة</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar:{ title:'مدرّب التصويب', reset:'إعادة', hits:'إصابات', acc:'دقة', time:'الوقت',
+      ready:'جاهز؟', readySub:'30 ثانية، أكبر عدد من الإصابات', start:'ابدأ',
+      end:'انتهى الوقت!', endSub:'أداء رائع!', newRound:'جولة جديدة',
+      hint:'اضغط على الأهداف بأسرع وأدق ما يمكن. النقر خارج الهدف يعدّ خطأً.', },
+    en:{ title:'Aim Trainer', reset:'Reset', hits:'Hits', acc:'Acc', time:'Time',
+      ready:'Ready?', readySub:'30 seconds, hit as many as you can', start:'Start',
+      end:'Time up!', endSub:'Great run!', newRound:'New round',
+      hint:'Tap targets fast and accurately. Clicking outside counts as a miss.', },
+  };
+  let lang = 'ar';
+  const $ = id => document.getElementById(id);
+  const arena = $('arena');
+  const ROUND_MS = 30000;
+  let active, hits, misses, target, targetTimer, endTime, tickRaf, best;
+
+  function applyLang(){
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
+    $('lblHits').textContent = s.hits; $('lblAcc').textContent = s.acc; $('lblTime').textContent = s.time;
+    $('curtainTitle').textContent = s.ready; $('curtainSub').textContent = s.readySub;
+    $('curtainBtn').textContent = s.start; $('hint').textContent = s.hint;
+    $('endTitle').textContent = s.end; $('endSub').textContent = s.endSub;
+    $('endRestart').textContent = s.newRound;
+    $('lblFinalHits').textContent = s.hits; $('lblFinalAcc').textContent = s.acc;
+  }
+
+  function reset(){
+    active = false; hits = 0; misses = 0;
+    if (targetTimer){ clearTimeout(targetTimer); targetTimer = null; }
+    if (tickRaf){ cancelAnimationFrame(tickRaf); tickRaf = null; }
+    arena.querySelectorAll('.at-target, .at-miss-fx').forEach(n => n.remove());
+    target = null;
+    $('hits').textContent = '0'; $('acc').textContent = '100%'; $('time').textContent = '30';
+    $('timeFill').style.width = '100%';
+    $('curtain').classList.remove('hide');
+    $('endOverlay').classList.remove('show');
+    best = parseInt(localStorage.getItem('vex.best.aim-trainer') || '0', 10);
+  }
+
+  function start(){
+    reset();
+    $('curtain').classList.add('hide');
+    active = true;
+    endTime = performance.now() + ROUND_MS;
+    spawnTarget();
+    tickRaf = requestAnimationFrame(tick);
+  }
+
+  function tick(){
+    if (!active) return;
+    const remain = Math.max(0, endTime - performance.now());
+    const sec = Math.ceil(remain / 1000);
+    $('time').textContent = sec;
+    $('timeFill').style.width = (remain / ROUND_MS * 100) + '%';
+    if (remain <= 0){ end(); return; }
+    tickRaf = requestAnimationFrame(tick);
+  }
+
+  function spawnTarget(){
+    if (!active) return;
+    if (target && target.parentNode) target.parentNode.removeChild(target);
+    const rect = arena.getBoundingClientRect();
+    // Difficulty: shrink targets as time advances
+    const elapsed = ROUND_MS - (endTime - performance.now());
+    const t = Math.max(0, Math.min(1, elapsed / ROUND_MS));
+    const size = Math.round(70 - t * 32); // 70 → 38 px
+    const padX = size/2 + 6, padY = size/2 + 6;
+    const cx = padX + Math.random() * (rect.width - 2*padX);
+    const cy = padY + Math.random() * (rect.height - 2*padY);
+    const el = document.createElement('div');
+    el.className = 'at-target';
+    el.style.width = size + 'px'; el.style.height = size + 'px';
+    el.style.left = cx + 'px'; el.style.top = cy + 'px';
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!active) return;
+      hits++;
+      $('hits').textContent = hits;
+      $('acc').textContent = Math.round(hits / (hits + misses) * 100) + '%';
+      el.classList.add('hit');
+      if (typeof VexGame !== 'undefined') VexGame.popScore(arena, '+1', cx + 'px', cy + 'px', 'rose');
+      // auto-spawn next
+      setTimeout(spawnTarget, 60);
+    });
+    arena.appendChild(el);
+    target = el;
+    // Despawn if not hit within 1.4s
+    if (targetTimer) clearTimeout(targetTimer);
+    targetTimer = setTimeout(() => {
+      if (active && el.parentNode){
+        // count expired target as a miss
+        misses++;
+        $('acc').textContent = Math.round(hits / Math.max(1, hits + misses) * 100) + '%';
+        el.parentNode.removeChild(el);
+        spawnTarget();
+      }
+    }, Math.max(700, 1500 - t * 700));
+  }
+
+  // Click on arena background = miss
+  arena.addEventListener('click', (e) => {
+    if (!active) return;
+    if (e.target === arena || e.target.classList.contains('at-time-bar') || e.target.classList.contains('at-time-fill')){
+      misses++;
+      $('acc').textContent = Math.round(hits / Math.max(1, hits + misses) * 100) + '%';
+      const rect = arena.getBoundingClientRect();
+      const fx = document.createElement('div');
+      fx.className = 'at-miss-fx';
+      fx.style.left = (e.clientX - rect.left) + 'px';
+      fx.style.top = (e.clientY - rect.top) + 'px';
+      arena.appendChild(fx);
+      setTimeout(() => fx.remove(), 400);
+    }
+  });
+
+  function end(){
+    active = false;
+    if (targetTimer){ clearTimeout(targetTimer); targetTimer = null; }
+    if (tickRaf){ cancelAnimationFrame(tickRaf); tickRaf = null; }
+    if (target && target.parentNode) target.parentNode.removeChild(target);
+    const accPct = hits + misses > 0 ? Math.round(hits / (hits + misses) * 100) : 0;
+    if (hits > best){ best = hits; localStorage.setItem('vex.best.aim-trainer', best); }
+    $('finalHits').textContent = hits; $('finalAcc').textContent = accPct + '%';
+    setTimeout(() => $('endOverlay').classList.add('show'), 400);
+    if (typeof VexGame !== 'undefined'){
+      if (hits >= 20) VexGame.confetti(800);
+      VexGame.setBest(best);
+      VexGame.endSession({ score: hits, result: 'win', metadata: { hits, misses, acc: accPct } });
+    }
+  }
+
+  $('curtainBtn').addEventListener('click', start);
+  $('resetBtn').addEventListener('click', () => { reset(); });
+  $('endRestart').addEventListener('click', start);
+
+  if (typeof VexGame !== 'undefined'){
+    VexGame.boot({
+      slug: 'aim-trainer',
+      onReady: function(player){
+        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+  reset();
+})();
+</script>
+</body>
+</html>

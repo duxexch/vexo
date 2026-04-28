@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<title>VEX Quiz Rush</title>
+<link rel="stylesheet" href="/games/_shared/vex-game.css">
+<style>
+  .qr-arena {
+    width: 100%; max-width: 380px; margin: 0 auto;
+    aspect-ratio: 3/4;
+    background: linear-gradient(180deg,#0a1a30,#040810);
+    border: 1px solid rgba(30,136,255,0.3);
+    border-radius: 14px;
+    position: relative; overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+  .qr-buzzer {
+    position: relative; cursor: pointer;
+    display: grid; place-items: center;
+    transition: all 0.18s ease;
+    user-select: none;
+  }
+  .qr-buzzer .qr-buzzer-content {
+    text-align: center; padding: 8px;
+  }
+  .qr-buzzer .qr-name {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem;
+    letter-spacing: 0.1em; opacity: 0.85;
+  }
+  .qr-buzzer .qr-score {
+    font-family: 'Bebas Neue', sans-serif; font-size: 2.4rem; line-height: 1;
+    margin-top: 4px;
+  }
+  .qr-buzzer.active { box-shadow: inset 0 0 30px currentColor; }
+  .qr-buzzer.locked { opacity: 0.45; }
+  .qr-buzzer.correct { animation: qrFlashGood 0.5s ease; }
+  .qr-buzzer.wrong { animation: qrFlashBad 0.5s ease; }
+  @keyframes qrFlashGood { 0%,100%{} 50%{box-shadow: inset 0 0 60px #22c55e} }
+  @keyframes qrFlashBad { 0%,100%{} 50%{box-shadow: inset 0 0 60px #ef4444} }
+  .qr-buzzer[data-i="0"] { background: linear-gradient(135deg,#22c55e,#14532d); color: #86efac; }
+  .qr-buzzer[data-i="1"] { background: linear-gradient(135deg,#ef4444,#7f1d1d); color: #fca5a5; }
+  .qr-buzzer[data-i="2"] { background: linear-gradient(135deg,#ffb627,#7c5300); color: #fde68a; }
+  .qr-buzzer[data-i="3"] { background: linear-gradient(135deg,#a855f7,#581c87); color: #d8b4fe; }
+  .qr-question-overlay {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 80%; max-width: 280px;
+    background: rgba(7,11,20,0.95); backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(30,136,255,0.5);
+    border-radius: 14px; padding: 14px;
+    z-index: 5; text-align: center;
+    box-shadow: 0 0 30px rgba(30,136,255,0.3);
+    transition: opacity 0.2s ease;
+  }
+  .qr-q-text {
+    font-size: 1.05rem; font-weight: 700; line-height: 1.35; color: var(--vex-text);
+    margin-bottom: 12px;
+  }
+  .qr-q-num {
+    font-family: 'Bebas Neue', sans-serif; font-size: 0.9rem;
+    color: #93c5fd; letter-spacing: 0.15em; margin-bottom: 6px;
+  }
+  .qr-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .qr-answer {
+    padding: 10px 6px; background: var(--vex-surface);
+    border: 1px solid var(--vex-border); border-radius: 8px;
+    color: var(--vex-text); font-family: inherit; font-weight: 600;
+    font-size: 0.9rem; cursor: pointer; transition: all 0.18s;
+  }
+  .qr-answer:hover { background: rgba(30,136,255,0.18); }
+  .qr-answer.correct { background: rgba(34,197,94,0.3); border-color: #22c55e; }
+  .qr-answer.wrong { background: rgba(239,68,68,0.3); border-color: #ef4444; }
+  .qr-buzz-state {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+    font-family: 'Bebas Neue', sans-serif; font-size: 0.95rem;
+    color: rgba(255,255,255,0.5); letter-spacing: 0.15em;
+    text-align: center; pointer-events: none;
+  }
+  .qr-setup-overlay {
+    position: absolute; inset: 0; background: rgba(7,11,20,0.96);
+    z-index: 20; padding: 14px; display: flex; flex-direction: column; gap: 10px;
+    align-items: stretch; justify-content: center; border-radius: 14px;
+  }
+  .qr-setup-title {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; color: #93c5fd;
+    text-align: center; letter-spacing: 0.1em;
+  }
+  .qr-count-row { display: flex; gap: 6px; justify-content: center; }
+  .qr-count-btn {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: var(--vex-surface); border: 1px solid var(--vex-border);
+    color: var(--vex-text); font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem;
+    cursor: pointer;
+  }
+  .qr-count-btn.active {
+    background: rgba(30,136,255,0.25); color: #93c5fd; border-color: rgba(30,136,255,0.6);
+  }
+  .qr-setup-row { display: flex; gap: 8px; align-items: center; }
+  .qr-setup-row input {
+    flex: 1; padding: 9px; background: var(--vex-surface);
+    border: 1px solid var(--vex-border); border-radius: 8px;
+    color: var(--vex-text); font-family: inherit; font-size: 0.9rem;
+  }
+  .qr-setup-start {
+    margin-top: 10px; padding: 13px; background: linear-gradient(135deg,#1e88ff,#0a3a78);
+    color: #fff; border: none; border-radius: 12px; font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.4rem; letter-spacing: 0.15em; cursor: pointer;
+    box-shadow: 0 0 18px -3px #1e88ff;
+  }
+</style>
+</head>
+<body class="vex-game">
+<div class="vex-shell">
+  <div class="vex-header">
+    <div class="vex-title">
+      <div class="vex-title-badge primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <span id="title">سباق الأسئلة</span>
+    </div>
+    <button class="vex-btn" id="resetBtn"><span id="resetBtnLabel">إعادة</span></button>
+  </div>
+
+  <div class="qr-arena" id="arena">
+    <!-- 4 buzzers in a 2x2 grid -->
+    <!-- Question overlay floats above -->
+    <div class="qr-question-overlay" id="qOverlay" style="display:none;">
+      <div class="qr-q-num" id="qNum">سؤال 1 / 10</div>
+      <div class="qr-q-text" id="qText">—</div>
+      <div class="qr-answers" id="qAnswers"></div>
+      <div class="qr-buzz-state" id="buzzState"></div>
+    </div>
+
+    <div class="qr-setup-overlay" id="setupOverlay">
+      <div class="qr-setup-title" id="setupTitle">إعداد اللاعبين</div>
+      <div class="qr-count-row" id="countRow">
+        <button class="qr-count-btn" data-c="2">2</button>
+        <button class="qr-count-btn" data-c="3">3</button>
+        <button class="qr-count-btn active" data-c="4">4</button>
+      </div>
+      <div id="namesArea"></div>
+      <button class="qr-setup-start" id="setupStart">ابدأ</button>
+    </div>
+  </div>
+
+  <div class="vex-hint" id="hint">السؤال يظهر، أول من يضغط على زره يرد. صحيح +10، خطأ −5.</div>
+</div>
+
+<div class="vex-overlay" id="endOverlay">
+  <div class="vex-overlay-card">
+    <div class="vex-overlay-icon primary">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 10 17 15 18 22 12 19 6 22 7 15 2 10 9 9 12 2"/></svg>
+    </div>
+    <div class="vex-overlay-title" id="endTitle">انتهت اللعبة!</div>
+    <div class="vex-overlay-subtitle" id="endSub"></div>
+    <div class="vex-btn-row">
+      <button class="vex-btn vex-btn-primary" id="endRestart" style="flex:1">جولة جديدة</button>
+    </div>
+  </div>
+</div>
+
+<script src="/games/vex-sdk.js"></script>
+<script src="/games/_shared/vex-game.js"></script>
+<script>
+(function(){
+  'use strict';
+  const STRINGS = {
+    ar:{ title:'سباق الأسئلة', reset:'إعادة', setupTitle:'إعداد اللاعبين',
+      defaultName:'لاعب', start:'ابدأ',
+      qNum:(i,n)=>`سؤال ${i} / ${n}`,
+      buzz:'اضغط زرّك للإجابة!', answering:(n)=>`${n} يجيب…`,
+      end:'انتهت اللعبة!', endSub:(n)=>`الفائز: ${n}`,
+      newRound:'جولة جديدة',
+      hint:'السؤال يظهر، أول من يضغط على زره يرد. صحيح +10، خطأ −5.', },
+    en:{ title:'Quiz Rush', reset:'Reset', setupTitle:'Setup players',
+      defaultName:'Player', start:'Start',
+      qNum:(i,n)=>`Question ${i} / ${n}`,
+      buzz:'Tap your buzzer to answer!', answering:(n)=>`${n} is answering…`,
+      end:'Game over!', endSub:(n)=>`Winner: ${n}`,
+      newRound:'New game',
+      hint:'When a question appears, first to buzz answers. Correct +10, wrong −5.', },
+  };
+  // Bilingual question bank
+  const QUESTIONS = [
+    { ar:{q:'كم عدد قارات العالم؟',a:['7','5','6','8'],c:0}, en:{q:'How many continents are there?',a:['7','5','6','8'],c:0} },
+    { ar:{q:'عاصمة فرنسا؟',a:['برلين','مدريد','باريس','روما'],c:2}, en:{q:'Capital of France?',a:['Berlin','Madrid','Paris','Rome'],c:2} },
+    { ar:{q:'كم لاعب في فريق كرة القدم؟',a:['9','11','10','12'],c:1}, en:{q:'Players in a football team?',a:['9','11','10','12'],c:1} },
+    { ar:{q:'أكبر كوكب؟',a:['الأرض','زحل','المشتري','نبتون'],c:2}, en:{q:'Largest planet?',a:['Earth','Saturn','Jupiter','Neptune'],c:2} },
+    { ar:{q:'مخترع المصباح الكهربائي؟',a:['أديسون','نيوتن','تسلا','أينشتاين'],c:0}, en:{q:'Who invented the lightbulb?',a:['Edison','Newton','Tesla','Einstein'],c:0} },
+    { ar:{q:'5 + 7 × 2 = ؟',a:['19','24','14','17'],c:0}, en:{q:'5 + 7 × 2 = ?',a:['19','24','14','17'],c:0} },
+    { ar:{q:'لون السماء وقت الغروب؟',a:['أزرق','أخضر','برتقالي','أبيض'],c:2}, en:{q:'Sky color at sunset?',a:['Blue','Green','Orange','White'],c:2} },
+    { ar:{q:'أطول نهر بالعالم؟',a:['الأمازون','النيل','اليانغتسي','الميسيسيبي'],c:1}, en:{q:'Longest river in the world?',a:['Amazon','Nile','Yangtze','Mississippi'],c:1} },
+    { ar:{q:'كم لون في قوس قزح؟',a:['5','6','7','8'],c:2}, en:{q:'Colors in a rainbow?',a:['5','6','7','8'],c:2} },
+    { ar:{q:'كم درجة في الزاوية القائمة؟',a:['45','60','90','180'],c:2}, en:{q:'Degrees in a right angle?',a:['45','60','90','180'],c:2} },
+    { ar:{q:'عاصمة اليابان؟',a:['طوكيو','أوساكا','كيوتو','سيول'],c:0}, en:{q:'Capital of Japan?',a:['Tokyo','Osaka','Kyoto','Seoul'],c:0} },
+    { ar:{q:'كم عدد أشهر السنة؟',a:['10','11','12','13'],c:2}, en:{q:'Months in a year?',a:['10','11','12','13'],c:2} },
+  ];
+  const ROUND_LEN = 10;
+  let lang = 'ar', count = 4;
+  const $ = id => document.getElementById(id);
+  let players;        // [{name, score, color}]
+  let qIndex;         // 0..ROUND_LEN-1
+  let pool;           // shuffled question indices
+  let buzzerLocked;   // set of player indices that already buzzed wrong this q
+  let answeringPlayer = null; // index when someone is answering
+  let buzzWindowActive = false;
+  let pendingTimers = [];
+  function later(fn, ms){ const id = setTimeout(() => { pendingTimers = pendingTimers.filter(x => x !== id); fn(); }, ms); pendingTimers.push(id); return id; }
+  function clearPending(){ pendingTimers.forEach(clearTimeout); pendingTimers = []; }
+
+  function applyLang(){
+    const s = STRINGS[lang];
+    document.documentElement.lang = lang; document.documentElement.dir = lang==='ar'?'rtl':'ltr';
+    $('title').textContent = s.title; $('resetBtnLabel').textContent = s.reset;
+    $('setupTitle').textContent = s.setupTitle;
+    $('setupStart').textContent = s.start;
+    $('hint').textContent = s.hint;
+    $('endRestart').textContent = s.newRound;
+    rebuildSetupNames();
+  }
+
+  function rebuildSetupNames(){
+    const area = $('namesArea'); area.innerHTML = '';
+    const s = STRINGS[lang];
+    for (let i = 0; i < count; i++){
+      const row = document.createElement('div');
+      row.className = 'qr-setup-row';
+      const dot = document.createElement('div');
+      dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:${playerColor(i)};box-shadow:0 0 8px ${playerColor(i)};flex-shrink:0;`;
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.maxLength = 12;
+      inp.placeholder = `${s.defaultName} ${i+1}`;
+      inp.value = `${s.defaultName} ${i+1}`;
+      inp.dataset.i = i;
+      row.appendChild(dot); row.appendChild(inp);
+      area.appendChild(row);
+    }
+  }
+
+  function playerColor(i){ return ['#22c55e','#ef4444','#ffb627','#a855f7'][i % 4]; }
+
+  function startSetup(){
+    clearPending();
+    buzzWindowActive = false;
+    answeringPlayer = null;
+    $('setupOverlay').style.display = 'flex';
+    $('qOverlay').style.display = 'none';
+    $('endOverlay').classList.remove('show');
+    // remove existing buzzers
+    $('arena').querySelectorAll('.qr-buzzer').forEach(n => n.remove());
+  }
+
+  function startGame(){
+    const s = STRINGS[lang];
+    const inputs = $('namesArea').querySelectorAll('input');
+    players = Array.from(inputs).map((inp, i) => ({
+      name: inp.value.trim() || `${s.defaultName} ${i+1}`,
+      score: 0, color: playerColor(i),
+    }));
+    qIndex = 0;
+    pool = shuffle(QUESTIONS.map((_, i) => i)).slice(0, ROUND_LEN);
+    $('setupOverlay').style.display = 'none';
+    renderBuzzers();
+    nextQuestion();
+  }
+
+  function shuffle(a){
+    a = a.slice();
+    for (let i = a.length-1; i > 0; i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [a[i],a[j]] = [a[j],a[i]];
+    }
+    return a;
+  }
+
+  function renderBuzzers(){
+    // Insert 4 buzzers (or 2-3 with empty slots)
+    const arena = $('arena');
+    arena.querySelectorAll('.qr-buzzer').forEach(n => n.remove());
+    for (let i = 0; i < 4; i++){
+      const el = document.createElement('div');
+      el.className = 'qr-buzzer';
+      el.dataset.i = i;
+      if (i < players.length){
+        const p = players[i];
+        el.innerHTML = `<div class="qr-buzzer-content">
+          <div class="qr-name">${escapeHtml(p.name)}</div>
+          <div class="qr-score">${p.score}</div>
+        </div>`;
+        el.addEventListener('click', () => buzz(i));
+      } else {
+        el.style.opacity = '0.15'; el.style.pointerEvents = 'none';
+        el.innerHTML = '';
+      }
+      // Order: 0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right
+      // Top players appear rotated for player facing them
+      // For 4-player setup, rotate top buzzers 180deg
+      if (i === 0 || i === 1){
+        el.style.transform = 'rotate(180deg)';
+      }
+      arena.appendChild(el);
+    }
+  }
+
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function refreshScores(){
+    $('arena').querySelectorAll('.qr-buzzer').forEach(el => {
+      const i = parseInt(el.dataset.i, 10);
+      if (i < players.length){
+        const sc = el.querySelector('.qr-score');
+        if (sc) sc.textContent = players[i].score;
+      }
+    });
+  }
+
+  function nextQuestion(){
+    if (qIndex >= ROUND_LEN){ return endGame(); }
+    buzzerLocked = new Set();
+    answeringPlayer = null;
+    buzzWindowActive = true;
+    const qData = QUESTIONS[pool[qIndex]];
+    const q = qData[lang];
+    const s = STRINGS[lang];
+    $('qNum').textContent = s.qNum(qIndex+1, ROUND_LEN);
+    $('qText').textContent = q.q;
+    const ansArea = $('qAnswers'); ansArea.innerHTML = '';
+    q.a.forEach((a, ai) => {
+      const b = document.createElement('button');
+      b.className = 'qr-answer'; b.textContent = a; b.dataset.ai = ai;
+      b.disabled = true; // disabled until someone buzzes
+      b.style.opacity = '0.5';
+      b.addEventListener('click', () => answer(ai));
+      ansArea.appendChild(b);
+    });
+    $('buzzState').textContent = s.buzz;
+    $('qOverlay').style.display = 'block';
+    $('qOverlay').style.opacity = '1';
+  }
+
+  function buzz(i){
+    if (!buzzWindowActive) return;
+    if (buzzerLocked.has(i)) return;
+    if (answeringPlayer !== null) return;
+    answeringPlayer = i;
+    const s = STRINGS[lang];
+    $('buzzState').textContent = s.answering(players[i].name);
+    // Lock all buzzers, enable answers
+    $('arena').querySelectorAll('.qr-buzzer').forEach(el => {
+      const idx = parseInt(el.dataset.i, 10);
+      if (idx === i) el.classList.add('active');
+      else el.classList.add('locked');
+    });
+    $('qAnswers').querySelectorAll('button').forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+  }
+
+  function answer(ai){
+    if (answeringPlayer === null) return;
+    const qData = QUESTIONS[pool[qIndex]];
+    const q = qData[lang];
+    const buttons = $('qAnswers').querySelectorAll('button');
+    buttons.forEach(b => b.disabled = true);
+    const player = players[answeringPlayer];
+    const buzzerEl = $('arena').querySelector(`.qr-buzzer[data-i="${answeringPlayer}"]`);
+    if (ai === q.c){
+      player.score += 10;
+      buttons[ai].classList.add('correct');
+      if (buzzerEl) buzzerEl.classList.add('correct');
+      if (typeof VexGame !== 'undefined') VexGame.toast('+10  ' + player.name, 'success');
+      refreshScores();
+      // advance after pause
+      later(() => {
+        $('qOverlay').style.opacity = '0';
+        later(() => { qIndex++; nextQuestion(); resetBuzzersUI(); }, 250);
+      }, 1100);
+    } else {
+      player.score = Math.max(0, player.score - 5);
+      buttons[ai].classList.add('wrong');
+      buttons[q.c].classList.add('correct');
+      if (buzzerEl) buzzerEl.classList.add('wrong');
+      if (typeof VexGame !== 'undefined') VexGame.toast('−5  ' + player.name, 'danger');
+      refreshScores();
+      buzzerLocked.add(answeringPlayer);
+      answeringPlayer = null;
+      // If all alive players have buzzed wrong, move on
+      if (buzzerLocked.size >= players.length){
+        later(() => {
+          $('qOverlay').style.opacity = '0';
+          later(() => { qIndex++; nextQuestion(); resetBuzzersUI(); }, 250);
+        }, 1100);
+      } else {
+        // Re-open for remaining players after brief pause
+        later(() => {
+          buttons.forEach(b => { b.classList.remove('correct','wrong'); b.disabled = true; b.style.opacity = '0.5'; });
+          if (buzzerEl) buzzerEl.classList.remove('wrong');
+          $('arena').querySelectorAll('.qr-buzzer').forEach(el => {
+            const idx = parseInt(el.dataset.i, 10);
+            el.classList.remove('active');
+            if (buzzerLocked.has(idx)) el.classList.add('locked');
+            else el.classList.remove('locked');
+          });
+          const s = STRINGS[lang]; $('buzzState').textContent = s.buzz;
+        }, 900);
+      }
+    }
+  }
+
+  function resetBuzzersUI(){
+    $('arena').querySelectorAll('.qr-buzzer').forEach(el => {
+      el.classList.remove('active','locked','correct','wrong');
+    });
+  }
+
+  function endGame(){
+    buzzWindowActive = false;
+    $('qOverlay').style.display = 'none';
+    const winner = players.reduce((a,b) => b.score > a.score ? b : a, players[0]);
+    const s = STRINGS[lang];
+    $('endTitle').textContent = s.end;
+    $('endSub').textContent = s.endSub(winner.name) + ` (${winner.score})`;
+    later(() => $('endOverlay').classList.add('show'), 600);
+    if (typeof VexGame !== 'undefined'){
+      VexGame.confetti(900);
+      VexGame.endSession({
+        score: winner.score, result: 'win',
+        metadata: { winner: winner.name, scores: players.map(p => ({n:p.name,s:p.score})) },
+      });
+    }
+  }
+
+  document.querySelectorAll('.qr-count-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      count = parseInt(b.dataset.c, 10);
+      document.querySelectorAll('.qr-count-btn').forEach(x => x.classList.toggle('active', x===b));
+      rebuildSetupNames();
+    });
+  });
+  $('setupStart').addEventListener('click', startGame);
+  $('resetBtn').addEventListener('click', startSetup);
+  $('endRestart').addEventListener('click', startSetup);
+
+  if (typeof VexGame !== 'undefined'){
+    VexGame.boot({
+      slug: 'quiz-rush',
+      onReady: function(player){
+        if (player && player.language){ lang = player.language === 'en' ? 'en' : 'ar'; VexGame.setLang(lang); }
+        applyLang();
+      },
+    });
+  }
+  applyLang();
+  startSetup();
+})();
+</script>
+</body>
+</html>
