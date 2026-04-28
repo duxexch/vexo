@@ -24,6 +24,7 @@ export class DominoEngine implements GameEngine {
       board: [], leftEnd: -1, rightEnd: -1,
       hands: {}, boneyard: [], currentPlayer: '',
       playerOrder: [], passCount: 0, drawsThisTurn: 0,
+      drewThisRound: [],
       gameOver: false, scores: {},
       targetScore: 101,
       roundNumber: 1,
@@ -143,21 +144,11 @@ export class DominoEngine implements GameEngine {
         state.scores[playerId] = 0;
       }
     }
-    // Backward-compat: legacy persisted rounds predate drewThisRound. Default to [] and
-    // filter to valid player IDs without duplicates so integrity check stays consistent.
-    if (!Array.isArray(state.drewThisRound)) {
+    // Backward-compat only: legacy persisted rounds predate drewThisRound. Backfill the
+    // missing field so old states stay playable. Malformed or unknown entries are NOT
+    // sanitized here — integrity validation must reject them so corrupt data surfaces loudly.
+    if (state.drewThisRound === undefined || state.drewThisRound === null) {
       state.drewThisRound = [];
-    } else {
-      const seen = new Set<string>();
-      const sanitized: string[] = [];
-      for (const entry of state.drewThisRound) {
-        if (typeof entry !== 'string' || !state.playerOrder.includes(entry) || seen.has(entry)) {
-          continue;
-        }
-        seen.add(entry);
-        sanitized.push(entry);
-      }
-      state.drewThisRound = sanitized;
     }
   }
 

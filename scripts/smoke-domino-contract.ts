@@ -409,27 +409,33 @@ function main(): void {
         logPass("drewThisRound resets to [] on new round");
     }
 
-    // Scenario E: hydrate sanitizes malformed drewThisRound rather than corrupting the round.
+    // Scenario E: integrity rejects malformed drewThisRound (unknown player ids, duplicates, non-array).
     {
         const baseState = JSON.parse(initialState) as SmokeState;
-        baseState.drewThisRound = ["not-a-real-player", baseState.currentPlayer, baseState.currentPlayer];
+        baseState.drewThisRound = ["not-a-real-player"];
         const validation = engine.validateMove(JSON.stringify(baseState), baseState.currentPlayer, { type: "pass" });
-        // Sanitized to [currentPlayer] only → integrity passes → cannotPass fires (current player has playable tiles).
-        assertCondition(!validation.valid, "Sanitized state should still validate moves");
-        assertEqual(validation.errorKey, "domino.cannotPass", "Sanitized drewThisRound must reach cannotPass, not invalidState");
-        const view = engine.getPlayerView(JSON.stringify(baseState), baseState.currentPlayer);
-        assertCondition(view.gamePhase !== "error", "Sanitized state must produce a non-error player view");
-        logPass("hydrate strips unknown ids and dedupes drewThisRound");
+        assertCondition(!validation.valid, "Expected integrity failure for unknown player id in drewThisRound");
+        assertEqual(validation.errorKey, "domino.invalidState", "Unknown player id must surface as domino.invalidState");
+        logPass("integrity rejects drewThisRound containing unknown player ids");
     }
 
     {
         const baseState = JSON.parse(initialState) as SmokeState;
-        // @ts-expect-error intentionally non-array; hydrate must coerce to [].
+        baseState.drewThisRound = [baseState.currentPlayer, baseState.currentPlayer];
+        const validation = engine.validateMove(JSON.stringify(baseState), baseState.currentPlayer, { type: "pass" });
+        assertCondition(!validation.valid, "Expected integrity failure for duplicate entry in drewThisRound");
+        assertEqual(validation.errorKey, "domino.invalidState", "Duplicate entry must surface as domino.invalidState");
+        logPass("integrity rejects drewThisRound containing duplicate entries");
+    }
+
+    {
+        const baseState = JSON.parse(initialState) as SmokeState;
+        // @ts-expect-error intentionally non-array for integrity check.
         baseState.drewThisRound = "not-an-array";
         const validation = engine.validateMove(JSON.stringify(baseState), baseState.currentPlayer, { type: "pass" });
-        assertCondition(!validation.valid, "Coerced state should still validate moves");
-        assertEqual(validation.errorKey, "domino.cannotPass", "Non-array drewThisRound must coerce to [] then surface cannotPass");
-        logPass("hydrate coerces non-array drewThisRound to empty array");
+        assertCondition(!validation.valid, "Expected integrity failure for non-array drewThisRound");
+        assertEqual(validation.errorKey, "domino.invalidState", "Non-array drewThisRound must surface as domino.invalidState");
+        logPass("integrity rejects drewThisRound that is not an array");
     }
 
     // Scenario F: legacy persisted states without drewThisRound stay playable (hydrate backfills []).
