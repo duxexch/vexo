@@ -230,6 +230,55 @@ jobs:
               ;;
           esac
 
+      - name: Verify APK signing schemes (v1 + v2 + v3)
+        # Google Play Protect surfaces "harmful app" / "unsafe app" warnings
+        # when an APK is missing the modern signing schemes (v2 mandatory
+        # since Android 11, v3 since Android 12) or when zipalign is not
+        # applied. apksigner is the canonical Android tool that:
+        #   1) confirms every required signing scheme is present,
+        #   2) prints the certificate fingerprint so we can pin it across
+        #      releases (a fingerprint change between builds is the single
+        #      biggest reason Play Protect flags an installation).
+        # Sideloaded APKs ALWAYS get a "you usually don't install apps from
+        # this source" prompt — that is platform policy, not a signing bug.
+        # Removing it requires shipping the AAB through the Play Store.
+        if: ${{ github.event.inputs.target == 'apk' || github.event.inputs.target == 'both' }}
+        run: |
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          if [ ! -s "$APK" ]; then
+            echo "::error::APK missing at $APK — earlier Gradle step must have failed."
+            exit 1
+          fi
+          BUILD_TOOLS_DIR="$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -n1)"
+          APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
+          if [ ! -x "$APKSIGNER" ]; then
+            echo "::error::apksigner not found at $APKSIGNER — Android build-tools missing."
+            exit 1
+          fi
+          echo "=== apksigner verify -v --print-certs ==="
+          "$APKSIGNER" verify -v --print-certs "$APK" | tee /tmp/apksigner.txt
+          if ! grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/apksigner.txt; then
+            echo "::error::APK is NOT signed with v2 scheme — Play Protect WILL flag this APK as harmful."
+            echo "::error::Inspect signingConfig in scripts/ci/patch-android-signing.mjs and confirm v2SigningEnabled."
+            exit 1
+          fi
+          if ! grep -q "Verified using v3 scheme (APK Signature Scheme v3): true" /tmp/apksigner.txt; then
+            echo "::error::APK is NOT signed with v3 scheme — required by Android 12+ for trusted installation."
+            exit 1
+          fi
+          echo "Signing scheme check passed: APK is signed with v1 + v2 + v3."
+
+          ZIPALIGN="$BUILD_TOOLS_DIR/zipalign"
+          if [ -x "$ZIPALIGN" ]; then
+            echo "=== zipalign -c -v 4 ==="
+            if "$ZIPALIGN" -c -v 4 "$APK" >/dev/null; then
+              echo "zipalign check passed."
+            else
+              echo "::error::APK is not 4-byte aligned — installation may fail on stricter devices."
+              exit 1
+            fi
+          fi
+
       - name: Resolve app version from package.json
         id: version
         run: |

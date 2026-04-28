@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getRtcSocket } from "@/lib/socket-io-client";
-import { ensureCallRationale } from "@/lib/call-permission-rationale";
-import {
-  ensureCallPermissions,
-  isPermanentlyDeniedForCall,
-} from "@/lib/native-call-permissions";
+import { requestCallMediaForCall } from "@/lib/native-call-permissions";
 import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
 import { registerCallActionHandler } from "@/lib/call-actions";
 import {
@@ -193,28 +189,23 @@ export function useCallSession(): UseCallSessionReturn {
 
   const attachLocalMedia = useCallback(async (pc: RTCPeerConnection, type: CallType): Promise<MediaStream> => {
     const kind = type === "video" ? "video" : "voice";
-    const decision = await ensureCallRationale(kind);
-    if (decision !== "allow") {
-      throw new Error("permission_dismissed");
-    }
 
-    // On native Android the WebView only obtains camera/mic if the host
-    // app has been granted the matching runtime permissions via
-    // Activity#requestPermissions. We do that here, after the user has
-    // accepted the in-app rationale, so the OS dialog is never the
-    // first thing they see.
-    const native = await ensureCallPermissions(kind);
-    if (!native.granted) {
-      // Surface the permanently-denied state so the modal hides "Allow"
-      // and steers the user straight to system Settings — re-tapping
-      // Allow when the OS has stopped showing its dialog is a silent
-      // no-op and confused users in production.
-      const blocked = isPermanentlyDeniedForCall(kind, native.status);
-      void ensureCallRationale(kind, {
-        force: true,
-        permanentlyDenied: blocked,
-      });
-      throw new Error("permission_dismissed");
+    // Surface the OS dialog FIRST. On native Android the WebView only
+    // obtains the device once the host app's runtime permission is
+    // `granted` — without this the WebView's mic request is auto-
+    // rejected by Capacitor's BridgeWebChromeClient and the user sees
+    // "permissions denied" right after tapping Allow. The plugin call
+    // is also the place the user actually grants the permission on
+    // first use; we never wrap it in an in-app modal.
+    const decision = await requestCallMediaForCall(kind);
+    if (!decision.granted) {
+      // The toast + open-settings deep link are surfaced by the call
+      // entry-point UI (`CallButtons` / `VoiceChat`). Throwing a
+      // distinct sentinel keeps the catch site untouched.
+      const reason = decision.permanentlyDenied
+        ? "permission_blocked"
+        : "permission_denied";
+      throw new Error(reason);
     }
 
     let stream: MediaStream;
@@ -226,15 +217,7 @@ export function useCallSession(): UseCallSessionReturn {
     } catch (err) {
       const errorName = (err as { name?: string } | null)?.name;
       if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
-        // Re-check the native status — the user may have ticked "Don't
-        // ask again" in the OS dialog we just showed, in which case the
-        // forced modal must skip the no-op "Allow" CTA.
-        const denial = await ensureCallPermissions(kind);
-        const blocked = isPermanentlyDeniedForCall(kind, denial.status);
-        void ensureCallRationale(kind, {
-          force: true,
-          permanentlyDenied: blocked,
-        });
+        throw new Error("permission_denied");
       }
       throw err;
     }

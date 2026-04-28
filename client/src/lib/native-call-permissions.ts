@@ -1,20 +1,30 @@
 /**
- * High-level wrapper around the NativeCallUI plugin's permission
- * methods. Centralises the "is the runtime even capable of this
- * permission?" branching so callers don't have to repeat
- * `Capacitor.isNativePlatform()` checks everywhere.
+ * Friend-call media permissions.
  *
- * Used by:
- *  - the post-rationale flow in `useCallSession` (mic + camera grant
- *    must be confirmed before getUserMedia is called on Android),
- *  - the new Permissions tab inside the settings page,
- *  - the startup-permissions probe that surfaces a one-time banner
- *    when required permissions are still missing.
+ * Single responsibility: surface a definitive granted / denied decision
+ * for the camera + microphone permissions a real-time call needs,
+ * without ever rendering an in-app modal.
  *
- * The plugin is registered the same way as in `native-call-ui.ts` —
- * via Capacitor's `registerPlugin` — instead of importing the plugin
- * source directly, so the project tsconfig (which only includes
- * `client/src/`, `shared/`, and `server/`) does not need to be widened.
+ * Platform semantics:
+ *  - **Native Android**: `requestCallMediaPermissions()` triggers
+ *    `Activity#requestPermissions`, which is the OS dialog. The
+ *    WebView's `getUserMedia` only obtains the device once the host
+ *    app's runtime permission is `granted` — so we MUST resolve the
+ *    plugin call before the caller invokes `getUserMedia`, otherwise
+ *    Capacitor 8's `BridgeWebChromeClient` rejects the WebView's
+ *    permission request silently and the user sees "permissions
+ *    denied" even after granting.
+ *  - **Native iOS**: the plugin asks `AVCaptureDevice` for
+ *    authorisation, which surfaces the system dialog the first time.
+ *  - **Web**: the browser fires its own permission prompt directly
+ *    from `getUserMedia`, so we soft-pass unless the Permissions API
+ *    has already recorded an explicit denial.
+ *
+ * Used by every call entry point:
+ *   - `useCallSession.attachLocalMedia` (DM voice + video calls),
+ *   - `private-call-layer.ensureLocalStream` (legacy DM call layer),
+ *   - `VoiceChat.ensureLocalStream` (in-game voice rooms),
+ *   - `permission-catalogue` (Settings → Permissions tab probes).
  */
 import { Capacitor, registerPlugin } from "@capacitor/core";
 
@@ -30,10 +40,9 @@ export interface CallMediaPermissionStatus {
   microphone: CallMediaPermissionState;
   camera: CallMediaPermissionState;
   /**
-   * Android-only signal — true when the OS will no longer surface the
-   * runtime dialog because the user previously selected "Don't ask
-   * again" (or device policy hard-blocked the permission). Undefined
-   * on web and iOS, where the platform never reaches this state.
+   * Android-only — true when the OS will no longer surface its runtime
+   * dialog because the user previously selected "Don't ask again" or
+   * device policy hard-blocked the permission. Undefined on web/iOS.
    */
   microphonePermanentlyDenied?: boolean;
   cameraPermanentlyDenied?: boolean;
@@ -55,13 +64,58 @@ interface PluginShape {
 
 const NativeCallUI = registerPlugin<PluginShape>("NativeCallUI");
 
+export interface CallPermissionDecision {
+  granted: boolean;
+  status: CallMediaPermissionStatus;
+  /**
+   * True when the OS will no longer surface its runtime dialog for the
+   * permissions this call kind needs. The caller should route the user
+   * to system Settings instead of re-issuing a request that would be
+   * a silent no-op. Always false on web and iOS.
+   */
+  permanentlyDenied: boolean;
+}
+
+/**
+ * Acquire mic (and camera if needed) before `getUserMedia` is called.
+ *
+ * NEVER throws. NEVER calls `getUserMedia`. NEVER renders UI. The
+ * caller is responsible for surfacing a toast + open-settings deep
+ * link when the returned `granted` flag is false.
+ */
+export async function requestCallMediaForCall(
+  kind: CallMediaKind,
+): Promise<CallPermissionDecision> {
+  if (Capacitor.isNativePlatform()) {
+    const status = await safeRequestMedia();
+    const micOk = status.microphone === "granted";
+    const camOk = kind === "voice" ? true : status.camera === "granted";
+    const granted = micOk && camOk;
+    const permanentlyDenied =
+      (!micOk && (status.microphonePermanentlyDenied ?? false)) ||
+      (kind === "video" && !camOk && (status.cameraPermanentlyDenied ?? false));
+    return { granted, status, permanentlyDenied };
+  }
+
+  // Web: browser fires its own `getUserMedia` prompt. Only block on a
+  // confirmed `denied` state so first-time users still get the prompt.
+  const status = await safeCheckMedia();
+  const micBlocked = status.microphone === "denied";
+  const camBlocked = kind === "video" && status.camera === "denied";
+  return {
+    granted: !micBlocked && !camBlocked,
+    status,
+    permanentlyDenied: false,
+  };
+}
+
+/** Read-only snapshot used by the Settings tab and catalogue probes. */
 export interface NativeCallPermissionsCheck {
   microphone: CallMediaPermissionState;
   camera: CallMediaPermissionState;
   overlay: OverlayPermissionStatus;
 }
 
-/** Read all friend-call related permissions in a single call. */
 export async function checkCallPermissions(): Promise<NativeCallPermissionsCheck> {
   const [media, overlay] = await Promise.all([
     safeCheckMedia(),
@@ -72,62 +126,6 @@ export async function checkCallPermissions(): Promise<NativeCallPermissionsCheck
     camera: media.camera,
     overlay,
   };
-}
-
-/**
- * Ensure the runtime permissions required to actually start a call of
- * the requested kind are granted.
- *
- * Platform semantics:
- *  - **Native Android**: hard-gate. The WebView only gets mic/camera
- *    access if the host app has been granted the matching runtime
- *    permission, so we MUST confirm a "granted" state before letting
- *    `getUserMedia` run. A "denied" or non-granted result returns
- *    `granted: false` so the caller can re-show the rationale modal.
- *  - **Web + iOS**: soft-pass. The browser / iOS WebView fires its
- *    own permission prompt directly from `getUserMedia`, so blocking
- *    here on a `prompt`/`unavailable` state would prevent that
- *    dialog from ever appearing on first-time use. We only return
- *    `granted: false` when the platform reports an explicit
- *    `denied` for a permission the call actually needs — every
- *    other state is allowed through.
- *
- * Safe to call on any platform — never throws.
- */
-export async function ensureCallPermissions(
-  kind: CallMediaKind,
-): Promise<{ granted: boolean; status: CallMediaPermissionStatus }> {
-  const isNativeAndroid =
-    Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
-
-  if (isNativeAndroid) {
-    const status = await safeRequestMedia();
-    const micOk = status.microphone === "granted";
-    const camOk = kind === "voice" ? true : status.camera === "granted";
-    return { granted: micOk && camOk, status };
-  }
-
-  // Soft check on web + iOS: only block on a confirmed denial.
-  const status = await safeCheckMedia();
-  const micBlocked = status.microphone === "denied";
-  const camBlocked = kind === "video" && status.camera === "denied";
-  return { granted: !micBlocked && !camBlocked, status };
-}
-
-/**
- * Convenience flag — true when one of the permissions the call kind
- * needs is in "permanently denied" state (the OS will no longer surface
- * the runtime dialog). Callers should route the user to system Settings
- * instead of re-issuing the permission request, which is a silent no-op
- * in this state. Always returns false on web and iOS.
- */
-export function isPermanentlyDeniedForCall(
-  kind: CallMediaKind,
-  status: CallMediaPermissionStatus,
-): boolean {
-  if (status.microphonePermanentlyDenied === true) return true;
-  if (kind === "video" && status.cameraPermanentlyDenied === true) return true;
-  return false;
 }
 
 /** Open the system overlay-permission screen (Android only). */
@@ -186,7 +184,9 @@ async function queryBrowserPermission(
   name: "microphone" | "camera",
 ): Promise<CallMediaPermissionState> {
   try {
-    const permissions = (typeof navigator !== "undefined" ? navigator.permissions : undefined) as
+    const permissions = (typeof navigator !== "undefined"
+      ? navigator.permissions
+      : undefined) as
       | { query: (descriptor: { name: string }) => Promise<{ state: string }> }
       | undefined;
     if (!permissions?.query) return "prompt";
@@ -197,13 +197,4 @@ async function queryBrowserPermission(
   } catch {
     return "prompt";
   }
-}
-
-export function isMissingForCall(
-  kind: CallMediaKind,
-  status: CallMediaPermissionStatus,
-): boolean {
-  if (status.microphone !== "granted") return true;
-  if (kind === "video" && status.camera !== "granted") return true;
-  return false;
 }

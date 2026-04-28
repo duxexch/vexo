@@ -10,8 +10,7 @@
  * Contracts pinned here:
  *   - SplashScreen.launchAutoHide = true            (consumer: client/src/main.tsx — splash hand-off)
  *   - SplashScreen.launchShowDuration <= 2000       (consumer: client/src/main.tsx — JS-side budget)
- *   - StatusBar.overlaysWebView    = false          (consumer: client/src/components/games/GameLayout.tsx,
- *                                                    client/src/components/PermissionsBanner.tsx)
+ *   - StatusBar.overlaysWebView    = false          (consumer: client/src/components/games/GameLayout.tsx)
  *   - Keyboard.style               = 'dark'         (consumer: light/dark theme parity for keyboard chrome)
  *   - server.url                   = 'https://vixo.click'  (Task #200 — production backend the
  *                                                    mobile app loads. Drift here ships the
@@ -82,11 +81,10 @@ describe("Task #189: capacitor.config.ts StatusBar contract", () => {
     expect(
       block,
       "StatusBar.overlaysWebView MUST be false. " +
-        "client/src/components/games/GameLayout.tsx (sticky game header) and " +
-        "client/src/components/PermissionsBanner.tsx (top-of-screen banner) both " +
-        "lay themselves out assuming the WebView starts BELOW the status bar. If " +
-        "the status bar is allowed to overlay the WebView, the game header and the " +
-        "permissions banner will both render UNDER the system clock/icons on Android.",
+        "client/src/components/games/GameLayout.tsx (sticky game header) lays " +
+        "itself out assuming the WebView starts BELOW the status bar. If the " +
+        "status bar is allowed to overlay the WebView, the game header will " +
+        "render UNDER the system clock/icons on Android.",
     ).toMatch(/overlaysWebView:\s*false/);
     expect(block, "StatusBar.overlaysWebView must NOT be set to true").not.toMatch(
       /overlaysWebView:\s*true/,

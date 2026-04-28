@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useRef, type ReactNode } from "re
 import { useLocation } from "wouter";
 import { useCallSession, type UseCallSessionReturn } from "@/hooks/use-call-session";
 import { CallModal } from "./CallModal";
-import { CallPermissionPrompt } from "./CallPermissionPrompt";
 import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
 import { dispatchCallAction, type CallAction } from "@/lib/call-actions";
 
@@ -89,7 +88,6 @@ export function CallSessionProvider({ children }: { children: ReactNode }) {
     <CallSessionContext.Provider value={call}>
       {children}
       <CallModal call={call} />
-      <CallPermissionPrompt />
     </CallSessionContext.Provider>
   );
 }

@@ -19,7 +19,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SupportContactQuickLaunch } from "@/components/support-contact-quick-launch";
 import { fetchWithCsrf } from "@/lib/csrf";
-import { openNotificationSettings, requestPostSignupNotificationPermissions } from "@/lib/startup-permissions";
+import { openNotificationSettings } from "@/lib/startup-permissions";
 
 type NativeGoogleLoginResult = {
   responseType?: string;
@@ -225,7 +225,6 @@ export default function LoginPage() {
   const socialLoginUnlockTimeoutRef = useRef<number | null>(null);
   const socialGoogleForceConsentRetriedRef = useRef<boolean>(false);
   const lastOAuthEventTsRef = useRef<number>(0);
-  const shouldPromptPostSignupPermissionsRef = useRef(false);
   const [activeSocialLoginPlatform, setActiveSocialLoginPlatform] = useState<string | null>(null);
 
   // Terms & privacy agreement state
@@ -875,59 +874,12 @@ export default function LoginPage() {
     return true;
   };
 
-  const requestPostSignupNotifications = async () => {
-    try {
-      const summary = await requestPostSignupNotificationPermissions();
-      const granted = summary.notifications === "granted" || summary.nativePush === "granted";
-
-      if (granted) {
-        toast({
-          title: t('common.success'),
-          description: t('permissions.postSignup.success'),
-        });
-        return;
-      }
-
-      toast({
-        title: t('permissions.postSignup.blocked'),
-        description: t('permissions.postSignup.openSettings'),
-        action: (
-          <ToastAction altText={t('permissions.gate.openSettings')} onClick={() => { void openNotificationSettings(); }}>
-            {t('permissions.gate.openSettings')}
-          </ToastAction>
-        ),
-      });
-    } catch {
-      toast({
-        title: t('common.error'),
-        description: t('permissions.gate.retryHint'),
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const promptPostSignupNotifications = () => {
-    toast({
-      title: t('permissions.postSignup.title'),
-      description: t('permissions.postSignup.description'),
-      action: (
-        <ToastAction altText={t('permissions.postSignup.allow')} onClick={() => { void requestPostSignupNotifications(); }}>
-          {t('permissions.postSignup.allow')}
-        </ToastAction>
-      ),
-    });
-  };
-
   const applyLoginFlowResult = (result: LoginFlowResult) => {
     if (result.status === "authenticated") {
       setShowIdentifierOtpModal(false);
       setShowTwoFactorModal(false);
       setIdentifierOtpCode("");
       setTwoFactorCode("");
-      if (shouldPromptPostSignupPermissionsRef.current) {
-        shouldPromptPostSignupPermissionsRef.current = false;
-        promptPostSignupNotifications();
-      }
       setLocation("/");
       return;
     }
@@ -1007,10 +959,6 @@ export default function LoginPage() {
       setShowTwoFactorModal(false);
       setTwoFactorCode("");
       setTwoFactorChallengeToken("");
-      if (shouldPromptPostSignupPermissionsRef.current) {
-        shouldPromptPostSignupPermissionsRef.current = false;
-        promptPostSignupNotifications();
-      }
       setLocation("/");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1044,7 +992,6 @@ export default function LoginPage() {
 
   const handleAccountLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    shouldPromptPostSignupPermissionsRef.current = false;
     setIsLoading(true);
     try {
       const result = await loginByAccount(accountLoginForm.accountId, accountLoginForm.password);
@@ -1058,7 +1005,6 @@ export default function LoginPage() {
 
   const handlePhoneLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    shouldPromptPostSignupPermissionsRef.current = false;
     setIsLoading(true);
     try {
       // Phone tab: validate phone number format (digits with optional + prefix, min 7 chars)
@@ -1080,7 +1026,6 @@ export default function LoginPage() {
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    shouldPromptPostSignupPermissionsRef.current = false;
     setIsLoading(true);
     try {
       // Email tab: only accept email format with @
@@ -1101,7 +1046,6 @@ export default function LoginPage() {
 
   const handleCreateAccount = async () => {
     if (!pendingRegistration) return;
-    shouldPromptPostSignupPermissionsRef.current = false;
     setIsLoading(true);
     try {
       const autoCreateClientId = getOrCreateAutoCreateClientId();
@@ -1140,13 +1084,11 @@ export default function LoginPage() {
         confirmOneClickLogin(data.user as UserSchema, data.token);
         setShowCreateAccountModal(false);
         setPendingRegistration(null);
-        promptPostSignupNotifications();
         setLocation("/");
         return;
       }
 
       if (data.requiresIdentifierOtp === true && typeof data.challengeToken === "string") {
-        shouldPromptPostSignupPermissionsRef.current = true;
         setIdentifierOtpChallengeToken(data.challengeToken);
         const methods = Array.isArray(data.availableMethods)
           ? data.availableMethods.filter((value: unknown): value is IdentifierOtpMethod => value === "email" || value === "phone")
@@ -1354,7 +1296,6 @@ export default function LoginPage() {
       if ((updatedUser || pendingUser) && pendingToken) {
         const userToCommit = (updatedUser ?? (pendingUser as unknown as UserSchema));
         confirmOneClickLogin(userToCommit, pendingToken);
-        promptPostSignupNotifications();
       }
       // Signup is fully complete — re-enable the background poller.
       quickSignupInProgressRef.current = false;

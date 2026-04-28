@@ -11,8 +11,11 @@ import { VexLogo } from "@/components/vex-logo";
 import { ThemeProvider } from "@/lib/theme";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { PermissionsBanner } from "@/components/PermissionsBanner";
 import { ErrorBoundary } from "@/components/error-boundary";
+import {
+    cancelStartupPermissionRequest,
+    scheduleStartupPermissionRequest,
+} from "@/lib/post-login-permission-scheduler";
 import { lazy, Suspense, useEffect } from "react";
 
 const LoginPage = lazy(() => import("@/pages/login"));
@@ -38,6 +41,26 @@ const TranslationDebugger = import.meta.env.DEV
         import("@/lib/i18n-ui").then((module) => ({ default: module.TranslationDebugger })),
     )
     : null;
+
+/**
+ * Arms the one-time post-login OS permission burst (camera + mic +
+ * notifications) sixty seconds after the user authenticates, and
+ * cancels any pending timer when they sign out. Renders nothing.
+ *
+ * Mounted inside `<AuthProvider>` so it always has access to the
+ * latest `isAuthenticated` flag without prop-drilling.
+ */
+function StartupPermissionScheduler() {
+    const { isAuthenticated } = useAuth();
+    useEffect(() => {
+        if (isAuthenticated) {
+            scheduleStartupPermissionRequest();
+        } else {
+            cancelStartupPermissionRequest();
+        }
+    }, [isAuthenticated]);
+    return null;
+}
 
 function PageLoader() {
     const { t } = useI18n();
@@ -251,7 +274,7 @@ function App() {
                         <SettingsProvider>
                             <AuthProvider>
                                 <OfflineBanner />
-                                <PermissionsBanner />
+                                <StartupPermissionScheduler />
                                 <Toaster />
                                 {TranslationDebugger && (
                                     <Suspense fallback={null}>

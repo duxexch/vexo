@@ -15,11 +15,7 @@ import {
   type ChatCallQueuedOperation,
 } from "@/lib/chat-call-ops-queue";
 import { useToast } from "@/hooks/use-toast";
-import { ensureCallRationale } from "@/lib/call-permission-rationale";
-import {
-  ensureCallPermissions,
-  isPermanentlyDeniedForCall,
-} from "@/lib/native-call-permissions";
+import { requestCallMediaForCall } from "@/lib/native-call-permissions";
 import { startCallRingtone, stopCallRingtone } from "@/lib/call-ringtone";
 import { registerCallActionHandler } from "@/lib/call-actions";
 import {
@@ -447,25 +443,21 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
     }
 
     const kind = needsVideo ? "video" : "voice";
-    const decision = await ensureCallRationale(kind);
-    if (decision !== "allow") {
-      setPhase("idle");
-      return false;
-    }
 
-    // On native Android the WebView only obtains camera/mic if the host
-    // app has been granted the matching runtime permissions via
-    // Activity#requestPermissions. Issue that prompt here, after the
-    // in-app rationale, so the OS dialog is never the first thing the
-    // user sees.
-    const native = await ensureCallPermissions(kind);
-    if (!native.granted) {
-      // Hide the no-op "Allow" button and surface "Open settings" as
-      // primary when the OS has stopped showing its runtime dialog.
-      const blocked = isPermanentlyDeniedForCall(kind, native.status);
-      void ensureCallRationale(kind, {
-        force: true,
-        permanentlyDenied: blocked,
+    // Surface the OS dialog FIRST. On native Android the WebView only
+    // obtains the device once the host app's runtime permission is
+    // `granted` via `Activity#requestPermissions`. Without this step
+    // Capacitor 8's BridgeWebChromeClient auto-rejects the WebView's
+    // mic/camera request and the user sees "permissions denied" right
+    // after tapping Allow. The plugin call is also the only place the
+    // user actually grants the permission on first use; we never wrap
+    // it in an in-app modal.
+    const decision = await requestCallMediaForCall(kind);
+    if (!decision.granted) {
+      toast({
+        variant: "destructive",
+        title: t("challenge.voiceMicPermissionNeeded"),
+        description: t("challenge.voiceErrorRetry"),
       });
       setPhase("idle");
       return false;
@@ -486,21 +478,6 @@ export function PrivateCallLayerProvider({ children }: { children: ReactNode }) 
           variant: "destructive",
           title: t("challenge.voiceMicPermissionNeeded"),
           description: t("challenge.voiceErrorRetry"),
-        });
-
-        // Re-show the rationale in "forced" mode so the user has a clear,
-        // user-driven path back to the system settings via the modal's
-        // "Open settings" CTA. We deliberately do NOT auto-jump to the
-        // OS settings screen here — popping the user out of VEX without
-        // an explicit tap is jarring and was flagged in code review.
-        // Re-check the native status so a "Don't ask again" tick during
-        // the just-shown OS dialog flips the modal into permanently-
-        // denied mode (Allow hidden, Open Settings primary).
-        const denial = await ensureCallPermissions(kind);
-        const blocked = isPermanentlyDeniedForCall(kind, denial.status);
-        void ensureCallRationale(needsVideo ? "video" : "voice", {
-          force: true,
-          permanentlyDenied: blocked,
         });
       }
       setPhase("error");

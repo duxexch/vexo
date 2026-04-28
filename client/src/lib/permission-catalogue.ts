@@ -269,15 +269,14 @@ async function requestCameraPrompt(): Promise<PermissionResult> {
 }
 
 async function requestNotificationsPrompt(): Promise<PermissionResult> {
-  // Re-use the post-signup helper so a single tap handles BOTH the
-  // web notification permission AND the native push registration when
-  // the app is wrapped in Capacitor.
+  // Surface a single tap that triggers the web notification prompt AND
+  // the native push registration when the app is wrapped in Capacitor.
   const mod = await import("@/lib/startup-permissions");
-  const summary = await mod.requestPostSignupNotificationPermissions();
-  if (Capacitor.isNativePlatform() && summary.nativePush !== "unavailable") {
-    return summary.nativePush;
+  const result = await mod.requestAllNotificationPermissions();
+  if (Capacitor.isNativePlatform() && result.nativePush !== "unavailable") {
+    return result.nativePush;
   }
-  return summary.notifications;
+  return result.web;
 }
 
 async function requestOverlayPromptOrDeepLink(): Promise<PermissionResult> {
