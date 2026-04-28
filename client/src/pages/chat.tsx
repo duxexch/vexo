@@ -563,6 +563,23 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
     void refreshCallStatus();
   }, [activeConversation, refreshCallStatus]);
 
+  // When a conversation is open on mobile, hide the bottom navigation so the
+  // composer (input area) sits flush against the screen edge / soft keyboard
+  // instead of having the nav bar sandwiched between them. Driven via a body
+  // class so a CSS rule in index.css handles the actual hiding.
+  useEffect(() => {
+    if (embedded || typeof document === 'undefined') {
+      return;
+    }
+    if (!mobileShowMessages) {
+      return;
+    }
+    document.body.classList.add('chat-conversation-active');
+    return () => {
+      document.body.classList.remove('chat-conversation-active');
+    };
+  }, [embedded, mobileShowMessages]);
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
@@ -1116,6 +1133,8 @@ export default function ChatPage({ embedded = false }: ChatPageProps) {
         "flex h-full min-h-0 bg-[radial-gradient(circle_at_top,hsl(var(--primary)/0.1),transparent_40%)] md:pb-0",
         embedded
           ? "pb-0"
+          : mobileShowMessages
+          ? "pb-0 md:pb-0"
           : "pb-[max(calc(4.5rem_+_env(safe-area-inset-bottom)),var(--keyboard-inset-bottom,0px))]"
       )}
     >

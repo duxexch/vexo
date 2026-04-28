@@ -1241,6 +1241,17 @@ body[data-vex-game-fullscreen="on"] {
   margin-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/*
+ * When a chat conversation is open on mobile we hide the bottom navigation so
+ * the message composer can sit flush against the screen edge / soft keyboard.
+ * The body class is toggled from client/src/pages/chat.tsx based on
+ * mobileShowMessages. On md+ screens the chat list and conversation render
+ * side-by-side and the nav is already hidden via Tailwind's md:hidden.
+ */
+body.chat-conversation-active nav[aria-label="Main navigation"] {
+  display: none !important;
+}
+
 /* ===== Game Animations ===== */
 
 /* Chess: piece move */
