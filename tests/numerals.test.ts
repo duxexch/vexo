@@ -1,13 +1,3 @@
-/**
- * Unit tests for the digit-script helpers used by every money input
- * (`client/src/lib/numerals.ts`).
- *
- * These guard the behaviour that lets Arabic-speaking users on Android
- * Gboard / iOS Arabic keyboards type Arabic-Indic (٠-٩) or Persian
- * (۰-۹) digits and still produce ASCII strings the backend can parse
- * with `parseFloat`.
- */
-
 import { describe, expect, it } from "vitest";
 import { sanitizeMoneyInput, toLatinDigits } from "@/lib/numerals";
 
@@ -21,21 +11,19 @@ describe("toLatinDigits", () => {
     expect(toLatinDigits("abc-7")).toBe("abc-7");
   });
 
-  it("transliterates every Arabic-Indic digit to ASCII", () => {
+  it("transliterates Arabic-Indic digits to ASCII", () => {
     expect(toLatinDigits("٠١٢٣٤٥٦٧٨٩")).toBe("0123456789");
   });
 
-  it("transliterates every Persian (Extended Arabic-Indic) digit to ASCII", () => {
+  it("transliterates Persian (Extended Arabic-Indic) digits to ASCII", () => {
     expect(toLatinDigits("۰۱۲۳۴۵۶۷۸۹")).toBe("0123456789");
   });
 
-  it("handles mixed Arabic + Latin strings without losing structure", () => {
+  it("handles mixed Arabic + Latin without losing structure", () => {
     expect(toLatinDigits("USD ١٢٣.٤٥")).toBe("USD 123.45");
   });
 
-  it("leaves non-digit characters intact even if surrounded by Arabic digits", () => {
-    // U+066B (Arabic decimal) and U+066C (Arabic thousands) are NOT digits;
-    // toLatinDigits is digit-only, the separators are normalized later.
+  it("leaves U+066B / U+066C separators alone (sanitizer normalizes them)", () => {
     expect(toLatinDigits("١٬٢٣٤٫٥٦")).toBe("1\u066c234\u066b56");
   });
 });
@@ -84,7 +72,7 @@ describe("sanitizeMoneyInput", () => {
     expect(sanitizeMoneyInput("--12", { allowNegative: true })).toBe("-12");
   });
 
-  it("strips the decimal point entirely when allowDecimal is false", () => {
+  it("strips the decimal point when allowDecimal is false", () => {
     expect(sanitizeMoneyInput("12.5", { allowDecimal: false })).toBe("125");
     expect(sanitizeMoneyInput("١٢٫٥", { allowDecimal: false })).toBe("125");
   });
@@ -94,17 +82,14 @@ describe("sanitizeMoneyInput", () => {
     expect(sanitizeMoneyInput("١٫٢٣٤٥", { maxFractionDigits: 3 })).toBe("1.234");
   });
 
-  it("handles realistic paste-from-clipboard payloads", () => {
-    // Copy-paste from a bank SMS: "حوالة بمبلغ ١٬٢٣٤٫٥٠ ريال"
+  it("handles realistic paste payloads", () => {
     expect(sanitizeMoneyInput("حوالة بمبلغ ١٬٢٣٤٫٥٠ ريال")).toBe("1234.50");
-    // Copy-paste of a Persian price tag: "قیمت: ۲۵٬۰۰۰ تومان"
     expect(sanitizeMoneyInput("قیمت: ۲۵٬۰۰۰ تومان")).toBe("25000");
   });
 
-  it("returns ASCII-only output for every supported input script", () => {
+  it("always returns ASCII-only output", () => {
     for (const sample of ["١٢٣", "۱۲۳", "1\u066c234\u066b56", "12.34"]) {
-      const out = sanitizeMoneyInput(sample);
-      expect(out).toMatch(/^[0-9.]*$/);
+      expect(sanitizeMoneyInput(sample)).toMatch(/^[0-9.]*$/);
     }
   });
 });

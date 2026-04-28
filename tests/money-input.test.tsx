@@ -1,17 +1,3 @@
-/**
- * Component test for <MoneyInput />.
- *
- * The DOM event carries whatever the user (or their IME) actually
- * typed — Arabic-Indic digits, Persian digits, an Arabic decimal
- * separator, etc. The contract we need to keep alive is:
- *
- *   Whatever lands in the DOM, the parent's `onChange` handler must
- *   receive an ASCII-only string it can safely `parseFloat`.
- *
- * If this regresses, every `Number(value)` in the wallet / P2P /
- * tournament / admin flows silently becomes `NaN`.
- */
-
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -52,47 +38,35 @@ describe("<MoneyInput />", () => {
     expect(onChange.mock.calls[0][0].target.value).toBe("125");
   });
 
-  it("forwards an ASCII-only string when the DOM event carries Arabic-Indic digits", () => {
+  it("forwards ASCII when the DOM event carries Arabic-Indic digits", () => {
     const onValue = vi.fn();
     render(<ControlledHarness onValue={onValue} />);
-    const input = screen.getByTestId("money-input") as HTMLInputElement;
-
-    fireEvent.change(input, { target: { value: "١٢٣" } });
-
+    fireEvent.change(screen.getByTestId("money-input"), { target: { value: "١٢٣" } });
     expect(onValue).toHaveBeenLastCalledWith("123");
   });
 
   it("forwards ASCII for Persian digits", () => {
     const onValue = vi.fn();
     render(<ControlledHarness onValue={onValue} />);
-    const input = screen.getByTestId("money-input") as HTMLInputElement;
-
-    fireEvent.change(input, { target: { value: "۲۵۰" } });
-
+    fireEvent.change(screen.getByTestId("money-input"), { target: { value: "۲۵۰" } });
     expect(onValue).toHaveBeenLastCalledWith("250");
   });
 
-  it("normalizes the Arabic decimal separator (U+066B) and drops the thousands separator (U+066C)", () => {
+  it("normalizes the Arabic decimal (U+066B) and drops the thousands separator (U+066C)", () => {
     const onValue = vi.fn();
     render(<ControlledHarness onValue={onValue} />);
-    const input = screen.getByTestId("money-input") as HTMLInputElement;
-
-    fireEvent.change(input, { target: { value: "١٬٢٣٤٫٥٠" } });
-
+    fireEvent.change(screen.getByTestId("money-input"), { target: { value: "١٬٢٣٤٫٥٠" } });
     expect(onValue).toHaveBeenLastCalledWith("1234.50");
   });
 
   it("rewrites the DOM input value so the user immediately sees ASCII", () => {
     render(<ControlledHarness onValue={() => {}} />);
     const input = screen.getByTestId("money-input") as HTMLInputElement;
-
     fireEvent.change(input, { target: { value: "٤٢" } });
-
-    // After React commits, the controlled value is the ASCII form.
     expect(input.value).toBe("42");
   });
 
-  it("survives `userEvent.type` of Arabic digits and yields ASCII end-to-end", async () => {
+  it("yields ASCII end-to-end under userEvent.type of Arabic digits", async () => {
     const user = userEvent.setup();
     const onValue = vi.fn();
     render(<ControlledHarness onValue={onValue} />);
@@ -100,43 +74,30 @@ describe("<MoneyInput />", () => {
 
     await user.type(input, "٧٥");
 
-    // Final committed value, regardless of intermediate keystrokes, is ASCII.
     expect(input.value).toBe("75");
     expect(onValue).toHaveBeenLastCalledWith("75");
   });
 
-  it("rewrites pasted Arabic strings to ASCII without flashing the original", () => {
+  it("rewrites pasted Arabic strings to ASCII", () => {
     render(<ControlledHarness onValue={() => {}} />);
     const input = screen.getByTestId("money-input") as HTMLInputElement;
     input.focus();
 
-    const dataTransfer = {
-      getData: (type: string) => (type === "text" ? "حوالة ١٬٢٣٤٫٥٠ ريال" : ""),
-    };
-
-    fireEvent.paste(input, { clipboardData: dataTransfer });
+    fireEvent.paste(input, {
+      clipboardData: { getData: (type: string) => (type === "text" ? "حوالة ١٬٢٣٤٫٥٠ ريال" : "") },
+    });
 
     expect(input.value).toBe("1234.50");
   });
 
-  it("works as a controlled input under react-hook-form's `{...field}` shape", () => {
+  it("works under react-hook-form's `{...field}` shape", () => {
     const onChange = vi.fn();
-    // Mimic the object react-hook-form's `field` spreads onto a child:
-    // { name, value, onChange, onBlur, ref }.
-    const fieldLike = {
-      name: "amount",
-      value: "",
-      onChange,
-      onBlur: () => {},
-    };
+    const fieldLike = { name: "amount", value: "", onChange, onBlur: () => {} };
     render(<MoneyInput data-testid="money-input" {...fieldLike} />);
-    const input = screen.getByTestId("money-input") as HTMLInputElement;
 
-    fireEvent.change(input, { target: { value: "٩٩٫٩٩" } });
+    fireEvent.change(screen.getByTestId("money-input"), { target: { value: "٩٩٫٩٩" } });
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    // react-hook-form reads from `event.target.value` to update its store —
-    // that value must already be ASCII.
     expect(onChange.mock.calls[0][0].target.value).toBe("99.99");
   });
 });
