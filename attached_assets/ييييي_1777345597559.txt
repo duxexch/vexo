@@ -1,0 +1,675 @@
+oot@srv1118737:~# cd /docker/vex
+root@srv1118737:/docker/vex# pwd && ls -la && find . -maxdepth 2 -type f | sed 's#^./##' | sort | head -200
+/docker/vex
+total 2044
+drwxr-xr-x 27 root root 4096 Apr 28 02:37 .
+drwxr-xr-x 4 root root 4096 Apr 23 18:45 ..
+drwxr-xr-x 3 root root 4096 Apr 24 19:29 .agents
+-rw-r--r-- 1 root root 948 Apr 23 21:17 .browserslistrc
+-rw-r--r-- 1 root root 1946 Apr 23 16:11 .cwe_scan.py
+-rw-r--r-- 1 root root 1029 Apr 23 16:11 .dockerignore
+-rw------- 1 root root 10720 Apr 28 02:37 .env
+-rw-r--r-- 1 root root 12451 Apr 26 17:21 .env.example
+drwxr-xr-x 7 root root 4096 Apr 28 02:41 .git
+-rw-r--r-- 1 root root 613 Apr 27 19:41 .gitattributes
+drwxr-xr-x 7 root root 4096 Apr 26 21:33 .github
+-rw-r--r-- 1 root root 1836 Apr 28 02:28 .gitignore
+-rw-r--r-- 1 root root 53046 Apr 23 16:11 .memory
+-rw-r--r-- 1 root root 1081 Apr 24 03:41 .replit
+-rw-r--r-- 1 root root 6 Apr 23 16:11 .server.pid
+-rw-r--r-- 1 root root 1350 Apr 23 16:11 .tmp-playwright-check.cjs
+-rw-r--r-- 1 root root 1350 Apr 23 16:11 .tmp-playwright-check.js
+drwxr-xr-x 3 root root 4096 Apr 23 16:11 .tools
+drwxr-xr-x 2 root root 4096 Apr 23 16:11 .vscode
+-rw-r--r-- 1 root root 6043 Apr 26 17:21 AGENTS.md
+-rw-r--r-- 1 root root 2608 Apr 23 16:11 Dockerfile
+-rw-r--r-- 1 root root 0 Apr 27 23:10 FETCH_HEAD
+drwxr-xr-x 3 root root 4096 Apr 26 03:38 PROJECT_KNOWLEDGE_ENGINE
+-rw-r--r-- 1 root root 15326 Apr 23 16:11 README.md
+drwxr-xr-x 3 root root 4096 Apr 23 16:11 ai-service
+lrwxrwxrwx 1 root root 29 Apr 27 21:09 android-test-link -> /tmp/vex-android-test/android
+drwxr-xr-x 3 root root 12288 Apr 28 02:28 attached_assets
+drwxr-xr-x 2 root root 4096 Apr 28 02:37 backups
+-rw-r--r-- 1 root root 5125 Apr 26 17:21 capacitor.config.ts
+drwxr-xr-x 4 root root 4096 Apr 23 21:17 client
+-rw-r--r-- 1 root root 459 Apr 23 16:11 components.json
+drwxr-xr-x 5 root root 4096 Apr 26 03:38 deploy
+drwxr-xr-x 2 root root 4096 Apr 23 16:11 docker
+-rw-r--r-- 1 root root 16690 Apr 27 20:13 docker-compose.prod.yml
+-rw-r--r-- 1 root root 6930 Apr 23 16:11 docker-compose.yml
+drwxr-xr-x 5 root root 4096 Apr 27 18:35 docs
+-rw-r--r-- 1 root root 325 Apr 23 16:11 drizzle.config.ts
+-rw-r--r-- 1 root root 147 Apr 23 16:11 filters.yaml
+drwxr-xr-x 2 root root 4096 Apr 23 16:11 k8s
+-rw-r--r-- 1 root root 3656 Apr 26 23:29 key.txt
+-rw-r--r-- 1 root root 3656 Apr 26 23:23 keystore_base64.txt
+drwxr-xr-x 2 1001 1001 4096 Apr 23 16:11 logs
+drwxr-xr-x 2 root root 4096 Apr 26 22:11 migrations
+drwxr-xr-x 4 root root 4096 Apr 25 19:01 native-plugins
+-rw-r--r-- 1 root root 496830 Apr 27 22:22 package-lock.json
+-rw-r--r-- 1 root root 15230 Apr 27 22:22 package.json
+-rw-r--r-- 1 root root 80 Apr 23 16:11 postcss.config.js
+-rwxr-xr-x 1 root root 43635 Apr 26 17:21 prod-auto.sh
+-rwxr-xr-x 1 root root 11427 Apr 23 16:11 prod-update.sh
+-rw-r--r-- 1 root root 2738 Apr 27 16:43 release-key.keystore
+-rw-r--r-- 1 root root 23820 Apr 27 20:13 replit.md
+-rw-r--r-- 1 root root 433 Apr 23 21:17 replit.nix
+-rw-r--r-- 1 root root 50282 Apr 23 16:11 screenshot-sequence-fix-mobile.png
+-rw-r--r-- 1 root root 51782 Apr 23 16:11 screenshot-watch-desktop.png
+-rw-r--r-- 1 root root 50282 Apr 23 16:11 screenshot-watch-mobile.png
+-rw-r--r-- 1 root root 51782 Apr 23 16:11 screenshot-watchpage-desktop.png
+-rw-r--r-- 1 root root 50282 Apr 23 16:11 screenshot-watchpage-mobile.png
+drwxr-xr-x 2 root root 4096 Apr 23 16:11 script
+drwxr-xr-x 6 root root 4096 Apr 27 23:49 scripts
+drwxr-xr-x 12 root root 4096 Apr 28 02:28 server
+drwxr-xr-x 2 root root 4096 Apr 26 22:11 shared
+-rw-r--r-- 1 root root 3518 Apr 24 19:29 skills-lock.json
+-rw-r--r-- 1 root root 5086 Apr 23 16:11 tailwind.config.ts
+drwxr-xr-x 3 root root 4096 Apr 26 21:33 tests
+-rw-r--r-- 1 root root 21951 Apr 23 16:11 translation_audit.txt
+-rw-r--r-- 1 root root 67093 Apr 23 16:11 translation_audit_byfile.txt
+-rw-r--r-- 1 root root 207 Apr 23 16:11 ts_errors.txt
+-rw-r--r-- 1 root root 713 Apr 23 16:11 tsconfig.json
+drwxr-xr-x 2 root root 4096 Apr 23 16:11 twa
+-rw-r--r-- 1 root root 20842 Apr 23 16:11 unique_keys.txt
+drwxr-xr-x 2 1001 1001 4096 Apr 23 16:11 uploads
+-rw-r--r-- 1 root root 741996 Apr 23 16:11 vex_database_production.sql
+-rw-r--r-- 1 root root 3710 Apr 28 02:28 vite.config.ts
+-rw-r--r-- 1 root root 609 Apr 26 00:27 vitest.config.ts
+drwxr-xr-x 15 root root 4096 Apr 23 16:11 vxmarket
+.browserslistrc
+.cwe_scan.py
+.dockerignore
+.env
+.env.example
+.git/FETCH_HEAD
+.git/HEAD
+.git/ORIG_HEAD
+.git/config
+.git/description
+.git/index
+.git/packed-refs
+.gitattributes
+.github/copilot-instructions.md
+.gitignore
+.memory
+.replit
+.server.pid
+.tmp-playwright-check.cjs
+.tmp-playwright-check.js
+.tools/ripgrep.zip
+.vscode/extensions.json
+.vscode/settings.json
+AGENTS.md
+Dockerfile
+FETCH_HEAD
+PROJECT_KNOWLEDGE_ENGINE/00_PRIORITIES.md
+PROJECT_KNOWLEDGE_ENGINE/01_KNOWLEDGE_TREE.md
+PROJECT_KNOWLEDGE_ENGINE/02_TECHNICAL_ARCHITECTURE.md
+PROJECT_KNOWLEDGE_ENGINE/03_DESIGN_MOBILE_I18N_SEO.md
+PROJECT_KNOWLEDGE_ENGINE/04_SECURITY_FINANCE_DATABASE.md
+PROJECT_KNOWLEDGE_ENGINE/05_DOCKER_DEPLOYMENT_RUNBOOK.md
+PROJECT_KNOWLEDGE_ENGINE/06_CHANGE_PROTOCOL_AND_LOG.md
+PROJECT_KNOWLEDGE_ENGINE/07_LEGACY_INDEX.md
+PROJECT_KNOWLEDGE_ENGINE/README.md
+README.md
+ai-service/Dockerfile
+ai-service/package.json
+attached_assets/Pasted---1777211079902_1777211079903.txt
+attached_assets/Pasted--1s-Run-The-destination-filenames-VEX-official-release-_1777317331139.txt
+attached_assets/Pasted--2-android-build-yml-FINAL-VERSION--1777295419375_1777295419375.txt
+attached_assets/Pasted--2026-04-27T23-54-37Z-Manifest-https-vixo-click-downloa_1777334808833.txt
+attached_assets/Pasted--All-jobs-Run-details-Annotations-1-error-Build-APK-and_1777309329148.txt
+attached_assets/Pasted--All-jobs-Run-details-build-failed-1-minute-ago-in-4m-2_1777306551326.txt
+attached_assets/Pasted--Changes-applied-npm-notice-npm-notice-New-major-versio_1776977660665.txt
+attached_assets/Pasted--Pulling-schema-from-database-Changes-applied-npm-notic_1777239492436.txt
+attached_assets/Pasted--app-resolving-provenance-for-metadata-file--1776983765_1776983765975.txt
+attached_assets/Pasted--unpacking-to-docker-io-library-vex-app-latest--1776972_1776972354508.txt
+attached_assets/Pasted--unpacking-to-docker-io-library-vex-app-latest--1777328_1777328938678.txt
+attached_assets/Pasted--vixo-click-Your-connection-is-not-private-Attackers-mi_1776959227330.txt
+attached_assets/Pasted-27-104-vex-app-timestamp-2026-04-27T22-49-49-178Z-level_1777330352750.txt
+attached_assets/Pasted-4c9cdfdbef30-redis-7-alpine-docker-entrypoint-s-5-hours_1776954947124.txt
+attached_assets/Pasted-Android-Build-Manual-Android-Build-Manual-10-All-jobs-R_1777310378218.txt
+attached_assets/Pasted-Android-Build-Manual-Android-Build-Manual-10-All-jobs-R_1777311766263.txt
+attached_assets/Pasted-Android-Build-Manual-Android-Build-Manual-11-All-jobs-R_1777317345071.txt
+attached_assets/Pasted-Android-Build-Manual-Android-Build-Manual-7-All-jobs-Ru_1777304680742.txt
+attached_assets/Pasted-Code-Issues-Pull-requests-Agents-Actions-Projects-Wiki-_1777303017994.txt
+attached_assets/Pasted-Code-Issues-Pull-requests-Agents-Actions-Projects-Wiki-_1777303724430.txt
+attached_assets/Pasted-Code-Issues-Pull-requests-Agents-Actions-Projects-Wiki-_1777305720779.txt
+attached_assets/Pasted-Code-Issues-Pull-requests-Agents-Actions-Projects-Wiki-_1777312198053.txt
+attached_assets/Pasted-CodeQL-Advanced-Update-build-workflows-to-use-latest-ac_1777301218490.txt
+attached_assets/Pasted-I-need-you-to-fully-set-up-an-Android-CI-CD-pipeline-in_1777294905781.txt
+attached_assets/Pasted-NS-A-record-Traefik-router-rule-entrypoints-root-srv111_1776971415379.txt
+attached_assets/Pasted-Render-History-Pages-that-have-been-recently-rendered-D_1777064863586.txt
+attached_assets/Pasted-Unpacking-objects-100-12-12-7-67-KiB-392-00-KiB-s-done-_1776954829159.txt
+attached_assets/Pasted-You-are-working-on-a-full-CI-CD-setup-for-an-Android-Ca_1777295581445.txt
+attached_assets/Pasted-You-are-working-on-a-full-CI-CD-setup-for-an-Android-Ca_1777295857975.txt
+attached_assets/Pasted-oot-srv1118737-docker-vex-cd-docker-vex-echo-all-apk-aa_1777321602833.txt
+attached_assets/Pasted-root-srv1118737-cd-docker-vex-bash-prod-update-sh-auth-_1777319263390.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-1-grep-E-TRAEFIK-DOCKER-PRO-_1776972060864.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-1-traefik-mrnn-docker-inspec_1776960225401.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-cd-docker-vex--1776955905190_1776955905191.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-cd-docker-vex-bash-prod-upda_1776970246093.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-cd-docker-vex-git-pull-origi_1777331308501.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-cd-docker-vex-git-pull-origi_1777331490292.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-cd-docker-vex-git-pull-origi_1777331875230.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-cd-docker-vex-git-pull-origi_1777332019081.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-cd-docker-vex-printf-PWD-pwd_1777321530782.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-cd-docker-vex-printf-downloa_1777324979081.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-cd-docker-vex-sed-n-1-220p-s_1777342266263.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-root-srv1118737-docker-vex-c_1777330499338.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-root-srv1118737-docker-vex-c_1777330706706.txt
+attached_assets/Pasted-root-srv1118737-docker-vex-root-srv1118737-docker-vex-c_1777333229745.txt
+attached_assets/Pasted-usCode-200-duration-44-ip-41-233-127-104-vex-app-timest_1777330333493.txt
+attached_assets/Screenshot_2026-04-21_185040_1777130302223.png
+attached_assets/Screenshot_2026-04-21_185131_1777130298069.png
+attached_assets/VEX-1.0.1_(3)_1777332608382.apk
+attached_assets/image_1776990489530.png
+attached_assets/image_1777170221250.png
+attached_assets/image_1777219365928.png
+attached_assets/image_1777240525235.png
+attached_assets/image_1777302439273.png
+attached_assets/image_1777321073840.png
+attached_assets/image_1777321474257.png
+attached_assets/image_1777330640954.png
+attached_assets/image_1777330657342.png
+attached_assets/image_1777335002682.png
+backups/vex_db_20260423_161112.sql.gz
+backups/vex_db_20260423_184241.sql.gz
+backups/vex_db_20260423_184313.sql.gz
+backups/vex_db_20260423_184415.sql.gz
+backups/vex_db_20260423_184657.sql.gz
+backups/vex_db_20260423_184841.sql.gz
+backups/vex_db_20260423_184926.sql.gz
+backups/vex_db_20260423_185217.sql.gz
+backups/vex_db_20260423_185339.sql.gz
+backups/vex_db_20260423_192126.sql.gz
+backups/vex_db_20260423_192732.sql.gz
+backups/vex_db_20260423_204146.sql.gz
+backups/vex_db_20260423_204838.sql.gz
+backups/vex_db_20260423_211739.sql.gz
+backups/vex_db_20260423_222326.sql.gz
+backups/vex_db_20260424_034157.sql.gz
+backups/vex_db_20260424_192939.sql.gz
+backups/vex_db_20260424_221506.sql.gz
+backups/vex_db_20260424_232612.sql.gz
+backups/vex_db_20260425_003036.sql.gz
+backups/vex_db_20260425_181822.sql.gz
+backups/vex_db_20260425_190123.sql.gz
+backups/vex_db_20260426_002739.sql.gz
+backups/vex_db_20260426_015826.sql.gz
+backups/vex_db_20260426_021510.sql.gz
+backups/vex_db_20260426_033811.sql.gz
+backups/vex_db_20260426_043015.sql.gz
+backups/vex_db_20260426_044349.sql.gz
+backups/vex_db_20260426_051430.sql.gz
+backups/vex_db_20260426_052848.sql.gz
+backups/vex_db_20260426_060036.sql.gz
+backups/vex_db_20260426_070705.sql.gz
+backups/vex_db_20260426_124830.sql.gz
+backups/vex_db_20260426_172112.sql.gz
+backups/vex_db_20260426_183547.sql.gz
+backups/vex_db_20260426_194909.sql.gz
+backups/vex_db_20260426_213317.sql.gz
+backups/vex_db_20260426_221112.sql.gz
+backups/vex_db_20260426_224221.sql.gz
+backups/vex_db_20260427_183509.sql.gz
+backups/vex_db_20260427_194145.sql.gz
+backups/vex_db_20260427_201351.sql.gz
+backups/vex_db_20260427_210929.sql.gz
+backups/vex_db_20260427_215343.sql.gz
+backups/vex_db_20260427_220040.sql.gz
+backups/vex_db_20260427_220413.sql.gz
+backups/vex_db_20260427_221253.sql.gz
+backups/vex_db_20260427_222248.sql.gz
+backups/vex_db_20260427_224525.sql.gz
+backups/vex_db_20260427_232413.sql.gz
+backups/vex_db_20260427_233752.sql.gz
+backups/vex_db_20260427_234938.sql.gz
+backups/vex_db_20260428_023713.sql.gz
+capacitor.config.ts
+client/index.html
+client/test-harness.html
+components.json
+deploy/docker-compose.traefik.yml
+deploy/docker-compose.voice.linux-sysctl.yml
+deploy/docker-compose.voice.yml
+deploy/ecosystem.config.js
+deploy/nginx.conf
+docker-compose.prod.yml
+docker-compose.yml
+docker/nginx.conf
+docs/CALL_PERMISSIONS_PLAYBOOK.md
+docs/CHALLENGE_PERMISSIONS_AUDIT_2026-03-30.md
+docs/CHALLENGE_VOICE_VALIDATION_CHECKLIST.md
+docs/CHAT_BUBBLES_PLAYBOOK.md
+docs/CHAT_SURFACES_BUTTONS_ICONS_INVENTORY_2026-04-15.md
+docs/GAME_FULLSCREEN_MOBILE_QA_2026-04-15.md
+docs/GAME_ICON_BACKGROUND_ROUTE_MATRIX_2026-04-19.md
+docs/GAME_WATCH_UNIFIED_UX_PLAYBOOK.md
+docs/I18N_GLOBAL_TRANSLATION_PIPELINE.md
+docs/LEGACY_CHAT_HISTORY_DEPRECATION_2026-04-26.md
+docs/MOBILE_UI_FULL_INVENTORY_2026-04-13.md
+docs/MOBILE_UI_PAGE_BY_PAGE_TRACKER.md
+docs/P2P_BINANCE_STYLE_UI_BLUEPRINT.md
+docs/PRODUCTION_TRAEFIK_RUNTIME_NOTES_2026-04-07.md
+docs/REALTIME_STATE_CANONICALIZATION_ADR_2026-04-22.md
+docs/SAM9_MASTER_RESEARCH_EXECUTION_PLAN_2026-04-10.md
+docs/SEO_MANAGEMENT_PRO_SETTINGS.md
+docs/SOCIAL_LOGIN_WEB_MOBILE_COMPLIANCE.md
+docs/TEAM_AGENT_EXECUTION_PROTOCOL.md
+docs/VOICE_CHAT_PRODUCTION_PLAYBOOK_2026-04-11.md
+docs/VOICE_PRODUCTION_UBUNTU_72.61.187.119.md
+docs/WORKSTREAM_PROGRESS_LOG.md
+drizzle.config.ts
+filters.yaml
+k8s/vex-production.yaml
+key.txt
+keystore_base64.txt
+migrations/add_account_lifecycle_security.sql
+migrations/add_badge_level_entitlements.sql
+migrations/add_chat_call_sessions.sql
+migrations/add_currency_conversion.sql
+migrations/add_domino_target_score.sql
+migrations/add_free_play_ad_events.sql
+migrations/add_game_events_phase0.sql
+migrations/add_language_duel_challenge_fields.sql
+migrations/add_marketer_commission_scheduler_runs.sql
+migrations/add_marketer_revshare_cpa_program.sql
+migrations/add_marketer_scheduler_idempotency_key.sql
+root@srv1118737:/docker/vex# grep -RniE "voice|call|webrtc|jitsi|mediasoup|livekit|twilio" docker-compose* deploy docs 2>/dev/null | head -120
+docker-compose.prod.yml:272: TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+docker-compose.prod.yml:273: TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+docker-compose.prod.yml:274: TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+docker-compose.prod.yml:375: # coturn — self-hosted TURN/STUN for WebRTC voice/video
+docker-compose.yml:164: TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+docker-compose.yml:165: TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+docker-compose.yml:166: TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+deploy/docker-compose.voice.linux-sysctl.yml:2: livekit:
+deploy/nginx.conf:80: # friend calls, the in-game fullscreen toggle, and every "Copy link"
+deploy/voice/bootstrap-prod-voice.sh:4:# Bootstraps production voice stack on Ubuntu server.
+deploy/voice/bootstrap-prod-voice.sh:6:# - Synchronizes voice vars across discovered .env* files (without duplication)
+deploy/voice/bootstrap-prod-voice.sh:8:# - Restarts app + livekit + coturn with the updated values
+deploy/voice/bootstrap-prod-voice.sh:16:LIVEKIT_KEY_NAME="${LIVEKIT_KEY_NAME:-vixo_prod}"
+deploy/voice/bootstrap-prod-voice.sh:30:Usage: deploy/voice/bootstrap-prod-voice.sh [options]
+deploy/voice/bootstrap-prod-voice.sh:40: --livekit-key-name VALUE Generated LIVEKIT key name if keys are not provided
+deploy/voice/bootstrap-prod-voice.sh:47: LIVEKIT_KEYS, LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET,
+deploy/voice/bootstrap-prod-voice.sh:70: --livekit-key-name)
+deploy/voice/bootstrap-prod-voice.sh:71: LIVEKIT_KEY_NAME="$2"; shift 2 ;;
+deploy/voice/bootstrap-prod-voice.sh:102:normalize_livekit_keys() {
+deploy/voice/bootstrap-prod-voice.sh:106: # LiveKit expects key entries in the form "key: secret"
+deploy/voice/bootstrap-prod-voice.sh:111:if [[ -n "${LIVEKIT_KEYS:-}" ]]; then
+deploy/voice/bootstrap-prod-voice.sh:112: LIVEKIT_KEYS="$(normalize_livekit_keys "${LIVEKIT_KEYS}")"
+deploy/voice/bootstrap-prod-voice.sh:113:elif [[ -n "${LIVEKIT_API_KEY:-}" && -n "${LIVEKIT_API_SECRET:-}" ]]; then
+deploy/voice/bootstrap-prod-voice.sh:114: LIVEKIT_KEYS="$(normalize_livekit_keys "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}")"
+deploy/voice/bootstrap-prod-voice.sh:116: LIVEKIT_SECRET="$(openssl rand -hex 32)"
+deploy/voice/bootstrap-prod-voice.sh:117: LIVEKIT_KEYS="$(normalize_livekit_keys "${LIVEKIT_KEY_NAME}: ${LIVEKIT_SECRET}")"
+deploy/voice/bootstrap-prod-voice.sh:199: upsert_env_in_file "${env_file}" "LIVEKIT_KEYS" "${LIVEKIT_KEYS}"
+deploy/voice/bootstrap-prod-voice.sh:210: if [[ -n "${LIVEKIT_URL:-}" ]]; then
+deploy/voice/bootstrap-prod-voice.sh:211: upsert_env_in_file "${env_file}" "LIVEKIT_URL" "${LIVEKIT_URL}"
+deploy/voice/bootstrap-prod-voice.sh:213: if [[ -n "${LIVEKIT_API_KEY:-}" ]]; then
+deploy/voice/bootstrap-prod-voice.sh:214: upsert_env_in_file "${env_file}" "LIVEKIT_API_KEY" "${LIVEKIT_API_KEY}"
+deploy/voice/bootstrap-prod-voice.sh:216: if [[ -n "${LIVEKIT_API_SECRET:-}" ]]; then
+deploy/voice/bootstrap-prod-voice.sh:217: upsert_env_in_file "${env_file}" "LIVEKIT_API_SECRET" "${LIVEKIT_API_SECRET}"
+deploy/voice/bootstrap-prod-voice.sh:229: local sysctl_file="/etc/sysctl.d/99-vex-voice.conf"
+deploy/voice/bootstrap-prod-voice.sh:283: # These stale names block recreation and keep old LIVEKIT_KEYS values active.
+deploy/voice/bootstrap-prod-voice.sh:284: docker rm -f vex-livekit vex-coturn >/dev/null 2>&1 || true
+deploy/voice/bootstrap-prod-voice.sh:288: if [[ -f "deploy/docker-compose.voice.linux-sysctl.yml" ]]; then
+deploy/voice/bootstrap-prod-voice.sh:289: docker compose -f deploy/docker-compose.voice.yml -f deploy/docker-compose.voice.linux-sysctl.yml --env-file .env up -d --force-recreate --remove-orphans livekit coturn || \
+deploy/voice/bootstrap-prod-voice.sh:290: docker compose -f deploy/docker-compose.voice.yml --env-file .env up -d --force-recreate --remove-orphans livekit coturn
+deploy/voice/bootstrap-prod-voice.sh:292: docker compose -f deploy/docker-compose.voice.yml --env-file .env up -d --force-recreate --remove-orphans livekit coturn
+deploy/voice/bootstrap-prod-voice.sh:301:echo "Voice bootstrap completed successfully."
+deploy/voice/bootstrap-prod-voice.sh:302:echo "LiveKit keys format used: ${LIVEKIT_KEYS%%:*}: ********"
+deploy/voice/livekit.yaml:10:# Room cleanup defaults tuned for game voice sessions.
+deploy/docker-compose.voice.yml:2: livekit:
+deploy/docker-compose.voice.yml:3: image: livekit/livekit-server:v1.9
+deploy/docker-compose.voice.yml:4: container_name: vex-livekit
+deploy/docker-compose.voice.yml:6: command: --config /etc/livekit/livekit.yaml
+deploy/docker-compose.voice.yml:8: - LIVEKIT_KEYS=${LIVEKIT_KEYS}
+deploy/docker-compose.voice.yml:10: - ./voice/livekit.yaml:/etc/livekit/livekit.yaml:ro
+deploy/docker-compose.voice.yml:16: - vex-voice
+deploy/docker-compose.voice.yml:33: - vex-voice
+deploy/docker-compose.voice.yml:36: vex-voice:
+deploy/coturn/README.md:3:Self-hosted TURN relay used by the WebRTC voice/video call feature.
+deploy/coturn/README.md:69:running this in DevTools BEFORE starting a call:
+deploy/coturn/README.md:76:connect; the call HUD should show the **Relay** tier badge.
+deploy/coturn/README.md:86:The app keeps working — calls fall back to peer-to-peer where possible
+deploy/coturn/turnserver.conf.template:2:# coturn turnserver.conf — vixo.click WebRTC TURN/STUN
+docs/CALL_PERMISSIONS_PLAYBOOK.md:1:# Friend-Call Permissions Playbook
+docs/CALL_PERMISSIONS_PLAYBOOK.md:4:voice/video calls on iOS, Android and PWA._
+docs/CALL_PERMISSIONS_PLAYBOOK.md:17:| `android.permission.RECORD_AUDIO` | Voice + video calls. Without it the WebView's `getUserMedia({audio:true})` is denied silently. | Plugin manifest (auto-merged) + runtime request through `NativeCallUI`. |
+docs/CALL_PERMISSIONS_PLAYBOOK.md:18:| `android.permission.CAMERA` | Video calls. Without it `getUserMedia({video:true})` is denied silently. | Plugin manifest (auto-merged) + runtime request through `NativeCallUI`. |
+docs/CALL_PERMISSIONS_PLAYBOOK.md:20:| iOS `NSMicrophoneUsageDescription` | Required by App Store review for voice calls. | Host app `Info.plist` — see section 3. |
+docs/CALL_PERMISSIONS_PLAYBOOK.md:21:| iOS `NSCameraUsageDescription` | Required by App Store review for video calls. | Host app `Info.plist` — see section 3. |
+docs/CALL_PERMISSIONS_PLAYBOOK.md:24:(`native-plugins/capacitor-native-call-ui/android/src/main/AndroidManifest.xml`)
+docs/CALL_PERMISSIONS_PLAYBOOK.md:26:copies them into the host app automatically. **You do not need to repeat
+docs/CALL_PERMISSIONS_PLAYBOOK.md:28:`native-plugins/capacitor-native-call-ui/examples/AndroidManifest-snippet.xml`
+docs/CALL_PERMISSIONS_PLAYBOOK.md:35:1. The user taps "Call" or "Video call" inside the app.
+docs/CALL_PERMISSIONS_PLAYBOOK.md:36:2. The JS layer calls `ensureCallRationale("voice" | "video")` from
+docs/CALL_PERMISSIONS_PLAYBOOK.md:37: `client/src/lib/call-permission-rationale.ts`. This shows the
+docs/CALL_PERMISSIONS_PLAYBOOK.md:40:3. The JS layer then calls `ensureCallPermissions(kind)` from
+docs/CALL_PERMISSIONS_PLAYBOOK.md:41: `client/src/lib/native-call-permissions.ts`, which delegates to the
+docs/CALL_PERMISSIONS_PLAYBOOK.md:42: plugin's `requestCallMediaPermissions` Kotlin entry point. The
+docs/CALL_PERMISSIONS_PLAYBOOK.md:45:4. Only when both grants come back as `granted` does the JS layer call
+docs/CALL_PERMISSIONS_PLAYBOOK.md:46: `navigator.mediaDevices.getUserMedia(...)` and wire up WebRTC.
+docs/CALL_PERMISSIONS_PLAYBOOK.md:69:app is submitted to the App Store. Without them, the call to
+docs/CALL_PERMISSIONS_PLAYBOOK.md:71:hood when `getUserMedia` is called) will throw a runtime exception and
+docs/CALL_PERMISSIONS_PLAYBOOK.md:76:<string>VEX uses your microphone only during voice and video calls so the other person can hear you. Audio is never recorded or stored.</string>
+docs/CALL_PERMISSIONS_PLAYBOOK.md:79:<string>VEX uses your camera only during video calls so the other person can see you. Video is never recorded or stored.</string>
+docs/CALL_PERMISSIONS_PLAYBOOK.md:96:`native-plugins/capacitor-native-call-ui/examples/AppDelegate-snippet.swift`)
+docs/CALL_PERMISSIONS_PLAYBOOK.md:101:`native-plugins/capacitor-native-call-ui/examples/Info-plist-snippet.xml`
+docs/CALL_PERMISSIONS_PLAYBOOK.md:108:CallKit on iOS handles the actual mic/camera prompt at the moment the
+docs/CALL_PERMISSIONS_PLAYBOOK.md:109:call is reported as connected — the in-app rationale serves as a
+docs/CALL_PERMISSIONS_PLAYBOOK.md:119:2. From phone A, start a **video** call to phone B.
+docs/CALL_PERMISSIONS_PLAYBOOK.md:122:4. Phone B should ring on the lock screen via the existing CallKit /
+docs/CALL_PERMISSIONS_PLAYBOOK.md:125:5. Once both sides have granted, the call should connect with
+docs/CALL_PERMISSIONS_PLAYBOOK.md:131:2. Phone B's call session should fail with the rationale modal
+docs/CALL_PERMISSIONS_PLAYBOOK.md:133:3. Phone A should see the call go to "failed" / be disconnected; the
+docs/CALL_PERMISSIONS_PLAYBOOK.md:135: `permission_denied` event for the callee.
+docs/CALL_PERMISSIONS_PLAYBOOK.md:137:### 4.1 Video friend-call permanent-denial smoke (Task #128)
+docs/CALL_PERMISSIONS_PLAYBOOK.md:139:The voice-call path was validated on a physical Android device under
+docs/CALL_PERMISSIONS_PLAYBOOK.md:140:Task #124. The video-call path uses the same JS layer
+docs/CALL_PERMISSIONS_PLAYBOOK.md:141:(`use-call-session.tsx` and `private-call-layer.tsx` both invoke
+docs/CALL_PERMISSIONS_PLAYBOOK.md:142:`ensureCallPermissions("video")` and forward the result through
+docs/CALL_PERMISSIONS_PLAYBOOK.md:143:`isPermanentlyDeniedForCall("video", ...)`) but, because the OS asks
+docs/CALL_PERMISSIONS_PLAYBOOK.md:150:2. Open the friend chat and tap **Video call**.
+docs/CALL_PERMISSIONS_PLAYBOOK.md:154: microphone + camera. Granting it should let the call proceed.
+docs/CALL_PERMISSIONS_PLAYBOOK.md:155:5. End the call. Open Settings → Apps → VEX → Permissions and revoke
+docs/CALL_PERMISSIONS_PLAYBOOK.md:157:6. Tap **Video call** again. Tap **Allow** on the in-app rationale.
+docs/CALL_PERMISSIONS_PLAYBOOK.md:161:7. Tap **Video call** a third time. Confirm:
+docs/CALL_PERMISSIONS_PLAYBOOK.md:169:out of sync with the voice path. The JS-side behaviour is locked in
+docs/CALL_PERMISSIONS_PLAYBOOK.md:170:by `tests/call-permission-prompt.test.tsx` (modal CTA layout for
+docs/CALL_PERMISSIONS_PLAYBOOK.md:171:video kind) and `tests/native-call-permissions-kind.test.ts`
+docs/CALL_PERMISSIONS_PLAYBOOK.md:172:(`isPermanentlyDeniedForCall("video", ...)` and
+docs/CALL_PERMISSIONS_PLAYBOOK.md:173:`isMissingForCall("video", ...)` routing).
+docs/CALL_PERMISSIONS_PLAYBOOK.md:194:- Surfaces an amber hint specifically for SYSTEM_ALERT_WINDOW because
+docs/CALL_PERMISSIONS_PLAYBOOK.md:198:prompts users to review their permissions when one of the call-related
+docs/CALL_PERMISSIONS_PLAYBOOK.md:286:2. Open the app, navigate to a friend chat, tap **Voice call**.
+docs/CALL_PERMISSIONS_PLAYBOOK.md:290: that `VoiceChat.tsx` still calls `ensureCallPermissions("voice")`
+docs/CALL_PERMISSIONS_PLAYBOOK.md:301: `client/src/components/games/VoiceChat.tsx`,
+docs/CALL_PERMISSIONS_PLAYBOOK.md:302: `client/src/hooks/use-call-session.tsx` and
+docs/CALL_PERMISSIONS_PLAYBOOK.md:303: `client/src/components/chat/private-call-layer.tsx` — each call
+docs/CALL_PERMISSIONS_PLAYBOOK.md:304: site invokes `ensureCallPermissions(kind)` (the native plugin's
+docs/CALL_PERMISSIONS_PLAYBOOK.md:322:would risk breaking other Bridge callbacks (file chooser, JS dialogs,
+docs/CALL_PERMISSIONS_PLAYBOOK.md:324:`native-plugins/capacitor-native-call-ui/examples/AndroidManifest-snippet.xml`
+docs/CALL_PERMISSIONS_PLAYBOOK.md:335:Tap **Voice call** on a fresh install and confirm:
+docs/VOICE_PRODUCTION_UBUNTU_72.61.187.119.md:1:# Voice Production Bootstrap (Ubuntu 25.10 / 72.61.187.119)
+docs/VOICE_PRODUCTION_UBUNTU_72.61.187.119.md:3:Use this to provision TURN + LiveKit for challenge voice with one command.
+docs/VOICE_PRODUCTION_UBUNTU_72.61.187.119.md:9:SERVER_IP=72.61.187.119 REPO_DIR=/opt/vixo bash deploy/voice/bootstrap-prod-voice.sh
+docs/VOICE_PRODUCTION_UBUNTU_72.61.187.119.md:15:- LIVEKIT_KEYS
+docs/VOICE_PRODUCTION_UBUNTU_72.61.187.119.md:18:1. Writes/updates voice env in `.env`:
+root@srv1118737:/docker/vex# find . -maxdepth 3 \( -name '*.log' -o -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' -o -name '.env*' -o -name '*service*' \) | sort | head -200
+./.env
+./.env.example
+./ai-service
+./deploy/docker-compose.traefik.yml
+./deploy/docker-compose.voice.linux-sysctl.yml
+./deploy/docker-compose.voice.yml
+./docker-compose.prod.yml
+./docker-compose.yml
+./server/lib/translation-service.ts
+root@srv1118737:/docker/vex# python3 - <<'PY'
+> import os,glob
+> for p in sorted(glob.glob('**/*', recursive=True)):
+> if any(x in p for x in ['docker-compose','compose','log','.env','voice','call']):
+> print(p)
+> PY
+PROJECT_KNOWLEDGE_ENGINE/legacy/docs/project-reference/10-change-log.md
+client/public/icons/vex-gaming-logo-128x128.png
+client/public/icons/vex-gaming-logo-144x144.png
+client/public/icons/vex-gaming-logo-152x152.png
+client/public/icons/vex-gaming-logo-192x192.png
+client/public/icons/vex-gaming-logo-384x384.png
+client/public/icons/vex-gaming-logo-512x512.png
+client/public/icons/vex-gaming-logo-72x72.png
+client/public/icons/vex-gaming-logo-96x96.png
+client/src/components/ConfirmDialog.tsx
+client/src/components/admin/AdminBalanceAdjustDialog.tsx
+client/src/components/calls
+client/src/components/calls/CallButton.tsx
+client/src/components/calls/CallModal.tsx
+client/src/components/calls/CallSessionProvider.tsx
+client/src/components/chat/ChatUnlockDialog.tsx
+client/src/components/chat/private-call-layer.tsx
+client/src/components/ui/alert-dialog.tsx
+client/src/components/ui/dialog.tsx
+client/src/components/vex-logo.tsx
+client/src/components/wallet/WithdrawDialog.tsx
+client/src/hooks/use-call-session.tsx
+client/src/lib/call-actions.ts
+client/src/lib/call-ringtone.ts
+client/src/lib/chat-call-ops-queue.ts
+client/src/lib/native-call-permissions.ts
+client/src/lib/native-call-ui.ts
+client/src/lib/permission-catalogue.ts
+client/src/lib/post-login-permission-scheduler.ts
+client/src/pages/admin/admin-audit-logs.tsx
+client/src/pages/admin/admin-login.tsx
+client/src/pages/auth-callback.tsx
+client/src/pages/games-catalog.tsx
+client/src/pages/login.tsx
+deploy/docker-compose.traefik.yml
+deploy/docker-compose.voice.linux-sysctl.yml
+deploy/docker-compose.voice.yml
+deploy/voice
+deploy/voice/bootstrap-prod-voice.sh
+deploy/voice/livekit.yaml
+docker-compose.prod.yml
+docker-compose.yml
+docs/device-tests/android-keyboard-composer-2026-04.md
+logs
+migrations/add_chat_call_sessions.sql
+migrations/add_p2p_trader_payment_method_catalog_link.sql
+native-plugins/capacitor-native-call-ui
+native-plugins/capacitor-native-call-ui/CapacitorNativeCallUI.podspec
+native-plugins/capacitor-native-call-ui/Package.swift
+native-plugins/capacitor-native-call-ui/README.md
+native-plugins/capacitor-native-call-ui/android
+native-plugins/capacitor-native-call-ui/android/build.gradle
+native-plugins/capacitor-native-call-ui/android/src
+native-plugins/capacitor-native-call-ui/android/src/main
+native-plugins/capacitor-native-call-ui/android/src/main/AndroidManifest.xml
+native-plugins/capacitor-native-call-ui/android/src/main/java
+native-plugins/capacitor-native-call-ui/android/src/main/java/click
+native-plugins/capacitor-native-call-ui/android/src/main/java/click/vixo
+native-plugins/capacitor-native-call-ui/android/src/main/java/click/vixo/nativecallui
+native-plugins/capacitor-native-call-ui/android/src/main/java/click/vixo/nativecallui/CallConnectionService.kt
+native-plugins/capacitor-native-call-ui/android/src/main/java/click/vixo/nativecallui/CallFcmService.kt
+native-plugins/capacitor-native-call-ui/android/src/main/java/click/vixo/nativecallui/IncomingCallForegroundService.kt
+native-plugins/capacitor-native-call-ui/android/src/main/java/click/vixo/nativecallui/NativeCallUIPlugin.kt
+native-plugins/capacitor-native-call-ui/examples
+native-plugins/capacitor-native-call-ui/examples/AndroidManifest-snippet.xml
+native-plugins/capacitor-native-call-ui/examples/AppDelegate-snippet.swift
+native-plugins/capacitor-native-call-ui/examples/Info-plist-snippet.xml
+native-plugins/capacitor-native-call-ui/ios
+native-plugins/capacitor-native-call-ui/ios/Sources
+native-plugins/capacitor-native-call-ui/ios/Sources/NativeCallUIPlugin
+native-plugins/capacitor-native-call-ui/ios/Sources/NativeCallUIPlugin/CallKitProvider.swift
+native-plugins/capacitor-native-call-ui/ios/Sources/NativeCallUIPlugin/NativeCallUIPlugin.swift
+native-plugins/capacitor-native-call-ui/ios/Sources/NativeCallUIPlugin/PushKitDelegate.swift
+native-plugins/capacitor-native-call-ui/package.json
+native-plugins/capacitor-native-call-ui/src
+native-plugins/capacitor-native-call-ui/src/definitions.ts
+native-plugins/capacitor-native-call-ui/src/index.ts
+native-plugins/capacitor-native-call-ui/src/web.ts
+scripts/smoke-call-actions.ts
+scripts/smoke-call-experience.ts
+scripts/smoke-challenge-voice-fullscreen.mjs
+scripts/smoke-challenge-voice-roundtrip.mjs
+scripts/smoke-voice-signaling-load.mjs
+scripts/voice-signaling-scenarios.example.json
+server/admin-routes/admin-login.ts
+server/admin-routes/admin-settings/login-gameplay.ts
+server/admin-routes/chat-calls.ts
+server/lib/chat-call-event.ts
+server/lib/logger.ts
+server/routes/auth/login-methods.ts
+server/routes/auth/login-username.ts
+server/routes/chat-features/calls.ts
+server/websocket/voice.ts
+tests/admin-balance-adjust-dialog.test.tsx
+tests/call-actions-react-tree.test.tsx
+tests/call-permission-native-android-ordering.test.tsx
+tests/call-permission-prompt.test.tsx
+tests/native-call-permissions-kind.test.ts
+tests/permission-catalogue.test.ts
+tests/wallet-withdraw-dialog.test.tsx
+root@srv1118737:/docker/vex# ls -1
+AGENTS.md
+Dockerfile
+FETCH_HEAD
+PROJECT_KNOWLEDGE_ENGINE
+README.md
+ai-service
+android-test-link
+attached_assets
+backups
+capacitor.config.ts
+client
+components.json
+deploy
+docker
+docker-compose.prod.yml
+docker-compose.yml
+docs
+drizzle.config.ts
+filters.yaml
+k8s
+key.txt
+keystore_base64.txt
+logs
+migrations
+native-plugins
+package-lock.json
+package.json
+postcss.config.js
+prod-auto.sh
+prod-update.sh
+release-key.keystore
+replit.md
+replit.nix
+screenshot-sequence-fix-mobile.png
+screenshot-watch-desktop.png
+screenshot-watch-mobile.png
+screenshot-watchpage-desktop.png
+screenshot-watchpage-mobile.png
+script
+scripts
+server
+shared
+skills-lock.json
+tailwind.config.ts
+tests
+translation_audit.txt
+translation_audit_byfile.txt
+ts_errors.txt
+tsconfig.json
+twa
+unique_keys.txt
+uploads
+vex_database_production.sql
+vite.config.ts
+vitest.config.ts
+vxmarket
+root@srv1118737:/docker/vex# find logs -maxdepth 3 -type f | sort | head -100
+root@srv1118737:/docker/vex# docker ps --format 'table {{.Names}}{{.Image}}{{.Status}}'
+NAMESIMAGESTATUS
+vex-appvex-appUp 24 minutes (healthy)
+vex-ai-agentvex-ai-agentUp 24 minutes (healthy)
+vex-dbpostgres:15-alpineUp 4 hours (healthy)
+vex-redisredis:7-alpineUp 4 hours (healthy)
+vex-miniominio/minio:latestUp 4 hours (healthy)
+traefik-mrnn-traefik-1traefik:latestUp 6 hours
+root@srv1118737:/docker/vex# docker logs --since 24h vex-app 2>&1 | grep -iE 'voice|video|call|webrtc|ice|dtls|sdp|rtp|mediasoup|jitsi|livekit' | tail -200
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.13.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.13.0
+npm notice To update run: npm install -g npm@11.13.0
+npm notice
+{"timestamp":"2026-04-28T02:39:09.015Z","level":"INFO","message":"[SEO] Prerender enabled with upstream https://service.prerender.io (host allowlist: <none>)"}
+{"timestamp":"2026-04-28T02:42:41.173Z","level":"INFO","message":"GET /smartphone-D8P0NJfm.js","context":{"requestId":"req_1777344161173_931e39de0ce6","method":"GET","path":"/smartphone-D8P0NJfm.js","statusCode":200,"duration":0,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:42:53.268Z","level":"WARN","message":"[OAuth Trace] oauth_callback_started","context":{"platform":"google","ip":"156.209.181.58","userAgent":"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Mobile Safari/537.36","path":"/api/auth/social/google/callback","traceId":"737d09e8bfb27611"}}
+{"timestamp":"2026-04-28T02:42:53.498Z","level":"WARN","message":"[OAuth Trace] oauth_callback_success","context":{"platform":"google","ip":"156.209.181.58","userAgent":"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Mobile Safari/537.36","path":"/api/auth/social/google/callback","traceId":"737d09e8bfb27611","durationMs":230,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","isNew":false}}
+{"timestamp":"2026-04-28T02:42:53.500Z","level":"INFO","message":"GET /api/auth/social/google/callback","context":{"requestId":"req_1777344173258_d18dfc473aa4","method":"GET","path":"/api/auth/social/google/callback","statusCode":302,"duration":242,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:42:53.600Z","level":"WARN","message":"[OAuth Trace] oauth_callback_started","context":{"platform":"google","ip":"156.209.181.58","userAgent":"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Mobile Safari/537.36","path":"/api/auth/social/google/callback","traceId":"6dea9cdd12de6ee6"}}
+{"timestamp":"2026-04-28T02:42:53.600Z","level":"WARN","message":"[OAuth] oauth_state_replay_served_from_cache","context":{"platform":"google","ip":"156.209.181.58","userAgent":"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Mobile Safari/537.36","path":"/api/auth/social/google/callback"}}
+{"timestamp":"2026-04-28T02:42:53.601Z","level":"INFO","message":"GET /api/auth/social/google/callback","context":{"requestId":"req_1777344173599_e97378fdad3c","method":"GET","path":"/api/auth/social/google/callback","statusCode":302,"duration":2,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:42:54.392Z","level":"INFO","message":"GET /auth-callback-LjEmbqVB.js","context":{"requestId":"req_1777344174386_7d70c97bd859","method":"GET","path":"/auth-callback-LjEmbqVB.js","statusCode":200,"duration":6,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:45:24.081Z","level":"INFO","message":"GET /smartphone-D8P0NJfm.js","context":{"requestId":"req_1777344324073_8c8a13ff0488","method":"GET","path":"/smartphone-D8P0NJfm.js","statusCode":200,"duration":8,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:47:18.846Z","level":"INFO","message":"GET /smartphone-D8P0NJfm.js","context":{"requestId":"req_1777344438839_fc7cfb59645e","method":"GET","path":"/smartphone-D8P0NJfm.js","statusCode":200,"duration":7,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:47:30.460Z","level":"WARN","message":"[OAuth Trace] oauth_callback_started","context":{"platform":"google","ip":"156.209.181.58","userAgent":"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36","path":"/api/auth/social/google/callback","traceId":"0a3fd3b1136f5896"}}
+{"timestamp":"2026-04-28T02:47:30.635Z","level":"WARN","message":"[OAuth Trace] oauth_callback_success","context":{"platform":"google","ip":"156.209.181.58","userAgent":"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36","path":"/api/auth/social/google/callback","traceId":"0a3fd3b1136f5896","durationMs":175,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","isNew":false}}
+{"timestamp":"2026-04-28T02:47:30.636Z","level":"INFO","message":"GET /api/auth/social/google/callback","context":{"requestId":"req_1777344450460_498fd0632db8","method":"GET","path":"/api/auth/social/google/callback","statusCode":302,"duration":176,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:47:30.768Z","level":"WARN","message":"[OAuth Trace] oauth_callback_started","context":{"platform":"google","ip":"156.209.181.58","userAgent":"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36","path":"/api/auth/social/google/callback","traceId":"bcf35413902968b2"}}
+{"timestamp":"2026-04-28T02:47:30.768Z","level":"WARN","message":"[OAuth] oauth_state_replay_served_from_cache","context":{"platform":"google","ip":"156.209.181.58","userAgent":"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Mobile Safari/537.36","path":"/api/auth/social/google/callback"}}
+{"timestamp":"2026-04-28T02:47:30.769Z","level":"INFO","message":"GET /api/auth/social/google/callback","context":{"requestId":"req_1777344450767_b045587522db","method":"GET","path":"/api/auth/social/google/callback","statusCode":302,"duration":2,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:47:31.514Z","level":"INFO","message":"GET /auth-callback-LjEmbqVB.js","context":{"requestId":"req_1777344451509_36d4535400e2","method":"GET","path":"/auth-callback-LjEmbqVB.js","statusCode":200,"duration":5,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:49:08.280Z","level":"INFO","message":"GET /smartphone-D8P0NJfm.js","context":{"requestId":"req_1777344548232_979e61562214","method":"GET","path":"/smartphone-D8P0NJfm.js","statusCode":200,"duration":48,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:49:24.038Z","level":"INFO","message":"GET /phone-call-CFPYgk0G.js","context":{"requestId":"req_1777344564035_4e4a7595db83","method":"GET","path":"/phone-call-CFPYgk0G.js","statusCode":200,"duration":3,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:49:24.629Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344564514_b67782eeda06","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":115,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:14.929Z","level":"INFO","message":"GET /phone-call-CFPYgk0G.js","context":{"requestId":"req_1777344614920_64e3925d9c6c","method":"GET","path":"/phone-call-CFPYgk0G.js","statusCode":200,"duration":9,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:15.747Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344615658_8da2346af1ed","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":89,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:15.961Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344615948_9fb28359e023","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":13,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:37.923Z","level":"INFO","message":"[voip-push] FCM not configured — Android background-call wake disabled until FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY are set."}
+{"timestamp":"2026-04-28T02:50:37.924Z","level":"INFO","message":"POST /api/chat/calls/start","context":{"requestId":"req_1777344637911_590aa83f3466","method":"POST","path":"/api/chat/calls/start","statusCode":200,"duration":13,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:38.072Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344638057_ebcd7cdae903","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":15,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:42.970Z","level":"INFO","message":"POST /api/chat/calls/end","context":{"requestId":"req_1777344642953_5fdad15590c8","method":"POST","path":"/api/chat/calls/end","statusCode":200,"duration":17,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:43.106Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344643066_2bc297e8d638","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":40,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:43.210Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344643194_5758bce48064","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":16,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:43.333Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344643324_2557592bba19","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":9,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:50.859Z","level":"INFO","message":"POST /api/chat/calls/start","context":{"requestId":"req_1777344650848_c0f610a3cca6","method":"POST","path":"/api/chat/calls/start","statusCode":200,"duration":11,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:50.985Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344650976_5e8585b4ccb8","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":9,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:51.399Z","level":"INFO","message":"POST /api/chat/calls/end","context":{"requestId":"req_1777344651386_f50c9ca45a54","method":"POST","path":"/api/chat/calls/end","statusCode":200,"duration":13,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:51.508Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344651497_72eafde08d87","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":11,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:51.629Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344651619_283d4fae1874","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":10,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:51.753Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344651744_d359b5e59395","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":9,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:59.701Z","level":"INFO","message":"POST /api/chat/calls/start","context":{"requestId":"req_1777344659689_fa8beed72326","method":"POST","path":"/api/chat/calls/start","statusCode":200,"duration":12,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:50:59.823Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344659813_fba81fbd9bb5","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":10,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:51:00.136Z","level":"INFO","message":"POST /api/chat/calls/end","context":{"requestId":"req_1777344660125_fa3a176d0cd3","method":"POST","path":"/api/chat/calls/end","statusCode":200,"duration":11,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:51:00.278Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344660270_c302e2402d23","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":8,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:51:00.384Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344660369_beec42583788","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":15,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:51:00.518Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344660506_5a70ec0bc307","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":11,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:51:40.980Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344700947_491167eba22b","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":33,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:51:41.905Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344701862_e2dec12a8c8c","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":43,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:51:42.940Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344702928_365cd0f239d8","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":12,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:02.277Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344722236_c99d204aaa26","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":40,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:03.631Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344723622_b286ecb9574b","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":9,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:07.559Z","level":"INFO","message":"POST /api/chat/calls/start","context":{"requestId":"req_1777344727549_ab240cdc790d","method":"POST","path":"/api/chat/calls/start","statusCode":200,"duration":10,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:07.690Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344727682_65c17425f816","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":8,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:08.227Z","level":"INFO","message":"POST /api/chat/calls/end","context":{"requestId":"req_1777344728216_faaecc78480d","method":"POST","path":"/api/chat/calls/end","statusCode":200,"duration":11,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:08.383Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344728373_72d1b001f7f1","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":10,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:08.487Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344728476_b874f97cd81e","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":11,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:08.612Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344728605_b87313342793","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":7,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:36.150Z","level":"INFO","message":"GET /phone-call-CFPYgk0G.js","context":{"requestId":"req_1777344756148_7bbbfd4e4d04","method":"GET","path":"/phone-call-CFPYgk0G.js","statusCode":200,"duration":2,"ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:36.691Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344756603_af928665a5f9","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":88,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:38.189Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344758179_32fd27c6ac6f","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":10,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:46.097Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344766055_5a3a3e30fae7","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":42,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:47.498Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344767489_885703022533","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":9,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:50.073Z","level":"INFO","message":"POST /api/chat/calls/start","context":{"requestId":"req_1777344770063_b824582f829a","method":"POST","path":"/api/chat/calls/start","statusCode":200,"duration":10,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:50.263Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344770254_86b893124241","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":9,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:53.682Z","level":"INFO","message":"[VoiceWS] voice_join accepted","context":{"matchId":"private:40e08fe4-966e-4f56-b332-604471c7b022","userId":"8032321a-8346-4c64-9695-610bc24ac76d","role":"player","participantIds":["8032321a-8346-4c64-9695-610bc24ac76d","bb29f537-88d3-49e6-acc9-2c05ceed73a2"],"roomSize":1}}
+{"timestamp":"2026-04-28T02:52:53.692Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344773679_0dd756ebc26a","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":13,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:53.802Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344773795_5f5571ab411a","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":7,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:55.278Z","level":"INFO","message":"[VoiceWS] voice_join accepted","context":{"matchId":"private:40e08fe4-966e-4f56-b332-604471c7b022","userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","role":"player","participantIds":["8032321a-8346-4c64-9695-610bc24ac76d","bb29f537-88d3-49e6-acc9-2c05ceed73a2"],"roomSize":2}}
+{"timestamp":"2026-04-28T02:52:55.611Z","level":"INFO","message":"[VoiceWS] voice_offer forwarded","context":{"matchId":"private:40e08fe4-966e-4f56-b332-604471c7b022","fromUserId":"8032321a-8346-4c64-9695-610bc24ac76d","toUserId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","forwardedCount":1}}
+{"timestamp":"2026-04-28T02:52:56.131Z","level":"INFO","message":"[VoiceWS] voice_answer forwarded","context":{"matchId":"private:40e08fe4-966e-4f56-b332-604471c7b022","fromUserId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","toUserId":"8032321a-8346-4c64-9695-610bc24ac76d","forwardedCount":1}}
+{"timestamp":"2026-04-28T02:52:58.420Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344778412_aa7380d6dc30","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":8,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:58.900Z","level":"INFO","message":"[VoiceWS] voice_leave processed","context":{"matchId":"private:40e08fe4-966e-4f56-b332-604471c7b022","userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","roomSizeAfterLeave":1}}
+{"timestamp":"2026-04-28T02:52:58.970Z","level":"INFO","message":"POST /api/chat/calls/end","context":{"requestId":"req_1777344778952_d473751270ae","method":"POST","path":"/api/chat/calls/end","statusCode":200,"duration":18,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:59.147Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344779132_c4eece688f06","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":15,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:52:59.167Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344779154_e9e67ee1e8fa","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":13,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:53:40.704Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344820685_3627bb55b067","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":19,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:12.086Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344972033_850b64515d95","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":53,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:24.935Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344984890_cabc39a4b748","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":45,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:25.153Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344985141_667aa48f8550","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":12,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:29.146Z","level":"INFO","message":"POST /api/chat/calls/start","context":{"requestId":"req_1777344989137_9a4fa6094d4b","method":"POST","path":"/api/chat/calls/start","statusCode":200,"duration":9,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:29.263Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344989252_972e6b5b6000","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":11,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:29.303Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344989292_c5e24d5c8dad","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":10,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:29.352Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344989332_ecf557bef6db","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":20,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:29.788Z","level":"INFO","message":"POST /api/chat/calls/end","context":{"requestId":"req_1777344989770_3e8c11eb3027","method":"POST","path":"/api/chat/calls/end","statusCode":200,"duration":18,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:29.891Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344989878_c3631cc90e56","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":13,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:29.897Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344989881_66881de0070f","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":16,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:29.926Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344989916_39244382605b","method":"GET","path":"/api/chat/calls/pricing","statusCode":200,"duration":10,"userId":"8032321a-8346-4c64-9695-610bc24ac76d","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:29.996Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344989988_00e05dca52c2","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":8,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+{"timestamp":"2026-04-28T02:56:30.110Z","level":"INFO","message":"GET /api/chat/calls/pricing","context":{"requestId":"req_1777344990096_d2d8610b2a4c","method":"GET","path":"/api/chat/calls/pricing","statusCode":304,"duration":14,"userId":"bb29f537-88d3-49e6-acc9-2c05ceed73a2","ip":"156.209.181.58"}}
+root@srv1118737:/docker/vex#
