@@ -42,6 +42,72 @@ uri = "file://artifacts/mockup-sandbox/public/images/ad-chess.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "Im6gmtFV8_Vo6wqzxXq-p"
+uri = "file://artifacts/mockup-sandbox/public/images/vex-home-holographic-stadium.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "knQ3MmRNngoESqDhFhlTJ"
+uri = "file://artifacts/mockup-sandbox/public/images/vex-home-holographic-emblem.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "x3AZxiJucPuQyofddCJda"
+uri = "file://artifacts/mockup-sandbox/public/images/vex-home-holographic-tournament-1.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "hRwJFTAzD8HD49sGX4WNh"
+uri = "file://artifacts/mockup-sandbox/public/images/vex-home-holographic-tournament-2.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "dR_g23RsJJ5Mo6GqlCC9t"
+uri = "file://artifacts/mockup-sandbox/public/images/vex-home-stadium-hero.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "q2CgN-tBhDsiHO4Ygs5Nv"
+uri = "file://artifacts/mockup-sandbox/public/images/vex-home-stadium-fifa.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "uZqOolEL_QP6TiQaWW0WD"
+uri = "file://artifacts/mockup-sandbox/public/images/vex-home-stadium-cs2.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "-mX1GSsNF4U8hZkzBHBNQ"
+uri = "file://artifacts/mockup-sandbox/public/images/vex-home-stadium-pubg.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "ONg9mGI0I0Mn0hrnYN0Ta"
+uri = "file://artifacts/mockup-sandbox/public/images/vex-home-livefeed-hero-arena.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "-Z7Ycz8ZmD3yKMq1l7q5O"
+uri = "file://artifacts/mockup-sandbox/public/images/vex-home-livefeed-tournament-cover.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "nbt9b0qeKlx274Uz8G6MJ"
+uri = "file://artifacts/mockup-sandbox/public/images/vex-home-livefeed-grain-bg.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "ca4K4aFlyoLyJjWP6qFUk"
 uri = "file://client/public/marketing/ad-platform-square.png"
