@@ -71,7 +71,9 @@ import {
   Image as ImageIcon,
   MoreVertical,
   Check,
-  X
+  X,
+  List,
+  Grid3x3,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -1095,6 +1097,7 @@ export default function AdminUnifiedGames() {
   const [deleteMode, setDeleteMode] = useState<"permanent" | "remove_from_section">("permanent");
   const [iconUploadTarget, setIconUploadTarget] = useState<UnifiedGame | null>(null);
   const [mediaUploadMode, setMediaUploadMode] = useState<"icon" | "background">("icon");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const iconFileInputRef = useRef<HTMLInputElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -1669,6 +1672,31 @@ export default function AdminUnifiedGames() {
                 }
               </span>
             )}
+
+            <div className="ms-auto flex items-center gap-1 rounded-2xl border border-slate-200 bg-white/70 p-1 dark:border-slate-700 dark:bg-slate-900/60">
+              <Button
+                size="sm"
+                onClick={() => setViewMode("grid")}
+                className={`${viewMode === "grid" ? BUTTON_3D_PRIMARY_CLASS : BUTTON_3D_CLASS} h-9 gap-1 px-3`}
+                data-testid="button-view-grid"
+                aria-pressed={viewMode === "grid"}
+                title={language === "ar" ? "عرض شبكة الأيقونات" : "Icon grid view"}
+              >
+                <Grid3x3 className="h-4 w-4" />
+                <span className="hidden sm:inline">{language === "ar" ? "شبكة" : "Grid"}</span>
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setViewMode("list")}
+                className={`${viewMode === "list" ? BUTTON_3D_PRIMARY_CLASS : BUTTON_3D_CLASS} h-9 gap-1 px-3`}
+                data-testid="button-view-list"
+                aria-pressed={viewMode === "list"}
+                title={language === "ar" ? "عرض القائمة" : "List view"}
+              >
+                <List className="h-4 w-4" />
+                <span className="hidden sm:inline">{language === "ar" ? "قائمة" : "List"}</span>
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1704,6 +1732,73 @@ export default function AdminUnifiedGames() {
                 <Plus className="h-4 w-4 me-2" />
                 {language === "ar" ? "إضافة لعبة جديدة" : "Add New Game"}
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : viewMode === "grid" ? (
+        <Card className={SURFACE_CARD_CLASS}>
+          <CardContent className="p-4 sm:p-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8">
+              {sortedFilteredGames.map((game) => {
+                const IconComp = getIconComponent(game.iconName);
+                const hasCustomIcon = isCustomImagePath(game.iconUrl);
+                const statusDot =
+                  game.status === "active" ? "bg-green-500" :
+                  game.status === "listed" ? "bg-yellow-500" :
+                  game.status === "inactive" ? "bg-red-500" : "bg-blue-500";
+                const statusLabel = STATUS_LABELS[game.status as keyof typeof STATUS_LABELS];
+                return (
+                  <button
+                    key={`${game._type}-${game.id}`}
+                    type="button"
+                    onClick={() => handleEdit(game)}
+                    data-testid={`grid-game-${game.id}`}
+                    className="group relative flex flex-col items-center gap-2 rounded-3xl border border-slate-200/70 bg-white/95 p-3 text-center shadow-[0_8px_24px_-12px_rgba(15,23,42,0.25)] transition-all duration-150 hover:-translate-y-1 hover:border-sky-300 hover:shadow-[0_18px_45px_-18px_rgba(56,189,248,0.45)] active:translate-y-0 dark:border-slate-800/70 dark:bg-slate-950/90 dark:hover:border-sky-700"
+                  >
+                    {game.isFeatured && (
+                      <span className="absolute end-2 top-2 z-10 rounded-full bg-amber-500 p-1 text-white shadow-[0_4px_0_0_rgba(180,83,9,0.5)]" title={language === "ar" ? "مميزة" : "Featured"}>
+                        <Sparkles className="h-3 w-3" />
+                      </span>
+                    )}
+                    <div className={`relative flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl ${hasCustomIcon ? "border border-border bg-muted/60" : game.colorClass} shadow-inner`}>
+                      {hasCustomIcon ? (
+                        <img
+                          src={String(game.iconUrl)}
+                          alt={language === "ar" ? `أيقونة ${game.nameAr}` : `${game.name} icon`}
+                          className="h-12 w-12 rounded-2xl object-contain"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <IconComp className="h-10 w-10" />
+                      )}
+                      <span
+                        className={`absolute -bottom-1 -end-1 h-4 w-4 rounded-full border-2 border-white ${statusDot} dark:border-slate-950`}
+                        title={statusLabel ? (language === "ar" ? statusLabel.ar : statusLabel.en) : game.status}
+                      />
+                    </div>
+                    <div className="min-h-[2.75rem] w-full">
+                      <p className="line-clamp-2 text-sm font-bold leading-tight">{language === "ar" ? game.nameAr : game.name}</p>
+                      <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">{game.key}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-1">
+                      <Badge variant="outline" className="rounded-full px-1.5 py-0 text-[9px] font-semibold">
+                        {game._type === "multiplayer" ? "MP" : "SP"}
+                      </Badge>
+                      {Number(game.priceVex) > 0 && (
+                        <Badge variant="outline" className="rounded-full px-1.5 py-0 text-[9px]">
+                          {game.priceVex} VEX
+                        </Badge>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+              <Pencil className="h-3.5 w-3.5" />
+              {language === "ar"
+                ? "اضغط على أي لعبة لفتح إعداداتها الكاملة"
+                : "Click any game to open its full settings card"}
             </div>
           </CardContent>
         </Card>
